@@ -1,48 +1,49 @@
-﻿Shader "Default/Gizmos"
-
-Properties
+Shader "Default/Blit"
 {
-}
+    Pass
+    {
+        Name "Blit"
+        Tags { "RenderOrder" = "Opaque" }
+        Blend SrcAlpha OneMinusSrcAlpha
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-Pass "Gizmos"
-{
-    Tags { "RenderOrder" = "Opaque" }
+        SLANGPROGRAM
 
-    // Rasterizer culling mode
-    Blend Alpha
-    Cull None
-    ZTest Off
-    ZWrite Off
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+        }
 
-	GLSLPROGRAM
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 uv : TEXCOORD0;
+        }
 
-	Vertex
-	{
-		layout (location = 0) in vec3 vertexPosition;
-		layout (location = 1) in vec2 vertexTexCoord;
-		
-		out vec2 TexCoords;
-		
-		void main()
-		{
-			TexCoords = vertexTexCoord;
-		    gl_Position = vec4(vertexPosition, 1.0);
-		}
-	}
+        struct Material
+        {
+            Sampler2D<float4> _MainTex;
+        }
+        ParameterBlock<Material> Mat;
 
-	Fragment
-	{
-		layout (location = 0) out vec4 finalColor;
-		
-		in vec2 TexCoords;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.position = float4(input.position, 1.0);
+            output.uv = input.uv;
+            return output;
+        }
 
-		uniform sampler2D _MainTex;
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            return Mat._MainTex.Sample(input.uv);
+        }
 
-		void main()
-		{
-			finalColor = texture(_MainTex, TexCoords).rgba;
-		}
-	}
-
-	ENDGLSL
+        ENDSLANG
+    }
 }

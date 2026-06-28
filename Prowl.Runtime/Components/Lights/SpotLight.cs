@@ -108,7 +108,7 @@ public class SpotLight : Light
             bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
             pipeline.AssignCameraMatrices(view, proj);
 
-            using var cmd = Graphics.GetCommandBuffer("SpotLightShadow");
+            var cmd = Graphics.GetCommandBuffer("SpotLightShadow");
             cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);

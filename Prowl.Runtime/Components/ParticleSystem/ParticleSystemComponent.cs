@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -53,7 +55,7 @@ public class ParticleSystemComponent : MonoBehaviour
     private float _time = 0;
     private bool _isPlaying = false;
     private SimulationSpace _prevSimulationSpace = SimulationSpace.Local;
-    private PropertyState _properties = new();
+    private PropertySet _properties = new();
 
     // GPU instancing data - separate arrays for clean API
     private Mesh _quadMesh;

@@ -575,9 +575,8 @@ public sealed class TerrainData : EngineObject, ISerializable
 
             _heightmapTexture?.Dispose();
             _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, PixelFormat.R32_Float);
-            _heightmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            Graphics.SetWrapS(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
+            _heightmapTexture.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+            _heightmapTexture.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             unsafe { fixed (float* ptr = _heightmapFloatBuffer) _heightmapTexture.SetDataPtr(ptr, 0, 0, (uint)HeightmapResolution, (uint)HeightmapResolution); }
             _heightmapDirty = false;
         }
@@ -619,9 +618,8 @@ public sealed class TerrainData : EngineObject, ISerializable
                 }
 
                 var tex = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, PixelFormat.R32_G32_B32_A32_Float);
-                tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-                Graphics.SetWrapS(tex.Handle, TextureWrap.ClampToEdge);
-                Graphics.SetWrapT(tex.Handle, TextureWrap.ClampToEdge);
+                tex.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+                tex.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
                 unsafe { fixed (float* ptr = buffer) tex.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
                 _splatmapTextures.Add(tex);
             }
@@ -650,9 +648,8 @@ public sealed class TerrainData : EngineObject, ISerializable
 
             _holesTexture?.Dispose();
             _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, PixelFormat.R32_Float);
-            _holesTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-            Graphics.SetWrapS(_holesTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_holesTexture.Handle, TextureWrap.ClampToEdge);
+            _holesTexture.SetTextureFilters(SamplerFilter.MinPoint_MagPoint_MipPoint);
+            _holesTexture.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             unsafe { fixed (float* ptr = _holesFloatBuffer) _holesTexture.SetDataPtr(ptr, 0, 0, (uint)SplatmapResolution, (uint)SplatmapResolution); }
             _holesDirty = false;
         }

@@ -4,47 +4,6 @@ using System;
 
 namespace Prowl.Runtime;
 
-public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
-public enum TextureType { Texture2D, Texture3D, TextureCubeMap, }
-public enum TextureParameter { WrapS, WrapT, WrapR, MinFilter, MagFilter }
-public enum TextureMin { Nearest, Linear, NearestMipmapNearest, LinearMipmapNearest, NearestMipmapLinear, LinearMipmapLinear }
-public enum TextureMag { Nearest, Linear }
-public enum TextureImageFormat
-{
-    Color4b,
-    Byte,
-
-    Short,
-    Short2,
-    Short3,
-    Short4,
-
-    Float,
-    Float2,
-    Float3,
-    Float4,
-    Depth16f,
-    Depth24f,
-    Depth32f,
-
-    Int,
-    Int2,
-    Int3,
-    Int4,
-
-    UnsignedShort,
-    UnsignedShort2,
-    UnsignedShort3,
-    UnsignedShort4,
-
-    UnsignedInt,
-    UnsignedInt2,
-    UnsignedInt3,
-    UnsignedInt4,
-
-    Depth24Stencil8,
-}
-
 public enum Topology { Points, Lines, LineLoop, LineStrip, Triangles, TriangleStrip, TriangleFan, Quads }
 
 public enum FBOTarget { Read, Draw, Framebuffer, }
@@ -95,6 +54,5 @@ public struct RasterizerState
 
     public RasterizerState()
     {
-        // Default constructor
     }
 }

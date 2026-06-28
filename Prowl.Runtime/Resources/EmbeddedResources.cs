@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -37,12 +38,40 @@ internal static class EmbeddedResources
         return reader.ReadToEnd();
     }
 
+
+    /// <summary>
+    /// Reads an embedded resource as text
+    /// </summary>
+    public static byte[] ReadAllBytes(string resourcePath)
+    {
+        using Stream stream = GetStream(resourcePath);
+        using MemoryStream ms = new();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
+
     /// <summary>
     /// Checks if an embedded resource exists
     /// </summary>
     public static bool Exists(string resourcePath)
     {
         return TryGetResourceName(resourcePath, out _);
+    }
+
+    /// <summary>
+    /// Enumerates the file names of every resource embedded from the engine's Assets/Defaults
+    /// folder. The folder is flat, so each returned name is the verbatim file name (including any
+    /// spaces or dots, e.g. "Standard Terrain.mat"). Combine with "Assets/Defaults/" to read.
+    /// </summary>
+    public static IEnumerable<string> EnumerateDefaultFileNames()
+    {
+        const string marker = "Assets.Defaults.";
+        foreach (string name in RuntimeAssembly.GetManifestResourceNames())
+        {
+            int idx = name.IndexOf(marker, StringComparison.Ordinal);
+            if (idx >= 0)
+                yield return name[(idx + marker.Length)..];
+        }
     }
 
     private static bool TryGetResourceName(string resourcePath, out string? resourceName)

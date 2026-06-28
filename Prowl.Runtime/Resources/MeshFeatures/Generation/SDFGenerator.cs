@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -122,7 +123,7 @@ public static class SDFGenerator
         });
         long tVoxels = sw.ElapsedMilliseconds; sw.Restart();
 
-        var volume = new Texture3D((uint)res, (uint)res, (uint)res, false, TextureImageFormat.Float);
+        var volume = new Texture3D((uint)res, (uint)res, (uint)res, false, Graphite.PixelFormat.R32_Float);
         volume.SetData<float>(distances);
         long tUpload = sw.ElapsedMilliseconds;
         long tTotal = totalSw.ElapsedMilliseconds;

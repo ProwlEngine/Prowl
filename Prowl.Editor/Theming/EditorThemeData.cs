@@ -91,9 +91,9 @@ public class EditorThemeData
     public ColorRamp Ink { get; set; } = new() { Primary = "#6C6A7A" };
 
     // Font
-    public string DefaultFontName { get; set; } = "bahnschrift";
+    public string DefaultFontName { get; set; } = "inter";
 
-    public string DefaultBoldFontName { get; set; } = "bahnschrift";
+    public string DefaultBoldFontName { get; set; } = "inter";
 
     public float UserScale { get; set; } = 1f;
 

@@ -182,7 +182,7 @@ public static class Window
 
         s_deviceOptions = new GraphicsDeviceOptions
         {
-            Debug = false,
+            Debug = true,
             SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = VSync,
             PreferStandardClipSpaceYDirection = true,
@@ -264,12 +264,15 @@ public static class Window
             float delta = (float)((now - lastTicks) / (double)freq);
             lastTicks = now;
 
-            Frame frame = Graphics.Device.BeginFrame();
-            Graphics.CurrentFrame = frame;
-
+            // Pump OS events before opening the frame so handlers that touch the device
+            // (e.g. FramebufferResize -> device.ResizeMainWindow) never run while a frame is open.
             InternalWindow.DoEvents();
             Update?.Invoke(delta);
             WindowInputHandler?.LateUpdate();
+
+            Frame frame = Graphics.Device.BeginFrame();
+            Graphics.CurrentFrame = frame;
+
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
 

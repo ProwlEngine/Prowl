@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System.Collections.Generic;
 
 using Prowl.Runtime.Resources;
@@ -44,7 +45,7 @@ public static class ShadowAtlas
         // Sample the atlas through hardware depth comparison: a sampler2DShadow in the lighting
         // shaders then gets fixed-function 2x2 PCF (with LINEAR filtering) instead of the manual
         // per-tap compare. Set once on the depth attachment after creation.
-        atlas.InternalDepth.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+        atlas.InternalDepth.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
         atlas.InternalDepth.SetDepthCompareMode(true);
 
         // Initialize with one large free rectangle covering the entire atlas

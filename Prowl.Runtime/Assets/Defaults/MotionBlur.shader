@@ -1,102 +1,93 @@
 Shader "Default/MotionBlur"
-
-Properties
 {
-}
-
-Pass "MotionBlur"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "MotionBlur"
+        Tags { "RenderOrder" = "Opaque" }
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-        out vec2 TexCoords;
+        SLANGPROGRAM
 
-        void main()
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
+        struct Material
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
+            float2 _Resolution;
+            float _Intensity;
+            int _Samples;
+            float _MaxBlurRadius;    // Max blur in pixels
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _MotionVectorsTex;
+            Sampler2D<float4> _CameraDepthTexture;
         }
-    }
+        ParameterBlock<Material> Mat;
 
-    Fragment
-    {
-        #include "ProwlCG"
-
-        layout(location = 0) out vec4 OutputColor;
-
-        in vec2 TexCoords;
-
-        uniform sampler2D _MainTex;
-        uniform sampler2D _MotionVectorsTex;
-        uniform sampler2D _CameraDepthTexture;
-
-        uniform vec2 _Resolution;
-        uniform float _Intensity;
-        uniform int _Samples;
-        uniform float _MaxBlurRadius;    // Max blur in pixels
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
 
         // Interleaved Gradient Noise (Jimenez 2014) for per-pixel jitter
-        float IGN(vec2 pixCoord)
+        float IGN(float2 pixCoord)
         {
-            const vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
-            return fract(magic.z * fract(dot(pixCoord, magic.xy)));
+            const float3 magic = float3(0.06711056, 0.00583715, 52.9829189);
+            return frac(magic.z * frac(dot(pixCoord, magic.xy)));
         }
 
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            vec2 texelSize = 1.0 / _Resolution;
-            vec3 centerColor = texture(_MainTex, TexCoords).rgb;
+            float2 texCoord = input.uv;
+            float2 texelSize = 1.0 / Mat._Resolution;
+            float3 centerColor = Mat._MainTex.Sample(texCoord).rgb;
 
             // Sample motion vector
-            vec2 motion = texture(_MotionVectorsTex, TexCoords).rg;
+            float2 motion = Mat._MotionVectorsTex.Sample(texCoord).rg;
 
             // Scale by intensity and clamp to max blur radius (in UV space)
-            motion *= _Intensity;
-            float maxBlurUV = _MaxBlurRadius * max(texelSize.x, texelSize.y);
+            motion *= Mat._Intensity;
+            float maxBlurUV = Mat._MaxBlurRadius * max(texelSize.x, texelSize.y);
             float motionLen = length(motion);
             if (motionLen > maxBlurUV)
                 motion = motion * (maxBlurUV / motionLen);
 
             // Skip blur for near-zero motion
-            if (length(motion * _Resolution) < 0.5)
+            if (length(motion * Mat._Resolution) < 0.5)
             {
-                OutputColor = vec4(centerColor, 1.0);
-                return;
+                return float4(centerColor, 1.0);
             }
 
             // Per-pixel jitter to break banding
-            float dither = IGN(gl_FragCoord.xy) - 0.5;
+            float dither = IGN(input.position.xy) - 0.5;
 
-            int samples = max(_Samples, 1);
-            vec3 acc = vec3(0.0);
+            int samples = max(Mat._Samples, 1);
+            float3 acc = float3(0.0);
             float totalWeight = 0.0;
 
             for (int i = 0; i < samples; i++)
             {
                 // Distribute samples along the motion vector [-0.5, 0.5]
                 float t = (float(i) + dither) / float(samples) - 0.5;
-                vec2 sampleUV = TexCoords + motion * t;
+                float2 sampleUV = texCoord + motion * t;
 
                 // Clamp to screen
-                sampleUV = clamp(sampleUV, vec2(0.0), vec2(1.0));
+                sampleUV = clamp(sampleUV, float2(0.0), float2(1.0));
 
-                vec3 sampleColor = texture(_MainTex, sampleUV).rgb;
+                float3 sampleColor = Mat._MainTex.Sample(sampleUV).rgb;
 
                 // Depth-aware weighting: reduce ghosting from background bleeding
                 // through foreground by weighting samples closer in depth higher
-                float sampleDepth = texture(_CameraDepthTexture, sampleUV).r;
-                float centerDepth = texture(_CameraDepthTexture, TexCoords).r;
+                float sampleDepth = Mat._CameraDepthTexture.Sample(sampleUV).r;
+                float centerDepth = Mat._CameraDepthTexture.Sample(texCoord).r;
                 float depthDiff = abs(linearizeDepthFromProjection(sampleDepth)
                                     - linearizeDepthFromProjection(centerDepth));
                 float depthWeight = 1.0 / (1.0 + depthDiff * 10.0);
@@ -105,9 +96,9 @@ Pass "MotionBlur"
                 totalWeight += depthWeight;
             }
 
-            OutputColor = vec4(acc / max(totalWeight, 1e-5), 1.0);
+            return float4(acc / max(totalWeight, 1e-5), 1.0);
         }
-    }
 
-    ENDGLSL
+        ENDSLANG
+    }
 }

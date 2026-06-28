@@ -131,7 +131,7 @@ public sealed class TAAEffect : ImageEffect
             _mat.SetTexture("_MotionVectorsTex", context.MotionVectors);
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
 
-        using var cmd = Graphics.GetCommandBuffer("TAA");
+        var cmd = Graphics.GetCommandBuffer("TAA");
 
         // Resolve: blend current jittered frame with reprojected history
         var resolved = RenderTexture.GetTemporaryRT(w, h, false, [format]);

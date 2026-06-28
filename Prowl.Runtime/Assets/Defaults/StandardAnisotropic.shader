@@ -1,277 +1,302 @@
 Shader "Default/StandardAnisotropic"
-
-Properties
 {
-    _MainTex ("Albedo", Texture2D) = "white"
-    _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _Tiling ("Tiling", Vector2) = (1.0, 1.0)
-    _Offset ("Offset", Vector2) = (0.0, 0.0)
+    Properties
+    {
+        _MainTex("Albedo", Texture2D) = "white" {}
+        _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Tiling("Tiling", Vector) = (1.0, 1.0, 0, 0)
+        _Offset("Offset", Vector) = (0.0, 0.0, 0, 0)
+        _NormalTex("Normal", Texture2D) = "normal" {}
+        _SurfaceTex("Surface (AO, Roughness, Metallicness)", Texture2D) = "surface" {}
+        _EmissionTex("Emission", Texture2D) = "emission" {}
+        _EmissionIntensity("Emission Intensity", Float) = 1.0
+        _AlphaCutoff("Alpha Cutoff", Float) = 0.5
+        _Anisotropy("Anisotropy", Float) = 0.5
+        _AnisoDirectionMap("Anisotropy Direction (RG)", Texture2D) = "normal" {}
+    }
 
-    _NormalTex ("Normal", Texture2D) = "normal"
+    Pass
+    {
+        Name "StandardAniso"
+        Tags { "RenderOrder" = "Opaque" }
+        Cull Back
 
-    _SurfaceTex ("Surface (AO, Roughness, Metallicness)", Texture2D) = "surface"
+        SLANGPROGRAM
 
-    _EmissionTex ("Emission", Texture2D) = "emission"
-    _EmissionIntensity ("Emission Intensity", Float) = 1.0
+        import ProwlCG;
+        import VertexAttributes;
+        import Lighting;
 
-    _AlphaCutoff ("Alpha Cutoff", Float) = 0.5
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            float3 normal : NORMAL0;
+            float4 tangent : TANGENT0;
+            float4 color : COLOR0;
+            uint vid : SV_VertexID;
+        }
 
-    _Anisotropy ("Anisotropy", Float) = 0.5
-    _AnisoDirectionMap ("Anisotropy Direction (RG)", Texture2D) = "normal"
-}
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+            float3 worldPos : TEXCOORD1;
+            float4 vColor : COLOR0;
+            float3 vNormal : NORMAL0;
+            float3 vTangent : TANGENT0;
+            float3 vBitangent : TEXCOORD2;
+        }
 
-Pass "StandardAniso"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Cull Back
+        struct Material
+        {
+            float2 _Tiling;
+            float2 _Offset;
+            float _EmissionIntensity;
+            float4 _MainColor;
+            float _AlphaCutoff;
+            float _Anisotropy;
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _NormalTex;
+            Sampler2D<float4> _SurfaceTex;
+            Sampler2D<float4> _EmissionTex;
+            Sampler2D<float4> _AnisoDirectionMap;
+        }
+        ParameterBlock<Material> Mat;
 
-	GLSLPROGRAM
-
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
-
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 vColor;
-			out vec3 vNormal;
-			out vec3 vTangent;
-			out vec3 vBitangent;
-
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
-
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-				worldPos = TransformPosition(vertexPosition);
-				vColor = GetInstanceColor();
-				vNormal = TransformDirection(vertexNormal);
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = TransformClip(input.position, input.vid);
+            o.texCoord0 = input.uv0 * Mat._Tiling + Mat._Offset;
+            o.worldPos = TransformPosition(input.position, input.vid);
+            o.vColor = GetInstanceColor(input.color);
+            o.vNormal = TransformDirection(input.normal);
+            o.vTangent = float3(0.0);
+            o.vBitangent = float3(0.0);
 #ifdef HAS_TANGENTS
-				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
-				if (dot(vBitangent, vBitangent) < 0.000001) {
-					vTangent = abs(vNormal.y) < 0.999 ? normalize(cross(vNormal, vec3(0,1,0))) : normalize(cross(vNormal, vec3(1,0,0)));
-					vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
-				}
+            o.vTangent = TransformDirection(input.tangent.xyz);
+            o.vBitangent = cross(o.vTangent, o.vNormal) * input.tangent.w;
+            if (dot(o.vBitangent, o.vBitangent) < 0.000001) {
+                o.vTangent = abs(o.vNormal.y) < 0.999 ? normalize(cross(o.vNormal, float3(0,1,0))) : normalize(cross(o.vNormal, float3(1,0,0)));
+                o.vBitangent = cross(o.vTangent, o.vNormal) * input.tangent.w;
+            }
 #endif
-			}
-		}
+            return o;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
-            #include "Lighting"
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            // Albedo
+            float4 albedo = Mat._MainTex.Sample(input.texCoord0) * input.vColor * Mat._MainColor;
+            float3 baseColor = gammaToLinearSpace(albedo.rgb);
 
-			layout (location = 0) out vec4 fragColor;
+            // Alpha cutout
+            if (albedo.a < Mat._AlphaCutoff)
+                discard;
 
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 vColor;
-			in vec3 vNormal;
-			in vec3 vTangent;
-			in vec3 vBitangent;
+            // Normal mapping
+            float3 worldNormal = ApplyNormalMap(Mat._NormalTex, input.texCoord0, input.vNormal, input.vTangent, input.vBitangent);
 
-			uniform sampler2D _MainTex;
-			uniform sampler2D _NormalTex;
-			uniform sampler2D _SurfaceTex;
-			uniform sampler2D _EmissionTex;
-			uniform float _EmissionIntensity;
-			uniform vec4 _MainColor;
-			uniform float _AlphaCutoff;
+            // Surface: R = AO, G = Roughness, B = Metallic
+            float4 surface = Mat._SurfaceTex.Sample(input.texCoord0);
+            float ao = 1.0 - surface.r;
+            float roughness = surface.g;
+            float metallic = surface.b;
 
-			uniform float _Anisotropy;
-			uniform sampler2D _AnisoDirectionMap;
+            // Tangent frame for anisotropic lighting
+            float3 T = normalize(input.vTangent);
+            float3 B = normalize(input.vBitangent);
+            float3 N = normalize(worldNormal);
 
-			void main()
-			{
-				// Albedo
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-				vec3 baseColor = gammaToLinearSpace(albedo.rgb);
+            // Optionally rotate tangent direction by aniso direction map
+            float2 anisoDir = Mat._AnisoDirectionMap.Sample(input.texCoord0).rg * 2.0 - 1.0;
+            float anisoDirLen = length(anisoDir);
+            float3 anisoTangent, anisoBitangent;
+            if (anisoDirLen > 0.01)
+            {
+                anisoDir /= anisoDirLen;
+                anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
+                anisoBitangent = normalize(cross(N, anisoTangent));
+            }
+            else
+            {
+                anisoTangent = T;
+                anisoBitangent = B;
+            }
 
-				// Alpha cutout
-				if (albedo.a < _AlphaCutoff)
-				    discard;
+            // Emission
+            float3 emission = Mat._EmissionTex.Sample(input.texCoord0).rgb * Mat._EmissionIntensity;
 
-				// Normal mapping
-				vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
+            // Anisotropic PBR lighting
+            float3 viewDir = normalize(Frame._WorldSpaceCameraPos.xyz - input.worldPos);
+            float3 lighting = CalculateForwardLightingAniso(input.worldPos, N, viewDir,
+                anisoTangent, anisoBitangent,
+                baseColor, metallic, roughness, Mat._Anisotropy, ao, input.position.xy);
 
-				// Surface: R = AO, G = Roughness, B = Metallic
-				vec4 surface = texture(_SurfaceTex, texCoord0);
-				float ao = 1.0 - surface.r;
-				float roughness = surface.g;
-				float metallic = surface.b;
+            // Ambient + fog (energy conserved for metals)
+            float3 ambientLight = CalculateAmbient(N) * ao * Light._AmbientStrength;
+            float3 diffuseColor = baseColor * (1.0 - metallic);
+            float3 ambientDiffuse = ambientLight * diffuseColor;
 
-				// Tangent frame for anisotropic lighting
-				vec3 T = normalize(vTangent);
-				vec3 B = normalize(vBitangent);
-				vec3 N = normalize(worldNormal);
+            float3 F0 = lerp(float3(0.04), baseColor, metallic);
+            float NdotV = max(dot(N, viewDir), 0.0);
+            float3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+            float specOcclusion = 1.0 - roughness * roughness;
+            float3 ambientSpecular = ambientLight * F * lerp(specOcclusion, 1.0, 0.25);
 
-				// Optionally rotate tangent direction by aniso direction map
-				// RG encodes direction in tangent plane, default (0.5, 0.5) = use mesh tangent as-is
-				vec2 anisoDir = texture(_AnisoDirectionMap, texCoord0).rg * 2.0 - 1.0;
-				float anisoDirLen = length(anisoDir);
-				vec3 anisoTangent, anisoBitangent;
-				if (anisoDirLen > 0.01)
-				{
-				    anisoDir /= anisoDirLen;
-				    anisoTangent = normalize(T * anisoDir.x + B * anisoDir.y);
-				    anisoBitangent = normalize(cross(N, anisoTangent));
-				}
-				else
-				{
-				    // No direction map or neutral use mesh tangent directly
-				    anisoTangent = T;
-				    anisoBitangent = B;
-				}
+            float3 ambient = ambientDiffuse + ambientSpecular;
+            float3 color = ApplyFog(ambient + lighting + emission, input.worldPos);
 
-				// Emission
-				vec3 emission = texture(_EmissionTex, texCoord0).rgb * _EmissionIntensity;
+            return float4(color, 1.0);
+        }
 
-				// Anisotropic PBR lighting
-				vec3 viewDir = normalize(_WorldSpaceCameraPos.xyz - worldPos);
-				vec3 lighting = CalculateForwardLightingAniso(worldPos, N, viewDir,
-				    anisoTangent, anisoBitangent,
-				    baseColor, metallic, roughness, _Anisotropy, ao);
+        ENDSLANG
+    }
 
-				// Ambient + fog (energy conserved for metals)
-				vec3 ambientLight = CalculateAmbient(N) * ao * _AmbientStrength;
-				vec3 diffuseColor = baseColor * (1.0 - metallic);
-				vec3 ambientDiffuse = ambientLight * diffuseColor;
+    Pass
+    {
+        Name "Prepass"
+        Tags { "LightMode" = "Prepass" }
+        Cull Back
+        ZWrite On
 
-				vec3 F0 = mix(vec3(0.04), baseColor, metallic);
-				float NdotV = max(dot(N, viewDir), 0.0);
-				vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
-				float specOcclusion = 1.0 - roughness * roughness;
-				vec3 ambientSpecular = ambientLight * F * mix(specOcclusion, 1.0, 0.25);
+        SLANGPROGRAM
 
-				vec3 ambient = ambientDiffuse + ambientSpecular;
-				vec3 color = ApplyFog(ambient + lighting + emission, worldPos);
+        import ProwlCG;
+        import VertexAttributes;
 
-				fragColor = vec4(color, 1.0);
-			}
-		}
-	ENDGLSL
-}
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            float3 normal : NORMAL0;
+            float4 tangent : TANGENT0;
+            uint vid : SV_VertexID;
+        }
 
-Pass "Prepass"
-{
-    Tags { "LightMode" = "Prepass" }
-    Cull Back
-    ZWrite On
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float3 vNormal : NORMAL0;
+            float3 vTangent : TANGENT0;
+            float3 vBitangent : TEXCOORD0;
+            float2 texCoord0 : TEXCOORD1;
+            float4 vCurrClipNJ : TEXCOORD2;
+            float4 vPrevClip : TEXCOORD3;
+        }
 
-	GLSLPROGRAM
+        struct Material
+        {
+            float2 _Tiling;
+            float2 _Offset;
+            float _AlphaCutoff;
+            Sampler2D<float4> _NormalTex;
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _SurfaceTex;
+        }
+        ParameterBlock<Material> Mat;
 
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        struct FragOut
+        {
+            float4 normalOut : SV_Target0;
+            float4 motionRM : SV_Target1;
+        }
 
-			out vec3 vNormal;
-			out vec3 vTangent;
-			out vec3 vBitangent;
-			out vec2 texCoord0;
-			out vec4 vCurrClipNJ;
-			out vec4 vPrevClip;
-
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
-
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
-				vNormal = TransformDirection(vertexNormal);
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = TransformClip(input.position, input.vid); // jittered, for raster + depth
+            o.vNormal = TransformDirection(input.normal);
+            o.vTangent = float3(0.0);
+            o.vBitangent = float3(0.0);
 #ifdef HAS_TANGENTS
-				vTangent = TransformDirection(vertexTangent.xyz);
-				vBitangent = cross(vTangent, vNormal) * vertexTangent.w;
+            o.vTangent = TransformDirection(input.tangent.xyz);
+            o.vBitangent = cross(o.vTangent, o.vNormal) * input.tangent.w;
 #endif
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
+            o.texCoord0 = input.uv0 * Mat._Tiling + Mat._Offset;
 
-				// Jitter-free current + previous clip positions for motion vectors.
-				vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
-				vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
-				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-				vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-			}
-		}
+            float4 worldPos = mul(GetModelMatrix(), float4(input.position, 1.0));
+            o.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, worldPos);
+            float4 prevWorldPos = mul(Object.prowl_PrevObjectToWorld, float4(input.position, 1.0));
+            o.vPrevClip = mul(Frame.prowl_PrevViewProj, prevWorldPos);
+            return o;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
+        [shader("fragment")]
+        FragOut Fragment(Varyings input)
+        {
+            if (Mat._MainTex.Sample(input.texCoord0).a < Mat._AlphaCutoff)
+                discard;
 
-			layout (location = 0) out vec4 normalOut;
-			layout (location = 1) out vec4 motionRM;
+            float3 worldNormal = ApplyNormalMap(Mat._NormalTex, input.texCoord0, input.vNormal, input.vTangent, input.vBitangent);
 
-			in vec3 vNormal;
-			in vec3 vTangent;
-			in vec3 vBitangent;
-			in vec2 texCoord0;
-			in vec4 vCurrClipNJ;
-			in vec4 vPrevClip;
+            FragOut o;
+            o.normalOut = EncodeViewNormal(worldNormal);
 
-			uniform sampler2D _NormalTex;
-			uniform sampler2D _MainTex;
-			uniform sampler2D _SurfaceTex;
-			uniform float _AlphaCutoff;
+            float2 currNDC = (input.vCurrClipNJ.xy / input.vCurrClipNJ.w) * 0.5 + 0.5;
+            float2 prevNDC = (input.vPrevClip.xy / input.vPrevClip.w) * 0.5 + 0.5;
+            float4 surface = Mat._SurfaceTex.Sample(input.texCoord0);
+            o.motionRM = float4(currNDC - prevNDC, surface.g, surface.b);
+            return o;
+        }
 
-			void main()
-			{
-				if (texture(_MainTex, texCoord0).a < _AlphaCutoff)
-				    discard;
+        ENDSLANG
+    }
 
-                vec3 worldNormal = ApplyNormalMap(_NormalTex, texCoord0, vNormal, vTangent, vBitangent);
-				normalOut = EncodeViewNormal(worldNormal);
+    Pass
+    {
+        Name "ShadowCaster"
+        Tags { "LightMode" = "ShadowCaster" }
+        Cull Back
 
-				// Motion vectors (jitter-free) + packed roughness/metallic (_SurfaceTex G/B).
-				vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
-				vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
-				vec4 surface = texture(_SurfaceTex, texCoord0);
-				motionRM = vec4(currNDC - prevNDC, surface.g, surface.b);
-			}
-		}
-	ENDGLSL
-}
+        SLANGPROGRAM
 
-Pass "ShadowCaster"
-{
-    Tags { "LightMode" = "ShadowCaster" }
-    Cull Back
+        import ProwlCG;
+        import VertexAttributes;
 
-	GLSLPROGRAM
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            uint vid : SV_VertexID;
+        }
 
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+        }
 
-			out vec2 texCoord0;
+        struct Material
+        {
+            float2 _Tiling;
+            float2 _Offset;
+            float _AlphaCutoff;
+            Sampler2D<float4> _MainTex;
+        }
+        ParameterBlock<Material> Mat;
 
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = TransformClip(input.position, input.vid);
+            o.texCoord0 = input.uv0 * Mat._Tiling + Mat._Offset;
+            return o;
+        }
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-			}
-		}
+        [shader("fragment")]
+        float Fragment(Varyings input) : SV_Depth
+        {
+            if (Mat._MainTex.Sample(input.texCoord0).a < Mat._AlphaCutoff)
+                discard;
+            return input.position.z;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
-
-			in vec2 texCoord0;
-			uniform sampler2D _MainTex;
-			uniform float _AlphaCutoff;
-
-			void main()
-			{
-				if (texture(_MainTex, texCoord0).a < _AlphaCutoff)
-				    discard;
-                gl_FragDepth = gl_FragCoord.z;
-			}
-		}
-	ENDGLSL
+        ENDSLANG
+    }
 }

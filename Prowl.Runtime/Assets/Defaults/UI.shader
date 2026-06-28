@@ -1,257 +1,244 @@
 Shader "Paper/UI"
-
-Properties
 {
-}
-
-Pass "UI"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend {
-        Src One
-        Dst OneMinusSrcAlpha
-        Mode Add
-    }
-    ZTest Off
-    ZWrite Off
-    Cull Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec2 aPosition;
-        layout (location = 1) in vec2 aTexCoord;
-        layout (location = 2) in vec4 aColor;
+        Name "UI"
+        Tags { "RenderOrder" = "Opaque" }
+        Blend One OneMinusSrcAlpha
+        ZTest Disabled
+        ZWrite Off
+        Cull Off
 
-        uniform mat4 projection;
+        SLANGPROGRAM
 
-        out vec2 fragTexCoord;
-        out vec4 fragColor;
-        out vec2 fragPos;
-
-        void main()
+        struct VertexInput
         {
-            fragTexCoord = aTexCoord;
-            fragColor = aColor;
-            fragPos = aPosition;
-            gl_Position = projection * vec4(aPosition, 0.0, 1.0);
+            float2 aPosition : POSITION0;
+            float2 aTexCoord : TEXCOORD0;
+            float4 aColor : COLOR0;
         }
-    }
 
-    Fragment
-    {
-        in vec2 fragTexCoord;
-        in vec4 fragColor;
-        in vec2 fragPos;
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 fragTexCoord : TEXCOORD0;
+            float4 fragColor : COLOR0;
+            float2 fragPos : TEXCOORD1;
+        }
 
-        out vec4 finalColor;
+        struct Material
+        {
+            float4x4 projection;
+            float4x4 scissorMat;
+            float2 scissorExt;
 
-        uniform sampler2D texture0;
-        uniform mat4 scissorMat;
-        uniform vec2 scissorExt;
+            float4x4 brushMat;
+            int brushType;
+            float4 brushColor1;
+            float4 brushColor2;
+            float4 brushParams;
+            float2 brushParams2;
 
-        uniform mat4 brushMat;
-        uniform int brushType;
-        uniform vec4 brushColor1;
-        uniform vec4 brushColor2;
-        uniform vec4 brushParams;
-        uniform vec2 brushParams2;
+            float4x4 brushTextureMat;
+            float dpiScale;
 
-        uniform mat4 brushTextureMat;
-        uniform float dpiScale;
+            float2 viewportSize;         // framebuffer size in pixels
+            float backdropBlurAmount;  // > 0 when this fill is frosted glass
+            int backdropFlipY;         // 1 to flip the backdrop sample vertically
 
-        // Backdrop blur
-        uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
-        uniform vec2 viewportSize;         // framebuffer size in pixels
-        uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
-        uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
+            Sampler2D<float4> texture0;
+            Sampler2D<float4> backdropTexture; // blurred copy of the scene behind the shape
+        }
+        ParameterBlock<Material> Mat;
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.fragTexCoord = input.aTexCoord;
+            o.fragColor = input.aColor;
+            o.fragPos = input.aPosition;
+            o.position = mul(Mat.projection, float4(input.aPosition, 0.0, 1.0));
+            return o;
+        }
 
         // ============== Canvas functions ==============
 
-        float calculateBrushFactor() {
-            if (brushType == 0) return 0.0;
-            vec2 logicalPos = fragPos / max(dpiScale, 0.001);
-            vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
+        float calculateBrushFactor(float2 fragPos) {
+            if (Mat.brushType == 0) return 0.0;
+            float2 logicalPos = fragPos / max(Mat.dpiScale, 0.001);
+            float2 transformedPoint = mul(Mat.brushMat, float4(logicalPos, 0.0, 1.0)).xy;
 
-            if (brushType == 1) {
-                vec2 startPoint = brushParams.xy; vec2 endPoint = brushParams.zw;
-                vec2 line = endPoint - startPoint; float lineLength = length(line);
+            if (Mat.brushType == 1) {
+                float2 startPoint = Mat.brushParams.xy; float2 endPoint = Mat.brushParams.zw;
+                float2 line = endPoint - startPoint; float lineLength = length(line);
                 if (lineLength < 0.001) return 0.0;
                 return clamp(dot(transformedPoint - startPoint, line) / (lineLength * lineLength), 0.0, 1.0);
             }
-            if (brushType == 2) {
-                vec2 center = brushParams.xy;
-                return clamp(smoothstep(brushParams.z, brushParams.w, length(transformedPoint - center)), 0.0, 1.0);
+            if (Mat.brushType == 2) {
+                float2 center = Mat.brushParams.xy;
+                return clamp(smoothstep(Mat.brushParams.z, Mat.brushParams.w, length(transformedPoint - center)), 0.0, 1.0);
             }
-            if (brushType == 3) {
-                vec2 center = brushParams.xy; vec2 halfSize = brushParams.zw;
-                float radius = brushParams2.x; float feather = brushParams2.y;
+            if (Mat.brushType == 3) {
+                float2 center = Mat.brushParams.xy; float2 halfSize = Mat.brushParams.zw;
+                float radius = Mat.brushParams2.x; float feather = Mat.brushParams2.y;
                 if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-                vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
+                float2 q = abs(transformedPoint - center) - (halfSize - float2(radius));
                 float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
                 return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
             }
             return 0.0;
         }
 
-        float scissorMask(vec2 p) {
-            if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-            float dpi = max(dpiScale, 0.001);
-            vec2 logicalP = p / dpi;
-            vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
-            vec2 logicalExt = scissorExt / dpi;
-            vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
+        float scissorMask(float2 p) {
+            if(Mat.scissorExt.x < 0.0 || Mat.scissorExt.y < 0.0) return 1.0;
+            float dpi = max(Mat.dpiScale, 0.001);
+            float2 logicalP = p / dpi;
+            float2 transformedPoint = mul(Mat.scissorMat, float4(logicalP, 0.0, 1.0)).xy;
+            float2 logicalExt = Mat.scissorExt / dpi;
+            float2 distanceFromEdges = abs(transformedPoint) - logicalExt;
             float halfPixelLogical = 0.5 / dpi;
-            vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
+            float2 smoothEdges = float2(halfPixelLogical) - distanceFromEdges;
             return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
         }
 
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            float mask = scissorMask(fragPos);
-            vec4 color = fragColor;
+            float mask = scissorMask(input.fragPos);
+            float4 color = input.fragColor;
 
-            if (brushType > 0) {
-                float factor = calculateBrushFactor();
-                color = mix(brushColor1, brushColor2, factor);
+            if (Mat.brushType > 0) {
+                float factor = calculateBrushFactor(input.fragPos);
+                color = lerp(Mat.brushColor1, Mat.brushColor2, factor);
             }
 
             // Bitmap text mode: UV.x >= 2.0
-            if (fragTexCoord.x >= 2.0) {
-                finalColor = color * texture(texture0, fragTexCoord - vec2(2.0)) * mask;
-                return;
+            if (input.fragTexCoord.x >= 2.0) {
+                return color * Mat.texture0.Sample(input.fragTexCoord - float2(2.0)) * mask;
             }
 
             // Standard canvas rendering with edge AA
-            vec2 pixelSize = fwidth(fragTexCoord);
-            vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
+            float2 pixelSize = fwidth(input.fragTexCoord);
+            float2 edgeDistance = min(input.fragTexCoord, 1.0 - input.fragTexCoord);
             float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
             edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
 
-            float dpi = max(dpiScale, 0.001);
-            vec2 logicalPos = fragPos / dpi;
-            vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+            float dpi = max(Mat.dpiScale, 0.001);
+            float2 logicalPos = input.fragPos / dpi;
+            float4 fill = color * Mat.texture0.Sample(mul(Mat.brushTextureMat, float4(logicalPos, 0.0, 1.0)).xy);
 
             // Backdrop blur: composite the fill over the blurred scene behind the shape.
-            if (backdropBlurAmount > 0.0) {
-                vec2 uv = fragPos / viewportSize;
-                if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
-                vec3 blurred = texture(backdropTexture, uv).rgb;
-                vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
-                finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
-                return;
+            if (Mat.backdropBlurAmount > 0.0) {
+                float2 uv = input.fragPos / Mat.viewportSize;
+                if (Mat.backdropFlipY == 1) uv.y = 1.0 - uv.y;
+                float3 blurred = Mat.backdropTexture.Sample(uv).rgb;
+                float3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
+                return float4(outRgb, 1.0) * edgeAlpha * mask;
             }
 
-            finalColor = fill * edgeAlpha * mask;
+            return fill * edgeAlpha * mask;
         }
+
+        ENDSLANG
     }
 
-    ENDGLSL
-}
-
-Pass "BlurDown"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    ZTest Off
-    ZWrite Off
-    Cull Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "BlurDown"
+        Tags { "RenderOrder" = "Opaque" }
+        ZTest Disabled
+        ZWrite Off
+        Cull Off
 
-        out vec2 TexCoords;
+        SLANGPROGRAM
 
-        void main()
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
+        struct Material
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
+            float _Offset;
+            Sampler2D<float4> _MainTex;
         }
+        ParameterBlock<Material> Mat;
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.uv = input.uv;
+            o.position = float4(input.position, 1.0);
+            return o;
+        }
+
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            uint texW, texH;
+            Mat._MainTex.GetDimensions(texW, texH);
+            float2 halfpixel = (0.5 / float2(texW, texH)) * Mat._Offset;
+
+            float4 sum = Mat._MainTex.Sample(input.uv) * 4.0;
+            sum += Mat._MainTex.Sample(input.uv - halfpixel);
+            sum += Mat._MainTex.Sample(input.uv + halfpixel);
+            sum += Mat._MainTex.Sample(input.uv + float2(halfpixel.x, -halfpixel.y));
+            sum += Mat._MainTex.Sample(input.uv - float2(halfpixel.x, -halfpixel.y));
+
+            return sum / 8.0;
+        }
+
+        ENDSLANG
     }
 
-    Fragment
+    Pass
     {
-        uniform sampler2D _MainTex;
-        uniform float _Offset;
+        Name "BlurUp"
+        Tags { "RenderOrder" = "Opaque" }
+        ZTest Disabled
+        ZWrite Off
+        Cull Off
 
-        layout(location = 0) out vec4 FragColor;
+        SLANGPROGRAM
 
-        in vec2 TexCoords;
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
 
-        void main()
+        struct Material
         {
-            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
-
-            vec4 sum = texture(_MainTex, TexCoords) * 4.0;
-            sum += texture(_MainTex, TexCoords - halfpixel);
-            sum += texture(_MainTex, TexCoords + halfpixel);
-            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, -halfpixel.y));
-            sum += texture(_MainTex, TexCoords - vec2(halfpixel.x, -halfpixel.y));
-
-            FragColor = sum / 8.0;
+            float _Offset;
+            Sampler2D<float4> _MainTex;
         }
-    }
+        ParameterBlock<Material> Mat;
 
-    ENDGLSL
-}
-
-Pass "BlurUp"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    ZTest Off
-    ZWrite Off
-    Cull Off
-
-    GLSLPROGRAM
-
-    Vertex
-    {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
-
-        out vec2 TexCoords;
-
-        void main()
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
+            Varyings o;
+            o.uv = input.uv;
+            o.position = float4(input.position, 1.0);
+            return o;
         }
-    }
 
-    Fragment
-    {
-        uniform sampler2D _MainTex;
-        uniform float _Offset;
-
-        layout(location = 0) out vec4 FragColor;
-
-        in vec2 TexCoords;
-
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            vec2 halfpixel = (0.5 / vec2(textureSize(_MainTex, 0))) * _Offset;
+            uint texW, texH;
+            Mat._MainTex.GetDimensions(texW, texH);
+            float2 halfpixel = (0.5 / float2(texW, texH)) * Mat._Offset;
 
-            vec4 sum = texture(_MainTex, TexCoords + vec2(-halfpixel.x * 2.0, 0.0));
-            sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, halfpixel.y)) * 2.0;
-            sum += texture(_MainTex, TexCoords + vec2(0.0, halfpixel.y * 2.0));
-            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, halfpixel.y)) * 2.0;
-            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x * 2.0, 0.0));
-            sum += texture(_MainTex, TexCoords + vec2(halfpixel.x, -halfpixel.y)) * 2.0;
-            sum += texture(_MainTex, TexCoords + vec2(0.0, -halfpixel.y * 2.0));
-            sum += texture(_MainTex, TexCoords + vec2(-halfpixel.x, -halfpixel.y)) * 2.0;
+            float4 sum = Mat._MainTex.Sample(input.uv + float2(-halfpixel.x * 2.0, 0.0));
+            sum += Mat._MainTex.Sample(input.uv + float2(-halfpixel.x, halfpixel.y)) * 2.0;
+            sum += Mat._MainTex.Sample(input.uv + float2(0.0, halfpixel.y * 2.0));
+            sum += Mat._MainTex.Sample(input.uv + float2(halfpixel.x, halfpixel.y)) * 2.0;
+            sum += Mat._MainTex.Sample(input.uv + float2(halfpixel.x * 2.0, 0.0));
+            sum += Mat._MainTex.Sample(input.uv + float2(halfpixel.x, -halfpixel.y)) * 2.0;
+            sum += Mat._MainTex.Sample(input.uv + float2(0.0, -halfpixel.y * 2.0));
+            sum += Mat._MainTex.Sample(input.uv + float2(-halfpixel.x, -halfpixel.y)) * 2.0;
 
-            FragColor = sum / 12.0;
+            return sum / 12.0;
         }
-    }
 
-    ENDGLSL
+        ENDSLANG
+    }
 }

@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System;
 using System.Runtime.CompilerServices;
 
@@ -133,7 +134,7 @@ public sealed class LightBVHTextures : IDisposable
         if (_lightTex != null && dim == LightTextureSize) return false;
 
         _lightTex?.Dispose();
-        _lightTex = new Texture2D((uint)dim, (uint)dim, false, TextureImageFormat.Float4);
+        _lightTex = new Texture2D((uint)dim, (uint)dim, false, PixelFormat.R32_G32_B32_A32_Float);
         // texelFetch ignores filtering and wrap, so leaving them at the texture defaults is fine.
         LightTextureSize = dim;
 
@@ -158,7 +159,7 @@ public sealed class LightBVHTextures : IDisposable
         if (_nodeTex != null && dim == NodeTextureSize) return false;
 
         _nodeTex?.Dispose();
-        _nodeTex = new Texture2D((uint)dim, (uint)dim, false, TextureImageFormat.Float4);
+        _nodeTex = new Texture2D((uint)dim, (uint)dim, false, PixelFormat.R32_G32_B32_A32_Float);
         NodeTextureSize = dim;
 
         int floats = dim * dim * 4;

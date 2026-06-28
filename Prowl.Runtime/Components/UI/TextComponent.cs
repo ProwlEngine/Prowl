@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 
 using Prowl.Echo;
@@ -176,7 +178,7 @@ public class TextComponent : UIBehaviour
         }
     }
 
-    public override void PopulateProperties(PropertyState p, in UIContext _)
+    public override void PopulateProperties(PropertySet p, in UIContext _)
     {
         // Always re-read the atlas through System.Texture - it can be replaced when the
         // atlas grows. Falls back to a 1x1 white texture if Scribe hasn't allocated yet.

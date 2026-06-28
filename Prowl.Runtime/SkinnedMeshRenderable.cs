@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -18,12 +20,12 @@ public class SkinnedMeshRenderable : IRenderable
     private Material _material;
     private Float4x4 _transform;
     private int _layerIndex;
-    private PropertyState _properties;
+    private PropertySet _properties;
     private int _subMeshIndex;
     private AABB _worldBounds;
     private Float4x4? _worldToObject;
 
-    public SkinnedMeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, AABB worldBounds, PropertyState? propertyBlock = null, int subMeshIndex = -1)
+    public SkinnedMeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, AABB worldBounds, PropertySet? propertyBlock = null, int subMeshIndex = -1)
     {
         _mesh = mesh;
         _material = material;
@@ -42,7 +44,7 @@ public class SkinnedMeshRenderable : IRenderable
         return new Float3(_transform[0, 3], _transform[1, 3], _transform[2, 3]);
     }
 
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
+    public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
     {
         mesh = _mesh;
         properties = _properties;

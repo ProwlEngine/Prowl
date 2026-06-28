@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
@@ -52,7 +53,7 @@ public class MeshRenderer : MonoBehaviour
 
             if (mat == null) continue;
 
-            PropertyState props = new();
+            PropertySet props = new();
             props.SetInt("_ObjectID", InstanceID);
             // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
             // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than

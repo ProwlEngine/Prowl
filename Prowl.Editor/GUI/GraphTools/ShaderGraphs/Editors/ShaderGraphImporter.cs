@@ -6,6 +6,7 @@ using System.IO;
 using Prowl.Echo;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Projects;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime;
 using Prowl.Runtime.GraphTools;
 using Prowl.Runtime.GraphTools.ShaderGraphs;
@@ -74,7 +75,7 @@ public sealed class ShaderGraphImporter : AssetImporter
             else
             {
                 if (d.severity == NodeMessageSeverity.Error) Debug.LogError($"[ShaderGraph] {d.message}");
-                else                                          Debug.LogWarning($"[ShaderGraph] {d.message}");
+                else Debug.LogWarning($"[ShaderGraph] {d.message}");
             }
         }
 
@@ -100,31 +101,18 @@ public sealed class ShaderGraphImporter : AssetImporter
             catch { return null; }
         }
 
-        Shader? shader;
-        bool parsedOk;
-        try
+        Shader? shader = ShaderImporter.LoadShader(result.ShaderSource, ctx.AbsolutePath);
+
+        if (shader == null)
         {
-            parsedOk = Prowl.Runtime.AssetImporting.ShaderParser.ParseShader(
-                ctx.AbsolutePath, result.ShaderSource, IncludeResolver, out shader);
-        }
-        catch (System.Exception ex)
-        {
-            Debug.LogError($"[ShaderGraphImporter] Shader parser threw for '{shaderName}': {ex.Message}");
-            // Dump the generated source so the user can see what went wrong.
+            Debug.LogError($"[ShaderGraphImporter] Graph failed to compile for '{shaderName}'");
             Debug.LogError($"[ShaderGraphImporter] Generated source:\n{result.ShaderSource}");
-            return true; // main asset still saved sub-asset just missing
+            return true;
         }
 
-        if (parsedOk && shader != null)
-        {
-            shader.Name = shaderName;
-            ctx.AddSubAsset("CompiledShader", shader);
-            Debug.Log($"[ShaderGraphImporter] Added compiled Shader sub-asset for '{shaderName}'.");
-        }
-        else
-        {
-            Debug.LogError($"[ShaderGraphImporter] ParseShader returned false for '{shaderName}'. Generated source:\n{result.ShaderSource}");
-        }
+        shader.Name = shaderName;
+        ctx.AddSubAsset("CompiledShader", shader);
+        Debug.Log($"[ShaderGraphImporter] Added compiled Shader sub-asset for '{shaderName}'.");
 
         return true;
     }

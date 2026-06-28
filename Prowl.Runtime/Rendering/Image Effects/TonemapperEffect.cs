@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 
 using Material = Prowl.Runtime.Resources.Material;
@@ -53,10 +54,10 @@ public sealed class TonemapperEffect : ImageEffect
             context.Width,
             context.Height,
             true, // Keep depth for transparents
-            [TextureImageFormat.Color4b] // LDR format
+            [PixelFormat.R8_G8_B8_A8_UNorm] // LDR format
         );
 
-        using var cmd = Graphics.GetCommandBuffer("Tonemapper");
+        var cmd = Graphics.GetCommandBuffer("Tonemapper");
 
         // Preserve depth so transparents drawn into the LDR buffer still occlude correctly.
         if (context.SceneColor.InternalDepth != null)

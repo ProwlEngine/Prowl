@@ -126,7 +126,7 @@ public sealed class VolumetricFogEffect : ImageEffect
             _historyValid = false;
         }
 
-        using var cmd = Graphics.GetCommandBuffer("VolumetricFog");
+        var cmd = Graphics.GetCommandBuffer("VolumetricFog");
 
         // Pass 0 Ray march into low-res.
         var currentLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);

@@ -222,8 +222,8 @@ public static class EditorTheme
     public static FontFile? DefaultFont;
     public static FontFile? DefaultBoldFont;
 
-    public static string DefaultFontName = "segoe ui";
-    public static string DefaultBoldFontName = "segoe ui";
+    public static string DefaultFontName = "inter";
+    public static string DefaultBoldFontName = "inter";
 
     // DPI Scaling value
     public static float UserScale { get; set; } = 1f;

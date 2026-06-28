@@ -55,10 +55,7 @@ public sealed class Texture2D : Texture, ISerializable
         _generateMipmaps = generateMipmaps;
         RecreateImage(width, height);
 
-        if (generateMipmaps)
-            GenerateMipmaps();
-
-        SetTextureFilters(IsMipmapped ? DefaultMipmapFilter : DefaultFilter);
+        SetTextureFilters(_generateMipmaps ? DefaultMipmapFilter : DefaultFilter);
     }
 
     /// <summary>
@@ -107,7 +104,8 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
-        throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
+        Debug.LogWarning("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture)");
+        // throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
     }
 
     public int GetSize() => (int)(Width * Height * ImageFormat.GetSizeInBytes());
@@ -123,10 +121,13 @@ public sealed class Texture2D : Texture, ISerializable
         Width = width;
         Height = height;
 
-        Handle?.Dispose();
+        // Old handle may still be in flight; defer its disposal to avoid a use-after-free stall.
+        Graphics.CancelMipmapGeneration(Handle);
+        Graphics.DisposeDeferred(Handle);
 
         uint mipLevels = _generateMipmaps ? ComputeMipLevels(width, height) : 1;
         TextureUsage usage = TextureUsage.Sampled | _extraUsage;
+
         if (_generateMipmaps)
             usage |= TextureUsage.GenerateMipmaps;
 
@@ -186,7 +187,7 @@ public sealed class Texture2D : Texture, ISerializable
         var addressV = (SamplerAddressMode)value["AddressV"].IntValue;
 
         Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(PixelFormat) };
-        object[] values = new object[] { Width, Height, false, imageFormat };
+        object[] values = new object[] { Width, Height, isMipMapped, imageFormat };
         typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
         Memory<byte> memory = value["Data"].ByteArrayValue;
@@ -217,7 +218,7 @@ public sealed class Texture2D : Texture, ISerializable
 
         nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
 
-        Texture2D texture = new(image.Width, image.Height, false, format);
+        Texture2D texture = new(image.Width, image.Height, generateMipmaps, format);
         try
         {
             unsafe

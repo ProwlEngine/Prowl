@@ -29,7 +29,7 @@ public sealed class FXAAEffect : ImageEffect
 
         // Blit to a temporary RT to avoid reading and writing the same texture simultaneously
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        using var cmd = Graphics.GetCommandBuffer("FXAA");
+        var cmd = Graphics.GetCommandBuffer("FXAA");
         cmd.Blit(context.SceneColor, temp, _mat, 0);
         cmd.Blit(temp, context.SceneColor, null, 0);
         Graphics.Submit(cmd);

@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
@@ -177,7 +179,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
     public int GetLayer() => GameObject.LayerIndex;
     Float3 IRenderable.GetPosition() => Transform.Position;
 
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
+    public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
     {
         // Create mesh only once
         if (_cachedMesh.IsNotValid())
@@ -191,7 +193,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
         _isDirty = false;
 
         // Setup properties
-        properties = new PropertyState();
+        properties = new PropertySet();
         properties.SetInt("_ObjectID", InstanceID);
         properties.SetColor("_StartColor", StartColor);
         properties.SetColor("_EndColor", EndColor);

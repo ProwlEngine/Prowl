@@ -1,66 +1,58 @@
-﻿Shader "Default/FXAA"
-
-Properties
+Shader "Default/FXAA"
 {
-}
-
-Pass "FXAA"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    
-    Blend Alpha
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "FXAA"
+        Tags { "RenderOrder" = "Opaque" }
+        Blend SrcAlpha OneMinusSrcAlpha
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-        out vec2 TexCoords;
+        SLANGPROGRAM
 
-        void main()
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
+        struct Material
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
+            float2 _Resolution;
+            float _EdgeThresholdMin;
+            float _EdgeThresholdMax;
+            float _SubpixelQuality;
+            Sampler2D<float4> _MainTex;
         }
-    }
+        ParameterBlock<Material> Mat;
 
-    Fragment
-    {
-        #include "ProwlCG"
-
-        layout(location = 0) out vec4 OutputColor;
-
-        in vec2 TexCoords;
-
-        uniform sampler2D _MainTex;
-        uniform vec2 _Resolution;
-        uniform float _EdgeThresholdMin;
-        uniform float _EdgeThresholdMax;
-        uniform float _SubpixelQuality;
-
-        float GetLuminance(vec3 color) {
-            return dot(color, vec3(0.299, 0.587, 0.114));
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
         }
 
-        vec3 FXAA311(vec2 texCoord) {
-            float quality[12] = float[12](1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 8.0);
+        float GetLuminance(float3 color) {
+            return dot(color, float3(0.299, 0.587, 0.114));
+        }
+
+        float3 FXAA311(float2 texCoord) {
+            float quality[12] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 8.0 };
             int iterations = 12;
 
-            vec2 inverseScreenSize = 1.0 / _Resolution;
-            ivec2 texelCoord = ivec2(texCoord * _Resolution);
+            float2 inverseScreenSize = 1.0 / Mat._Resolution;
+            int2 texelCoord = int2(texCoord * Mat._Resolution);
 
-            vec3 colorCenter = texelFetch(_MainTex, texelCoord, 0).rgb;
+            float3 colorCenter = Mat._MainTex.Load(int3(texelCoord, 0)).rgb;
 
             float lumaCenter = GetLuminance(colorCenter);
-            float lumaDown   = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2( 0, -1)).rgb);
-            float lumaUp     = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2( 0,  1)).rgb);
-            float lumaLeft   = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2(-1,  0)).rgb);
-            float lumaRight  = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2( 1,  0)).rgb);
+            float lumaDown   = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 0, -1), 0)).rgb);
+            float lumaUp     = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 0,  1), 0)).rgb);
+            float lumaLeft   = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2(-1,  0), 0)).rgb);
+            float lumaRight  = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 1,  0), 0)).rgb);
 
             float lumaMin = min(lumaCenter, min(min(lumaDown, lumaUp), min(lumaLeft, lumaRight)));
             float lumaMax = max(lumaCenter, max(max(lumaDown, lumaUp), max(lumaLeft, lumaRight)));
@@ -68,15 +60,15 @@ Pass "FXAA"
             float lumaRange = lumaMax - lumaMin;
 
             // Early exit if no edge detected
-            if (lumaRange < max(_EdgeThresholdMin, lumaMax * _EdgeThresholdMax)) {
+            if (lumaRange < max(Mat._EdgeThresholdMin, lumaMax * Mat._EdgeThresholdMax)) {
                 return colorCenter;
             }
 
             // Sample corners
-            float lumaDownLeft  = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2(-1, -1)).rgb);
-            float lumaUpRight   = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2( 1,  1)).rgb);
-            float lumaUpLeft    = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2(-1,  1)).rgb);
-            float lumaDownRight = GetLuminance(texelFetchOffset(_MainTex, texelCoord, 0, ivec2( 1, -1)).rgb);
+            float lumaDownLeft  = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2(-1, -1), 0)).rgb);
+            float lumaUpRight   = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 1,  1), 0)).rgb);
+            float lumaUpLeft    = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2(-1,  1), 0)).rgb);
+            float lumaDownRight = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 1, -1), 0)).rgb);
 
             float lumaDownUp    = lumaDown + lumaUp;
             float lumaLeftRight = lumaLeft + lumaRight;
@@ -115,20 +107,20 @@ Pass "FXAA"
                 lumaLocalAverage = 0.5 * (luma2 + lumaCenter);
             }
 
-            vec2 currentUv = texCoord;
+            float2 currentUv = texCoord;
             if (isHorizontal) {
                 currentUv.y += stepLength * 0.5;
             } else {
                 currentUv.x += stepLength * 0.5;
             }
 
-            vec2 offset = isHorizontal ? vec2(inverseScreenSize.x, 0.0) : vec2(0.0, inverseScreenSize.y);
+            float2 offset = isHorizontal ? float2(inverseScreenSize.x, 0.0) : float2(0.0, inverseScreenSize.y);
 
-            vec2 uv1 = currentUv - offset;
-            vec2 uv2 = currentUv + offset;
+            float2 uv1 = currentUv - offset;
+            float2 uv2 = currentUv + offset;
 
-            float lumaEnd1 = GetLuminance(texture(_MainTex, uv1).rgb);
-            float lumaEnd2 = GetLuminance(texture(_MainTex, uv2).rgb);
+            float lumaEnd1 = GetLuminance(Mat._MainTex.Sample(uv1).rgb);
+            float lumaEnd2 = GetLuminance(Mat._MainTex.Sample(uv2).rgb);
             lumaEnd1 -= lumaLocalAverage;
             lumaEnd2 -= lumaLocalAverage;
 
@@ -146,11 +138,11 @@ Pass "FXAA"
             if (!reachedBoth) {
                 for (int i = 2; i < iterations; i++) {
                     if (!reached1) {
-                        lumaEnd1 = GetLuminance(texture(_MainTex, uv1).rgb);
+                        lumaEnd1 = GetLuminance(Mat._MainTex.Sample(uv1).rgb);
                         lumaEnd1 = lumaEnd1 - lumaLocalAverage;
                     }
                     if (!reached2) {
-                        lumaEnd2 = GetLuminance(texture(_MainTex, uv2).rgb);
+                        lumaEnd2 = GetLuminance(Mat._MainTex.Sample(uv2).rgb);
                         lumaEnd2 = lumaEnd2 - lumaLocalAverage;
                     }
 
@@ -189,28 +181,29 @@ Pass "FXAA"
             float lumaAverage = (1.0 / 12.0) * (2.0 * (lumaDownUp + lumaLeftRight) + lumaLeftCorners + lumaRightCorners);
             float subPixelOffset1 = clamp(abs(lumaAverage - lumaCenter) / lumaRange, 0.0, 1.0);
             float subPixelOffset2 = (-2.0 * subPixelOffset1 + 3.0) * subPixelOffset1 * subPixelOffset1;
-            float subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * _SubpixelQuality;
+            float subPixelOffsetFinal = subPixelOffset2 * subPixelOffset2 * Mat._SubpixelQuality;
 
             finalOffset = max(finalOffset, subPixelOffsetFinal);
 
             // Compute final UV coordinates
-            vec2 finalUv = texCoord;
+            float2 finalUv = texCoord;
             if (isHorizontal) {
                 finalUv.y += finalOffset * stepLength;
             } else {
                 finalUv.x += finalOffset * stepLength;
             }
 
-            return texture(_MainTex, finalUv).rgb;
+            return Mat._MainTex.Sample(finalUv).rgb;
         }
 
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            vec4 base = texture(_MainTex, TexCoords);
-            vec3 color = FXAA311(TexCoords);
-            OutputColor = vec4(color, base.a);
+            float4 base = Mat._MainTex.Sample(input.uv);
+            float3 color = FXAA311(input.uv);
+            return float4(color, base.a);
         }
-    }
 
-    ENDGLSL
+        ENDSLANG
+    }
 }

@@ -4,10 +4,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Graphite;
 using Prowl.Vector;
+
+using GraphiteIndexFormat = Prowl.Graphite.IndexFormat;
 
 namespace Prowl.Runtime.Resources;
 
@@ -56,8 +59,38 @@ public sealed class BlendShapeFrame
 }
 
 [CreateAssetMenu("Mesh", Extension = ".mesh", Order = 4)]
-public class Mesh : EngineObject, ISerializable
+public class Mesh : EngineObject, ISerializable, IVertexSource
 {
+    // Vertex attribute streams. Each stream is a separate per-attribute DeviceBuffer, bound by
+    // attribute name through the IVertexSource interface (Graphite resolves layout slots by name).
+    private const int STREAM_POSITION = 0;
+    private const int STREAM_TEXCOORD0 = 1;
+    private const int STREAM_TEXCOORD1 = 2;
+    private const int STREAM_NORMAL = 3;
+    private const int STREAM_COLOR = 4;
+    private const int STREAM_TANGENT = 5;
+    private const int STREAM_BLENDINDICES = 6;
+    private const int STREAM_BLENDWEIGHT = 7;
+    private const int StreamCount = 8;
+
+    // Per-stream GPU element size in bytes. Colors are always uploaded as Float4 regardless of
+    // whether the CPU array is Color (float) or Color32 (byte), matching the shader's COLOR0 input.
+    private static readonly int[] s_streamGpuSizes = [12, 8, 8, 12, 16, 16, 16, 16];
+
+    // Interned attribute names matching the HLSL semantics declared by Prowl's shaders.
+    private static readonly VertexAttributeID[] s_streamNames =
+    [
+        "POSITION0", "TEXCOORD0", "TEXCOORD1", "NORMAL0", "COLOR0", "TANGENT0", "BLENDINDICES0", "BLENDWEIGHT0"
+    ];
+
+    private struct VertexStream
+    {
+        public Array? Data;
+        public bool Dirty;
+        public DeviceBuffer? Buffer;
+        public int UploadedCount;
+    }
+
     /// <summary> Whether this mesh is readable by the CPU </summary>
     public readonly bool isReadable = true;
 
@@ -77,6 +110,7 @@ public class Mesh : EngineObject, ISerializable
             changed = true;
             indexFormat = value;
             indices = [];
+            indicesDirty = true;
         }
     }
 
@@ -109,26 +143,23 @@ public class Mesh : EngineObject, ISerializable
     /// </summary>
     public Float3[] Vertices
     {
-        get => vertices ?? [];
+        get => GetVertexBufferAt<Float3>(STREAM_POSITION);
         set
         {
             if (isWritable == false)
                 return;
-            bool needsReset = vertices == null || vertices.Length != value.Length;
+            bool needsReset = _streams[STREAM_POSITION].Data == null || VertexCount != value.Length;
 
             // Copy Vertices
-            vertices = CopyArray(value);
+            StoreStream(STREAM_POSITION, CopyArray(value));
 
             changed = true;
             if (needsReset)
             {
-                normals = null;
-                tangents = null;
-                colors = null;
-                colors32 = null;
-                uv = null;
-                uv2 = null;
+                for (int i = STREAM_POSITION + 1; i < StreamCount; i++)
+                    StoreStream(i, null);
                 indices = null;
+                indicesDirty = true;
                 // Blend-shape deltas are indexed by vertex; a vertex-count change invalidates them.
                 _blendShapes = Array.Empty<BlendShape>();
                 _morphDirty = true;
@@ -138,76 +169,80 @@ public class Mesh : EngineObject, ISerializable
 
     public Float3[] Normals
     {
-        get => ReadVertexData(normals ?? []);
-        set => WriteVertexData(ref normals, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float3>(STREAM_NORMAL));
+        set => WriteVertexData(STREAM_NORMAL, CopyArray(value), value.Length);
     }
 
     public Float4[] Tangents
     {
-        get => ReadVertexData(tangents ?? []);
-        set => WriteVertexData(ref tangents, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float4>(STREAM_TANGENT));
+        set => WriteVertexData(STREAM_TANGENT, CopyArray(value), value.Length);
     }
 
     public Color[] Colors
     {
-        get => ReadVertexData(colors ?? []);
-        set => WriteVertexData(ref colors, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Color>(STREAM_COLOR));
+        set => WriteVertexData(STREAM_COLOR, CopyArray(value), value.Length);
     }
 
     public Color32[] Colors32
     {
-        get => ReadVertexData(colors32 ?? []);
-        set => WriteVertexData(ref colors32, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Color32>(STREAM_COLOR));
+        set => WriteVertexData(STREAM_COLOR, CopyArray(value), value.Length);
     }
 
     public Float2[] UV
     {
-        get => ReadVertexData(uv ?? []);
-        set => WriteVertexData(ref uv, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float2>(STREAM_TEXCOORD0));
+        set => WriteVertexData(STREAM_TEXCOORD0, CopyArray(value), value.Length);
     }
 
     public Float2[] UV2
     {
-        get => ReadVertexData(uv2 ?? []);
-        set => WriteVertexData(ref uv2, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float2>(STREAM_TEXCOORD1));
+        set => WriteVertexData(STREAM_TEXCOORD1, CopyArray(value), value.Length);
     }
 
     public uint[] Indices
     {
         get => ReadVertexData(indices ?? []);
-        set => WriteVertexData(ref indices, CopyArray(value), value.Length, false);
+        set
+        {
+            if (isWritable == false)
+                throw new InvalidOperationException("Mesh is not writable");
+            indices = CopyArray(value);
+            indicesDirty = true;
+            changed = true;
+        }
     }
 
     public Float4[] BoneIndices
     {
-        get => ReadVertexData(boneIndices ?? []);
-        set => WriteVertexData(ref boneIndices, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float4>(STREAM_BLENDINDICES));
+        set => WriteVertexData(STREAM_BLENDINDICES, CopyArray(value), value.Length);
     }
 
     public Float4[] BoneWeights
     {
-        get => ReadVertexData(boneWeights ?? []);
-        set => WriteVertexData(ref boneWeights, CopyArray(value), value.Length);
+        get => ReadVertexData(GetVertexBufferAt<Float4>(STREAM_BLENDWEIGHT));
+        set => WriteVertexData(STREAM_BLENDWEIGHT, CopyArray(value), value.Length);
     }
 
-    public int VertexCount => vertices?.Length ?? 0;
+    public int VertexCount => _streams[STREAM_POSITION].Data?.Length ?? 0;
     public int IndexCount => indices?.Length ?? 0;
 
-    // Graphite has no vertex-array-object concept; the VAO path is part of the Stage-2 draw
-    // pipeline that has not been ported yet.
-    // public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
-    public DeviceBuffer? VertexBuffer => vertexBuffer;
+    public DeviceBuffer? VertexBuffer => _streams[STREAM_POSITION].Buffer;
     public DeviceBuffer? IndexBuffer => indexBuffer;
 
-    public bool HasNormals => (normals?.Length ?? 0) > 0;
-    public bool HasTangents => (tangents?.Length ?? 0) > 0;
-    public bool HasColors => (colors?.Length ?? 0) > 0;
-    public bool HasColors32 => (colors32?.Length ?? 0) > 0;
-    public bool HasUV => (uv?.Length ?? 0) > 0;
-    public bool HasUV2 => (uv2?.Length ?? 0) > 0;
+    public bool HasNormals => GetVertexBufferAt<Float3>(STREAM_NORMAL).Length > 0;
+    public bool HasTangents => GetVertexBufferAt<Float4>(STREAM_TANGENT).Length > 0;
+    public bool HasColors => GetVertexBufferAt<Color>(STREAM_COLOR).Length > 0;
+    public bool HasColors32 => GetVertexBufferAt<Color32>(STREAM_COLOR).Length > 0;
+    public bool HasUV => GetVertexBufferAt<Float2>(STREAM_TEXCOORD0).Length > 0;
+    public bool HasUV2 => GetVertexBufferAt<Float2>(STREAM_TEXCOORD1).Length > 0;
 
-    public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
-    public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
+    public bool HasBoneIndices => GetVertexBufferAt<Float4>(STREAM_BLENDINDICES).Length > 0;
+    public bool HasBoneWeights => GetVertexBufferAt<Float4>(STREAM_BLENDWEIGHT).Length > 0;
 
     public Float4x4[]? BindPoses;
     public string[]? BoneNames;
@@ -280,10 +315,10 @@ public class Mesh : EngineObject, ISerializable
         DisposeMorphTextures();
         _morphLayerCount = 0;
 
-        if (_blendShapes.Length == 0 || vertices == null || vertices.Length == 0)
+        if (_blendShapes.Length == 0 || VertexCount == 0)
             return;
 
-        int vtx = vertices.Length;
+        int vtx = VertexCount;
 
         // Flatten frames into layers and record per-shape offsets.
         _morphLayerOffsets = new int[_blendShapes.Length];
@@ -360,7 +395,7 @@ public class Mesh : EngineObject, ISerializable
         var tex = new Texture2D((uint)width, (uint)height, false, PixelFormat.R32_G32_B32_A32_Float);
         tex.SetTextureFilters(SamplerFilter.MinPoint_MagPoint_MipPoint);
         tex.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
-        tex.SetData<Float4>(data.AsMemory());
+        tex.SetData(data.AsMemory());
         return tex;
     }
 
@@ -402,48 +437,29 @@ public class Mesh : EngineObject, ISerializable
     }
 
     bool changed = true;
-    Float3[]? vertices;
-    Float3[]? normals;
-    Float4[]? tangents;
-    Color[]? colors;
-    Color32[]? colors32;
-    Float2[]? uv;
-    Float2[]? uv2;
+
+    private readonly VertexStream[] _streams = new VertexStream[StreamCount];
+
     uint[]? indices;
-    Float4[]? boneIndices;
-    Float4[]? boneWeights;
+    bool indicesDirty = true;
 
     IndexFormat indexFormat = IndexFormat.UInt16;
     Topology meshTopology = Topology.Triangles;
 
-    // GraphicsVertexArray? vertexArrayObject;
-    DeviceBuffer? vertexBuffer;
     DeviceBuffer? indexBuffer;
 
-    // Instanced rendering - cached VAO and buffer (created lazily on first instanced draw)
-    // GraphicsVertexArray? instancedVAO;
-    // GraphicsBuffer? instanceBuffer;
-    // int instanceBufferCapacity = 0;
-
-    // Track last uploaded state for buffer reuse optimization
-    private int lastVertexCount = 0;
-    private int lastIndexCount = 0;
-    private int lastVertexStride = 0;
+    // Zero-filled placeholder bound for shader vertex inputs the mesh doesn't provide.
+    private DeviceBuffer? _zeroStream;
+    private uint _zeroStreamCapacity;
 
     public Mesh() { }
 
     public void Clear()
     {
-        vertices = null;
-        normals = null;
-        colors = null;
-        colors32 = null;
-        uv = null;
-        uv2 = null;
+        for (int i = 0; i < StreamCount; i++)
+            StoreStream(i, null);
         indices = null;
-        tangents = null;
-        boneIndices = null;
-        boneWeights = null;
+        indicesDirty = true;
 
         changed = true;
 
@@ -454,12 +470,12 @@ public class Mesh : EngineObject, ISerializable
 
     public void Upload()
     {
-        if (changed == false && vertexBuffer != null)
+        if (changed == false && _streams[STREAM_POSITION].Buffer != null)
             return;
 
         changed = false;
 
-        if (vertices == null || vertices.Length == 0)
+        if (VertexCount == 0)
             throw new InvalidOperationException($"Mesh has no vertices");
 
         if (indices == null || indices.Length == 0)
@@ -487,25 +503,50 @@ public class Mesh : EngineObject, ISerializable
                 break;
         }
 
-        int stride = ComputeVertexStride();
-        byte[] vertexBlob = MakeVertexDataBlob(stride);
-        if (vertexBlob == null)
+        for (int i = 0; i < StreamCount; i++)
+            UploadStream(i);
+
+        UploadIndices();
+    }
+
+    private void UploadStream(int stream)
+    {
+        ref VertexStream s = ref _streams[stream];
+        Array? data = s.Data;
+        if (data == null || data.Length == 0)
+        {
+            // Stream was cleared; stop binding its (now stale) buffer until new data is uploaded.
+            s.UploadedCount = 0;
+            return;
+        }
+        if (!s.Dirty && s.Buffer != null)
             return;
 
-        ResourceFactory factory = Graphics.Device.ResourceFactory;
+        int gpuSize = s_streamGpuSizes[stream];
+        int count = data.Length;
 
-        // Recreate the vertex buffer when its size/stride changed, otherwise reuse and update in place.
-        bool canReuseVertexBuffer = vertexBuffer != null && lastVertexCount == vertices.Length && lastVertexStride == stride;
-        if (!canReuseVertexBuffer)
+        // Colors stored as Color32 are widened to Float4 to match the shader's COLOR0 input.
+        Array uploadData = data;
+        if (stream == STREAM_COLOR && data is Color32[] c32)
         {
-            vertexBuffer?.Dispose();
-            vertexBuffer = factory.CreateBuffer(new BufferDescription((uint)vertexBlob.Length, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
-            lastVertexCount = vertices.Length;
-            lastVertexStride = stride;
+            var widened = new Color[c32.Length];
+            for (int i = 0; i < c32.Length; i++)
+                widened[i] = (Color)c32[i];
+            uploadData = widened;
         }
-        Graphics.Device.UpdateBuffer(vertexBuffer, 0u, vertexBlob);
 
-        bool canReuseIndexBuffer = indexBuffer != null && lastIndexCount == indices.Length;
+        EnsureBuffer(ref s.Buffer, count, gpuSize, BufferUsage.VertexBuffer);
+        PinUpload(s.Buffer!, uploadData, gpuSize);
+        s.Dirty = false;
+        s.UploadedCount = count;
+    }
+
+    private void UploadIndices()
+    {
+        if (indices == null || indices.Length == 0)
+            return;
+        if (!indicesDirty && indexBuffer != null)
+            return;
 
         if (indexFormat == IndexFormat.UInt16)
         {
@@ -517,42 +558,77 @@ public class Mesh : EngineObject, ISerializable
                 data[i] = (ushort)indices[i];
             }
 
-            if (!canReuseIndexBuffer)
-            {
-                indexBuffer?.Dispose();
-                indexBuffer = factory.CreateBuffer(new BufferDescription((uint)(data.Length * sizeof(ushort)), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-                lastIndexCount = indices.Length;
-            }
+            EnsureBuffer(ref indexBuffer, data.Length, sizeof(ushort), BufferUsage.IndexBuffer);
             Graphics.Device.UpdateBuffer(indexBuffer, 0u, data);
         }
-        else if (indexFormat == IndexFormat.UInt32)
+        else
         {
-            if (!canReuseIndexBuffer)
-            {
-                indexBuffer?.Dispose();
-                indexBuffer = factory.CreateBuffer(new BufferDescription((uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-                lastIndexCount = indices.Length;
-            }
+            EnsureBuffer(ref indexBuffer, indices.Length, sizeof(uint), BufferUsage.IndexBuffer);
             Graphics.Device.UpdateBuffer(indexBuffer, 0u, indices);
+        }
+
+        indicesDirty = false;
+    }
+
+    // Reuses an existing buffer when the requested size fits within its capacity and isn't wastefully
+    // small; otherwise (re)allocates with 50% headroom to amortise future growth.
+    private static void EnsureBuffer(ref DeviceBuffer? buffer, int elementCount, int elementStride, BufferUsage usage)
+    {
+        uint requested = (uint)(elementCount * elementStride);
+        uint capacity = buffer?.SizeInBytes ?? 0;
+
+        if (buffer != null && requested <= capacity && requested >= capacity * 0.33f)
+            return;
+
+        buffer?.Dispose();
+        buffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
+        {
+            Usage = usage,
+            SizeInBytes = (uint)(requested * 1.5f),
+        });
+    }
+
+    private static void PinUpload(DeviceBuffer buffer, Array data, int elementSize)
+    {
+        GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+        try
+        {
+            Graphics.Device.UpdateBuffer(buffer, 0u, handle.AddrOfPinnedObject(), (uint)(elementSize * data.Length));
+        }
+        finally
+        {
+            handle.Free();
         }
     }
 
-    /// <summary>Packed byte stride of one vertex for the current attribute set.</summary>
-    private int ComputeVertexStride()
+    private DeviceBuffer? _instanceBuffer;
+    private int _instanceBufferCapacity;
+
+    /// <summary>
+    /// Ensures a per-instance <see cref="DeviceBuffer"/> exists with enough capacity for
+    /// <paramref name="instanceCount"/> <see cref="Rendering.InstanceData"/> entries (grows with
+    /// 50 % headroom to amortise repeated resizes). The buffer is written immediately before each
+    /// instanced draw via <c>Device.UpdateBuffer</c> from <see cref="Rendering.RenderPipeline"/>.
+    /// </summary>
+    public DeviceBuffer EnsureInstanceBuffer(int instanceCount)
     {
-        int stride = 3 * sizeof(float); // position
-        if (HasUV) stride += 2 * sizeof(float);
-        if (HasUV2) stride += 2 * sizeof(float);
-        if (HasNormals) stride += 3 * sizeof(float);
-        if (HasColors || HasColors32) stride += 4 * sizeof(float);
-        if (HasTangents) stride += 4 * sizeof(float);
-        if (HasBoneIndices) stride += 4 * sizeof(float);
-        if (HasBoneWeights) stride += 4 * sizeof(float);
-        return stride;
+        if (_instanceBuffer != null && instanceCount <= _instanceBufferCapacity)
+            return _instanceBuffer;
+
+        _instanceBufferCapacity = (int)(instanceCount * 1.5f);
+        Graphics.DisposeDeferred(_instanceBuffer!);
+
+        uint sizeBytes = (uint)(_instanceBufferCapacity * Rendering.InstanceData.SizeInBytes);
+        _instanceBuffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
+        {
+            Usage = BufferUsage.VertexBuffer | BufferUsage.Dynamic,
+            SizeInBytes = sizeBytes,
+        });
+        return _instanceBuffer;
     }
 
-    // Graphite has no VAO/vertex-format abstraction; GPU instancing is part of the Stage-2 draw
-    // path that has not been ported yet. Preserved verbatim for the later pass.
+    // Graphite has no VAO/vertex-format abstraction; the old pre-Graphite instancing machinery
+    // is preserved below in case it is useful as reference.
     /*
     /// <summary>
     /// Ensures the instanced rendering VAO and buffer exist for this mesh with
@@ -629,7 +705,8 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateBounds()
     {
-        if (vertices == null)
+        Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
+        if (vertices.Length == 0)
             throw new ArgumentNullException();
 
         bool empty = true;
@@ -650,7 +727,8 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateNormals()
     {
-        if (vertices == null || vertices.Length < 3) return;
+        Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
+        if (vertices.Length < 3) return;
         if (indices == null || indices.Length < 3) return;
 
         var normals = new Float3[vertices.Length];
@@ -683,9 +761,12 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateTangents()
     {
-        if (vertices == null || vertices.Length < 3) return;
+        Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
+        Float2[] uv = GetVertexBufferAt<Float2>(STREAM_TEXCOORD0);
+        Float3[] normals = GetVertexBufferAt<Float3>(STREAM_NORMAL);
+        if (vertices.Length < 3) return;
         if (indices == null || indices.Length < 3) return;
-        if (uv == null) return;
+        if (uv.Length == 0) return;
 
         var tan1 = new Float3[vertices.Length]; // tangent accumulator
         var tan2 = new Float3[vertices.Length]; // bitangent accumulator (for handedness)
@@ -718,7 +799,7 @@ public class Mesh : EngineObject, ISerializable
             bitangent.Y = f * (-deltaUV2.X * edge1.Y + deltaUV1.X * edge2.Y);
             bitangent.Z = f * (-deltaUV2.X * edge1.Z + deltaUV1.X * edge2.Z);
 
-            tan1[ai] += tangent;  tan1[bi] += tangent;  tan1[ci] += tangent;
+            tan1[ai] += tangent; tan1[bi] += tangent; tan1[ci] += tangent;
             tan2[ai] += bitangent; tan2[bi] += bitangent; tan2[ci] += bitangent;
         }
 
@@ -757,8 +838,11 @@ public class Mesh : EngineObject, ISerializable
         hitDistance = float.MaxValue;
         hitNormal = Float3.Zero;
 
+        Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
+        Float3[] normals = GetVertexBufferAt<Float3>(STREAM_NORMAL);
+
         // Make sure we have vertices and indices
-        if (vertices == null || vertices.Length == 0 || indices == null || indices.Length == 0)
+        if (vertices.Length == 0 || indices == null || indices.Length == 0)
             return false;
 
         bool hit = false;
@@ -839,19 +923,23 @@ public class Mesh : EngineObject, ISerializable
     {
         if (fullScreenQuad.IsValid()) return fullScreenQuad;
         Mesh mesh = new();
-        mesh.vertices = new Float3[4];
-        mesh.vertices[0] = new Float3(-1, -1, 0);
-        mesh.vertices[1] = new Float3(1, -1, 0);
-        mesh.vertices[2] = new Float3(-1, 1, 0);
-        mesh.vertices[3] = new Float3(1, 1, 0);
+        mesh.Vertices =
+        [
+            new Float3(-1, -1, 0),
+            new Float3(1, -1, 0),
+            new Float3(-1, 1, 0),
+            new Float3(1, 1, 0)
+        ];
 
-        mesh.uv = new Float2[4];
-        mesh.uv[0] = new Float2(0, 0);
-        mesh.uv[1] = new Float2(1, 0);
-        mesh.uv[2] = new Float2(0, 1);
-        mesh.uv[3] = new Float2(1, 1);
+        mesh.UV =
+        [
+            new Float2(0, 0),
+            new Float2(1, 0),
+            new Float2(0, 1),
+            new Float2(1, 1)
+        ];
 
-        mesh.indices = [0, 2, 1, 2, 3, 1];
+        mesh.Indices = [0, 2, 1, 2, 3, 1];
 
         fullScreenQuad = mesh;
         return mesh;
@@ -901,9 +989,9 @@ public class Mesh : EngineObject, ISerializable
             }
         }
 
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
+        mesh.Indices = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -966,9 +1054,9 @@ public class Mesh : EngineObject, ISerializable
             20, 21, 22, 20, 22, 23  // Bottom face
         ];
 
-        mesh.vertices = vertices;
-        mesh.uv = uvs;
-        mesh.indices = indices;
+        mesh.Vertices = vertices;
+        mesh.UV = uvs;
+        mesh.Indices = indices;
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -1055,9 +1143,9 @@ public class Mesh : EngineObject, ISerializable
             indices.Add((uint)bottom1);
         }
 
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
+        mesh.Indices = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -1204,9 +1292,9 @@ public class Mesh : EngineObject, ISerializable
             }
         }
 
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
+        mesh.Indices = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -1273,9 +1361,9 @@ public class Mesh : EngineObject, ISerializable
             indices.Add((uint)(baseStart + i));
         }
 
-        mesh.vertices = [.. vertices];
-        mesh.uv = [.. uvs];
-        mesh.indices = [.. indices];
+        mesh.Vertices = [.. vertices];
+        mesh.UV = [.. uvs];
+        mesh.Indices = [.. indices];
 
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
@@ -1287,8 +1375,8 @@ public class Mesh : EngineObject, ISerializable
     public static Mesh CreateTriangle(Float3 a, Float3 b, Float3 c)
     {
         Mesh mesh = new();
-        mesh.vertices = [a, b, c];
-        mesh.indices = [0, 1, 2];
+        mesh.Vertices = [a, b, c];
+        mesh.Indices = [0, 1, 2];
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         mesh.RecalculateTangents();
@@ -1297,17 +1385,21 @@ public class Mesh : EngineObject, ISerializable
 
     private void DeleteGPUBuffers()
     {
-        vertexBuffer?.Dispose();
-        vertexBuffer = null;
+        for (int i = 0; i < StreamCount; i++)
+        {
+            _streams[i].Buffer?.Dispose();
+            _streams[i].Buffer = null;
+            _streams[i].UploadedCount = 0;
+            _streams[i].Dirty = true;
+        }
+
         indexBuffer?.Dispose();
         indexBuffer = null;
+        indicesDirty = true;
 
-        // Clean up instanced rendering resources (instancing not yet ported to Graphite).
-        // instancedVAO?.Dispose();
-        // instancedVAO = null;
-        // instanceBuffer?.Dispose();
-        // instanceBuffer = null;
-        // instanceBufferCapacity = 0;
+        _zeroStream?.Dispose();
+        _zeroStream = null;
+        _zeroStreamCapacity = 0;
 
         // Morph delta textures will be rebuilt from CPU blend-shape data on next use.
         DisposeMorphTextures();
@@ -1321,141 +1413,90 @@ public class Mesh : EngineObject, ISerializable
         return value;
     }
 
-    private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
+    private void WriteVertexData<T>(int stream, T[] value, int length, bool mustMatchLength = true) where T : unmanaged
     {
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
-        if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
+        if ((value == null || length == 0 || length != VertexCount) && mustMatchLength)
             throw new ArgumentException("Array length should match vertices length");
         changed = true;
-        target = value;
+        StoreStream(stream, value);
     }
 
-    // The Prowl VertexFormat type was removed; Graphite declares vertex layouts on the
-    // GraphicsProgram instead. The mesh's vertex-attribute order is mirrored by
-    // ComputeVertexStride + MakeVertexDataBlob. Preserved for the Stage-2 draw-path port.
-    /*
-    internal static VertexFormat GetVertexLayout(Mesh mesh)
+    /// <summary>Returns the CPU-side array for a stream, or an empty array if absent or of a different element type.</summary>
+    internal T[] GetVertexBufferAt<T>(int stream) where T : unmanaged
+        => _streams[stream].Data as T[] ?? [];
+
+    private void StoreStream(int stream, Array? data)
     {
-        List<Element> elements = [new Element(VertexSemantic.Position, VertexType.Float, 3)];
-
-        if (mesh.HasUV)
-            elements.Add(new Element(VertexSemantic.TexCoord0, VertexType.Float, 2));
-
-        if (mesh.HasUV2)
-            elements.Add(new Element(VertexSemantic.TexCoord1, VertexType.Float, 2));
-
-        if (mesh.HasNormals)
-            elements.Add(new Element(VertexSemantic.Normal, VertexType.Float, 3, 0, true));
-
-        if (mesh.HasColors || mesh.HasColors32)
-            elements.Add(new Element(VertexSemantic.Color, VertexType.Float, 4));
-
-        if (mesh.HasTangents)
-            elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 4, 0, true));
-
-        if (mesh.HasBoneIndices)
-            elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.Float, 4));
-
-        if (mesh.HasBoneWeights)
-            elements.Add(new Element(VertexSemantic.BoneWeight, VertexType.Float, 4));
-
-        return new VertexFormat([.. elements]);
+        _streams[stream].Data = data;
+        _streams[stream].Dirty = true;
     }
-    */
 
-    internal byte[] MakeVertexDataBlob(int stride)
+    private static PrimitiveTopology ToPrimitive(Topology topology) => topology switch
     {
-        byte[] buffer = new byte[stride * vertices.Length];
+        Topology.Triangles => PrimitiveTopology.TriangleList,
+        Topology.TriangleStrip => PrimitiveTopology.TriangleStrip,
+        Topology.Lines => PrimitiveTopology.LineList,
+        Topology.LineStrip => PrimitiveTopology.LineStrip,
+        Topology.Points => PrimitiveTopology.PointList,
+        _ => PrimitiveTopology.TriangleList,
+    };
 
-        void Copy(byte[] source, ref int index)
+    PrimitiveTopology IVertexSource.Topology => ToPrimitive(meshTopology);
+
+    void IVertexSource.ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
+    {
+        Upload();
+
+        VertexAttributeID name = layout.Elements[0].Name;
+        int stream = -1;
+        for (int i = 0; i < StreamCount; i++)
         {
-            if (index + source.Length > buffer.Length)
+            if (s_streamNames[i] == name)
             {
-                throw new InvalidOperationException($"[Mesh] Buffer Overrun while generating vertex data blob: {index} -> {index + source.Length} "
-                    + $"is larger than buffer {buffer.Length}");
-            }
-
-            System.Buffer.BlockCopy(source, 0, buffer, index, source.Length);
-
-            index += source.Length;
-        }
-
-        int index = 0;
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            if (index % stride != 0)
-                throw new InvalidOperationException("[Mesh] Exceeded expected byte count while generating vertex data blob");
-
-            //Copy position
-            Copy(BitConverter.GetBytes(vertices[i].X), ref index);
-            Copy(BitConverter.GetBytes(vertices[i].Y), ref index);
-            Copy(BitConverter.GetBytes(vertices[i].Z), ref index);
-
-            if (HasUV)
-            {
-                Copy(BitConverter.GetBytes(uv[i].X), ref index);
-                Copy(BitConverter.GetBytes(uv[i].Y), ref index);
-            }
-
-            if (HasUV2)
-            {
-                Copy(BitConverter.GetBytes(uv2[i].X), ref index);
-                Copy(BitConverter.GetBytes(uv2[i].Y), ref index);
-            }
-
-            //Copy normals
-            if (HasNormals)
-            {
-                Copy(BitConverter.GetBytes(normals[i].X), ref index);
-                Copy(BitConverter.GetBytes(normals[i].Y), ref index);
-                Copy(BitConverter.GetBytes(normals[i].Z), ref index);
-            }
-
-            if (HasColors)
-            {
-                Copy(BitConverter.GetBytes((float)colors[i].R), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].G), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].B), ref index);
-                Copy(BitConverter.GetBytes((float)colors[i].A), ref index);
-            }
-            else if (HasColors32)
-            {
-                var c = (Color)colors32[i];
-
-                Copy(BitConverter.GetBytes(c.R), ref index);
-                Copy(BitConverter.GetBytes(c.G), ref index);
-                Copy(BitConverter.GetBytes(c.B), ref index);
-                Copy(BitConverter.GetBytes(c.A), ref index);
-            }
-
-            if (HasTangents)
-            {
-                Copy(BitConverter.GetBytes(tangents[i].X), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].Y), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].Z), ref index);
-                Copy(BitConverter.GetBytes(tangents[i].W), ref index);
-            }
-
-            if (HasBoneIndices)
-            {
-                //Copy(new byte[] { boneIndices[i].red, boneIndices[i].green, boneIndices[i].blue, boneIndices[i].alpha }, ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].X), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].Y), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].Z), ref index);
-                Copy(BitConverter.GetBytes(boneIndices[i].W), ref index);
-            }
-
-            if (HasBoneWeights)
-            {
-                Copy(BitConverter.GetBytes(boneWeights[i].X), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].Y), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].Z), ref index);
-                Copy(BitConverter.GetBytes(boneWeights[i].W), ref index);
+                stream = i;
+                break;
             }
         }
 
-        return buffer;
+        if (stream >= 0 && _streams[stream].Buffer != null && _streams[stream].UploadedCount > 0)
+            binding = new VertexBinding(_streams[stream].Buffer!);
+        else
+            binding = new VertexBinding(GetOrCreateZeroStream(layout.Stride));
+    }
+
+    bool IVertexSource.TryGetIndexBuffer(out DeviceBuffer buffer, out GraphiteIndexFormat format, out uint indexCount)
+    {
+        Upload();
+
+        buffer = indexBuffer!;
+        format = indexFormat == IndexFormat.UInt32 ? GraphiteIndexFormat.UInt32 : GraphiteIndexFormat.UInt16;
+        indexCount = (uint)IndexCount;
+        return indexBuffer != null;
+    }
+
+    private DeviceBuffer GetOrCreateZeroStream(uint stride)
+    {
+        uint vertices = (uint)Math.Max(1, VertexCount);
+        uint required = stride * vertices;
+
+        if (_zeroStream != null && required <= _zeroStreamCapacity)
+            return _zeroStream;
+
+        _zeroStream?.Dispose();
+        uint capacity = (uint)(required * 1.5f);
+        _zeroStream = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription
+        {
+            Usage = BufferUsage.VertexBuffer,
+            SizeInBytes = capacity,
+        });
+        _zeroStreamCapacity = capacity;
+
+        byte[] zeros = new byte[capacity];
+        Graphics.Device.UpdateBuffer(_zeroStream, 0u, zeros);
+
+        return _zeroStream;
     }
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
@@ -1465,6 +1506,16 @@ public class Mesh : EngineObject, ISerializable
         {
             writer.Write((byte)indexFormat);
             writer.Write((byte)meshTopology);
+
+            Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
+            Float3[] normals = GetVertexBufferAt<Float3>(STREAM_NORMAL);
+            Float4[] tangents = GetVertexBufferAt<Float4>(STREAM_TANGENT);
+            Color[] colors = GetVertexBufferAt<Color>(STREAM_COLOR);
+            Color32[] colors32 = GetVertexBufferAt<Color32>(STREAM_COLOR);
+            Float2[] uv = GetVertexBufferAt<Float2>(STREAM_TEXCOORD0);
+            Float2[] uv2 = GetVertexBufferAt<Float2>(STREAM_TEXCOORD1);
+            Float4[] boneIndices = GetVertexBufferAt<Float4>(STREAM_BLENDINDICES);
+            Float4[] boneWeights = GetVertexBufferAt<Float4>(STREAM_BLENDWEIGHT);
 
             writer.Write(vertices.Length);
             foreach (Float3 vertex in vertices)
@@ -1521,24 +1572,18 @@ public class Mesh : EngineObject, ISerializable
                 }
             }
 
-            writer.Write(uv?.Length ?? 0);
-            if (uv != null)
+            writer.Write(uv.Length);
+            foreach (Float2 coord in uv)
             {
-                foreach (Float2 uv in uv)
-                {
-                    writer.Write(uv.X);
-                    writer.Write(uv.Y);
-                }
+                writer.Write(coord.X);
+                writer.Write(coord.Y);
             }
 
-            writer.Write(uv2?.Length ?? 0);
-            if (uv2 != null)
+            writer.Write(uv2.Length);
+            foreach (Float2 coord in uv2)
             {
-                foreach (Float2 uv in uv2)
-                {
-                    writer.Write(uv.X);
-                    writer.Write(uv.Y);
-                }
+                writer.Write(coord.X);
+                writer.Write(coord.Y);
             }
 
             writer.Write(indices?.Length ?? 0);
@@ -1667,56 +1712,65 @@ public class Mesh : EngineObject, ISerializable
             meshTopology = (Topology)reader.ReadByte();
 
             int vertexCount = reader.ReadInt32();
-            vertices = new Float3[vertexCount];
+            Float3[] vertices = new Float3[vertexCount];
             for (int i = 0; i < vertexCount; i++)
                 vertices[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+            StoreStream(STREAM_POSITION, vertices);
 
             int normalCount = reader.ReadInt32();
             if (normalCount > 0)
             {
-                normals = new Float3[normalCount];
+                Float3[] normals = new Float3[normalCount];
                 for (int i = 0; i < normalCount; i++)
                     normals[i] = new Float3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_NORMAL, normals);
             }
 
             int tangentCount = reader.ReadInt32();
             if (tangentCount > 0)
             {
-                tangents = new Float4[tangentCount];
+                Float4[] tangents = new Float4[tangentCount];
                 for (int i = 0; i < tangentCount; i++)
                     tangents[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_TANGENT, tangents);
             }
 
             int colorCount = reader.ReadInt32();
             if (colorCount > 0)
             {
-                colors = new Color[colorCount];
+                Color[] colors = new Color[colorCount];
                 for (int i = 0; i < colorCount; i++)
                     colors[i] = new Color(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_COLOR, colors);
             }
 
             int color32Count = reader.ReadInt32();
             if (color32Count > 0)
             {
-                colors32 = new Color32[color32Count];
+                Color32[] colors32 = new Color32[color32Count];
                 for (int i = 0; i < color32Count; i++)
                     colors32[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                // Colors and Colors32 share the COLOR0 stream; a mesh stores at most one.
+                if (colorCount == 0)
+                    StoreStream(STREAM_COLOR, colors32);
             }
 
             int uvCount = reader.ReadInt32();
             if (uvCount > 0)
             {
-                uv = new Float2[uvCount];
+                Float2[] uv = new Float2[uvCount];
                 for (int i = 0; i < uvCount; i++)
                     uv[i] = new Float2(reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_TEXCOORD0, uv);
             }
 
             int uv2Count = reader.ReadInt32();
             if (uv2Count > 0)
             {
-                uv2 = new Float2[uv2Count];
+                Float2[] uv2 = new Float2[uv2Count];
                 for (int i = 0; i < uv2Count; i++)
                     uv2[i] = new Float2(reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_TEXCOORD1, uv2);
             }
 
             int indexCount = reader.ReadInt32();
@@ -1725,25 +1779,25 @@ public class Mesh : EngineObject, ISerializable
                 indices = new uint[indexCount];
                 for (int i = 0; i < indexCount; i++)
                     indices[i] = reader.ReadUInt32();
+                indicesDirty = true;
             }
 
             int boneIndexCount = reader.ReadInt32();
             if (boneIndexCount > 0)
             {
-                boneIndices = new Float4[boneIndexCount];
+                Float4[] boneIndices = new Float4[boneIndexCount];
                 for (int i = 0; i < boneIndexCount; i++)
-                {
-                    //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
                     boneIndices[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                }
+                StoreStream(STREAM_BLENDINDICES, boneIndices);
             }
 
             int boneWeightCount = reader.ReadInt32();
             if (boneWeightCount > 0)
             {
-                boneWeights = new Float4[boneWeightCount];
+                Float4[] boneWeights = new Float4[boneWeightCount];
                 for (int i = 0; i < boneWeightCount; i++)
                     boneWeights[i] = new Float4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                StoreStream(STREAM_BLENDWEIGHT, boneWeights);
             }
 
             int BindPosesCount = reader.ReadInt32();

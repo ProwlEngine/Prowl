@@ -1,10 +1,6 @@
-#ifndef PBR_FUNCTIONS
-#define PBR_FUNCTIONS
+module PBR;
 
-#ifndef MATH_PI
-#define MATH_PI
-const float PI = 3.14159265359;
-#endif
+public static const float PI = 3.14159265359;
 
 // =============================================================
 //  Standard Isotropic BRDF (GGX + Smith + Disney Diffuse)
@@ -12,9 +8,9 @@ const float PI = 3.14159265359;
 
 // GGX/Trowbridge-Reitz Normal Distribution Function
 // Input roughness is perceptual roughness [0,1] squared internally to get alpha.
-float DistributionGGX(vec3 N, vec3 H, float roughness)
+public float DistributionGGX(float3 N, float3 H, float roughness)
 {
-    float a2 = roughness * roughness; // alpha = perceptualRoughness², a2 = alpha
+    float a2 = roughness * roughness; // alpha = perceptualRoughness^2, a2 = alpha
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
 
@@ -25,8 +21,8 @@ float DistributionGGX(vec3 N, vec3 H, float roughness)
 }
 
 // Schlick-GGX Geometry Function (single direction)
-// Uses k = (roughness + 1)² / 8 for direct/analytical lights.
-float GeometrySchlickGGX(float NdotV, float roughness)
+// Uses k = (roughness + 1)^2 / 8 for direct/analytical lights.
+public float GeometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);
     float k = (r * r) / 8.0;
@@ -36,7 +32,7 @@ float GeometrySchlickGGX(float NdotV, float roughness)
 
 // Smith Geometry Function (both directions combined)
 // Uses abs(NdotV) to handle backface normals gracefully.
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+public float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
 {
     float NdotV = abs(dot(N, V));
     float NdotL = max(dot(N, L), 0.0);
@@ -47,25 +43,23 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 }
 
 // Schlick Fresnel Approximation (fast exp2 variant)
-vec3 FresnelSchlick(float cosTheta, vec3 F0)
+public float3 FresnelSchlick(float cosTheta, float3 F0)
 {
     return F0 + (1.0 - F0) * exp2(-9.28 * cosTheta);
 }
 
 // Fresnel with roughness for IBL/indirect specular (Lazarov Environmental BRDF)
-vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+public float3 FresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
 {
-    vec3 F90 = max(vec3(1.0 - roughness), F0);
+    float3 F90 = max(float3(1.0 - roughness), F0);
     return F0 + (F90 - F0) * exp2(-9.28 * cosTheta);
 }
 
 // =============================================================
 //  Disney Diffuse (from Burley 2012)
-//  Roughness-dependent diffuse that darkens at grazing angles
-//  for rough surfaces more physically accurate than Lambertian.
 // =============================================================
 
-float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRoughness)
+public float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRoughness)
 {
     float fd90 = 0.5 + 2.0 * LdotH * LdotH * perceptualRoughness;
     float lightScatter = 1.0 + (fd90 - 1.0) * exp2(-8.35 * NdotL);
@@ -75,20 +69,17 @@ float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRough
 
 // =============================================================
 //  Anisotropic BRDF (Far Cry 4 / GGX Aniso)
-//  For brushed metal, hair, and directional surfaces.
 // =============================================================
 
-// Anisotropic GGX NDF
-// mt and mb are SQUARED roughness values (mt = roughnessT², mb = roughnessB²)
-float DistributionGGXAniso(float TdotH, float BdotH, float NdotH, float mt, float mb)
+// Anisotropic GGX NDF. mt and mb are SQUARED roughness values.
+public float DistributionGGXAniso(float TdotH, float BdotH, float NdotH, float mt, float mb)
 {
     float d = TdotH * TdotH / (mt * mt) + BdotH * BdotH / (mb * mb) + NdotH * NdotH;
     return 1.0 / (PI * mt * mb * d * d);
 }
 
-// Anisotropic Smith Joint Visibility (Far Cry 4)
-// mt and mb are SQUARED roughness values (mt = roughnessT², mb = roughnessB²)
-float GeometrySmithAniso(
+// Anisotropic Smith Joint Visibility (Far Cry 4). mt and mb are SQUARED roughness values.
+public float GeometrySmithAniso(
     float TdotV, float BdotV, float NdotV,
     float TdotL, float BdotL, float NdotL,
     float mt, float mb)
@@ -100,18 +91,16 @@ float GeometrySmithAniso(
 
 // =============================================================
 //  Specular Anti-Aliasing (Geometric Normal Filtering)
-//  Reduces specular shimmer on normal-mapped surfaces by
-//  increasing roughness where normal variance is high.
 //  Based on: Kaplanyan & Hill, "Filtering Distributions of Normals"
 // =============================================================
 
 #define SPEC_AA_VARIANCE 0.5
 #define SPEC_AA_THRESHOLD 0.1
 
-float ApplySpecularAA(float roughness, vec3 worldNormal)
+public float ApplySpecularAA(float roughness, float3 worldNormal)
 {
-    vec3 ddxN = dFdx(worldNormal);
-    vec3 ddyN = dFdy(worldNormal);
+    float3 ddxN = ddx(worldNormal);
+    float3 ddyN = ddy(worldNormal);
     float variance = SPEC_AA_VARIANCE * (dot(ddxN, ddxN) + dot(ddyN, ddyN));
     float kernelRoughnessSq = min(2.0 * variance, SPEC_AA_THRESHOLD);
     float squaredRoughness = clamp(roughness * roughness + kernelRoughnessSq, 0.0, 1.0);
@@ -120,40 +109,34 @@ float ApplySpecularAA(float roughness, vec3 worldNormal)
 
 // =============================================================
 //  Parallax Occlusion Mapping (POM)
-//  Linear ray march + secant-method binary refinement.
-//
-//  Usage:
-//    vec2 pomUV = ParallaxOcclusionMapping(heightTex, uv, viewDirTS, heightScale, steps);
-//
-//  viewDirTS must be in tangent space (use transpose(TBN) * viewDir).
-//  Height is sampled from the G channel of the height texture.
+//  viewDirTS must be in tangent space. Height sampled from the G channel.
 // =============================================================
 
-vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, float heightScale, int linearSteps)
+public float2 ParallaxOcclusionMapping(Sampler2D<float4> heightTex, float2 uv, float3 viewDirTS, float heightScale, int linearSteps)
 {
     // Slope damping: reduce parallax at grazing angles
-    float slopeDamp = 1.0 - clamp(dot(viewDirTS, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
+    float slopeDamp = 1.0 - clamp(dot(viewDirTS, float3(0.0, 0.0, 1.0)), 0.0, 1.0);
 
     // Maximum UV offset based on view angle and height scale
-    vec2 vMaxOffset = (viewDirTS.xy / -viewDirTS.z) * heightScale * (1.0 - slopeDamp * slopeDamp);
+    float2 vMaxOffset = (viewDirTS.xy / -viewDirTS.z) * heightScale * (1.0 - slopeDamp * slopeDamp);
 
     float fStepSize = 1.0 / float(linearSteps);
-    vec2 finalStepSize = fStepSize * vMaxOffset;
+    float2 finalStepSize = fStepSize * vMaxOffset;
 
     // Pre-compute texture derivatives for correct mip selection
-    vec2 dx = dFdx(uv);
-    vec2 dy = dFdy(uv);
+    float2 dx = ddx(uv);
+    float2 dy = ddy(uv);
 
     // Linear ray march from surface (1.0) downward
     float fCurrRayHeight = 1.0;
-    vec2 vCurrOffset = vec2(0.0);
-    vec2 vLastOffset = vec2(0.0);
+    float2 vCurrOffset = float2(0.0);
+    float2 vLastOffset = float2(0.0);
     float fLastSampledHeight = 1.0;
     float fCurrSampledHeight = 1.0;
 
     for (int i = 0; i < linearSteps; i++)
     {
-        fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;
+        fCurrSampledHeight = heightTex.SampleGrad(uv + vCurrOffset, dx, dy).g;
 
         if (fCurrSampledHeight > fCurrRayHeight)
             break;
@@ -175,7 +158,7 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
         float intersectionHeight = (pt0 * delta1 - pt1 * delta0) / (delta1 - delta0);
         vCurrOffset = (1.0 - intersectionHeight) * finalStepSize * float(linearSteps);
 
-        fCurrSampledHeight = textureGrad(heightTex, uv + vCurrOffset, dx, dy).g;
+        fCurrSampledHeight = heightTex.SampleGrad(uv + vCurrOffset, dx, dy).g;
 
         float delta = intersectionHeight - fCurrSampledHeight;
         if (delta < 0.0)
@@ -194,30 +177,20 @@ vec2 ParallaxOcclusionMapping(sampler2D heightTex, vec2 uv, vec3 viewDirTS, floa
 }
 
 // =============================================================
-//  Translucency
-//  Two modes controlled by scatteringPower:
-//    - scatteringPower == 0: Wrapped diffuse + GGX backscatter (foliage, thin surfaces)
-//    - scatteringPower > 0:  Spherical Gaussian approximation (skin, wax)
-//  Reference: Colin Barré-Brisebois, GDC 2011
-//
-//  translucency: per-pixel thickness/translucency value (from texture B channel)
-//  scatteringPower: Gaussian falloff exponent (0 = wrapped mode, 1-8 = gaussian)
-//  distortion: how much the normal bends the light direction through the surface
-//  scale: overall translucency intensity multiplier
+//  Translucency (Colin Barre-Brisebois, GDC 2011)
 // =============================================================
 
-vec3 CalculateTranslucency(vec3 lightDir, vec3 viewDir, vec3 normal,
+public float3 CalculateTranslucency(float3 lightDir, float3 viewDir, float3 normal,
                            float translucency, float scatteringPower,
-                           float distortion, float scale, vec3 lightColor)
+                           float distortion, float scale, float3 lightColor)
 {
-    if (translucency <= 0.0) return vec3(0.0);
+    if (translucency <= 0.0) return float3(0.0);
 
-    vec3 lightScattering = vec3(0.0);
+    float3 lightScattering = float3(0.0);
 
     if (scatteringPower < 0.001)
     {
-        // Mode 1: Wrapped diffuse + GGX backscatter lobe
-        // foliage, thin cloth, paper
+        // Mode 1: Wrapped diffuse + GGX backscatter lobe (foliage, thin cloth, paper)
         float wrap = 0.5;
         float wrappedNdotL = clamp((dot(-normal, lightDir) + wrap) / ((1.0 + wrap) * (1.0 + wrap)), 0.0, 1.0);
 
@@ -231,9 +204,8 @@ vec3 CalculateTranslucency(vec3 lightDir, vec3 viewDir, vec3 normal,
     }
     else
     {
-        // Mode 2: Spherical Gaussian approximation
-        // skin, wax, subsurface materials
-        vec3 transLightDir = lightDir + normal * distortion;
+        // Mode 2: Spherical Gaussian approximation (skin, wax, subsurface)
+        float3 transLightDir = lightDir + normal * distortion;
         float transDot = dot(-transLightDir, viewDir);
         transDot = exp2(clamp(transDot, 0.0, 1.0) * scatteringPower - scatteringPower) * translucency;
 
@@ -242,5 +214,3 @@ vec3 CalculateTranslucency(vec3 lightDir, vec3 viewDir, vec3 normal,
 
     return lightScattering * scale;
 }
-
-#endif

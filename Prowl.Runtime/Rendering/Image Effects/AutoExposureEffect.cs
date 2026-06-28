@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System;
 using System.Collections.Generic;
 
@@ -47,10 +48,10 @@ public sealed class AutoExposureEffect : ImageEffect
         int w = context.Width / 2;
         int h = context.Height / 2;
 
-        using var cmd = Graphics.GetCommandBuffer("AutoExposure");
+        var cmd = Graphics.GetCommandBuffer("AutoExposure");
 
         // ---- Step 1: Extract log-luminance at half resolution ----
-        var lumRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
+        var lumRT = RenderTexture.GetTemporaryRT(w, h, false, [PixelFormat.R16_Float]);
         cmd.Blit(context.SceneColor, lumRT, _mat, 0);
 
         // ---- Step 2: Downsample chain until we reach a small enough size ----
@@ -63,7 +64,7 @@ public sealed class AutoExposureEffect : ImageEffect
             w = Math.Max(1, w / 2);
             h = Math.Max(1, h / 2);
 
-            var downRT = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Short]);
+            var downRT = RenderTexture.GetTemporaryRT(w, h, false, [PixelFormat.R16_Float]);
             cmd.Blit(current, downRT, _mat, 1);
             mipChain.Add(downRT);
             current = downRT;
@@ -76,9 +77,9 @@ public sealed class AutoExposureEffect : ImageEffect
             _historyValid = false;
         }
 
-        _adaptedLuminance ??= new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
+        _adaptedLuminance ??= new RenderTexture(1, 1, false, [PixelFormat.R16_Float]);
 
-        var newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [TextureImageFormat.Short]);
+        var newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [PixelFormat.R16_Float]);
         _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
         _mat.SetFloat("_AdaptSpeedUp", Math.Max(0.01f, AdaptSpeedUp));
         _mat.SetFloat("_AdaptSpeedDown", Math.Max(0.01f, AdaptSpeedDown));

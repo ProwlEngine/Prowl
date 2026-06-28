@@ -74,7 +74,9 @@ public abstract class Texture : EngineObject
     /// <summary>Recreates <see cref="Sampler"/> from the current filter and address-mode state.</summary>
     private protected void RebuildSampler()
     {
-        Sampler?.Dispose();
+        // Defer the old sampler's disposal: a filter/wrap change can swap it while an in-flight
+        // frame still binds it.
+        Graphics.DisposeDeferred(Sampler);
         Sampler = Graphics.Device.ResourceFactory.CreateSampler(new SamplerDescription
         {
             AddressModeU = AddressModeU,
@@ -91,27 +93,6 @@ public abstract class Texture : EngineObject
     {
         Filter = filter;
         RebuildSampler();
-    }
-
-    /// <summary>
-    /// Bridges the old (min, mag) GL-style filter pair onto a Graphite <see cref="SamplerFilter"/>.
-    /// </summary>
-    public void SetTextureFilters(TextureMin min, TextureMag mag)
-        => SetTextureFilters(ToSamplerFilter(min, mag));
-
-    private static SamplerFilter ToSamplerFilter(TextureMin min, TextureMag mag)
-    {
-        bool magLinear = mag == TextureMag.Linear;
-        return min switch
-        {
-            TextureMin.Nearest => magLinear ? SamplerFilter.MinPoint_MagLinear_MipPoint : SamplerFilter.MinPoint_MagPoint_MipPoint,
-            TextureMin.Linear => magLinear ? SamplerFilter.MinLinear_MagLinear_MipPoint : SamplerFilter.MinLinear_MagPoint_MipPoint,
-            TextureMin.NearestMipmapNearest => magLinear ? SamplerFilter.MinPoint_MagLinear_MipPoint : SamplerFilter.MinPoint_MagPoint_MipPoint,
-            TextureMin.LinearMipmapNearest => magLinear ? SamplerFilter.MinLinear_MagLinear_MipPoint : SamplerFilter.MinLinear_MagPoint_MipPoint,
-            TextureMin.NearestMipmapLinear => magLinear ? SamplerFilter.MinPoint_MagLinear_MipLinear : SamplerFilter.MinPoint_MagPoint_MipLinear,
-            TextureMin.LinearMipmapLinear => magLinear ? SamplerFilter.MinLinear_MagLinear_MipLinear : SamplerFilter.MinLinear_MagPoint_MipLinear,
-            _ => SamplerFilter.MinLinear_MagLinear_MipPoint,
-        };
     }
 
     /// <summary>
@@ -149,8 +130,12 @@ public abstract class Texture : EngineObject
 
     public override void OnDispose()
     {
-        Handle?.Dispose();
-        Sampler?.Dispose();
+        // Defer the GPU handle's disposal: it may still be bound by an in-flight frame (e.g. the UI
+        // drawing this texture while it is reimported). Freeing it now is a use-after-free that
+        // stalls the device on SwapBuffers. Drop any queued mipmap pass against it first.
+        Graphics.CancelMipmapGeneration(Handle);
+        Graphics.DisposeDeferred(Handle);
+        Graphics.DisposeDeferred(Sampler);
     }
 
     /// <summary>
@@ -158,8 +143,8 @@ public abstract class Texture : EngineObject
     /// </summary>
     public static bool IsTextureTypeMipmappable(PixelFormat format, TextureSampleCount sampleCount)
     {
-        return format == PixelFormat.D24_UNorm_S8_UInt || format == PixelFormat.D32_Float_S8_UInt
-            || sampleCount != TextureSampleCount.Count1;
+        return format != PixelFormat.D24_UNorm_S8_UInt && format != PixelFormat.D32_Float_S8_UInt
+            && sampleCount == TextureSampleCount.Count1;
     }
 
     /// <summary>Number of mip levels in the full chain for a texture of the given dimensions.</summary>

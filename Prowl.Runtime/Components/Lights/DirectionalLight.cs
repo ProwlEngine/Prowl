@@ -162,7 +162,7 @@ public class DirectionalLight : Light
                 // executed against just the last cascade's matrices.
                 pipeline.AssignCameraMatrices(view, proj);
 
-                using var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
+                var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
                 cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
                 cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
                 pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -20,7 +22,7 @@ public static class LightmapBinding
     /// <param name="worldPos">Renderer bounds-center world position, used to sample probe SH for dynamic objects.</param>
     /// <param name="meshHasUV2">Whether the renderer's mesh has a UV2 set. The bake samples the lightmap from UV2
     /// when present, else falls back to the primary UVs (UV0), so this selects the runtime sampling UV set.</param>
-    public static void Fill(PropertyState props, Scene? scene, int lightmapIndex, Float4 scaleOffset, Float3 worldPos, bool meshHasUV2)
+    public static void Fill(PropertySet props, Scene? scene, int lightmapIndex, Float4 scaleOffset, Float3 worldPos, bool meshHasUV2)
     {
         // 1) Baked lightmap (static, lightmapped). A renderer with a valid index IS lightmapped, so it
         // commits to baked GI here and never falls through to probe SH below: probes would light it

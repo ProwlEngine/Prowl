@@ -158,7 +158,7 @@ public abstract class Game
                 // === Start Graphics ===
 
                 {
-                    using var frameStart = Graphics.GetCommandBuffer("Frame Start");
+                    var frameStart = Graphics.GetCommandBuffer("Frame Start");
                     frameStart.SetRenderTarget(null);
                     frameStart.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
                     frameStart.SetRasterState(new RasterizerState());
@@ -178,7 +178,7 @@ public abstract class Game
                 EndRender();
 
                 {
-                    using var preGui = Graphics.GetCommandBuffer("Pre-GUI");
+                    var preGui = Graphics.GetCommandBuffer("Pre-GUI");
                     preGui.SetRenderTarget(null);
                     preGui.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
                     Graphics.Submit(preGui);

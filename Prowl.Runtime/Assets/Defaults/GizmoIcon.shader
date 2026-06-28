@@ -1,73 +1,72 @@
 Shader "Default/GizmoIcon"
-
-Properties
 {
-    _MainTex ("Icon", Texture2D) = "white"
-    _IconColor ("Color", Vector4) = (1.0, 1.0, 1.0, 1.0)
-    _IconCenter ("Center", Vector3) = (0.0, 0.0, 0.0)
-    _IconScale ("Scale", Float) = 1.0
-}
-
-Pass "GizmoIcon"
-{
-    Tags { "RenderOrder" = "Transparent" }
-
-    Cull Off
-    Blend Alpha
-    ZWrite Off
-    ZTest Always
-
-    GLSLPROGRAM
-    Vertex
+    Properties
     {
-        #include "ProwlCG"
-        #include "VertexAttributes"
+        _MainTex("Icon", Texture2D) = "white" {}
+        _IconColor("Color", Vector) = (1.0, 1.0, 1.0, 1.0)
+        _IconCenter("Center", Vector) = (0.0, 0.0, 0.0, 0)
+        _IconScale("Scale", Float) = 1.0
+    }
 
-        out vec2 vUV;
+    Pass
+    {
+        Name "GizmoIcon"
+        Tags { "RenderOrder" = "Transparent" }
+        Cull Off
+        Blend SrcAlpha OneMinusSrcAlpha
+        ZWrite Off
+        ZTest Always
 
-        uniform vec3 _IconCenter;
-        uniform float _IconScale;
+        SLANGPROGRAM
 
-        void main()
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; }
+        struct Varyings { float4 position : SV_Position; float2 vUV : TEXCOORD0; }
+
+        struct Material
+        {
+            float3 _IconCenter;
+            float _IconScale;
+            float4 _IconColor;
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _CameraDepthTexture;
+        }
+        ParameterBlock<Material> Mat;
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
         {
             // World-space billboard: 1 meter * _IconScale, always facing camera
-            float halfSize = _IconScale * 0.5;
+            float halfSize = Mat._IconScale * 0.5;
 
-            // Camera right/up from the view matrix
-            vec3 camRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
-            vec3 camUp    = vec3(PROWL_MATRIX_V[0][1], PROWL_MATRIX_V[1][1], PROWL_MATRIX_V[2][1]);
+            // Camera right/up are rows 0/1 of the view matrix (GLSL V[i][0]/V[i][1] -> Slang V[0]/V[1]).
+            float3 camRight = Frame.prowl_MatV[0].xyz;
+            float3 camUp    = Frame.prowl_MatV[1].xyz;
 
-            // vertexPosition is -1..1 from fullscreen quad
-            vec3 worldPos = _IconCenter
-                + camRight * (vertexPosition.x * halfSize)
-                + camUp    * (vertexPosition.y * halfSize);
+            // position is -1..1 from fullscreen quad
+            float3 worldPos = Mat._IconCenter
+                + camRight * (input.position.x * halfSize)
+                + camUp    * (input.position.y * halfSize);
 
-            gl_Position = PROWL_MATRIX_VP * vec4(worldPos, 1.0);
-            vUV = vertexPosition.xy * 0.5 + 0.5;
+            Varyings o;
+            o.position = mul(Frame.prowl_MatVP, float4(worldPos, 1.0));
+            o.vUV = input.position.xy * 0.5 + 0.5;
+            return o;
         }
-    }
-    Fragment
-    {
-        #include "ProwlCG"
 
-        in vec2 vUV;
-        layout (location = 0) out vec4 finalColor;
-
-        uniform sampler2D _MainTex;
-        uniform vec4 _IconColor;
-        uniform sampler2D _CameraDepthTexture;
-
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            vec4 texColor = texture(_MainTex, vUV);
-            vec4 color = texColor * _IconColor;
+            float4 texColor = Mat._MainTex.Sample(input.vUV);
+            float4 color = texColor * Mat._IconColor;
 
             if (color.a < 0.01) discard;
 
             // Depth-based dimming (same as gizmo shader)
-            vec2 screenUV = gl_FragCoord.xy / _ScreenParams.xy;
-            float sceneDepth = texture(_CameraDepthTexture, screenUV).r;
-            float fragmentDepth = gl_FragCoord.z;
+            float2 screenUV = input.position.xy / Frame._ScreenParams.xy;
+            float sceneDepth = Mat._CameraDepthTexture.Sample(screenUV).r;
+            float fragmentDepth = input.position.z;
             float occluded = step(sceneDepth, fragmentDepth - 0.00001);
             if (occluded > 0.5)
             {
@@ -75,8 +74,9 @@ Pass "GizmoIcon"
                 color.a *= 0.3;
             }
 
-            finalColor = color;
+            return color;
         }
+
+        ENDSLANG
     }
-    ENDGLSL
 }

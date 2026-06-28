@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
@@ -233,13 +234,8 @@ public class DefaultRenderPipeline : RenderPipeline
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
 
-        // ─── Shadow atlas setup (clear) ───
-        // Done in its own CB and submitted before the lights start so the depth/stencil
-        // clear is in place before any face/cascade draws into the atlas. Each face
-        // then submits its own CB (necessary because each face uploads different
-        // view/proj matrices and they can't share a CB see Light.RenderShadows).
         {
-            using var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
+            var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
             shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
             Graphics.Submit(shadowSetup);
@@ -255,51 +251,31 @@ public class DefaultRenderPipeline : RenderPipeline
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);
 
-        // Main color render target
+        // colorRT owns the shared depth; prepass borrows it so both framebuffers see the same
+        // depth buffer without any CopyTexture call between them.
         RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
+            isHDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm,
         ]);
-
-        // Unified prepass RT. One MRT pass writes everything depth-based effects need:
-        //   depth attachment      = scene depth
-        //   color 0 (Color4b)     = view-space normals
-        //   color 1 (Short4)      = motion vectors (.rg) + roughness (.b) + metallic (.a)
-        RenderTexture prepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            TextureImageFormat.Color4b,
-            TextureImageFormat.Short4,
+        RenderTexture prepass = new((int)css.PixelWidth, (int)css.PixelHeight, colorRT.InternalDepth, [
+            PixelFormat.R8_G8_B8_A8_UNorm,
+            PixelFormat.R16_G16_B16_A16_Float,
         ]);
 
         // ─── Pre-pass + opaque CB ───
         var mainCmd = Graphics.GetCommandBuffer("ColorPass");
 
-        // Single MRT prepass: depth + view-space normals + motion + roughness/metallic.
-        // Cleared to zero so sky/background reads zero motion (and the unwritten normal/material
-        // is only ever sampled by effects that gate on depth < 1, so its value there is moot).
-        // updatePreviousMatrices = true so prowl_PrevObjectToWorld is bound per object for motion.
         mainCmd.SetRenderTarget(prepass.frameBuffer);
         mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0, 0, 0, 0));
         DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
 
-        // Expose depth + normals + motion as globals AFTER the prepass draws have been encoded
-        // into mainCmd. Using cmd.SetGlobalTexture (not the static directly) means the executor
-        // mutates the global at the right point in submit order setting the static here would
-        // expose the textures as sampler inputs while they are still bound FBO attachments for
-        // the prepass draws above (GL undefined behavior).
         mainCmd.SetGlobalTexture("_CameraDepthTexture", prepass.InternalDepth);
         mainCmd.SetGlobalTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
         mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
 
-        // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
-        mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
-        mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
-                                 0, 0, colorRT.Width, colorRT.Height,
-                                 ClearFlags.Depth, BlitFilter.Nearest);
-
-        // Switch back to colorRT for the opaque draws.
+        // Depth is already in colorRT (shared attachment) — no copy needed.
         mainCmd.SetRenderTarget(colorRT.frameBuffer);
         mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
 
-        // Camera clear flags
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
@@ -335,17 +311,12 @@ public class DefaultRenderPipeline : RenderPipeline
                 break;
         }
 
-        // Forward opaques (with PBR lighting inline).
         RenderStats.BeginColorPass();
         DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
 
-        // Submit so image effects see all the rendering above. Motion vectors were already
-        // produced jitter-free in the unified prepass (via PROWL_MATRIX_VP_NONJITTERED), so no
-        // separate pass or mid-frame matrix swap is needed here.
         Graphics.Submit(mainCmd);
 
         // ─── AfterOpaques image effects ───
-        // Image effects rent + submit their own CommandBuffers internally.
         RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
@@ -371,7 +342,6 @@ public class DefaultRenderPipeline : RenderPipeline
         DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT);
         Graphics.Submit(transparentCmd);
 
-        // World-space UI canvases (drawn with the camera matrices, into the scene color).
         RenderUIQueue(css, colorRT, UISurface.World, data);
 
         RenderStats.EndColorPass();
@@ -403,7 +373,6 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         RenderStats.EndPostFx();
 
-        // ─── Screen-space UI (Camera surface) composited into the scene color ───
         RenderUIQueue(css, colorRT, UISurface.Camera, data);
 
         // ─── Gizmos + final blit CB ───
@@ -418,25 +387,19 @@ public class DefaultRenderPipeline : RenderPipeline
         finalCmd.Blit(colorRT, target, null, 0, false, false);
         Graphics.Submit(finalCmd);
 
-        // ─── Screen-space UI (Overlay surface) on top of the final image (into target) ───
         RenderUIQueue(css, target, UISurface.Overlay, data);
 
-        // Reset to backbuffer for whatever runs after the pipeline (Paper UI, etc.). MUST run after the
-        // overlay pass, which binds `target` - otherwise the editor's UI draws into the game RT and the
-        // window goes black.
         var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
         resetCmd.SetRenderTarget(null);
         resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         Graphics.Submit(resetCmd);
 
-        // Save previous VP for next frame's motion vectors.
         camera.SavePreviousViewProjectionMatrix();
 
         foreach (ImageEffect effect in allEffects)
             effect.OnPostRender(camera);
 
-        // Cleanup
-        RenderTexture.ReleaseTemporaryRT(prepass);
+        prepass.Dispose();
         RenderTexture.ReleaseTemporaryRT(colorRT);
     }
 
@@ -579,7 +542,7 @@ public class DefaultRenderPipeline : RenderPipeline
             Material material = item.Material;
             if (material == null || material.Shader.IsNotValid()) continue;
 
-            item.GetRenderingData(viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out _);
+            item.GetRenderingData(viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out _);
             if (mesh == null || mesh.VertexCount <= 0) continue;
 
             // UI materials carry a single pass tagged RenderOrder=UI.

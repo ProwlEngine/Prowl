@@ -13,14 +13,5 @@ namespace Prowl.Runtime.Rendering.Shaders;
 public struct ShaderVariant
 {
     public Keyword[] Keywords;
-    public ShaderVariantBackend[] Backends;
-}
-
-/// <summary>
-/// A reflected <see cref="ShaderDescription"/> for a single graphics backend.
-/// </summary>
-public struct ShaderVariantBackend
-{
-    public GraphicsBackend Backend;
-    public ShaderDescription Description;
+    public (ShaderDescription, GraphicsBackend)[] Backends;
 }

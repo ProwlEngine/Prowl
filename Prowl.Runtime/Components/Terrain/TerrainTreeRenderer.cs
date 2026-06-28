@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -16,7 +18,7 @@ internal class TerrainTreeRenderer
     private readonly List<Float4> _colors = [];
     private readonly List<Rendering.InstanceData> _instanceDataList = [];
     private static Material? s_defaultStandardMat;
-    private static readonly PropertyState s_emptyProps = new();
+    private static readonly PropertySet s_emptyProps = new();
 
     public void CollectRenderables(
         TerrainData data, TerrainComponent terrain, Camera camera,

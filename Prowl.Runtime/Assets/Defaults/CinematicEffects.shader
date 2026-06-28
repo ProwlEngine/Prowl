@@ -1,186 +1,168 @@
 Shader "Default/CinematicEffects"
-
-Properties
 {
-}
-
-Pass "CinematicEffects"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    ZTest Off
-    ZWrite Off
-    Cull Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "CinematicEffects"
+        Tags { "RenderOrder" = "Opaque" }
+        ZTest Disabled
+        ZWrite Off
+        Cull Off
 
-        out vec2 TexCoords;
+        SLANGPROGRAM
 
-        void main()
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
+        struct Material
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-        }
-    }
+            float2 _Resolution;
+            Sampler2D<float4> _MainTex;
 
-    Fragment
-    {
-        #include "ProwlCG"
-
-        layout(location = 0) out vec4 OutputColor;
-
-        in vec2 TexCoords;
-
-        uniform sampler2D _MainTex;
-        uniform vec2 _Resolution;
-
-        // ── Vignette ──────────────────────────────────────
         #ifdef VIGNETTE
-        uniform float _VignetteIntensity;
-        uniform float _VignetteSmoothness;
-        uniform float _VignetteRoundness;
+            float _VignetteIntensity;
+            float _VignetteSmoothness;
+            float _VignetteRoundness;
         #endif
 
-        // ── Chromatic Aberration ──────────────────────────
         #ifdef CHROMATIC_ABERRATION
-        uniform float _ChromaticIntensity;
-        uniform float _ChromaticDistortion;
+            float _ChromaticIntensity;
+            float _ChromaticDistortion;
         #endif
 
-        // ── Film Grain ────────────────────────────────────
         #ifdef FILM_GRAIN
-        uniform float _GrainIntensity;
-        uniform float _GrainResponse;
+            float _GrainIntensity;
+            float _GrainResponse;
         #endif
 
-        // ── Color Grading ─────────────────────────────────
         #ifdef COLOR_GRADING
-        uniform float _PostExposure;
-        uniform float _Contrast;
-        uniform float _Saturation;
-        uniform float _Temperature;
-        uniform vec4 _Lift;
-        uniform vec4 _Gamma;
-        uniform vec4 _Gain;
+            float _PostExposure;
+            float _Contrast;
+            float _Saturation;
+            float _Temperature;
+            float4 _Lift;
+            float4 _Gamma;
+            float4 _Gain;
         #endif
 
-        // ── LUT ───────────────────────────────────────────
         #ifdef LUT
-        uniform sampler2D _LUTTex;
-        uniform float _LUTContribution;
-        uniform float _LUTSize;
+            float _LUTContribution;
+            float _LUTSize;
+            Sampler2D<float4> _LUTTex;
         #endif
 
-        // ── Sharpen (CAS) ─────────────────────────────────
         #ifdef SHARPEN
-        uniform float _SharpenAmount;
-        uniform float _SharpenRadius;
+            float _SharpenAmount;
+            float _SharpenRadius;
         #endif
 
-        // ── Edge Detection ────────────────────────────────
         #ifdef EDGE_DETECTION
-        uniform float _EdgeIntensity;
-        uniform vec4 _EdgeColor;
-        uniform float _EdgeBackgroundFade;
+            float _EdgeIntensity;
+            float4 _EdgeColor;
+            float _EdgeBackgroundFade;
         #endif
 
-        // ── Pixelation ────────────────────────────────────
         #ifdef PIXELATION
-        uniform float _PixelSize;
+            float _PixelSize;
         #endif
 
-        // ── God Rays ──────────────────────────────────────
         #ifdef GOD_RAYS
-        uniform float _GodRayIntensity;
-        uniform float _GodRayDecay;
-        uniform float _GodRayDensity;
-        uniform float _GodRayWeight;
-        uniform int _GodRaySamples;
-        uniform float _GodRayThreshold;
-        uniform vec2 _SunScreenPos;
-        uniform sampler2D _CameraDepthTexture;
+            float _GodRayIntensity;
+            float _GodRayDecay;
+            float _GodRayDensity;
+            float _GodRayWeight;
+            int _GodRaySamples;
+            float _GodRayThreshold;
+            float2 _SunScreenPos;
+            Sampler2D<float4> _CameraDepthTexture;
         #endif
+        }
+        ParameterBlock<Material> Mat;
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
 
         // ── Utility functions ─────────────────────────────
 
-        float getLuminance(vec3 c) {
-            return dot(c, vec3(0.2126, 0.7152, 0.0722));
+        float getLuminance(float3 c) {
+            return dot(c, float3(0.2126, 0.7152, 0.0722));
         }
 
         // Hash-based noise
-        float hash12(vec2 p) {
-            vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        float hash12(float2 p) {
+            float3 p3 = frac(float3(p.xyx) * 0.1031);
             p3 += dot(p3, p3.yzx + 33.33);
-            return fract((p3.x + p3.y) * p3.z);
+            return frac((p3.x + p3.y) * p3.z);
         }
 
         // ── Effect implementations ────────────────────────
 
         #ifdef PIXELATION
-        vec2 applyPixelation(vec2 uv) {
-            vec2 pixelCount = _Resolution / _PixelSize;
+        float2 applyPixelation(float2 uv) {
+            float2 pixelCount = Mat._Resolution / Mat._PixelSize;
             return floor(uv * pixelCount) / pixelCount;
         }
         #endif
 
         #ifdef CHROMATIC_ABERRATION
-        vec3 applyChromaticAberration(vec2 uv) {
+        float3 applyChromaticAberration(float2 uv) {
             // Barrel distortion-based chromatic aberration
-            vec2 center = uv - 0.5;
+            float2 center = uv - 0.5;
             float dist2 = dot(center, center);
 
             // Apply barrel distortion per channel with different magnitudes
-            float intensity = _ChromaticIntensity / _Resolution.x;
-            float distortion = _ChromaticDistortion;
+            float intensity = Mat._ChromaticIntensity / Mat._Resolution.x;
+            float distortion = Mat._ChromaticDistortion;
 
             // Red shifts outward, blue shifts inward
-            vec2 offsetR = center * (1.0 + dist2 * distortion) * intensity;
-            vec2 offsetB = center * (1.0 - dist2 * distortion) * intensity;
+            float2 offsetR = center * (1.0 + dist2 * distortion) * intensity;
+            float2 offsetB = center * (1.0 - dist2 * distortion) * intensity;
 
-            float r = texture(_MainTex, uv + offsetR).r;
-            float g = texture(_MainTex, uv).g;
-            float b = texture(_MainTex, uv - offsetB).b;
-            return vec3(r, g, b);
+            float r = Mat._MainTex.Sample(uv + offsetR).r;
+            float g = Mat._MainTex.Sample(uv).g;
+            float b = Mat._MainTex.Sample(uv - offsetB).b;
+            return float3(r, g, b);
         }
         #endif
 
         #ifdef SHARPEN
         // Contrast Adaptive Sharpening (CAS)
         // Reference: Lou Kramer, FidelityFX CAS, AMD Developer Day 2019
-        vec3 applyContrastAdaptiveSharpening(ivec2 texcoord) {
-            int r = int(_SharpenRadius);
-            vec3 a = texelFetch(_MainTex, texcoord + ivec2( 0, -1) * r, 0).rgb;
-            vec3 b = texelFetch(_MainTex, texcoord + ivec2(-1,  0) * r, 0).rgb;
-            vec3 c = texelFetch(_MainTex, texcoord, 0).rgb;
-            vec3 d = texelFetch(_MainTex, texcoord + ivec2( 1,  0) * r, 0).rgb;
-            vec3 e = texelFetch(_MainTex, texcoord + ivec2( 0,  1) * r, 0).rgb;
+        float3 applyContrastAdaptiveSharpening(int2 texcoord) {
+            int r = int(Mat._SharpenRadius);
+            float3 a = Mat._MainTex.Load(int3(texcoord + int2( 0, -1) * r, 0)).rgb;
+            float3 b = Mat._MainTex.Load(int3(texcoord + int2(-1,  0) * r, 0)).rgb;
+            float3 c = Mat._MainTex.Load(int3(texcoord, 0)).rgb;
+            float3 d = Mat._MainTex.Load(int3(texcoord + int2( 1,  0) * r, 0)).rgb;
+            float3 e = Mat._MainTex.Load(int3(texcoord + int2( 0,  1) * r, 0)).rgb;
 
             float mn = min(a.g, min(b.g, min(c.g, min(d.g, e.g))));
             float mx = max(a.g, max(b.g, max(c.g, max(d.g, e.g))));
 
-            float w = sqrt(min(1.0 - mx, mn) / max(mx, 0.001)) * mix(-0.125, -0.2, _SharpenAmount);
+            float w = sqrt(min(1.0 - mx, mn) / max(mx, 0.001)) * lerp(-0.125, -0.2, Mat._SharpenAmount);
             return (w * (a + b + d + e) + c) / (4.0 * w + 1.0);
         }
         #endif
 
         #ifdef EDGE_DETECTION
-        float sobelEdge(vec2 uv) {
-            vec2 texel = 1.0 / _Resolution;
+        float sobelEdge(float2 uv) {
+            float2 texel = 1.0 / Mat._Resolution;
 
-            float tl = getLuminance(texture(_MainTex, uv + vec2(-texel.x,  texel.y)).rgb);
-            float t  = getLuminance(texture(_MainTex, uv + vec2(     0.0,  texel.y)).rgb);
-            float tr = getLuminance(texture(_MainTex, uv + vec2( texel.x,  texel.y)).rgb);
-            float l  = getLuminance(texture(_MainTex, uv + vec2(-texel.x,      0.0)).rgb);
-            float r  = getLuminance(texture(_MainTex, uv + vec2( texel.x,      0.0)).rgb);
-            float bl = getLuminance(texture(_MainTex, uv + vec2(-texel.x, -texel.y)).rgb);
-            float b  = getLuminance(texture(_MainTex, uv + vec2(     0.0, -texel.y)).rgb);
-            float br = getLuminance(texture(_MainTex, uv + vec2( texel.x, -texel.y)).rgb);
+            float tl = getLuminance(Mat._MainTex.Sample(uv + float2(-texel.x,  texel.y)).rgb);
+            float t  = getLuminance(Mat._MainTex.Sample(uv + float2(     0.0,  texel.y)).rgb);
+            float tr = getLuminance(Mat._MainTex.Sample(uv + float2( texel.x,  texel.y)).rgb);
+            float l  = getLuminance(Mat._MainTex.Sample(uv + float2(-texel.x,      0.0)).rgb);
+            float r  = getLuminance(Mat._MainTex.Sample(uv + float2( texel.x,      0.0)).rgb);
+            float bl = getLuminance(Mat._MainTex.Sample(uv + float2(-texel.x, -texel.y)).rgb);
+            float b  = getLuminance(Mat._MainTex.Sample(uv + float2(     0.0, -texel.y)).rgb);
+            float br = getLuminance(Mat._MainTex.Sample(uv + float2( texel.x, -texel.y)).rgb);
 
             float gx = -tl - 2.0*l - bl + tr + 2.0*r + br;
             float gy = -tl - 2.0*t - tr + bl + 2.0*b + br;
@@ -190,46 +172,46 @@ Pass "CinematicEffects"
         #endif
 
         #ifdef COLOR_GRADING
-        vec3 applyColorGrading(vec3 color) {
+        float3 applyColorGrading(float3 color) {
             // Post-exposure (EV stops)
-            color *= exp2(_PostExposure);
+            color *= exp2(Mat._PostExposure);
 
             // Contrast (around mid-gray 0.18)
-            color = mix(vec3(0.18), color, 1.0 + _Contrast);
+            color = lerp(float3(0.18), color, 1.0 + Mat._Contrast);
 
             // Temperature (approximate Planckian locus shift)
-            color.r *= 1.0 + _Temperature * 0.1;
-            color.b *= 1.0 - _Temperature * 0.1;
+            color.r *= 1.0 + Mat._Temperature * 0.1;
+            color.b *= 1.0 - Mat._Temperature * 0.1;
 
             // Saturation
             float lum = getLuminance(color);
-            color = mix(vec3(lum), color, 1.0 + _Saturation);
+            color = lerp(float3(lum), color, 1.0 + Mat._Saturation);
 
             // Lift / Gamma / Gain (ASC CDL style)
             // Lift affects shadows, Gain affects highlights, Gamma adjusts midtones
-            vec3 lift = _Lift.rgb;
-            vec3 gamma = _Gamma.rgb;
-            vec3 gain = _Gain.rgb;
+            float3 lift = Mat._Lift.rgb;
+            float3 gamma = Mat._Gamma.rgb;
+            float3 gain = Mat._Gain.rgb;
 
             // Apply gain (multiply)
-            color *= (vec3(1.0) + gain);
+            color *= (float3(1.0) + gain);
 
             // Apply lift (add to shadows weighted by inverse luminance)
             color += lift * (1.0 - color);
 
             // Apply gamma (power curve on midtones)
             // gamma offset of 0 = no change, positive = brighten mids, negative = darken mids
-            vec3 gammaExp = 1.0 / max(vec3(1.0) + gamma, vec3(0.01));
-            color = pow(max(color, vec3(0.0)), gammaExp);
+            float3 gammaExp = 1.0 / max(float3(1.0) + gamma, float3(0.01));
+            color = pow(max(color, float3(0.0)), gammaExp);
 
-            return max(color, vec3(0.0));
+            return max(color, float3(0.0));
         }
         #endif
 
         #ifdef LUT
-        // Sample a strip-format LUT texture (e.g., 256x16 for 16^3 LUT)
-        vec3 applyLUT(vec3 color) {
-            float size = _LUTSize;
+        // Sample a strip-format LUT e.g. 256x16 for 16^3 LUT
+        float3 applyLUT(float3 color) {
+            float size = Mat._LUTSize;
             float invSize = 1.0 / size;
             float sliceSize = 1.0 / size; // width of one slice in UV space
 
@@ -246,75 +228,76 @@ Pass "CinematicEffects"
             float halfTexel = 0.5 * invSize;
 
             // UV within a single slice (red = x, green = y)
-            vec2 innerUV = vec2(
+            float2 innerUV = float2(
                 halfTexel + color.r * (1.0 - invSize),
                 halfTexel + color.g * (1.0 - invSize)
             );
 
             // Offset to the correct slice
-            vec2 uv1 = vec2(innerUV.x * sliceSize + sliceLow * sliceSize, innerUV.y);
-            vec2 uv2 = vec2(innerUV.x * sliceSize + sliceHigh * sliceSize, innerUV.y);
+            float2 uv1 = float2(innerUV.x * sliceSize + sliceLow * sliceSize, innerUV.y);
+            float2 uv2 = float2(innerUV.x * sliceSize + sliceHigh * sliceSize, innerUV.y);
 
-            vec3 graded1 = texture(_LUTTex, uv1).rgb;
-            vec3 graded2 = texture(_LUTTex, uv2).rgb;
+            float3 graded1 = Mat._LUTTex.Sample(uv1).rgb;
+            float3 graded2 = Mat._LUTTex.Sample(uv2).rgb;
 
-            vec3 graded = mix(graded1, graded2, sliceFrac);
-            return mix(color, graded, _LUTContribution);
+            float3 graded = lerp(graded1, graded2, sliceFrac);
+            return lerp(color, graded, Mat._LUTContribution);
         }
         #endif
 
         #ifdef FILM_GRAIN
-        vec3 applyFilmGrain(vec3 color, vec2 uv) {
-            float noise = hash12(uv * _Resolution + fract(_Time.y) * 1000.0) * 2.0 - 1.0;
+        float3 applyFilmGrain(float3 color, float2 uv) {
+            float noise = hash12(uv * Mat._Resolution + frac(Frame._Time.y) * 1000.0) * 2.0 - 1.0;
             float lum = getLuminance(color);
-            float response = mix(1.0, lum, _GrainResponse);
-            color += noise * _GrainIntensity * response;
-            return max(color, vec3(0.0));
+            float response = lerp(1.0, lum, Mat._GrainResponse);
+            color += noise * Mat._GrainIntensity * response;
+            return max(color, float3(0.0));
         }
         #endif
 
         #ifdef VIGNETTE
-        vec3 applyVignette(vec3 color, vec2 uv) {
-            vec2 d = abs(uv - 0.5) * 2.0;
-            d = mix(d, vec2(length(d)), _VignetteRoundness);
-            float vfactor = pow(clamp(1.0 - dot(d, d) * _VignetteIntensity, 0.0, 1.0), _VignetteSmoothness + 0.01);
+        float3 applyVignette(float3 color, float2 uv) {
+            float2 d = abs(uv - 0.5) * 2.0;
+            d = lerp(d, float2(length(d)), Mat._VignetteRoundness);
+            float vfactor = pow(clamp(1.0 - dot(d, d) * Mat._VignetteIntensity, 0.0, 1.0), Mat._VignetteSmoothness + 0.01);
             return color * vfactor;
         }
         #endif
 
         #ifdef GOD_RAYS
-        vec3 applyGodRays(vec3 color, vec2 uv) {
-            vec2 deltaUV = (uv - _SunScreenPos) * _GodRayDensity / float(_GodRaySamples);
-            vec2 sampleUV = uv;
+        float3 applyGodRays(float3 color, float2 uv) {
+            float2 deltaUV = (uv - Mat._SunScreenPos) * Mat._GodRayDensity / float(Mat._GodRaySamples);
+            float2 sampleUV = uv;
             float illumination = 0.0;
             float decay = 1.0;
 
-            int sampleCount = min(_GodRaySamples, 128);
+            int sampleCount = min(Mat._GodRaySamples, 128);
             for (int i = 0; i < sampleCount; i++) {
                 sampleUV -= deltaUV;
-                vec2 clampedUV = clamp(sampleUV, 0.001, 0.999);
+                float2 clampedUV = clamp(sampleUV, 0.001, 0.999);
 
                 // Depth test sky pixels (depth ~1.0) contribute light
-                float depth = texture(_CameraDepthTexture, clampedUV).r;
+                float depth = Mat._CameraDepthTexture.Sample(clampedUV).r;
                 float sky = step(0.9999, depth);
 
                 // Luminance threshold only bright sky areas contribute
-                vec3 sampleColor = texture(_MainTex, clampedUV).rgb;
+                float3 sampleColor = Mat._MainTex.Sample(clampedUV).rgb;
                 float brightness = getLuminance(sampleColor);
-                float bright = sky * step(_GodRayThreshold, brightness);
+                float bright = sky * step(Mat._GodRayThreshold, brightness);
 
-                illumination += bright * decay * _GodRayWeight;
-                decay *= _GodRayDecay;
+                illumination += bright * decay * Mat._GodRayWeight;
+                decay *= Mat._GodRayDecay;
             }
 
             // Warm-tinted light shafts
-            return color + illumination * _GodRayIntensity * vec3(1.0, 0.95, 0.85);
+            return color + illumination * Mat._GodRayIntensity * float3(1.0, 0.95, 0.85);
         }
         #endif
 
-        void main()
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            vec2 uv = TexCoords;
+            float2 uv = input.uv;
 
             // ── Pixelation (modify UV first) ──────────────
             #ifdef PIXELATION
@@ -323,23 +306,23 @@ Pass "CinematicEffects"
 
             // ── Sample color ──────────────────────────────
             #ifdef CHROMATIC_ABERRATION
-            vec3 color = applyChromaticAberration(uv);
+            float3 color = applyChromaticAberration(uv);
             #else
-            vec3 color = texture(_MainTex, uv).rgb;
+            float3 color = Mat._MainTex.Sample(uv).rgb;
             #endif
 
-            float alpha = texture(_MainTex, TexCoords).a;
+            float alpha = Mat._MainTex.Sample(input.uv).a;
 
             // ── Sharpen (CAS) ─────────────────────────────
             #ifdef SHARPEN
-            color = applyContrastAdaptiveSharpening(ivec2(uv * _Resolution));
+            color = applyContrastAdaptiveSharpening(int2(uv * Mat._Resolution));
             #endif
 
             // ── Edge Detection ────────────────────────────
             #ifdef EDGE_DETECTION
-            float edge = sobelEdge(uv) * _EdgeIntensity;
+            float edge = sobelEdge(uv) * Mat._EdgeIntensity;
             edge = clamp(edge, 0.0, 1.0);
-            color = mix(color * _EdgeBackgroundFade, _EdgeColor.rgb, edge);
+            color = lerp(color * Mat._EdgeBackgroundFade, Mat._EdgeColor.rgb, edge);
             #endif
 
             // ── Color Grading ─────────────────────────────
@@ -354,7 +337,7 @@ Pass "CinematicEffects"
 
             // ── God Rays ──────────────────────────────────
             #ifdef GOD_RAYS
-            color = applyGodRays(color, TexCoords);
+            color = applyGodRays(color, input.uv);
             #endif
 
             // ── Film Grain ────────────────────────────────
@@ -367,9 +350,9 @@ Pass "CinematicEffects"
             color = applyVignette(color, uv);
             #endif
 
-            OutputColor = vec4(color, alpha);
+            return float4(color, alpha);
         }
-    }
 
-    ENDGLSL
+        ENDSLANG
+    }
 }

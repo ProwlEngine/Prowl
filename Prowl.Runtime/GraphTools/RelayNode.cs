@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime.GraphTools;
 
@@ -45,7 +46,7 @@ public sealed class RelayNode : Node, IAutoPruneNode
     public override string Category => "Utility";
     public override System.Drawing.Color AccentColor => System.Drawing.Color.FromArgb(255, 120, 120, 135);
 
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
+    [UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
         Justification = "Relay ports require runtime generic instantiation to mirror the carried type. NOT AOT-compatible — AOT consumers must avoid RelayNode (TODO: replace with dispatcher table).")]
     protected override void DefineNode()
     {
@@ -61,7 +62,7 @@ public sealed class RelayNode : Node, IAutoPruneNode
     private void AddInputGeneric<T>() => AddInput<T>("In");
     private void AddOutputGeneric<T>() => AddOutput<T>("Out");
 
-    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2057:Type.GetType",
+    [UnconditionalSuppressMessage("Trimming", "IL2057:Type.GetType",
         Justification = "Relay carries a user-chosen type by serialized name; user types must be preserved by the consuming application's trim configuration.")]
     private Type ResolveCarriedType()
     {

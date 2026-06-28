@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 
 using Prowl.Echo;
@@ -259,7 +261,7 @@ public class UIImage : UIBehaviour
             _border.W / tex.Height);
     }
 
-    public override void PopulateProperties(PropertyState p, in UIContext _)
+    public override void PopulateProperties(PropertySet p, in UIContext _)
     {
         p.SetTexture("_MainTex", Texture ?? defaultTexture);
         p.SetColor("_MainColor", Color);   // tint already baked into vertex color

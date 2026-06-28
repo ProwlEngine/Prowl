@@ -15,8 +15,17 @@ public class Project
     public string Name { get; private set; }
     public string RootPath { get; private set; }
 
+    /// <summary>Name of the engine-managed, read-only defaults folder (sibling of Assets/).</summary>
+    public const string DefaultsFolder = "Defaults";
+
     // Standard directories
     public string AssetsPath => Path.Combine(RootPath, "Assets");
+
+    /// <summary>
+    /// Engine defaults extracted next to Assets/. Read-only: overwritten on startup from the
+    /// embedded runtime resources. Scanned by the asset database as a second (read-only) root.
+    /// </summary>
+    public string DefaultsPath => Path.Combine(RootPath, DefaultsFolder);
     public string LibraryPath => Path.Combine(RootPath, "Library");
     public string CachePath => Path.Combine(RootPath, "Library", "cache");
     public string ThumbnailsPath => Path.Combine(RootPath, "Library", "thumbnails");
@@ -38,6 +47,42 @@ public class Project
     public string GameCsprojPath => Path.Combine(RootPath, $"{Name}.Game.csproj");
     public string EditorCsprojPath => Path.Combine(RootPath, $"{Name}.Editor.csproj");
     public string AutoSaveScenePath => Path.Combine(LibraryPath, "~autosave.scene");
+
+    /// <summary>
+    /// True if a project-relative path lives under the read-only Defaults/ root.
+    /// </summary>
+    public static bool IsDefaultsRelativePath(string relativePath)
+    {
+        string norm = relativePath.Replace('\\', '/');
+        return norm.Equals(DefaultsFolder, StringComparison.OrdinalIgnoreCase)
+            || norm.StartsWith(DefaultsFolder + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolve a project-relative path to an absolute path. Paths under Defaults/ resolve against
+    /// the project root (sibling of Assets/); everything else resolves against Assets/.
+    /// </summary>
+    public string ToAbsolutePath(string relativePath)
+    {
+        string norm = relativePath.Replace('\\', '/');
+        return IsDefaultsRelativePath(norm)
+            ? Path.Combine(RootPath, norm)
+            : Path.Combine(AssetsPath, norm);
+    }
+
+    /// <summary>
+    /// Convert an absolute path back to a project-relative path, normalized to forward slashes.
+    /// Files under Defaults/ keep the "Defaults/" prefix; everything else is relative to Assets/.
+    /// </summary>
+    public string ToRelativePath(string absolutePath)
+    {
+        string full = Path.GetFullPath(absolutePath);
+        string defaultsRoot = Path.GetFullPath(DefaultsPath);
+        if (full.Equals(defaultsRoot, StringComparison.OrdinalIgnoreCase)
+            || full.StartsWith(defaultsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return Path.GetRelativePath(RootPath, full).Replace('\\', '/');
+        return Path.GetRelativePath(AssetsPath, full).Replace('\\', '/');
+    }
 
     private Project(string rootPath, string name)
     {
@@ -64,7 +109,7 @@ public class Project
         if (!File.Exists(gitignore))
         {
             File.WriteAllText(gitignore,
-                "Library/\nTemp/\nLogs/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
+                "Library/\nTemp/\nLogs/\nDefaults/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
         }
 
         return project;

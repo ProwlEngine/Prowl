@@ -9,6 +9,7 @@ using ImageMagick;
 
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
+using Prowl.Graphite;
 using Prowl.Photonic;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -440,11 +441,11 @@ public sealed class LightmapBakeService
         var rgba = new byte[n * 4];
         try
         {
-            if (tex.ImageFormat == TextureImageFormat.Color4b)
+            if (tex.ImageFormat == PixelFormat.R8_G8_B8_A8_UNorm)
             {
                 tex.GetData<byte>(rgba);
             }
-            else if (tex.ImageFormat is TextureImageFormat.UnsignedShort4 or TextureImageFormat.Short4)
+            else if (tex.ImageFormat is PixelFormat.R16_G16_B16_A16_UNorm or PixelFormat.R16_G16_B16_A16_Float)
             {
                 var tmp = new ushort[n * 4];
                 tex.GetData<ushort>(tmp);

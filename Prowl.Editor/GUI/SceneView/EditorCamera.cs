@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.Graphite;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -117,7 +118,7 @@ public class EditorCamera
             _renderTarget?.Dispose();
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
-                new[] { TextureImageFormat.Color4b });
+                new[] { PixelFormat.R8_G8_B8_A8_UNorm });
 
             _camera.Target = _renderTarget;
         }

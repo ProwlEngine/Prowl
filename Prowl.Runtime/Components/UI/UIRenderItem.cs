@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -29,7 +31,7 @@ internal sealed class UIRenderItem : IRenderable
 
     // -------- Per-frame state --------
     public Float4x4      Model;                  // canvas-local-pixel x canvas-world (see GameCanvas.BuildItemModel)
-    public PropertyState Props = new();          // reused; never reallocated
+    public PropertySet Props = new();          // reused; never reallocated
 
     // -------- Sort + lifecycle --------
     public int    SortKey;                       // (canvasSortOrder << 24) | depthFirstIndex
@@ -56,7 +58,7 @@ internal sealed class UIRenderItem : IRenderable
     /// </summary>
     public Float3 GetPosition() => Float4x4.TransformPoint(Float3.Zero, Model);
 
-    public void GetRenderingData(ViewerData v, out PropertyState p, out Mesh m, out Float4x4 model, out InstanceData[]? inst)
+    public void GetRenderingData(ViewerData v, out PropertySet p, out Mesh m, out Float4x4 model, out InstanceData[]? inst)
     {
         // Repopulate Props only when the owning behaviour reports a Material change.
         // The first call after a rebuild always writes (PropertyCacheState starts at All).

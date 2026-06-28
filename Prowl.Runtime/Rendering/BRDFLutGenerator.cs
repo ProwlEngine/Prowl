@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System.IO;
 
 using Prowl.Runtime.Resources;
@@ -55,10 +56,10 @@ public static class BRDFLutGenerator
         if (bytesRead != expectedSize)
             throw new InvalidDataException($"BRDF LUT file size mismatch. Expected {expectedSize} bytes, got {bytesRead}.");
 
-        var tex = new Texture2D((uint)Size, (uint)Size, false, TextureImageFormat.Color4b);
+        var tex = new Texture2D((uint)Size, (uint)Size, false, PixelFormat.R8_G8_B8_A8_UNorm);
         tex.SetData<byte>(pixels);
-        tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-        tex.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
+        tex.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+        tex.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
         tex.Name = "BRDF LUT";
         return tex;
     }
@@ -94,10 +95,10 @@ public static class BRDFLutGenerator
             }
         }
 
-        var tex = new Texture2D((uint)size, (uint)size, false, TextureImageFormat.Color4b);
+        var tex = new Texture2D((uint)size, (uint)size, false, PixelFormat.R8_G8_B8_A8_UNorm);
         tex.SetData<byte>(pixels);
-        tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-        tex.SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
+        tex.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+        tex.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
         tex.Name = "BRDF LUT";
         return tex;
     }

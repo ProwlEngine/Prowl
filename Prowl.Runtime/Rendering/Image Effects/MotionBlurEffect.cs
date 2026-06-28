@@ -49,7 +49,7 @@ public sealed class MotionBlurEffect : ImageEffect
 
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false,
             [context.SceneColor.MainTexture.ImageFormat]);
-        using var cmd = Graphics.GetCommandBuffer("MotionBlur");
+        var cmd = Graphics.GetCommandBuffer("MotionBlur");
         cmd.Blit(context.SceneColor, temp, _mat, 0);
         cmd.Blit(temp, context.SceneColor, null, 0);
         Graphics.Submit(cmd);

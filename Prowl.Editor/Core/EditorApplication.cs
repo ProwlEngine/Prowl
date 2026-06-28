@@ -22,6 +22,8 @@ using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Runtime.Rendering;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.Editor.Core;
 
@@ -44,6 +46,11 @@ public class EditorApplication : Game
 
     private string _curDefaultFont;
     private string _curDefaultBoldFont;
+
+    private Scribe.FontFile? _builtinFont;
+    private Scribe.FontFile? _builtinBoldFont;
+
+    public static Runtime.Resources.RenderTexture? SmokeTestRT { get; private set; }
 
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
@@ -287,18 +294,18 @@ public class EditorApplication : Game
 
     public void InitializeFont()
     {
-        // Pick a good system font prefer Segoe UI (Windows), then Arial, then any Regular font
+        // Prefer the configured font from the system. If it can't be resolved (e.g. the
+        // font isn't installed, or only a partial style set is) fall back to the builtin
+        // Inter font rather than grabbing an arbitrary system font, which produced
+        // inconsistent results like a bold-only face for every glyph.
+        _builtinFont ??= LoadBuiltinFont("Prowl.Editor.Resources.Inter-Regular.ttf");
+        _builtinBoldFont ??= LoadBuiltinFont("Prowl.Editor.Resources.Inter-Bold.ttf");
+
         if (EditorTheme.DefaultFontName != _curDefaultFont)
         {
             EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
                 .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultFontName && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+                ?? _builtinFont;
 
             _curDefaultFont = EditorTheme.DefaultFontName;
         }
@@ -307,16 +314,21 @@ public class EditorApplication : Game
         {
             EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
                 .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultBoldFontName && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
+                ?? _builtinBoldFont;
 
             _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
         }
+    }
+
+    private static Scribe.FontFile? LoadBuiltinFont(string resourceName)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            Runtime.Debug.LogWarning($"Could not load builtin font resource: {resourceName}");
+            return null;
+        }
+        return new Scribe.FontFile(stream);
     }
 
     protected override void PreparePaperFrame()
@@ -808,11 +820,11 @@ public class EditorApplication : Game
             _statusBarMessage = message.Contains('\n') ? message.Split('\n')[0] : message;
             switch (severity)
             {
-                case Runtime.LogSeverity.Warning:   _statusBarIcon = EditorIcons.TriangleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 200, 80); break;
+                case Runtime.LogSeverity.Warning: _statusBarIcon = EditorIcons.TriangleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 200, 80); break;
                 case Runtime.LogSeverity.Error:
-                case Runtime.LogSeverity.Exception: _statusBarIcon = EditorIcons.CircleExclamation;   _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 80, 80); break;
-                case Runtime.LogSeverity.Success:   _statusBarIcon = EditorIcons.CircleCheck;         _statusBarColor = System.Drawing.Color.FromArgb(255, 80, 200, 80); break;
-                default:                            _statusBarIcon = EditorIcons.CircleInfo;          _statusBarColor = EditorTheme.Ink400; break;
+                case Runtime.LogSeverity.Exception: _statusBarIcon = EditorIcons.CircleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 80, 80); break;
+                case Runtime.LogSeverity.Success: _statusBarIcon = EditorIcons.CircleCheck; _statusBarColor = System.Drawing.Color.FromArgb(255, 80, 200, 80); break;
+                default: _statusBarIcon = EditorIcons.CircleInfo; _statusBarColor = EditorTheme.Ink400; break;
             }
         };
     }
@@ -1832,7 +1844,7 @@ public class EditorApplication : Game
         if (scene != null)
             scene.DrawGizmos();
 
-        if(Selection.Count > 0)
+        if (Selection.Count > 0)
         {
             // Draw selection gizmo
             var selectedGOs = Selection.GetSelected<GameObject>();
@@ -1849,6 +1861,13 @@ public class EditorApplication : Game
     public override void OnRender(Runtime.Resources.Scene? scene)
     {
         // Don't render SceneView panel renders the editor camera to its own RT.
+
+        SmokeTestRT ??= new Runtime.Resources.RenderTexture(200, 200, false, [Prowl.Graphite.PixelFormat.R8_G8_B8_A8_UNorm]);
+        var smokeCmd = Runtime.Graphics.GetCommandBuffer("SmokeTest");
+        smokeCmd.SetRenderTarget(SmokeTestRT.frameBuffer);
+        smokeCmd.ClearRenderTarget(ClearFlags.Color, new Color(0f, 1f, 0f, 1f));
+        smokeCmd.SetRenderTarget(null);
+        Runtime.Graphics.Submit(smokeCmd);
     }
 
     /// <summary>

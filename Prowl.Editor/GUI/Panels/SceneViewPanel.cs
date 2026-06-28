@@ -158,12 +158,8 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
     {
         if (_editorCamera == null || width <= 0 || height <= 0) return;
 
-        uint rtWidth = (uint)MathF.Max(1, width);
-        uint rtHeight = (uint)MathF.Max(1, height);
-        _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
-
         var scene = Scene.Current;
-        var rt = _editorCamera.RenderTarget;
+        var rt = EditorApplication.SmokeTestRT;
 
         if (scene == null)
         {
@@ -221,10 +217,6 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         // Update transform gizmo for selected objects (skip if scene editor consumed input)
         if (!sceneEditorConsumedInput)
             UpdateTransformGizmo(paper, scene, width, height);
-
-        // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
-        DrawSelectionGizmos();
-        _editorCamera.Render(scene);
 
         if (rt != null && rt.MainTexture != null)
         {

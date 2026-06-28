@@ -3,6 +3,8 @@
 //
 // Patch-based detail renderer with per-prototype density layers.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -21,7 +23,7 @@ internal class TerrainGrassRenderer
 
     private Mesh? _quadMesh;
     private static Material? s_defaultStandardMat;
-    private static readonly PropertyState s_emptyProps = new();
+    private static readonly PropertySet s_emptyProps = new();
     private static Texture2D? s_defaultWhite;
 
     // Cache key = protoIndex * maxPatches + patchX + patchZ * patchCountX

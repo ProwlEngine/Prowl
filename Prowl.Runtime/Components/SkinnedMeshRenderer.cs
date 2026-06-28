@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -264,10 +266,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
         // Width = boneCount * 4 (4 texels per mat4), Height = 1
         uint width = (uint)(boneCount * 4);
-        _boneTexture = new Texture2D(width, 1, false, TextureImageFormat.Float4);
-        _boneTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-        Graphics.SetWrapS(_boneTexture.Handle, TextureWrap.ClampToEdge);
-        Graphics.SetWrapT(_boneTexture.Handle, TextureWrap.ClampToEdge);
+        _boneTexture = new Texture2D(width, 1, false, PixelFormat.R32_G32_B32_A32_Float);
+        _boneTexture.SetTextureFilters(SamplerFilter.MinPoint_MagPoint_MipPoint);
+        _boneTexture.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
         _boneTextureSize = boneCount;
     }
 
@@ -362,8 +363,8 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _morphReady = true;
     }
 
-    /// <summary>Binds the morph uniforms onto a submesh's <see cref="PropertyState"/>. Cheap dictionary writes.</summary>
-    private void ApplyBlendShapeProps(Mesh mesh, PropertyState props)
+    /// <summary>Binds the morph uniforms onto a submesh's <see cref="PropertySet"/>. Cheap dictionary writes.</summary>
+    private void ApplyBlendShapeProps(Mesh mesh, PropertySet props)
     {
         if (!_morphReady)
         {
@@ -395,10 +396,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (_morphWeightTexture == null || _morphWeightCapacity < count)
         {
             _morphWeightTexture?.Dispose();
-            _morphWeightTexture = new Texture2D((uint)count, 1, false, TextureImageFormat.Float4);
-            _morphWeightTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
-            Graphics.SetWrapS(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
-            Graphics.SetWrapT(_morphWeightTexture.Handle, TextureWrap.ClampToEdge);
+            _morphWeightTexture = new Texture2D((uint)count, 1, false, PixelFormat.R32_G32_B32_A32_Float);
+            _morphWeightTexture.SetTextureFilters(SamplerFilter.MinPoint_MagPoint_MipPoint);
+            _morphWeightTexture.SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             _morphWeightCapacity = count;
             _morphWeightData = new Float4[count];
         }
@@ -456,7 +456,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
             if (mat == null) continue;
 
-            PropertyState props = new();
+            PropertySet props = new();
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
             Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);

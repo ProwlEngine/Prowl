@@ -25,6 +25,9 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     private ShaderPass[] _passes;
     public IEnumerable<ShaderPass> Passes => _passes;
 
+    [SerializeField]
+    private string _fallbackShader;
+
 
     private Dictionary<string, int> _nameIndexLookup = [];
     private Dictionary<string, List<int>> _tagIndexLookup = [];
@@ -32,10 +35,11 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     internal Shader() : base("New Shader") { }
 
-    public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes) : base(name)
+    public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes, string fallback) : base(name)
     {
         _properties = properties;
         _passes = passes;
+        _fallbackShader = fallback;
 
         OnAfterDeserialize();
     }

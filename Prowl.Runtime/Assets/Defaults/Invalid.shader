@@ -1,34 +1,21 @@
-﻿Shader "Default/Invalid"
-
-Properties
+﻿Shader "Default/Fallback"
 {
-}
+    Pass 0
+    {
+        SLANGPROGRAM
 
-Pass "Invalid"
-{
-	Tags { "RenderType" = "Opaque" }
-	Cull None
+        [shader("vertex")]
+        float4 Vertex(float3 position : POSITION) : SV_Position
+        {
+            return float4(position.xyz, 1.0);
+        }
 
-	GLSLPROGRAM
-	Vertex
-	{
-		#include "ProwlCG"
-		#include "VertexAttributes"
+        [shader("fragment")]
+        float4 Fragment() : SV_Target
+        {
+            return float4(1.0, 1.0, 0.0, 0.0);
+        }
 
-		void main()
-		{
-			gl_Position = PROWL_MATRIX_VP * vec4(vertexPosition, 1.0);
-		}
-	}
-
-	Fragment
-	{
-		layout (location = 0) out vec4 fragColor;
-
-		void main()
-		{
-			fragColor = vec4(1.0, 0.0, 1.0, 1.0);
-		}
-	}
-	ENDGLSL
+        ENDSLANG
+    }
 }

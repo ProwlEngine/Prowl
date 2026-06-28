@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -67,7 +69,7 @@ public class TerrainComponent : MonoBehaviour
     private TerrainQuadtree _quadtree;
     private Mesh _baseMesh;
     private Float4x4[] _transforms = Array.Empty<Float4x4>();
-    private PropertyState _properties = new();
+    private PropertySet _properties = new();
 
     // Material instances (cloned from assets each frame so edits propagate immediately)
     [NonSerialized] private Material? _materialInstance;

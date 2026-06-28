@@ -23,6 +23,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
     public int Height { get; private set; }
     private int numTextures;
     private bool hasDepthAttachment;
+    private bool ownsDepth;
     private PixelFormat[] textureFormats;
 
     public RenderTexture() : base("RenderTexture")
@@ -31,6 +32,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Height = 0;
         numTextures = 0;
         hasDepthAttachment = false;
+        ownsDepth = false;
         textureFormats = [];
     }
 
@@ -40,14 +42,14 @@ public sealed class RenderTexture : EngineObject, ISerializable
         this.Height = Height;
         numTextures = formats?.Length ?? throw new ArgumentNullException(nameof(formats), "Texture formats cannot be null.");
         this.hasDepthAttachment = hasDepthAttachment;
-
+        ownsDepth = hasDepthAttachment;
         textureFormats = formats;
 
         InternalTextures = new Texture2D[numTextures];
         Graphite.Texture[] colorTargets = new Graphite.Texture[numTextures];
         for (int i = 0; i < numTextures; i++)
         {
-            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget);
+            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget | TextureUsage.Sampled);
             InternalTextures[i].SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
             InternalTextures[i].SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             colorTargets[i] = InternalTextures[i].Handle;
@@ -64,14 +66,37 @@ public sealed class RenderTexture : EngineObject, ISerializable
             new FramebufferDescription(depthTarget, colorTargets));
     }
 
+    public RenderTexture(int Width, int Height, Texture2D sharedDepth, PixelFormat[] formats) : base("RenderTexture")
+    {
+        this.Width = Width;
+        this.Height = Height;
+        numTextures = formats?.Length ?? throw new ArgumentNullException(nameof(formats), "Texture formats cannot be null.");
+        hasDepthAttachment = sharedDepth != null;
+        ownsDepth = false;
+        textureFormats = formats;
+
+        InternalTextures = new Texture2D[numTextures];
+        Graphite.Texture[] colorTargets = new Graphite.Texture[numTextures];
+        for (int i = 0; i < numTextures; i++)
+        {
+            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget | TextureUsage.Sampled);
+            InternalTextures[i].SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
+            InternalTextures[i].SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
+            colorTargets[i] = InternalTextures[i].Handle;
+        }
+
+        InternalDepth = sharedDepth;
+        frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(
+            new FramebufferDescription(sharedDepth?.Handle, colorTargets));
+    }
+
     public override void OnDispose()
     {
         if (frameBuffer == null) return;
         foreach (Texture2D texture in InternalTextures)
             texture.Dispose();
 
-        // Dispose depth texture if present
-        if (hasDepthAttachment && InternalDepth != null)
+        if (ownsDepth && InternalDepth != null)
             InternalDepth.Dispose();
 
         frameBuffer.Dispose();

@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.Graphite;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
@@ -289,7 +290,7 @@ public class PreviewRenderer : IDisposable
     private void EnsureRT()
     {
         _rt?.Dispose();
-        _rt = new RenderTexture(Width, Height, true, new[] { TextureImageFormat.Color4b });
+        _rt = new RenderTexture(Width, Height, true, new[] { PixelFormat.R8_G8_B8_A8_UNorm });
         _camera.Target = _rt;
     }
 

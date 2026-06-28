@@ -18,6 +18,7 @@ using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
+using Prowl.Graphite;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -1222,7 +1223,7 @@ public class ProjectPanel : DockPanel
             {
                 paper.Box($"{id}_l")
                     .PositionType(PositionType.SelfDirected)
-                    .Position(0,UnitValue.Stretch())
+                    .Position(0, UnitValue.Stretch())
                     .Width(cellSize).Height(EditorTheme.FontSize)
                     .Clip()
                     .Text(item.Name, font)
@@ -1357,9 +1358,9 @@ public class ProjectPanel : DockPanel
         try
         {
             var (w, h, pixels) = thumb.Value;
-            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, PixelFormat.R8_G8_B8_A8_UNorm);
             tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            tex.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipLinear);
             _thumbnailCache[guid] = tex;
             return tex;
         }

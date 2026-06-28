@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -35,7 +37,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     private RenderTexture? _renderTexture;
     private PaperRenderer? _paperRenderer;
     private Paper? _paper;
-    private PropertyState _properties = new();
+    private PropertySet _properties = new();
     private Mesh? _quadMesh;
 
     // Input state
@@ -55,11 +57,12 @@ public class WorldCanvas : MonoBehaviour, IRenderable
     private void InitializeCanvas()
     {
         // Create the render texture
-        _renderTexture = new RenderTexture(Width, Height, false, [TextureImageFormat.Color4b]);
+        _renderTexture = new RenderTexture(Width, Height, false, [PixelFormat.R8_G8_B8_A8_UNorm]);
 
         // Create the Paper renderer and instance
         _paperRenderer = new PaperRenderer();
         _paperRenderer.Initialize(Width, Height);
+        _paperRenderer.PresentTarget = _renderTexture.frameBuffer;
         _paper = new Paper(_paperRenderer, Width, Height, new Prowl.Quill.FontAtlasSettings());
 
         // Create a default material if none is provided
@@ -229,7 +232,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
         // Bind the render texture and clear it through a CommandBuffer so Paper's
         // submits stay in order with the bind.
         {
-            using var cmd = Graphics.GetCommandBuffer("WorldCanvas.Begin");
+            var cmd = Graphics.GetCommandBuffer("WorldCanvas.Begin");
             cmd.SetRenderTarget(_renderTexture.frameBuffer);
             cmd.SetViewport(0, 0, (uint)_renderTexture.Width, (uint)_renderTexture.Height);
             cmd.ClearRenderTarget(ClearFlags.Color, new Color(0, 0, 0, 0));
@@ -244,7 +247,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
 
         // Unbind so the next renderer doesn't inherit the WorldCanvas target.
         {
-            using var cmd = Graphics.GetCommandBuffer("WorldCanvas.End");
+            var cmd = Graphics.GetCommandBuffer("WorldCanvas.End");
             cmd.SetRenderTarget(null);
             Graphics.Submit(cmd);
         }
@@ -257,7 +260,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
 
     public Float3 GetPosition() => Transform.Position;
 
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
+    public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh drawData, out Float4x4 model, out InstanceData[]? instanceData)
     {
         properties = _properties;
         drawData = _quadMesh ?? Mesh.GetFullscreenQuad();

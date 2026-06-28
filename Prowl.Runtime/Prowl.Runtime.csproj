@@ -6,7 +6,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NoWarn>8600;8601;8618;8602;8603;8604;8625;1591</NoWarn>
+    <NoWarn>8600;8601;8618;8602;8603;8604;8625;1591;NU1902;NU1903</NoWarn>
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
@@ -32,8 +32,8 @@
     <PackageReference Include="Prowl.Echo" Version="2.2.1" />
     <PackageReference Include="Prowl.Paper" Version="1.9.0" />
     <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
-    <PackageReference Include="Prowl.Graphite" Version="0.6.1" />
-    <PackageReference Include="Prowl.Graphite.Shaders" Version="0.6.1" />
+    <PackageReference Include="Prowl.Graphite" Version="0.7.0" />
+    <PackageReference Include="Prowl.Graphite.Shaders" Version="0.7.0" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.23.0" />

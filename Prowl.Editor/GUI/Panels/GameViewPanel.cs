@@ -3,6 +3,7 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Graphite;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -138,58 +139,13 @@ public class GameViewPanel : DockPanel
                 rtH = targetH;
             }
 
-            EnsureRT(rtW, rtH);
-
-            // Render all cameras
-            var cameras = scene.ActiveObjects
-                .SelectMany(go => go.GetComponentsInChildren<Camera>())
-                .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-                .OrderBy(c => c.Depth)
-                .ToList();
-
-            RenderStats.BeginFrame();
-            foreach (var cam in cameras)
-            {
-                var origTarget = cam.Target;
-                cam.Target = _rt;
-                cam.UpdateRenderData();
-
-                var pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
-                pipeline.Render(cam, new RenderingData());
-
-                cam.Target = origTarget;
-            }
-            RenderStats.EndFrame();
-            _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)
-
-            // Render game UI into the RT
-            if (Application.IsPlaying && _rt != null)
-            {
-                EnsureGamePaper(rtW, rtH);
-                _gamePaperRenderer!.UpdateProjection(rtW, rtH);
-
-                {
-                    using var bind = Graphics.GetCommandBuffer("GameViewPanel.GUI Bind");
-                    bind.SetRenderTarget(_rt.frameBuffer);
-                    bind.SetViewport(0, 0, (uint)rtW, (uint)rtH);
-                    Graphics.Submit(bind);
-                }
-
-                _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
-                scene.OnGui(_gamePaper);
-                _gamePaper.EndFrame();
-
-                {
-                    using var unbind = Graphics.GetCommandBuffer("GameViewPanel.GUI Unbind");
-                    unbind.SetRenderTarget(null);
-                    unbind.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    Graphics.Submit(unbind);
-                }
-            }
+            var smokeRT = EditorApplication.SmokeTestRT;
 
             // Display with letterboxing
-            if (_rt != null && _rt.MainTexture != null)
+            if (smokeRT != null && smokeRT.MainTexture != null)
             {
+                rtW = smokeRT.Width;
+                rtH = smokeRT.Height;
                 float aspect = rtW / (float)rtH;
                 float panelAspect = width / height;
                 float displayW, displayH, offsetX, offsetY;
@@ -231,7 +187,7 @@ public class GameViewPanel : DockPanel
 
                 // Game viewport - rounded rect with purple border (matches SceneView)
                 bool playing = Application.IsPlaying;
-                var capturedRT = _rt;
+                var capturedRT = smokeRT;
                 paper.Box("gv_display")
                     .PositionType(PositionType.SelfDirected)
                     .Position(offsetX, offsetY).Size(displayW, displayH)
@@ -294,12 +250,6 @@ public class GameViewPanel : DockPanel
                 if (_showStats)
                     DrawStats(paper, font, offsetX + displayW, offsetY, displayW);
             }
-            else
-            {
-                paper.Box("gv_black")
-                    .Size(width, height)
-                    .BackgroundColor(Color.Black);
-            }
         }
     }
 
@@ -343,8 +293,7 @@ public class GameViewPanel : DockPanel
                     DrawFrameTimeGraph(canvas, r, font)));
 
             // General info
-            if (_rt != null)
-                Row(paper, font, "gv_r", $"{_rt.Width}x{_rt.Height}", $"{s.Cameras} cam", fs, rowH);
+            Row(paper, font, "gv_r", $"{s.Cameras} cam", "", fs, rowH);
 
             // Target (color pass)
             int cullPct = s.RenderablesCollected > 0 ? (int)(s.RenderablesCulled * 100f / s.RenderablesCollected) : 0;
@@ -362,7 +311,7 @@ public class GameViewPanel : DockPanel
                 "Objects removed by frustum culling before rendering. Higher percentage means more objects are outside the camera view and skipped.");
             Row(paper, font, "gv_tlt", "Lights", $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
                 "Active lights this frame. D = Directional (sun), P = Point (omni), S = Spot. Each light adds a lighting pass over affected geometry.");
-            Row(paper, font, "gv_twa", "Waited", FormatMs(Graphics.LastFrameWaitMs), fs, rowH,
+            Row(paper, font, "gv_twa", "Waited", "-", fs, rowH,
                 "Time the main thread spent blocked at end of frame waiting for the render thread to finish executing this frame's command buffers. " +
                 "High values mean the render thread is the bottleneck (GPU work or CB execution dominates the frame). " +
                 "Near-zero values mean the main thread (update + encoding) takes longer than rendering, so the render thread was already idle when we asked.");
@@ -504,6 +453,7 @@ public class GameViewPanel : DockPanel
         {
             _gamePaperRenderer = new PaperRenderer();
             _gamePaperRenderer.Initialize(w, h);
+            _gamePaperRenderer.PresentTarget = _rt?.frameBuffer;
         }
 
         if (_gamePaper == null)
@@ -516,7 +466,9 @@ public class GameViewPanel : DockPanel
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
         _rt?.Dispose();
-        _rt = new RenderTexture(w, h, true, new[] { TextureImageFormat.Color4b });
+        _rt = new RenderTexture(w, h, true, new[] { PixelFormat.R8_G8_B8_A8_UNorm });
+        if (_gamePaperRenderer != null)
+            _gamePaperRenderer.PresentTarget = _rt.frameBuffer;
     }
 
     private void InvalidateRT()

@@ -47,6 +47,12 @@ public class PaperRenderer : ICanvasRenderer
 
     public bool SupportsBackdropBlur => true;
 
+    /// <summary>
+    /// When set, Present() renders into this framebuffer instead of the swapchain.
+    /// WorldCanvas sets this to its own render texture so Paper renders off-screen.
+    /// </summary>
+    public Framebuffer? PresentTarget { get; set; }
+
     private CommandBuffer _buffer;
 
     private GraphicsProgram _shader;
@@ -364,7 +370,7 @@ public class PaperRenderer : ICanvasRenderer
 
     private void Present()
     {
-        _buffer.SetFramebuffer(_device.SwapchainFramebuffer!);
+        _buffer.SetFramebuffer(PresentTarget ?? _device.SwapchainFramebuffer!);
 
         _blurProgram.SetKeyword(s_upsampleOff);
 

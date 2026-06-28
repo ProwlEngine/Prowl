@@ -1,84 +1,95 @@
-﻿Shader "Default/Line"
-
-Properties
+Shader "Default/Line"
 {
-    _MainTex ("Texture", Texture2D) = "white"
-    _StartColor ("Start Color", Color) = (1.0, 1.0, 1.0, 1.0)
-    _EndColor ("End Color", Color) = (1.0, 1.0, 1.0, 1.0)
-}
+    Properties
+    {
+        _MainTex("Texture", Texture2D) = "white" {}
+        _StartColor("Start Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        _EndColor("End Color", Color) = (1.0, 1.0, 1.0, 1.0)
+    }
 
-Pass "Line"
-{
-    Tags { "RenderOrder" = "Transparent" }
-    Cull Off
-    Blend Alpha
+    Pass
+    {
+        Name "Line"
+        Tags { "RenderOrder" = "Transparent" }
+        Cull Off
+        Blend SrcAlpha OneMinusSrcAlpha
 
-	GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        SLANGPROGRAM
 
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 currentPos;
-			out vec4 previousPos;
-			out float fogCoord;
-			out vec4 vColor;
+        import ProwlCG;
+        import Lighting;
 
-			void main()
-			{
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-				fogCoord = gl_Position.z;
-				currentPos = gl_Position;
-				texCoord0 = vertexTexCoord0;
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            float4 color : COLOR0;
+        }
 
-				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-				previousPos = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+            float3 worldPos : TEXCOORD1;
+            float4 currentPos : TEXCOORD2;
+            float4 previousPos : TEXCOORD3;
+            float fogCoord : TEXCOORD4;
+            float4 vColor : COLOR0;
+        }
 
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-				vColor = vertexColor;
-			}
-		}
+        struct Material { Sampler2D<float4> _MainTex; }
+        ParameterBlock<Material> Mat;
 
-		Fragment
-		{
-            #include "ProwlCG"
+        struct FragOut
+        {
+            float4 gAlbedo : SV_Target0;
+            float4 gMotionVector : SV_Target1;
+            float4 gNormal : SV_Target2;
+            float4 gSurface : SV_Target3;
+        }
 
-			layout (location = 0) out vec4 gAlbedo;
-			layout (location = 1) out vec4 gMotionVector;
-			layout (location = 2) out vec4 gNormal;
-			layout (location = 3) out vec4 gSurface;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = mul(Object.mvp, float4(input.position, 1.0));
+            o.fogCoord = o.position.z;
+            o.currentPos = o.position;
+            o.texCoord0 = input.uv0;
 
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 currentPos;
-			in vec4 previousPos;
-			in float fogCoord;
-			in vec4 vColor;
+            float4 prevWorldPos = mul(Object.prowl_PrevObjectToWorld, float4(input.position, 1.0));
+            o.previousPos = mul(Frame.prowl_PrevViewProj, prevWorldPos);
 
-			uniform sampler2D _MainTex;
+            o.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
+            o.vColor = input.color;
+            return o;
+        }
 
-			void main()
-			{
-				vec2 curNDC = (currentPos.xy / currentPos.w) - _CameraJitter;
-				vec2 prevNDC = (previousPos.xy / previousPos.w) - _CameraPreviousJitter;
-			    gMotionVector = vec4((curNDC - prevNDC) * 0.5, 0.0, 1.0);
+        [shader("fragment")]
+        FragOut Fragment(Varyings input)
+        {
+            FragOut o;
 
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor;
+            float2 curNDC = (input.currentPos.xy / input.currentPos.w) - Frame._CameraJitter;
+            float2 prevNDC = (input.previousPos.xy / input.previousPos.w) - Frame._CameraPreviousJitter;
+            o.gMotionVector = float4((curNDC - prevNDC) * 0.5, 0.0, 1.0);
 
-				// Lines don't have meaningful normals in billboarded mode
-                gNormal = vec4(0.0, 0.0, 1.0, 1.0);
+            float4 albedo = Mat._MainTex.Sample(input.texCoord0) * input.vColor;
 
-				// Unlit surface properties
-				gSurface = vec4(1.0, 0.0, 0.0, 1.0);
+            // Lines don't have meaningful normals in billboarded mode
+            o.gNormal = float4(0.0, 0.0, 1.0, 1.0);
 
-				vec3 baseColor = albedo.rgb;
-				baseColor.rgb = gammaToLinearSpace(baseColor.rgb);
+            // Unlit surface properties
+            o.gSurface = float4(1.0, 0.0, 0.0, 1.0);
 
-				gAlbedo = vec4(baseColor, albedo.a);
-				gAlbedo.rgb = ApplyFog(fogCoord, gAlbedo.rgb);
-			}
-		}
-	ENDGLSL
+            float3 baseColor = gammaToLinearSpace(albedo.rgb);
+
+            o.gAlbedo = float4(baseColor, albedo.a);
+            // Original called a 2-arg ApplyFog(fogCoord,color) that no longer exists; use world-pos fog.
+            o.gAlbedo.rgb = ApplyFog(o.gAlbedo.rgb, input.worldPos);
+            return o;
+        }
+
+        ENDSLANG
+    }
 }

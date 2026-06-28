@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,6 +10,8 @@ using System.Linq;
 using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using IndexFormat = Prowl.Runtime.Resources.IndexFormat;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -53,7 +57,7 @@ public interface IRenderable
     /// <param name="mesh">Mesh to render</param>
     /// <param name="model">Model matrix (only used for single-instance rendering)</param>
     /// <param name="instanceData">Instance data array for GPU instancing, or null for single-instance rendering</param>
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
+    public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
 
     /// <summary>
     /// World-to-object matrix (the inverse of the model matrix), bound as <c>prowl_WorldToObject</c>
@@ -61,6 +65,13 @@ public interface IRenderable
     /// for the frame should cache the result so it isn't re-inverted once per render pass.
     /// </summary>
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => model.Invert();
+
+    /// <summary>
+    /// Returns a stable integer identity for this renderable, used to track its model matrix
+    /// across frames for motion-vector computation. Return 0 to opt out of per-object tracking
+    /// (motion vectors will show zero for this object). The default returns 0.
+    /// </summary>
+    public int GetObjectID() => 0;
 
     public void GetCullingData(out bool isRenderable, out AABB bounds);
 }
@@ -287,6 +298,23 @@ public abstract class RenderPipeline : EngineObject
     private readonly List<(IRenderable renderable, float distSq)> _sortPairs = new();
     private readonly List<IRenderable> _sortResult = new();
 
+    // Per-draw PropertySets for model/prevModel matrices. A single CB may encode hundreds of
+    // draws; each needs its own PropertySet so successive calls don't overwrite earlier ones
+    // (SetProperties records by reference, not by value). The pool is cursor-indexed: reset the
+    // cursor at the start of each DrawRenderables call, allocate from the pool per draw.
+    private readonly List<PropertySet> _perDrawSetPool = new();
+    private int _perDrawSetCursor;
+
+    private PropertySet RentPerDrawSet()
+    {
+        if (_perDrawSetCursor < _perDrawSetPool.Count)
+            return _perDrawSetPool[_perDrawSetCursor++];
+        var set = new PropertySet();
+        _perDrawSetPool.Add(set);
+        _perDrawSetCursor++;
+        return set;
+    }
+
     // DrawRenderables scratch, reused across passes (encode is sequential, never re-entrant).
     private readonly List<RenderBatch> _batches = new();
     private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
@@ -428,6 +456,7 @@ public abstract class RenderPipeline : EngineObject
     /// pass in this batch will request a grab texture.</param>
     public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
     {
+        _perDrawSetCursor = 0;
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
 
@@ -455,7 +484,7 @@ public abstract class RenderPipeline : EngineObject
             if (material == null || material.Shader.IsNotValid()) continue;
 
             // Get rendering data to determine if this is instanced or single-instance rendering
-            renderable.GetRenderingData(viewer, out PropertyState _, out Mesh mesh, out Float4x4 _, out InstanceData[]? instanceData);
+            renderable.GetRenderingData(viewer, out PropertySet _, out Mesh mesh, out Float4x4 _, out InstanceData[]? instanceData);
             if (mesh == null || mesh.VertexCount <= 0) continue;
 
             // Handle instanced renderables - add to batches with proper sorting (instanceData != null)
@@ -474,7 +503,7 @@ public abstract class RenderPipeline : EngineObject
                         continue;
 
                     // Compute sort key for this pass (same as non-instanced)
-                    int sortKey = hasRenderOrder ? instancedPassIndex + pass.GetTagSortOffset(shaderTag) : instancedPassIndex;
+                    int sortKey = instancedPassIndex;
                     hasSortOffsets |= sortKey != instancedPassIndex;
 
                     // Create batch for instanced renderable
@@ -520,7 +549,7 @@ public abstract class RenderPipeline : EngineObject
                 else
                 {
                     // Compute sort key for this pass
-                    int sortKey = hasRenderOrder ? passIndex + pass.GetTagSortOffset(shaderTag) : passIndex;
+                    int sortKey = passIndex;
                     hasSortOffsets |= sortKey != passIndex;
 
                     // Create new batch for this unique material+pass+mesh combination
@@ -568,7 +597,9 @@ public abstract class RenderPipeline : EngineObject
             Material material = batch.Material;
             Mesh mesh = batch.Mesh;
             int passIndex = batch.PassIndex;
-            RenderTexture grabRT = null;
+            // Grab textures depend on the blit/render-target-split path, removed from ShaderPass
+            // and not yet ported to Graphite. Preserved for the Stage-2 draw-path port.
+            // RenderTexture grabRT = null;
 
             // Configure shader keywords based on mesh attributes. Once per batch since
             // all objects in this batch share the same mesh.
@@ -583,20 +614,21 @@ public abstract class RenderPipeline : EngineObject
             material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
 
             ShaderPass pass = material.Shader.GetPass(passIndex);
-            if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
+            pass.SetKeywords(Enumerable.ToArray(material._localKeywords.Values));
+            GraphicsProgram variant = pass.ActiveProgram;
+            if (variant == null)
                 continue;
-
-            GraphicsProgram variant = variantNullable;
 
             // GrabTexture: blit current framebuffer into a temporary RT and expose it
             // as a global texture for the shader to sample. Uses the CB's read/draw
             // FB split so the blit happens in the correct order relative to the draws.
+            /*
             if (pass.HasGrabTexture && currentRT != null && currentRT.IsValid())
             {
                 int fbWidth = currentRT.Width;
                 int fbHeight = currentRT.Height;
                 bool wantDepth = pass.HasGrabDepth;
-                grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [TextureImageFormat.Color4b]);
+                grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [PixelFormat.R8_G8_B8_A8_UNorm]);
 
                 cmd.SetRenderTargets(grabRT.frameBuffer, currentRT.frameBuffer);
                 cmd.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Color, BlitFilter.Nearest);
@@ -609,10 +641,10 @@ public abstract class RenderPipeline : EngineObject
                 cmd.GenerateMipmap(grabRT.MainTexture);
                 // Filter is a sticky texture property; setting it directly is fine and
                 // doesn't need to go through the CB (no ordering constraint vs draws).
-                grabRT.MainTexture.SetTextureFilters(TextureMin.LinearMipmapLinear, TextureMag.Linear);
+                grabRT.MainTexture.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipLinear);
 
                 // Encode the global set as a CB opcode so it's ordered against the
-                // draws below at EXECUTE time. Writing PropertyState.SetGlobalTexture
+                // draws below at EXECUTE time. Writing PropertySet.SetGlobalTexture
                 // directly here would set the static at encode time, but by the time
                 // mainCmd actually runs we've already encoded the matching clear
                 // below and the executor would see an empty global slot.
@@ -620,12 +652,14 @@ public abstract class RenderPipeline : EngineObject
                 if (wantDepth && grabRT.InternalDepth != null)
                     cmd.SetGlobalTexture(pass.GrabDepthTextureName, grabRT.InternalDepth);
             }
+            */
 
             // Bind state for the batch. Globals UBO + material uniforms (with shader
             // defaults filled in) apply once; per-object only sets instance uniforms
             // and transforms.
             cmd.SetShader(variant);
-            cmd.SetRasterState(pass.State);
+            // Graphite owns blend/depth/raster on the GraphicsProgram; the pass-level RasterizerState was removed.
+            // cmd.SetRasterState(pass.State);
 
             // GlobalUniforms UBO is bound automatically by the executor's PrepareDraw
             // for every draw no explicit cmd.SetBuffer needed here.
@@ -639,37 +673,37 @@ public abstract class RenderPipeline : EngineObject
             {
                 IRenderable renderable = renderables[renderIndex];
 
-                renderable.GetRenderingData(viewer, out PropertyState properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
+                renderable.GetRenderingData(viewer, out PropertySet properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
 
-                int instanceId = properties.GetInt("_ObjectID");
+                int instanceId = renderable.GetObjectID();
                 Float4x4 prevModel = model;
                 if (updatePreviousMatrices && instanceId != 0)
                     prevModel = TrackModelMatrix(instanceId, model);
 
                 cmd.SetInstanceProperties(properties);
 
-                // Per-object transform uniforms. Encoded after SetInstanceProperties so
-                // they apply last and can't be clobbered by an instance property of the
-                // same name (matches today's order).
-                cmd.SetMatrix("prowl_ObjectToWorld", in model);
+                PropertySet perDraw = RentPerDrawSet();
+                perDraw.SetMatrix("prowl_ObjectToWorld", model);
                 Float4x4 inv = renderable.GetWorldToObjectMatrix(in model);
-                cmd.SetMatrix("prowl_WorldToObject", in inv);
-                if (updatePreviousMatrices)
-                    cmd.SetMatrix("prowl_PrevObjectToWorld", in prevModel);
+                perDraw.SetMatrix("prowl_WorldToObject", inv);
+                perDraw.SetMatrix("prowl_PrevObjectToWorld", updatePreviousMatrices ? prevModel : model);
+                cmd.SetProperties(perDraw);
 
                 int subIdx = renderable.GetSubMeshIndex();
-                bool i32 = mesh.IndexFormat == IndexFormat.UInt32;
                 if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
                 {
-                    var sub = mesh.GetSubMesh(subIdx);
-                    cmd.DrawIndexed(mesh.VertexArrayObject, sub.Topology, (uint)sub.IndexCount, (uint)sub.IndexStart, 0, i32);
+                    SubMeshDescriptor sub = mesh.GetSubMesh(subIdx);
+                    cmd.SetVertexSource(new RenderCommandExtensions.SubMeshVertexSource(mesh, sub.IndexStart, sub.IndexCount, sub.Topology));
+                    cmd.DrawIndexed(1, (uint)sub.IndexStart, 0, 0);
                 }
                 else
                 {
-                    cmd.DrawIndexed(mesh.VertexArrayObject, mesh.MeshTopology, (uint)mesh.IndexCount, 0, 0, i32);
+                    cmd.SetVertexSource(mesh);
+                    cmd.DrawIndexed(1, 0, 0, 0);
                 }
             }
 
+            /*
             if (grabRT != null)
             {
                 // Mirror the encode-time set above with an encode-time clear so the
@@ -680,6 +714,7 @@ public abstract class RenderPipeline : EngineObject
                 RenderTexture.ReleaseTemporaryRT(grabRT);
                 grabRT = null;
             }
+            */
         }
     }
 
@@ -690,23 +725,10 @@ public abstract class RenderPipeline : EngineObject
     /// </summary>
     private void DrawInstancedRenderablePass(CommandBuffer cmd, IRenderable renderable, Material material, Mesh mesh, int passIndex, ViewerData viewer)
     {
-        renderable.GetRenderingData(viewer, out PropertyState sharedProperties, out Mesh _, out Float4x4 __, out InstanceData[]? instanceData);
+        renderable.GetRenderingData(viewer, out PropertySet sharedProperties, out Mesh _, out Float4x4 __, out InstanceData[]? instanceData);
 
         if (instanceData == null || instanceData.Length == 0)
             return;
-
-        // Ensure the shared instance VAO + buffer exist. The actual data upload is
-        // encoded into the SAME CommandBuffer as the draw below this matters when
-        // multiple instanced batches share the same mesh (e.g. all grass patches of
-        // one prototype). Each batch's UpdateBuffer + DrawIndexedInstanced is a pair
-        // in the stream, so the executor uploads each batch's data immediately before
-        // its draw and they don't clobber each other.
-        GraphicsVertexArray vao = mesh.EnsureInstanceVAO(instanceData.Length, out GraphicsBuffer instanceBuf);
-        if (vao == null) return;
-
-        int instanceCount = instanceData.Length;
-        int indexCount = mesh.IndexCount;
-        bool useIndex32 = mesh.IndexFormat == IndexFormat.UInt32;
 
         material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
         material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
@@ -716,41 +738,45 @@ public abstract class RenderPipeline : EngineObject
         material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
         material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
         material.SetKeyword("SKINNED", mesh.HasBoneIndices && mesh.HasBoneWeights);
-        material.SetKeyword("BLENDSHAPES", false); // per-instance morph weights aren't supported
+        material.SetKeyword("BLENDSHAPES", false);
         material.SetKeyword("GPU_INSTANCING", true);
 
-        Shaders.ShaderPass pass = material.Shader.GetPass(passIndex);
-        if (!pass.TryGetVariantProgram(material._localKeywords, out GraphicsProgram? variantNullable) || variantNullable == null)
+        ShaderPass pass = material.Shader.GetPass(passIndex);
+        pass.SetKeywords(Enumerable.ToArray(material._localKeywords.Values));
+        GraphicsProgram variant = pass.ActiveProgram;
+        if (variant == null)
         {
             material.SetKeyword("GPU_INSTANCING", false);
             return;
         }
 
-        GraphicsProgram variant = variantNullable;
+        mesh.Upload();
+        if (mesh.VertexBuffer == null || mesh.IndexBuffer == null)
+        {
+            material.SetKeyword("GPU_INSTANCING", false);
+            return;
+        }
+
+        int instanceCount = instanceData.Length;
+        DeviceBuffer instanceBuf = mesh.EnsureInstanceBuffer(instanceCount);
+        Graphics.Device.UpdateBuffer(instanceBuf, 0u, instanceData);
 
         cmd.SetShader(variant);
-        cmd.SetRasterState(pass.State);
-
-        // GlobalUniforms UBO bound by PrepareDraw automatically.
-
         cmd.SetMaterialProperties(material);
-
         if (sharedProperties != null)
             cmd.SetInstanceProperties(sharedProperties);
-
-        // Upload THIS batch's instance data immediately before the draw so the
-        // shared instance buffer holds the right contents when the draw executes.
-        cmd.UpdateBuffer<InstanceData>(instanceBuf, new System.ReadOnlySpan<InstanceData>(instanceData, 0, instanceCount));
 
         int subIdx = renderable.GetSubMeshIndex();
         if (subIdx >= 0 && subIdx < mesh.SubMeshCount)
         {
-            var sub = mesh.GetSubMesh(subIdx);
-            cmd.DrawIndexedInstanced(vao, sub.Topology, (uint)sub.IndexCount, (uint)instanceCount, (uint)sub.IndexStart, 0, useIndex32);
+            SubMeshDescriptor sub = mesh.GetSubMesh(subIdx);
+            cmd.SetVertexSource(new RenderCommandExtensions.InstancedSubMeshVertexSource(mesh, instanceBuf, sub.IndexStart, sub.IndexCount, sub.Topology));
+            cmd.DrawIndexed((uint)instanceCount, (uint)sub.IndexStart, 0, 0);
         }
         else
         {
-            cmd.DrawIndexedInstanced(vao, Topology.Triangles, (uint)indexCount, (uint)instanceCount, 0, 0, useIndex32);
+            cmd.SetVertexSource(new RenderCommandExtensions.InstancedMeshVertexSource(mesh, instanceBuf));
+            cmd.DrawIndexed((uint)instanceCount, 0, 0, 0);
         }
 
         material.SetKeyword("GPU_INSTANCING", false);

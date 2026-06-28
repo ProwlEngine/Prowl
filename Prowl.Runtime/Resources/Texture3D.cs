@@ -50,10 +50,7 @@ public sealed class Texture3D : Texture, ISerializable
         _generateMipmaps = generateMipmaps;
         RecreateImage(width, height, depth);
 
-        if (generateMipmaps)
-            GenerateMipmaps();
-
-        SetTextureFilters(IsMipmapped ? DefaultMipmapFilter : DefaultFilter);
+        SetTextureFilters(_generateMipmaps ? DefaultMipmapFilter : DefaultFilter);
     }
 
     /// <summary>
@@ -191,7 +188,7 @@ public sealed class Texture3D : Texture, ISerializable
         var address = (SamplerAddressMode)value["AddressU"].IntValue;
 
         Type[] param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(bool), typeof(PixelFormat) };
-        object[] values = new object[] { Width, Height, Depth, false, imageFormat };
+        object[] values = new object[] { Width, Height, Depth, isMipMapped, imageFormat };
         typeof(Texture3D).GetConstructor(param).Invoke(this, values);
 
         Memory<byte> memory = value["Data"].ByteArrayValue;

@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
@@ -19,7 +21,7 @@ public class InstancedMeshRenderable : IRenderable
     private readonly Mesh _mesh;
     private readonly Material _material;
     private readonly int _layerIndex;
-    private readonly PropertyState _sharedProperties;
+    private readonly PropertySet _sharedProperties;
     private readonly AABB _bounds;
     private readonly InstanceData[] _instanceData;
     private readonly Float3 _sortPosition;
@@ -39,7 +41,7 @@ public class InstancedMeshRenderable : IRenderable
         InstanceData[] instanceData,
         Float3 sortPosition,
         int layerIndex = 0,
-        PropertyState? sharedProperties = null,
+        PropertySet? sharedProperties = null,
         AABB? bounds = null,
         int subMeshIndex = -1)
     {
@@ -47,7 +49,7 @@ public class InstancedMeshRenderable : IRenderable
         _material = material;
         _instanceData = instanceData;
         _layerIndex = layerIndex;
-        _sharedProperties = sharedProperties ?? new PropertyState();
+        _sharedProperties = sharedProperties ?? new PropertySet();
         _sortPosition = sortPosition;
         _subMeshIndex = subMeshIndex;
 
@@ -96,7 +98,7 @@ public class InstancedMeshRenderable : IRenderable
         return _sortPosition;
     }
 
-    public void GetRenderingData(ViewerData viewer, out PropertyState properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
+    public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
     {
         properties = _sharedProperties;
         mesh = _mesh;
@@ -123,7 +125,7 @@ public class InstancedMeshRenderable : IRenderable
         Float4[]? colors = null,
         Float4[]? customData = null,
         int layer = 0,
-        PropertyState? properties = null,
+        PropertySet? properties = null,
         AABB? bounds = null,
         int maxBatchSize = 1023)
     {

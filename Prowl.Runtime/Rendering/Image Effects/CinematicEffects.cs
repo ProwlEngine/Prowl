@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using System;
 
 using Prowl.Runtime.Resources;
@@ -203,7 +204,7 @@ public sealed class CinematicEffects : ImageEffect
 
         // Blit through temp RT to avoid reading and writing the same texture
         var temp = RenderTexture.GetTemporaryRT(context.Width, context.Height, false, [context.SceneColor.MainTexture.ImageFormat]);
-        using var cmd = Graphics.GetCommandBuffer("Cinematic");
+        var cmd = Graphics.GetCommandBuffer("Cinematic");
         cmd.Blit(context.SceneColor, temp, _mat, 0);
         cmd.Blit(temp, context.SceneColor, null, 0);
         Graphics.Submit(cmd);

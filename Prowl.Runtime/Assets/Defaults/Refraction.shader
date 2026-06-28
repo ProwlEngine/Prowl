@@ -1,95 +1,59 @@
 Shader "Default/Refraction"
-
-Properties
 {
-    _RefractionStrength ("Refraction Strength", Float) = 0.1
-    _NoiseScale ("Noise Scale", Float) = 1.0
-    _Tint ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _BlurRadius ("Blur Radius", Float) = 0.02
-    _BlurMIP ("Blur MIP Bias", Float) = 2.0
-    _BlurSteps ("Blur Steps", Int) = 4
-}
+    Properties
+    {
+        _RefractionStrength("Refraction Strength", Float) = 0.1
+        _NoiseScale("Noise Scale", Float) = 1.0
+        _Tint("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _BlurRadius("Blur Radius", Float) = 0.02
+        _BlurMIP("Blur MIP Bias", Float) = 2.0
+        _BlurSteps("Blur Steps", Integer) = 4
+    }
 
-Pass "Refraction"
-{
-    GrabTexture "_GrabTexture"
-    Tags { "RenderOrder" = "Transparent" }
-    Blend Alpha
-    ZWrite Off
-    Cull Back
+    Pass
+    {
+        Name "Refraction"
+        GrabTexture
+        _GrabTexture
+        Tags { "RenderOrder" = "Transparent" }
+        Blend SrcAlpha OneMinusSrcAlpha
+        ZWrite Off
+        Cull Back
 
-	GLSLPROGRAM
-		Shared
-		{
-			// Simple 3D noise function
-			float hash(vec3 p)
-			{
-				p = fract(p * 0.3183099 + 0.1);
-				p *= 17.0;
-				return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-			}
+        SLANGPROGRAM
 
-			float noise(vec3 x)
-			{
-				vec3 i = floor(x);
-				vec3 f = fract(x);
-				f = f * f * (3.0 - 2.0 * f);
+        // ----------------------- VERTEX START ----------------------
+            import ProwlCG;
+            import VertexAttributes;
 
-				return mix(mix(mix(hash(i + vec3(0.0, 0.0, 0.0)),
-								   hash(i + vec3(1.0, 0.0, 0.0)), f.x),
-							   mix(hash(i + vec3(0.0, 1.0, 0.0)),
-								   hash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
-						   mix(mix(hash(i + vec3(0.0, 0.0, 1.0)),
-								   hash(i + vec3(1.0, 0.0, 1.0)), f.x),
-							   mix(hash(i + vec3(0.0, 1.0, 1.0)),
-								   hash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
-			}
-
-			// Interleaved Gradient Noise (Jimenez 2014)
-			float InterleavedGradientNoise(vec2 pixCoord, int frameCount)
-			{
-				const vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
-				vec2 frameMagicScale = vec2(2.083, 4.867);
-				pixCoord += float(frameCount) * frameMagicScale;
-				return fract(magic.z * fract(dot(pixCoord, magic.xy)));
-			}
-		}
-
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
-
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 screenPos;
-			out vec3 vNormal;
+			out float2 texCoord0;
+			out float3 worldPos;
+			out float4 screenPos;
+			out float3 vNormal;
 
 			void main()
 			{
-				gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
+				gl_Position = PROWL_MATRIX_MVP * float4(vertexPosition, 1.0);
 				texCoord0 = vertexTexCoord0;
-				worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
+				worldPos = (PROWL_MATRIX_M * float4(vertexPosition, 1.0)).xyz;
 				screenPos = gl_Position;
-				vNormal = normalize(mat3(PROWL_MATRIX_M) * vertexNormal);
+				vNormal = normalize(float3x3(PROWL_MATRIX_M) * vertexNormal);
 			}
-		}
 
-		Fragment
-		{
-            #include "ProwlCG"
+        // ----------------------- FRAGMENT START ----------------------
+            import ProwlCG;
 
-			layout (location = 0) out vec4 fragColor;
+			layout (location = 0) out float4 fragColor;
 
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 screenPos;
-			in vec3 vNormal;
+			in float2 texCoord0;
+			in float3 worldPos;
+			in float4 screenPos;
+			in float3 vNormal;
 
-			uniform sampler2D _GrabTexture;
+			uniform Sampler2D<float4> _GrabTexture;
 			uniform float _RefractionStrength;
 			uniform float _NoiseScale;
-			uniform vec4 _Tint;
+			uniform float4 _Tint;
 			uniform float _BlurRadius;
 			uniform float _BlurMIP;
 			uniform int _BlurSteps;
@@ -97,36 +61,37 @@ Pass "Refraction"
 			void main()
 			{
 				// Screen UV from clip space
-				vec2 screenUV = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
+				float2 screenUV = (screenPos.xy / screenPos.w) * 0.5 + 0.5;
 
 				// Noise-based refraction offset
-				vec3 noiseInput = worldPos * _NoiseScale + vec3(_Time * 0.1);
-				vec2 refractionOffset = vec2(
-					noise(noiseInput + vec3(0.0, 0.0, 0.0)),
-					noise(noiseInput + vec3(5.2, 1.3, 0.0))
+				float3 noiseInput = worldPos * _NoiseScale + float3(_Time * 0.1);
+				float2 refractionOffset = float2(
+					noise(noiseInput + float3(0.0, 0.0, 0.0)),
+					noise(noiseInput + float3(5.2, 1.3, 0.0))
 				);
 				refractionOffset = (refractionOffset * 2.0 - 1.0) * _RefractionStrength;
-				vec2 refractedUV = clamp(screenUV + refractionOffset, 0.0, 1.0);
+				float2 refractedUV = clamp(screenUV + refractionOffset, 0.0, 1.0);
 
 				// One-step mip blur (Mirza Beig technique)
 				float ign = InterleavedGradientNoise(gl_FragCoord.xy, int(_Time.w) % 60);
 				float angle = ign * 6.28318530718;
-				vec2 dir = vec2(cos(angle), sin(angle));
-				vec2 aspect = vec2(min(1.0, _ScreenParams.y / _ScreenParams.x),
+				float2 dir = float2(cos(angle), sin(angle));
+				float2 aspect = float2(min(1.0, _ScreenParams.y / _ScreenParams.x),
 				                   min(1.0, _ScreenParams.x / _ScreenParams.y));
 
 				int steps = clamp(_BlurSteps, 1, 4);
-				vec4 acc = vec4(0.0);
+				float4 acc = float4(0.0);
 				for (int i = 0; i < steps; i++)
 				{
-					vec2 offset = dir * _BlurRadius * aspect;
-					acc += textureLod(_GrabTexture, refractedUV + offset, _BlurMIP);
-					dir = vec2(-dir.y, dir.x); // Rotate 90 degrees
+					float2 offset = dir * _BlurRadius * aspect;
+					acc += _GrabTexture.SampleLevel(refractedUV + offset, _BlurMIP);
+					dir = float2(-dir.y, dir.x); // Rotate 90 degrees
 				}
-				vec4 refractedColor = acc / float(steps);
+				float4 refractedColor = acc / float(steps);
 
-				fragColor = vec4(refractedColor.rgb * _Tint.rgb, _Tint.a);
+				fragColor = float4(refractedColor.rgb * _Tint.rgb, _Tint.a);
 			}
-		}
-	ENDGLSL
+
+        ENDSLANG
+    }
 }

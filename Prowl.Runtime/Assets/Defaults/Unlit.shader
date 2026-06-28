@@ -1,113 +1,134 @@
 Shader "Default/Unlit"
-
-Properties
 {
-    _MainTex ("Texture", Texture2D) = "white"
-    _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _Tiling ("Tiling", Vector2) = (1.0, 1.0)
-    _Offset ("Offset", Vector2) = (0.0, 0.0)
-}
+    Properties
+    {
+        _MainTex("Texture", Texture2D) = "white" {}
+        _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Tiling("Tiling", Vector) = (1.0, 1.0, 0, 0)
+        _Offset("Offset", Vector) = (0.0, 0.0, 0, 0)
+    }
 
-Pass "Unlit"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Cull Back
+    Pass
+    {
+        Name "Unlit"
+        Tags { "RenderOrder" = "Opaque" }
+        Cull Back
 
-	GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        SLANGPROGRAM
 
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 vColor;
+        import ProwlCG;
+        import VertexAttributes;
+        import Lighting;
 
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            float4 color : COLOR0;
+            uint vid : SV_VertexID;
+        }
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-				worldPos = TransformPosition(vertexPosition);
-				vColor = GetInstanceColor();
-			}
-		}
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+            float3 worldPos : TEXCOORD1;
+            float4 vColor : COLOR0;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
-            #include "Lighting"
+        struct Material
+        {
+            float2 _Tiling;
+            float2 _Offset;
+            float4 _MainColor;
+            Sampler2D<float4> _MainTex;
+        }
+        ParameterBlock<Material> Mat;
 
-			layout (location = 0) out vec4 fragColor;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = TransformClip(input.position, input.vid);
+            o.texCoord0 = input.uv0 * Mat._Tiling + Mat._Offset;
+            o.worldPos = TransformPosition(input.position, input.vid);
+            o.vColor = GetInstanceColor(input.color);
+            return o;
+        }
 
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 vColor;
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float4 albedo = Mat._MainTex.Sample(input.texCoord0) * input.vColor * Mat._MainColor;
+            float3 baseColor = gammaToLinearSpace(albedo.rgb);
+            baseColor = ApplyFog(baseColor, input.worldPos);
+            return float4(baseColor, albedo.a);
+        }
 
-			uniform sampler2D _MainTex;
-			uniform vec4 _MainColor;
+        ENDSLANG
+    }
 
-			void main()
-			{
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-				vec3 baseColor = gammaToLinearSpace(albedo.rgb);
-				baseColor = ApplyFog(baseColor, worldPos);
-				fragColor = vec4(baseColor, albedo.a);
-			}
-		}
-	ENDGLSL
-}
+    Pass
+    {
+        Name "UnlitPrepass"
+        Tags { "LightMode" = "Prepass" }
+        Cull Back
+        ZWrite On
 
-Pass "UnlitPrepass"
-{
-    Tags { "LightMode" = "Prepass" }
-    Cull Back
-    ZWrite On
+        SLANGPROGRAM
 
-	GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+        import ProwlCG;
+        import VertexAttributes;
 
-			out vec3 vNormal;
-			out vec4 vCurrClipNJ;
-			out vec4 vPrevClip;
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float3 normal : NORMAL0;
+            uint vid : SV_VertexID;
+        }
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition); // jittered, for raster + depth
-				vNormal = TransformDirection(vertexNormal);
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float3 vNormal : NORMAL0;
+            float4 vCurrClipNJ : TEXCOORD0;
+            float4 vPrevClip : TEXCOORD1;
+        }
 
-				// Jitter-free current + previous clip positions for motion vectors.
-				vec4 worldPos = GetModelMatrix() * vec4(vertexPosition, 1.0);
-				vCurrClipNJ = PROWL_MATRIX_VP_NONJITTERED * worldPos;
-				vec4 prevWorldPos = PROWL_MATRIX_M_PREVIOUS * vec4(vertexPosition, 1.0);
-				vPrevClip = PROWL_MATRIX_VP_PREVIOUS * prevWorldPos;
-			}
-		}
+        struct FragOut
+        {
+            float4 normalOut : SV_Target0;
+            float4 motionRM : SV_Target1;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
+            o.position = TransformClip(input.position, input.vid); // jittered, for raster + depth
+            o.vNormal = TransformDirection(input.normal);
 
-			layout (location = 0) out vec4 normalOut;
-			layout (location = 1) out vec4 motionRM;
-			in vec3 vNormal;
-			in vec4 vCurrClipNJ;
-			in vec4 vPrevClip;
+            // Jitter-free current + previous clip positions for motion vectors.
+            float4 worldPos = mul(GetModelMatrix(), float4(input.position, 1.0));
+            o.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, worldPos);
+            float4 prevWorldPos = mul(Object.prowl_PrevObjectToWorld, float4(input.position, 1.0));
+            o.vPrevClip = mul(Frame.prowl_PrevViewProj, prevWorldPos);
+            return o;
+        }
 
-			void main()
-			{
-				normalOut = EncodeViewNormal(normalize(vNormal));
+        [shader("fragment")]
+        FragOut Fragment(Varyings input)
+        {
+            FragOut o;
+            o.normalOut = EncodeViewNormal(normalize(input.vNormal));
 
-				// Motion vectors (jitter-free). Unlit has no PBR material -> roughness/metallic 0.
-				vec2 currNDC = (vCurrClipNJ.xy / vCurrClipNJ.w) * 0.5 + 0.5;
-				vec2 prevNDC = (vPrevClip.xy / vPrevClip.w) * 0.5 + 0.5;
-				motionRM = vec4(currNDC - prevNDC, 0.0, 0.0);
-			}
-		}
-	ENDGLSL
+            // Motion vectors (jitter-free). Unlit has no PBR material -> roughness/metallic 0.
+            float2 currNDC = (input.vCurrClipNJ.xy / input.vCurrClipNJ.w) * 0.5 + 0.5;
+            float2 prevNDC = (input.vPrevClip.xy / input.vPrevClip.w) * 0.5 + 0.5;
+            o.motionRM = float4(currNDC - prevNDC, 0.0, 0.0);
+            return o;
+        }
+
+        ENDSLANG
+    }
 }

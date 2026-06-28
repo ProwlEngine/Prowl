@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -99,9 +100,9 @@ public sealed class GTAOEffect : ImageEffect
         if ((!UseTemporal || (_aoHistory != null && (_aoHistory.Width != width || _aoHistory.Height != height))))
             ReleaseHistory();
         if (UseTemporal)
-            _aoHistory ??= new RenderTexture(width, height, false, [TextureImageFormat.Color4b]);
+            _aoHistory ??= new RenderTexture(width, height, false, [PixelFormat.R8_G8_B8_A8_UNorm]);
 
-        RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
+        RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [PixelFormat.R8_G8_B8_A8_UNorm]);
 
         // Pass 0: Calculate GTAO (blue-noise + per-frame jitter).
         _mat.SetInt("_Slices", Slices);
@@ -114,7 +115,7 @@ public sealed class GTAOEffect : ImageEffect
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
         _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
 
-        using var cmd = Graphics.GetCommandBuffer("GTAO");
+        var cmd = Graphics.GetCommandBuffer("GTAO");
         cmd.Blit(context.SceneColor, aoRT, _mat, 0);
 
         // Pass 3: Temporal accumulate against history, then store the (pre-blur) result for next frame.
@@ -124,7 +125,7 @@ public sealed class GTAOEffect : ImageEffect
         {
             if (_historyValid)
             {
-                temporalRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
+                temporalRT = RenderTexture.GetTemporaryRT(width, height, false, [PixelFormat.R8_G8_B8_A8_UNorm]);
                 _mat.SetTexture("_PreviousBuffer", _aoHistory.MainTexture);
                 _mat.SetTexture("_CameraMotionVectorsTexture", context.MotionVectors);
                 _mat.SetFloat("_TResponse", TemporalResponse);
@@ -138,7 +139,7 @@ public sealed class GTAOEffect : ImageEffect
         RenderTexture blurTempRT = null;
         if (BlurRadius > 0.01f)
         {
-            blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
+            blurTempRT = RenderTexture.GetTemporaryRT(width, height, false, [PixelFormat.R8_G8_B8_A8_UNorm]);
             _mat.SetVector("_BlurDirection", new Float2(1.0f, 0.0f));
             _mat.SetFloat("_BlurRadius", BlurRadius);
             cmd.Blit(ao, blurTempRT, _mat, 1);

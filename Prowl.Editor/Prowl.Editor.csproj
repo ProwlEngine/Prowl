@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Version>1.0-preview</Version>
-    <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
+    <NoWarn>8600;8601;8618;8602;8603;8604;8625;NU1902;NU1903</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -27,10 +27,19 @@
     <PackageReference Include="Prowl.Photonic" Version="0.1.1" />
     <PackageReference Include="Prowl.Rosetta" Version="1.1.0" />
     <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
+    <PackageReference Include="Prowl.Graphite.Compiler" Version="0.7.0" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="0.7.0" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\**" />
+
+    <EmbeddedResource Include="..\Prowl.Runtime\Assets\Fonts\Inter\static\Inter_18pt-Regular.ttf">
+      <Link>Resources\Inter-Regular.ttf</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Prowl.Runtime\Assets\Fonts\Inter\static\Inter_18pt-Bold.ttf">
+      <Link>Resources\Inter-Bold.ttf</Link>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

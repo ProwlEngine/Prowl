@@ -1,125 +1,122 @@
 Shader "Default/CubemapSkybox"
-
-Properties
 {
-    _CubeRight ("Right (+X)", Texture2D) = "white"
-    _CubeLeft ("Left (-X)", Texture2D) = "white"
-    _CubeTop ("Top (+Y)", Texture2D) = "white"
-    _CubeBottom ("Bottom (-Y)", Texture2D) = "white"
-    _CubeFront ("Front (+Z)", Texture2D) = "white"
-    _CubeBack ("Back (-Z)", Texture2D) = "white"
-    _Tint ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _Exposure ("Exposure", Float) = 1.0
-}
+    Properties
+    {
+        _CubeRight("Right (+X)", Texture2D) = "white" {}
+        _CubeLeft("Left (-X)", Texture2D) = "white" {}
+        _CubeTop("Top (+Y)", Texture2D) = "white" {}
+        _CubeBottom("Bottom (-Y)", Texture2D) = "white" {}
+        _CubeFront("Front (+Z)", Texture2D) = "white" {}
+        _CubeBack("Back (-Z)", Texture2D) = "white" {}
+        _Tint("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Exposure("Exposure", Float) = 1.0
+    }
 
-Pass "CubemapSkybox"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Cull Front
-    ZWrite Off
-    ZTest LEqual
+    Pass
+    {
+        Name "CubemapSkybox"
+        Tags { "RenderOrder" = "Opaque" }
+        Cull Front
+        ZWrite Off
+        ZTest LessEqual
 
-    GLSLPROGRAM
+        SLANGPROGRAM
 
-        Vertex
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; }
+        struct Varyings { float4 position : SV_Position; float3 vDirection : TEXCOORD0; }
+
+        struct Material
         {
-            #include "ProwlCG"
-            #include "VertexAttributes"
+            float4 _Tint;
+            float _Exposure;
+            Sampler2D<float4> _CubeRight;
+            Sampler2D<float4> _CubeLeft;
+            Sampler2D<float4> _CubeTop;
+            Sampler2D<float4> _CubeBottom;
+            Sampler2D<float4> _CubeFront;
+            Sampler2D<float4> _CubeBack;
+        }
+        ParameterBlock<Material> Mat;
 
-            out vec3 vDirection;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            // Strip translation from view matrix (GLSL V[3][i] -> Slang V[i][3]).
+            float4x4 viewNoTranslation = Frame.prowl_MatV;
+            viewNoTranslation[0][3] = 0.0;
+            viewNoTranslation[1][3] = 0.0;
+            viewNoTranslation[2][3] = 0.0;
 
-            void main()
-            {
-                mat4 viewNoTranslation = PROWL_MATRIX_V;
-                viewNoTranslation[3][0] = 0.0;
-                viewNoTranslation[3][1] = 0.0;
-                viewNoTranslation[3][2] = 0.0;
+            float4 pos = mul(mul(Frame.prowl_MatP, viewNoTranslation), float4(input.position, 1.0));
 
-                vec4 pos = PROWL_MATRIX_P * viewNoTranslation * vec4(vertexPosition, 1.0);
-                gl_Position = pos.xyww;
-
-                vDirection = vertexPosition;
-            }
+            Varyings o;
+            o.position = pos.xyww;
+            o.vDirection = input.position;
+            return o;
         }
 
-        Fragment
+        // Sample a cubemap face from 6 separate 2D textures
+        float4 sampleCubemap(float3 dir)
         {
-            #include "ProwlCG"
+            float3 absDir = abs(dir);
+            float2 uv;
+            float4 color;
 
-            layout (location = 0) out vec4 fragColor;
-
-            in vec3 vDirection;
-
-            uniform sampler2D _CubeRight;
-            uniform sampler2D _CubeLeft;
-            uniform sampler2D _CubeTop;
-            uniform sampler2D _CubeBottom;
-            uniform sampler2D _CubeFront;
-            uniform sampler2D _CubeBack;
-            uniform vec4 _Tint;
-            uniform float _Exposure;
-
-            // Sample a cubemap face from 6 separate 2D textures
-            vec4 sampleCubemap(vec3 dir)
+            if (absDir.x >= absDir.y && absDir.x >= absDir.z)
             {
-                vec3 absDir = abs(dir);
-                vec2 uv;
-                vec4 color;
-
-                if (absDir.x >= absDir.y && absDir.x >= absDir.z)
+                if (dir.x > 0.0)
                 {
-                    // X dominant
-                    if (dir.x > 0.0)
-                    {
-                        uv = vec2(-dir.z, -dir.y) / absDir.x * 0.5 + 0.5;
-                        color = texture(_CubeRight, uv);
-                    }
-                    else
-                    {
-                        uv = vec2(dir.z, -dir.y) / absDir.x * 0.5 + 0.5;
-                        color = texture(_CubeLeft, uv);
-                    }
-                }
-                else if (absDir.y >= absDir.x && absDir.y >= absDir.z)
-                {
-                    // Y dominant
-                    if (dir.y > 0.0)
-                    {
-                        uv = vec2(dir.x, dir.z) / absDir.y * 0.5 + 0.5;
-                        color = texture(_CubeTop, uv);
-                    }
-                    else
-                    {
-                        uv = vec2(dir.x, -dir.z) / absDir.y * 0.5 + 0.5;
-                        color = texture(_CubeBottom, uv);
-                    }
+                    uv = float2(-dir.z, -dir.y) / absDir.x * 0.5 + 0.5;
+                    color = Mat._CubeRight.Sample(uv);
                 }
                 else
                 {
-                    // Z dominant
-                    if (dir.z > 0.0)
-                    {
-                        uv = vec2(dir.x, -dir.y) / absDir.z * 0.5 + 0.5;
-                        color = texture(_CubeFront, uv);
-                    }
-                    else
-                    {
-                        uv = vec2(-dir.x, -dir.y) / absDir.z * 0.5 + 0.5;
-                        color = texture(_CubeBack, uv);
-                    }
+                    uv = float2(dir.z, -dir.y) / absDir.x * 0.5 + 0.5;
+                    color = Mat._CubeLeft.Sample(uv);
                 }
-
-                return color;
             }
-
-            void main()
+            else if (absDir.y >= absDir.x && absDir.y >= absDir.z)
             {
-                vec3 dir = normalize(vDirection);
-                vec4 color = sampleCubemap(dir);
-                color.rgb *= _Tint.rgb * _Exposure;
-
-                fragColor = vec4(color.rgb, 1.0);
+                if (dir.y > 0.0)
+                {
+                    uv = float2(dir.x, dir.z) / absDir.y * 0.5 + 0.5;
+                    color = Mat._CubeTop.Sample(uv);
+                }
+                else
+                {
+                    uv = float2(dir.x, -dir.z) / absDir.y * 0.5 + 0.5;
+                    color = Mat._CubeBottom.Sample(uv);
+                }
             }
+            else
+            {
+                if (dir.z > 0.0)
+                {
+                    uv = float2(dir.x, -dir.y) / absDir.z * 0.5 + 0.5;
+                    color = Mat._CubeFront.Sample(uv);
+                }
+                else
+                {
+                    uv = float2(-dir.x, -dir.y) / absDir.z * 0.5 + 0.5;
+                    color = Mat._CubeBack.Sample(uv);
+                }
+            }
+
+            return color;
         }
-    ENDGLSL
+
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float3 dir = normalize(input.vDirection);
+            float4 color = sampleCubemap(dir);
+            color.rgb *= Mat._Tint.rgb * Mat._Exposure;
+
+            return float4(color.rgb, 1.0);
+        }
+
+        ENDSLANG
+    }
 }

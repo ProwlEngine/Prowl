@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -116,7 +117,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
 
         bool feedback = UseTemporal && _historyValid;
 
-        using var cmd = Graphics.GetCommandBuffer("SSR");
+        var cmd = Graphics.GetCommandBuffer("SSR");
 
         // 1) Reflection source. With one-bounce feedback, reflections sample last frame's combined
         //    result reprojected by motion; otherwise the current scene.
@@ -172,7 +173,7 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         }
 
         // 3) RayCast (at ray resolution).
-        RenderTexture rayData = RenderTexture.GetTemporaryRT(rayW, rayH, false, [TextureImageFormat.Short4]);
+        RenderTexture rayData = RenderTexture.GetTemporaryRT(rayW, rayH, false, [PixelFormat.R16_G16_B16_A16_Float]);
         cmd.Blit(context.SceneColor, rayData, _mat, 0);
         _mat.SetTexture("_RayCast", rayData.MainTexture);
 

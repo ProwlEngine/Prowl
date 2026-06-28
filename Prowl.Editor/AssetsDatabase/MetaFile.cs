@@ -76,16 +76,27 @@ public static class MetaFile
     /// Ensure a .meta file exists for the given asset. Creates one if missing.
     /// Returns the meta data.
     /// </summary>
-    public static MetaFileData EnsureMeta(string absoluteAssetPath, string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null)
+    public static MetaFileData EnsureMeta(string absoluteAssetPath, string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null, Guid? forcedGuid = null)
     {
         string metaPath = GetMetaPath(absoluteAssetPath);
         if (File.Exists(metaPath))
         {
-            try { return Read(metaPath); }
+            try
+            {
+                var existing = Read(metaPath);
+                if (forcedGuid.HasValue && existing.Guid != forcedGuid.Value)
+                {
+                    existing.Guid = forcedGuid.Value;
+                    Write(metaPath, existing);
+                }
+                return existing;
+            }
             catch { /* corrupted meta, recreate */ }
         }
 
         var data = CreateNew(importerTypeName, importerVersion, defaultSettings);
+        if (forcedGuid.HasValue)
+            data.Guid = forcedGuid.Value;
         Write(metaPath, data);
         return data;
     }

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System.Collections.Generic;
 
 using Prowl.Echo;
@@ -67,7 +69,7 @@ public abstract class UIBehaviour : MonoBehaviour
     public abstract void GenerateMesh(UIMeshBuilder builder, in UIContext context);
 
     /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
-    public virtual void PopulateProperties(PropertyState props, in UIContext context) { }
+    public virtual void PopulateProperties(PropertySet props, in UIContext context) { }
 
     /// <summary>The material this element draws with. Default returns the shared `GameUI` material.</summary>
     public virtual Material GetMaterial() => GameCanvas.SharedUIMaterial;

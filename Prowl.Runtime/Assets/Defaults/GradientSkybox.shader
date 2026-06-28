@@ -1,61 +1,61 @@
 Shader "Default/GradientSkybox"
-
-Properties
 {
-    _TopColor ("Top Color", Color) = (0.4, 0.6, 0.9, 1.0)
-    _BottomColor ("Bottom Color", Color) = (0.8, 0.8, 0.7, 1.0)
-    _Exponent ("Exponent", Float) = 1.0
-}
+    Properties
+    {
+        _TopColor("Top Color", Color) = (0.4, 0.6, 0.9, 1.0)
+        _BottomColor("Bottom Color", Color) = (0.8, 0.8, 0.7, 1.0)
+        _Exponent("Exponent", Float) = 1.0
+    }
 
-Pass "GradientSkybox"
-{
-    Tags { "RenderOrder" = "Opaque" }
-    Cull Front
-    ZWrite Off
-    ZTest LEqual
+    Pass
+    {
+        Name "GradientSkybox"
+        Tags { "RenderOrder" = "Opaque" }
+        Cull Front
+        ZWrite Off
+        ZTest LessEqual
 
-    GLSLPROGRAM
+        SLANGPROGRAM
 
-        Vertex
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; }
+        struct Varyings { float4 position : SV_Position; float3 vDirection : TEXCOORD0; }
+
+        struct Material
         {
-            #include "ProwlCG"
-            #include "VertexAttributes"
+            float4 _TopColor;
+            float4 _BottomColor;
+            float _Exponent;
+        }
+        ParameterBlock<Material> Mat;
 
-            out vec3 vDirection;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            // Strip translation from view matrix so skybox stays centered.
+            // GLSL V[3][i] (col 3 = translation) -> Slang V[i][3].
+            float4x4 viewNoTranslation = Frame.prowl_MatV;
+            viewNoTranslation[0][3] = 0.0;
+            viewNoTranslation[1][3] = 0.0;
+            viewNoTranslation[2][3] = 0.0;
 
-            void main()
-            {
-                // Strip translation from view matrix so skybox stays centered
-                mat4 viewNoTranslation = PROWL_MATRIX_V;
-                viewNoTranslation[3][0] = 0.0;
-                viewNoTranslation[3][1] = 0.0;
-                viewNoTranslation[3][2] = 0.0;
+            float4 pos = mul(mul(Frame.prowl_MatP, viewNoTranslation), float4(input.position, 1.0));
 
-                vec4 pos = PROWL_MATRIX_P * viewNoTranslation * vec4(vertexPosition, 1.0);
-                gl_Position = pos.xyww; // depth = 1.0 (far plane)
-
-                vDirection = normalize(vertexPosition);
-            }
+            Varyings o;
+            o.position = pos.xyww; // depth = 1.0 (far plane)
+            o.vDirection = normalize(input.position);
+            return o;
         }
 
-        Fragment
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
         {
-            #include "ProwlCG"
-
-            layout (location = 0) out vec4 fragColor;
-
-            in vec3 vDirection;
-
-            uniform vec4 _TopColor;
-            uniform vec4 _BottomColor;
-            uniform float _Exponent;
-
-            void main()
-            {
-                float t = pow(clamp(vDirection.y * 0.5 + 0.5, 0.0, 1.0), _Exponent);
-                vec3 color = mix(_BottomColor.rgb, _TopColor.rgb, t);
-                fragColor = vec4(color, 1.0);
-            }
+            float t = pow(clamp(input.vDirection.y * 0.5 + 0.5, 0.0, 1.0), Mat._Exponent);
+            float3 color = lerp(Mat._BottomColor.rgb, Mat._TopColor.rgb, t);
+            return float4(color, 1.0);
         }
-    ENDGLSL
+
+        ENDSLANG
+    }
 }

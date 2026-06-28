@@ -1,125 +1,126 @@
 Shader "Default/Particle"
-
-Properties
 {
-    _MainTex ("Particle Texture", Texture2D) = "white"
-    _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _SoftParticlesFactor ("Soft Particles Factor", Float) = 1.0
-}
+    Properties
+    {
+        _MainTex("Particle Texture", Texture2D) = "white" {}
+        _MainColor("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _SoftParticlesFactor("Soft Particles Factor", Float) = 1.0
+    }
 
-Pass "Particle"
-{
-    Tags { "RenderOrder" = "Transparent" }
+    Pass
+    {
+        Name "Particle"
+        Tags { "RenderOrder" = "Transparent" }
+        Cull Off
+        ZWrite Off
+        Blend SrcAlpha OneMinusSrcAlpha
 
-    // Particle settings
-    Cull Off
-    ZWrite Off
-    Blend Alpha
+        SLANGPROGRAM
 
-	GLSLPROGRAM
+        import ProwlCG;
+        import VertexAttributes;
 
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
-
-			out vec2 texCoord0;
-			out vec4 vColor;
-            out vec3 worldPos;
-            out float vLifetime;
-
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv0 : TEXCOORD0;
+            float4 color : COLOR0;
 #ifdef GPU_INSTANCING
-            // Instance attributes declared in VertexAttributes.glsl
+            float4 instanceModelRow0 : TEXCOORD8;
+            float4 instanceModelRow1 : TEXCOORD9;
+            float4 instanceModelRow2 : TEXCOORD10;
+            float4 instanceModelRow3 : TEXCOORD11;
+            float4 instanceColor : TEXCOORD12;
+            float4 instanceCustomData : TEXCOORD13;
 #endif
+        }
 
-			void main()
-			{
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+            float4 vColor : COLOR0;
+            float3 worldPos : TEXCOORD1;
+            float vLifetime : TEXCOORD2;
+        }
+
+        struct Material
+        {
+            float4 _MainColor;
+            float _SoftParticlesFactor;
+            Sampler2D<float4> _MainTex;
+        }
+        ParameterBlock<Material> Mat;
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings o;
 #ifdef GPU_INSTANCING
-                // Extract position and scale from instance matrix
-                vec3 particlePosition = instanceModelRow3.xyz;
+            // Extract position and scale from instance matrix
+            float3 particlePosition = input.instanceModelRow3.xyz;
 
-                // Calculate scale from the instance matrix column lengths
-                float scaleX = length(instanceModelRow0.xyz);
-                float scaleY = length(instanceModelRow1.xyz);
+            // Scale from the instance matrix column lengths
+            float scaleX = length(input.instanceModelRow0.xyz);
+            float scaleY = length(input.instanceModelRow1.xyz);
 
-                // Extract rotation from the matrix (Z-axis rotation for billboards)
-                // Get normalized right vector from first column
-                vec3 matrixRight = instanceModelRow0.xyz / scaleX;
-                vec3 matrixUp = instanceModelRow1.xyz / scaleY;
+            // Normalized right/up vectors
+            float3 matrixRight = input.instanceModelRow0.xyz / scaleX;
+            float3 matrixUp = input.instanceModelRow1.xyz / scaleY;
 
-                // Calculate rotation angle from the XY components
-                // This extracts the Z-axis rotation that was applied
-                float rotationAngle = atan(matrixRight.y, matrixRight.x);
+            // Z-axis rotation that was applied
+            float rotationAngle = atan2(matrixRight.y, matrixRight.x);
 
-                // Create billboard matrix using camera's inverse view matrix
-                // Get camera right and up vectors from view matrix (inverse)
-                vec3 cameraRight = vec3(PROWL_MATRIX_V[0][0], PROWL_MATRIX_V[1][0], PROWL_MATRIX_V[2][0]);
-                vec3 cameraUp = vec3(PROWL_MATRIX_V[0][1], PROWL_MATRIX_V[1][1], PROWL_MATRIX_V[2][1]);
+            // Camera right/up are rows 0/1 of the view matrix (GLSL V[i][0]/[i][1] -> Slang V[0]/[1]).
+            float3 cameraRight = Frame.prowl_MatV[0].xyz;
+            float3 cameraUp = Frame.prowl_MatV[1].xyz;
 
-                // Apply rotation to the quad vertices
-                float cosRot = cos(rotationAngle);
-                float sinRot = sin(rotationAngle);
-                vec2 rotatedVertex = vec2(
-                    vertexPosition.x * cosRot - vertexPosition.y * sinRot,
-                    vertexPosition.x * sinRot + vertexPosition.y * cosRot
-                );
+            // Apply rotation to the quad vertices
+            float cosRot = cos(rotationAngle);
+            float sinRot = sin(rotationAngle);
+            float2 rotatedVertex = float2(
+                input.position.x * cosRot - input.position.y * sinRot,
+                input.position.x * sinRot + input.position.y * cosRot
+            );
 
-                // Build billboard quad in world space with rotation applied
-                vec3 worldPosition = particlePosition
-                    + cameraRight * rotatedVertex.x * scaleX
-                    + cameraUp * rotatedVertex.y * scaleY;
+            // Build billboard quad in world space with rotation applied
+            float3 worldPosition = particlePosition
+                + cameraRight * rotatedVertex.x * scaleX
+                + cameraUp * rotatedVertex.y * scaleY;
 
-                gl_Position = PROWL_MATRIX_VP * vec4(worldPosition, 1.0);
+            o.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
 
-                // Apply UV animation
-                // instanceCustomData: x=lifetime, y=UV offsetX, z=UV offsetY, w=UV scale
-                vec2 uvOffset = instanceCustomData.yz;
-                float uvScale = instanceCustomData.w;
-                texCoord0 = vertexTexCoord0 * uvScale + uvOffset;
+            // instanceCustomData: x=lifetime, y=UV offsetX, z=UV offsetY, w=UV scale
+            float2 uvOffset = input.instanceCustomData.yz;
+            float uvScale = input.instanceCustomData.w;
+            o.texCoord0 = input.uv0 * uvScale + uvOffset;
 
-                worldPos = worldPosition;
-
-                // Multiply vertex color by instance color
-                vColor = vertexColor * instanceColor;
-
-                // Pass normalized lifetime from custom data
-                vLifetime = instanceCustomData.x;
+            o.worldPos = worldPosition;
+            o.vColor = input.color * input.instanceColor;
+            o.vLifetime = input.instanceCustomData.x;
 #else
-                // Non-instanced fallback
-                gl_Position = PROWL_MATRIX_MVP * vec4(vertexPosition, 1.0);
-                texCoord0 = vertexTexCoord0;
-                worldPos = (PROWL_MATRIX_M * vec4(vertexPosition, 1.0)).xyz;
-                vColor = vertexColor;
-                vLifetime = 0.0;
+            // Non-instanced fallback
+            o.position = mul(Object.mvp, float4(input.position, 1.0));
+            o.texCoord0 = input.uv0;
+            o.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
+            o.vColor = input.color;
+            o.vLifetime = 0.0;
 #endif
-			}
-		}
+            return o;
+        }
 
-		Fragment
-		{
-            #include "ProwlCG"
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float4 albedo = Mat._MainTex.Sample(input.texCoord0) * input.vColor * Mat._MainColor;
 
-			layout (location = 0) out vec4 fragColor;
+            if (albedo.a < 0.01)
+                discard;
 
-			in vec2 texCoord0;
-			in vec4 vColor;
-            in vec3 worldPos;
-            in float vLifetime;
+            float3 baseColor = gammaToLinearSpace(albedo.rgb);
+            return float4(baseColor, albedo.a);
+        }
 
-			uniform sampler2D _MainTex;
-			uniform vec4 _MainColor;
-            uniform float _SoftParticlesFactor;
-
-			void main()
-			{
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-
-                if (albedo.a < 0.01)
-                    discard;
-
-                vec3 baseColor = gammaToLinearSpace(albedo.rgb);
-				fragColor = vec4(baseColor, albedo.a);
-			}
-		}
-	ENDGLSL
+        ENDSLANG
+    }
 }

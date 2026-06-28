@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 using System;
 using System.Collections.Generic;
 
@@ -238,7 +240,7 @@ public sealed class SceneLightSystem : IDisposable
         // All of these are global-uniform writes. Routing each through its own one-op
         // CommandBuffer (the PropertyState.SetGlobalX helpers) meant ~80-100 rent/submit
         // cycles per camera per frame. Encode them all into a single buffer and submit once.
-        using var cmd = Graphics.GetCommandBuffer("LightUniforms");
+        var cmd = Graphics.GetCommandBuffer("LightUniforms");
         UploadBVHTextures(cmd);
         UploadDirectionalLight(cmd);
         UploadLocalShadowSlots(cmd);

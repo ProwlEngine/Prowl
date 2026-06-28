@@ -3,6 +3,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.Projects;
+using Prowl.Graphite;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -94,20 +95,23 @@ public class TextureAssetEditor : AssetImporterEditor
                 v => settings["sRGB"] = new EchoObject(v))
             .LabelRight("sRGB").Show();
 
-        var currentMin = settings.TryGet("minFilter", out var minTag)
-            ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
-        InspectorRow.Draw(paper, $"{id}_min", "Min Filter", () =>
-            Origami.EnumDropdown(paper, $"{id}_min_v", currentMin,
-                v => settings["minFilter"] = new EchoObject((int)v)).Show());
+        bool minLinear = !settings.TryGet("minLinear", out var minTag) || minTag.BoolValue;
+        Origami.Checkbox(paper, $"{id}_min", minLinear,
+                v => settings["minLinear"] = new EchoObject(v))
+            .LabelRight("Min Linear").Show();
 
-        var currentMag = settings.TryGet("magFilter", out var magTag)
-            ? (TextureMag)magTag.IntValue : TextureMag.Linear;
-        InspectorRow.Draw(paper, $"{id}_mag", "Mag Filter", () =>
-            Origami.EnumDropdown(paper, $"{id}_mag_v", currentMag,
-                v => settings["magFilter"] = new EchoObject((int)v)).Show());
+        bool magLinear = !settings.TryGet("magLinear", out var magTag) || magTag.BoolValue;
+        Origami.Checkbox(paper, $"{id}_mag", magLinear,
+                v => settings["magLinear"] = new EchoObject(v))
+            .LabelRight("Mag Linear").Show();
+
+        bool mipLinear = !settings.TryGet("mipLinear", out var mipFilterTag) || mipFilterTag.BoolValue;
+        Origami.Checkbox(paper, $"{id}_mip", mipLinear,
+                v => settings["mipLinear"] = new EchoObject(v))
+            .LabelRight("Mip Linear").Show();
 
         var currentWrap = settings.TryGet("wrapMode", out var wrapTag)
-            ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
+            ? (SamplerAddressMode)wrapTag.IntValue : SamplerAddressMode.Wrap;
         InspectorRow.Draw(paper, $"{id}_wrap", "Wrap Mode", () =>
             Origami.EnumDropdown(paper, $"{id}_wrap_v", currentWrap,
                 v => settings["wrapMode"] = new EchoObject((int)v)).Show());

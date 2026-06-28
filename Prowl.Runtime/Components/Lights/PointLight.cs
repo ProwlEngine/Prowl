@@ -112,7 +112,7 @@ public class PointLight : Light
             // execute against whatever matrices the last face uploaded.
             pipeline.AssignCameraMatrices(view, projection);
 
-            using var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
+            var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
             cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             cmd.SetViewport(viewportX, viewportY, (uint)res, (uint)res);
             pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);

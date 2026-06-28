@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -40,9 +41,9 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         // Create MRT render texture for horizontal pass (3 color attachments for R, G, B)
         // Use floating point format to store complex number values (can be negative)
         RenderTexture horizontalMRT = RenderTexture.GetTemporaryRT(blurWidth, blurHeight, false, [
-            TextureImageFormat.Short4,
-            TextureImageFormat.Short4,
-            TextureImageFormat.Short4
+            PixelFormat.R16_G16_B16_A16_Float,
+            PixelFormat.R16_G16_B16_A16_Float,
+            PixelFormat.R16_G16_B16_A16_Float
         ]);
 
         // Create vertical result texture
@@ -57,7 +58,7 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
         // Set resolution for blur passes
         _mat.SetVector("_Resolution", new Float2(blurWidth, blurHeight));
 
-        using var cmd = Graphics.GetCommandBuffer("BokehDoF");
+        var cmd = Graphics.GetCommandBuffer("BokehDoF");
 
         // Pass 0: Horizontal MRT - outputs to 3 render targets (R, G, B channels)
         _mat.SetTexture("_MainTex", context.SceneColor.MainTexture);
