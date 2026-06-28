@@ -292,6 +292,10 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         _properties.SetMatrix("projection", _projection);
         texture.SetTexture(_properties, "texture0");
 
+        // 1 / atlas size, so the text shader's distance-field screen range is correct at any zoom.
+        Int2 texSize = GetTextureSize(texture);
+        _properties.SetFloat2("atlasTexelSize", new Float2(texSize.X > 0 ? 1f / texSize.X : 0f, texSize.Y > 0 ? 1f / texSize.Y : 0f));
+
         drawCall.GetScissor(out Float4x4 scissorMat, out Float2 scissorExt);
         _properties.SetMatrix("scissorMat", scissorMat);
         _properties.SetFloat2("scissorExt", scissorExt);

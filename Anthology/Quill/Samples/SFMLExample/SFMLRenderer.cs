@@ -45,6 +45,13 @@ uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
 
 varying vec2 v_position; // Add this
 
+const float sdfPxRange = 4.0;
+float sdfScreenPxRange(vec2 uv) {
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
 float calculateBrushFactor(vec2 fragPos) {
     // No brush
     if (brushType == 0) return 0.0;
@@ -144,7 +151,11 @@ void main()
     
     // Text mode: UV >= 2.0 means text rendering - fast path
     if (fragTexCoord.x >= 2.0) {
-        gl_FragColor = color * texture(texture0, fragTexCoord - vec2(2.0, 2.0)) * mask;
+        vec2 uv = fragTexCoord - vec2(2.0, 2.0);
+        float sd = texture(texture0, uv).r;
+        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+        gl_FragColor = color * coverage * mask;
         return;
     }
     

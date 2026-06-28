@@ -28,7 +28,7 @@ public partial class App
 
     static void Main()
     {
-        // Entry point — actual init happens in Init() called from JS after module imports are ready.
+        // Entry point - actual init happens in Init() called from JS after module imports are ready.
     }
 
     [JSExport]

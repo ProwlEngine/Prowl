@@ -2518,19 +2518,16 @@ namespace Prowl.Quill
         /// <paramref name="letterSpacing"/> are in logical units; internally the canvas rasterizes
         /// glyphs at <c>size × FramebufferScale</c> for HiDPI crispness.
         /// </summary>
-        public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null)
+        public void DrawText(string text, float x, float y, Color32 color, float pixelSize, FontFile font, float letterSpacing = 0f, Float2? origin = null, FontQuality quality = FontQuality.Normal)
         {
-            Float2 bitmapPosition = new Float2(x, y);
-            float bitmapPixelSize = pixelSize * _framebufferScale;
-            float bitmapLetterSpacing = letterSpacing * _framebufferScale;
-            if (origin.HasValue)
-            {
-                var textSize = _scribeRenderer.FontEngine.MeasureText(text, bitmapPixelSize, font, bitmapLetterSpacing);
-                bitmapPosition.X -= (textSize.X / _framebufferScale) * origin.Value.X;
-                bitmapPosition.Y -= (textSize.Y / _framebufferScale) * origin.Value.Y;
-            }
-            Float2 pixelPos = bitmapPosition * _framebufferScale;
-            _scribeRenderer.FontEngine.DrawText(text, pixelPos, new FontColor(color.R, color.G, color.B, color.A), bitmapPixelSize, font, bitmapLetterSpacing);
+            // Route through the settings-based overload so the atlas quality threads down to glyph
+            // creation (the simple FontEngine.DrawText overload is quality-independent / Normal).
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = pixelSize;
+            settings.Font = font;
+            settings.LetterSpacing = letterSpacing;
+            settings.Quality = quality;
+            DrawText(text, x, y, color, settings, origin);
         }
 
         /// <summary>
@@ -2685,7 +2682,7 @@ namespace Prowl.Quill
             /// <summary>Visible text with all tags stripped (useful for accessibility / clipboard).</summary>
             public readonly string VisibleText => Layout?.VisibleText ?? string.Empty;
 
-            /// <summary>Re-anchors animation start time on the next draw — replays typewriter etc.</summary>
+            /// <summary>Re-anchors animation start time on the next draw - replays typewriter etc.</summary>
             public readonly void Reset() => Layout?.Reset();
         }
 
@@ -2710,6 +2707,7 @@ namespace Prowl.Quill
                 WordSpacing = src.WordSpacing * _framebufferScale,
                 TabSize = src.TabSize,
                 DefaultColor = src.DefaultColor,
+                Quality = src.Quality,
 
                 MaxWidth = src.MaxWidth > 0 ? src.MaxWidth * _framebufferScale : 0f,
                 WrapMode = src.WrapMode,

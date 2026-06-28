@@ -79,22 +79,12 @@ namespace Prowl.Quill
         public object CreateTexture(int width, int height) => _canvas._renderer.CreateTexture((uint)width, (uint)height);
 
         /// <summary>
-        /// Updates texture data in the specified region.
+        /// Updates texture data in the specified region. Scribe now produces multi-channel signed
+        /// distance fields, so the data is already RGBA (4 bytes per pixel) and is uploaded directly.
         /// </summary>
         public void UpdateTextureRegion(object texture, AtlasRect bounds, byte[] data)
         {
-            // The data is single channel, we need to convert it to RGBA
-            byte[] rgbaData = new byte[bounds.Width * bounds.Height * 4];
-            for (int i = 0; i < bounds.Width * bounds.Height; i++)
-            {
-                byte value = data[i];
-                rgbaData[i * 4 + 0] = value; // R
-                rgbaData[i * 4 + 1] = value; // G
-                rgbaData[i * 4 + 2] = value; // B
-                rgbaData[i * 4 + 3] = value; // A
-            }
-
-            _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.X + bounds.Width, bounds.Y + bounds.Height), rgbaData);
+            _canvas._renderer.SetTextureData(texture, new IntRect(bounds.X, bounds.Y, bounds.X + bounds.Width, bounds.Y + bounds.Height), data);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-// Prowl.Quill WasmExample — No Blazor, pure .NET WASM + WebGL2
+// Prowl.Quill WasmExample - No Blazor, pure .NET WASM + WebGL2
 
 import { dotnet } from './_framework/dotnet.js';
 
@@ -73,11 +73,25 @@ float scissorMask(vec2 p) {
     return clamp(se.x,0.0,1.0)*clamp(se.y,0.0,1.0);
 }
 
+const float sdfPxRange = 4.0;
+float sdfScreenPxRange(vec2 uv) {
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(uTexture, 0));
+    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
 void main() {
     float mask = scissorMask(vPos);
     vec4 color = vColor;
     if (uBrushType > 0) color = mix(uBrushColor1, uBrushColor2, calculateBrushFactor());
-    if (vUV.x >= 2.0) { fragColor = color * texture(uTexture, vUV - vec2(2.0, 0.0)) * mask; return; }
+    if (vUV.x >= 2.0) {
+        vec2 uv = vUV - vec2(2.0);
+        float sd = texture(uTexture, uv).r;
+        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+        fragColor = color * coverage * mask;
+        return;
+    }
     vec2 ps = fwidth(vUV), ed = min(vUV, 1.0-vUV);
     float ea = clamp((ps.x>0.0?smoothstep(0.0,ps.x,ed.x):1.0)*(ps.y>0.0?smoothstep(0.0,ps.y,ed.y):1.0), 0.0, 1.0);
     vec2 lp = vPos / uDpiScale;

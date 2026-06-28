@@ -60,6 +60,17 @@ uniform float backdropBlurAmount;   // > 0 when the current fill is frosted glas
 
 // ============== Canvas functions ==============
 
+// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
+const float sdfPxRange = 4.0;
+
+// Screen-space width (in pixels) that one distance-field unit spans at this fragment. Derived from
+// texture-coordinate derivatives, so glyphs stay crisp at any canvas zoom or DPI automatically.
+float sdfScreenPxRange(vec2 uv) {
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
 float calculateBrushFactor() {
     if (brushType == 0) return 0.0;
     vec2 logicalPos = fragPos / dpiScale;
@@ -109,7 +120,11 @@ void main()
 
     // Text mode: UV >= 2.0
     if (fragTexCoord.x >= 2.0) {
-        finalColor = color * texture(texture0, fragTexCoord - vec2(2.0)) * mask;
+        vec2 uv = fragTexCoord - vec2(2.0);
+        float sd = texture(texture0, uv).r;
+        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+        finalColor = color * coverage * mask;
         return;
     }
 
