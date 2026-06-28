@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 namespace Prowl.Vector.Geometry
 {
@@ -1154,7 +1155,99 @@ namespace Prowl.Vector.Geometry
         {
             return (u >= -INTERSECTION_EPSILON) && (v >= -INTERSECTION_EPSILON) && (u + v <= 1.0 + INTERSECTION_EPSILON);
         }
-        
+
+        /// <summary>
+        /// Computes generalized barycentric coordinates of a point with respect to a planar polygon
+        /// using Mean Value Coordinates (Floater 2003). The weights form a partition of unity (sum to 1)
+        /// and reproduce the polygon's vertices, so they can interpolate any per-vertex quantity. The
+        /// point is inside the polygon when every weight is non-negative; weights may be negative for
+        /// points outside, which makes this usable as a containment test as well.
+        /// </summary>
+        /// <param name="point">The query point, assumed to lie on (or close to) the polygon's plane.</param>
+        /// <param name="polygon">The polygon's ordered vertices (convex or concave, 3 or more).</param>
+        /// <param name="weights">Output weights, one per polygon vertex; length must be at least polygon.Count.</param>
+        /// <returns>False if the polygon is degenerate or the weights buffer is too small.</returns>
+        public static bool PolygonMeanValueWeights(Float3 point, IReadOnlyList<Float3> polygon, float[] weights)
+        {
+            int n = polygon.Count;
+            if (n < 3 || weights == null || weights.Length < n)
+                return false;
+
+            for (int i = 0; i < n; i++)
+                weights[i] = 0.0f;
+
+            // Polygon normal (Newell's method) used to give the corner angles a consistent sign.
+            Float3 normal = Float3.Zero;
+            for (int i = 0; i < n; i++)
+            {
+                Float3 cur = polygon[i];
+                Float3 nxt = polygon[(i + 1) % n];
+                normal.X += (cur.Y - nxt.Y) * (cur.Z + nxt.Z);
+                normal.Y += (cur.Z - nxt.Z) * (cur.X + nxt.X);
+                normal.Z += (cur.X - nxt.X) * (cur.Y + nxt.Y);
+            }
+            if (Float3.LengthSquared(normal) < INTERSECTION_EPSILON * INTERSECTION_EPSILON)
+                return false;
+            normal = Float3.Normalize(normal);
+
+            var distances = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                Float3 s = polygon[i] - point;
+                float r = Float3.Length(s);
+                if (r < INTERSECTION_EPSILON)
+                {
+                    // Point coincides with a vertex.
+                    weights[i] = 1.0f;
+                    return true;
+                }
+                distances[i] = r;
+            }
+
+            // Signed half-angle tangent for each edge (vertex i to vertex i+1) as seen from the point.
+            var halfTan = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                int j = (i + 1) % n;
+                Float3 si = polygon[i] - point;
+                Float3 sj = polygon[j] - point;
+
+                float cos = Float3.Dot(si, sj) / (distances[i] * distances[j]);
+                cos = Maths.Clamp(cos, -1.0f, 1.0f);
+
+                if (cos < -1.0f + 1e-6f)
+                {
+                    // Point lies on this edge: interpolate linearly along it.
+                    float t = distances[i] / (distances[i] + distances[j]);
+                    weights[i] = 1.0f - t;
+                    weights[j] = t;
+                    return true;
+                }
+
+                float angle = MathF.Acos(cos);
+                float sign = Float3.Dot(Float3.Cross(si, sj), normal) < 0 ? -1.0f : 1.0f;
+                halfTan[i] = MathF.Tan(sign * angle * 0.5f);
+            }
+
+            float sum = 0.0f;
+            for (int i = 0; i < n; i++)
+            {
+                int prev = (i - 1 + n) % n;
+                float w = (halfTan[prev] + halfTan[i]) / distances[i];
+                weights[i] = w;
+                sum += w;
+            }
+
+            if (Maths.Abs(sum) < INTERSECTION_EPSILON)
+                return false;
+
+            float invSum = 1.0f / sum;
+            for (int i = 0; i < n; i++)
+                weights[i] *= invSum;
+
+            return true;
+        }
+
         #endregion
         
         #endregion
