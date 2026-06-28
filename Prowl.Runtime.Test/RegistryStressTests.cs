@@ -25,8 +25,8 @@ public sealed class PlainUpdateCounter : MonoBehaviour
 /// <summary>Appends a tag on Update, for ordering tests.</summary>
 public sealed class TagTick : MonoBehaviour
 {
-    public string Tag = "";
-    public override void Update() => TickLog.Entries.Add(Tag);
+    public string Mark = "";
+    public override void Update() => TickLog.Entries.Add(Mark);
 }
 
 /// <summary>
@@ -143,9 +143,9 @@ public class RegistryStressTests : RuntimeTestBase
     {
         TickLog.Entries.Clear();
         var (scene, go) = NewSceneGo();
-        go.AddComponent<TagTick>().Tag = "a";
-        go.AddComponent<TagTick>().Tag = "b";
-        go.AddComponent<TagTick>().Tag = "c";
+        go.AddComponent<TagTick>().Mark = "a";
+        go.AddComponent<TagTick>().Mark = "b";
+        go.AddComponent<TagTick>().Mark = "c";
         scene.Add(go);
 
         Update(scene);
