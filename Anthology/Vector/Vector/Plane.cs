@@ -182,6 +182,34 @@ namespace Prowl.Vector
             return new Plane(Normal, D + Float3.Dot(Normal, translation), true);
         }
 
+        /// <summary>
+        /// Computes the single point where three planes intersect.
+        /// Returns a point with NaN components if the planes do not meet at a unique point
+        /// (i.e. two or more are parallel, or they share a common line).
+        /// </summary>
+        public static Float3 Intersection(Plane plane1, Plane plane2, Plane plane3)
+        {
+            // Solve [n1;n2;n3] * P = [d1;d2;d3] using Cramer's rule:
+            // P = (d1 (n2 x n3) + d2 (n3 x n1) + d3 (n1 x n2)) / (n1 . (n2 x n3))
+            // Accumulated in double precision to keep near-degenerate brushes stable.
+            Float3 n1 = plane1.Normal, n2 = plane2.Normal, n3 = plane3.Normal;
+
+            Float3 cross23 = Float3.Cross(n2, n3);
+            double denom = (double)n1.X * cross23.X + (double)n1.Y * cross23.Y + (double)n1.Z * cross23.Z;
+
+            if (denom > -1e-9 && denom < 1e-9)
+                return new Float3(float.NaN, float.NaN, float.NaN);
+
+            Float3 cross31 = Float3.Cross(n3, n1);
+            Float3 cross12 = Float3.Cross(n1, n2);
+
+            double x = (double)plane1.D * cross23.X + (double)plane2.D * cross31.X + (double)plane3.D * cross12.X;
+            double y = (double)plane1.D * cross23.Y + (double)plane2.D * cross31.Y + (double)plane3.D * cross12.Y;
+            double z = (double)plane1.D * cross23.Z + (double)plane2.D * cross31.Z + (double)plane3.D * cross12.Z;
+
+            return new Float3((float)(x / denom), (float)(y / denom), (float)(z / denom));
+        }
+
         // --- IEquatable & IFormattable Implementation ---
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(Plane other) => Normal.Equals(other.Normal) && D.Equals(other.D);
