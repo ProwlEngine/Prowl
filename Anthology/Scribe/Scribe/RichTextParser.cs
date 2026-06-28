@@ -57,7 +57,7 @@ namespace Prowl.Scribe
         /// <summary>Exclusive end (visible char index).</summary>
         public int End;
 
-        // Generic parameter slots — interpretation depends on Kind. See <see cref="RichTextEffects"/>.
+        // Generic parameter slots - interpretation depends on Kind. See <see cref="RichTextEffects"/>.
         public float P0, P1, P2, P3;
     }
 
@@ -70,7 +70,7 @@ namespace Prowl.Scribe
         public int[] SourceMap;
         public List<RichStyleSpan> Styles;
         public List<RichEffectSpan> Effects;
-        /// <summary>Diagnostics for malformed tags. Non-fatal — the source is still parsed leniently.</summary>
+        /// <summary>Diagnostics for malformed tags. Non-fatal - the source is still parsed leniently.</summary>
         public List<string> Warnings;
     }
 
@@ -78,13 +78,13 @@ namespace Prowl.Scribe
     /// Unity-style rich-text tag parser.
     ///
     /// Supported tag forms:
-    ///   &lt;b&gt; &lt;/b&gt;                              — boolean style on/off
-    ///   &lt;color=#ff0&gt; &lt;color=red&gt;                — single value (interpreted by context)
-    ///   &lt;shake amp=2 freq=8&gt;                       — multiple key=value attributes
-    ///   &lt;link=https://...&gt;text&lt;/link&gt;             — single value as href
+    ///   &lt;b&gt; &lt;/b&gt;                              - boolean style on/off
+    ///   &lt;color=#ff0&gt; &lt;color=red&gt;                - single value (interpreted by context)
+    ///   &lt;shake amp=2 freq=8&gt;                       - multiple key=value attributes
+    ///   &lt;link=https://...&gt;text&lt;/link&gt;             - single value as href
     ///
     /// Unknown tags are emitted as literal text. Use a literal '&lt;' in source by escaping it as
-    /// "\&lt;" (backslash + &lt;) — the backslash is consumed and the &lt; is treated as a normal char.
+    /// "\&lt;" (backslash + &lt;) - the backslash is consumed and the &lt; is treated as a normal char.
     /// </summary>
     public static class RichTextParser
     {
@@ -106,7 +106,7 @@ namespace Prowl.Scribe
             var sb = new StringBuilder(source.Length);
             var sourceMap = new List<int>(source.Length);
 
-            // Open tag tracking — when a closing tag arrives we pop the most recent matching open
+            // Open tag tracking - when a closing tag arrives we pop the most recent matching open
             // and emit a finalized span covering [openStart..currentVisibleIndex).
             var openStyles = new Stack<OpenStyle>();
             var openEffects = new Stack<OpenEffect>();
@@ -153,7 +153,7 @@ namespace Prowl.Scribe
                 i = tagEnd;
             }
 
-            // Anything still open at EOF — close it implicitly at the end of visible text.
+            // Anything still open at EOF - close it implicitly at the end of visible text.
             int finalVisible = sb.Length;
             while (openStyles.Count > 0)
             {
@@ -299,13 +299,13 @@ namespace Prowl.Scribe
                 P0 = float.NaN, P1 = float.NaN, P2 = float.NaN, P3 = float.NaN,
             };
             // Some effects accept a single value as their primary parameter:
-            //   <wave=4>      → amp = 4
-            //   <typewriter=40> → speed = 40 (chars per second)
-            //   <fade=2>      → speed = 2
-            //   <pulse=3>     → speed = 3
-            //   <shake=2>     → amp = 2
-            //   <jitter=1>    → amp = 1
-            //   <rainbow=1>   → speed = 1
+            //   <wave=4>      -> amp = 4
+            //   <typewriter=40> -> speed = 40 (chars per second)
+            //   <fade=2>      -> speed = 2
+            //   <pulse=3>     -> speed = 3
+            //   <shake=2>     -> amp = 2
+            //   <jitter=1>    -> amp = 1
+            //   <rainbow=1>   -> speed = 1
             if (!string.IsNullOrEmpty(singleValue) && float.TryParse(singleValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
             {
                 switch (kind)
@@ -373,7 +373,7 @@ namespace Prowl.Scribe
             Stack<OpenStyle> openStyles, Stack<OpenEffect> openEffects, RichTextParseResult result)
         {
             // Effects and styles share namespace by tag name. Try effect stack first if the name
-            // is one of our effect tags — otherwise it's a style.
+            // is one of our effect tags - otherwise it's a style.
             switch (tag)
             {
                 case "shake":
@@ -399,7 +399,7 @@ namespace Prowl.Scribe
 
         private static bool TryPop<T>(Stack<T> stack, string tag, out T popped) where T : struct
         {
-            // Pop the most recent matching tag — tolerates incorrectly-nested tags by walking down.
+            // Pop the most recent matching tag - tolerates incorrectly-nested tags by walking down.
             // (We snapshot then restore in original order if not found, to keep behavior deterministic.)
             if (stack.Count == 0) { popped = default; return false; }
             var buffer = new List<T>();
@@ -416,7 +416,7 @@ namespace Prowl.Scribe
                 }
                 buffer.Add(top);
             }
-            // Not found — restore everything and signal failure
+            // Not found - restore everything and signal failure
             for (int k = buffer.Count - 1; k >= 0; k--) stack.Push(buffer[k]);
             popped = default;
             return false;
@@ -559,7 +559,7 @@ namespace Prowl.Scribe
         {
             px = 0f;
             if (string.IsNullOrEmpty(s)) return false;
-            // Percent form: <size=120%> — caller is expected to multiply by base size.
+            // Percent form: <size=120%> - caller is expected to multiply by base size.
             // We encode percent as a negative number sentinel: -value is "percent of base".
             if (s.EndsWith("%", StringComparison.Ordinal))
             {

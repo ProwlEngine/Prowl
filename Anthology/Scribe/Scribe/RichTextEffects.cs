@@ -36,7 +36,7 @@ namespace Prowl.Scribe
             };
 
             int ci = g.CharIndex;
-            // Glyph-relative index within its own effect span — used for per-glyph phase shifts so
+            // Glyph-relative index within its own effect span - used for per-glyph phase shifts so
             // the wave/rainbow still march along even when the same effect wraps multiple lines.
             for (int i = 0; i < effects.Count; i++)
             {
@@ -50,7 +50,7 @@ namespace Prowl.Scribe
                     {
                         float amp = float.IsNaN(e.P0) ? settings.DefaultShakeAmp : e.P0;
                         float freq = float.IsNaN(e.P1) ? settings.DefaultShakeFreq : e.P1;
-                        // Per-glyph deterministic noise — different seeds for X and Y axes.
+                        // Per-glyph deterministic noise - different seeds for X and Y axes.
                         float ox = Noise2(local * 13 + 1, t * freq) * amp;
                         float oy = Noise2(local * 17 + 7, t * freq + 3.7f) * amp;
                         r.OffsetX += ox;
@@ -132,7 +132,7 @@ namespace Prowl.Scribe
             return r;
         }
 
-        // Cheap deterministic 2D pseudo-noise in [-1, 1]. Not a real PRNG — good enough for
+        // Cheap deterministic 2D pseudo-noise in [-1, 1]. Not a real PRNG - good enough for
         // shake/jitter visual effects and stable across frames at the same (i, t).
         private static float Noise2(int i, float t)
         {

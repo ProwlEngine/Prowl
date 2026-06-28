@@ -63,7 +63,11 @@ namespace Prowl.Scribe
         private double? _startTime;
         private int _atlasVersion = -1;
 
-        // Reusable scratch buffers — keep DrawLayout-style allocation behavior.
+        // Font system this layout was last built against - used by hit-testing/decoration paths to
+        // fetch per-glyph metrics, since AtlasGlyph is now size-independent.
+        private FontSystem _fontSystem;
+
+        // Reusable scratch buffers - keep DrawLayout-style allocation behavior.
         private readonly List<IFontRenderer.Vertex> _drawVertices = new List<IFontRenderer.Vertex>(1024);
         private readonly List<int> _drawIndices = new List<int>(1536);
 
@@ -103,11 +107,12 @@ namespace Prowl.Scribe
 
         /// <summary>
         /// Parse tags and build glyphs/lines against the given font system.
-        /// Safe to call repeatedly — only does work when text/settings/atlas have changed.
+        /// Safe to call repeatedly - only does work when text/settings/atlas have changed.
         /// </summary>
         public void Update(FontSystem fontSystem)
         {
             if (fontSystem == null) throw new ArgumentNullException(nameof(fontSystem));
+            _fontSystem = fontSystem;
 
             if (_parsed == null)
                 _parsed = RichTextParser.Parse(_source);
@@ -140,8 +145,8 @@ namespace Prowl.Scribe
                 LinkHref = null,
             };
 
-            // The parser emits style spans in close order — innermost is closed first, so the
-            // list is ordered innermost → outermost. Walk in reverse so outer overrides apply
+            // The parser emits style spans in close order - innermost is closed first, so the
+            // list is ordered innermost -> outermost. Walk in reverse so outer overrides apply
             // first and inner spans override them last (matches Unity's nesting semantics).
             // Flags use OR so order doesn't affect them.
             var styles = _parsed.Styles;
@@ -197,7 +202,7 @@ namespace Prowl.Scribe
             float pen = 0f;
             float yTop = 0f;
 
-            // Cross-glyph kerning state — only kern within the same font and same pixel size.
+            // Cross-glyph kerning state - only kern within the same font and same pixel size.
             int prevGlyphIdx = 0;
             FontFile prevFont = null;
             float prevPixelSize = 0f;
@@ -296,7 +301,7 @@ namespace Prowl.Scribe
                 i = wordEnd;
             }
 
-            // Final line — always emit even if empty so trailing newlines reserve a line.
+            // Final line - always emit even if empty so trailing newlines reserve a line.
             FinishLine(ref lineFirstGlyph, lineCharStart, len, ref lineMaxAsc, ref lineMaxDesc,
                        pen, ref yTop, lineHeightMul, forceEmit: true);
 
@@ -318,10 +323,12 @@ namespace Prowl.Scribe
             var font = ResolveFont(cs.Flags);
             if (font == null) return;
 
-            var g = fontSystem.GetOrCreateGlyph(c, cs.PixelSize, font);
+            var g = fontSystem.GetOrCreateGlyph(c, font, _settings.Quality);
             if (g == null) return;
 
-            // Kerning — only meaningful within same font & same pixel size.
+            var gm = fontSystem.GetGlyphMetrics(g.Font, c, cs.PixelSize) ?? default;
+
+            // Kerning - only meaningful within same font & same pixel size.
             if (prevGlyphIdx != 0 && ReferenceEquals(prevFont, g.Font) && prevPixelSize == cs.PixelSize)
             {
                 pen += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIdx, g.GlyphIndex, cs.PixelSize);
@@ -333,11 +340,11 @@ namespace Prowl.Scribe
             if (asc > lineMaxAsc) lineMaxAsc = asc;
             if (descPositive > lineMaxDesc) lineMaxDesc = descPositive;
 
-            float advance = g.Metrics.AdvanceWidth + _settings.LetterSpacing;
+            float advance = gm.AdvanceWidth + _settings.LetterSpacing;
 
             _glyphs.Add(new RichGlyph {
                 Glyph = g,
-                Position = new Float2(pen + g.Metrics.OffsetX, g.Metrics.OffsetY), // baseline-relative; line baseline added in FinishLine
+                Position = new Float2(pen + gm.OffsetX, gm.OffsetY), // baseline-relative; line baseline added in FinishLine
                 PixelSize = cs.PixelSize,
                 Advance = advance,
                 Character = c,
@@ -367,10 +374,11 @@ namespace Prowl.Scribe
                 var cs = ResolveCharStyle(j);
                 var font = ResolveFont(cs.Flags);
                 if (font == null) continue;
-                var g = fontSystem.GetOrCreateGlyph(c, cs.PixelSize, font);
+                var g = fontSystem.GetOrCreateGlyph(c, font, _settings.Quality);
                 if (g == null) continue;
 
-                float adv = g.Metrics.AdvanceWidth + _settings.LetterSpacing;
+                var gm = fontSystem.GetGlyphMetrics(g.Font, c, cs.PixelSize) ?? default;
+                float adv = gm.AdvanceWidth + _settings.LetterSpacing;
                 float k = 0f;
                 if (prevGlyphIdx != 0 && ReferenceEquals(prevFont, g.Font) && prevPixelSize == cs.PixelSize)
                     k = fontSystem.GetKerningByGlyph(g.Font, prevGlyphIdx, g.GlyphIndex, cs.PixelSize);
@@ -393,7 +401,7 @@ namespace Prowl.Scribe
 
                 _glyphs.Add(new RichGlyph {
                     Glyph = g,
-                    Position = new Float2(pen + g.Metrics.OffsetX, g.Metrics.OffsetY),
+                    Position = new Float2(pen + gm.OffsetX, gm.OffsetY),
                     PixelSize = cs.PixelSize,
                     Advance = adv,
                     Character = c,
@@ -422,13 +430,14 @@ namespace Prowl.Scribe
                 var cs = ResolveCharStyle(j);
                 var font = ResolveFont(cs.Flags);
                 if (font == null) continue;
-                var g = fontSystem.GetOrCreateGlyph(c, cs.PixelSize, font);
+                var g = fontSystem.GetOrCreateGlyph(c, font, _settings.Quality);
                 if (g == null) continue;
 
                 if (prevGlyphIdx != 0 && ReferenceEquals(prevFont, g.Font) && prevPixelSize == cs.PixelSize)
                     w += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIdx, g.GlyphIndex, cs.PixelSize);
 
-                w += g.Metrics.AdvanceWidth + _settings.LetterSpacing;
+                var gm = fontSystem.GetGlyphMetrics(g.Font, c, cs.PixelSize) ?? default;
+                w += gm.AdvanceWidth + _settings.LetterSpacing;
                 prevGlyphIdx = g.GlyphIndex;
                 prevFont = g.Font;
                 prevPixelSize = cs.PixelSize;
@@ -442,8 +451,10 @@ namespace Prowl.Scribe
             var cs = ResolveCharStyle(charIndex);
             var font = ResolveFont(cs.Flags) ?? _settings.RegularFont;
             if (font == null) return cs.PixelSize * 0.25f;
-            var g = fontSystem.GetOrCreateGlyph(' ', cs.PixelSize, font);
-            return g?.Metrics.AdvanceWidth ?? cs.PixelSize * 0.25f;
+            var g = fontSystem.GetOrCreateGlyph(' ', font, _settings.Quality);
+            if (g == null) return cs.PixelSize * 0.25f;
+            var gm = fontSystem.GetGlyphMetrics(g.Font, g.Codepoint, cs.PixelSize);
+            return gm?.AdvanceWidth ?? cs.PixelSize * 0.25f;
         }
 
         // Finalize the in-progress line: assign baseline Y to all its glyphs, record the line, and
@@ -571,14 +582,22 @@ namespace Prowl.Scribe
                 var fx = RichTextEffects.Evaluate(g, _parsed.Effects, t, _settings);
                 if (!fx.Visible) continue;
 
-                // Quad corners around glyph's atlas drawing rect, with per-glyph scale around the
-                // glyph center.
-                float w = atlas.Metrics.Width;
-                float h = atlas.Metrics.Height;
-                float cx = position.X + g.Position.X + w * 0.5f + fx.OffsetX;
-                float cy = position.Y + g.Position.Y + h * 0.5f + fx.OffsetY;
-                float hw = w * 0.5f * fx.Scale;
-                float hh = h * 0.5f * fx.Scale;
+                // Padded distance-field quad (includes the field margin), placed relative to the pen
+                // origin/baseline, then scaled per-glyph around its center for effects. The region is
+                // in font units; scale it to this glyph's pixel size at draw time.
+                var gm = fontSystem.GetGlyphMetrics(atlas.Font, atlas.Codepoint, g.PixelSize) ?? default;
+                float sc = atlas.Font.ScaleForPixelHeight(g.PixelSize);
+                float penX = position.X + g.Position.X - gm.OffsetX;
+                float baselineY = position.Y + g.Position.Y - gm.OffsetY;
+                float qx0 = penX + (float)(atlas.RegionX0 * sc);
+                float qy0 = baselineY + (float)(-atlas.RegionY1 * sc);
+                float qx1 = penX + (float)(atlas.RegionX1 * sc);
+                float qy1 = baselineY + (float)(-atlas.RegionY0 * sc);
+
+                float cx = (qx0 + qx1) * 0.5f + fx.OffsetX;
+                float cy = (qy0 + qy1) * 0.5f + fx.OffsetY;
+                float hw = (qx1 - qx0) * 0.5f * fx.Scale;
+                float hh = (qy1 - qy0) * 0.5f * fx.Scale;
 
                 float x0 = cx - hw, y0 = cy - hh;
                 float x1 = cx + hw, y1 = cy + hh;
@@ -599,7 +618,7 @@ namespace Prowl.Scribe
                 vbase += 4;
             }
 
-            // Decorations (underline / strike) — solid quads sampled from the atlas's white texel.
+            // Decorations (underline / strike) - solid quads sampled from the atlas's white texel.
             EmitDecorations(verts, indices, ref vbase, position);
 
             if (verts.Count > 0)
@@ -618,7 +637,7 @@ namespace Prowl.Scribe
         {
             // Walk lines; within each line, scan glyph runs of contiguous Underline/Strike spans
             // (sharing color) and emit a single quad per run. Decorations use the layout's white
-            // texel — which the FontSystem reserves at U=0,V=0 in the atlas (we sample U0/V0 of
+            // texel - which the FontSystem reserves at U=0,V=0 in the atlas (we sample U0/V0 of
             // the first non-empty glyph as a stand-in if needed).
             for (int li = 0; li < _lines.Count; li++)
             {
@@ -652,7 +671,7 @@ namespace Prowl.Scribe
                         active = true;
                         color = rg.Color;
                         size = rg.PixelSize;
-                        gx0 = position.X + rg.Position.X - rg.Glyph.Metrics.OffsetX;
+                        gx0 = position.X + rg.Position.X - GlyphOffsetX(rg);
                         gx1 = gx0 + rg.Advance;
                     }
                 }
@@ -677,6 +696,15 @@ namespace Prowl.Scribe
                     runColor = color; runX0 = gx0; runX1 = gx1; runMaxSize = size;
                 }
             }
+        }
+
+        // Pen-origin X of a placed glyph: Position.X is pen + glyph offset, so subtract the offset
+        // (fetched per-glyph now that AtlasGlyph is size-independent).
+        private float GlyphOffsetX(RichGlyph rg)
+        {
+            if (_fontSystem == null || rg.Glyph == null) return 0f;
+            var gm = _fontSystem.GetGlyphMetrics(rg.Glyph.Font, rg.Glyph.Codepoint, rg.PixelSize);
+            return gm?.OffsetX ?? 0f;
         }
 
         private static bool ColorEquals(FontColor a, FontColor b)
@@ -717,7 +745,7 @@ namespace Prowl.Scribe
                 for (int g = ln.FirstGlyph; g < end; g++)
                 {
                     var rg = _glyphs[g];
-                    float gx0 = rg.Position.X - rg.Glyph.Metrics.OffsetX;
+                    float gx0 = rg.Position.X - GlyphOffsetX(rg);
                     float gx1 = gx0 + rg.Advance;
                     if (localPosition.X >= gx0 && localPosition.X < gx1) return g;
                 }

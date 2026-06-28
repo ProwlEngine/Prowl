@@ -1,4 +1,5 @@
 ﻿using Prowl.Scribe.Internal;
+using Prowl.Scribe.Sdf;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,6 +10,19 @@ using System.Text;
 
 namespace Prowl.Scribe
 {
+    /// <summary>
+    /// Atlas rasterization quality. The value is the per-glyph em pixel height the distance field is
+    /// generated at; the shader scales it to any display size, so higher mainly helps very small text
+    /// and very sharp corners, at the cost of atlas memory and one-time generation time.
+    /// </summary>
+    public enum FontQuality
+    {
+        Low = 16,
+        Normal = 32,
+        High = 64,
+        Ultra = 128
+    }
+
     public class FontSystem
     {
         private readonly IFontRenderer renderer;
@@ -22,7 +36,7 @@ namespace Prowl.Scribe
         private int atlasWidth;
         private int atlasHeight;
 
-        // Reusable scratch buffers for DrawLayout — avoid per-frame List/array allocations.
+        // Reusable scratch buffers for DrawLayout - avoid per-frame List/array allocations.
         private readonly List<IFontRenderer.Vertex> drawVertices = new List<IFontRenderer.Vertex>(1024);
         private readonly List<int> drawIndices = new List<int>(1536);
 
@@ -34,6 +48,14 @@ namespace Prowl.Scribe
         public float ExpansionFactor { get; set; } = 2f;
         public int MaxAtlasSize { get; set; } = 4096;
         public int Padding { get; set; } = 1;
+
+        /// <summary>
+        /// Width of the signed-distance range in atlas pixels. Must match the value the text shader
+        /// uses for its screen-pixel-range calculation. Larger ranges allow softer/larger effects.
+        /// </summary>
+        public float DistanceRange { get; set; } = 4f;
+
+
         int _maxLayout = 256;
         public int MaxLayoutCacheSize {
             get => _maxLayout;
@@ -51,7 +73,7 @@ namespace Prowl.Scribe
         /// Monotonically-increasing counter bumped every time the atlas is rebuilt/resized.
         /// <para>
         /// When the atlas grows, the backing texture is recreated and every cached
-        /// <see cref="AtlasGlyph"/> is invalidated — their UVs and atlas positions belong to the
+        /// <see cref="AtlasGlyph"/> is invalidated - their UVs and atlas positions belong to the
         /// previous texture. Any <see cref="TextLayout"/> created before the resize still holds
         /// references to those stale <see cref="AtlasGlyph"/> objects.
         /// </para>
@@ -88,7 +110,9 @@ namespace Prowl.Scribe
         {
             if (binPacker.TryPack(4 + Padding * 2, 4 + Padding * 2, out int x, out int y))
             {
-                byte[] whiteData = new byte[4 * 4];
+                // RGBA, fully opaque white. In the SDF text shader the median of (1,1,1) reads as
+                // fully inside, so this rect still renders as a solid fill.
+                byte[] whiteData = new byte[4 * 4 * 4];
                 Array.Fill<byte>(whiteData, 255);
 
                 renderer.UpdateTextureRegion(atlasTexture,
@@ -105,7 +129,7 @@ namespace Prowl.Scribe
         {
             fallbackFonts.Add(font);
 
-            // Fallback list changed → cached glyphs may resolve to different fonts now.
+            // Fallback list changed -> cached glyphs may resolve to different fonts now.
             glyphCache.Clear();
             layoutCache.Clear();
             AtlasVersion++;
@@ -211,7 +235,7 @@ namespace Prowl.Scribe
                     yield return f;
         }
 
-        public AtlasGlyph GetOrCreateGlyph(int codepoint, float pixelSize, FontFile font)
+        public AtlasGlyph GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)
         {
             if(font == null) throw new ArgumentNullException(nameof(font));
 
@@ -237,11 +261,11 @@ namespace Prowl.Scribe
                 if (font.FindGlyphIndex(codepoint) <= 0)
                     return null;
 
-                var key = new AtlasGlyph.CacheKey(codepoint, pixelSize, font);
+                var key = new AtlasGlyph.CacheKey(codepoint, quality, font);
                 if (glyphCache.TryGetValue(key, out var cachedGlyph))
                     return cachedGlyph;
 
-                var glyph = new AtlasGlyph(codepoint, pixelSize, font, this);
+                var glyph = new AtlasGlyph(codepoint, font, quality);
 
                 if (TryAddGlyphToAtlas(glyph))
                 {
@@ -260,20 +284,22 @@ namespace Prowl.Scribe
             }
         }
 
+        // Rasterizes a glyph's distance field into the atlas once per quality. The field is
+        // resolution independent, so the single entry serves every requested display size.
         private bool TryAddGlyphToAtlas(AtlasGlyph glyph)
         {
-            var bitmap = RenderGlyph(glyph.Font, glyph.Codepoint, glyph.PixelSize);
-            if (bitmap == null) return true; // Empty glyph, nothing to pack
+            if (!SdfScanlineGenerator.TryGenerate(glyph.Font, glyph.GlyphIndex, (int)glyph.Quality, DistanceRange, out var result))
+                return true; // Empty glyph (e.g. space), nothing to pack
 
-            int packWidth = bitmap.Value.Width + Padding * 2;
-            int packHeight = bitmap.Value.Height + Padding * 2;
+            int packWidth = result.Width + Padding * 2;
+            int packHeight = result.Height + Padding * 2;
 
             if (binPacker.TryPack(packWidth, packHeight, out int x, out int y))
             {
                 glyph.AtlasX = x + Padding;
                 glyph.AtlasY = y + Padding;
-                glyph.AtlasWidth = bitmap.Value.Width;
-                glyph.AtlasHeight = bitmap.Value.Height;
+                glyph.AtlasWidth = result.Width;
+                glyph.AtlasHeight = result.Height;
 
                 // Calculate texture coordinates
                 glyph.U0 = (float)glyph.AtlasX / atlasWidth;
@@ -281,10 +307,16 @@ namespace Prowl.Scribe
                 glyph.U1 = (float)(glyph.AtlasX + glyph.AtlasWidth) / atlasWidth;
                 glyph.V1 = (float)(glyph.AtlasY + glyph.AtlasHeight) / atlasHeight;
 
-                // Upload bitmap to atlas
+                // Padded glyph region in font units (Y up) - scaled per display size at draw time.
+                glyph.RegionX0 = result.Rx0;
+                glyph.RegionY0 = result.Ry0;
+                glyph.RegionX1 = result.Rx1;
+                glyph.RegionY1 = result.Ry1;
+
+                // Upload distance field to atlas
                 renderer.UpdateTextureRegion(atlasTexture,
                     new AtlasRect(glyph.AtlasX, glyph.AtlasY, glyph.AtlasWidth, glyph.AtlasHeight),
-                    bitmap.Value.Data);
+                    result.Rgba);
 
                 return true;
             }
@@ -294,11 +326,11 @@ namespace Prowl.Scribe
 
         private bool TryExpandAtlas(AtlasGlyph glyph)
         {
-            var bitmap = RenderGlyph(glyph.Font, glyph.Codepoint, glyph.PixelSize);
-            if (bitmap == null) return true;
+            if (!SdfScanlineGenerator.TryGenerate(glyph.Font, glyph.GlyphIndex, (int)glyph.Quality, DistanceRange, out var result))
+                return true;
 
-            int requiredWidth = bitmap.Value.Width + Padding * 2;
-            int requiredHeight = bitmap.Value.Height + Padding * 2;
+            int requiredWidth = result.Width + Padding * 2;
+            int requiredHeight = result.Height + Padding * 2;
 
             int newWidth = Math.Max(atlasWidth, (int)(atlasWidth * ExpansionFactor));
             int newHeight = Math.Max(atlasHeight, (int)(atlasHeight * ExpansionFactor));
@@ -366,35 +398,6 @@ namespace Prowl.Scribe
             ascent = font.Ascent * s;
             descent = font.Descent * s; // stb returns negative descent; caller may convert to positive if desired
             lineGap = font.Linegap * s;
-        }
-
-        public GlyphBitmap? RenderGlyph(FontFile fontInfo, int codepoint, float pixelSize)
-        {
-            int glyphIndex = fontInfo.FindGlyphIndex(codepoint);
-            if (glyphIndex == 0) return null;
-
-            float scale = fontInfo.ScaleForPixelHeight(pixelSize);
-
-            int width = 0, height = 0, xoff = 0, yoff = 0;
-            var bitmap = fontInfo.GetGlyphBitmap(scale, scale, glyphIndex, ref width, ref height, ref xoff, ref yoff);
-
-            if (bitmap.IsNull || width == 0 || height == 0)
-                return null;
-
-            // Convert to byte array
-            byte[] data = new byte[width * height];
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = bitmap[i];
-            }
-
-            return new GlyphBitmap {
-                Width = width,
-                Height = height,
-                OffsetX = xoff,
-                OffsetY = yoff,
-                Data = data
-            };
         }
 
         public float GetKerning(FontFile fontInfo, int leftCodepoint, int rightCodepoint, float pixelSize)
@@ -493,7 +496,7 @@ namespace Prowl.Scribe
         {
             if (layout.Lines.Count == 0) return;
 
-            // Atlas may have grown/rebuilt since the layout was created — UVs and glyph refs
+            // Atlas may have grown/rebuilt since the layout was created - UVs and glyph refs
             // would be stale. Re-layout in place so glyphs repopulate against the current atlas.
             layout.EnsureUpToDate(this);
 
@@ -513,18 +516,29 @@ namespace Prowl.Scribe
                     if (!glyph.IsInAtlas || glyph.AtlasWidth <= 0 || glyph.AtlasHeight <= 0)
                         continue;
 
-                    float glyphX = position.X + line.Position.X + glyphInstance.Position.X;
-                    float glyphY = position.Y + line.Position.Y + glyphInstance.Position.Y;
-                    float glyphW = glyph.Metrics.Width;
-                    float glyphH = glyph.Metrics.Height;
+                    // Recover the pen origin (x) and baseline (y) from the glyph instance, then place
+                    // the padded distance-field quad relative to them. The quad includes the
+                    // distance-field margin, so it is larger than the glyph's ink bounds. The region
+                    // is in font units; scale it to this instance's pixel size at draw time.
+                    float ps = glyphInstance.PixelSize;
+                    var gm = GetGlyphMetrics(glyph.Font, glyph.Codepoint, ps) ?? default;
+                    float sc = glyph.Font.ScaleForPixelHeight(ps);
+
+                    float penX = position.X + line.Position.X + glyphInstance.Position.X - gm.OffsetX;
+                    float baselineY = position.Y + line.Position.Y + glyphInstance.Position.Y - gm.OffsetY;
+
+                    float glyphX = penX + (float)(glyph.RegionX0 * sc);
+                    float glyphY = baselineY + (float)(-glyph.RegionY1 * sc);
+                    float glyphX1 = penX + (float)(glyph.RegionX1 * sc);
+                    float glyphY1 = baselineY + (float)(-glyph.RegionY0 * sc);
 
                     // Create quad vertices
                     vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY, 0), color, new Float2(glyph.U0, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX + glyphW, glyphY, 0), color, new Float2(glyph.U1, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY + glyphH, 0), color, new Float2(glyph.U0, glyph.V1)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX + glyphW, glyphY + glyphH, 0), color, new Float2(glyph.U1, glyph.V1)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX1, glyphY, 0), color, new Float2(glyph.U1, glyph.V0)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY1, 0), color, new Float2(glyph.U0, glyph.V1)));
+                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX1, glyphY1, 0), color, new Float2(glyph.U1, glyph.V1)));
 
-                    // Create quad indices (six Add calls — no per-quad array allocation)
+                    // Create quad indices (six Add calls - no per-quad array allocation)
                     indices.Add(vertexCount);
                     indices.Add(vertexCount + 1);
                     indices.Add(vertexCount + 2);

@@ -1,4 +1,4 @@
-﻿// MarkdownLayoutEngine — builds and renders a Markdown AST
+﻿// MarkdownLayoutEngine - builds and renders a Markdown AST
 // Shapes/lines are emitted as quads sampling the atlas at UV(0,0) (white texel).
 //
 // Usage:
@@ -549,7 +549,7 @@ namespace Prowl.Scribe
                     TextLayout tl;
                     if (cellMinWidths[r][c] <= colW[c])
                     {
-                        // No wrapping needed — pass-1 NoWrap layout matches what Wrap would produce.
+                        // No wrapping needed - pass-1 NoWrap layout matches what Wrap would produce.
                         tl = cellNoWrapLayouts[r][c];
                     }
                     else
@@ -583,7 +583,7 @@ namespace Prowl.Scribe
             float tableBottom = rowY;
 
             // Draw grid lines UNDER the text (borders 1px). Build them into a local list and
-            // InsertRange once at index 0 — repeated Insert(0, ...) was O(n) per call → O(n²) for
+            // InsertRange once at index 0 - repeated Insert(0, ...) was O(n) per call -> O(n^2) for
             // tables with many rows/cols.
             float th = 1f; // thickness
             var gridOps = new List<IDrawOp>(t.Rows.Count + 1 + colX.Length);
@@ -765,15 +765,23 @@ namespace Prowl.Scribe
                         var g = ginst.Glyph;              // AtlasGlyph
                         if (!g.IsInAtlas || g.AtlasWidth <= 0 || g.AtlasHeight <= 0) continue;
 
-                        float x = t.Pos.X + position.X + line.Position.X + ginst.Position.X;
-                        float y = t.Pos.Y + position.Y + line.Position.Y + ginst.Position.Y;
+                        // Recover pen origin / baseline, then place the padded distance-field quad.
+                        // The region is in font units; scale it to this glyph's pixel size.
+                        var gm = fontSystem.GetGlyphMetrics(g.Font, g.Codepoint, ginst.PixelSize) ?? default;
+                        float sc = g.Font.ScaleForPixelHeight(ginst.PixelSize);
+                        float penX = t.Pos.X + position.X + line.Position.X + ginst.Position.X - gm.OffsetX;
+                        float baselineY = t.Pos.Y + position.Y + line.Position.Y + ginst.Position.Y - gm.OffsetY;
+                        float x0 = penX + (float)(g.RegionX0 * sc);
+                        float y0 = baselineY + (float)(-g.RegionY1 * sc);
+                        float x1 = penX + (float)(g.RegionX1 * sc);
+                        float y1 = baselineY + (float)(-g.RegionY0 * sc);
 
                         var c = settings.ColorLink;
                         // 4 vertices (pos, uv, color)
-                        verts.Add(new IFontRenderer.Vertex(new Float3(x, y, 0), c, new Float2(g.U0, g.V0)));
-                        verts.Add(new IFontRenderer.Vertex(new Float3(x + g.AtlasWidth, y, 0), c, new Float2(g.U1, g.V0)));
-                        verts.Add(new IFontRenderer.Vertex(new Float3(x, y + g.AtlasHeight, 0), c, new Float2(g.U0, g.V1)));
-                        verts.Add(new IFontRenderer.Vertex(new Float3(x + g.AtlasWidth, y + g.AtlasHeight, 0), c, new Float2(g.U1, g.V1)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x0, y0, 0), c, new Float2(g.U0, g.V0)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x1, y0, 0), c, new Float2(g.U1, g.V0)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x0, y1, 0), c, new Float2(g.U0, g.V1)));
+                        verts.Add(new IFontRenderer.Vertex(new Float3(x1, y1, 0), c, new Float2(g.U1, g.V1)));
                         idx.Add(vbase + 0); idx.Add(vbase + 2); idx.Add(vbase + 1);
                         idx.Add(vbase + 1); idx.Add(vbase + 2); idx.Add(vbase + 3);
                         vbase += 4;

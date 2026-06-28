@@ -80,6 +80,10 @@ namespace Prowl.Scribe
         public TextAlignment Alignment;
         public float MaxWidth; // for wrapping, 0 = no limit
 
+        // Atlas rasterization quality. Independent of PixelSize - the distance field is generated
+        // once per quality and scaled to any display size at draw time.
+        public FontQuality Quality;
+
         public Func<int, FontFile> FontSelector; // optional: index in the full string -> font
 
         public static TextLayoutSettings Default => new TextLayoutSettings {
@@ -91,7 +95,8 @@ namespace Prowl.Scribe
             TabSize = 4,
             WrapMode = TextWrapMode.NoWrap,
             Alignment = TextAlignment.Left,
-            MaxWidth = 0
+            MaxWidth = 0,
+            Quality = FontQuality.Normal
         };
     }
 
@@ -101,14 +106,16 @@ namespace Prowl.Scribe
         public Float2 Position;
         public char Character;
         public float AdvanceWidth;
+        public float PixelSize;
         public int CharIndex;
 
-        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, int charIndex)
+        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex)
         {
             Glyph = glyph;
             Position = position;
             Character = character;
             AdvanceWidth = advanceWidth;
+            PixelSize = pixelSize;
             CharIndex = charIndex;
         }
     }

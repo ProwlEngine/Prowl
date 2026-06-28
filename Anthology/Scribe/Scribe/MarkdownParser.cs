@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace Prowl.Scribe
 {
-    // Minimal markdown → AST
+    // Minimal markdown -> AST
     // Focus: headings, blockquotes, lists (ordered/unordered, simple nesting), code blocks (```),
     // tables (pipe rows with optional header underline), anchors (#[name]), hr (---/===),
     // paragraphs, and a compact inline syntax (strong/em/underline/strike/overline, code spans,
@@ -503,7 +503,7 @@ namespace Prowl.Scribe
         {
             if (!AtLineStart(text, pos)) return false;
             int le = LineEnd(text, pos);
-            // Hot path — called per line during paragraph parsing. We avoid Substring + Regex by
+            // Hot path - called per line during paragraph parsing. We avoid Substring + Regex by
             // operating on (text, pos, le) index ranges with hand-rolled predicates.
             if (StartsWithAt(text, pos, le, "```")) return true;
             if (IsHeadingStart(text, pos, le)) return true;
@@ -535,7 +535,7 @@ namespace Prowl.Scribe
             return -1;
         }
 
-        // ^#{1,6} (heading: 1–6 hashes followed by a space)
+        // ^#{1,6} (heading: 1-6 hashes followed by a space)
         private static bool IsHeadingStart(string text, int pos, int le)
         {
             if (pos >= le || text[pos] != '#') return false;
@@ -725,7 +725,7 @@ namespace Prowl.Scribe
                 }
                 else
                 {
-                    // Don’t drop characters we didn’t handle; preserve as text.
+                    // Don't drop characters we didn't handle; preserve as text.
                     list.Add(Inline.TextRun(text[i].ToString()));
                     i++;
                 }

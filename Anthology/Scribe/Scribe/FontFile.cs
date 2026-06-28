@@ -440,59 +440,6 @@ namespace Prowl.Scribe
 			}
         }
 
-        public FakePtr<byte> GetGlyphBitmap(float scale_x, float scale_y, int glyph, ref int width, ref int height, ref int xoff, ref int yoff)
-		{
-			var ix0 = 0;
-			var iy0 = 0;
-			var ix1 = 0;
-			var iy1 = 0;
-			var gbm = new Bitmap();
-			GlyphVertex[] vertices;
-			var num_verts = GetGlyphShape(glyph, out vertices);
-			if (scale_x == 0)
-				scale_x = scale_y;
-			if (scale_y == 0)
-			{
-				if (scale_x == 0)
-					return FakePtr<byte>.Null;
-				scale_y = scale_x;
-			}
-
-			GetGlyphBitmapBoundingBox(glyph, scale_x, scale_y, ref ix0, ref iy0, ref ix1, ref iy1);
-			gbm.w = ix1 - ix0;
-			gbm.h = iy1 - iy0;
-			width = gbm.w;
-			height = gbm.h;
-			xoff = ix0;
-			yoff = iy0;
-			if (gbm.w != 0 && gbm.h != 0)
-			{
-				gbm.pixels = FakePtr<byte>.CreateWithSize(gbm.w * gbm.h);
-				gbm.stride = gbm.w;
-				gbm.Rasterize(0.35f, vertices, num_verts, scale_x, scale_y, ix0, iy0, 1);
-			}
-
-			return gbm.pixels;
-		}
-
-        public void MakeGlyphBitmap(FakePtr<byte> output, int out_w, int out_h, int out_stride, float scale_x, float scale_y, int glyph)
-		{
-			var ix0 = 0;
-			var iy0 = 0;
-			var ix1 = 0;
-			var iy1 = 0;
-			var num_verts = GetGlyphShape(glyph, out GlyphVertex[] vertices);
-			var gbm = new Bitmap();
-			GetGlyphBitmapBoundingBox(glyph, scale_x, scale_y, ref ix0, ref iy0, ref ix1, ref iy1);
-			gbm.pixels = output;
-			gbm.w = out_w;
-			gbm.h = out_h;
-			gbm.stride = out_stride;
-
-			if (gbm.w != 0 && gbm.h != 0)
-				gbm.Rasterize(0.35f, vertices, num_verts, scale_x, scale_y, ix0, iy0, 1);
-		}
-
 		public FakePtr<byte> GetFontNameString(ref int length, int platformID, int encodingID, int languageID, int nameID)
 		{
 			var offset = (uint)fontstart;

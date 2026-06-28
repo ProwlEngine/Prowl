@@ -23,6 +23,12 @@ namespace Prowl.Scribe
         public int TabSize = 4;
         public FontColor DefaultColor = FontColor.White;
 
+        /// <summary>
+        /// Atlas rasterization quality used for every glyph in this block. Independent of pixel
+        /// size - the distance field is generated once per quality and scaled to any display size.
+        /// </summary>
+        public FontQuality Quality = FontQuality.Normal;
+
         // --- Wrap / alignment ---
         public float MaxWidth = 0f; // 0 = no limit
         public TextWrapMode WrapMode = TextWrapMode.NoWrap;
@@ -32,7 +38,7 @@ namespace Prowl.Scribe
         /// Multiplier applied to absolute pixel-size tag values (e.g. <c>&lt;size=24&gt;</c>) at
         /// layout time. Lets host code keep tag values in logical units when the engine itself runs
         /// in physical pixels (e.g. for HiDPI). Default 1.
-        /// Percent sizes (e.g. <c>&lt;size=200%&gt;</c>) are unaffected — they're already relative
+        /// Percent sizes (e.g. <c>&lt;size=200%&gt;</c>) are unaffected - they're already relative
         /// to <see cref="PixelSize"/>, which the host scales separately.
         /// </summary>
         public float AbsoluteSizeScale = 1f;
