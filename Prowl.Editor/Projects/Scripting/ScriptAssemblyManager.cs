@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Threading.Tasks;
 
@@ -33,6 +34,12 @@ public static class ScriptAssemblyManager
     private static AssemblyLoadContext? s_scriptContext;
     private static readonly List<Assembly> s_scriptAssemblies = [];
     private const int MaxGCAttempts = 10;
+
+    // Plugin resolution state, refreshed each time assemblies are (re)loaded.
+    private static readonly Dictionary<string, string> s_managedPlugins = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly List<PluginInfo> s_nativePlugins = [];
+    private static DllImportResolver? s_nativeResolver;
+    private static string s_pluginLoadDir = "";
 
     /// <summary>Signal that scripts have changed and need recompilation.</summary>
     public static void RequestRecompile()
@@ -167,13 +174,82 @@ public static class ScriptAssemblyManager
     //  Loading
     // ================================================================
 
-    /// <summary>Load pre-built script assemblies into a collectible AssemblyLoadContext.</summary>
+    /// <summary>Load all pre-built user assemblies into a collectible AssemblyLoadContext.</summary>
     public static void LoadAssemblies(Project project)
     {
-        s_scriptContext ??= new AssemblyLoadContext("ProwlScripts", isCollectible: true);
+        RefreshPluginResolution(project);
 
-        LoadAssembly(project.GameAssemblyPath, "game");
-        LoadAssembly(project.EditorAssemblyPath, "editor");
+        if (s_scriptContext == null)
+        {
+            s_scriptContext = new AssemblyLoadContext("ProwlScripts", isCollectible: true);
+            // Resolve managed plugin dependencies of user assemblies (engine assemblies fall back
+            // to the default context automatically; plugins are not in any context yet).
+            s_scriptContext.Resolving += ResolveManagedPlugin;
+        }
+
+        // Load every produced user assembly in dependency order.
+        foreach (var dll in ScriptCompiler.GetEditorAssemblyPaths(project))
+            LoadAssembly(dll, Path.GetFileNameWithoutExtension(dll));
+    }
+
+    /// <summary>Snapshot the project's plugins so the resolvers can satisfy user-assembly imports.</summary>
+    private static void RefreshPluginResolution(Project project)
+    {
+        s_managedPlugins.Clear();
+        s_nativePlugins.Clear();
+        s_pluginLoadDir = Path.Combine(project.ScriptAssemblyPath, ".loaded");
+
+        foreach (var plugin in PluginScanner.ScanAll(project))
+        {
+            if (plugin.IsManaged)
+                s_managedPlugins[Path.GetFileNameWithoutExtension(plugin.FileName)] = plugin.AbsolutePath;
+            else
+                s_nativePlugins.Add(plugin);
+        }
+
+        s_nativeResolver ??= ResolveNativePlugin;
+    }
+
+    private static Assembly? ResolveManagedPlugin(AssemblyLoadContext context, AssemblyName name)
+    {
+        if (name.Name == null || !s_managedPlugins.TryGetValue(name.Name, out var path) || !File.Exists(path))
+            return null;
+
+        try
+        {
+            // Copy to the unlocked .loaded directory (under ScriptAssemblies, NOT under Assets, so it
+            // is never rescanned as a plugin) so the source plugin stays writable.
+            string tempDir = string.IsNullOrEmpty(s_pluginLoadDir)
+                ? Path.Combine(Path.GetDirectoryName(path)!, ".loaded")
+                : s_pluginLoadDir;
+            Directory.CreateDirectory(tempDir);
+            string tempPath = Path.Combine(tempDir, $"{name.Name}_{Guid.NewGuid():N}.dll");
+            File.Copy(path, tempPath, true);
+            return context.LoadFromAssemblyPath(tempPath);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[ScriptAssemblyManager] Failed to resolve managed plugin '{name.Name}': {ex.Message}");
+            return null;
+        }
+    }
+
+    private static IntPtr ResolveNativePlugin(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        string requested = libraryName;
+        foreach (var plugin in s_nativePlugins)
+        {
+            string stem = Path.GetFileNameWithoutExtension(plugin.FileName);
+            if (stem.StartsWith("lib", StringComparison.Ordinal)) stem = stem[3..];
+
+            bool matches = plugin.FileName.Equals(requested, StringComparison.OrdinalIgnoreCase)
+                || stem.Equals(requested, StringComparison.OrdinalIgnoreCase)
+                || Path.GetFileNameWithoutExtension(plugin.FileName).Equals(requested, StringComparison.OrdinalIgnoreCase);
+
+            if (matches && NativeLibrary.TryLoad(plugin.AbsolutePath, out IntPtr handle))
+                return handle;
+        }
+        return IntPtr.Zero;
     }
 
     private static void LoadAssembly(string dllPath, string label)
@@ -203,6 +279,11 @@ public static class ScriptAssemblyManager
 
             var asm = s_scriptContext.LoadFromAssemblyPath(Path.GetFullPath(tempPath));
             s_scriptAssemblies.Add(asm);
+
+            // Let this assembly's P/Invokes resolve against the project's native plugins.
+            if (s_nativeResolver != null && s_nativePlugins.Count > 0)
+                try { NativeLibrary.SetDllImportResolver(asm, s_nativeResolver); } catch { }
+
             Runtime.Debug.Log($"[ScriptAssemblyManager] Loaded {label} assembly: {Path.GetFileName(dllPath)}");
         }
         catch (Exception ex)
@@ -282,7 +363,8 @@ public static class ScriptAssemblyManager
 
     /// <summary>Check if compiled assemblies exist for this project.</summary>
     public static bool HasScriptAssemblies(Project project)
-        => File.Exists(project.GameAssemblyPath) || File.Exists(project.EditorAssemblyPath);
+        => Directory.Exists(project.ScriptAssemblyPath)
+           && Directory.EnumerateFiles(project.ScriptAssemblyPath, "*.dll").Any();
 
     /// <summary>
     /// Attempt to hot-reload script assemblies without restarting the editor.

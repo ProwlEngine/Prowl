@@ -229,24 +229,17 @@ public sealed class CarPhysicsGame : Game
         wheelRenderer.Mesh = Mesh.CreateCylinder(0.5f, 0.3f, 16);
         wheelRenderer.Material = standardMaterial;
 
-        // Add wheel collider
+        // Add wheel collider. Suspension is tuned from a natural frequency + damping ratio (sprung mass
+        // auto-divides the body mass across the wheels), and grip is the friction-ellipse limits.
         WheelCollider wheelCollider = wheel.AddComponent<WheelCollider>();
         wheelCollider.Radius = 0.5f;
         wheelCollider.Width = 0.3f;
         wheelCollider.SuspensionDistance = 0.25f;
-        wheelCollider.SidewaysFriction = 1.2f;
+        wheelCollider.SuspensionFrequency = 2.0f;
+        wheelCollider.SuspensionDampingRatio = 0.7f;
         wheelCollider.ForwardFriction = 2.5f;
-        wheelCollider.GripSaturationSpeed = 4f;
+        wheelCollider.SidewaysFriction = 1.2f;
         wheelCollider.visualTransform = visual.Transform;
-
-        //const float dampingFrac = 0.8f;
-        //const float springFrac = 0.45f;
-        //const float carMass = 100f;
-        //const float carMassSplitPerWheel = carMass / 4f;
-        //const float wheelMass = 100f * 0.03f;
-        //wheelCollider.WheelInertia = 0.5f * (0.5f * 0.5f) * wheelMass;
-        //wheelCollider.SuspensionStiffness = carMassSplitPerWheel * (float)Float3.Length(wheel.Scene.Physics.Gravity) / (wheelCollider.SuspensionTravel * springFrac);
-        //wheelCollider.SuspensionDamping = 2.0f * (float)Maths.Sqrt(wheelCollider.SuspensionStiffness * carMass) * 0.25f * dampingFrac;
 
         scene.Add(wheel);
 

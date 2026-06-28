@@ -58,6 +58,11 @@ public static class AssetCreateMenu
             task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);*/
 
         });
+        builder.Item($"{EditorIcons.FileLines}  Assembly Definition", () =>
+        {
+            string? created = CreateAssemblyDefinition(currentFolder);
+            if (created != null) onCreated?.Invoke(created);
+        });
     }
 
     /// <summary>
@@ -76,6 +81,7 @@ public static class AssetCreateMenu
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_shader")}", () => CreateShader(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator(assets);
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_script")}", () => NewScriptDialog.Open(GetCurrentFolder()));
+        MenuRegistry.Register($"{assets}/Assembly Definition", () => CreateAssemblyDefinition(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator(assets);
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.refresh")}", () =>
         {
@@ -128,6 +134,21 @@ public static class AssetCreateMenu
         Debug.Log($"Created folder: {name}");
         string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         return relPath;
+    }
+
+    public static string? CreateAssemblyDefinition(string relativeFolder)
+    {
+        string absFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        string name = FindUniqueName(absFolder, "NewAssembly", Projects.Scripting.AssemblyDefinitionDatabase.Extension);
+        string filePath = Path.Combine(absFolder, name);
+
+        var def = new Projects.Scripting.AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(name) };
+        def.WriteToFile(filePath);
+
+        Debug.Log($"Created assembly definition: {name}");
+        return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
     public static string? CreateShader(string relativeFolder)

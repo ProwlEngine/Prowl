@@ -44,16 +44,12 @@ public class DesktopBuildPipeline : BuildPipeline
 
         try
         {
-            // 0. Compile user scripts if needed
+            // 0. Compile user scripts (all user assemblies: default + asmdef-defined).
             progress?.Log("Compiling scripts...");
-            var (gameScripts, _) = ScriptCompiler.ClassifyScripts(project);
-            if (gameScripts.Count > 0)
-            {
-                var compileResult = ScriptCompiler.CompileAll(project);
-                if (!compileResult.Success)
-                    return new BuildResult { Success = false, Errors = $"Script compilation failed:\n{compileResult.Errors}" };
-                progress?.Log("Scripts compiled successfully.");
-            }
+            var compileResult = ScriptCompiler.CompileAll(project);
+            if (!compileResult.Success)
+                return new BuildResult { Success = false, Errors = $"Script compilation failed:\n{compileResult.Errors}" };
+            progress?.Log("Scripts compiled successfully.");
 
             // 1. Validate
             progress?.Log("Validating project...", 0.05f);
@@ -64,6 +60,10 @@ public class DesktopBuildPipeline : BuildPipeline
             }
 
             DesktopBuildProfile desktopProfile = settings.GetProfile<DesktopBuildProfile>(this.GetType());
+            string targetPlatform = BuildPlatforms.FromBuildTarget(desktopProfile.Platform);
+
+            // User game-side assemblies to ship (default + asmdef, in dependency order).
+            var buildAssemblies = ScriptCompiler.GetBuildAssemblies(project, targetPlatform);
 
             outputDirectory = Path.IsPathRooted(settings.OutputDirectory)
                 ? settings.OutputDirectory
@@ -148,7 +148,8 @@ public class DesktopBuildPipeline : BuildPipeline
                     embeddedAssetPaths.Add(f);
             }
 
-            GeneratePlayerSource(project, settings, desktopProfile, defaultScene, buildTempDir);
+            GeneratePlayerSource(project, settings, desktopProfile, defaultScene, buildTempDir,
+                buildAssemblies.Select(b => b.Name).ToList());
             GeneratePlayerCsproj(project, settings, desktopProfile, buildTempDir, embeddedAssetPaths);
             progress?.Log("Generated player source and project.");
 
@@ -187,15 +188,35 @@ public class DesktopBuildPipeline : BuildPipeline
                 };
             }
 
-            // 4b. Copy pre-compiled game scripts assembly
-            if (File.Exists(project.GameAssemblyPath))
+            // 4b. Copy pre-compiled user game assemblies (default + asmdef) into the output root.
+            var userAssemblyFiles = new List<string>();
+            foreach (var asm in buildAssemblies)
             {
-                File.Copy(project.GameAssemblyPath, Path.Combine(outputDirectory, Path.GetFileName(project.GameAssemblyPath)), true);
-                progress?.Log($"Copied game assembly: {Path.GetFileName(project.GameAssemblyPath)}");
+                if (!File.Exists(asm.DllPath))
+                {
+                    Runtime.Debug.LogWarning($"[Build] Expected user assembly missing: {asm.DllPath}");
+                    continue;
+                }
+                string destDll = Path.Combine(outputDirectory, Path.GetFileName(asm.DllPath));
+                File.Copy(asm.DllPath, destDll, true);
+                userAssemblyFiles.Add(Path.GetFileName(asm.DllPath));
+
+                string pdb = Path.ChangeExtension(asm.DllPath, ".pdb");
+                if (File.Exists(pdb))
+                {
+                    File.Copy(pdb, Path.Combine(outputDirectory, Path.GetFileName(pdb)), true);
+                    userAssemblyFiles.Add(Path.GetFileName(pdb));
+                }
+                progress?.Log($"Copied game assembly: {Path.GetFileName(asm.DllPath)}");
             }
 
-            // 4c. Organize assemblies - move dependency DLLs to runtimes/ subfolder
-            OrganizePublishOutput(outputDirectory, project.Name);
+            // 4c. Copy managed plugins (to runtimes/, where the managed resolver probes) and native
+            //     plugins (to runtimes/{rid}/native, where the native resolver probes), filtered to
+            //     this platform and excluding editor-only plugins.
+            CopyPlugins(project, outputDirectory, targetPlatform, progress);
+
+            // 4d. Organize assemblies - move dependency DLLs to runtimes/ subfolder
+            OrganizePublishOutput(outputDirectory, project.Name, userAssemblyFiles);
 
             // 5. Package assets AFTER publish (publish may clean the output dir)
             // For embedded mode, assets were already baked into the assembly at compile time
@@ -268,10 +289,13 @@ public class DesktopBuildPipeline : BuildPipeline
         }
     }
 
-    private void GeneratePlayerSource(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, Guid defaultSceneGuid, string outputDir)
+    private void GeneratePlayerSource(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, Guid defaultSceneGuid, string outputDir, List<string> gameAssemblyNames)
     {
         string productName = "Prowl Game";
         try { productName = ProjectSettingsRegistry.Get<GeneralSettings>().ProductName; } catch { }
+
+        // C# array literal of user game assemblies to load at startup (dependency order).
+        string gameAssembliesLiteral = string.Join(", ", gameAssemblyNames.Select(n => $"\"{n}\""));
 
         // Program.cs
         File.WriteAllText(Path.Combine(outputDir, "Program.cs"), $$"""
@@ -285,7 +309,23 @@ public class DesktopBuildPipeline : BuildPipeline
             using System.Runtime.InteropServices;
             using System.Runtime.Loader;
 
-            new DesktopPlayer().Run("{{productName}}", {{desktopProfile.WindowWidth}}, {{desktopProfile.WindowHeight}});
+            var __game = new DesktopPlayer();
+            var __args = Environment.GetCommandLineArgs();
+            if (__args.Contains("--headless") || __args.Contains("-headless"))
+            {
+                var __opts = new Prowl.Runtime.HeadlessRunOptions();
+                for (int __i = 0; __i < __args.Length - 1; __i++)
+                {
+                    if (__args[__i] == "--frames" && long.TryParse(__args[__i + 1], out var __f)) __opts.MaxFrames = __f;
+                    else if (__args[__i] == "--seconds" && double.TryParse(__args[__i + 1], System.Globalization.CultureInfo.InvariantCulture, out var __s)) __opts.MaxSeconds = __s;
+                    else if (__args[__i] == "--fps" && int.TryParse(__args[__i + 1], out var __fps)) __opts.TargetFps = __fps;
+                }
+                __game.RunHeadless(__opts);
+            }
+            else
+            {
+                __game.Run("{{productName}}", {{desktopProfile.WindowWidth}}, {{desktopProfile.WindowHeight}});
+            }
 
             internal static class ModuleInitializer
             {
@@ -485,10 +525,13 @@ public class DesktopBuildPipeline : BuildPipeline
 
                     NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, ModuleInitializer.ResolveNativeLibrary);
 
-                    // Load user game scripts assembly
-                    string gameAssembly = Path.Combine(Prowl.Runtime.Application.DataPath, "{{project.Name}}.Game.dll");
-                    if (File.Exists(gameAssembly))
-                        Assembly.LoadFrom(gameAssembly);
+                    // Load user game script assemblies (default + asmdef-defined) in dependency order.
+                    foreach (var __asmName in new string[] { {{gameAssembliesLiteral}} })
+                    {
+                        string __asmPath = Path.Combine(Prowl.Runtime.Application.DataPath, __asmName + ".dll");
+                        if (File.Exists(__asmPath))
+                            Assembly.LoadFrom(__asmPath);
+                    }
 
                     // Initialize built-in assets BEFORE loading any scenes/assets
                     Prowl.Runtime.BuiltInAssets.Initialize();
@@ -657,10 +700,43 @@ public class DesktopBuildPipeline : BuildPipeline
     }
 
     /// <summary>
+    /// Copies project plugins into the player output: managed plugins go to <c>runtimes/</c> (probed
+    /// by the managed assembly resolver), native plugins go to <c>runtimes/{rid}/native</c> (probed by
+    /// the native resolver). Editor-only plugins and plugins not targeting this platform are skipped.
+    /// </summary>
+    private static void CopyPlugins(Project project, string outputDir, string platform, BuildProgress? progress)
+    {
+        string runtimesDir = Path.Combine(outputDir, "runtimes");
+        int managed = 0, native = 0;
+
+        foreach (var plugin in PluginScanner.ScanAll(project))
+        {
+            if (!plugin.AppliesToBuild(platform)) continue;
+
+            if (plugin.IsManaged)
+            {
+                Directory.CreateDirectory(runtimesDir);
+                File.Copy(plugin.AbsolutePath, Path.Combine(runtimesDir, plugin.FileName), true);
+                managed++;
+            }
+            else
+            {
+                string nativeDir = Path.Combine(runtimesDir, plugin.RuntimeIdentifierFor(platform), "native");
+                Directory.CreateDirectory(nativeDir);
+                File.Copy(plugin.AbsolutePath, Path.Combine(nativeDir, plugin.FileName), true);
+                native++;
+            }
+        }
+
+        if (managed + native > 0)
+            progress?.Log($"Copied {managed} managed and {native} native plugin(s).");
+    }
+
+    /// <summary>
     /// Moves DLLs from the publish root into a runtimes/ subfolder,
     /// keeping only the player executable, game assembly, and core runtime in the root.
     /// </summary>
-    private static void OrganizePublishOutput(string outputDir, string projectName)
+    private static void OrganizePublishOutput(string outputDir, string projectName, IEnumerable<string> userAssemblies)
     {
         string libsDir = Path.Combine(outputDir, "runtimes");
         Directory.CreateDirectory(libsDir);
@@ -671,8 +747,6 @@ public class DesktopBuildPipeline : BuildPipeline
             $"{projectName}.dll",
             $"{projectName}.exe",
             $"{projectName}.pdb",
-            $"{projectName}.Game.dll",
-            $"{projectName}.Game.pdb",
             "System.Private.CoreLib.dll",
             "System.Runtime.dll",
             "System.Runtime.InteropServices.dll",
@@ -681,6 +755,8 @@ public class DesktopBuildPipeline : BuildPipeline
             "Prowl.Runtime.dll",
             "Prowl.Runtime.pdb",
         };
+        foreach (var name in userAssemblies)
+            keepInRoot.Add(name);
 
         foreach (var file in Directory.GetFiles(outputDir, "*.dll"))
         {

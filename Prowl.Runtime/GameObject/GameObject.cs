@@ -480,21 +480,6 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>
-    /// Performs pre-update operations on the GameObject's components.
-    /// </summary>
-    internal void PreUpdate()
-    {
-        foreach (MonoBehaviour component in _components)
-        {
-            if (!component.HasStarted)
-                if (component.EnabledInHierarchy)
-                {
-                    component.InternalStart();
-                }
-        }
-    }
-
-    /// <summary>
     /// Adds a component of type T to the GameObject.
     /// </summary>
     /// <typeparam name="T">The type of component to add.</typeparam>
@@ -536,8 +521,6 @@ public class GameObject : EngineObject, ISerializable
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
 
-        SortComponents();
-
         // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
         if (scene.IsValid() && scene.IsActive && newComponent.EnabledInHierarchy)
@@ -577,8 +560,6 @@ public class GameObject : EngineObject, ISerializable
         comp.AttachToGameObject(this);
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
-
-        SortComponents();
 
         // Trigger OnEnable if the GameObject is in an active scene and enabled
         Scene? scene = Scene;
@@ -946,18 +927,6 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "GetExecutionOrder reads [DefaultExecutionOrder] from the live component types, which are kept alive by their attribute references.")]
-    private void SortComponents()
-    {
-        _components.Sort((a, b) =>
-        {
-            int orderA = RuntimeUtils.GetExecutionOrder(a) ?? 0;
-            int orderB = RuntimeUtils.GetExecutionOrder(b) ?? 0;
-            return orderA.CompareTo(orderB);
-        });
-    }
-
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
@@ -1188,16 +1157,6 @@ public class GameObject : EngineObject, ISerializable
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.GameObject = this;
 
-        EchoObject children = value["Children"];
-        Children = [];
-        foreach (EchoObject childTag in children.List)
-        {
-            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
-            if (child.IsNotValid()) continue;
-            child._parent = this;
-            Children.Add(child);
-        }
-
         EchoObject comps = value["Components"];
         _components = [];
         foreach (EchoObject compTag in comps.List)
@@ -1234,6 +1193,21 @@ public class GameObject : EngineObject, ISerializable
         // Attach all components
         foreach (MonoBehaviour comp in _components)
             comp.AttachToGameObject(this);
+
+        // Children are deserialized AFTER components so the visit order matches serialization
+        // (Serialize writes Components then Children). Echo's reference encoding is single-pass and
+        // definition-first, so visiting out of order would turn intra-object references (e.g. a
+        // component referencing another component, including across the parent/child boundary, or a
+        // cyclic reference) into broken forward refs.
+        EchoObject children = value["Children"];
+        Children = [];
+        foreach (EchoObject childTag in children.List)
+        {
+            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
+            if (child.IsNotValid()) continue;
+            child._parent = this;
+            Children.Add(child);
+        }
     }
 
     /// <summary>

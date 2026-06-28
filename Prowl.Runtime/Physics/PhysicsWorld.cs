@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Jitter2;
 using Jitter2.Collision;
@@ -10,6 +11,7 @@ using Jitter2.Collision.Shapes;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
+using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -28,6 +30,41 @@ public class PhysicsWorld
     public static void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.IgnoreCollisionBetween(bodyA, bodyB);
 
     public static void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.EnableCollisionBetween(bodyA, bodyB);
+
+    // Baked physics meshes, keyed weakly by Mesh so the cache evicts when a mesh is collected.
+    private static readonly ConditionalWeakTable<Mesh, BakedPhysicsMesh> s_bakedMeshes = new();
+    private static readonly object s_bakeLock = new();
+
+    /// <summary>
+    /// Bake (or fetch the cached) physics representation of a mesh. The result is shared by every
+    /// collider that uses the mesh, so the bake happens once instead of per MeshCollider instance, and
+    /// is rebuilt automatically when the mesh's <see cref="Mesh.Version"/> changes.
+    /// <para/>
+    /// Thread-safe. The bake is pure CPU work, so this may be called from worker threads to pre-bake
+    /// meshes off the main thread (independent meshes bake in parallel; the cache itself is locked).
+    /// </summary>
+    public static BakedPhysicsMesh BakeMesh(Mesh mesh)
+    {
+        ArgumentNullException.ThrowIfNull(mesh);
+
+        lock (s_bakeLock)
+        {
+            if (s_bakedMeshes.TryGetValue(mesh, out var cached) && cached.Version == mesh.Version)
+                return cached;
+        }
+
+        // Bake outside the lock so independent meshes bake concurrently. A rare double-bake of the
+        // same mesh is harmless (the bake is idempotent; last write wins).
+        BakedPhysicsMesh baked = BakedPhysicsMesh.Build(mesh);
+
+        lock (s_bakeLock)
+        {
+            if (s_bakedMeshes.TryGetValue(mesh, out var cached) && cached.Version == mesh.Version)
+                return cached; // another thread baked the current version meanwhile
+            s_bakedMeshes.AddOrUpdate(mesh, baked);
+            return baked;
+        }
+    }
 
     public World World { get; private set; }
 

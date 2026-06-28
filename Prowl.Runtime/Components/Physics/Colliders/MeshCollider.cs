@@ -74,8 +74,9 @@ public sealed class MeshCollider : Collider
             return null;
         }
 
-        var triangles = ToTriangleList(m);
-        if (triangles.Count == 0)
+        // Shared, cached bake (built once per mesh, reused across all colliders and rebuilt on edit).
+        var baked = PhysicsWorld.BakeMesh(m);
+        if (baked.Triangles.Count == 0)
         {
             Debug.LogWarning("MeshCollider: mesh has no triangles.");
             return null;
@@ -83,13 +84,13 @@ public sealed class MeshCollider : Collider
 
         if (convex)
         {
-            return [new ConvexHullShape(triangles)];
+            return [new ConvexHullShape(baked.Triangles)];
         }
         else
         {
-            var triMesh = new TriangleMesh(triangles, true);
-            var shapes = new TriangleShape[triangles.Count];
-            for (int i = 0; i < triangles.Count; i++)
+            var triMesh = baked.TriangleMesh;
+            var shapes = new TriangleShape[baked.Triangles.Count];
+            for (int i = 0; i < shapes.Length; i++)
                 shapes[i] = new TriangleShape(triMesh, i);
             return shapes;
         }
@@ -100,7 +101,6 @@ public sealed class MeshCollider : Collider
         _cachedConvexShape = null;
         _cachedHullTris = null;
         base.OnValidate();
-        Debug.Log("OnInvalidate called");
     }
 
     public override void OnEnable()
@@ -168,9 +168,9 @@ public sealed class MeshCollider : Collider
     {
         if (_cachedConvexShape == null)
         {
-            var triangles = ToTriangleList(m);
-            if (triangles.Count == 0) return;
-            _cachedConvexShape = new ConvexHullShape(triangles);
+            var baked = PhysicsWorld.BakeMesh(m);
+            if (baked.Triangles.Count == 0) return;
+            _cachedConvexShape = new ConvexHullShape(baked.Triangles);
         }
 
         _cachedHullTris ??= ShapeHelper.Tessellate(_cachedConvexShape, 2);
@@ -189,33 +189,4 @@ public sealed class MeshCollider : Collider
         }
     }
 
-    private static List<JTriangle> ToTriangleList(Mesh mesh)
-    {
-        var vertices = mesh.Vertices;
-        var indices = mesh.Indices;
-        var triangles = new List<JTriangle>(indices.Length / 3);
-
-        // i + 2 < indices.Length protects against malformed meshes whose index count
-        // isn't a multiple of 3, and also protects the i+1/i+2 reads.
-        for (int i = 0; i + 2 < indices.Length; i += 3)
-        {
-            uint i0 = indices[i];
-            uint i1 = indices[i + 1];
-            uint i2 = indices[i + 2];
-
-            // Skip degenerate triangles whose indices are out of range
-            if (i0 >= vertices.Length || i1 >= vertices.Length || i2 >= vertices.Length)
-                continue;
-
-            var v0 = vertices[i0];
-            var v1 = vertices[i1];
-            var v2 = vertices[i2];
-            triangles.Add(new JTriangle(
-                new JVector(v0.X, v0.Y, v0.Z),
-                new JVector(v1.X, v1.Y, v1.Z),
-                new JVector(v2.X, v2.Y, v2.Z)));
-        }
-
-        return triangles;
-    }
 }

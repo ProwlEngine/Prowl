@@ -103,6 +103,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public PhysicsWorld Physics => _physics;
 
     [SerializeIgnore]
+    private readonly SceneComponentRegistry _componentRegistry = new();
+
+    /// <summary>Per-scene registry of components that implement per-frame callbacks. Drives Update.</summary>
+    internal SceneComponentRegistry ComponentRegistry => _componentRegistry;
+
+    [SerializeIgnore]
     private bool _isActive = false;
 
     public struct FogParams
@@ -248,8 +254,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
     public void InvalidateProbeVolume() => _probeVolume = null;
 
-    /// <summary> The number of registered objects. </summary>
-    public int Count => _allObj.Count;
+    /// <summary> The number of registered, non-disposed objects. </summary>
+    public int Count => _allObj.Count(o => !o.IsDisposed);
 
     /// <summary> Enumerates all registered objects. </summary>
     public IEnumerable<GameObject> AllObjects => _allObj.Where(o => !o.IsDisposed);
@@ -624,19 +630,15 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Updates all active GameObjects and their components in this scene.
-    /// PreUpdate handles Start (gated by ShouldExecuteGameplay).
-    /// Update and LateUpdate are gated internally by each component's ShouldExecuteGameplay.
+    /// Runs Start, then Update, then LateUpdate for the scene's registered components (those that
+    /// implement those callbacks and are enabled in an active scene), in execution order. Each call
+    /// is still gated per-component by ShouldExecuteGameplay.
     /// </summary>
     public void Update()
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        foreach (GameObject go in activeGOs)
-            go.PreUpdate();
-
-        ForeachComponent(activeGOs, (x) => x.InternalUpdate());
-
-        ForeachComponent(activeGOs, (x) => x.InternalLateUpdate());
+        _componentRegistry.RunStart();
+        _componentRegistry.RunUpdate();
+        _componentRegistry.RunLateUpdate();
 
         Flush();
     }
@@ -649,8 +651,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         Physics.Update();
 
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) => x.InternalFixedUpdate());
+        _componentRegistry.RunFixedUpdate();
 
         Flush();
     }
@@ -661,11 +662,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            x.OnRenderCollect(camera, renderables, lights);
-        });
+        _componentRegistry.RunRenderCollect(camera, renderables, lights);
     }
 
     /// <summary>
@@ -673,12 +670,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            if (!x.HideFlags.HasFlag(HideFlags.NoGizmos))
-                x.DrawGizmos();
-        });
+        _componentRegistry.RunDrawGizmos();
 
         Flush();
     }
@@ -689,11 +681,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void OnGui(Paper paper)
     {
-        List<GameObject> activeGOs = [.. ActiveObjects];
-        ForeachComponent(activeGOs, (x) =>
-        {
-            x.OnGui(paper);
-        });
+        _componentRegistry.RunOnGui(paper);
 
         Flush();
     }
@@ -735,27 +723,4 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         return true;
     }
 
-    /// <summary>
-    /// Helper method to iterate over all MonoBehaviour components in a collection of GameObjects
-    /// and execute an action on each enabled component.
-    /// </summary>
-    public void ForeachComponent(IEnumerable<GameObject> objs, Action<MonoBehaviour> action)
-    {
-        foreach (GameObject go in objs)
-        {
-            MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
-            foreach (MonoBehaviour? comp in components)
-            {
-                if (!comp.EnabledInHierarchy) continue;
-                try
-                {
-                    action.Invoke(comp);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"[{go.Name}/{comp.GetType().Name}] threw: {ex.Message}\n{ex.StackTrace}");
-                }
-            }
-        }
-    }
 }

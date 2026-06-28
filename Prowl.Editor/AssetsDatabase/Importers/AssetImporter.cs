@@ -33,4 +33,11 @@ public abstract class AssetImporter
     /// Returns default settings for this importer type. Override to provide defaults.
     /// </summary>
     public virtual EchoObject? DefaultSettings() => null;
+
+    /// <summary>
+    /// When true, files handled by this importer are not real runtime assets and are excluded from
+    /// build packaging (e.g. scripts, plugins, assembly definitions). Plugins are still shipped, but
+    /// through the dedicated plugin pipeline rather than the asset manifest.
+    /// </summary>
+    public virtual bool IsEditorOnlyAsset => false;
 }

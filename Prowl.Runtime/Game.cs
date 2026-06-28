@@ -103,35 +103,7 @@ public abstract class Game
 
                 BeginUpdate();
 
-                Scene? currentScene = Scene.Current;
-
-                // Fixed update loop only when gameplay should run
-                fixedTimeAccumulator += delta;
-                if (Application.ShouldRunGameplay)
-                {
-                    Application.IsGameplayExecuting = true;
-                    int count = 0;
-                    while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
-                    {
-                        currentScene?.FixedUpdate();
-                        fixedTimeAccumulator -= Time.FixedDeltaTime;
-                    }
-                    Application.IsGameplayExecuting = false;
-                }
-                else
-                {
-                    // Clamp accumulator to prevent burst when unpausing/starting play
-                    fixedTimeAccumulator = MathF.Min(fixedTimeAccumulator, Time.FixedDeltaTime);
-                }
-
-                OnUpdate(currentScene);
-
-                // Consume step request re-pause after one frame
-                if (Application.StepRequested)
-                {
-                    Application.StepRequested = false;
-                    Application.IsPaused = true;
-                }
+                SimulationStep(delta);
 
                 EndUpdate();
 
@@ -244,6 +216,117 @@ public abstract class Game
         Debug.LogSuccess("Initialization complete");
         Window.Start();
 
+    }
+
+    private volatile bool _headlessQuitRequested;
+
+    /// <summary>
+    /// Runs the game without a window, graphics device or audio - only the simulation loop
+    /// (gameplay, physics, scripts). Intended for dedicated servers and for headless build
+    /// verification. The loop runs until <see cref="RequestHeadlessQuit"/> / Ctrl+C, or until the
+    /// frame/time limit in <paramref name="options"/> is reached.
+    /// </summary>
+    public void RunHeadless(HeadlessRunOptions? options = null)
+    {
+        options ??= new HeadlessRunOptions();
+
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        System.Threading.Thread.CurrentThread.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+
+        Application.IsPlaying = true;
+        Application.IsHeadless = true;
+
+        // Registers built-in asset loaders (no GPU work happens until something resolves them).
+        BuiltInAssets.Initialize();
+        Initialize();
+
+        Debug.LogSuccess("Headless initialization complete");
+
+        _headlessQuitRequested = false;
+        ConsoleCancelEventHandler cancelHandler = (_, e) => { e.Cancel = true; _headlessQuitRequested = true; };
+        try { Console.CancelKeyPress += cancelHandler; } catch { /* no console in some hosts */ }
+
+        float targetFrameTime = options.TargetFps > 0 ? 1.0f / options.TargetFps : 0.0f;
+        var runClock = System.Diagnostics.Stopwatch.StartNew();
+        long frame = 0;
+
+        try
+        {
+            while (!_headlessQuitRequested)
+            {
+                long frameStartTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+
+                time.Update();
+                Time.TimeStack.Clear();
+                Time.TimeStack.Push(time);
+
+                float delta = Time.DeltaTime;
+                Input.UpdateActions(delta);
+
+                BeginUpdate();
+                SimulationStep(delta);
+                EndUpdate();
+
+                frame++;
+                if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
+                if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
+
+                // Throttle to the target tick rate so a server doesn't spin a core at 100%.
+                if (targetFrameTime > 0.0f)
+                {
+                    float elapsed = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - frameStartTicks) / (double)System.Diagnostics.Stopwatch.Frequency);
+                    int sleepMs = (int)((targetFrameTime - elapsed) * 1000.0f);
+                    if (sleepMs > 0) System.Threading.Thread.Sleep(sleepMs);
+                }
+            }
+        }
+        finally
+        {
+            try { Console.CancelKeyPress -= cancelHandler; } catch { }
+            Closing();
+            Scene.Unload();
+            Application.IsHeadless = false;
+        }
+    }
+
+    /// <summary>Signals a running <see cref="RunHeadless"/> loop to exit after the current frame.</summary>
+    public void RequestHeadlessQuit() => _headlessQuitRequested = true;
+
+    /// <summary>
+    /// Advances one simulation step: the fixed-update loop (when gameplay should run) followed by
+    /// <see cref="OnUpdate"/>. Shared by the windowed and headless loops.
+    /// </summary>
+    private void SimulationStep(float delta)
+    {
+        Scene? currentScene = Scene.Current;
+
+        // Fixed update loop only when gameplay should run
+        fixedTimeAccumulator += delta;
+        if (Application.ShouldRunGameplay)
+        {
+            Application.IsGameplayExecuting = true;
+            int count = 0;
+            while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
+            {
+                currentScene?.FixedUpdate();
+                fixedTimeAccumulator -= Time.FixedDeltaTime;
+            }
+            Application.IsGameplayExecuting = false;
+        }
+        else
+        {
+            // Clamp accumulator to prevent burst when unpausing/starting play
+            fixedTimeAccumulator = MathF.Min(fixedTimeAccumulator, Time.FixedDeltaTime);
+        }
+
+        OnUpdate(currentScene);
+
+        // Consume step request re-pause after one frame
+        if (Application.StepRequested)
+        {
+            Application.StepRequested = false;
+            Application.IsPaused = true;
+        }
     }
 
     public virtual void Initialize() { }
@@ -407,6 +490,21 @@ public abstract class Game
         Window.Stop();
         Debug.Log("Is terminating...");
     }
+}
+
+/// <summary>
+/// Options for <see cref="Game.RunHeadless"/>.
+/// </summary>
+public sealed class HeadlessRunOptions
+{
+    /// <summary>Stop after this many frames. 0 = run until quit (server mode).</summary>
+    public long MaxFrames = 0;
+
+    /// <summary>Stop after this many seconds of wall-clock time. 0 = no time limit.</summary>
+    public double MaxSeconds = 0;
+
+    /// <summary>Tick rate to throttle the loop to. 0 = run as fast as possible.</summary>
+    public int TargetFps = 60;
 }
 
 /// <summary>
