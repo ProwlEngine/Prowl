@@ -239,6 +239,10 @@ namespace Prowl.Scribe
         {
             if(font == null) throw new ArgumentNullException(nameof(font));
 
+            // An unset/default FontQuality (0) is not a valid rasterization size, so callers that
+            // build TextLayoutSettings without specifying Quality would otherwise get no glyphs.
+            if ((int)quality <= 0) quality = FontQuality.Normal;
+
             var glyph = TryGetGlyphFromFont(font);
             if (glyph != null)
                 return glyph;
