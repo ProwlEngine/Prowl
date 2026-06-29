@@ -102,6 +102,8 @@ namespace Prowl.Scribe
         public FontFile ItalicFont;          // italic font
         public FontFile BoldItalicFont;      // bold italic font
 
+        public FontQuality Quality;          // atlas rasterization quality for all markdown text
+
         public FontColor ColorText;
         public FontColor ColorMutedText;
         public FontColor ColorRule;
@@ -116,6 +118,7 @@ namespace Prowl.Scribe
             return new MarkdownLayoutSettings {
                 Width = width,
                 BaseSize = 18f,
+                Quality = FontQuality.Normal,
                 LineHeight = 1.2f,
                 ParagraphSpacing = 8f,
                 Heading1Scale = 1.6f,
@@ -305,6 +308,7 @@ namespace Prowl.Scribe
 
             var baseFont = fontOverride ?? settings.ParagraphFont;
             var tls = TextLayoutSettings.Default;
+            tls.Quality = settings.Quality;
             tls.PixelSize = sizeOverride ?? settings.BaseSize;
             tls.LineHeight = lineHeightOverride ?? settings.LineHeight;
             tls.WrapMode = TextWrapMode.Wrap;
@@ -398,6 +402,7 @@ namespace Prowl.Scribe
                 {
                     // right-aligned number inside bulletBox
                     var tlsNum = TextLayoutSettings.Default;
+                    tlsNum.Quality = settings.Quality;
                     tlsNum.PixelSize = settings.BaseSize;
                     tlsNum.LineHeight = settings.LineHeight;
                     tlsNum.WrapMode = TextWrapMode.NoWrap;
@@ -451,6 +456,7 @@ namespace Prowl.Scribe
             float innerW = MathF.Max(0, wAvail - 2 * pad);
 
             var tls = TextLayoutSettings.Default;
+            tls.Quality = settings.Quality;
             tls.PixelSize = settings.BaseSize * 0.95f;
             tls.LineHeight = 1.25f;
             tls.WrapMode = TextWrapMode.Wrap;
@@ -495,6 +501,7 @@ namespace Prowl.Scribe
 
                     var styles = inlines.styles;
                     var tls = TextLayoutSettings.Default;
+                    tls.Quality = settings.Quality;
                     tls.PixelSize = settings.BaseSize;
                     tls.LineHeight = settings.LineHeight;
                     tls.WrapMode = TextWrapMode.NoWrap;
@@ -555,6 +562,7 @@ namespace Prowl.Scribe
                     else
                     {
                         var tls = TextLayoutSettings.Default;
+                        tls.Quality = settings.Quality;
                         tls.PixelSize = settings.BaseSize;
                         tls.LineHeight = settings.LineHeight;
                         tls.WrapMode = TextWrapMode.Wrap;
