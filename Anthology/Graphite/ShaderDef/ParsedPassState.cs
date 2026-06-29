@@ -22,6 +22,7 @@ public class ParsedPassState
 
     // -------------------- Depth --------------------
 
+    public bool? EnableDepthTest;
     public ComparisonKind? DepthFunc;
     public bool? DepthWriteMask;
     public bool? EnableDepthClamp;
@@ -92,6 +93,7 @@ public class ParsedPassState
     /// </summary>
     public DepthStencilStateDescription ToDepthStencilState(DepthStencilStateDescription baseState)
     {
+        baseState.DepthTestEnabled = EnableDepthTest ?? baseState.DepthTestEnabled;
         baseState.DepthWriteEnabled = DepthWriteMask ?? baseState.DepthWriteEnabled;
         baseState.DepthComparison = DepthFunc ?? baseState.DepthComparison;
         baseState.StencilTestEnabled = EnableStencilTest ?? baseState.StencilTestEnabled;
@@ -147,6 +149,7 @@ public class ParsedPassState
             EnablePolygonOffsetFill = EnablePolygonOffsetFill ?? other.EnablePolygonOffsetFill,
             PolygonOffsetFactor = PolygonOffsetFactor ?? other.PolygonOffsetFactor,
             PolygonOffsetUnits = PolygonOffsetUnits ?? other.PolygonOffsetUnits,
+            EnableDepthTest = EnableDepthTest ?? other.EnableDepthTest,
             DepthFunc = DepthFunc ?? other.DepthFunc,
             DepthWriteMask = DepthWriteMask ?? other.DepthWriteMask,
             EnableDepthClamp = EnableDepthClamp ?? other.EnableDepthClamp,
@@ -363,7 +366,15 @@ public class ParsedPassState
 
             case "ZTest":
                 t.Next();
-                state = new() { DepthFunc = ParserUtility.Keywords<ComparisonKind>(ref t) };
+                if (ParserUtility.PeekKeyword(ref t, "Disabled"))
+                {
+                    t.Next();
+                    state = new() { EnableDepthTest = false };
+                }
+                else
+                {
+                    state = new() { EnableDepthTest = true, DepthFunc = ParserUtility.Keywords<ComparisonKind>(ref t) };
+                }
                 return true;
 
             case "ZWrite":

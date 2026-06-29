@@ -162,7 +162,7 @@ Controls which polygon faces are discarded before rasterization.
 ZTest Disabled | Never | Less | Equal | LessEqual | Greater | NotEqual | GreaterEqual | Always
 ```
 
-Sets the depth comparison function used to determine whether a fragment passes the depth test.
+Sets the depth comparison function. `Disabled` turns depth testing off entirely; any other value enables depth testing and sets the comparison function.
 
 | Value          | Description                                          | Default |
 |----------------|------------------------------------------------------|---------|
@@ -170,10 +170,10 @@ Sets the depth comparison function used to determine whether a fragment passes t
 | `Never`        | Never passes                                         |         |
 | `Less`         | Passes if fragment depth < stored depth              |         |
 | `Equal`        | Passes if fragment depth = stored depth              |         |
-| `LessEqual`    | Passes if fragment depth ≤ stored depth              | ✓       |
+| `LessEqual`    | Passes if fragment depth <= stored depth             | ✓       |
 | `Greater`      | Passes if fragment depth > stored depth              |         |
-| `NotEqual`     | Passes if fragment depth ≠ stored depth              |         |
-| `GreaterEqual` | Passes if fragment depth ≥ stored depth              |         |
+| `NotEqual`     | Passes if fragment depth != stored depth             |         |
+| `GreaterEqual` | Passes if fragment depth >= stored depth             |         |
 | `Always`       | Always passes (depth test is effectively skipped)    |         |
 
 ---
@@ -225,43 +225,36 @@ Specifying any `Blend` command implicitly enables blending for the pass.
 
 #### Blend Factors
 
-| Value                  | Description                                              |
-|------------------------|----------------------------------------------------------|
-| `Zero`                 | Factor is `(0, 0, 0, 0)`                                 |
-| `One`                  | Factor is `(1, 1, 1, 1)`                                 |
-| `SrcColor`             | Source color `(Rs, Gs, Bs, As)`                          |
-| `OneMinusSrcColor`     | `1 - SrcColor`                                           |
-| `SrcAlpha`             | Source alpha `(As, As, As, As)`                          |
-| `OneMinusSrcAlpha`     | `1 - SrcAlpha`                                           |
-| `DstAlpha`             | Destination alpha                                        |
-| `OneMinusDstAlpha`     | `1 - DstAlpha`                                           |
-| `DstColor`             | Destination color                                        |
-| `OneMinusDstColor`     | `1 - DstColor`                                           |
-| `SrcAlphaSaturate`     | `min(As, 1 - Ad)` — saturated source alpha               |
-| `ConstantColor`        | Constant blend color                                     |
-| `OneMinusConstantColor`| `1 - ConstantColor`                                      |
-| `ConstantAlpha`        | Constant blend alpha                                     |
-| `OneMinusConstantAlpha`| `1 - ConstantAlpha`                                      |
-| `Src1Color`            | Second source color (dual-source blending)               |
-| `OneMinusSrc1Color`    | `1 - Src1Color`                                          |
-| `Src1Alpha`            | Second source alpha (dual-source blending)               |
-| `OneMinusSrc1Alpha`    | `1 - Src1Alpha`                                          |
+| Value                   | Description                                              |
+|-------------------------|----------------------------------------------------------|
+| `Zero`                  | Factor is `(0, 0, 0, 0)`                                 |
+| `One`                   | Factor is `(1, 1, 1, 1)`                                 |
+| `SourceColor`           | Source color `(Rs, Gs, Bs, As)`                          |
+| `InverseSourceColor`    | `1 - SourceColor`                                        |
+| `SourceAlpha`           | Source alpha `(As, As, As, As)`                          |
+| `InverseSourceAlpha`    | `1 - SourceAlpha`                                        |
+| `DestinationAlpha`      | Destination alpha                                        |
+| `InverseDestinationAlpha` | `1 - DestinationAlpha`                                 |
+| `DestinationColor`      | Destination color                                        |
+| `InverseDestinationColor` | `1 - DestinationColor`                                 |
+| `BlendFactor`           | Constant blend color set on the pipeline                 |
+| `InverseBlendFactor`    | `1 - BlendFactor`                                        |
 
 **Common presets:**
 
-| Intent                  | Command                               |
-|-------------------------|---------------------------------------|
-| Alpha blending          | `Blend SrcAlpha OneMinusSrcAlpha`     |
-| Additive blending       | `Blend One One`                       |
-| Premultiplied alpha     | `Blend One OneMinusSrcAlpha`          |
-| Multiply                | `Blend DstColor Zero`                 |
+| Intent                  | Command                                       |
+|-------------------------|-----------------------------------------------|
+| Alpha blending          | `Blend SourceAlpha InverseSourceAlpha`        |
+| Additive blending       | `Blend One One`                               |
+| Premultiplied alpha     | `Blend One InverseSourceAlpha`                |
+| Multiply                | `Blend DestinationColor Zero`                 |
 
 ---
 
 ### Blend Equation — `BlendOp`
 
 ```
-BlendOp Add | Subtract | ReverseSubtract | Min | Max
+BlendOp Add | Subtract | ReverseSubtract | Minimum | Maximum
 ```
 
 Sets the equation used to combine source and destination color values after applying blend factors.
@@ -272,8 +265,8 @@ Applies to both RGB and alpha channels.
 | `Add`             | `Src + Dst`                 | Default additive blend             |
 | `Subtract`        | `Src - Dst`                 | Subtracts destination from source  |
 | `ReverseSubtract` | `Dst - Src`                 | Subtracts source from destination  |
-| `Min`             | `min(Src, Dst)`             | Per-channel minimum                |
-| `Max`             | `max(Src, Dst)`             | Per-channel maximum                |
+| `Minimum`         | `min(Src, Dst)`             | Per-channel minimum                |
+| `Maximum`         | `max(Src, Dst)`             | Per-channel maximum                |
 
 ---
 
@@ -395,16 +388,16 @@ Used by `Pass`/`PassFront`/`PassBack`, `Fail`/`FailFront`/`FailBack`, and
 | `Fail`         | Stencil test failed                                  |
 | `ZFail`        | Stencil test passed but depth test failed            |
 
-| Value           | Description                                                 |
-|-----------------|-------------------------------------------------------------|
-| `Keep`          | Keep the current stencil value                              |
-| `Zero`          | Set stencil value to 0                                      |
-| `Replace`       | Replace with the `Ref` value                                |
-| `Increment`     | Increment, clamping at the maximum value                    |
-| `Decrement`     | Decrement, clamping at 0                                    |
-| `Invert`        | Bitwise invert                                              |
-| `IncrementWrap` | Increment, wrapping to 0 when past the maximum              |
-| `DecrementWrap` | Decrement, wrapping to the maximum value when below 0       |
+| Value                | Description                                                 |
+|----------------------|-------------------------------------------------------------|
+| `Keep`               | Keep the current stencil value                              |
+| `Zero`               | Set stencil value to 0                                      |
+| `Replace`            | Replace with the `Ref` value                                |
+| `IncrementAndClamp`  | Increment, clamping at the maximum value                    |
+| `DecrementAndClamp`  | Decrement, clamping at 0                                    |
+| `Invert`             | Bitwise invert                                              |
+| `IncrementAndWrap`   | Increment, wrapping to 0 when past the maximum              |
+| `DecrementAndWrap`   | Decrement, wrapping to the maximum value when below 0       |
 
 ---
 
