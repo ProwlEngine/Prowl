@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Prowl.Scribe;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.PaperUI.Utilities;
 using Prowl.Vector;
@@ -91,6 +92,7 @@ namespace Prowl.PaperUI
 
         TabSize,
         FontSize,
+        TextQuality,
         #endregion
     }
 
@@ -737,6 +739,7 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.LineHeight] = 1.0f;
             _defaultValues[(int)GuiProp.TabSize] = 4;
             _defaultValues[(int)GuiProp.FontSize] = 16.0f;
+            _defaultValues[(int)GuiProp.TextQuality] = FontQuality.Normal;
 
             _initialized = true;
         }

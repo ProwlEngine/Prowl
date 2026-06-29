@@ -1361,6 +1361,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     BoldItalicFont = element.FontBoldItalic,
                     MonoFont = element.FontMono,
                     PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize)),
+                    Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality),
                     LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight)),
                     LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing)),
                     WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing)),
@@ -1402,6 +1403,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 settings.LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight));
                 settings.TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize);
                 settings.PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize));
+                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
 
                 settings.Alignment = ToScribeAlignment(element.TextAlignment);
 
@@ -1421,6 +1423,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 var i = element.FontItalic;
                 var bi = element.FontBoldItalic;
                 var settings = MarkdownLayoutSettings.Default(r, availableWidth, m, b, i, bi);
+                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
 
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 

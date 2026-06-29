@@ -340,6 +340,11 @@ namespace Prowl.PaperUI
         /// <summary>Sets the size of text in pixels.</summary>
         public T FontSize(float size) => SetStyleProperty(GuiProp.FontSize, size);
 
+        /// <summary>Atlas rasterization quality for this element's text. Higher is crisper at very large
+        /// sizes/zoom, at the cost of atlas memory. The distance field is resolution independent, so
+        /// Normal is fine for typical UI text. Defaults to <see cref="FontQuality.Normal"/>.</summary>
+        public T TextQuality(FontQuality quality) => SetStyleProperty(GuiProp.TextQuality, quality);
+
         #endregion
 
         #region Transform Properties
@@ -1511,6 +1516,7 @@ namespace Prowl.PaperUI
 
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = (float)fontSize;
+            settings.Quality = (FontQuality)_handle.Data._elementStyle.GetValue(GuiProp.TextQuality);
             settings.Font = inputSettings.Font;
             settings.LetterSpacing = (float)letterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;

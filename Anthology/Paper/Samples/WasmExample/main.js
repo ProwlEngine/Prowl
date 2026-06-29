@@ -71,6 +71,16 @@ float scissorMask(vec2 p) {
     return clamp(se.x,0.0,1.0)*clamp(se.y,0.0,1.0);
 }
 
+// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
+const float sdfPxRange = 4.0;
+
+// Screen-space width (in pixels) that one distance-field unit spans at this fragment.
+float sdfScreenPxRange(vec2 uv) {
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(uTexture, 0));
+    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
 void main() {
     float mask = scissorMask(vPos);
     vec4 color = vColor;
@@ -80,7 +90,11 @@ void main() {
 
     // Text mode: UV >= 2.0
     if (vUV.x >= 2.0) {
-        fragColor = color * texture(uTexture, vUV - vec2(2.0)) * mask;
+        vec2 uv = vUV - vec2(2.0);
+        float sd = texture(uTexture, uv).r;
+        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+        fragColor = color * coverage * mask;
         return;
     }
 

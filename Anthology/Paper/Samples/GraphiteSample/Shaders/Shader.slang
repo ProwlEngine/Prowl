@@ -31,6 +31,7 @@ struct FragmentData
 {
     float4x4 projection;
     Sampler2D<float4> texture0;
+    float2 atlasTexelSize;       // 1 / texture0 size, for the text distance-field screen range
     float4x4 scissorMat;
     float2 scissorExt;
 
@@ -123,6 +124,18 @@ float scissorMask(float2 p)
 }
 
 
+// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
+static const float sdfPxRange = 4.0;
+
+// Screen-space width (in pixels) that one distance-field unit spans at this fragment.
+float sdfScreenPxRange(float2 uv)
+{
+    float2 unitRange = float2(sdfPxRange) * DrawData.atlasTexelSize;
+    float2 screenTexSize = float2(1.0) / fwidth(uv);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
+
 [shader("fragment")]
 float4 Fragment(VertexOutput input) : SV_Target
 {
@@ -136,9 +149,16 @@ float4 Fragment(VertexOutput input) : SV_Target
         color = lerp(DrawData.brushColor1, DrawData.brushColor2, factor);
     }
 
-    // Text mode: UV >= 2.0
-    if (input.fragTexCoord.x >= 2.0) 
-        return color * DrawData.texture0.Sample(input.fragTexCoord - float2(2.0)) * mask;
+    // Text mode: UV >= 2.0. The glyph atlas holds a single-channel signed distance field (replicated
+    // across RGB); reconstruct sharp coverage from it.
+    if (input.fragTexCoord.x >= 2.0)
+    {
+        float2 uv = input.fragTexCoord - float2(2.0);
+        float sd = DrawData.texture0.Sample(uv).r;
+        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+        return color * coverage * mask;
+    }
 
     // Edge anti-aliasing
     float2 pixelSize = fwidth(input.fragTexCoord);
