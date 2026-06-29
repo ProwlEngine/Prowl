@@ -155,17 +155,24 @@ public class TextComponent : UIBehaviour
                 AtlasGlyph ag = inst.Glyph;
                 if (ag is null || !ag.IsInAtlas) continue;
 
-                GlyphMetrics m = ag.Metrics;
+                // The atlas glyph is resolution independent now: metrics come from the font at the
+                // display size, and the quad is the glyph's padded distance-field region scaled to
+                // that size (matching FontSystem.DrawLayout).
+                GlyphMetrics m = fs.System.GetGlyphMetrics(ag.Font, ag.Codepoint, pixelSize) ?? default;
                 if (m.Width <= 0 || m.Height <= 0) continue; // whitespace / invisible
 
-                // Glyph quad in canvas-design pixels. Scribe lays text out downward, so its
-                // Y offsets are subtracted from the top-left origin (+Y up). The atlas V
-                // axis runs top-to-bottom (V0 = glyph top), hence V1 maps to the quad's
+                float sc = ag.Font.ScaleForPixelHeight(pixelSize);
+
+                // Recover the pen origin (inst.Position bakes in the glyph offset), then place the
+                // region. Scribe lays out downward, so its Y is subtracted from the origin (+Y up).
+                // The atlas V axis runs top-to-bottom (V0 = region top), hence V1 maps to the quad's
                 // bottom-left corner and V0 to its top-right.
-                float x0 = originX + line.Position.X + inst.Position.X;
-                float yTop = originY - verticalOffset - line.Position.Y - inst.Position.Y;
-                float x1 = x0 + m.Width;
-                float yBottom = yTop - m.Height;
+                float penX = originX + line.Position.X + inst.Position.X - m.OffsetX;
+                float penY = originY - verticalOffset - line.Position.Y - inst.Position.Y + m.OffsetY;
+                float x0 = penX + (float)(ag.RegionX0 * sc);
+                float x1 = penX + (float)(ag.RegionX1 * sc);
+                float yTop = penY + (float)(ag.RegionY1 * sc);
+                float yBottom = penY + (float)(ag.RegionY0 * sc);
 
                 builder.AddQuad(
                     new Rect(x0, yBottom, x1, yTop),
@@ -182,6 +189,7 @@ public class TextComponent : UIBehaviour
         // atlas grows. Falls back to a 1x1 white texture if Scribe hasn't allocated yet.
         Texture2D atlas = UIFontSystem.Default.Atlas ?? Texture2D.LoadDefault(DefaultTexture.White);
         p.SetTexture("_MainTex", atlas);
+        p.SetFloat("_SdfText", 1.0f); // atlas is a single-channel SDF; the GameUI shader reconstructs coverage
         p.SetColor("_MainColor", Color.White);
         p.SetVector("_Tiling", new Float2(1, 1));
         p.SetVector("_Offset", Float2.Zero);
