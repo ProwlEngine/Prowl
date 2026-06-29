@@ -23,6 +23,14 @@ public static class GlobalPropertySet
     /// <summary>Sets a <c>float4</c> uniform field.</summary>
     public static void SetFloat4(PropertyID name, Float4 v) => _globalSet.SetFloat4(name, v);
 
+    public static void SetVector(PropertyID name, Float2 v) => _globalSet.SetVector(name, v);
+
+    public static void SetVector(PropertyID name, Float3 v) => _globalSet.SetVector(name, v);
+
+    public static void SetVector(PropertyID name, Float4 v) => _globalSet.SetVector(name, v);
+
+    public static void SetColor(PropertyID name, Color v) => _globalSet.SetColor(name, v);
+
     /// <summary>Sets an <c>int</c> uniform field.</summary>
     public static void SetInt(PropertyID name, int v) => _globalSet.SetInt(name, v);
 
@@ -64,6 +72,8 @@ public static class GlobalPropertySet
     /// <inheritdoc cref="SetTexture(PropertyID, TextureView, Sampler)"/>
     public static void SetTexture(PropertyID name, Graphite.Texture texture, Sampler? sampler = null) => _globalSet.SetTexture(name, texture, sampler);
 
+    public static void SetTexture(PropertyID name, Texture2D texture) => _globalSet.SetTexture(name, texture.Handle, texture.Sampler);
+
     /// <summary>
     /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler.
     /// On OpenGL the sampler is bound alongside the texture. On Vulkan and D3D11 the sampler is also
@@ -72,10 +82,11 @@ public static class GlobalPropertySet
     /// </summary>
     public static void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null) => _globalSet.SetTexture(name, view, sampler);
 
-
     /// <summary>
     /// Binds a <see cref="Sampler"/> to the named slot independently of any texture. On OpenGL this is
     /// a no-op; the sampler is sourced from the matching <see cref="SetTexture(PropertyID,Graphite.Texture,Sampler?)"/> call instead.
     /// </summary>
     public static void SetSampler(PropertyID name, Sampler sampler) => _globalSet.SetSampler(name, sampler);
+
+    public static void ClearGlobals() => _globalSet.Clear();
 }

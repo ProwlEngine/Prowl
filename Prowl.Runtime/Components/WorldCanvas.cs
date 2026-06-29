@@ -235,7 +235,7 @@ public class WorldCanvas : MonoBehaviour, IRenderable
             var cmd = Graphics.GetCommandBuffer("WorldCanvas.Begin");
             cmd.SetRenderTarget(_renderTexture.frameBuffer);
             cmd.SetViewport(0, 0, (uint)_renderTexture.Width, (uint)_renderTexture.Height);
-            cmd.ClearRenderTarget(ClearFlags.Color, new Color(0, 0, 0, 0));
+            cmd.ClearRenderTarget(true, false, new Color(0, 0, 0, 0));
             Graphics.Submit(cmd);
         }
 

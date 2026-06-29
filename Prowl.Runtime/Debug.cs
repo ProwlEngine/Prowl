@@ -9,6 +9,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 
+using Prowl.Graphite;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -720,7 +721,7 @@ public class GizmoBuilder
         {
             _wire ??= new()
             {
-                MeshTopology = Topology.Lines,
+                Topology = PrimitiveTopology.LineList,
                 IndexFormat = IndexFormat.UInt32,
             };
 
@@ -736,7 +737,7 @@ public class GizmoBuilder
         {
             _solid ??= new()
             {
-                MeshTopology = Topology.Triangles,
+                Topology = PrimitiveTopology.TriangleList,
                 IndexFormat = IndexFormat.UInt32,
             };
 

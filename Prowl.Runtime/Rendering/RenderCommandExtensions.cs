@@ -9,7 +9,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using GraphiteIndexFormat = Prowl.Graphite.IndexFormat;
-using IndexFormat = Prowl.Runtime.Resources.IndexFormat;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -18,34 +17,15 @@ namespace Prowl.Runtime.Rendering;
 /// </summary>
 public static class RenderCommandExtensions
 {
-    // ─────────────────────── Vertex sources ───────────────────────
-
-    /// <summary>
-    /// Per-mesh <see cref="IVertexSource"/> wrapper that forwards to the mesh's own IVertexSource
-    /// implementation. Binds the full index buffer (all indices).
-    /// </summary>
-    public readonly struct MeshVertexSource(Mesh mesh) : IVertexSource
-    {
-        private readonly IVertexSource Source => mesh;
-
-        public PrimitiveTopology Topology => Source.Topology;
-
-        public void ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
-            => Source.ResolveSlot(layoutSlot, layout, out binding);
-
-        public bool TryGetIndexBuffer(out DeviceBuffer buffer, out GraphiteIndexFormat format, out uint indexCount)
-            => Source.TryGetIndexBuffer(out buffer, out format, out indexCount);
-    }
-
     /// <summary>
     /// Per-submesh variant: exposes the mesh's vertex streams but overrides the index count so
     /// <c>DrawIndexed</c> only covers the slice defined by <paramref name="indexStart"/> and
     /// <paramref name="indexCount"/>. The topology is taken from the submesh descriptor.
     /// </summary>
-    public readonly struct SubMeshVertexSource(Mesh mesh, int indexStart, int indexCount, Topology topology) : IVertexSource
+    public readonly struct SubMeshVertexSource(Mesh mesh, int indexStart, int indexCount, PrimitiveTopology topology) : IVertexSource
     {
         private readonly uint _indexCount = (uint)indexCount;
-        private readonly PrimitiveTopology _topology = ToPrimitive(topology);
+        private readonly PrimitiveTopology _topology = topology;
 
         public PrimitiveTopology Topology => _topology;
 
@@ -83,10 +63,10 @@ public static class RenderCommandExtensions
     /// <summary>
     /// Two-slot instanced source that also restricts the index range to a single submesh slice.
     /// </summary>
-    public readonly struct InstancedSubMeshVertexSource(Mesh mesh, DeviceBuffer instanceBuffer, int indexStart, int indexCount, Topology topology) : IVertexSource
+    public readonly struct InstancedSubMeshVertexSource(Mesh mesh, DeviceBuffer instanceBuffer, int indexStart, int indexCount, PrimitiveTopology topology) : IVertexSource
     {
         private readonly uint _indexCount = (uint)indexCount;
-        private readonly PrimitiveTopology _topology = ToPrimitive(topology);
+        private readonly PrimitiveTopology _topology = topology;
 
         public PrimitiveTopology Topology => _topology;
 
@@ -138,7 +118,7 @@ public static class RenderCommandExtensions
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = 3 * 3 * sizeof(float),
         });
-        float[] verts = [-1f, -1f, 0f,   3f, -1f, 0f,   -1f, 3f, 0f];
+        float[] verts = [-1f, -1f, 0f, 3f, -1f, 0f, -1f, 3f, 0f];
         Graphics.Device.UpdateBuffer(s_fullscreenPositionBuffer, 0u, verts);
         return s_fullscreenPositionBuffer;
     }
@@ -152,58 +132,28 @@ public static class RenderCommandExtensions
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = 3 * 2 * sizeof(float),
         });
-        float[] uvs = [0f, 0f,   2f, 0f,   0f, 2f];
+        float[] uvs = [0f, 0f, 2f, 0f, 0f, 2f];
         Graphics.Device.UpdateBuffer(s_fullscreenUVBuffer, 0u, uvs);
         return s_fullscreenUVBuffer;
     }
 
     private static readonly FullscreenVertexSource s_fullscreenSource = new();
 
-    public static PrimitiveTopology ToPrimitive(Topology topology) => topology switch
-    {
-        Topology.Triangles => PrimitiveTopology.TriangleList,
-        Topology.TriangleStrip => PrimitiveTopology.TriangleStrip,
-        Topology.Lines => PrimitiveTopology.LineList,
-        Topology.LineStrip => PrimitiveTopology.LineStrip,
-        Topology.Points => PrimitiveTopology.PointList,
-        _ => PrimitiveTopology.TriangleList,
-    };
-
     // ─────────────────────── PropertySet convenience (old PropertyState names) ───────────────────────
 
-    public static void SetColor(this PropertySet set, string name, Color color) => set.SetFloat4(name, color);
-    public static void SetVector(this PropertySet set, string name, Float2 value) => set.SetFloat2(name, value);
-    public static void SetVector(this PropertySet set, string name, Float3 value) => set.SetFloat3(name, value);
-    public static void SetVector(this PropertySet set, string name, Float4 value) => set.SetFloat4(name, value);
+    public static void SetColor(this PropertySet set, PropertyID name, Color color) => set.SetFloat4(name, color);
+    public static void SetVector(this PropertySet set, PropertyID name, Float2 value) => set.SetFloat2(name, value);
+    public static void SetVector(this PropertySet set, PropertyID name, Float3 value) => set.SetFloat3(name, value);
+    public static void SetVector(this PropertySet set, PropertyID name, Float4 value) => set.SetFloat4(name, value);
 
-    public static void SetTexture(this PropertySet set, string name, Texture2D? texture)
+    public static void SetTexture(this PropertySet set, PropertyID name, Texture2D? texture)
     {
         if (texture?.Handle != null)
             set.SetTexture(name, texture.Handle, texture.Sampler);
     }
 
-    public static void SetTexture(this PropertySet set, string name, AssetRef<Texture2D> texture)
+    public static void SetTexture(this PropertySet set, PropertyID name, AssetRef<Texture2D> texture)
         => set.SetTexture(name, texture.Res);
-
-    // ─────────────────────── Global uniforms ───────────────────────
-
-    public static void SetGlobalInt(this CommandBuffer cmd, string name, int value) => GlobalPropertySet.SetInt(name, value);
-    public static void SetGlobalFloat(this CommandBuffer cmd, string name, float value) => GlobalPropertySet.SetFloat(name, value);
-    public static void SetGlobalVector(this CommandBuffer cmd, string name, Float2 value) => GlobalPropertySet.SetFloat2(name, value);
-    public static void SetGlobalVector(this CommandBuffer cmd, string name, Float3 value) => GlobalPropertySet.SetFloat3(name, value);
-    public static void SetGlobalVector(this CommandBuffer cmd, string name, Float4 value) => GlobalPropertySet.SetFloat4(name, value);
-    public static void SetGlobalMatrix(this CommandBuffer cmd, string name, Float4x4 value) => GlobalPropertySet.SetMatrix(name, value);
-
-    public static void SetGlobalTexture(this CommandBuffer cmd, string name, Texture2D? texture)
-    {
-        if (texture?.Handle != null)
-            GlobalPropertySet.SetTexture(name, texture.Handle, texture.Sampler);
-    }
-
-    public static void ClearGlobalTexture(this CommandBuffer cmd, string name)
-    {
-        // GlobalPropertySet has no per-slot clear; grab-texture scoping is part of the Stage-2 rework.
-    }
 
     // ─────────────────────── Material / per-object properties ───────────────────────
 
@@ -214,28 +164,12 @@ public static class RenderCommandExtensions
             cmd.SetProperties(set);
     }
 
-    public static void SetInstanceProperties(this CommandBuffer cmd, PropertySet properties)
-    {
-        if (properties != null)
-            cmd.SetProperties(properties);
-    }
-
-    public static void SetMatrix(this CommandBuffer cmd, string name, in Float4x4 value)
-    {
-        // Per-object transform uniforms are applied through per-draw PropertySets in
-        // DrawRenderables and DrawMesh; this stub is retained for call sites outside those paths.
-    }
-
-    public static void SetRasterState(this CommandBuffer cmd, RasterizerState state)
-    {
-        // Graphite owns blend/depth/raster on the GraphicsProgram; per-draw raster override not supported.
-    }
-
     // ─────────────────────── Targets / viewport / scissor ───────────────────────
 
     // Tracked per-encode-thread so BlitFramebuffer can find the read/draw texture handles.
     [System.ThreadStatic]
     private static Framebuffer? s_readFramebuffer;
+
     [System.ThreadStatic]
     private static Framebuffer? s_drawFramebuffer;
 
@@ -245,11 +179,11 @@ public static class RenderCommandExtensions
         cmd.SetFramebuffer(s_drawFramebuffer!);
     }
 
-    public static void ClearRenderTarget(this CommandBuffer cmd, ClearFlags flags, Color color)
+    public static void ClearRenderTarget(this CommandBuffer cmd, bool clearColor, bool clearDepthStencil, Color color)
     {
-        if ((flags & ClearFlags.Color) != 0)
+        if (clearColor)
             cmd.ClearColorTarget(0, color);
-        if ((flags & (ClearFlags.Depth | ClearFlags.Stencil)) != 0)
+        if (clearDepthStencil)
             cmd.ClearDepthStencil(1f, 0);
     }
 
@@ -269,22 +203,6 @@ public static class RenderCommandExtensions
         cmd.SetViewport(0, new Viewport(x, y, width, height, 0f, 1f));
     }
 
-    public static void SetScissor(this CommandBuffer cmd, int x, int y, uint width, uint height)
-    {
-        cmd.SetScissorRect(0, (uint)x, (uint)y, width, height);
-    }
-
-    public static void DisableScissor(this CommandBuffer cmd)
-    {
-        cmd.SetFullScissorRects();
-    }
-
-    public static void GenerateMipmap(this CommandBuffer cmd, Texture2D texture)
-    {
-        if (texture?.Handle != null)
-            cmd.GenerateMipmaps(texture.Handle);
-    }
-
     // ─────────────────────── Blits ───────────────────────
 
     /// <summary>
@@ -292,20 +210,20 @@ public static class RenderCommandExtensions
     /// <see cref="SetRenderTargets"/>) into the matching attachments of <see cref="s_drawFramebuffer"/>.
     /// Maps the old GL <c>glBlitFramebuffer</c> semantic onto <c>cmd.CopyTexture</c>.
     /// </summary>
-    public static void BlitFramebuffer(this CommandBuffer cmd, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1, ClearFlags mask, BlitFilter filter)
+    public static void BlitFramebuffer(this CommandBuffer cmd, bool copyColor, bool copyDepth)
     {
         Framebuffer? src = s_readFramebuffer;
         Framebuffer? dst = s_drawFramebuffer;
         if (src == null || dst == null)
             return;
 
-        if ((mask & (ClearFlags.Depth | ClearFlags.Stencil)) != 0
+        if (copyColor
             && src.DepthTarget.HasValue && dst.DepthTarget.HasValue)
         {
             cmd.CopyTexture(src.DepthTarget.Value.Target, dst.DepthTarget.Value.Target);
         }
 
-        if ((mask & ClearFlags.Color) != 0)
+        if (copyDepth)
         {
             int count = System.Math.Min(src.ColorTargets.Count, dst.ColorTargets.Count);
             for (int i = 0; i < count; i++)
@@ -334,7 +252,7 @@ public static class RenderCommandExtensions
         Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
         if (clear)
-            cmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0f, 0f, 0f, 0f));
+            cmd.ClearRenderTarget(true, true, new Color(0f, 0f, 0f, 0f));
 
         PropertySet props = mat.BuildPropertySet();
         if (source?.IsValid() == true && source.MainTexture?.Handle != null)

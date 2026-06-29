@@ -24,6 +24,7 @@ using PAnim = Prowl.Runtime.AnimationClip;
 using PCurve = Prowl.Runtime.AnimationCurve;
 using PBlendShape = Prowl.Runtime.Resources.BlendShape;
 using PBlendShapeFrame = Prowl.Runtime.Resources.BlendShapeFrame;
+using Prowl.Graphite;
 
 namespace Prowl.Runtime.AssetImporting;
 
@@ -251,7 +252,7 @@ internal static class ClayBackedImporter
         var dst = new PMesh
         {
             Name = src.Name,
-            MeshTopology = Topology.Triangles,
+            Topology = Graphite.PrimitiveTopology.TriangleList,
             // IndexFormat must be assigned BEFORE Indices below: Prowl's IndexFormat setter wipes
             // the index buffer as a side effect, so setting it after Indices would leave us with
             // a mesh that fails Upload() with "Mesh has no indices".
@@ -325,7 +326,13 @@ internal static class ClayBackedImporter
             for (int s = 0; s < src.SubMeshes.Length; s++)
             {
                 var sm = src.SubMeshes[s];
-                dst.SetSubMesh(s, new SubMeshDescriptor(sm.IndexStart, sm.IndexCount, MapTopology(sm.Topology)));
+                dst.SetSubMesh(s, new SubMeshDescriptor(sm.IndexStart, sm.IndexCount, sm.Topology switch
+                {
+                    Clay.PrimitiveTopology.Triangles => Graphite.PrimitiveTopology.TriangleList,
+                    Clay.PrimitiveTopology.Points => Graphite.PrimitiveTopology.PointList,
+                    Clay.PrimitiveTopology.Lines => Graphite.PrimitiveTopology.LineList,
+                    _ => throw new Exception($"Unknown model topology: {sm.Topology}")
+                }));
                 submeshMatIndices[s] = sm.MaterialIndex;
             }
         }
@@ -366,14 +373,6 @@ internal static class ClayBackedImporter
         }
         mesh.Normals = normals;
     }
-
-    private static Topology MapTopology(PrimitiveTopology t) => t switch
-    {
-        PrimitiveTopology.Triangles => Topology.Triangles,
-        PrimitiveTopology.Lines => Topology.Lines,
-        PrimitiveTopology.Points => Topology.Points,
-        _ => Topology.Triangles,
-    };
 
     // ----------------------------------------------------------------------------------------
     // Material bake
@@ -526,8 +525,8 @@ internal static class ClayBackedImporter
                 bone.ScaleY = SampleComponent(curve, component: 1);
                 bone.ScaleZ = SampleComponent(curve, component: 2);
                 break;
-            // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
-            // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
+                // Visibility: not handled by Prowl yet. BlendShapeWeight is handled separately
+                // (see ApplyBlendShapeBinding) since it targets a renderer + named shape, not a bone.
         }
     }
 

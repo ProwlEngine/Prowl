@@ -48,7 +48,7 @@ public abstract class Game
     public virtual void InitializeWindow(string title, int width, int height)
     {
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
-    } 
+    }
 
     public void Run(string title, int width, int height)
     {
@@ -108,7 +108,7 @@ public abstract class Game
                 EndUpdate();
 
                 if (frameCounter++ % 60 == 0)
-                { 
+                {
                     Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
                 }
 
@@ -133,8 +133,7 @@ public abstract class Game
                     var frameStart = Graphics.GetCommandBuffer("Frame Start");
                     frameStart.SetRenderTarget(null);
                     frameStart.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    frameStart.SetRasterState(new RasterizerState());
-                    frameStart.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
+                    frameStart.ClearRenderTarget(true, true, new Color(0, 0, 0, 1));
                     Graphics.Submit(frameStart);
                 }
 
@@ -171,11 +170,7 @@ public abstract class Game
                 // === End Graphics ===
 
                 RenderTexture.UpdatePool();
-                // Dispose any GPU resources that were replaced mid-frame (e.g.
-                // grown instance buffers). This only ENQUEUES delete CBs; the render
-                // thread is still draining this frame's queue. Because the deletes are
-                // submitted after every draw that referenced the old handle, submit
-                // order guarantees they execute last on the render thread.
+
                 Graphics.FlushDeferredDisposes();
 
                 // === End of End Graphics ===

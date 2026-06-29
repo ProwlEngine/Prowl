@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Graphite;
+
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
@@ -164,13 +166,12 @@ public static class RenderStats
     /// Record a draw call. Called from <see cref="Graphics"/>. <paramref name="indexCount"/> is
     /// the number of indices and <paramref name="topology"/> determines the triangle count.
     /// </summary>
-    public static void RecordDraw(Topology topology, uint indexCount, uint instances = 1)
+    public static void RecordDraw(PrimitiveTopology topology, uint indexCount, uint instances = 1)
     {
         long primCount = topology switch
         {
-            Topology.Triangles => indexCount / 3,
-            Topology.TriangleStrip => indexCount >= 2 ? indexCount - 2 : 0,
-            Topology.TriangleFan => indexCount >= 2 ? indexCount - 2 : 0,
+            PrimitiveTopology.TriangleList => indexCount / 3,
+            PrimitiveTopology.TriangleStrip => indexCount >= 2 ? indexCount - 2 : 0,
             _ => 0
         };
 

@@ -249,30 +249,34 @@ public sealed class SceneLightSystem : IDisposable
 
     private void UploadBVHTextures(CommandBuffer cmd)
     {
+        PropertySet props = new();
+
         // Textures may be null when neither tree has been populated yet. Pass them through as-is;
         // the shader only samples them when its corresponding _*LightRoot >= 0 (which we set to
         // -1 here for empty trees). Sizes default to 0 and the root index to -1, both of which
         // make the traversal a no-op.
         if (_staticTex.LightDataTexture != null)
-            cmd.SetGlobalTexture("_StaticLightData", _staticTex.LightDataTexture);
+            props.SetTexture("_StaticLightData", _staticTex.LightDataTexture);
         if (_staticTex.NodeDataTexture != null)
-            cmd.SetGlobalTexture("_StaticLightNodes", _staticTex.NodeDataTexture);
+            props.SetTexture("_StaticLightNodes", _staticTex.NodeDataTexture);
         if (_dynamicTex.LightDataTexture != null)
-            cmd.SetGlobalTexture("_DynamicLightData", _dynamicTex.LightDataTexture);
+            props.SetTexture("_DynamicLightData", _dynamicTex.LightDataTexture);
         if (_dynamicTex.NodeDataTexture != null)
-            cmd.SetGlobalTexture("_DynamicLightNodes", _dynamicTex.NodeDataTexture);
+            props.SetTexture("_DynamicLightNodes", _dynamicTex.NodeDataTexture);
 
-        cmd.SetGlobalInt("_StaticLightTexSize", _staticTex.LightTextureSize);
-        cmd.SetGlobalInt("_StaticLightTexShift", Log2(_staticTex.LightTextureSize));
-        cmd.SetGlobalInt("_StaticNodeTexSize", _staticTex.NodeTextureSize);
-        cmd.SetGlobalInt("_StaticNodeTexShift", Log2(_staticTex.NodeTextureSize));
-        cmd.SetGlobalInt("_DynamicLightTexSize", _dynamicTex.LightTextureSize);
-        cmd.SetGlobalInt("_DynamicLightTexShift", Log2(_dynamicTex.LightTextureSize));
-        cmd.SetGlobalInt("_DynamicNodeTexSize", _dynamicTex.NodeTextureSize);
-        cmd.SetGlobalInt("_DynamicNodeTexShift", Log2(_dynamicTex.NodeTextureSize));
+        props.SetInt("_StaticLightTexSize", _staticTex.LightTextureSize);
+        props.SetInt("_StaticLightTexShift", Log2(_staticTex.LightTextureSize));
+        props.SetInt("_StaticNodeTexSize", _staticTex.NodeTextureSize);
+        props.SetInt("_StaticNodeTexShift", Log2(_staticTex.NodeTextureSize));
+        props.SetInt("_DynamicLightTexSize", _dynamicTex.LightTextureSize);
+        props.SetInt("_DynamicLightTexShift", Log2(_dynamicTex.LightTextureSize));
+        props.SetInt("_DynamicNodeTexSize", _dynamicTex.NodeTextureSize);
+        props.SetInt("_DynamicNodeTexShift", Log2(_dynamicTex.NodeTextureSize));
 
-        cmd.SetGlobalInt("_StaticLightRoot", _staticTex.RootNode);
-        cmd.SetGlobalInt("_DynamicLightRoot", _dynamicTex.RootNode);
+        props.SetInt("_StaticLightRoot", _staticTex.RootNode);
+        props.SetInt("_DynamicLightRoot", _dynamicTex.RootNode);
+
+        cmd.SetProperties(props);
     }
 
     /// <summary>log2 of a power of 2; returns 0 for size &lt;= 1.</summary>
@@ -285,41 +289,45 @@ public sealed class SceneLightSystem : IDisposable
 
     private void UploadDirectionalLight(CommandBuffer cmd)
     {
+        PropertySet props = new();
+
         if (_directional == null)
         {
-            cmd.SetGlobalInt("_DirectionalLightEnabled", 0);
-            cmd.SetGlobalVector("_DirectionalLightDirection", Float3.Zero);
-            cmd.SetGlobalVector("_DirectionalLightColor", Float3.Zero);
-            cmd.SetGlobalFloat("_DirectionalLightIntensity", 0f);
-            cmd.SetGlobalInt("_DirectionalLightShadowEnabled", 0);
-            cmd.SetGlobalInt("_CascadeCount", 0);
+            props.SetInt("_DirectionalLightEnabled", 0);
+            props.SetVector("_DirectionalLightDirection", Float3.Zero);
+            props.SetVector("_DirectionalLightColor", Float3.Zero);
+            props.SetFloat("_DirectionalLightIntensity", 0f);
+            props.SetInt("_DirectionalLightShadowEnabled", 0);
+            props.SetInt("_CascadeCount", 0);
             return;
         }
 
         var data = _directional.GetForwardLightData();
         // Direct lighting wants the raw direction; intensity applies the same * 8 scaling the
         // legacy ForwardLightManager did so existing scenes look identical at low light counts.
-        cmd.SetGlobalInt("_DirectionalLightEnabled", 1);
-        cmd.SetGlobalVector("_DirectionalLightDirection", data.Direction);
-        cmd.SetGlobalVector("_DirectionalLightColor", data.Color);
-        cmd.SetGlobalFloat("_DirectionalLightIntensity", data.Intensity);
-        cmd.SetGlobalInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
-        cmd.SetGlobalFloat("_DirectionalLightShadowBias", data.ShadowBias);
-        cmd.SetGlobalFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
-        cmd.SetGlobalFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
-        cmd.SetGlobalFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
+        props.SetInt("_DirectionalLightEnabled", 1);
+        props.SetVector("_DirectionalLightDirection", data.Direction);
+        props.SetVector("_DirectionalLightColor", data.Color);
+        props.SetFloat("_DirectionalLightIntensity", data.Intensity);
+        props.SetInt("_DirectionalLightShadowEnabled", data.ShadowEnabled ? 1 : 0);
+        props.SetFloat("_DirectionalLightShadowBias", data.ShadowBias);
+        props.SetFloat("_DirectionalLightShadowNormalBias", data.ShadowNormalBias);
+        props.SetFloat("_DirectionalLightShadowStrength", data.ShadowStrength);
+        props.SetFloat("_DirectionalLightShadowQuality", data.ShadowQuality);
 
-        cmd.SetGlobalInt("_CascadeCount", data.ShadowEnabled ? data.CascadeCount : 0);
+        props.SetInt("_CascadeCount", data.ShadowEnabled ? data.CascadeCount : 0);
         if (data.CascadeShadowMatrices != null && data.CascadeAtlasParams != null)
         {
             for (int c = 0; c < 4; c++)
             {
-                cmd.SetGlobalMatrix($"_CascadeShadowMatrix{c}",
+                props.SetMatrix($"_CascadeShadowMatrix{c}",
                     c < data.CascadeCount ? data.CascadeShadowMatrices[c] : Float4x4.Identity);
-                cmd.SetGlobalVector($"_CascadeAtlasParams{c}",
+                props.SetVector($"_CascadeAtlasParams{c}",
                     c < data.CascadeCount ? data.CascadeAtlasParams[c] : Float4.Zero);
             }
         }
+
+        cmd.SetProperties(props);
     }
 
     // What occupied each shadow slot last frame (0 = empty, 1 = point, 2 = spot). Lets us clear
@@ -329,6 +337,8 @@ public sealed class SceneLightSystem : IDisposable
 
     private void UploadLocalShadowSlots(CommandBuffer cmd)
     {
+        PropertySet props = new();
+
         // Clear only the slots that held data last frame so any stale matrices a shader could
         // index fall through (spot atlas params .z <= 0). Slots reused this frame are overwritten
         // below; slots that were never written keep their default-zero GPU state.
@@ -339,14 +349,14 @@ public sealed class SceneLightSystem : IDisposable
                 for (int f = 0; f < 6; f++)
                 {
                     int idx = i * 6 + f;
-                    cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", Float4x4.Identity);
-                    cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", Float4.Zero);
+                    props.SetMatrix($"_PointShadowMatrices[{idx}]", Float4x4.Identity);
+                    props.SetVector($"_PointShadowFaceParams[{idx}]", Float4.Zero);
                 }
             }
             else if (_slotKind[i] == 2)
             {
-                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{i}]", Float4x4.Identity);
-                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{i}]", Float4.Zero);
+                props.SetMatrix($"_SpotShadowMatrices[{i}]", Float4x4.Identity);
+                props.SetVector($"_SpotShadowAtlasParams[{i}]", Float4.Zero);
             }
             _slotKind[i] = 0;
         }
@@ -364,16 +374,16 @@ public sealed class SceneLightSystem : IDisposable
                     for (int f = 0; f < 6; f++)
                     {
                         int idx = slot * 6 + f;
-                        cmd.SetGlobalMatrix($"_PointShadowMatrices[{idx}]", data.PointShadowMatrices[f]);
-                        cmd.SetGlobalVector($"_PointShadowFaceParams[{idx}]", data.PointShadowFaceParams[f]);
+                        props.SetMatrix($"_PointShadowMatrices[{idx}]", data.PointShadowMatrices[f]);
+                        props.SetVector($"_PointShadowFaceParams[{idx}]", data.PointShadowFaceParams[f]);
                     }
                     _slotKind[slot] = 1;
                 }
             }
             else if (data.Type == LightType.Spot)
             {
-                cmd.SetGlobalMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
-                cmd.SetGlobalVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
+                props.SetMatrix($"_SpotShadowMatrices[{slot}]", data.SpotShadowMatrix);
+                props.SetVector($"_SpotShadowAtlasParams[{slot}]", data.SpotShadowAtlasParams);
                 _slotKind[slot] = 2;
             }
         }
@@ -382,9 +392,11 @@ public sealed class SceneLightSystem : IDisposable
         var shadowAtlas = ShadowAtlas.GetAtlas();
         if (shadowAtlas != null)
         {
-            cmd.SetGlobalTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
-            cmd.SetGlobalVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
+            props.SetTexture("_ShadowAtlas", shadowAtlas.InternalDepth);
+            props.SetVector("_ShadowAtlasSize", new Float2(shadowAtlas.Width, shadowAtlas.Height));
         }
+
+        cmd.SetProperties(props);
     }
 
     public void Dispose()

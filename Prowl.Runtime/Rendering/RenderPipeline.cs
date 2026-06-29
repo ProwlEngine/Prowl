@@ -11,9 +11,9 @@ using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-using IndexFormat = Prowl.Runtime.Resources.IndexFormat;
 
 namespace Prowl.Runtime.Rendering;
+
 
 public struct RenderingData
 {
@@ -680,7 +680,7 @@ public abstract class RenderPipeline : EngineObject
                 if (updatePreviousMatrices && instanceId != 0)
                     prevModel = TrackModelMatrix(instanceId, model);
 
-                cmd.SetInstanceProperties(properties);
+                cmd.SetProperties(properties);
 
                 PropertySet perDraw = RentPerDrawSet();
                 perDraw.SetMatrix("prowl_ObjectToWorld", model);
@@ -764,7 +764,7 @@ public abstract class RenderPipeline : EngineObject
         cmd.SetShader(variant);
         cmd.SetMaterialProperties(material);
         if (sharedProperties != null)
-            cmd.SetInstanceProperties(sharedProperties);
+            cmd.SetProperties(sharedProperties);
 
         int subIdx = renderable.GetSubMeshIndex();
         if (subIdx >= 0 && subIdx < mesh.SubMeshCount)

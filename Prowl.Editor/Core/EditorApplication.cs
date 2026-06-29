@@ -1865,7 +1865,7 @@ public class EditorApplication : Game
         SmokeTestRT ??= new Runtime.Resources.RenderTexture(200, 200, false, [Prowl.Graphite.PixelFormat.R8_G8_B8_A8_UNorm]);
         var smokeCmd = Runtime.Graphics.GetCommandBuffer("SmokeTest");
         smokeCmd.SetRenderTarget(SmokeTestRT.frameBuffer);
-        smokeCmd.ClearRenderTarget(ClearFlags.Color, new Color(0f, 1f, 0f, 1f));
+        smokeCmd.ClearRenderTarget(true, false, new Color(0f, 1f, 0f, 1f));
         smokeCmd.SetRenderTarget(null);
         Runtime.Graphics.Submit(smokeCmd);
     }

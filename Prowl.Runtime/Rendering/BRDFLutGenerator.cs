@@ -37,7 +37,7 @@ public static class BRDFLutGenerator
     /// </summary>
     public static void UploadGlobal()
     {
-        PropertyState.SetGlobalTexture("_BRDFLut", GetLut());
+        GlobalPropertySet.SetTexture("_BRDFLut", GetLut());
     }
 
     /// <summary>

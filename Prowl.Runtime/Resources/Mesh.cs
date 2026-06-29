@@ -10,30 +10,24 @@ using Prowl.Echo;
 using Prowl.Graphite;
 using Prowl.Vector;
 
-using GraphiteIndexFormat = Prowl.Graphite.IndexFormat;
-
 namespace Prowl.Runtime.Resources;
 
-public enum IndexFormat : byte
-{
-    UInt16 = 0,
-    UInt32 = 1
-}
 
 /// <summary>Defines a portion of a Mesh's index buffer as a submesh.</summary>
 public struct SubMeshDescriptor
 {
     public int IndexStart;
     public int IndexCount;
-    public Topology Topology;
+    public PrimitiveTopology Topology;
 
-    public SubMeshDescriptor(int indexStart, int indexCount, Topology topology = Topology.Triangles)
+    public SubMeshDescriptor(int indexStart, int indexCount, PrimitiveTopology topology = PrimitiveTopology.TriangleList)
     {
         IndexStart = indexStart;
         IndexCount = indexCount;
         Topology = topology;
     }
 }
+
 
 /// <summary>
 /// A named morph target (blend shape). Holds one or more <see cref="BlendShapeFrame"/>s; a single
@@ -46,6 +40,7 @@ public sealed class BlendShape
     public BlendShapeFrame[] Frames = Array.Empty<BlendShapeFrame>();
 }
 
+
 /// <summary>
 /// One frame of a <see cref="BlendShape"/>. <see cref="Weight"/> is the weight (0-100) at which this
 /// frame is fully applied. Delta arrays are parallel to the mesh's vertices; normals/tangents are optional.
@@ -57,6 +52,7 @@ public sealed class BlendShapeFrame
     public Float3[]? DeltaNormals;
     public Float3[]? DeltaTangents;
 }
+
 
 [CreateAssetMenu("Mesh", Extension = ".mesh", Order = 4)]
 public class Mesh : EngineObject, ISerializable, IVertexSource
@@ -115,14 +111,14 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
     }
 
     /// <summary> The mesh's primitive type </summary>
-    public Topology MeshTopology
+    public PrimitiveTopology Topology
     {
-        get => meshTopology;
+        get => topology;
         set
         {
             if (isWritable == false) return;
             changed = true;
-            meshTopology = value;
+            topology = value;
         }
     }
 
@@ -416,7 +412,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
     public SubMeshDescriptor GetSubMesh(int index)
     {
         if (_subMeshes.Count == 0)
-            return new SubMeshDescriptor(0, indices?.Length ?? 0, meshTopology);
+            return new SubMeshDescriptor(0, indices?.Length ?? 0, topology);
         return _subMeshes[index];
     }
 
@@ -455,7 +451,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     /// <summary>
     /// Monotonic version that advances whenever the mesh's data changes (vertices, indices, topology,
-    /// submeshes, ...). Mirrors <see cref="Prowl.Vector.Transform.Version"/>. Useful for invalidating
+    /// submeshes, ...). Mirrors <see cref="Transform.Version"/>. Useful for invalidating
     /// caches derived from this mesh (e.g. baked physics meshes - see <see cref="PhysicsWorld.BakeMesh"/>).
     /// </summary>
     public uint Version => _version;
@@ -475,7 +471,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
     bool indicesDirty = true;
 
     IndexFormat indexFormat = IndexFormat.UInt16;
-    Topology meshTopology = Topology.Triangles;
+    PrimitiveTopology topology = PrimitiveTopology.TriangleList;
 
     DeviceBuffer? indexBuffer;
 
@@ -512,23 +508,23 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         if (indices == null || indices.Length == 0)
             throw new InvalidOperationException($"Mesh has no indices");
 
-        switch (meshTopology)
+        switch (topology)
         {
-            case Topology.Triangles:
+            case PrimitiveTopology.TriangleList:
                 if (indices.Length % 3 != 0)
                     throw new InvalidOperationException($"Triangle mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
                 break;
-            case Topology.TriangleStrip:
+            case PrimitiveTopology.TriangleStrip:
                 if (indices.Length < 3)
                     throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
                 break;
 
-            case Topology.Lines:
+            case PrimitiveTopology.LineList:
                 if (indices.Length % 2 != 0)
                     throw new InvalidOperationException($"Line mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
                 break;
 
-            case Topology.LineStrip:
+            case PrimitiveTopology.LineStrip:
                 if (indices.Length < 2)
                     throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
                 break;
@@ -1464,18 +1460,6 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         _streams[stream].Dirty = true;
     }
 
-    private static PrimitiveTopology ToPrimitive(Topology topology) => topology switch
-    {
-        Topology.Triangles => PrimitiveTopology.TriangleList,
-        Topology.TriangleStrip => PrimitiveTopology.TriangleStrip,
-        Topology.Lines => PrimitiveTopology.LineList,
-        Topology.LineStrip => PrimitiveTopology.LineStrip,
-        Topology.Points => PrimitiveTopology.PointList,
-        _ => PrimitiveTopology.TriangleList,
-    };
-
-    PrimitiveTopology IVertexSource.Topology => ToPrimitive(meshTopology);
-
     void IVertexSource.ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
     {
         Upload();
@@ -1497,12 +1481,12 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             binding = new VertexBinding(GetOrCreateZeroStream(layout.Stride));
     }
 
-    bool IVertexSource.TryGetIndexBuffer(out DeviceBuffer buffer, out GraphiteIndexFormat format, out uint indexCount)
+    bool IVertexSource.TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
     {
         Upload();
 
         buffer = indexBuffer!;
-        format = indexFormat == IndexFormat.UInt32 ? GraphiteIndexFormat.UInt32 : GraphiteIndexFormat.UInt16;
+        format = indexFormat == IndexFormat.UInt32 ? IndexFormat.UInt32 : IndexFormat.UInt16;
         indexCount = (uint)IndexCount;
         return indexBuffer != null;
     }
@@ -1536,7 +1520,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         using (BinaryWriter writer = new(memoryStream))
         {
             writer.Write((byte)indexFormat);
-            writer.Write((byte)meshTopology);
+            writer.Write((byte)topology);
 
             Float3[] vertices = GetVertexBufferAt<Float3>(STREAM_POSITION);
             Float3[] normals = GetVertexBufferAt<Float3>(STREAM_NORMAL);
@@ -1716,7 +1700,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             }
 
             compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
-            compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
+            compoundTag.Add("MeshType", new EchoObject((int)topology));
             compoundTag.Add("MeshIndexFormat", new EchoObject((int)indexFormat));
             compoundTag.Add("BoundsMinX", new EchoObject(bounds.Min.X));
             compoundTag.Add("BoundsMinY", new EchoObject(bounds.Min.Y));
@@ -1729,7 +1713,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        meshTopology = (Topology)value["MeshType"].IntValue;
+        topology = (PrimitiveTopology)value["MeshType"].IntValue;
         indexFormat = (IndexFormat)value["MeshIndexFormat"].IntValue;
         bounds = new AABB(
             new Float3(value["BoundsMinX"].FloatValue, value["BoundsMinY"].FloatValue, value["BoundsMinZ"].FloatValue),
@@ -1740,7 +1724,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         using (BinaryReader reader = new(memoryStream))
         {
             indexFormat = (IndexFormat)reader.ReadByte();
-            meshTopology = (Topology)reader.ReadByte();
+            topology = (PrimitiveTopology)reader.ReadByte();
 
             int vertexCount = reader.ReadInt32();
             Float3[] vertices = new Float3[vertexCount];
@@ -1883,7 +1867,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
                     {
                         int start = reader.ReadInt32();
                         int count = reader.ReadInt32();
-                        var topo = (Topology)reader.ReadInt32();
+                        var topo = (PrimitiveTopology)reader.ReadInt32();
                         _subMeshes.Add(new SubMeshDescriptor(start, count, topo));
                     }
                 }

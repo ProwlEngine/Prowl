@@ -34,7 +34,7 @@ public sealed class TonemapperEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-            _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
+        _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
 
         _mat.SetKeyword("TONEMAP_MELON", Type == TonemapperType.Melon);
         _mat.SetKeyword("TONEMAP_ACES", Type == TonemapperType.ACES);
@@ -63,10 +63,7 @@ public sealed class TonemapperEffect : ImageEffect
         if (context.SceneColor.InternalDepth != null)
         {
             cmd.SetRenderTargets(ldrBuffer.frameBuffer, context.SceneColor.frameBuffer);
-            cmd.BlitFramebuffer(
-                0, 0, context.Width, context.Height,
-                0, 0, context.Width, context.Height,
-                ClearFlags.Depth, BlitFilter.Nearest);
+            cmd.BlitFramebuffer(false, true);
         }
 
         cmd.Blit(context.SceneColor, ldrBuffer, _mat, 0);

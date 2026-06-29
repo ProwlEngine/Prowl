@@ -120,7 +120,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // change in the pipeline's CBs picks up wherever GL is.
         Internal_Render(camera, data);
 
-        PropertyState.ClearGlobals();
+        GlobalPropertySet.ClearGlobals();
 
         base.Render(camera, in data);
     }
@@ -237,7 +237,7 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
             shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-            shadowSetup.ClearRenderTarget(ClearFlags.Depth | ClearFlags.Stencil, new Color(0, 0, 0, 1));
+            shadowSetup.ClearRenderTarget(true, true, new Color(0, 0, 0, 1));
             Graphics.Submit(shadowSetup);
         }
 
@@ -265,12 +265,16 @@ public class DefaultRenderPipeline : RenderPipeline
         var mainCmd = Graphics.GetCommandBuffer("ColorPass");
 
         mainCmd.SetRenderTarget(prepass.frameBuffer);
-        mainCmd.ClearRenderTarget(ClearFlags.Color | ClearFlags.Depth, new Color(0, 0, 0, 0));
+        mainCmd.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
         DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
 
-        mainCmd.SetGlobalTexture("_CameraDepthTexture", prepass.InternalDepth);
-        mainCmd.SetGlobalTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
-        mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
+        PropertySet props = new();
+
+        props.SetTexture("_CameraDepthTexture", prepass.InternalDepth);
+        props.SetTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
+        props.SetTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
+
+        mainCmd.SetProperties(props);
 
         // Depth is already in colorRT (shared attachment) — no copy needed.
         mainCmd.SetRenderTarget(colorRT.frameBuffer);
@@ -279,23 +283,21 @@ public class DefaultRenderPipeline : RenderPipeline
         switch (camera.ClearFlags)
         {
             case CameraClearFlags.Skybox:
-            {
-                var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
-                    ? css.Scene.Skybox.SolidColor : camera.ClearColor;
-                mainCmd.ClearRenderTarget(ClearFlags.Color, skyColor);
-                RenderSkybox(mainCmd, css, lights);
-                break;
-            }
+                {
+                    var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
+                        ? css.Scene.Skybox.SolidColor : camera.ClearColor;
+                    mainCmd.ClearRenderTarget(true, false, skyColor);
+                    RenderSkybox(mainCmd, css, lights);
+                    break;
+                }
             case CameraClearFlags.SolidColor:
-                mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
+                mainCmd.ClearRenderTarget(true, false, camera.ClearColor);
                 break;
             case CameraClearFlags.Depth:
                 if (target.IsValid())
                 {
                     mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
+                    mainCmd.BlitFramebuffer(true, false);
                     mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 }
                 break;
@@ -303,9 +305,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 if (target.IsValid())
                 {
                     mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
+                    mainCmd.BlitFramebuffer(true, false);
                     mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 }
                 break;
@@ -414,9 +414,9 @@ public class DefaultRenderPipeline : RenderPipeline
         fogParams.Z = -1.0f / fogRange;
         fogParams.W = fog.End / fogRange;
 
-        PropertyState.SetGlobalColor("_FogColor", fog.Color);
-        PropertyState.SetGlobalVector("_FogParams", fogParams);
-        PropertyState.SetGlobalVector("_FogStates", new Float3(
+        GlobalPropertySet.SetColor("_FogColor", fog.Color);
+        GlobalPropertySet.SetVector("_FogParams", fogParams);
+        GlobalPropertySet.SetVector("_FogStates", new Float3(
             fog.Mode == Scene.FogParams.FogMode.Linear ? 1 : 0,
             fog.Mode == Scene.FogParams.FogMode.Exponential ? 1 : 0,
             fog.Mode == Scene.FogParams.FogMode.ExponentialSquared ? 1 : 0
@@ -426,14 +426,14 @@ public class DefaultRenderPipeline : RenderPipeline
     private static void UploadAmbientUniforms(Scene scene)
     {
         Scene.AmbientLightParams ambient = scene.Ambient;
-        PropertyState.SetGlobalVector("_AmbientMode", new Float2(
+        GlobalPropertySet.SetVector("_AmbientMode", new Float2(
             ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform ? 1 : 0,
             ambient.Mode == Scene.AmbientLightParams.AmbientMode.Hemisphere ? 1 : 0
         ));
-        PropertyState.SetGlobalColor("_AmbientColor", ambient.Color);
-        PropertyState.SetGlobalColor("_AmbientSkyColor", ambient.SkyColor);
-        PropertyState.SetGlobalColor("_AmbientGroundColor", ambient.GroundColor);
-        PropertyState.SetGlobalFloat("_AmbientStrength", (float)ambient.Strength);
+        GlobalPropertySet.SetColor("_AmbientColor", ambient.Color);
+        GlobalPropertySet.SetColor("_AmbientSkyColor", ambient.SkyColor);
+        GlobalPropertySet.SetColor("_AmbientGroundColor", ambient.GroundColor);
+        GlobalPropertySet.SetFloat("_AmbientStrength", (float)ambient.Strength);
     }
 
     // ─────────────────────── UI ───────────────────────
@@ -556,18 +556,18 @@ public class DefaultRenderPipeline : RenderPipeline
                 int sy = (int)MathF.Floor(sp.Y);
                 int sw = Math.Max(0, (int)MathF.Ceiling(sp.X + sp.Z) - sx);
                 int sh = Math.Max(0, (int)MathF.Ceiling(sp.Y + sp.W) - sy);
-                cmd.SetScissor(sx, sy, (uint)sw, (uint)sh);
+                cmd.SetScissorRect(0, (uint)sx, (uint)sy, (uint)sw, (uint)sh);
             }
             else
             {
-                cmd.DisableScissor();
+                cmd.SetFullScissorRects();
             }
 
             cmd.DrawMesh(mesh, material, uiPasses[0], model, properties);
         }
 
         // Leave the scissor test off so the next command buffer isn't clipped.
-        cmd.DisableScissor();
+        cmd.SetFullScissorRects();
     }
 
     private static Float4x4 BuildScreenOrtho(CameraSnapshot css)
@@ -580,37 +580,37 @@ public class DefaultRenderPipeline : RenderPipeline
         switch (skyParams.Mode)
         {
             case Scene.SkyboxMode.Procedural:
-            {
-                var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-                var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, -0.7f, 0.5f));
-                s_skybox.SetVector("_SunDir", sunDir);
-                cmd.DrawMesh(s_skyDome, s_skybox);
-                break;
-            }
+                {
+                    var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
+                    var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, -0.7f, 0.5f));
+                    s_skybox.SetVector("_SunDir", sunDir);
+                    cmd.DrawMesh(s_skyDome, s_skybox);
+                    break;
+                }
 
             case Scene.SkyboxMode.SolidColor:
                 // Camera clear already filled with color nothing more to do.
                 break;
 
             case Scene.SkyboxMode.Gradient:
-            {
-                s_gradientSkybox ??= new Material(Shader.LoadDefault(DefaultShader.GradientSkybox));
-                s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
-                s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
-                s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
-                cmd.DrawMesh(s_skyDome, s_gradientSkybox);
-                break;
-            }
+                {
+                    s_gradientSkybox ??= new Material(Shader.LoadDefault(DefaultShader.GradientSkybox));
+                    s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
+                    s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
+                    s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
+                    cmd.DrawMesh(s_skyDome, s_gradientSkybox);
+                    break;
+                }
 
             case Scene.SkyboxMode.Material:
-            {
-                var customMat = skyParams.CustomMaterial.Res;
-                if (customMat != null)
-                    cmd.DrawMesh(s_skyDome, customMat);
-                else
-                    cmd.DrawMesh(s_skyDome, s_skybox);
-                break;
-            }
+                {
+                    var customMat = skyParams.CustomMaterial.Res;
+                    if (customMat != null)
+                        cmd.DrawMesh(s_skyDome, customMat);
+                    else
+                        cmd.DrawMesh(s_skyDome, s_skybox);
+                    break;
+                }
         }
     }
 
