@@ -1,0 +1,226 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+using Prowl.Vector.Geometry;
+
+namespace Prowl.Vector
+{
+    /// <summary>
+    /// Represents a 3D ray with an origin and a direction.
+    /// </summary>
+    public struct Ray : IEquatable<Ray>, IFormattable
+    {
+        /// <summary>The origin point of the ray.</summary>
+        public Float3 Origin;
+
+        /// <summary>The normalized direction vector of the ray.</summary>
+        public Float3 Direction;
+
+        /// <summary>
+        /// Initializes a new instance of the RayD struct.
+        /// The direction vector will be normalized.
+        /// </summary>
+        /// <param name="origin">The origin point of the ray.</param>
+        /// <param name="direction">The direction vector of the ray (will be normalized).</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Ray(Float3 origin, Float3 direction)
+        {
+            Origin = origin;
+            Direction = Float3.Normalize(direction);
+        }
+
+        /// <summary>
+        /// Gets a point along the ray at the specified distance from the origin.
+        /// </summary>
+        /// <param name="distance">The distance along the ray.</param>
+        /// <returns>A point on the ray.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 GetPoint(float distance)
+        {
+            return Origin + Direction * distance;
+        }
+
+        #region --- Intersection Methods ---
+
+        /// <summary>
+        /// Tests intersection with a plane.
+        /// </summary>
+        /// <param name="plane">The plane to test against.</param>
+        /// <param name="distance">The distance along the ray to the intersection point.</param>
+        /// <returns>True if the ray intersects the plane in the forward direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Plane plane, out float distance)
+        {
+            return Intersection.RayPlane(Origin, Direction, plane.Normal, plane.D, out distance);
+        }
+
+        /// <summary>
+        /// Tests intersection with a triangle.
+        /// </summary>
+        /// <param name="triangle">The triangle to test against.</param>
+        /// <param name="distance">The distance along the ray to the intersection point.</param>
+        /// <param name="u">Barycentric coordinate u.</param>
+        /// <param name="v">Barycentric coordinate v.</param>
+        /// <returns>True if the ray intersects the triangle.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Triangle triangle, out float distance, out float u, out float v)
+        {
+            return Intersection.RayTriangle(Origin, Direction, triangle.V0, triangle.V1, triangle.V2, out distance, out u, out v);
+        }
+
+        /// <summary>
+        /// Tests intersection with an axis-aligned bounding box.
+        /// </summary>
+        /// <param name="aabb">The AABB to test against.</param>
+        /// <param name="tMin">The entry distance.</param>
+        /// <param name="tMax">The exit distance.</param>
+        /// <returns>True if the ray intersects the AABB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(AABB aabb, out float tMin, out float tMax)
+        {
+            return Intersection.RayAABB(Origin, Direction, aabb.Min, aabb.Max, out tMin, out tMax);
+        }
+
+        /// <summary>
+        /// Tests intersection with a sphere.
+        /// </summary>
+        /// <param name="sphere">The sphere to test against.</param>
+        /// <param name="t0">The first intersection distance.</param>
+        /// <param name="t1">The second intersection distance.</param>
+        /// <returns>True if the ray intersects the sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Sphere sphere, out float t0, out float t1)
+        {
+            return Intersection.RaySphere(Origin, Direction, sphere.Center, sphere.Radius, out t0, out t1);
+        }
+
+        #endregion
+
+        #region --- Utility Methods ---
+
+        /// <summary>
+        /// Creates a ray from a 2D screen position, camera matrices, and viewport dimensions.
+        /// This ray can be used for picking objects in the 3D world.
+        /// Assumes DirectX-style projection (depth 0-1).
+        /// </summary>
+        /// <param name="screenPosition">The 2D screen coordinates (e.g., mouse position). Y is typically 0 at top.</param>
+        /// <param name="viewMatrix">The camera's view matrix.</param>
+        /// <param name="projectionMatrix">The camera's projection matrix (DirectX-style, depth 0-1).</param>
+        /// <param name="viewportWidth">The width of the viewport in pixels.</param>
+        /// <param name="viewportHeight">The height of the viewport in pixels.</param>
+        /// <returns>A Ray originating from the near plane and pointing into the scene.</returns>
+        public static Ray ScreenPointToRay(Float2 screenPosition, Float4x4 viewMatrix, Float4x4 projectionMatrix, float viewportWidth, float viewportHeight)
+        {
+            // 1. Convert screen coordinates to Normalized Device Coordinates (NDC)
+            float ndcX = (2.0f * screenPosition.X) / viewportWidth - 1.0f;
+            float ndcY = 1.0f - (2.0f * screenPosition.Y) / viewportHeight; // Y is often flipped screen -> NDC
+
+            // 2. Define points in NDC space on the near and far clip planes (DirectX-style Z)
+            Float4 nearPointNDC = new Float4(ndcX, ndcY, 0.0f, 1.0f); // Point on the near plane (Z=0 for DX)
+            Float4 farPointNDC = new Float4(ndcX, ndcY, 1.0f, 1.0f); // Point on the far plane (Z=1 for DX)
+
+            // 3. Calculate the inverse of the combined view-projection matrix
+            Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+            Float4x4 inverseViewProjectionMatrix;
+            try
+            {
+                inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
+            }
+            catch (ArgumentException ex)
+            {
+                System.Diagnostics.Debug.WriteLine("ScreenPointToRay Error: View-Projection matrix is singular. " + ex.Message);
+                return new Ray(Float3.Zero, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
+            }
+
+            // 4. Transform NDC points to world space
+            Float4 nearPointWorld = inverseViewProjectionMatrix * nearPointNDC;
+            Float4 farPointWorld = inverseViewProjectionMatrix * farPointNDC;
+
+            // 5. Perform perspective division (divide by W component)
+            const float wEpsilon = float.Epsilon * 1000; // Local epsilon for W component check
+            if (Maths.Abs(nearPointWorld.W) > wEpsilon) nearPointWorld /= nearPointWorld.W; else nearPointWorld.W = 1.0f; // Avoid division by zero/small W
+            if (Maths.Abs(farPointWorld.W) > wEpsilon) farPointWorld /= farPointWorld.W; else farPointWorld.W = 1.0f; // Avoid division by zero/small W
+
+            // 6. Create the ray
+            Float3 rayOrigin = new Float3(nearPointWorld.X, nearPointWorld.Y, nearPointWorld.Z);
+            Float3 rayDirectionTarget = new Float3(farPointWorld.X, farPointWorld.Y, farPointWorld.Z);
+            Float3 rayDirection = rayDirectionTarget - rayOrigin;
+
+            // Direction should be normalized by the Ray constructor
+            return new Ray(rayOrigin, rayDirection);
+        }
+
+        /// <summary>
+        /// Creates a ray from a 2D screen position using camera properties.
+        /// The ray originates from the camera's world position.
+        /// Assumes DirectX-style projection (depth 0-1).
+        /// </summary>
+        /// <param name="screenPosition">The 2D screen coordinates (Y typically 0 at top).</param>
+        /// <param name="cameraWorldPosition">The world position of the camera.</param>
+        /// <param name="viewMatrix">The camera's view matrix.</param>
+        /// <param name="projectionMatrix">The camera's projection matrix (DirectX-style, depth 0-1).</param>
+        /// <param name="viewportWidth">The width of the viewport.</param>
+        /// <param name="viewportHeight">The height of the viewport.</param>
+        /// <returns>A Ray starting from the camera's world position.</returns>
+        public static Ray ScreenPointToRayFromCamera(Float2 screenPosition, Float3 cameraWorldPosition, Float4x4 viewMatrix, Float4x4 projectionMatrix, float viewportWidth, float viewportHeight)
+        {
+            float ndcX = (2.0f * screenPosition.X) / viewportWidth - 1.0f;
+            float ndcY = 1.0f - (2.0f * screenPosition.Y) / viewportHeight; // Y is often flipped
+
+            // For direction, unprojecting a point on the far plane is standard.
+            // Using Z=1 for far plane in DirectX-style NDC.
+            Float4 farPointNDC = new Float4(ndcX, ndcY, 1.0f, 1.0f);
+
+            Float4x4 viewProjectionMatrix = projectionMatrix * viewMatrix;
+            Float4x4 inverseViewProjectionMatrix;
+            try
+            {
+                inverseViewProjectionMatrix = viewProjectionMatrix.Invert();
+            }
+            catch (ArgumentException ex)
+            {
+                System.Diagnostics.Debug.WriteLine("ScreenPointToRayFromCamera Error: View-Projection matrix is singular. " + ex.Message);
+                return new Ray(cameraWorldPosition, new Float3(0.0f, 0.0f, -1.0f)); // Fallback ray
+            }
+
+            Float4 farPointWorldH = inverseViewProjectionMatrix * farPointNDC;
+
+            const float wEpsilon = float.Epsilon * 1000;
+            if (Maths.Abs(farPointWorldH.W) > wEpsilon) farPointWorldH /= farPointWorldH.W; else farPointWorldH.W = 1.0f;
+
+            Float3 worldPointOnFarPlane = new Float3(farPointWorldH.X, farPointWorldH.Y, farPointWorldH.Z);
+            Float3 direction = worldPointOnFarPlane - cameraWorldPosition;
+
+            // Direction will be normalized by the Ray constructor
+            return new Ray(cameraWorldPosition, direction);
+        }
+
+        #endregion
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(Ray other) => Origin.Equals(other.Origin) && Direction.Equals(other.Direction);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is Ray other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(Origin, Direction);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "RayD(Origin: {0}, Direction: {1})", Origin.ToString(format, formatProvider), Direction.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==(Ray left, Ray right) => left.Equals(right);
+        public static bool operator !=(Ray left, Ray right) => !left.Equals(right);
+    }
+}
