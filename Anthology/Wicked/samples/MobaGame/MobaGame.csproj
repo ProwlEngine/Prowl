@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="6.1.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Prowl.Wicked\Prowl.Wicked.csproj" />
+    <ProjectReference Include="..\..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="Weave" AfterTargets="Build">
+    <Exec Command="dotnet run --no-build --project &quot;$(MSBuildThisFileDirectory)..\..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj&quot; -- &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>

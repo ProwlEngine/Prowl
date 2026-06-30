@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Prowl.Wicked post-build IL weaver.
+    This target runs automatically after build for any project that references
+    the Prowl.Wicked NuGet package (directly or transitively via buildTransitive).
+    It rewrites RPC/Command methods using Mono.Cecil.
+  -->
+
+  <PropertyGroup>
+    <!-- Resolve the weaver executable from the package tools folder -->
+    <_ProwlWickedWeaverDir>$(MSBuildThisFileDirectory)..\tools\net8.0\any\</_ProwlWickedWeaverDir>
+    <_ProwlWickedWeaverExe>$(_ProwlWickedWeaverDir)Prowl.Wicked.Weaver.dll</_ProwlWickedWeaverExe>
+    <!-- Allow projects to opt out of weaving -->
+    <ProwlWickedWeave Condition="'$(ProwlWickedWeave)' == ''">true</ProwlWickedWeave>
+  </PropertyGroup>
+
+  <Target Name="ProwlWickedWeave" AfterTargets="Build" Condition="'$(ProwlWickedWeave)' == 'true'">
+    <Message Importance="high" Text="Prowl.Wicked: Weaving $(TargetFileName)..." />
+    <Exec Command="dotnet &quot;$(_ProwlWickedWeaverExe)&quot; &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>

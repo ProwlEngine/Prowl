@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Prowl.Wicked</RootNamespace>
+
+    <!-- NuGet package metadata -->
+    <PackageId>Prowl.Wicked</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Prowl</Authors>
+    <Description>Lightweight C# networking library with IL-weaved RPCs, SyncVars, and client-server architecture.</Description>
+    <PackageTags>networking;multiplayer;rpc;syncvar;gamedev</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Ensure the weaver project is built before packing -->
+    <BuildDependsOn>BuildWeaver;$(BuildDependsOn)</BuildDependsOn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Wicked.Tests" />
+  </ItemGroup>
+
+  <!-- Reference the weaver project (build-only, not a runtime dependency) -->
+  <ItemGroup>
+    <ProjectReference Include="..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Pack the .targets files so consuming projects auto-weave -->
+  <ItemGroup>
+    <None Include="build\Prowl.Wicked.targets" Pack="true" PackagePath="build\" />
+    <None Include="buildTransitive\Prowl.Wicked.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+
+  <!-- Pack the weaver tool (published output) into tools/ -->
+  <Target Name="BuildWeaver" BeforeTargets="Build">
+    <MSBuild Projects="..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$(MSBuildThisFileDirectory)..\Prowl.Wicked.Weaver\bin\publish\" />
+  </Target>
+
+  <ItemGroup>
+    <None Include="..\Prowl.Wicked.Weaver\bin\publish\**\*"
+          Pack="true"
+          PackagePath="tools\net8.0\any\"
+          CopyToOutputDirectory="Never"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>
