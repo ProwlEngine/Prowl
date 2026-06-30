@@ -205,6 +205,19 @@ namespace Prowl.PaperUI.LayoutEngine
             var paddingCrossAfterUnit = GetPaddingCrossAfter(ref element, parentLayoutType);
             float paddingCrossAfter = paddingCrossAfterUnit.ToPx(computedCross, DEFAULT_PADDING);
 
+            // The padding values above are resolved against the PARENT's axes, correct for this
+            // element's own auto-size (which is measured in the parent's frame, see childrenMain/Cross).
+            // But this element's CHILDREN flow along its OWN axis (`layoutType`); when this element's
+            // direction differs from its parent's, the main/cross axes are swapped (mirroring the
+            // actualParentMain/Cross swap below). Use these own-axis values everywhere children are
+            // positioned or have free space distributed, so e.g. a Row's PaddingLeft insets its
+            // children horizontally instead of vertically.
+            bool paddingAxesFlipped = layoutType != parentLayoutType;
+            float ownPaddingMainBefore = paddingAxesFlipped ? paddingCrossBefore : paddingMainBefore;
+            float ownPaddingMainAfter = paddingAxesFlipped ? paddingCrossAfter : paddingMainAfter;
+            float ownPaddingCrossBefore = paddingAxesFlipped ? paddingMainBefore : paddingCrossBefore;
+            float ownPaddingCrossAfter = paddingAxesFlipped ? paddingMainAfter : paddingCrossAfter;
+
             // Pre-allocate and filter in single pass to avoid LINQ overhead
             var visibleChildren = new List<int>();
             var parentDirectedChildren = new List<int>();
@@ -572,8 +585,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 while (unfrozenCrossCount > 0)
                 {
                     float childCrossFreeSpace = actualParentCross
-                        - paddingCrossBefore
-                        - paddingCrossAfter
+                        - ownPaddingCrossBefore
+                        - ownPaddingCrossAfter
                         - child.CrossBefore
                         - child.Cross
                         - child.CrossAfter;
@@ -699,7 +712,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 int unfrozenMainCount = mainAxis.Count;
                 while (unfrozenMainCount > 0)
                 {
-                    float freeMainSpace = actualParentMain - mainSum - paddingMainBefore - paddingMainAfter;
+                    float freeMainSpace = actualParentMain - mainSum - ownPaddingMainBefore - ownPaddingMainAfter;
                     float totalViolation = 0f;
 
                     foreach (var item in mainAxis)
@@ -875,7 +888,7 @@ namespace Prowl.PaperUI.LayoutEngine
             {
                 var child = children[i];
                 ProcessChildCrossStretching(child, layoutType, actualParentCross, actualParentMain,
-                    paddingCrossBefore, paddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter, i);
+                    ownPaddingCrossBefore, ownPaddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter, i);
             }
 
             // Process main-axis stretching for self-directed children
@@ -883,14 +896,14 @@ namespace Prowl.PaperUI.LayoutEngine
             {
                 var child = children[i];
                 ProcessChildMainStretching(child, layoutType, actualParentMain, actualParentCross,
-                    paddingMainBefore, paddingMainAfter, elementChildMainBefore, elementChildMainAfter, i);
+                    ownPaddingMainBefore, ownPaddingMainAfter, elementChildMainBefore, elementChildMainAfter, i);
             }
 
             // Compute stretch cross spacing for auto-sized children
             foreach (var child in children)
             {
                 ProcessChildCrossSpacing(child, layoutType, actualParentCross,
-                    paddingCrossBefore, paddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter);
+                    ownPaddingCrossBefore, ownPaddingCrossAfter, elementChildCrossBefore, elementChildCrossAfter);
             }
 
             if (aspectRatio >= 0)
@@ -928,7 +941,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
             }
 
-            // Set bounds for all children
+            // Set bounds for all children (positioned along this element's own axes; see ownPadding*).
             float mainPos = 0f;
             foreach (var child in children)
             {
@@ -937,8 +950,8 @@ namespace Prowl.PaperUI.LayoutEngine
                     SetElementBounds(
                         child.Element,
                         layoutType,
-                        child.MainBefore + paddingMainBefore,
-                        child.CrossBefore + paddingCrossBefore,
+                        child.MainBefore + ownPaddingMainBefore,
+                        child.CrossBefore + ownPaddingCrossBefore,
                         child.Main,
                         child.Cross
                     );
@@ -949,8 +962,8 @@ namespace Prowl.PaperUI.LayoutEngine
                     SetElementBounds(
                         child.Element,
                         layoutType,
-                        mainPos + paddingMainBefore,
-                        child.CrossBefore + paddingCrossBefore,
+                        mainPos + ownPaddingMainBefore,
+                        child.CrossBefore + ownPaddingCrossBefore,
                         child.Main,
                         child.Cross
                     );
