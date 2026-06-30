@@ -1,0 +1,83 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>Prowl.Aspect</PackageId>
+    <Version>1.0.0-preview.2</Version>
+    <Authors>Wulferis</Authors>
+    <Company>Prowl Engine</Company>
+    <Product>Prowl.Aspect</Product>
+    <Description>Prowl.Aspect is an open-source Aspect-Oriented Programming (AOP) framework for C#, inspired by PostSharp. It uses IL weaving with Mono.Cecil to inject aspect behavior into your assemblies at compile-time, enabling powerful cross-cutting concerns like logging, caching, validation, and more with zero runtime overhead.</Description>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Aspect</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Aspect</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>aop;aspect;postsharp;il-weaving;cecil;logging;caching;validation;attributes</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
+    <DevelopmentDependency>false</DevelopmentDependency>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Include README and LICENSE -->
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+
+    <!-- Include MSBuild targets file -->
+    <None Include="build\Prowl.Aspect.targets">
+      <Pack>True</Pack>
+      <PackagePath>build\</PackagePath>
+    </None>
+
+    <!-- Include weaver tools for net8.0 (most compatible) -->
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.Host.exe">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.Host.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.Host.runtimeconfig.json">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Mono.Cecil.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Mono.Cecil.Pdb.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Mono.Cecil.Mdb.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+    <None Include="..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Mono.Cecil.Rocks.dll">
+      <Pack>True</Pack>
+      <PackagePath>tools\net8.0\</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
