@@ -1,0 +1,50 @@
+name: Publish
+
+# Tag a commit vX.Y.Z to release every package at that version.
+# Publishes via NuGet Trusted Publishing (OIDC) - no API key secret needed.
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore Anthology.slnx
+
+      - name: Build
+        run: dotnet build Anthology.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Anthology.slnx -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts
+
+      - name: NuGet auth (trusted publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Wulferis
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

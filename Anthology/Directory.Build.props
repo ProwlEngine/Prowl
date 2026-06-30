@@ -1,0 +1,47 @@
+<Project>
+
+  <!-- Shared build and package metadata for every project in the Anthology monorepo.
+       Library .csproj files should only need their own Title, Description and PackageTags;
+       everything common lives here. Anything a project sets explicitly overrides these. -->
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <Authors>Wulferis</Authors>
+    <Company>Prowl</Company>
+    <Product>Prowl</Product>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+
+    <!-- One version for the whole family. Bump this single line to release everything.
+         Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
+         first Anthology publish of any package is never treated as older than what is
+         already on NuGet. -->
+    <Version>2.3.0</Version>
+
+    <RepositoryUrl>https://github.com/ProwlEngine/Anthology</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Anthology</PackageProjectUrl>
+  </PropertyGroup>
+
+  <!-- Tests, samples and benchmarks are never packed or published. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('Sample')) Or $(MSBuildProjectName.Contains('Benchmark')) Or $(MSBuildProjectName.Contains('Experiment'))">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Defaults applied only to the library projects that ship as NuGet packages.
+       PackageId assumes the assembly is named without the Prowl prefix (Echo -> Prowl.Echo).
+       A project already named Prowl.Something must set its own PackageId. -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <!-- Pack the shared root LICENSE into every published package. Each library keeps
+       packing its own README, so remove per-project LICENSE <None> lines on fold-in. -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>
