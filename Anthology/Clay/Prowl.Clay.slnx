@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Clay/Clay.csproj" />
+  <Project Path="DiffDebugger/DiffDebugger.csproj" />
+  <Project Path="Tests/Tests.csproj" />
+</Solution>

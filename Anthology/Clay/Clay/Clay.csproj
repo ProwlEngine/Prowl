@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Prowl.Clay</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Package metadata -->
+    <PackageId>Prowl.Clay</PackageId>
+    <Title>Prowl.Clay</Title>
+    <Version>0.5.1</Version>
+    <Authors>Wulferis</Authors>
+    <Company>Prowl Engine</Company>
+    <Description>3D model importing library for the Prowl Game Engine. Loads glTF2 / GLB / VRM, OBJ, and FBX (binary + ASCII) into a read-only Model graph with a configurable post-process pipeline (triangulation, tangent generation, bone limiting, coordinate conversion, mesh optimization).</Description>
+    <PackageTags>3d;model;import;gltf;glb;vrm;obj;fbx;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+
+    <!-- Build -->
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <NeutralLanguage>en-AU</NeutralLanguage>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+    <!-- Links -->
+    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Clay</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Clay</PackageProjectUrl>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE" Pack="True" PackagePath="\" />
+    <None Include="..\README.md" Pack="True" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tests" />
+    <InternalsVisibleTo Include="DiffDebugger" />
+  </ItemGroup>
+
+</Project>
