@@ -107,7 +107,7 @@ Shader "Quill/CanvasShader"
                     float insideDist = min(max(q.x, q.y), 0.0);
                     float dist = insideDist + outsideDist - cornerRadius;
 
-                    return saturate((dist + feather * 0.5) / feather);
+                    return smoothstep(-feather * 0.5, feather * 0.5, dist);
                 }
 
                 return 0.0;

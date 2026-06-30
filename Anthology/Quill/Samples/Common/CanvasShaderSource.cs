@@ -92,7 +92,7 @@ float calculateBrushFactor() {
         if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
         vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
         float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-        return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+        return smoothstep(-feather * 0.5, feather * 0.5, dist);
     }
     return 0.0;
 }

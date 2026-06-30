@@ -93,7 +93,7 @@ float calculateBrushFactor() {
         //float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
         float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
 
-        return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+        return smoothstep(-feather * 0.5, feather * 0.5, dist);
     }
 
     return 0.0;

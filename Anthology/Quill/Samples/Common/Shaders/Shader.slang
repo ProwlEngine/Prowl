@@ -100,7 +100,7 @@ float calculateBrushFactor(float2 fragPos, float2 fragTexCoord)
             float2 q = abs(transformedPoint - center) - (halfSize - float2(radius));
             float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
 
-            return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+            return smoothstep(-feather * 0.5, feather * 0.5, dist);
         }
         default:
             return 0.0;
