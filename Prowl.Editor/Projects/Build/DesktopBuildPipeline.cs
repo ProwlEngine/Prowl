@@ -708,24 +708,36 @@ public class DesktopBuildPipeline : BuildPipeline
     {
         string runtimesDir = Path.Combine(outputDir, "runtimes");
         int managed = 0, native = 0;
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var plugin in PluginScanner.ScanAll(project))
         {
             if (!plugin.AppliesToBuild(platform)) continue;
 
+            string dest;
             if (plugin.IsManaged)
             {
+                // The player's managed resolver probes runtimes/{assemblyName}.dll - the CLR identity
+                // recorded in referencing assemblies, which is not necessarily the file name on disk.
+                string asmName;
+                try { asmName = AssemblyName.GetAssemblyName(plugin.AbsolutePath).Name ?? Path.GetFileNameWithoutExtension(plugin.FileName); }
+                catch { asmName = Path.GetFileNameWithoutExtension(plugin.FileName); }
+
                 Directory.CreateDirectory(runtimesDir);
-                File.Copy(plugin.AbsolutePath, Path.Combine(runtimesDir, plugin.FileName), true);
+                dest = Path.Combine(runtimesDir, asmName + ".dll");
                 managed++;
             }
             else
             {
                 string nativeDir = Path.Combine(runtimesDir, plugin.RuntimeIdentifierFor(platform), "native");
                 Directory.CreateDirectory(nativeDir);
-                File.Copy(plugin.AbsolutePath, Path.Combine(nativeDir, plugin.FileName), true);
+                dest = Path.Combine(nativeDir, plugin.FileName);
                 native++;
             }
+
+            if (!written.Add(dest))
+                Runtime.Debug.LogWarning($"[Build] Plugin '{plugin.FileName}' overwrites '{Path.GetFileName(dest)}' (another plugin maps to the same destination).");
+            File.Copy(plugin.AbsolutePath, dest, true);
         }
 
         if (managed + native > 0)

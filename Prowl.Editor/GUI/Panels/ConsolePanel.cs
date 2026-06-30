@@ -282,9 +282,9 @@ public class ConsolePanel : DockPanel
                             canvas.RectFilled(startX+2, rowY+1, (float)4, totalRowSize-2, LerpRGB(textColor, Color.Black, 0.5f));
 
                             // Create layouts lazily
-                            msg.IconLayout ??= canvas.CreateLayout(icon, new TextLayoutSettings { Font = font, PixelSize = size });
-                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new TextLayoutSettings { Font = font, PixelSize = size });
-                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new TextLayoutSettings { Font = font, PixelSize = size });
+                            msg.IconLayout ??= canvas.CreateLayout(icon, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
+                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
+                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
 
                             float padStack = 4;
                             // Draw using cached layouts
@@ -301,7 +301,7 @@ public class ConsolePanel : DockPanel
                             {
                                 float stackSize = size * 0.8f;
                                 float stackY = rowY + totalRowSize * (_multiLine ? 0.75f : 0.5f) - stackSize * 0.5f - 2;
-                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new TextLayoutSettings { Font = font, PixelSize = stackSize });
+                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new TextLayoutSettings { Font = font, PixelSize = stackSize, Quality = FontQuality.Normal });
                                 canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, LerpRGB(textColor,Color.Black,0.25f));
                             }
 
@@ -311,7 +311,7 @@ public class ConsolePanel : DockPanel
                             if (_collapse && msg.Count > 1)
                             {
                                 var textSize = size / 1.2f;
-                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new TextLayoutSettings { Font = font, PixelSize = textSize });
+                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new TextLayoutSettings { Font = font, PixelSize = textSize, Quality = FontQuality.Normal });
                                 float badgeW = msg.CountLayout.Size.X + 8; // Size is in scaled pixels
                                 float badgeH = RowHeight - 6;
                                 float badgeX = startX + (float)r.Size.X - badgeW - 4;
