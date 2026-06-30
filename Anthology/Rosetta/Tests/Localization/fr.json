@@ -1,0 +1,24 @@
+{
+  "ui.button.confirm": "Confirmer",
+  "ui.button.cancel": "Annuler",
+  "ui.title": "Mon Application",
+
+  "player.killed": "{{name}} a vaincu {{count}} ennemis",
+  "player.greeting": "Bonjour, {{name}} !",
+
+  "item.collected": {
+    "one":   "{{count}} objet",
+    "other": "{{count}} objets"
+  },
+
+  "enemy.remaining": {
+    "one":   "{{count}} ennemi reste dans {{zone}}",
+    "other": "{{count}} ennemis restent dans {{zone}}"
+  },
+
+  "npc.greeting": {
+    "male":   "Il vous salue.",
+    "female": "Elle vous sourit.",
+    "other":  "Ils vous regardent."
+  }
+}
