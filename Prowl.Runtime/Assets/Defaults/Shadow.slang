@@ -1,12 +1,9 @@
 module Shadow;
 
-// Shadow sampling utilities for deferred lighting.
-// Shared by DirectionalLight, SpotLight, and PointLight shaders.
-
 __exported import ShaderVariables;
 
 // Precomputed Poisson disk offsets for rotated PCF sampling
-static const float2 POISSON_DISK_8[8] = {
+public static const float2 POISSON_DISK_8[8] = {
     float2(-0.613392,  0.617481),
     float2( 0.170019, -0.040254),
     float2(-0.299417, -0.792901),
@@ -32,14 +29,8 @@ public float3 WorldPosFromDepth(float depth, float2 texCoord) {
     return worldSpacePosition.xyz;
 }
 
-// Sample shadow from atlas with PCF filtering.
-//   shadowAtlas: shadow atlas (hardware depth-compare sampler)
-//   atlasCoords: UV in the atlas (normalized 0-1)
-//   shadowMin/Max: atlas boundaries for clamping (prevents bleeding)
-//   currentDepth: fragment depth in light space
-//   shadowQuality: 0 = hard shadows, 1 = soft shadows
-//   shadowStrength: multiplier for shadow intensity
-//   fragCoord: pixel coordinates (SV_Position.xy) for PCF rotation
+// Sample shadow from atlas with PCF filtering. fragCoord is the pixel position (input.position.xy in
+// the fragment stage) used to drive the rotated Poisson kernel - gl_FragCoord is unavailable here.
 public float SampleShadowPCF(
     Sampler2DShadow shadowAtlas,
     float2 atlasCoords,
@@ -50,11 +41,8 @@ public float SampleShadowPCF(
     float shadowStrength,
     float2 fragCoord)
 {
-    // SampleCmp returns the filtered fraction that is LIT (currentDepth <= storedDepth);
-    // with linear filtering each fetch is a hardware 2x2 PCF tap.
     float lit;
 
-    // Check shadow quality: 0 = Hard, 1 = Soft
     if (shadowQuality < 0.5) {
         // Hard shadows - single hardware-compared (2x2) sample
         lit = shadowAtlas.SampleCmp(atlasCoords, currentDepth);
@@ -67,33 +55,32 @@ public float SampleShadowPCF(
         float randomRotation = InterleavedGradientNoise(fragCoord) * 6.283185;
         float s = sin(randomRotation);
         float c = cos(randomRotation);
-        float2x2 rotationMatrix = float2x2(c, -s, s, c);
+        float2x2 rotationMatrix = float2x2(c, s, -s, c);
 
         float2 texelScale = texelSize * filterRadius;
         lit = 0.0;
-        for(int i = 0; i < 8; i++) {
-            float2 offset = mul(POISSON_DISK_8[i], rotationMatrix) * texelScale;
+        for (int i = 0; i < 8; i++) {
+            float2 offset = mul(rotationMatrix, POISSON_DISK_8[i]) * texelScale;
             float2 sampleCoords = clamp(atlasCoords + offset, shadowMin, shadowMax);
             lit += shadowAtlas.SampleCmp(sampleCoords, currentDepth);
         }
         lit /= 8.0;
     }
 
-    float shadow = 1.0 - lit;       // fraction occluded
+    float shadow = 1.0 - lit;
     return shadow * shadowStrength;
 }
 
-// Slope-scale bias based on surface angle to light.
+// Calculate slope-scale bias based on surface angle to light
 public float CalculateSlopeBias(float3 worldNormal, float3 lightDirection, float baseBias) {
     float cosTheta = clamp(dot(normalize(worldNormal), normalize(lightDirection)), 0.0, 1.0);
-    // tan(acos(cosTheta)) == sin/cos, without the two transcendentals.
     float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
     float slopeScaleBias = baseBias * (sinTheta / max(cosTheta, 1e-4));
     slopeScaleBias = clamp(slopeScaleBias, 0.0, baseBias * 2.0);
     return baseBias + slopeScaleBias;
 }
 
-// Convert shadow space coordinates to atlas UVs.
+// Convert shadow space coordinates to atlas UVs
 public void GetAtlasCoordinates(
     float3 projCoords,
     float4 atlasParams,
@@ -102,15 +89,12 @@ public void GetAtlasCoordinates(
     out float2 shadowMin,
     out float2 shadowMax)
 {
-    // Map projected coords to atlas region
     atlasCoords.x = atlasParams.x + (projCoords.x * atlasParams.z);
     atlasCoords.y = atlasParams.y + (projCoords.y * atlasParams.z);
 
-    // Calculate shadow map boundaries to prevent bleeding
     float2 texelSize = float2(1.0) / atlasSize;
     shadowMin = float2(atlasParams.x, atlasParams.y) / atlasSize + texelSize * 0.5;
     shadowMax = float2(atlasParams.x + atlasParams.z, atlasParams.y + atlasParams.z) / atlasSize - texelSize * 0.5;
 
-    // Normalize to 0-1 range
     atlasCoords /= atlasSize;
 }

@@ -1,26 +1,7 @@
 module SimplexNoise4D;
 
-// SimplexNoise4D.glsl Ashima Arts / Stefan Gustavson's 4D simplex noise, dropped
-// in unchanged (save for include guards) so it can be referenced from hand-written
-// shaders and the Simplex4D shader-graph node via `import SimplexNoise4D;`.
-//
-// Original source:
-//   https://github.com/ashima/webgl-noise/blob/master/src/noise4D.glsl
-//
-// The original Ashima header + MIT license follows verbatim.
-// ============================================================================
-//
-// Description : Array and textureless GLSL 2D/3D/4D simplex
-//               noise functions.
-//      Author : Ian McEwan, Ashima Arts.
-//  Maintainer : stegu
-//     Lastmod : 20110822 (ijm)
-//     License : Copyright (C) 2011 Ashima Arts. All rights reserved.
-//               Distributed under the MIT License. See LICENSE file.
-//               https://github.com/ashima/webgl-noise
-//               https://github.com/stegu/webgl-noise
-//
-// ============================================================================
+// Ashima Arts / Stefan Gustavson's 4D simplex noise. Distributed under the MIT License.
+// https://github.com/ashima/webgl-noise
 
 public float4 mod289(float4 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -47,27 +28,27 @@ public float taylorInvSqrt(float r)
 }
 
 public float4 grad4(float j, float4 ip)
-  {
+{
   const float4 ones = float4(1.0, 1.0, 1.0, -1.0);
-  float4 p,s;
+  float4 p, s;
 
   p.xyz = floor( frac (float3(j) * ip.xyz) * 7.0) * ip.z - 1.0;
   p.w = 1.5 - dot(abs(p.xyz), ones.xyz);
   s = float4(p < float4(0.0));
-  p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www; 
+  p.xyz = p.xyz + (s.xyz*2.0 - 1.0) * s.www;
 
   return p;
-  }
-						
+}
+
 // (sqrt(5) - 1)/4 = F4, used once below
-#define F4 0.309016994374947451
+public static const float F4 = 0.309016994374947451;
 
 public float snoise(float4 v)
-  {
-  const float4  C = float4( 0.138196601125011,  // (5 - sqrt(5))/20  G4
-                        0.276393202250021,  // 2 * G4
-                        0.414589803375032,  // 3 * G4
-                       -0.447213595499958); // -1 + 4 * G4
+{
+  const float4 C = float4( 0.138196601125011,  // (5 - sqrt(5))/20  G4
+                           0.276393202250021,  // 2 * G4
+                           0.414589803375032,  // 3 * G4
+                          -0.447213595499958); // -1 + 4 * G4
 
 // First corner
   float4 i  = floor(v + dot(v, float4(F4)) );
@@ -75,14 +56,11 @@ public float snoise(float4 v)
 
 // Other corners
 
-// Rank sorting originally contributed by Bill Licea-Kane, AMD (formerly ATI)
   float4 i0;
   float3 isX = step( x0.yzw, x0.xxx );
   float3 isYZ = step( x0.zww, x0.yyz );
-//  i0.x = dot( isX, float3( 1.0 ) );
   i0.x = isX.x + isX.y + isX.z;
   i0.yzw = 1.0 - isX;
-//  i0.y += dot( isYZ.xy, float2( 1.0 ) );
   i0.y += isYZ.x + isYZ.y;
   i0.zw += 1.0 - isYZ.xy;
   i0.z += isYZ.z;
@@ -93,18 +71,13 @@ public float snoise(float4 v)
   float4 i2 = clamp( i0-1.0, 0.0, 1.0 );
   float4 i1 = clamp( i0-2.0, 0.0, 1.0 );
 
-  //  x0 = x0 - 0.0 + 0.0 * C.xxxx
-  //  x1 = x0 - i1  + 1.0 * C.xxxx
-  //  x2 = x0 - i2  + 2.0 * C.xxxx
-  //  x3 = x0 - i3  + 3.0 * C.xxxx
-  //  x4 = x0 - 1.0 + 4.0 * C.xxxx
   float4 x1 = x0 - i1 + C.xxxx;
   float4 x2 = x0 - i2 + C.yyyy;
   float4 x3 = x0 - i3 + C.zzzz;
   float4 x4 = x0 + C.wwww;
 
 // Permutations
-  i = mod289(i); 
+  i = mod289(i);
   float j0 = permute( permute( permute( permute(i.w) + i.z) + i.y) + i.x);
   float4 j1 = permute( permute( permute( permute (
              i.w + float4(i1.w, i2.w, i3.w, 1.0 ))
@@ -112,8 +85,7 @@ public float snoise(float4 v)
            + i.y + float4(i1.y, i2.y, i3.y, 1.0 ))
            + i.x + float4(i1.x, i2.x, i3.x, 1.0 ));
 
-// Gradients: 7x7x6 points over a cube, mapped onto a 4-cross polytope
-// 7*7*6 = 294, which is close to the ring size 17*17 = 289.
+// Gradients
   float4 ip = float4(1.0/294.0, 1.0/49.0, 1.0/7.0, 0.0) ;
 
   float4 p0 = grad4(j0,   ip);
@@ -138,5 +110,4 @@ public float snoise(float4 v)
   return 49.0 * ( dot(m0*m0, float3( dot( p0, x0 ), dot( p1, x1 ), dot( p2, x2 )))
                + dot(m1*m1, float2( dot( p3, x3 ), dot( p4, x4 ) ) ) ) ;
 
-  }
-
+}

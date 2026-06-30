@@ -7,10 +7,9 @@ public static const float PI = 3.14159265359;
 // =============================================================
 
 // GGX/Trowbridge-Reitz Normal Distribution Function
-// Input roughness is perceptual roughness [0,1] squared internally to get alpha.
 public float DistributionGGX(float3 N, float3 H, float roughness)
 {
-    float a2 = roughness * roughness; // alpha = perceptualRoughness^2, a2 = alpha
+    float a2 = roughness * roughness;
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
 
@@ -21,7 +20,6 @@ public float DistributionGGX(float3 N, float3 H, float roughness)
 }
 
 // Schlick-GGX Geometry Function (single direction)
-// Uses k = (roughness + 1)^2 / 8 for direct/analytical lights.
 public float GeometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);
@@ -31,7 +29,6 @@ public float GeometrySchlickGGX(float NdotV, float roughness)
 }
 
 // Smith Geometry Function (both directions combined)
-// Uses abs(NdotV) to handle backface normals gracefully.
 public float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
 {
     float NdotV = abs(dot(N, V));
@@ -91,11 +88,10 @@ public float GeometrySmithAniso(
 
 // =============================================================
 //  Specular Anti-Aliasing (Geometric Normal Filtering)
-//  Based on: Kaplanyan & Hill, "Filtering Distributions of Normals"
 // =============================================================
 
-#define SPEC_AA_VARIANCE 0.5
-#define SPEC_AA_THRESHOLD 0.1
+public static const float SPEC_AA_VARIANCE = 0.5;
+public static const float SPEC_AA_THRESHOLD = 0.1;
 
 public float ApplySpecularAA(float roughness, float3 worldNormal)
 {
@@ -109,25 +105,21 @@ public float ApplySpecularAA(float roughness, float3 worldNormal)
 
 // =============================================================
 //  Parallax Occlusion Mapping (POM)
-//  viewDirTS must be in tangent space. Height sampled from the G channel.
+//  viewDirTS must be in tangent space. Height is sampled from the G channel.
 // =============================================================
 
 public float2 ParallaxOcclusionMapping(Sampler2D<float4> heightTex, float2 uv, float3 viewDirTS, float heightScale, int linearSteps)
 {
-    // Slope damping: reduce parallax at grazing angles
     float slopeDamp = 1.0 - clamp(dot(viewDirTS, float3(0.0, 0.0, 1.0)), 0.0, 1.0);
 
-    // Maximum UV offset based on view angle and height scale
     float2 vMaxOffset = (viewDirTS.xy / -viewDirTS.z) * heightScale * (1.0 - slopeDamp * slopeDamp);
 
     float fStepSize = 1.0 / float(linearSteps);
     float2 finalStepSize = fStepSize * vMaxOffset;
 
-    // Pre-compute texture derivatives for correct mip selection
     float2 dx = ddx(uv);
     float2 dy = ddy(uv);
 
-    // Linear ray march from surface (1.0) downward
     float fCurrRayHeight = 1.0;
     float2 vCurrOffset = float2(0.0);
     float2 vLastOffset = float2(0.0);
@@ -147,7 +139,6 @@ public float2 ParallaxOcclusionMapping(Sampler2D<float4> heightTex, float2 uv, f
         fLastSampledHeight = fCurrSampledHeight;
     }
 
-    // Secant-method binary refinement (3 iterations)
     float pt0 = fCurrRayHeight + fStepSize;
     float pt1 = fCurrRayHeight;
     float delta0 = pt0 - fLastSampledHeight;
@@ -190,13 +181,12 @@ public float3 CalculateTranslucency(float3 lightDir, float3 viewDir, float3 norm
 
     if (scatteringPower < 0.001)
     {
-        // Mode 1: Wrapped diffuse + GGX backscatter lobe (foliage, thin cloth, paper)
+        // Mode 1: Wrapped diffuse + GGX backscatter lobe
         float wrap = 0.5;
         float wrappedNdotL = clamp((dot(-normal, lightDir) + wrap) / ((1.0 + wrap) * (1.0 + wrap)), 0.0, 1.0);
 
-        // GGX-shaped backscatter approximation
         float VdotL = clamp(dot(viewDir, -lightDir), 0.0, 1.0);
-        float a2 = 0.49; // 0.7^2
+        float a2 = 0.49;
         float d = (VdotL * a2 - VdotL) * VdotL + 1.0;
         float GGX = (a2 / PI) / (d * d);
 
@@ -204,7 +194,7 @@ public float3 CalculateTranslucency(float3 lightDir, float3 viewDir, float3 norm
     }
     else
     {
-        // Mode 2: Spherical Gaussian approximation (skin, wax, subsurface)
+        // Mode 2: Spherical Gaussian approximation
         float3 transLightDir = lightDir + normal * distortion;
         float transDot = dot(-transLightDir, viewDir);
         transDot = exp2(clamp(transDot, 0.0, 1.0) * scatteringPower - scatteringPower) * translucency;

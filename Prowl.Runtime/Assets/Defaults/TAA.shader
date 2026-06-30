@@ -4,39 +4,38 @@ Shader "Default/TAA"
     {
         Name "Resolve"
         Tags { "RenderOrder" = "Opaque" }
+
         Cull Off
         ZTest Disabled
         ZWrite Off
 
         SLANGPROGRAM
-
         import ProwlCG;
 
-        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
-        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
-
-        struct Material
+        struct MaterialData
         {
-            float2 _Resolution;
-            float2 _Jitter;               // Current frame jitter in pixels
-            float _HistoryValid;        // 0 or 1
-            float _BlendFactor;         // Feedback weight (0.9-0.97 typical)
-            float _MotionScale;         // Scale for motion-based rejection
-            float _Sharpness;           // Sharpening amount (0-1)
             Sampler2D<float4> _MainTex;          // Current frame (jittered)
             Sampler2D<float4> _HistoryTex;       // Previous frame (resolved)
             Sampler2D<float4> _MotionVectorsTex; // Screen-space motion vectors
             Sampler2D<float4> _CameraDepthTexture;
+            float2 _Resolution;
+            float2 _Jitter;
+            float _HistoryValid;
+            float _BlendFactor;
+            float _MotionScale;
+            float _Sharpness;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
 
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
+        struct VertexInput
         {
-            Varyings output;
-            output.uv = input.uv;
-            output.position = float4(input.position, 1.0);
-            return output;
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 uv : TEXCOORD0;
         }
 
         // Catmull-Rom bicubic sampling for history (reduces blurriness)
@@ -48,13 +47,11 @@ Shader "Default/TAA"
             float2 f2 = f * f;
             float2 f3 = f2 * f;
 
-            // Catmull-Rom weights
             float2 w0 = f2 - 0.5 * (f3 + f);
             float2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
             float2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
             float2 w3 = 0.5 * (f3 - f2);
 
-            // Optimized to 4 bilinear taps by grouping pairs
             float2 w12 = w1 + w2;
             float2 tc12 = (center + w2 / w12) * texelSize;
             float2 tc0 = (center - 1.0) * texelSize;
@@ -74,7 +71,6 @@ Shader "Default/TAA"
             return max(result, float4(0.0));
         }
 
-        // YCoCg color space for better neighborhood clamping
         float3 RGBToYCoCg(float3 rgb)
         {
             return float3(
@@ -93,18 +89,9 @@ Shader "Default/TAA"
             );
         }
 
-        // Tonemap/inverse for stable blending in HDR
-        float3 Tonemap(float3 c)
-        {
-            return c / (1.0 + luminance(c));
-        }
+        float3 Tonemap(float3 c) { return c / (1.0 + luminance(c)); }
+        float3 InverseTonemap(float3 c) { return c / max(1.0 - luminance(c), 1e-6); }
 
-        float3 InverseTonemap(float3 c)
-        {
-            return c / max(1.0 - luminance(c), 1e-6);
-        }
-
-        // Find closest depth in 3x3 neighborhood for motion vector sampling
         float2 GetClosestMotionVector(float2 uv, float2 texelSize)
         {
             float closestDepth = 1.0;
@@ -127,40 +114,38 @@ Shader "Default/TAA"
             return Mat._MotionVectorsTex.Sample(closestUV).rg;
         }
 
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
+
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
-            float2 texCoord = input.uv;
+            float2 texCoords = input.uv;
             float2 texelSize = 1.0 / Mat._Resolution;
 
-            // Sample current color (from jittered render)
-            float3 currentColor = Mat._MainTex.Sample(texCoord).rgb;
+            float3 currentColor = Mat._MainTex.Sample(texCoords).rgb;
 
-            // If no valid history, just output current frame
             if (Mat._HistoryValid < 0.5)
-            {
                 return float4(currentColor, 1.0);
-            }
 
-            // Get motion vector from closest depth neighbor (reduces edge artifacts)
-            float2 motionVector = GetClosestMotionVector(texCoord, texelSize);
+            float2 motionVector = GetClosestMotionVector(texCoords, texelSize);
 
-            // Reproject to find history UV
-            float2 historyUV = texCoord - motionVector;
+            float2 historyUV = texCoords - motionVector;
 
-            // Check if reprojection is within screen bounds
             bool validReproject = historyUV.x >= 0.0 && historyUV.x <= 1.0 &&
                                   historyUV.y >= 0.0 && historyUV.y <= 1.0;
 
             if (!validReproject)
-            {
                 return float4(currentColor, 1.0);
-            }
 
-            // Sample history with Catmull-Rom for sharpness
             float3 historyColor = SampleHistoryCatmullRom(Mat._HistoryTex, historyUV, texelSize).rgb;
 
-            // Neighborhood clamping in YCoCg space (variance clip)
             float3 m1 = float3(0.0);
             float3 m2 = float3(0.0);
 
@@ -168,46 +153,40 @@ Shader "Default/TAA"
             {
                 for (int x = -1; x <= 1; x++)
                 {
-                    float3 s = RGBToYCoCg(Tonemap(Mat._MainTex.Sample(texCoord + float2(float(x), float(y)) * texelSize).rgb));
+                    float3 s = RGBToYCoCg(Tonemap(Mat._MainTex.Sample(texCoords + float2(float(x), float(y)) * texelSize).rgb));
                     m1 += s;
                     m2 += s * s;
                 }
             }
 
-            // Variance-based AABB clip
             m1 /= 9.0;
             m2 /= 9.0;
             float3 sigma = sqrt(max(m2 - m1 * m1, float3(0.0)));
 
-            // Tighter clamping when motion is detected
             float motionLength = length(motionVector * Mat._Resolution);
             float gammaScale = lerp(1.0, 0.5, saturate(motionLength * Mat._MotionScale));
 
             float3 aabbMin = m1 - gammaScale * sigma;
             float3 aabbMax = m1 + gammaScale * sigma;
 
-            // Clip history to AABB
             float3 historyYCoCg = RGBToYCoCg(Tonemap(historyColor));
             float3 clippedHistory = clamp(historyYCoCg, aabbMin, aabbMax);
             historyColor = InverseTonemap(YCoCgToRGB(clippedHistory));
 
-            // Adaptive blend factor: reduce history weight with fast motion
             float blendFactor = Mat._BlendFactor;
             blendFactor = lerp(blendFactor, 0.0, saturate(motionLength * 0.1));
 
-            // Blend in tonemapped space for HDR stability
             float3 currentTM = Tonemap(currentColor);
             float3 historyTM = Tonemap(historyColor);
             float3 result = InverseTonemap(lerp(currentTM, historyTM, blendFactor));
 
-            // Optional sharpening (negative lobe)
             if (Mat._Sharpness > 0.0)
             {
                 float3 blur = float3(0.0);
-                blur += Mat._MainTex.Sample(texCoord + float2(-texelSize.x, 0.0)).rgb;
-                blur += Mat._MainTex.Sample(texCoord + float2( texelSize.x, 0.0)).rgb;
-                blur += Mat._MainTex.Sample(texCoord + float2(0.0, -texelSize.y)).rgb;
-                blur += Mat._MainTex.Sample(texCoord + float2(0.0,  texelSize.y)).rgb;
+                blur += Mat._MainTex.Sample(texCoords + float2(-texelSize.x, 0.0)).rgb;
+                blur += Mat._MainTex.Sample(texCoords + float2( texelSize.x, 0.0)).rgb;
+                blur += Mat._MainTex.Sample(texCoords + float2(0.0, -texelSize.y)).rgb;
+                blur += Mat._MainTex.Sample(texCoords + float2(0.0,  texelSize.y)).rgb;
                 blur *= 0.25;
 
                 result += (result - blur) * Mat._Sharpness;
@@ -216,7 +195,6 @@ Shader "Default/TAA"
 
             return float4(result, 1.0);
         }
-
         ENDSLANG
     }
 }

@@ -1,55 +1,23 @@
 Shader "Default/EnhancedBokehdoF"
 {
+    // Pass 0: Horizontal MRT (outputs to 3 render targets for R, G, B channels)
     Pass
     {
         Name "CircularHorizMRT"
         Tags { "RenderOrder" = "Opaque" }
-        Blend One Zero
         Cull Off
         ZTest Disabled
         ZWrite Off
 
         SLANGPROGRAM
+        import VariantAttributes;
 
-        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
-        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+        [variant("false") variant("true")]
+        extern static const bool AUTOFOCUS;
 
-        struct Material
-        {
-            float2 _Resolution;
-            float _FocusStrength;
-            float _ManualFocusPoint;
-            float _MaxBlurRadius;
-            Sampler2D<float4> _MainTex;
-            Sampler2D<float4> _CameraDepthTexture;
-        }
-        ParameterBlock<Material> Mat;
+        static const int KERNEL_RADIUS = 8;
+        static const int KERNEL_COUNT = 17;
 
-        struct FragOut
-        {
-            float4 R : SV_Target0;
-            float4 G : SV_Target1;
-            float4 B : SV_Target2;
-        }
-
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
-        {
-            Varyings output;
-            output.uv = input.uv;
-            output.position = float4(input.position, 1.0);
-            return output;
-        }
-
-        // Kernel constants
-        #define KERNEL_RADIUS 8
-        #define KERNEL_COUNT 17
-
-        // Final composition weights for both kernels
-        static const float2 FinalWeights_Kernel0 = float2(0.411259, -0.548794);
-        static const float2 FinalWeights_Kernel1 = float2(0.513282, 4.561110);
-
-        // Combined kernel coefficients (xy: Kernel0, zw: Kernel1)
         static const float4 CombinedKernels[KERNEL_COUNT] = {
             float4( 0.014096, -0.022658, 0.000115, 0.009116),
             float4(-0.020612, -0.025574, 0.005324, 0.013416),
@@ -70,7 +38,26 @@ Shader "Default/EnhancedBokehdoF"
             float4( 0.014096, -0.022658, 0.000115, 0.009116)
         };
 
-        // Calculate Circle of Confusion
+        struct MaterialData
+        {
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _CameraDepthTexture;
+            float2 _Resolution;
+            float _FocusStrength;
+            float _ManualFocusPoint;
+            float _MaxBlurRadius;
+        }
+        ParameterBlock<MaterialData> Mat;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+        struct FragOutput
+        {
+            float4 OutputR : SV_Target0;
+            float4 OutputG : SV_Target1;
+            float4 OutputB : SV_Target2;
+        }
+
         float calculateCoC(float depth, float focusPoint)
         {
             float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
@@ -79,14 +66,23 @@ Shader "Default/EnhancedBokehdoF"
             return min(cocPixels, maxBlurPixels);
         }
 
-        [shader("fragment")]
-        FragOut Fragment(Varyings input)
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
-        #else
-            float focusPoint = Mat._ManualFocusPoint;
-        #endif
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
+
+        [shader("fragment")]
+        FragOutput Fragment(Varyings input)
+        {
+            float focusPoint;
+            static if (AUTOFOCUS)
+                focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
+            else
+                focusPoint = Mat._ManualFocusPoint;
 
             float depth = Mat._CameraDepthTexture.Sample(input.uv).x;
             float coc = calculateCoC(depth, focusPoint);
@@ -110,61 +106,36 @@ Shader "Default/EnhancedBokehdoF"
                 bVal += image.b * kernels;
             }
 
-            FragOut o;
-            o.R = rVal;
-            o.G = gVal;
-            o.B = bVal;
+            FragOutput o;
+            o.OutputR = rVal;
+            o.OutputG = gVal;
+            o.OutputB = bVal;
             return o;
         }
-
         ENDSLANG
     }
 
+    // Pass 1: Vertical Composite
     Pass
     {
         Name "CircularVerticalComposite"
         Tags { "RenderOrder" = "Opaque" }
-        Blend One Zero
         Cull Off
         ZTest Disabled
         ZWrite Off
 
         SLANGPROGRAM
+        import VariantAttributes;
 
-        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
-        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+        [variant("false") variant("true")]
+        extern static const bool AUTOFOCUS;
 
-        struct Material
-        {
-            float2 _Resolution;
-            float _FocusStrength;
-            float _ManualFocusPoint;
-            float _MaxBlurRadius;
-            Sampler2D<float4> _HorizR;
-            Sampler2D<float4> _HorizG;
-            Sampler2D<float4> _HorizB;
-            Sampler2D<float4> _CameraDepthTexture;
-        }
-        ParameterBlock<Material> Mat;
+        static const int KERNEL_RADIUS = 8;
+        static const int KERNEL_COUNT = 17;
 
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
-        {
-            Varyings output;
-            output.uv = input.uv;
-            output.position = float4(input.position, 1.0);
-            return output;
-        }
-
-        // Kernel constants
-        #define KERNEL_RADIUS 8
-        #define KERNEL_COUNT 17
-
-        // Final composition weights for both kernels
         static const float2 FinalWeights_Kernel0 = float2(0.411259, -0.548794);
         static const float2 FinalWeights_Kernel1 = float2(0.513282, 4.561110);
 
-        // Combined kernel coefficients (xy: Kernel0, zw: Kernel1)
         static const float4 CombinedKernels[KERNEL_COUNT] = {
             float4( 0.014096, -0.022658, 0.000115, 0.009116),
             float4(-0.020612, -0.025574, 0.005324, 0.013416),
@@ -185,13 +156,27 @@ Shader "Default/EnhancedBokehdoF"
             float4( 0.014096, -0.022658, 0.000115, 0.009116)
         };
 
-        // Complex multiplication
+        struct MaterialData
+        {
+            Sampler2D<float4> _HorizR;
+            Sampler2D<float4> _HorizG;
+            Sampler2D<float4> _HorizB;
+            Sampler2D<float4> _CameraDepthTexture;
+            float2 _Resolution;
+            float _FocusStrength;
+            float _ManualFocusPoint;
+            float _MaxBlurRadius;
+        }
+        ParameterBlock<MaterialData> Mat;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
         float2 mulComplex(float2 p, float2 q)
         {
             return float2(p.x * q.x - p.y * q.y, p.x * q.y + p.y * q.x);
         }
 
-        // Calculate Circle of Confusion
         float calculateCoC(float depth, float focusPoint)
         {
             float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
@@ -200,14 +185,23 @@ Shader "Default/EnhancedBokehdoF"
             return min(cocPixels, maxBlurPixels);
         }
 
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
+
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
-        #else
-            float focusPoint = Mat._ManualFocusPoint;
-        #endif
+            float focusPoint;
+            static if (AUTOFOCUS)
+                focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
+            else
+                focusPoint = Mat._ManualFocusPoint;
 
             float depth = Mat._CameraDepthTexture.Sample(input.uv).x;
             float coc = calculateCoC(depth, focusPoint);
@@ -250,35 +244,46 @@ Shader "Default/EnhancedBokehdoF"
 
             return float4(r0 + r1, g0 + g1, b0 + b1, 1.0);
         }
-
         ENDSLANG
     }
 
+    // Pass 2: Final Combine with original image
     Pass
     {
         Name "DoFCombine"
         Tags { "RenderOrder" = "Opaque" }
-        Blend One Zero
         Cull Off
         ZTest Disabled
         ZWrite Off
 
         SLANGPROGRAM
+        import VariantAttributes;
 
-        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
-        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+        [variant("false") variant("true")]
+        extern static const bool AUTOFOCUS;
 
-        struct Material
+        struct MaterialData
         {
+            Sampler2D<float4> _MainTex;
+            Sampler2D<float4> _BlurredTex;
+            Sampler2D<float4> _CameraDepthTexture;
             float _FocusStrength;
             float _ManualFocusPoint;
             float _MaxBlurRadius;
             float2 _Resolution;
-            Sampler2D<float4> _MainTex;
-            Sampler2D<float4> _BlurredTex;
-            Sampler2D<float4> _CameraDepthTexture;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
+
+        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
+        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
+
+        float calculateCoC(float depth, float focusPoint)
+        {
+            float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
+            float cocPixels = normalizedDepthDiff * Mat._FocusStrength * 0.01 * Mat._Resolution.y;
+            float maxBlurPixels = Mat._MaxBlurRadius * 0.01 * Mat._Resolution.y;
+            return min(cocPixels, maxBlurPixels);
+        }
 
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
@@ -289,22 +294,14 @@ Shader "Default/EnhancedBokehdoF"
             return output;
         }
 
-        float calculateCoC(float depth, float focusPoint)
-        {
-            float normalizedDepthDiff = abs(depth - focusPoint) / focusPoint;
-            float cocPixels = normalizedDepthDiff * Mat._FocusStrength * 0.01 * Mat._Resolution.y;
-            float maxBlurPixels = Mat._MaxBlurRadius * 0.01 * Mat._Resolution.y;
-            return min(cocPixels, maxBlurPixels);
-        }
-
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
-        #ifdef AUTOFOCUS
-            float focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
-        #else
-            float focusPoint = Mat._ManualFocusPoint;
-        #endif
+            float focusPoint;
+            static if (AUTOFOCUS)
+                focusPoint = Mat._CameraDepthTexture.Sample(float2(0.5, 0.5)).x;
+            else
+                focusPoint = Mat._ManualFocusPoint;
 
             float4 originalColor = Mat._MainTex.Sample(input.uv);
             float4 blurredColor = Mat._BlurredTex.Sample(input.uv);
@@ -312,13 +309,11 @@ Shader "Default/EnhancedBokehdoF"
             float depth = Mat._CameraDepthTexture.Sample(input.uv).x;
             float coc = calculateCoC(depth, focusPoint);
 
-            // Smooth blend based on CoC
             float maxBlurPixels = Mat._MaxBlurRadius * 0.005 * Mat._Resolution.y;
             float blendFactor = smoothstep(0.5, maxBlurPixels * 0.5, coc);
 
             return lerp(originalColor, blurredColor, blendFactor);
         }
-
         ENDSLANG
     }
 }

@@ -1,39 +1,41 @@
 module VertexAttributes;
 
 __exported import ShaderVariables;
+import VariantAttributes;
 
-// =============================================================
-//  Vertex attributes are declared per-shader in each vertex
-//  input struct. The helpers below take the values they need as
-//  explicit parameters instead of reading global `in` variables.
-// =============================================================
+// Global mesh keywords. Shaders that call the Transform* / GetInstance* helpers below get all three
+// permutation axes; each shader still declares its own vertex input struct and fills a MeshVertex.
+[variant("false") variant("true")]
+extern static const bool SKINNED;
+[variant("false") variant("true")]
+extern static const bool GPU_INSTANCING;
+[variant("false") variant("true")]
+extern static const bool BLENDSHAPES;
 
 // =============================================================
 //  Skeletal Animation (Skinning)
+//  Bone matrices stored in a RGBA32F texture - no uniform array size limit.
+//  Layout: each bone = 4 consecutive texels (one per column of float4x4).
 // =============================================================
 
-#ifdef SKINNED
-static const int MAX_BONE_INFLUENCE = 4;
-
-// Bone matrices stored in a RGBA32F texture - no uniform array size limit.
-// Layout: each bone = 4 consecutive texels (one per column of the bone matrix).
-public struct SkinningData
+public struct SkinData
 {
     public Sampler2D<float4> boneMatrixTexture;
     public int boneCount;
 }
-public ParameterBlock<SkinningData> Skin;
+public ParameterBlock<SkinData> Skin;
 
-// Returns the bone matrix as float4x4(col0,col1,col2,col3); its rows are the stored
-// columns, so apply it with mul(vector, matrix) to reproduce the GLSL `matrix * vector`.
+public static const int MAX_BONE_INFLUENCE = 4;
+
+// Texels store the matrix columns; transpose so mul(M, v) matches the original column-major GLSL.
 public float4x4 GetBoneMatrix(int boneIndex)
 {
     int texOffset = boneIndex * 4;
-    float4 col0 = Skin.boneMatrixTexture.Load(int3(int2(texOffset + 0, 0), 0));
-    float4 col1 = Skin.boneMatrixTexture.Load(int3(int2(texOffset + 1, 0), 0));
-    float4 col2 = Skin.boneMatrixTexture.Load(int3(int2(texOffset + 2, 0), 0));
-    float4 col3 = Skin.boneMatrixTexture.Load(int3(int2(texOffset + 3, 0), 0));
-    return float4x4(col0, col1, col2, col3);
+    float4 col0 = Skin.boneMatrixTexture.Load(int3(texOffset + 0, 0, 0));
+    float4 col1 = Skin.boneMatrixTexture.Load(int3(texOffset + 1, 0, 0));
+    float4 col2 = Skin.boneMatrixTexture.Load(int3(texOffset + 2, 0, 0));
+    float4 col3 = Skin.boneMatrixTexture.Load(int3(texOffset + 3, 0, 0));
+    return transpose(float4x4(col0, col1, col2, col3));
 }
 
 public float4 GetSkinnedPosition(float3 position, float4 boneIndices, float4 boneWeights)
@@ -46,7 +48,7 @@ public float4 GetSkinnedPosition(float3 position, float4 boneIndices, float4 bon
         if (boneIndex > 0 && weight > 0.0 && boneIndex <= Skin.boneCount)
         {
             float4x4 boneTransform = GetBoneMatrix(boneIndex - 1);
-            skinnedPos += mul(float4(position, 1.0), boneTransform) * weight;
+            skinnedPos += mul(boneTransform, float4(position, 1.0)) * weight;
         }
     }
     float totalWeight = boneWeights.x + boneWeights.y + boneWeights.z + boneWeights.w;
@@ -65,7 +67,7 @@ public float3 GetSkinnedNormal(float3 normal, float4 boneIndices, float4 boneWei
         if (boneIndex > 0 && weight > 0.0 && boneIndex <= Skin.boneCount)
         {
             float4x4 boneTransform = GetBoneMatrix(boneIndex - 1);
-            skinnedNormal += mul(normal, (float3x3)boneTransform) * weight;
+            skinnedNormal += mul((float3x3)boneTransform, normal) * weight;
         }
     }
     float totalWeight = boneWeights.x + boneWeights.y + boneWeights.z + boneWeights.w;
@@ -73,19 +75,14 @@ public float3 GetSkinnedNormal(float3 normal, float4 boneIndices, float4 boneWei
         skinnedNormal = normal;
     return normalize(skinnedNormal);
 }
-#endif
 
 // =============================================================
 //  Blend Shapes (Morph Targets)
 //  Per-mesh delta textures (RGBA32F) hold one "layer" per blend-shape frame.
 //  Deltas are laid out linearly as idx = layer * morphVertexCount + vertexID
 //  and tiled into 2D: (idx % morphTexWidth, idx / morphTexWidth).
-//  The renderer uploads only the ACTIVE layers (non-zero weight) into
-//  morphWeightTexture, one texel each: (layerIndex, weight, 0, 0).
-//  Morphing is applied to the rest-pose vertex BEFORE skinning.
 // =============================================================
 
-#ifdef BLENDSHAPES
 public struct MorphData
 {
     public Sampler2D<float4> morphPositionTexture;
@@ -100,155 +97,151 @@ public struct MorphData
 }
 public ParameterBlock<MorphData> Morph;
 
-float3 SampleMorphDelta(Sampler2D<float4> tex, int layer, uint vertexID)
+public float3 SampleMorphDelta(Sampler2D<float4> tex, int layer, uint vertexID)
 {
     int idx = layer * Morph.morphVertexCount + int(vertexID);
-    return tex.Load(int3(int2(idx % Morph.morphTexWidth, idx / Morph.morphTexWidth), 0)).xyz;
+    return tex.Load(int3(idx % Morph.morphTexWidth, idx / Morph.morphTexWidth, 0)).xyz;
 }
 
+// No-op passthrough unless the BLENDSHAPES variant is active.
 public float3 GetMorphedPosition(float3 position, uint vertexID)
 {
-    for (int i = 0; i < Morph.morphActiveCount; i++)
+    static if (BLENDSHAPES)
     {
-        float2 lw = Morph.morphWeightTexture.Load(int3(int2(i, 0), 0)).xy;
-        position += SampleMorphDelta(Morph.morphPositionTexture, int(lw.x), vertexID) * lw.y;
+        for (int i = 0; i < Morph.morphActiveCount; i++)
+        {
+            float2 lw = Morph.morphWeightTexture.Load(int3(i, 0, 0)).xy;
+            position += SampleMorphDelta(Morph.morphPositionTexture, int(lw.x), vertexID) * lw.y;
+        }
     }
     return position;
 }
 
 public float3 GetMorphedNormal(float3 normal, uint vertexID)
 {
-    if (Morph.morphHasNormals == 0) return normal;
-    for (int i = 0; i < Morph.morphActiveCount; i++)
+    static if (BLENDSHAPES)
     {
-        float2 lw = Morph.morphWeightTexture.Load(int3(int2(i, 0), 0)).xy;
-        normal += SampleMorphDelta(Morph.morphNormalTexture, int(lw.x), vertexID) * lw.y;
+        if (Morph.morphHasNormals == 0) return normal;
+        for (int i = 0; i < Morph.morphActiveCount; i++)
+        {
+            float2 lw = Morph.morphWeightTexture.Load(int3(i, 0, 0)).xy;
+            normal += SampleMorphDelta(Morph.morphNormalTexture, int(lw.x), vertexID) * lw.y;
+        }
     }
     return normal;
 }
 
 public float3 GetMorphedTangent(float3 tangent, uint vertexID)
 {
-    if (Morph.morphHasTangents == 0) return tangent;
-    for (int i = 0; i < Morph.morphActiveCount; i++)
+    static if (BLENDSHAPES)
     {
-        float2 lw = Morph.morphWeightTexture.Load(int3(int2(i, 0), 0)).xy;
-        tangent += SampleMorphDelta(Morph.morphTangentTexture, int(lw.x), vertexID) * lw.y;
+        if (Morph.morphHasTangents == 0) return tangent;
+        for (int i = 0; i < Morph.morphActiveCount; i++)
+        {
+            float2 lw = Morph.morphWeightTexture.Load(int3(i, 0, 0)).xy;
+            tangent += SampleMorphDelta(Morph.morphTangentTexture, int(lw.x), vertexID) * lw.y;
+        }
     }
     return tangent;
 }
-#else
-// No-op passthroughs so shaders can call these unconditionally.
-public float3 GetMorphedPosition(float3 position, uint vertexID) { return position; }
-public float3 GetMorphedNormal(float3 normal, uint vertexID) { return normal; }
-public float3 GetMorphedTangent(float3 tangent, uint vertexID) { return tangent; }
-#endif
 
 // =============================================================
-//  Vertex Utilities
-//  Helpers that fold morph + (optional) skinning + (optional) instancing
-//  into the standard transforms. Under GPU_INSTANCING the model rows and
-//  under SKINNED the bone attributes are passed in by the caller.
+//  GPU Instancing
+//  Instance rows store the model matrix columns (see InstanceData.cs); transpose so
+//  mul(M, v) matches the original column-major GLSL.
 // =============================================================
 
-// Returns the model (object-to-world) matrix, accounting for GPU instancing.
-#ifdef GPU_INSTANCING
-// GLSL `mat4(a,b,c,d)` builds columns; transpose(float4x4(...)) reproduces that in Slang.
-public float4x4 GetModelMatrix(float4 row0, float4 row1, float4 row2, float4 row3)
+public float4x4 GetInstanceMatrix(float4 row0, float4 row1, float4 row2, float4 row3)
 {
     return transpose(float4x4(row0, row1, row2, row3));
 }
-#else
-public float4x4 GetModelMatrix()
-{
-    return Object.prowl_ObjectToWorld;
-}
-#endif
 
-// Transform a position to world space (morph, then skinning if active, then model matrix).
-public float3 TransformPosition(
-    float3 position,
-    uint vertexID
-#ifdef SKINNED
-    , float4 boneIndices, float4 boneWeights
-#endif
-#ifdef GPU_INSTANCING
-    , float4 row0, float4 row1, float4 row2, float4 row3
-#endif
-)
+// =============================================================
+//  Composition helpers (handle instancing + skinning + morph)
+//  The shader fills a MeshVertex from its own input struct, then calls Transform*/GetInstance*.
+// =============================================================
+
+public struct MeshVertex
 {
-    position = GetMorphedPosition(position, vertexID);
-#ifdef GPU_INSTANCING
-    float4x4 model = GetModelMatrix(row0, row1, row2, row3);
-#else
-    float4x4 model = GetModelMatrix();
-#endif
-#ifdef SKINNED
-    return mul(model, GetSkinnedPosition(position, boneIndices, boneWeights)).xyz;
-#else
-    return mul(model, float4(position, 1.0)).xyz;
-#endif
+    public float3 position;
+    public float3 normal;
+    public float4 tangent;
+    public float4 color;
+    public uint vid;
+    public float4 boneIndices;
+    public float4 boneWeights;
+    public float4 instanceRow0;
+    public float4 instanceRow1;
+    public float4 instanceRow2;
+    public float4 instanceRow3;
+    public float4 instanceColor;
+    public float4 instanceCustomData;
 }
 
-// Transform a position to clip space (morph, then skinning if active, then MVP matrix).
-public float4 TransformClip(
-    float3 position,
-    uint vertexID
-#ifdef SKINNED
-    , float4 boneIndices, float4 boneWeights
-#endif
-#ifdef GPU_INSTANCING
-    , float4 row0, float4 row1, float4 row2, float4 row3
-#endif
-)
+public float4x4 GetModelMatrix(MeshVertex v)
 {
-    position = GetMorphedPosition(position, vertexID);
-#ifdef GPU_INSTANCING
-    float4x4 mvp = mul(Frame.prowl_MatVP, GetModelMatrix(row0, row1, row2, row3));
-#else
-    float4x4 mvp = Object.mvp;
-#endif
-#ifdef SKINNED
-    return mul(mvp, GetSkinnedPosition(position, boneIndices, boneWeights));
-#else
-    return mul(mvp, float4(position, 1.0));
-#endif
+    static if (GPU_INSTANCING)
+        return GetInstanceMatrix(v.instanceRow0, v.instanceRow1, v.instanceRow2, v.instanceRow3);
+    else
+        return Object.prowl_ObjectToWorld;
 }
 
-// Transform a direction/normal to world space (skinning if active, then model rotation).
-public float3 TransformDirection(
-    float3 dir
-#ifdef SKINNED
-    , float4 boneIndices, float4 boneWeights
-#endif
-#ifdef GPU_INSTANCING
-    , float4 row0, float4 row1, float4 row2, float4 row3
-#endif
-)
+public float4x4 GetMVPMatrix(MeshVertex v)
 {
-#ifdef GPU_INSTANCING
-    float4x4 model = GetModelMatrix(row0, row1, row2, row3);
-#else
-    float4x4 model = GetModelMatrix();
-#endif
-#ifdef SKINNED
-    return normalize(mul((float3x3)model, GetSkinnedNormal(dir, boneIndices, boneWeights)));
-#else
-    return normalize(mul((float3x3)model, dir));
-#endif
+    static if (GPU_INSTANCING)
+        return mul(Frame.prowl_MatVP, GetModelMatrix(v));
+    else
+        return Object.mvp;
+}
+
+// World-space position (applies morph, then skinning if active, then model matrix).
+public float3 TransformPosition(MeshVertex v)
+{
+    float3 position = GetMorphedPosition(v.position, v.vid);
+
+    float4x4 model = GetModelMatrix(v);
+    static if (SKINNED)
+        return mul(model, GetSkinnedPosition(position, v.boneIndices, v.boneWeights)).xyz;
+    else
+        return mul(model, float4(position, 1.0)).xyz;
+}
+
+// Clip-space position (applies morph, then skinning if active, then MVP matrix).
+public float4 TransformClip(MeshVertex v)
+{
+    float3 position = GetMorphedPosition(v.position, v.vid);
+
+    float4x4 mvp = GetMVPMatrix(v);
+    static if (SKINNED)
+        return mul(mvp, GetSkinnedPosition(position, v.boneIndices, v.boneWeights));
+    else
+        return mul(mvp, float4(position, 1.0));
+}
+
+// World-space direction (applies skinning if active, then model rotation).
+public float3 TransformDirection(MeshVertex v, float3 dir)
+{
+    float4x4 model = GetModelMatrix(v);
+    static if (SKINNED)
+        return normalize(mul((float3x3)model, GetSkinnedNormal(dir, v.boneIndices, v.boneWeights)));
+    else
+        return normalize(mul((float3x3)model, dir));
 }
 
 // Vertex color with per-instance tint applied.
-public float4 GetInstanceColor(
-    float4 vertexColor
-#ifdef GPU_INSTANCING
-    , float4 instanceColor
-#endif
-)
+public float4 GetInstanceColor(MeshVertex v)
 {
-#ifdef GPU_INSTANCING
-    return vertexColor * instanceColor;
-#else
-    return vertexColor;
-#endif
+    static if (GPU_INSTANCING)
+        return v.color * v.instanceColor;
+    else
+        return v.color;
+}
+
+// Per-instance custom data (zero without GPU instancing).
+public float4 GetInstanceCustomData(MeshVertex v)
+{
+    static if (GPU_INSTANCING)
+        return v.instanceCustomData;
+    else
+        return float4(0.0);
 }

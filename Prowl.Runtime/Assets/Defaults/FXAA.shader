@@ -4,35 +4,33 @@ Shader "Default/FXAA"
     {
         Name "FXAA"
         Tags { "RenderOrder" = "Opaque" }
-        Blend SrcAlpha OneMinusSrcAlpha
+
+        Blend SourceAlpha InverseSourceAlpha
         Cull Off
         ZTest Disabled
         ZWrite Off
 
         SLANGPROGRAM
 
-        import ProwlCG;
-
-        struct VertexInput { float3 position : POSITION0; float2 uv : TEXCOORD0; }
-        struct Varyings { float4 position : SV_Position; float2 uv : TEXCOORD0; }
-
-        struct Material
+        struct MaterialData
         {
+            Sampler2D<float4> _MainTex;
             float2 _Resolution;
             float _EdgeThresholdMin;
             float _EdgeThresholdMax;
             float _SubpixelQuality;
-            Sampler2D<float4> _MainTex;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
 
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
+        struct VertexInput
         {
-            Varyings output;
-            output.uv = input.uv;
-            output.position = float4(input.position, 1.0);
-            return output;
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 uv : TEXCOORD0;
         }
 
         float GetLuminance(float3 color) {
@@ -59,12 +57,10 @@ Shader "Default/FXAA"
 
             float lumaRange = lumaMax - lumaMin;
 
-            // Early exit if no edge detected
             if (lumaRange < max(Mat._EdgeThresholdMin, lumaMax * Mat._EdgeThresholdMax)) {
                 return colorCenter;
             }
 
-            // Sample corners
             float lumaDownLeft  = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2(-1, -1), 0)).rgb);
             float lumaUpRight   = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2( 1,  1), 0)).rgb);
             float lumaUpLeft    = GetLuminance(Mat._MainTex.Load(int3(texelCoord + int2(-1,  1), 0)).rgb);
@@ -78,7 +74,6 @@ Shader "Default/FXAA"
             float lumaRightCorners = lumaDownRight + lumaUpRight;
             float lumaUpCorners    = lumaUpRight   + lumaUpLeft;
 
-            // Detect horizontal/vertical edge
             float edgeHorizontal = abs(-2.0 * lumaLeft   + lumaLeftCorners ) +
                                    abs(-2.0 * lumaCenter + lumaDownUp      ) * 2.0 +
                                    abs(-2.0 * lumaRight  + lumaRightCorners);
@@ -177,7 +172,6 @@ Shader "Default/FXAA"
 
             float finalOffset = correctVariation ? pixelOffset : 0.0;
 
-            // Sub-pixel antialiasing
             float lumaAverage = (1.0 / 12.0) * (2.0 * (lumaDownUp + lumaLeftRight) + lumaLeftCorners + lumaRightCorners);
             float subPixelOffset1 = clamp(abs(lumaAverage - lumaCenter) / lumaRange, 0.0, 1.0);
             float subPixelOffset2 = (-2.0 * subPixelOffset1 + 3.0) * subPixelOffset1 * subPixelOffset1;
@@ -185,7 +179,6 @@ Shader "Default/FXAA"
 
             finalOffset = max(finalOffset, subPixelOffsetFinal);
 
-            // Compute final UV coordinates
             float2 finalUv = texCoord;
             if (isHorizontal) {
                 finalUv.y += finalOffset * stepLength;
@@ -196,6 +189,15 @@ Shader "Default/FXAA"
             return Mat._MainTex.Sample(finalUv).rgb;
         }
 
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
+            return output;
+        }
+
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
@@ -203,7 +205,6 @@ Shader "Default/FXAA"
             float3 color = FXAA311(input.uv);
             return float4(color, base.a);
         }
-
         ENDSLANG
     }
 }

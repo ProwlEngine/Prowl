@@ -4,7 +4,8 @@ Shader "Default/Blit"
     {
         Name "Blit"
         Tags { "RenderOrder" = "Opaque" }
-        Blend SrcAlpha OneMinusSrcAlpha
+
+        Blend SourceAlpha InverseSourceAlpha
         Cull Off
         ZTest Disabled
         ZWrite Off
@@ -23,18 +24,18 @@ Shader "Default/Blit"
             float2 uv : TEXCOORD0;
         }
 
-        struct Material
+        struct MaterialData
         {
             Sampler2D<float4> _MainTex;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
 
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
         {
             Varyings output;
-            output.position = float4(input.position, 1.0);
             output.uv = input.uv;
+            output.position = float4(input.position, 1.0);
             return output;
         }
 
@@ -43,7 +44,6 @@ Shader "Default/Blit"
         {
             return Mat._MainTex.Sample(input.uv);
         }
-
         ENDSLANG
     }
 }

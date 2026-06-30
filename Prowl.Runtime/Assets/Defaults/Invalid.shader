@@ -1,21 +1,30 @@
-﻿Shader "Default/Fallback"
+Shader "Default/Invalid"
 {
-    Pass 0
+    Pass
     {
+        Name "Invalid"
+        Tags { "RenderType" = "Opaque" }
+        Cull Off
+
         SLANGPROGRAM
+        import ProwlCG;
+
+        struct VertexInput { float3 position : POSITION0; }
+        struct Varyings { float4 position : SV_Position; }
 
         [shader("vertex")]
-        float4 Vertex(float3 position : POSITION) : SV_Position
+        Varyings Vertex(VertexInput input)
         {
-            return float4(position.xyz, 1.0);
+            Varyings output;
+            output.position = mul(Frame.prowl_MatVP, float4(input.position, 1.0));
+            return output;
         }
 
         [shader("fragment")]
-        float4 Fragment() : SV_Target
+        float4 Fragment(Varyings input) : SV_Target
         {
-            return float4(1.0, 1.0, 0.0, 0.0);
+            return float4(1.0, 0.0, 1.0, 1.0);
         }
-
         ENDSLANG
     }
 }

@@ -2,58 +2,58 @@ Shader "Default/Terrain"
 {
     Properties
     {
-        _Heightmap("Heightmap", Texture2D) = "black" {}
-        _Splatmap0("Splatmap 0 (Layers 0-3)", Texture2D) = "white" {}
-        _Splatmap1("Splatmap 1 (Layers 4-7)", Texture2D) = "black" {}
-        _HolesMap("Holes Map", Texture2D) = "white" {}
-        _HasHoles("Has Holes", Integer) = 0
-        _LayerCount("Layer Count", Integer) = 4
-        _Layer0("Layer 0 Albedo", Texture2D) = "white" {}
-        _Layer0Normal("Layer 0 Normal", Texture2D) = "normal" {}
-        _Layer0Tiling("Layer 0 Tiling", Float) = 10.0
-        _Layer0Roughness("Layer 0 Roughness", Float) = 1.0
-        _Layer0Metallic("Layer 0 Metallic", Float) = 0.0
-        _Layer1("Layer 1 Albedo", Texture2D) = "white" {}
-        _Layer1Normal("Layer 1 Normal", Texture2D) = "normal" {}
-        _Layer1Tiling("Layer 1 Tiling", Float) = 10.0
-        _Layer1Roughness("Layer 1 Roughness", Float) = 1.0
-        _Layer1Metallic("Layer 1 Metallic", Float) = 0.0
-        _Layer2("Layer 2 Albedo", Texture2D) = "white" {}
-        _Layer2Normal("Layer 2 Normal", Texture2D) = "normal" {}
-        _Layer2Tiling("Layer 2 Tiling", Float) = 10.0
-        _Layer2Roughness("Layer 2 Roughness", Float) = 1.0
-        _Layer2Metallic("Layer 2 Metallic", Float) = 0.0
-        _Layer3("Layer 3 Albedo", Texture2D) = "white" {}
-        _Layer3Normal("Layer 3 Normal", Texture2D) = "normal" {}
-        _Layer3Tiling("Layer 3 Tiling", Float) = 10.0
-        _Layer3Roughness("Layer 3 Roughness", Float) = 1.0
-        _Layer3Metallic("Layer 3 Metallic", Float) = 0.0
-        _Layer4("Layer 4 Albedo", Texture2D) = "white" {}
-        _Layer4Normal("Layer 4 Normal", Texture2D) = "normal" {}
-        _Layer4Tiling("Layer 4 Tiling", Float) = 10.0
-        _Layer4Roughness("Layer 4 Roughness", Float) = 1.0
-        _Layer4Metallic("Layer 4 Metallic", Float) = 0.0
-        _Layer5("Layer 5 Albedo", Texture2D) = "white" {}
-        _Layer5Normal("Layer 5 Normal", Texture2D) = "normal" {}
-        _Layer5Tiling("Layer 5 Tiling", Float) = 10.0
-        _Layer5Roughness("Layer 5 Roughness", Float) = 1.0
-        _Layer5Metallic("Layer 5 Metallic", Float) = 0.0
-        _Layer6("Layer 6 Albedo", Texture2D) = "white" {}
-        _Layer6Normal("Layer 6 Normal", Texture2D) = "normal" {}
-        _Layer6Tiling("Layer 6 Tiling", Float) = 10.0
-        _Layer6Roughness("Layer 6 Roughness", Float) = 1.0
-        _Layer6Metallic("Layer 6 Metallic", Float) = 0.0
-        _Layer7("Layer 7 Albedo", Texture2D) = "white" {}
-        _Layer7Normal("Layer 7 Normal", Texture2D) = "normal" {}
-        _Layer7Tiling("Layer 7 Tiling", Float) = 10.0
-        _Layer7Roughness("Layer 7 Roughness", Float) = 1.0
-        _Layer7Metallic("Layer 7 Metallic", Float) = 0.0
-        _TerrainSize("Terrain Size", Float) = 1024.0
-        _TerrainHeight("Terrain Height", Float) = 100.0
-        _BrushPosition("Brush Position", Vector) = (0.0, 0.0, 0, 0)
-        _BrushRadius("Brush Radius", Float) = 0.0
-        _BrushFalloff("Brush Falloff", Float) = 0.5
-        _BrushVisible("Brush Visible", Float) = 0
+        _Heightmap ("Heightmap", Texture2D) = "black" {}
+        _Splatmap0 ("Splatmap 0 (Layers 0-3)", Texture2D) = "white" {}
+        _Splatmap1 ("Splatmap 1 (Layers 4-7)", Texture2D) = "black" {}
+        _HolesMap ("Holes Map", Texture2D) = "white" {}
+        _HasHoles ("Has Holes", Integer) = 0
+        _LayerCount ("Layer Count", Integer) = 4
+        _Layer0 ("Layer 0 Albedo", Texture2D) = "white" {}
+        _Layer0Normal ("Layer 0 Normal", Texture2D) = "normal" {}
+        _Layer0Tiling ("Layer 0 Tiling", Float) = 10.0
+        _Layer0Roughness ("Layer 0 Roughness", Float) = 1.0
+        _Layer0Metallic ("Layer 0 Metallic", Float) = 0.0
+        _Layer1 ("Layer 1 Albedo", Texture2D) = "white" {}
+        _Layer1Normal ("Layer 1 Normal", Texture2D) = "normal" {}
+        _Layer1Tiling ("Layer 1 Tiling", Float) = 10.0
+        _Layer1Roughness ("Layer 1 Roughness", Float) = 1.0
+        _Layer1Metallic ("Layer 1 Metallic", Float) = 0.0
+        _Layer2 ("Layer 2 Albedo", Texture2D) = "white" {}
+        _Layer2Normal ("Layer 2 Normal", Texture2D) = "normal" {}
+        _Layer2Tiling ("Layer 2 Tiling", Float) = 10.0
+        _Layer2Roughness ("Layer 2 Roughness", Float) = 1.0
+        _Layer2Metallic ("Layer 2 Metallic", Float) = 0.0
+        _Layer3 ("Layer 3 Albedo", Texture2D) = "white" {}
+        _Layer3Normal ("Layer 3 Normal", Texture2D) = "normal" {}
+        _Layer3Tiling ("Layer 3 Tiling", Float) = 10.0
+        _Layer3Roughness ("Layer 3 Roughness", Float) = 1.0
+        _Layer3Metallic ("Layer 3 Metallic", Float) = 0.0
+        _Layer4 ("Layer 4 Albedo", Texture2D) = "white" {}
+        _Layer4Normal ("Layer 4 Normal", Texture2D) = "normal" {}
+        _Layer4Tiling ("Layer 4 Tiling", Float) = 10.0
+        _Layer4Roughness ("Layer 4 Roughness", Float) = 1.0
+        _Layer4Metallic ("Layer 4 Metallic", Float) = 0.0
+        _Layer5 ("Layer 5 Albedo", Texture2D) = "white" {}
+        _Layer5Normal ("Layer 5 Normal", Texture2D) = "normal" {}
+        _Layer5Tiling ("Layer 5 Tiling", Float) = 10.0
+        _Layer5Roughness ("Layer 5 Roughness", Float) = 1.0
+        _Layer5Metallic ("Layer 5 Metallic", Float) = 0.0
+        _Layer6 ("Layer 6 Albedo", Texture2D) = "white" {}
+        _Layer6Normal ("Layer 6 Normal", Texture2D) = "normal" {}
+        _Layer6Tiling ("Layer 6 Tiling", Float) = 10.0
+        _Layer6Roughness ("Layer 6 Roughness", Float) = 1.0
+        _Layer6Metallic ("Layer 6 Metallic", Float) = 0.0
+        _Layer7 ("Layer 7 Albedo", Texture2D) = "white" {}
+        _Layer7Normal ("Layer 7 Normal", Texture2D) = "normal" {}
+        _Layer7Tiling ("Layer 7 Tiling", Float) = 10.0
+        _Layer7Roughness ("Layer 7 Roughness", Float) = 1.0
+        _Layer7Metallic ("Layer 7 Metallic", Float) = 0.0
+        _TerrainSize ("Terrain Size", Float) = 1024.0
+        _TerrainHeight ("Terrain Height", Float) = 100.0
+        _BrushPosition ("Brush Position", Vector) = (0.0, 0.0, 0.0, 0.0)
+        _BrushRadius ("Brush Radius", Float) = 0.0
+        _BrushFalloff ("Brush Falloff", Float) = 0.5
+        _BrushVisible ("Brush Visible", Float) = 0
     }
 
     Pass
@@ -64,71 +64,57 @@ Shader "Default/Terrain"
         ZWrite On
 
         SLANGPROGRAM
-
         import ProwlCG;
-        import VertexAttributes;
         import Lighting;
+        import VariantAttributes;
+
+        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
+        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
+        [variant("false") variant("true")] extern static const bool TERRAIN_8_LAYERS;
+
+        struct MaterialData
+        {
+            Sampler2D<float4> _Heightmap;
+            Sampler2D<float4> _Splatmap0;
+            Sampler2D<float4> _Splatmap1;
+            Sampler2D<float4> _HolesMap;
+            int _HasHoles;
+            int _LayerCount;
+            Sampler2D<float4> _Layer0; Sampler2D<float4> _Layer0Normal; float _Layer0Tiling; float _Layer0Roughness; float _Layer0Metallic;
+            Sampler2D<float4> _Layer1; Sampler2D<float4> _Layer1Normal; float _Layer1Tiling; float _Layer1Roughness; float _Layer1Metallic;
+            Sampler2D<float4> _Layer2; Sampler2D<float4> _Layer2Normal; float _Layer2Tiling; float _Layer2Roughness; float _Layer2Metallic;
+            Sampler2D<float4> _Layer3; Sampler2D<float4> _Layer3Normal; float _Layer3Tiling; float _Layer3Roughness; float _Layer3Metallic;
+            Sampler2D<float4> _Layer4; Sampler2D<float4> _Layer4Normal; float _Layer4Tiling; float _Layer4Roughness; float _Layer4Metallic;
+            Sampler2D<float4> _Layer5; Sampler2D<float4> _Layer5Normal; float _Layer5Tiling; float _Layer5Roughness; float _Layer5Metallic;
+            Sampler2D<float4> _Layer6; Sampler2D<float4> _Layer6Normal; float _Layer6Tiling; float _Layer6Roughness; float _Layer6Metallic;
+            Sampler2D<float4> _Layer7; Sampler2D<float4> _Layer7Normal; float _Layer7Tiling; float _Layer7Roughness; float _Layer7Metallic;
+            float _TerrainSize;
+            float _TerrainHeight;
+            float4x4 _TerrainWorldToLocal;
+            float4x4 _TerrainLocalToWorld;
+            float2 _BrushPosition;
+            float _BrushRadius;
+            float _BrushFalloff;
+            float _BrushVisible;
+        }
+        ParameterBlock<MaterialData> Mat;
 
         struct VertexInput
         {
             float3 position : POSITION0;
-            float2 uv0 : TEXCOORD0;
-#ifdef GPU_INSTANCING
-            float4 instanceModelRow0 : TEXCOORD8;
-            float4 instanceModelRow1 : TEXCOORD9;
-            float4 instanceModelRow2 : TEXCOORD10;
-            float4 instanceModelRow3 : TEXCOORD11;
-#endif
+            float2 uv : TEXCOORD0;
+            float4 instRow0 : TEXCOORD8;
+            float4 instRow1 : TEXCOORD9;
+            float4 instRow2 : TEXCOORD10;
+            float4 instRow3 : TEXCOORD11;
         }
-
         struct Varyings
         {
             float4 position : SV_Position;
             float2 texCoord0 : TEXCOORD0;
             float3 worldPos : TEXCOORD1;
-            float3 worldNormal : NORMAL0;
+            float3 worldNormal : TEXCOORD2;
         }
-
-        struct Material
-        {
-            float _TerrainSize;
-            float _TerrainHeight;
-            float4x4 _TerrainWorldToLocal;
-            float4x4 _TerrainLocalToWorld;
-
-            int _HasHoles;
-            int _LayerCount;
-            float _Layer0Tiling; float _Layer0Roughness; float _Layer0Metallic;
-            float _Layer1Tiling; float _Layer1Roughness; float _Layer1Metallic;
-            float _Layer2Tiling; float _Layer2Roughness; float _Layer2Metallic;
-            float _Layer3Tiling; float _Layer3Roughness; float _Layer3Metallic;
-            float2 _BrushPosition;
-            float _BrushRadius;
-            float _BrushFalloff;
-            float _BrushVisible;
-#ifdef TERRAIN_8_LAYERS
-            float _Layer4Tiling; float _Layer4Roughness; float _Layer4Metallic;
-            float _Layer5Tiling; float _Layer5Roughness; float _Layer5Metallic;
-            float _Layer6Tiling; float _Layer6Roughness; float _Layer6Metallic;
-            float _Layer7Tiling; float _Layer7Roughness; float _Layer7Metallic;
-#endif
-
-            Sampler2D<float4> _Heightmap;
-            Sampler2D<float4> _Splatmap0;
-            Sampler2D<float4> _HolesMap;
-            Sampler2D<float4> _Layer0; Sampler2D<float4> _Layer0Normal;
-            Sampler2D<float4> _Layer1; Sampler2D<float4> _Layer1Normal;
-            Sampler2D<float4> _Layer2; Sampler2D<float4> _Layer2Normal;
-            Sampler2D<float4> _Layer3; Sampler2D<float4> _Layer3Normal;
-#ifdef TERRAIN_8_LAYERS
-            Sampler2D<float4> _Splatmap1;
-            Sampler2D<float4> _Layer4; Sampler2D<float4> _Layer4Normal;
-            Sampler2D<float4> _Layer5; Sampler2D<float4> _Layer5Normal;
-            Sampler2D<float4> _Layer6; Sampler2D<float4> _Layer6Normal;
-            Sampler2D<float4> _Layer7; Sampler2D<float4> _Layer7Normal;
-#endif
-        }
-        ParameterBlock<Material> Mat;
 
         float2 hmSampleUV(float2 uv)
         {
@@ -137,48 +123,44 @@ Shader "Default/Terrain"
             return uv * (s - 1.0) / s + 0.5 / s;
         }
 
-#ifdef TERRAIN_BICUBIC
-        // Bicubic B-spline filtering using 4 bilinear taps (Sigg & Hadwiger).
         float sampleHeightBicubic(float2 uv)
         {
             uint w, h; Mat._Heightmap.GetDimensions(w, h);
             float2 texSize = float2(w, h);
             float2 invTexSize = 1.0 / texSize;
-
             float2 coord = uv * texSize - 0.5;
             float2 f = frac(coord);
             coord -= f;
-
-            float2 f2 = f * f;
-            float2 f3 = f2 * f;
-
+            float2 f2 = f * f; float2 f3 = f2 * f;
             float2 w0 = -0.5 * f3 + f2 - 0.5 * f;
-            float2 w1 =  1.5 * f3 - 2.5 * f2 + 1.0;
+            float2 w1 = 1.5 * f3 - 2.5 * f2 + 1.0;
             float2 w2 = -1.5 * f3 + 2.0 * f2 + 0.5 * f;
-            float2 w3 =  0.5 * f3 - 0.5 * f2;
-
-            float2 s0 = w0 + w1;
-            float2 s1 = w2 + w3;
-            float2 f0 = w1 / s0;
-            float2 f1 = w3 / s1;
-
+            float2 w3 = 0.5 * f3 - 0.5 * f2;
+            float2 s0 = w0 + w1; float2 s1 = w2 + w3;
+            float2 f0 = w1 / s0; float2 f1 = w3 / s1;
             float2 t0 = (coord - 0.5 + f0) * invTexSize + 0.5 * invTexSize;
             float2 t1 = (coord + 1.5 + f1) * invTexSize + 0.5 * invTexSize;
-
             float h00 = Mat._Heightmap.Sample(float2(t0.x, t0.y)).r;
             float h10 = Mat._Heightmap.Sample(float2(t1.x, t0.y)).r;
             float h01 = Mat._Heightmap.Sample(float2(t0.x, t1.y)).r;
             float h11 = Mat._Heightmap.Sample(float2(t1.x, t1.y)).r;
-
             float row0 = lerp(h00, h10, s1.x / (s0.x + s1.x));
             float row1 = lerp(h01, h11, s1.x / (s0.x + s1.x));
             return lerp(row0, row1, s1.y / (s0.y + s1.y));
         }
 
-        float sampleHeight(float2 uv) { return sampleHeightBicubic(uv) * Mat._TerrainHeight; }
-#else
-        float sampleHeight(float2 uv) { return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight; }
-#endif
+        float sampleHeight(float2 uv)
+        {
+            static if (TERRAIN_BICUBIC)
+                return sampleHeightBicubic(uv) * Mat._TerrainHeight;
+            else
+                return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight;
+        }
+
+        float4x4 InstanceModel(VertexInput input)
+        {
+            return transpose(float4x4(input.instRow0, input.instRow1, input.instRow2, input.instRow3));
+        }
 
         float3 unpackNormal(float4 packednormal)
         {
@@ -191,54 +173,54 @@ Shader "Default/Terrain"
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
         {
-            Varyings o;
-#ifdef GPU_INSTANCING
-            // GLSL float4x4(r0..r3) builds columns; transpose(float4x4(...)) reproduces that in Slang.
-            float4x4 instanceModel = transpose(float4x4(input.instanceModelRow0, input.instanceModelRow1, input.instanceModelRow2, input.instanceModelRow3));
-            float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
-            float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
-            float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
-            o.texCoord0 = terrainUV;
+            Varyings output;
+            static if (GPU_INSTANCING)
+            {
+                float4x4 instanceModel = InstanceModel(input);
+                float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
+                float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
+                float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
+                output.texCoord0 = terrainUV;
 
-            float height = sampleHeight(terrainUV);
-            float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
-            float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
+                float height = sampleHeight(terrainUV);
+                float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
+                float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
 
-            uint hw, hh; Mat._Heightmap.GetDimensions(hw, hh);
-            float hmSize = float(hw);
-            float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
+                uint hmW, hmH; Mat._Heightmap.GetDimensions(hmW, hmH);
+                float hmSize = float(hmW);
+                float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
 
-            float hR = sampleHeight(terrainUV + float2(vertStep, 0.0));
-            float hL = sampleHeight(terrainUV - float2(vertStep, 0.0));
-            float hU = sampleHeight(terrainUV + float2(0.0, vertStep));
-            float hD = sampleHeight(terrainUV - float2(0.0, vertStep));
+                float hR = sampleHeight(terrainUV + float2(vertStep, 0.0));
+                float hL = sampleHeight(terrainUV - float2(vertStep, 0.0));
+                float hU = sampleHeight(terrainUV + float2(0.0, vertStep));
+                float hD = sampleHeight(terrainUV - float2(0.0, vertStep));
 
-            float wStep = vertStep * Mat._TerrainSize;
-            float slopeX = (hR - hL) / (wStep * 2.0);
-            float slopeZ = (hU - hD) / (wStep * 2.0);
+                float wStep = vertStep * Mat._TerrainSize;
+                float slopeX = (hR - hL) / (wStep * 2.0);
+                float slopeZ = (hU - hD) / (wStep * 2.0);
 
-            float3 localNormal = normalize(float3(-slopeX, 1.0, -slopeZ));
-            o.worldNormal = normalize(mul(Mat._TerrainLocalToWorld, float4(localNormal, 0.0)).xyz);
+                float3 localNormal = normalize(float3(-slopeX, 1.0, -slopeZ));
+                output.worldNormal = normalize(mul(Mat._TerrainLocalToWorld, float4(localNormal, 0.0)).xyz);
 
-            o.worldPos = worldPosition;
-            o.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
-#else
-            o.position = mul(Object.mvp, float4(input.position, 1.0));
-            o.texCoord0 = input.uv0;
-            o.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
-            o.worldNormal = normalize(mul(Object.prowl_ObjectToWorld, float4(0.0, 1.0, 0.0, 0.0)).xyz);
-#endif
-            return o;
+                output.worldPos = worldPosition;
+                output.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
+            }
+            else
+            {
+                output.position = mul(Object.mvp, float4(input.position, 1.0));
+                output.texCoord0 = input.uv;
+                output.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
+                output.worldNormal = normalize(mul(Object.prowl_ObjectToWorld, float4(0.0, 1.0, 0.0, 0.0)).xyz);
+            }
+            return output;
         }
 
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
-            // Terrain holes
             if (Mat._HasHoles > 0 && Mat._HolesMap.Sample(input.texCoord0).r < 0.5)
                 discard;
 
-            // Sample splatmap 0 (layers 0-3)
             float4 w0 = Mat._Splatmap0.Sample(input.texCoord0);
 
             float3 albedo = float3(0.0);
@@ -280,42 +262,43 @@ Shader "Default/Terrain"
                 totalWeight += w0.a;
             }
 
-#ifdef TERRAIN_8_LAYERS
-            float4 w1 = Mat._Splatmap1.Sample(input.texCoord0);
+            static if (TERRAIN_8_LAYERS)
+            {
+                float4 w1 = Mat._Splatmap1.Sample(input.texCoord0);
 
-            if (w1.r > 0.001) {
-                float2 uv = input.texCoord0 * Mat._Layer4Tiling;
-                albedo += Mat._Layer4.Sample(uv).rgb * w1.r;
-                blendedNormalTS += unpackNormal(Mat._Layer4Normal.Sample(uv)) * w1.r;
-                roughness += Mat._Layer4Roughness * w1.r;
-                metallic += Mat._Layer4Metallic * w1.r;
-                totalWeight += w1.r;
+                if (w1.r > 0.001) {
+                    float2 uv = input.texCoord0 * Mat._Layer4Tiling;
+                    albedo += Mat._Layer4.Sample(uv).rgb * w1.r;
+                    blendedNormalTS += unpackNormal(Mat._Layer4Normal.Sample(uv)) * w1.r;
+                    roughness += Mat._Layer4Roughness * w1.r;
+                    metallic += Mat._Layer4Metallic * w1.r;
+                    totalWeight += w1.r;
+                }
+                if (w1.g > 0.001) {
+                    float2 uv = input.texCoord0 * Mat._Layer5Tiling;
+                    albedo += Mat._Layer5.Sample(uv).rgb * w1.g;
+                    blendedNormalTS += unpackNormal(Mat._Layer5Normal.Sample(uv)) * w1.g;
+                    roughness += Mat._Layer5Roughness * w1.g;
+                    metallic += Mat._Layer5Metallic * w1.g;
+                    totalWeight += w1.g;
+                }
+                if (w1.b > 0.001) {
+                    float2 uv = input.texCoord0 * Mat._Layer6Tiling;
+                    albedo += Mat._Layer6.Sample(uv).rgb * w1.b;
+                    blendedNormalTS += unpackNormal(Mat._Layer6Normal.Sample(uv)) * w1.b;
+                    roughness += Mat._Layer6Roughness * w1.b;
+                    metallic += Mat._Layer6Metallic * w1.b;
+                    totalWeight += w1.b;
+                }
+                if (w1.a > 0.001) {
+                    float2 uv = input.texCoord0 * Mat._Layer7Tiling;
+                    albedo += Mat._Layer7.Sample(uv).rgb * w1.a;
+                    blendedNormalTS += unpackNormal(Mat._Layer7Normal.Sample(uv)) * w1.a;
+                    roughness += Mat._Layer7Roughness * w1.a;
+                    metallic += Mat._Layer7Metallic * w1.a;
+                    totalWeight += w1.a;
+                }
             }
-            if (w1.g > 0.001) {
-                float2 uv = input.texCoord0 * Mat._Layer5Tiling;
-                albedo += Mat._Layer5.Sample(uv).rgb * w1.g;
-                blendedNormalTS += unpackNormal(Mat._Layer5Normal.Sample(uv)) * w1.g;
-                roughness += Mat._Layer5Roughness * w1.g;
-                metallic += Mat._Layer5Metallic * w1.g;
-                totalWeight += w1.g;
-            }
-            if (w1.b > 0.001) {
-                float2 uv = input.texCoord0 * Mat._Layer6Tiling;
-                albedo += Mat._Layer6.Sample(uv).rgb * w1.b;
-                blendedNormalTS += unpackNormal(Mat._Layer6Normal.Sample(uv)) * w1.b;
-                roughness += Mat._Layer6Roughness * w1.b;
-                metallic += Mat._Layer6Metallic * w1.b;
-                totalWeight += w1.b;
-            }
-            if (w1.a > 0.001) {
-                float2 uv = input.texCoord0 * Mat._Layer7Tiling;
-                albedo += Mat._Layer7.Sample(uv).rgb * w1.a;
-                blendedNormalTS += unpackNormal(Mat._Layer7Normal.Sample(uv)) * w1.a;
-                roughness += Mat._Layer7Roughness * w1.a;
-                metallic += Mat._Layer7Metallic * w1.a;
-                totalWeight += w1.a;
-            }
-#endif
 
             if (totalWeight > 0.0) {
                 albedo /= totalWeight;
@@ -329,10 +312,8 @@ Shader "Default/Terrain"
             float3 N = normalize(input.worldNormal);
             float3 T = normalize(cross(N, float3(0.0, 0.0, 1.0)));
             float3 B = cross(T, N);
-            // GLSL mat3(T,B,N) * v (cols T,B,N) -> Slang mul(v, float3x3(T,B,N)) (rows T,B,N).
             float3 finalWorldNormal = normalize(mul(blendedNormalTS, float3x3(T, B, N)));
 
-            // Brush visualization
             if (Mat._BrushVisible > 0.5 && Mat._BrushRadius > 0.0)
             {
                 float dist = length(input.texCoord0 - Mat._BrushPosition);
@@ -344,11 +325,10 @@ Shader "Default/Terrain"
                 }
             }
 
-            // Forward lighting
             float3 viewDir = normalize(Frame._WorldSpaceCameraPos.xyz - input.worldPos);
             float3 lighting = CalculateForwardLighting(input.worldPos, finalWorldNormal, viewDir,
-                                                     baseColor, metallic, roughness, 1.0, input.position.xy);
-            float3 ambientLight = CalculateAmbient(finalWorldNormal) * Light._AmbientStrength;
+                baseColor, metallic, roughness, 1.0, input.position.xy);
+            float3 ambientLight = CalculateAmbient(finalWorldNormal) * Lights._AmbientStrength;
             float3 diffuseColor = baseColor * (1.0 - metallic);
             float3 ambientDiffuse = ambientLight * diffuseColor;
 
@@ -363,7 +343,6 @@ Shader "Default/Terrain"
 
             return float4(color, 1.0);
         }
-
         ENDSLANG
     }
 
@@ -374,40 +353,39 @@ Shader "Default/Terrain"
         Cull Back
 
         SLANGPROGRAM
-
         import ProwlCG;
-        import VertexAttributes;
+        import VariantAttributes;
+
+        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
+        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
+
+        struct MaterialData
+        {
+            Sampler2D<float4> _Heightmap;
+            Sampler2D<float4> _HolesMap;
+            int _HasHoles;
+            float _TerrainSize;
+            float _TerrainHeight;
+            float4x4 _TerrainWorldToLocal;
+            float4x4 _TerrainLocalToWorld;
+        }
+        ParameterBlock<MaterialData> Mat;
 
         struct VertexInput
         {
             float3 position : POSITION0;
-            float2 uv0 : TEXCOORD0;
-#ifdef GPU_INSTANCING
-            float4 instanceModelRow0 : TEXCOORD8;
-            float4 instanceModelRow1 : TEXCOORD9;
-            float4 instanceModelRow2 : TEXCOORD10;
-            float4 instanceModelRow3 : TEXCOORD11;
-#endif
+            float2 uv : TEXCOORD0;
+            float4 instRow0 : TEXCOORD8;
+            float4 instRow1 : TEXCOORD9;
+            float4 instRow2 : TEXCOORD10;
+            float4 instRow3 : TEXCOORD11;
         }
-
         struct Varyings
         {
             float4 position : SV_Position;
             float3 worldPos : TEXCOORD0;
             float2 texCoord0 : TEXCOORD1;
         }
-
-        struct Material
-        {
-            float _TerrainSize;
-            float _TerrainHeight;
-            float4x4 _TerrainWorldToLocal;
-            float4x4 _TerrainLocalToWorld;
-            int _HasHoles;
-            Sampler2D<float4> _Heightmap;
-            Sampler2D<float4> _HolesMap;
-        }
-        ParameterBlock<Material> Mat;
 
         float2 hmSampleUV(float2 uv)
         {
@@ -416,7 +394,6 @@ Shader "Default/Terrain"
             return uv * (s - 1.0) / s + 0.5 / s;
         }
 
-#ifdef TERRAIN_BICUBIC
         float sampleHeightBicubic(float2 uv)
         {
             uint w, h; Mat._Heightmap.GetDimensions(w, h);
@@ -434,42 +411,49 @@ Shader "Default/Terrain"
             float2 f0 = w1/s0; float2 f1 = w3/s1;
             float2 t0 = (coord-0.5+f0)*invTexSize + 0.5*invTexSize;
             float2 t1 = (coord+1.5+f1)*invTexSize + 0.5*invTexSize;
-            float h00=Mat._Heightmap.Sample(float2(t0.x,t0.y)).r;
-            float h10=Mat._Heightmap.Sample(float2(t1.x,t0.y)).r;
-            float h01=Mat._Heightmap.Sample(float2(t0.x,t1.y)).r;
-            float h11=Mat._Heightmap.Sample(float2(t1.x,t1.y)).r;
-            float row0=lerp(h00,h10,s1.x/(s0.x+s1.x));
-            float row1=lerp(h01,h11,s1.x/(s0.x+s1.x));
-            return lerp(row0,row1,s1.y/(s0.y+s1.y));
+            float h00 = Mat._Heightmap.Sample(float2(t0.x, t0.y)).r;
+            float h10 = Mat._Heightmap.Sample(float2(t1.x, t0.y)).r;
+            float h01 = Mat._Heightmap.Sample(float2(t0.x, t1.y)).r;
+            float h11 = Mat._Heightmap.Sample(float2(t1.x, t1.y)).r;
+            float row0 = lerp(h00, h10, s1.x/(s0.x+s1.x));
+            float row1 = lerp(h01, h11, s1.x/(s0.x+s1.x));
+            return lerp(row0, row1, s1.y/(s0.y+s1.y));
         }
-        float sampleHeight(float2 uv) { return sampleHeightBicubic(uv) * Mat._TerrainHeight; }
-#else
-        float sampleHeight(float2 uv) { return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight; }
-#endif
+
+        float sampleHeight(float2 uv)
+        {
+            static if (TERRAIN_BICUBIC)
+                return sampleHeightBicubic(uv) * Mat._TerrainHeight;
+            else
+                return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight;
+        }
 
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
         {
-            Varyings o;
-#ifdef GPU_INSTANCING
-            float4x4 instanceModel = transpose(float4x4(input.instanceModelRow0, input.instanceModelRow1, input.instanceModelRow2, input.instanceModelRow3));
-            float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
-            float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
-            float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
-            o.texCoord0 = terrainUV;
+            Varyings output;
+            static if (GPU_INSTANCING)
+            {
+                float4x4 instanceModel = transpose(float4x4(input.instRow0, input.instRow1, input.instRow2, input.instRow3));
+                float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
+                float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
+                float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
+                output.texCoord0 = terrainUV;
 
-            float height = sampleHeight(terrainUV);
-            float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
-            float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
+                float height = sampleHeight(terrainUV);
+                float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
+                float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
 
-            o.worldPos = worldPosition;
-            o.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
-#else
-            o.position = mul(Object.mvp, float4(input.position, 1.0));
-            o.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
-            o.texCoord0 = input.uv0;
-#endif
-            return o;
+                output.worldPos = worldPosition;
+                output.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
+            }
+            else
+            {
+                output.position = mul(Object.mvp, float4(input.position, 1.0));
+                output.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
+                output.texCoord0 = input.uv;
+            }
+            return output;
         }
 
         [shader("fragment")]
@@ -479,7 +463,6 @@ Shader "Default/Terrain"
                 discard;
             return input.position.z;
         }
-
         ENDSLANG
     }
 
@@ -491,44 +474,42 @@ Shader "Default/Terrain"
         ZWrite On
 
         SLANGPROGRAM
-
         import ProwlCG;
-        import VertexAttributes;
+        import VariantAttributes;
 
-        struct VertexInput
-        {
-            float3 position : POSITION0;
-            float2 uv0 : TEXCOORD0;
-#ifdef GPU_INSTANCING
-            float4 instanceModelRow0 : TEXCOORD8;
-            float4 instanceModelRow1 : TEXCOORD9;
-            float4 instanceModelRow2 : TEXCOORD10;
-            float4 instanceModelRow3 : TEXCOORD11;
-#endif
-        }
+        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
+        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
 
-        struct Varyings
+        struct MaterialData
         {
-            float4 position : SV_Position;
-            float3 worldNormal : NORMAL0;
-            float2 texCoord0 : TEXCOORD0;
-            float4 vCurrClipNJ : TEXCOORD1;
-            float4 vPrevClip : TEXCOORD2;
-        }
-
-        struct Material
-        {
+            Sampler2D<float4> _Heightmap;
+            Sampler2D<float4> _HolesMap;
+            int _HasHoles;
             float _TerrainSize;
             float _TerrainHeight;
             float4x4 _TerrainWorldToLocal;
             float4x4 _TerrainLocalToWorld;
-            int _HasHoles;
-            Sampler2D<float4> _Heightmap;
-            Sampler2D<float4> _HolesMap;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
 
-        struct FragOut
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+            float4 instRow0 : TEXCOORD8;
+            float4 instRow1 : TEXCOORD9;
+            float4 instRow2 : TEXCOORD10;
+            float4 instRow3 : TEXCOORD11;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float3 worldNormal : TEXCOORD0;
+            float2 texCoord0 : TEXCOORD1;
+            float4 vCurrClipNJ : TEXCOORD2;
+            float4 vPrevClip : TEXCOORD3;
+        }
+        struct FragOutput
         {
             float4 normalOut : SV_Target0;
             float4 motionRM : SV_Target1;
@@ -541,7 +522,6 @@ Shader "Default/Terrain"
             return uv * (s - 1.0) / s + 0.5 / s;
         }
 
-#ifdef TERRAIN_BICUBIC
         float sampleHeightBicubic(float2 uv)
         {
             uint w, h; Mat._Heightmap.GetDimensions(w, h);
@@ -559,71 +539,77 @@ Shader "Default/Terrain"
             float2 f0 = w1/s0; float2 f1 = w3/s1;
             float2 t0 = (coord-0.5+f0)*invTexSize + 0.5*invTexSize;
             float2 t1 = (coord+1.5+f1)*invTexSize + 0.5*invTexSize;
-            float h00=Mat._Heightmap.Sample(float2(t0.x,t0.y)).r;
-            float h10=Mat._Heightmap.Sample(float2(t1.x,t0.y)).r;
-            float h01=Mat._Heightmap.Sample(float2(t0.x,t1.y)).r;
-            float h11=Mat._Heightmap.Sample(float2(t1.x,t1.y)).r;
-            float row0=lerp(h00,h10,s1.x/(s0.x+s1.x));
-            float row1=lerp(h01,h11,s1.x/(s0.x+s1.x));
-            return lerp(row0,row1,s1.y/(s0.y+s1.y));
+            float h00 = Mat._Heightmap.Sample(float2(t0.x, t0.y)).r;
+            float h10 = Mat._Heightmap.Sample(float2(t1.x, t0.y)).r;
+            float h01 = Mat._Heightmap.Sample(float2(t0.x, t1.y)).r;
+            float h11 = Mat._Heightmap.Sample(float2(t1.x, t1.y)).r;
+            float row0 = lerp(h00, h10, s1.x/(s0.x+s1.x));
+            float row1 = lerp(h01, h11, s1.x/(s0.x+s1.x));
+            return lerp(row0, row1, s1.y/(s0.y+s1.y));
         }
-        float sampleHeight(float2 uv) { return sampleHeightBicubic(uv) * Mat._TerrainHeight; }
-#else
-        float sampleHeight(float2 uv) { return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight; }
-#endif
+
+        float sampleHeight(float2 uv)
+        {
+            static if (TERRAIN_BICUBIC)
+                return sampleHeightBicubic(uv) * Mat._TerrainHeight;
+            else
+                return Mat._Heightmap.Sample(hmSampleUV(uv)).r * Mat._TerrainHeight;
+        }
 
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
         {
-            Varyings o;
-#ifdef GPU_INSTANCING
-            float4x4 instanceModel = transpose(float4x4(input.instanceModelRow0, input.instanceModelRow1, input.instanceModelRow2, input.instanceModelRow3));
-            float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
-            float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
-            float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
-            o.texCoord0 = terrainUV;
+            Varyings output;
+            static if (GPU_INSTANCING)
+            {
+                float4x4 instanceModel = transpose(float4x4(input.instRow0, input.instRow1, input.instRow2, input.instRow3));
+                float4 worldPos4 = mul(instanceModel, float4(input.position, 1.0));
+                float3 terrainLocal = mul(Mat._TerrainWorldToLocal, worldPos4).xyz;
+                float2 terrainUV = terrainLocal.xz / Mat._TerrainSize;
+                output.texCoord0 = terrainUV;
 
-            float height = sampleHeight(terrainUV);
-            float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
-            float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
+                float height = sampleHeight(terrainUV);
+                float3 displacedLocal = float3(terrainLocal.x, height, terrainLocal.z);
+                float3 worldPosition = mul(Mat._TerrainLocalToWorld, float4(displacedLocal, 1.0)).xyz;
 
-            uint hw, hh; Mat._Heightmap.GetDimensions(hw, hh);
-            float hmSize = float(hw);
-            float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
-            float hR = sampleHeight(terrainUV + float2(vertStep, 0.0));
-            float hL = sampleHeight(terrainUV - float2(vertStep, 0.0));
-            float hU = sampleHeight(terrainUV + float2(0.0, vertStep));
-            float hD = sampleHeight(terrainUV - float2(0.0, vertStep));
-            float wStep = vertStep * Mat._TerrainSize;
-            float slopeX = (hR - hL) / (wStep * 2.0);
-            float slopeZ = (hU - hD) / (wStep * 2.0);
-            float3 localNormal = normalize(float3(-slopeX, 1.0, -slopeZ));
-            o.worldNormal = normalize(mul(Mat._TerrainLocalToWorld, float4(localNormal, 0.0)).xyz);
+                uint hmW, hmH; Mat._Heightmap.GetDimensions(hmW, hmH);
+                float hmSize = float(hmW);
+                float vertStep = hmSize > 1.0 ? (1.0 / (hmSize - 1.0)) : 0.001;
+                float hR = sampleHeight(terrainUV + float2(vertStep, 0.0));
+                float hL = sampleHeight(terrainUV - float2(vertStep, 0.0));
+                float hU = sampleHeight(terrainUV + float2(0.0, vertStep));
+                float hD = sampleHeight(terrainUV - float2(0.0, vertStep));
+                float wStep = vertStep * Mat._TerrainSize;
+                float slopeX = (hR - hL) / (wStep * 2.0);
+                float slopeZ = (hU - hD) / (wStep * 2.0);
+                float3 localNormal = normalize(float3(-slopeX, 1.0, -slopeZ));
+                output.worldNormal = normalize(mul(Mat._TerrainLocalToWorld, float4(localNormal, 0.0)).xyz);
 
-            o.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
+                output.position = mul(Frame.prowl_MatVP, float4(worldPosition, 1.0));
 
-            // Static terrain: only the camera moves, so previous world position is identical.
-            o.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, float4(worldPosition, 1.0));
-            o.vPrevClip = mul(Frame.prowl_PrevViewProj, float4(worldPosition, 1.0));
-#else
-            o.position = mul(Object.mvp, float4(input.position, 1.0));
-            o.worldNormal = normalize(mul(Object.prowl_ObjectToWorld, float4(0.0, 1.0, 0.0, 0.0)).xyz);
-            o.texCoord0 = input.uv0;
+                output.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, float4(worldPosition, 1.0));
+                output.vPrevClip = mul(Frame.prowl_PrevViewProj, float4(worldPosition, 1.0));
+            }
+            else
+            {
+                output.position = mul(Object.mvp, float4(input.position, 1.0));
+                output.worldNormal = normalize(mul(Object.prowl_ObjectToWorld, float4(0.0, 1.0, 0.0, 0.0)).xyz);
+                output.texCoord0 = input.uv;
 
-            float4 wp = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0));
-            o.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, wp);
-            o.vPrevClip = mul(Frame.prowl_PrevViewProj, mul(Object.prowl_PrevObjectToWorld, float4(input.position, 1.0)));
-#endif
-            return o;
+                float4 wp = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0));
+                output.vCurrClipNJ = mul(Frame.prowl_MatVP_NonJittered, wp);
+                output.vPrevClip = mul(Frame.prowl_PrevViewProj, mul(Object.prowl_PrevObjectToWorld, float4(input.position, 1.0)));
+            }
+            return output;
         }
 
         [shader("fragment")]
-        FragOut Fragment(Varyings input)
+        FragOutput Fragment(Varyings input)
         {
             if (Mat._HasHoles > 0 && Mat._HolesMap.Sample(input.texCoord0).r < 0.5)
                 discard;
 
-            FragOut o;
+            FragOutput o;
             o.normalOut = EncodeViewNormal(input.worldNormal);
 
             float2 currNDC = (input.vCurrClipNJ.xy / input.vCurrClipNJ.w) * 0.5 + 0.5;
@@ -631,7 +617,6 @@ Shader "Default/Terrain"
             o.motionRM = float4(currNDC - prevNDC, 1.0, 0.0);
             return o;
         }
-
         ENDSLANG
     }
 }

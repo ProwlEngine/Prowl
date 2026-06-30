@@ -1,8 +1,6 @@
 module ShaderVariables;
 
-// Global per-frame shared rendering data, uploaded once per frame and constant across draw calls.
-// Field names match the engine's uniform upload keys.
-public struct FrameUniforms
+public struct FrameData
 {
     public float4x4 prowl_MatV;
     public float4x4 prowl_MatIV;
@@ -26,20 +24,27 @@ public struct FrameUniforms
     public float4 _CosTime;
     public float4 prowl_DeltaTime;
 }
-public ParameterBlock<FrameUniforms> Frame;
+public ParameterBlock<FrameData> Frame;
 
-// Per-object data, set per draw call. Derived matrices reach the Frame block internally.
-// GLSL uses column vectors, so GLSL `A * B` maps to `mul(A, B)`.
-public struct ObjectUniforms
+public struct ObjectData
 {
     public float4x4 prowl_ObjectToWorld;
     public float4x4 prowl_WorldToObject;
     public float4x4 prowl_PrevObjectToWorld;
     public int _ObjectID;
 
-    public property float4x4 mv   { get { return mul(Frame.prowl_MatV, prowl_ObjectToWorld); } }
-    public property float4x4 mvp  { get { return mul(Frame.prowl_MatVP, prowl_ObjectToWorld); } }
-    public property float4x4 tmv  { get { return transpose(mul(Frame.prowl_MatV, prowl_ObjectToWorld)); } }
+    // Per-object light-probe spherical harmonics (set by the pipeline for dynamic objects).
+    public float4 prowl_SHAr;
+    public float4 prowl_SHAg;
+    public float4 prowl_SHAb;
+    public float4 prowl_SHBr;
+    public float4 prowl_SHBg;
+    public float4 prowl_SHBb;
+    public float4 prowl_SHC;
+
+    public property float4x4 mv { get { return mul(Frame.prowl_MatV, prowl_ObjectToWorld); } }
+    public property float4x4 mvp { get { return mul(Frame.prowl_MatVP, prowl_ObjectToWorld); } }
+    public property float4x4 tmv { get { return transpose(mul(Frame.prowl_MatV, prowl_ObjectToWorld)); } }
     public property float4x4 itmv { get { return transpose(mul(prowl_WorldToObject, Frame.prowl_MatIV)); } }
 }
-public ParameterBlock<ObjectUniforms> Object;
+public ParameterBlock<ObjectData> Object;

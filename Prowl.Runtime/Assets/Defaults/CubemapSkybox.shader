@@ -2,14 +2,14 @@ Shader "Default/CubemapSkybox"
 {
     Properties
     {
-        _CubeRight("Right (+X)", Texture2D) = "white" {}
-        _CubeLeft("Left (-X)", Texture2D) = "white" {}
-        _CubeTop("Top (+Y)", Texture2D) = "white" {}
-        _CubeBottom("Bottom (-Y)", Texture2D) = "white" {}
-        _CubeFront("Front (+Z)", Texture2D) = "white" {}
-        _CubeBack("Back (-Z)", Texture2D) = "white" {}
-        _Tint("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-        _Exposure("Exposure", Float) = 1.0
+        _CubeRight ("Right (+X)", Texture2D) = "white" {}
+        _CubeLeft ("Left (-X)", Texture2D) = "white" {}
+        _CubeTop ("Top (+Y)", Texture2D) = "white" {}
+        _CubeBottom ("Bottom (-Y)", Texture2D) = "white" {}
+        _CubeFront ("Front (+Z)", Texture2D) = "white" {}
+        _CubeBack ("Back (-Z)", Texture2D) = "white" {}
+        _Tint ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Exposure ("Exposure", Float) = 1.0
     }
 
     Pass
@@ -21,43 +21,24 @@ Shader "Default/CubemapSkybox"
         ZTest LessEqual
 
         SLANGPROGRAM
-
         import ProwlCG;
 
-        struct VertexInput { float3 position : POSITION0; }
-        struct Varyings { float4 position : SV_Position; float3 vDirection : TEXCOORD0; }
-
-        struct Material
+        struct MaterialData
         {
-            float4 _Tint;
-            float _Exposure;
             Sampler2D<float4> _CubeRight;
             Sampler2D<float4> _CubeLeft;
             Sampler2D<float4> _CubeTop;
             Sampler2D<float4> _CubeBottom;
             Sampler2D<float4> _CubeFront;
             Sampler2D<float4> _CubeBack;
+            float4 _Tint;
+            float _Exposure;
         }
-        ParameterBlock<Material> Mat;
+        ParameterBlock<MaterialData> Mat;
 
-        [shader("vertex")]
-        Varyings Vertex(VertexInput input)
-        {
-            // Strip translation from view matrix (GLSL V[3][i] -> Slang V[i][3]).
-            float4x4 viewNoTranslation = Frame.prowl_MatV;
-            viewNoTranslation[0][3] = 0.0;
-            viewNoTranslation[1][3] = 0.0;
-            viewNoTranslation[2][3] = 0.0;
+        struct VertexInput { float3 position : POSITION0; }
+        struct Varyings { float4 position : SV_Position; float3 vDirection : TEXCOORD0; }
 
-            float4 pos = mul(mul(Frame.prowl_MatP, viewNoTranslation), float4(input.position, 1.0));
-
-            Varyings o;
-            o.position = pos.xyww;
-            o.vDirection = input.position;
-            return o;
-        }
-
-        // Sample a cubemap face from 6 separate 2D textures
         float4 sampleCubemap(float3 dir)
         {
             float3 absDir = abs(dir);
@@ -107,16 +88,30 @@ Shader "Default/CubemapSkybox"
             return color;
         }
 
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            float4x4 viewNoTranslation = Frame.prowl_MatV;
+            viewNoTranslation[0][3] = 0.0;
+            viewNoTranslation[1][3] = 0.0;
+            viewNoTranslation[2][3] = 0.0;
+
+            float4 pos = mul(Frame.prowl_MatP, mul(viewNoTranslation, float4(input.position, 1.0)));
+
+            Varyings output;
+            output.position = pos.xyww;
+            output.vDirection = input.position;
+            return output;
+        }
+
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
             float3 dir = normalize(input.vDirection);
             float4 color = sampleCubemap(dir);
             color.rgb *= Mat._Tint.rgb * Mat._Exposure;
-
             return float4(color.rgb, 1.0);
         }
-
         ENDSLANG
     }
 }
