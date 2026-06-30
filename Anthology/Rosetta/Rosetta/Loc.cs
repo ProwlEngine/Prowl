@@ -78,6 +78,18 @@ public static class Loc
     }
 
     /// <summary>
+    /// Add a provider at runtime (after Configure). Useful for plugins, custom editor
+    /// scripts, or game code that wants to register its own translations without
+    /// re-configuring the entire system. Later providers override earlier ones on
+    /// key conflicts. Automatically reloads the cache.
+    /// </summary>
+    public static void AddProvider(ILocalizationProvider provider)
+    {
+        _providers.Add(provider);
+        Reload();
+    }
+
+    /// <summary>
     /// Force reload all cached translations for the current locale.
     /// </summary>
     public static void Reload()
