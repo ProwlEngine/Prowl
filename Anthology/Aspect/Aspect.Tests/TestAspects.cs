@@ -225,7 +225,7 @@ public class ValidationAttribute : OnMethodBoundaryAspect
 }
 
 // Property interception aspects
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+[AttributeUsage(AttributeTargets.Property)]
 public class PropertyAccessTrackingAttribute : LocationInterceptionAspect
 {
     public override void OnGetValue(LocationInterceptionArgs args)
@@ -241,7 +241,7 @@ public class PropertyAccessTrackingAttribute : LocationInterceptionAspect
     }
 }
 
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+[AttributeUsage(AttributeTargets.Property)]
 public class PropertyValueCaptureAttribute : LocationInterceptionAspect
 {
     public override void OnGetValue(LocationInterceptionArgs args)

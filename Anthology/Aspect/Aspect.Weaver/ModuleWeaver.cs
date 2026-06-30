@@ -37,18 +37,8 @@ public class ModuleWeaver
         var methodWeaver = new MethodBoundaryAspectWeaver(_module);
         var propertyWeaver = new LocationInterceptionAspectWeaver(_module);
         var methodInterceptionWeaver = new MethodInterceptionAspectWeaver(_module);
-        var fieldAccessReplacer = new FieldAccessReplacer(_module);
 
-        // First pass: transform fields to properties and collect replacements
-        foreach (var type in _module.Types.ToList())
-        {
-            TransformFieldsInType(type, propertyWeaver, fieldAccessReplacer);
-        }
-
-        // Second pass: replace all field access instructions with property calls
-        fieldAccessReplacer.ProcessModule();
-
-        // Third pass: weave aspects into methods and properties
+        // Weave aspects into methods and properties
         foreach (var type in _module.Types.ToList())
         {
             WeaveType(type, methodWeaver, propertyWeaver, methodInterceptionWeaver);
@@ -73,22 +63,6 @@ public class ModuleWeaver
         }
 
         Console.WriteLine("Weaving completed successfully!");
-    }
-
-    private void TransformFieldsInType(TypeDefinition type, LocationInterceptionAspectWeaver propertyWeaver, FieldAccessReplacer fieldAccessReplacer)
-    {
-        // Skip compiler-generated types
-        if (type.Name.Contains("<") || type.Name.Contains(">"))
-            return;
-
-        // Transform fields with LocationInterceptionAspect to properties
-        propertyWeaver.TransformFieldsToProperties(type, fieldAccessReplacer);
-
-        // Process nested types recursively
-        foreach (var nestedType in type.NestedTypes.ToList())
-        {
-            TransformFieldsInType(nestedType, propertyWeaver, fieldAccessReplacer);
-        }
     }
 
     private void WeaveType(TypeDefinition type, MethodBoundaryAspectWeaver methodWeaver, LocationInterceptionAspectWeaver propertyWeaver, MethodInterceptionAspectWeaver methodInterceptionWeaver)

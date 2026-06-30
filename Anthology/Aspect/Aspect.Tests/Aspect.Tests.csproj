@@ -33,10 +33,11 @@
        this automatically from the NuGet build/ targets; here (ProjectReference) we run the
        weaver ourselves, cross-platform, over the built test assembly. -->
   <PropertyGroup>
-    <AspectWeaverDll>$(MSBuildThisFileDirectory)..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.Host.dll</AspectWeaverDll>
+    <!-- Use the net10 weaver host: a net8-hosted Cecil mis-weaves this net10 test assembly. -->
+    <AspectWeaverDll>$(MSBuildThisFileDirectory)..\Aspect.Weaver.Host\bin\$(Configuration)\net10.0\Aspect.Weaver.Host.dll</AspectWeaverDll>
   </PropertyGroup>
 
-  <Target Name="WeaveAspectsIntoTests" AfterTargets="Build" BeforeTargets="VSTest"
+  <Target Name="WeaveAspectsIntoTests" AfterTargets="Build"
           Condition="'$(DesignTimeBuild)' != 'true' And Exists('$(AspectWeaverDll)')">
     <Message Text="Prowl.Aspect: weaving $(TargetPath)" Importance="high" />
     <Exec Command="dotnet &quot;$(AspectWeaverDll)&quot; &quot;$(TargetPath)&quot;" ConsoleToMSBuild="true" />

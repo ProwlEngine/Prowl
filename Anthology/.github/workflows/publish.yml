@@ -30,11 +30,10 @@ jobs:
       - name: Build
         run: dotnet build Anthology.slnx -c Release --no-restore
 
-      # Clay.Tests needs uncommitted/licensed model assets, and Aspect.Tests needs the AOP
-      # weaver regression fixed - both fail on their original repos too. Run everything else;
-      # both suites stay fully runnable locally.
+      # Clay.Tests needs uncommitted/licensed model assets (fails on its original repo too);
+      # excluded here but stays fully runnable locally. Everything else gates the release.
       - name: Test
-        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Aspect.Tests"
+        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests"
 
       # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
       - name: Fetch Slang native binaries
