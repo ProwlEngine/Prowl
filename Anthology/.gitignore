@@ -399,3 +399,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Wulferis personal/local notes (not part of the repo)
+Wulferis_Local/
