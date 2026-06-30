@@ -1,0 +1,2444 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+
+using Prowl.PaperUI.Events;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.PaperUI.Utilities;
+using Prowl.Quill;
+using Prowl.Scribe;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
+
+namespace Prowl.PaperUI
+{
+    public interface IStyleSetter<T> where T : IStyleSetter<T>
+    {
+        T SetStyleProperty(GuiProp property, object value);
+    }
+
+    public abstract class StyleSetterBase<T> : IStyleSetter<T> where T : StyleSetterBase<T>
+    {
+        public ElementHandle _handle { get; protected set; }
+
+        protected StyleSetterBase(ElementHandle element)
+        {
+            _handle = element;
+        }
+
+        public abstract T SetStyleProperty(GuiProp property, object value);
+
+        // Shared implementation methods
+
+        #region Appearance Properties
+
+        /// <summary>Sets the background color of the element.</summary>
+        public T BackgroundColor(Color color) => SetStyleProperty(GuiProp.BackgroundColor, color);
+
+        /// <summary>Sets a linear gradient background gradient.</summary>
+        public T BackgroundLinearGradient(float x1, float y1, float x2, float y2, Color color1, Color color2) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Linear(x1, y1, x2, y2, color1, color2));
+
+        /// <summary>Sets a radial gradient background gradient.</summary>
+        public T BackgroundRadialGradient(float centerX, float centerY, float innerRadius, float outerRadius, Color innerColor, Color outerColor) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Radial(centerX, centerY, innerRadius, outerRadius, innerColor, outerColor));
+
+        /// <summary>Sets a box gradient background gradient.</summary>
+        public T BackgroundBoxGradient(float centerX, float centerY, float width, float height, float radius, float feather, Color innerColor, Color outerColor) =>
+            SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Box(centerX, centerY, width, height, radius, feather, innerColor, outerColor));
+
+        /// <summary>Clears any background gradient on the element.</summary>
+        public T ClearBackgroundGradient() => SetStyleProperty(GuiProp.BackgroundGradient, Gradient.None);
+
+        /// <summary>Sets a background image texture on the element. The texture is stretched to fill the element rect.</summary>
+        public T BackgroundImage(object texture) => SetStyleProperty(GuiProp.BackgroundImage, texture);
+
+        /// <summary>Clears the background image from the element.</summary>
+        public T ClearBackgroundImage() => SetStyleProperty(GuiProp.BackgroundImage, (object?)null);
+
+        /// <summary>Sets the border color of the element.</summary>
+        public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
+
+        /// <summary>Sets the border width of the element.</summary>
+        public T BorderWidth(float width) => SetStyleProperty(GuiProp.BorderWidth, width);
+
+        /// <summary>Sets a box shadow on the element.</summary>
+        public T BoxShadow(float offsetX, float offsetY, float blur, float spread, Color color) =>
+            SetStyleProperty(GuiProp.BoxShadow, new BoxShadow(offsetX, offsetY, blur, spread, color));
+
+        /// <summary>Sets a box shadow on the element.</summary>
+        public T BoxShadow(BoxShadow shadow) => SetStyleProperty(GuiProp.BoxShadow, shadow);
+
+        /// <summary>
+        /// Blurs whatever is rendered behind this element (frosted glass / backdrop blur), with the
+        /// given radius in pixels. Combine with a translucent <see cref="BackgroundColor"/> for a tint.
+        /// A radius of 0 disables it. Requires a renderer backend with backdrop blur support.
+        /// </summary>
+        public T BackdropBlur(float radius) => SetStyleProperty(GuiProp.BackdropBlur, radius);
+
+        #endregion
+
+        #region Corner Rounding
+
+        /// <summary>Rounds the top corners of the element.</summary>
+        public T RoundedTop(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, radius, 0, 0));
+
+        /// <summary>Rounds the bottom corners of the element.</summary>
+        public T RoundedBottom(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(0, 0, radius, radius));
+
+        /// <summary>Rounds the left corners of the element.</summary>
+        public T RoundedLeft(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, 0, 0, radius));
+
+        /// <summary>Rounds the right corners of the element.</summary>
+        public T RoundedRight(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(0, radius, radius, 0));
+
+        /// <summary>Rounds all corners of the element with the same radius.</summary>
+        public T Rounded(float radius) => SetStyleProperty(GuiProp.Rounded, new Float4(radius, radius, radius, radius));
+
+        /// <summary>Rounds each corner of the element with individual radii.</summary>
+        /// <param name="tlRadius">Top-left radius</param>
+        /// <param name="trRadius">Top-right radius</param>
+        /// <param name="brRadius">Bottom-right radius</param>
+        /// <param name="blRadius">Bottom-left radius</param>
+        public T Rounded(float tlRadius, float trRadius, float brRadius, float blRadius) =>
+            SetStyleProperty(GuiProp.Rounded, new Float4(tlRadius, trRadius, brRadius, blRadius));
+
+        #endregion
+
+        #region Layout Properties
+
+        /// <summary>Sets the aspect ratio (width/height) of the element.</summary>
+        public T AspectRatio(float ratio) => SetStyleProperty(GuiProp.AspectRatio, ratio);
+
+        /// <summary>Sets both width and height to the same value.</summary>
+        public T Size(in UnitValue sizeUniform) => Size(sizeUniform, sizeUniform);
+
+        /// <summary>Sets the width and height of the element.</summary>
+        public T Size(in UnitValue width, in UnitValue height)
+        {
+            SetStyleProperty(GuiProp.Width, width);
+            return SetStyleProperty(GuiProp.Height, height);
+        }
+
+        /// <summary>Sets the width of the element.</summary>
+        public T Width(in UnitValue width) => SetStyleProperty(GuiProp.Width, width);
+
+        /// <summary>Sets the height of the element.</summary>
+        public T Height(in UnitValue height) => SetStyleProperty(GuiProp.Height, height);
+
+        /// <summary>Sets the minimum width of the element.</summary>
+        public T MinWidth(in UnitValue minWidth) => SetStyleProperty(GuiProp.MinWidth, minWidth);
+
+        /// <summary>Sets the maximum width of the element.</summary>
+        public T MaxWidth(in UnitValue maxWidth) => SetStyleProperty(GuiProp.MaxWidth, maxWidth);
+
+        /// <summary>Sets the minimum height of the element.</summary>
+        public T MinHeight(in UnitValue minHeight) => SetStyleProperty(GuiProp.MinHeight, minHeight);
+
+        /// <summary>Sets the maximum height of the element.</summary>
+        public T MaxHeight(in UnitValue maxHeight) => SetStyleProperty(GuiProp.MaxHeight, maxHeight);
+
+        /// <summary>Sets the position of the element from the left and top edges.</summary>
+        public T Position(in UnitValue left, in UnitValue top)
+        {
+            SetStyleProperty(GuiProp.Left, left);
+            return SetStyleProperty(GuiProp.Top, top);
+        }
+
+        /// <summary>Sets the left position of the element.</summary>
+        public T Left(in UnitValue left) => SetStyleProperty(GuiProp.Left, left);
+
+        /// <summary>Sets the right position of the element.</summary>
+        public T Right(in UnitValue right) => SetStyleProperty(GuiProp.Right, right);
+
+        /// <summary>Sets the top position of the element.</summary>
+        public T Top(in UnitValue top) => SetStyleProperty(GuiProp.Top, top);
+
+        /// <summary>Sets the bottom position of the element.</summary>
+        public T Bottom(in UnitValue bottom) => SetStyleProperty(GuiProp.Bottom, bottom);
+
+        /// <summary>Sets the minimum left position of the element.</summary>
+        public T MinLeft(in UnitValue minLeft) => SetStyleProperty(GuiProp.MinLeft, minLeft);
+
+        /// <summary>Sets the maximum left position of the element.</summary>
+        public T MaxLeft(in UnitValue maxLeft) => SetStyleProperty(GuiProp.MaxLeft, maxLeft);
+
+        /// <summary>Sets the minimum right position of the element.</summary>
+        public T MinRight(in UnitValue minRight) => SetStyleProperty(GuiProp.MinRight, minRight);
+
+        /// <summary>Sets the maximum right position of the element.</summary>
+        public T MaxRight(in UnitValue maxRight) => SetStyleProperty(GuiProp.MaxRight, maxRight);
+
+        /// <summary>Sets the minimum top position of the element.</summary>
+        public T MinTop(in UnitValue minTop) => SetStyleProperty(GuiProp.MinTop, minTop);
+
+        /// <summary>Sets the maximum top position of the element.</summary>
+        public T MaxTop(in UnitValue maxTop) => SetStyleProperty(GuiProp.MaxTop, maxTop);
+
+        /// <summary>Sets the minimum bottom position of the element.</summary>
+        public T MinBottom(in UnitValue minBottom) => SetStyleProperty(GuiProp.MinBottom, minBottom);
+
+        /// <summary>Sets the maximum bottom position of the element.</summary>
+        public T MaxBottom(in UnitValue maxBottom) => SetStyleProperty(GuiProp.MaxBottom, maxBottom);
+
+        /// <summary>
+        /// The element's own outer spacing on each side. Each side maps to the corresponding
+        /// <see cref="GuiProp.Left"/>/<see cref="GuiProp.Right"/>/<see cref="GuiProp.Top"/>/<see cref="GuiProp.Bottom"/>
+        /// style property, which the layout engine treats as MainBefore / MainAfter / CrossBefore / CrossAfter
+        /// depending on the parent's row/column direction.
+        /// <para>
+        /// Default per side is <see cref="UnitValue.Auto"/>, which means "no preference" and lets the parent's
+        /// <see cref="ChildLeft(in UnitValue)"/>/<see cref="ChildRight(in UnitValue)"/>/<see cref="ChildTop(in UnitValue)"/>/<see cref="ChildBottom(in UnitValue)"/>
+        /// fill in for the first/last child, or the parent's <see cref="RowBetween(in UnitValue)"/>/<see cref="ColBetween(in UnitValue)"/>
+        /// fill in between two siblings whose adjacent margins are both Auto. Setting a concrete value here
+        /// opts that side out of parent-side defaulting.
+        /// </para>
+        /// <para>
+        /// Stretch values (e.g. <c>Stretch(1)</c>) on a margin make the element compete with siblings for
+        /// leftover space on that axis > useful for centering or pushing.
+        /// </para>
+        /// </summary>
+        public T Margin(in UnitValue all) => Margin(all, all, all, all);
+
+        /// <inheritdoc cref="Margin(in UnitValue)"/>
+        public T Margin(in UnitValue horizontal, in UnitValue vertical) =>
+            Margin(horizontal, horizontal, vertical, vertical);
+
+        /// <inheritdoc cref="Margin(in UnitValue)"/>
+        public T Margin(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
+        {
+            SetStyleProperty(GuiProp.Left, left);
+            SetStyleProperty(GuiProp.Right, right);
+            SetStyleProperty(GuiProp.Top, top);
+            return SetStyleProperty(GuiProp.Bottom, bottom);
+        }
+
+        /// <summary>
+        /// Default left-side spacing filled into any child whose own <see cref="Margin(in UnitValue)"/> left side
+        /// is still <see cref="UnitValue.Auto"/>. Together with <see cref="ChildRight(in UnitValue)"/>,
+        /// <see cref="ChildTop(in UnitValue)"/>, <see cref="ChildBottom(in UnitValue)"/>,
+        /// <see cref="RowBetween(in UnitValue)"/>, and <see cref="ColBetween(in UnitValue)"/>, this is how the
+        /// engine expresses CSS-style <c>justify-content</c> alignment > by putting <see cref="UnitValue.Stretch(float)"/>
+        /// values into the slots between or around children, the layout engine grows those slots to consume leftover space.
+        /// <para>
+        /// Common alignment recipes (set on the parent, with default-margin children):
+        /// <list type="table">
+        ///   <listheader><term>Effect</term><description>Recipe</description></listheader>
+        ///   <item><term>Pack at start (default)</term><description>no parent setting needed</description></item>
+        ///   <item><term>Pack at end</term><description><c>.ChildLeft()</c> (or <c>.ChildTop()</c> for column layout)</description></item>
+        ///   <item><term>Center</term><description><c>.ChildLeft().ChildRight()</c> (or top/bottom)</description></item>
+        ///   <item><term>Space between siblings</term><description><c>.ColBetween()</c> (row layout) or <c>.RowBetween()</c> (column layout)</description></item>
+        ///   <item><term>Space around siblings</term><description><c>.ChildLeft().ChildRight().ColBetween()</c></description></item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// The no-argument overload defaults to <see cref="UnitValue.StretchOne"/> > the alignment use case > because
+        /// that is the value users almost always want here. A pixel value (e.g. <c>.ChildLeft(8)</c>) acts as a default
+        /// margin the child can still override; for the more common case of guaranteed inner spacing that does not
+        /// depend on child settings, prefer <see cref="Padding(in UnitValue)"/> instead.
+        /// </para>
+        /// </summary>
+        public T ChildLeft(in UnitValue childLeft) => SetStyleProperty(GuiProp.ChildLeft, childLeft);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildLeft() => ChildLeft(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildRight(in UnitValue childRight) => SetStyleProperty(GuiProp.ChildRight, childRight);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildRight() => ChildRight(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildTop(in UnitValue childTop) => SetStyleProperty(GuiProp.ChildTop, childTop);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildTop() => ChildTop(UnitValue.StretchOne);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildBottom(in UnitValue childBottom) => SetStyleProperty(GuiProp.ChildBottom, childBottom);
+
+        /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
+        public T ChildBottom() => ChildBottom(UnitValue.StretchOne);
+
+        /// <summary>
+        /// Default spacing inserted between two adjacent children in a column-direction container, but only
+        /// when both adjacent margins (the upper child's bottom and the lower child's top) are still
+        /// <see cref="UnitValue.Auto"/>. The no-argument overload defaults to <see cref="UnitValue.StretchOne"/>
+        /// for space-between-style alignment; pass an explicit pixel value for a fixed gap. See
+        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
+        /// </summary>
+        public T RowBetween(in UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
+
+        /// <inheritdoc cref="RowBetween(in UnitValue)"/>
+        public T RowBetween() => RowBetween(UnitValue.StretchOne);
+
+        /// <summary>
+        /// Default spacing inserted between two adjacent children in a row-direction container, under the
+        /// same conditions as <see cref="RowBetween(in UnitValue)"/>. The no-argument overload defaults to
+        /// <see cref="UnitValue.StretchOne"/> for space-between-style alignment. See
+        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
+        /// </summary>
+        public T ColBetween(in UnitValue colBetween) => SetStyleProperty(GuiProp.ColBetween, colBetween);
+
+        /// <inheritdoc cref="ColBetween(in UnitValue)"/>
+        public T ColBetween() => ColBetween(UnitValue.StretchOne);
+
+        /// <summary>
+        /// Inner padding on the left side of the parent's content area > unconditional inset that always
+        /// applies. Children are positioned starting after this inset, stretch competition fights only over
+        /// the remaining inner space, and an auto-sized parent grows to include this thickness in its outer size.
+        /// </summary>
+        public T PaddingLeft(in UnitValue paddingLeft) => SetStyleProperty(GuiProp.PaddingLeft, paddingLeft);
+
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingRight(in UnitValue paddingRight) => SetStyleProperty(GuiProp.PaddingRight, paddingRight);
+
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingTop(in UnitValue paddingTop) => SetStyleProperty(GuiProp.PaddingTop, paddingTop);
+
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T PaddingBottom(in UnitValue paddingBottom) => SetStyleProperty(GuiProp.PaddingBottom, paddingBottom);
+
+        /// <summary>Uniform inner padding on all four sides.</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue all) => Padding(all, all, all, all);
+
+        /// <summary>Inner padding split into horizontal (left/right) and vertical (top/bottom).</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue horizontal, in UnitValue vertical) =>
+            Padding(horizontal, horizontal, vertical, vertical);
+
+        /// <summary>Inner padding specified per side.</summary>
+        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        public T Padding(in UnitValue left, in UnitValue right, in UnitValue top, in UnitValue bottom)
+        {
+            SetStyleProperty(GuiProp.PaddingLeft, left);
+            SetStyleProperty(GuiProp.PaddingRight, right);
+            SetStyleProperty(GuiProp.PaddingTop, top);
+            return SetStyleProperty(GuiProp.PaddingBottom, bottom);
+        }
+
+        #endregion
+
+        #region Text Properties
+
+        /// <summary>Sets the color of text.</summary>
+        public T TextColor(Color color) => SetStyleProperty(GuiProp.TextColor, color);
+
+        /// <summary>Sets the spacing between words in text.</summary>
+        public T WordSpacing(float spacing) => SetStyleProperty(GuiProp.WordSpacing, spacing);
+        /// <summary>Sets the spacing between letters in text.</summary>
+        public T LetterSpacing(float spacing) => SetStyleProperty(GuiProp.LetterSpacing, spacing);
+        /// <summary>Sets the height of a line in text.</summary>
+        public T LineHeight(float height) => SetStyleProperty(GuiProp.LineHeight, height);
+
+        /// <summary>Sets the size of a Tab character in spaces.</summary>
+        public T TabSize(int size) => SetStyleProperty(GuiProp.TabSize, size);
+        /// <summary>Sets the size of text in pixels.</summary>
+        public T FontSize(float size) => SetStyleProperty(GuiProp.FontSize, size);
+
+        /// <summary>Atlas rasterization quality for this element's text. Higher is crisper at very large
+        /// sizes/zoom, at the cost of atlas memory. The distance field is resolution independent, so
+        /// Normal is fine for typical UI text. Defaults to <see cref="FontQuality.Normal"/>.</summary>
+        public T TextQuality(FontQuality quality) => SetStyleProperty(GuiProp.TextQuality, quality);
+
+        #endregion
+
+        #region Transform Properties
+
+        /// <summary>Sets horizontal translation.</summary>
+        public T TranslateX(float x) => SetStyleProperty(GuiProp.TranslateX, x);
+
+        /// <summary>Sets vertical translation.</summary>
+        public T TranslateY(float y) => SetStyleProperty(GuiProp.TranslateY, y);
+
+        /// <summary>Sets both horizontal and vertical translation.</summary>
+        public T Translate(float x, float y)
+        {
+            SetStyleProperty(GuiProp.TranslateX, x);
+            return SetStyleProperty(GuiProp.TranslateY, y);
+        }
+
+        /// <summary>Sets horizontal scaling factor.</summary>
+        public T ScaleX(float x) => SetStyleProperty(GuiProp.ScaleX, x);
+
+        /// <summary>Sets vertical scaling factor.</summary>
+        public T ScaleY(float y) => SetStyleProperty(GuiProp.ScaleY, y);
+
+        /// <summary>Sets uniform scaling in both directions.</summary>
+        public T Scale(float scale) => Scale(scale, scale);
+
+        /// <summary>Sets individual scaling factors for each axis.</summary>
+        public T Scale(float x, float y)
+        {
+            SetStyleProperty(GuiProp.ScaleX, x);
+            return SetStyleProperty(GuiProp.ScaleY, y);
+        }
+
+        /// <summary>Sets rotation angle in degrees.</summary>
+        public T Rotate(float angleInDegrees) => SetStyleProperty(GuiProp.Rotate, angleInDegrees);
+
+        /// <summary>Sets horizontal skew angle.</summary>
+        public T SkewX(float angle) => SetStyleProperty(GuiProp.SkewX, angle);
+
+        /// <summary>Sets vertical skew angle.</summary>
+        public T SkewY(float angle) => SetStyleProperty(GuiProp.SkewY, angle);
+
+        /// <summary>Sets both horizontal and vertical skew angles.</summary>
+        public T Skew(float x, float y)
+        {
+            SetStyleProperty(GuiProp.SkewX, x);
+            return SetStyleProperty(GuiProp.SkewY, y);
+        }
+
+        /// <summary>Sets the origin point for transformations.</summary>
+        public T TransformOrigin(float x, float y)
+        {
+            SetStyleProperty(GuiProp.OriginX, x);
+            return SetStyleProperty(GuiProp.OriginY, y);
+        }
+
+        /// <summary>Sets a complete transform matrix.</summary>
+        public T Transform(Transform2D transform) => SetStyleProperty(GuiProp.Transform, transform);
+
+        #endregion
+
+        #region Transition Properties
+
+        /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        public T Transition(GuiProp property, float duration, Func<float, float> easing = null) => SetTransition(property, duration, easing);
+
+        /// <summary>
+        /// Abstract method to handle transition setting - implemented by derived classes
+        /// </summary>
+        protected abstract T SetTransition(GuiProp property, float duration, Func<float, float> easing);
+
+        #endregion
+    }
+
+    /// <summary>
+    /// Represents a reference to a style state that can be conditionally applied.
+    /// Provides a fluent API for setting style properties based on element state conditions.
+    /// </summary>
+    public class StateDrivenStyle : StyleSetterBase<StateDrivenStyle>
+    {
+        private ElementBuilder _owner;
+        private bool _isActive;
+        private static readonly ObjectPool<StateDrivenStyle> _pool = new ObjectPool<StateDrivenStyle>(() => new StateDrivenStyle());
+
+        // Private constructor for the pool
+        private StateDrivenStyle() : base(default)
+        {
+            _owner = null;
+            _isActive = false;
+        }
+
+        // Constructor for direct creation (used internally)
+        private StateDrivenStyle(ElementBuilder owner, bool isActive) : base(owner._handle)
+        {
+            _owner = owner;
+            _isActive = isActive;
+        }
+
+        /// <summary>
+        /// Gets a StateDrivenStyle from the pool
+        /// </summary>
+        internal static StateDrivenStyle Get(ElementBuilder owner, bool isActive)
+        {
+            var style = _pool.Get();
+            style.Initialize(owner, isActive);
+            return style;
+        }
+
+        /// <summary>
+        /// Initializes a pooled StateDrivenStyle with new values
+        /// </summary>
+        private void Initialize(ElementBuilder owner, bool isActive)
+        {
+            // Use reflection or another method to set base.Element
+            _handle = owner._handle;
+
+            // Set fields with new values
+            _owner = owner;
+            _isActive = isActive;
+        }
+
+        public StateDrivenStyle Style(StyleTemplate style)
+        {
+            if (_isActive)
+                style.ApplyTo(_handle);
+
+            return this;
+        }
+
+        public StateDrivenStyle Style(params string[] names)
+        {
+            if (_isActive)
+                foreach (var styleName in names)
+                    _owner._paper.ApplyStyleWithStates(_handle, styleName);
+
+            return this;
+        }
+
+        public StateDrivenStyle StyleIf(bool condition, params string[] names)
+        {
+            if (condition)
+            {
+                foreach(var styleName in names)
+                    _owner._paper.ApplyStyleWithStates(_handle, styleName);
+            }
+            return this;
+        }
+
+        public override StateDrivenStyle SetStyleProperty(GuiProp property, object value)
+        {
+            if (_isActive)
+                _owner._paper.SetStyleProperty(_handle.Data.ID, property, value);
+            return this;
+        }
+
+        /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        protected override StateDrivenStyle SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        {
+            if (_isActive)
+                _owner._paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
+            return this;
+        }
+
+        /// <summary>
+        /// Returns to the element builder to continue the building chain and
+        /// returns this object to the pool
+        /// </summary>
+        public ElementBuilder End()
+        {
+            var owner = _owner;
+            _pool.Return(this);
+            return owner;
+        }
+    }
+
+    /// <summary>
+    /// A template that can store and apply a collection of style properties
+    /// </summary>
+    public class StyleTemplate : StyleSetterBase<StyleTemplate>
+    {
+        private readonly Dictionary<GuiProp, object> _styleProperties = new Dictionary<GuiProp, object>();
+        private readonly Dictionary<GuiProp, (float duration, Func<float, float> easing)> _transitions = new Dictionary<GuiProp, (float, Func<float, float>)>();
+
+        /// <summary>
+        /// Creates a new style template
+        /// </summary>
+        public StyleTemplate() : base(default) { }
+
+        /// <summary>
+        /// Sets a style property in the template
+        /// </summary>
+        public override StyleTemplate SetStyleProperty(GuiProp property, object value)
+        {
+            _styleProperties[property] = value;
+            return this;
+        }
+
+        /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        protected override StyleTemplate SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        {
+            _transitions[property] = (duration, easing);
+            return this;
+        }
+
+        /// <summary>
+        /// Applies all style properties in this template to an element
+        /// </summary>
+        /// <param name="element">The element to apply styles to</param>
+        public void ApplyTo(ElementHandle element)
+        {
+            if (element.Owner == null) throw new ArgumentNullException(nameof(element));
+            foreach (var kvp in _styleProperties)
+            {
+                element.Owner!.SetStyleProperty(element.Data.ID, kvp.Key, kvp.Value);
+            }
+
+            // Apply transitions
+            foreach (var kvp in _transitions)
+            {
+                element.Owner!.SetTransitionConfig(element.Data.ID, kvp.Key, kvp.Value.duration, kvp.Value.easing);
+            }
+        }
+
+        /// <summary>
+        /// Applies a template to another template
+        /// </summary>
+        public StyleTemplate ApplyTo(StyleTemplate other)
+        {
+            foreach (var kvp in _styleProperties)
+            {
+                other.SetStyleProperty(kvp.Key, kvp.Value);
+            }
+
+            // Apply transitions
+            foreach (var kvp in _transitions)
+            {
+                other.SetTransition(kvp.Key, kvp.Value.duration, kvp.Value.easing);
+            }
+            return other;
+        }
+
+        /// <summary>
+        /// Creates a copy of this template
+        /// </summary>
+        public StyleTemplate Clone()
+        {
+            var clone = new StyleTemplate();
+            foreach (var kvp in _styleProperties)
+            {
+                clone._styleProperties[kvp.Key] = kvp.Value;
+            }
+
+            // Clone transitions
+            foreach (var kvp in _transitions)
+            {
+                clone._transitions[kvp.Key] = kvp.Value;
+            }
+            return clone;
+        }
+    }
+
+    /// <summary>
+    /// Provides a fluent API for building and configuring UI elements.
+    /// Implements IDisposable to support hierarchical element creation using 'using' blocks.
+    /// </summary>
+    public class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
+    {
+        internal Paper _paper;
+
+        /// <summary>Style properties that are always applied.</summary>
+        public StateDrivenStyle Normal => StateDrivenStyle.Get(this, true);
+
+        /// <summary>Style properties applied when the element is hovered.</summary>
+        public StateDrivenStyle Hovered => StateDrivenStyle.Get(this, _paper.IsElementHovered(_handle.Data.ID));
+
+        /// <summary>Style properties applied when the element is active (pressed).</summary>
+        public StateDrivenStyle Active => StateDrivenStyle.Get(this, _paper.IsElementActive(_handle.Data.ID));
+
+        /// <summary>Style properties applied when the element has focus.</summary>
+        public StateDrivenStyle Focused => StateDrivenStyle.Get(this, _paper.IsElementFocused(_handle.Data.ID));
+
+        public ElementBuilder(Paper paper, ElementHandle handle) : base(handle)
+        {
+            _paper = paper;
+        }
+
+        public override ElementBuilder SetStyleProperty(GuiProp property, object value)
+        {
+            _paper.SetStyleProperty(_handle.Data.ID, property, value);
+            return this;
+        }
+
+        /// <summary>
+        /// Configures a property transition with the specified duration and easing function.
+        /// </summary>
+        /// <param name="property">The property to animate</param>
+        /// <param name="duration">Animation duration in seconds</param>
+        /// <param name="easing">Optional easing function</param>
+        protected override ElementBuilder SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        {
+            _paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
+            return this;
+        }
+
+        /// <summary>
+        /// Creates a conditional style state that only applies if the condition is true.
+        /// </summary>
+        /// <param name="condition">Boolean condition to evaluate</param>
+        public StateDrivenStyle If(bool condition) => StateDrivenStyle.Get(this, condition);
+
+        /// <summary>
+        /// Inherits style properties from the specified element or from the parent if not specified.
+        /// </summary>
+        public ElementBuilder InheritStyle(ElementHandle? element = null)
+        {
+            if (element != null)
+            {
+                _handle.Data._elementStyle.SetParent(element.Value.Data._elementStyle);
+                return this;
+            }
+
+            var parentHandle = _handle.GetParentHandle();
+            if (parentHandle.IsValid)
+                _handle.Data._elementStyle.SetParent(parentHandle.Data._elementStyle);
+
+            return this;
+        }
+
+        public ElementBuilder Style(StyleTemplate style)
+        {
+            style.ApplyTo(_handle);
+            return this;
+        }
+
+        public ElementBuilder Style(params string[] names)
+        {
+            foreach (var name in names)
+                _paper.ApplyStyleWithStates(_handle, name);
+
+            return this;
+        }
+
+        public ElementBuilder StyleIf(bool condition, params string[] names)
+        {
+            if(condition)
+                foreach (var name in names)
+                    _paper.ApplyStyleWithStates(_handle, name);
+            return this;
+        }
+
+        #region Event Handlers
+
+        /// <summary>Makes the element incapable of receiving focus.</summary>
+        public ElementBuilder IsNotFocusable()
+        {
+            _handle.Data.IsFocusable = false;
+            return this;
+        }
+
+        /// <summary>
+        /// Hooks this element to its parent's interaction states.
+        /// When the parent is hovered, active, focused, or dragging, this element will also be considered in those states and receive the events.
+        /// </summary>
+        public ElementBuilder HookToParent()
+        {
+            _handle.Data.IsHookedToParent = true;
+
+            // Mark the parent as having hooked children for optimization
+            ElementHandle parent = _handle.GetParentHandle();
+            if (parent.IsValid)
+            {
+                parent.Data.IsAHookedParent = true;
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the tab index for keyboard navigation.
+        /// Elements with lower tab indices are focused first when pressing Tab.
+        /// Use -1 to exclude from tab navigation (default).
+        /// </summary>
+        public ElementBuilder TabIndex(int index)
+        {
+            _handle.Data.TabIndex = index;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs after layout calculation is complete.</summary>
+        public ElementBuilder OnPostLayout(Action<ElementHandle, Rect> handler)
+        {
+            _handle.Data.OnPostLayout += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs after layout calculation is complete, with a captured value.</summary>
+        public ElementBuilder OnPostLayout<T>(T capturedValue, Action<T, ElementHandle, Rect> handler) =>
+            OnPostLayout((ElementHandle element, Rect rect) => handler(capturedValue, element, rect));
+
+        /// <summary>Sets a callback that runs when the element is pressed.</summary>
+        public ElementBuilder OnPress(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnPress += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is pressed, with a captured value.</summary>
+        public ElementBuilder OnPress<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnPress((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is held down.</summary>
+        public ElementBuilder OnHeld(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnHeld += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is held down, with a captured value.</summary>
+        public ElementBuilder OnHeld<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnHeld((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is clicked.</summary>
+        public ElementBuilder OnClick(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnClick += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is clicked, with a captured value.</summary>
+        public ElementBuilder OnClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnClick((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is dragged.</summary>
+        public ElementBuilder OnDragStart(Action<DragEvent> handler)
+        {
+            _handle.Data.OnDragStart += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is dragged, with a captured value.</summary>
+        public ElementBuilder OnDragStart<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragStart((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is dragged.</summary>
+        public ElementBuilder OnDragging(Action<DragEvent> handler)
+        {
+            _handle.Data.OnDragging += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is dragged, with a captured value.</summary>
+        public ElementBuilder OnDragging<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragging((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is released after dragging.</summary>
+        public ElementBuilder OnDragEnd(Action<DragEvent> handler)
+        {
+            _handle.Data.OnDragEnd += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is released after dragging, with a captured value.</summary>
+        public ElementBuilder OnDragEnd<T>(T capturedValue, Action<T, DragEvent> handler) =>
+            OnDragEnd((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element.</summary>
+        public ElementBuilder OnRelease(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnRelease += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the mouse button is released after clicking this element, with a captured value.</summary>
+        public ElementBuilder OnRelease<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnRelease((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is float-clicked.</summary>
+        public ElementBuilder OnDoubleClick(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnDoubleClick += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is float-clicked, with a captured value.</summary>
+        public ElementBuilder OnDoubleClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnDoubleClick((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the element is right-clicked.</summary>
+        public ElementBuilder OnRightClick(Action<ClickEvent> handler)
+        {
+            _handle.Data.OnRightClick += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the element is right-clicked, with a captured value.</summary>
+        public ElementBuilder OnRightClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
+            OnRightClick((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when scrolling occurs over the element.</summary>
+        public ElementBuilder OnScroll(Action<ScrollEvent> handler)
+        {
+            _handle.Data.OnScroll += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when scrolling occurs over the element, with a captured value.</summary>
+        public ElementBuilder OnScroll<T>(T capturedValue, Action<T, ScrollEvent> handler) =>
+            OnScroll((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when a key is pressed while the element is focused.</summary>
+        public ElementBuilder OnKeyPressed(Action<KeyEvent> handler)
+        {
+            _handle.Data.OnKeyPressed += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when a key is pressed while the element is focused, with a captured value.</summary>
+        public ElementBuilder OnKeyPressed<T>(T capturedValue, Action<T, KeyEvent> handler) =>
+            OnKeyPressed((key) => handler(capturedValue, key));
+
+        /// <summary>Sets a callback that runs when a character is typed while the element is focused.</summary>
+        public ElementBuilder OnTextInput(Action<TextInputEvent> handler)
+        {
+            _handle.Data.OnTextInput += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when a character is typed while the element is focused, with a captured value.</summary>
+        public ElementBuilder OnTextInput<T>(T capturedValue, Action<T, TextInputEvent> handler) =>
+            OnTextInput((character) => handler(capturedValue, character));
+
+        /// <summary>Sets a callback that runs when the cursor hovers over the element.</summary>
+        public ElementBuilder OnHover(Action<ElementEvent> handler)
+        {
+            _handle.Data.OnHover += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the cursor hovers over the element, with a captured value.</summary>
+        public ElementBuilder OnHover<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnHover((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the Focused state changes.</summary>
+        public ElementBuilder OnFocusChange(Action<FocusEvent> handler)
+        {
+            _handle.Data.OnFocusChange += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the Focused state changes, with a captured value.</summary>
+        public ElementBuilder OnFocusChange<T>(T capturedValue, Action<T, FocusEvent> handler) =>
+            OnFocusChange((focused) => handler(capturedValue, focused));
+
+        /// <summary>Sets a callback that runs when the cursor enters the element's bounds.</summary>
+        public ElementBuilder OnEnter(Action<ElementEvent> handler)
+        {
+            _handle.Data.OnEnter += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the cursor enters the element's bounds, with a captured value.</summary>
+        public ElementBuilder OnEnter<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnEnter((e) => handler(capturedValue, e));
+
+        /// <summary>Sets a callback that runs when the cursor leaves the element's bounds.</summary>
+        public ElementBuilder OnLeave(Action<ElementEvent> handler)
+        {
+            _handle.Data.OnLeave += handler;
+            return this;
+        }
+
+        /// <summary>Sets a callback that runs when the cursor leaves the element's bounds, with a captured value.</summary>
+        public ElementBuilder OnLeave<T>(T capturedValue, Action<T, ElementEvent> handler) =>
+            OnLeave((e) => handler(capturedValue, e));
+
+        #endregion
+
+        #region Behavior Configuration
+
+        /// <summary>Makes the element non-interactive (ignores mouse/touch events).</summary>
+        public ElementBuilder IsNotInteractable()
+        {
+            _handle.Data.IsNotInteractable = true;
+            return this;
+        }
+
+        /// <summary>Makes any event on this element not trigger any parent events.</summary>
+        public ElementBuilder StopEventPropagation()
+        {
+            _handle.Data.StopPropagation = true;
+            return this;
+        }
+
+        /// <summary>Sets the layout direction for child elements.</summary>
+        /// <param name="layoutType">How child elements should be arranged (Row or Column)</param>
+        public ElementBuilder LayoutType(LayoutType layoutType)
+        {
+            _handle.Data.LayoutType = layoutType;
+            return this;
+        }
+
+        /// <summary>Sets how the element is positioned within its parent.</summary>
+        /// <param name="positionType">Position strategy (SelfDirected or ParentDirected)</param>
+        public ElementBuilder PositionType(PositionType positionType)
+        {
+            _handle.Data.PositionType = positionType;
+            return this;
+        }
+
+        /// <summary>Sets whether the element is visible.</summary>
+        /// <param name="visible">True to show the element, false to hide it</param>
+        public ElementBuilder Visible(bool visible)
+        {
+            _handle.Data.Visible = visible;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a content sizing function for auto-sized elements.
+        /// The function receives optional width and height constraints and should return the preferred content size.
+        /// This is particularly useful for custom controls that need to calculate their own size based on content.
+        /// </summary>
+        /// <param name="sizer">
+        /// Function that takes (maxWidth?, maxHeight?) and returns (preferredWidth, preferredHeight)?.
+        /// Return null if the element cannot be sized with the given constraints.
+        /// </param>
+        /// <returns>This builder for method chaining</returns>
+        /// <example>
+        /// // Example: Size based on text content
+        /// .ContentSizer((maxWidth, maxHeight) => {
+        ///     var textSize = MeasureText("My content", font, fontSize);
+        ///     return (textSize.Width + padding * 2, textSize.Height + padding * 2);
+        /// })
+        ///
+        /// // Example: Aspect ratio sizing
+        /// .ContentSizer((maxWidth, maxHeight) => {
+        ///     const float aspectRatio = 16.0 / 9.0;
+        ///     if (maxWidth.HasValue) {
+        ///         return (maxWidth.Value, maxWidth.Value / aspectRatio);
+        ///     }
+        ///     if (maxHeight.HasValue) {
+        ///         return (maxHeight.Value * aspectRatio, maxHeight.Value);
+        ///     }
+        ///     return (320, 180); // Default size
+        /// })
+        /// </example>
+        public ElementBuilder ContentSizer(Func<float?, float?, (float, float)?> sizer)
+        {
+            _handle.Data.ContentSizer = sizer;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets a simple content sizing function that returns a fixed size.
+        /// </summary>
+        /// <param name="width">Fixed preferred width</param>
+        /// <param name="height">Fixed preferred height</param>
+        /// <returns>This builder for method chaining</returns>
+        public ElementBuilder ContentSizer(float width, float height)
+        {
+            _handle.Data.ContentSizer = (a, b) => (width, height);
+            return this;
+        }
+
+        /// <summary>
+        /// Removes any content sizing function, allowing the element to use default sizing behavior.
+        /// </summary>
+        /// <returns>This builder for method chaining</returns>
+        public ElementBuilder ClearContentSizer()
+        {
+            _handle.Data.ContentSizer = null;
+            return this;
+        }
+
+        /// <summary>Enables content clipping to the element's bounds.</summary>
+        public ElementBuilder Clip()
+        {
+            _handle.Data._scissorEnabled = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Clamps this element's position so it stays fully within the screen bounds.
+        /// Applied after layout, before rendering. Works with both SelfDirected and ParentDirected elements.
+        /// Children are moved with the parent automatically.
+        /// </summary>
+        public ElementBuilder ClampToScreen()
+        {
+            _handle.Data._clampToScreen = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Places the element on a specific rendering layer. Higher values render on top of
+        /// lower ones and are hit-tested first.
+        /// </summary>
+        /// <param name="layer">
+        /// Layer value. Use <see cref="Layer.Base"/>, <see cref="Layer.Overlay"/>,
+        /// <see cref="Layer.Topmost"/>, or any custom <see cref="int"/> (e.g. <c>Layer.Overlay + 10</c>
+        /// to wedge a new tier between the named ones).
+        /// </param>
+        public ElementBuilder Layer(int layer)
+        {
+            _handle.Data.Layer = layer;
+            return this;
+        }
+
+        /// <summary>Sets the text content of the element.</summary>
+        /// <param name="text">The text to display</param>
+        /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
+        public ElementBuilder Text(string text, FontFile font)
+        {
+            _handle.Data.IsMarkdown = false;
+            _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            return this;
+        }
+
+        /// <summary>Sets the text content of the element.</summary>
+        /// <param name="text">The text to display</param>
+        /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
+        public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+        {
+            _handle.Data.IsMarkdown = true;
+            _handle.Data.IsRichText = false;
+            _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            _handle.Data.FontBold = bold;
+            _handle.Data.FontItalic = italic;
+            _handle.Data.FontBoldItalic = boldItalic;
+            _handle.Data.FontMono = mono;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the element's content to a tagged rich-text source. Supported tags include
+        /// styling (<c>&lt;b&gt;</c>, <c>&lt;i&gt;</c>, <c>&lt;u&gt;</c>, <c>&lt;s&gt;</c>,
+        /// <c>&lt;color=...&gt;</c>, <c>&lt;size=...&gt;</c>, <c>&lt;font=mono&gt;</c>,
+        /// <c>&lt;link=...&gt;</c>) and animations (<c>&lt;shake&gt;</c>, <c>&lt;wave&gt;</c>,
+        /// <c>&lt;rainbow&gt;</c>, <c>&lt;pulse&gt;</c>, <c>&lt;fade&gt;</c>, <c>&lt;jitter&gt;</c>,
+        /// <c>&lt;typewriter&gt;</c>).
+        ///
+        /// <para>The laid-out text is cached across frames so that animation start time and the
+        /// typewriter reveal survive between frames. Use <see cref="Paper.ResetRichText"/> to
+        /// replay the animation.</para>
+        /// </summary>
+        public ElementBuilder RichText(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
+        {
+            _handle.Data.IsMarkdown = false;
+            _handle.Data.IsRichText = true;
+            _handle.Data.Paragraph = text;
+            _handle.Data.Font = font;
+            _handle.Data.FontBold = bold;
+            _handle.Data.FontItalic = italic;
+            _handle.Data.FontBoldItalic = boldItalic;
+            _handle.Data.FontMono = mono;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the text Alignment mode of the element.
+        /// </summary>
+        /// <param name="mode">The Text Alignment mode to apply</param>
+        public ElementBuilder Alignment(TextAlignment mode)
+        {
+            _handle.Data.TextAlignment = mode;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the text wrapping mode of the element.
+        /// </summary>
+        /// <param name="mode">The text wrapping mode to apply</param>
+        public ElementBuilder Wrap(TextWrapMode mode)
+        {
+            _handle.Data.WrapMode = mode;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets an image to be drawn inside the element, filling the element's layout rect.
+        /// </summary>
+        /// <param name="texture">The texture object (created via the renderer's CreateTexture).</param>
+        /// <param name="tint">Optional tint color applied to the image. Defaults to white (no tint).</param>
+        /// <param name="rotation">Rotation angle in degrees.</param>
+        /// <param name="pivot">Pivot point for rotation as normalized coordinates (0-1). Defaults to center (0.5, 0.5).</param>
+        /// <param name="scaleMode">How the image fills the element rect.</param>
+        public ElementBuilder Image(object texture, Color32? tint = null, float rotation = 0f, Float2? pivot = null, ImageScaleMode scaleMode = ImageScaleMode.Stretch)
+        {
+            var tex = texture;
+            var color = tint;
+            var rot = rotation;
+            var piv = pivot ?? new Float2(0.5f, 0.5f);
+            var mode = scaleMode;
+            var handle = _handle;
+            var renderer = _paper.Renderer;
+            _paper.Draw(ref handle, (canvas, rect) =>
+            {
+                float x = rect.Min.X;
+                float y = rect.Min.Y;
+                float w = rect.Size.X;
+                float h = rect.Size.Y;
+
+                if (mode != ImageScaleMode.Stretch)
+                {
+                    var texSize = renderer.GetTextureSize(tex);
+                    float texW = texSize.X;
+                    float texH = texSize.Y;
+
+                    if (texW > 0 && texH > 0)
+                    {
+                        float scaleX = w / texW;
+                        float scaleY = h / texH;
+
+                        float scale = mode == ImageScaleMode.Fit
+                            ? Maths.Min(scaleX, scaleY)
+                            : Maths.Max(scaleX, scaleY); // Fill
+
+                        float drawW = texW * scale;
+                        float drawH = texH * scale;
+                        x += (w - drawW) * 0.5f;
+                        y += (h - drawH) * 0.5f;
+                        w = drawW;
+                        h = drawH;
+                    }
+                }
+
+                if (rot != 0f)
+                {
+                    canvas.SaveState();
+                    float pivotX = x + w * piv.X;
+                    float pivotY = y + h * piv.Y;
+                    var transform = Transform2D.CreateTranslation(pivotX, pivotY)
+                        * Transform2D.CreateRotation(rot * (Maths.PI / 180f))
+                        * Transform2D.CreateTranslation(-pivotX, -pivotY);
+                    canvas.TransformBy(transform);
+                    canvas.DrawImage(tex, x, y, w, h, color);
+                    canvas.RestoreState();
+                }
+                else
+                {
+                    canvas.DrawImage(tex, x, y, w, h, color);
+                }
+            });
+            return this;
+        }
+
+        /// <summary>
+        /// Applies a custom shader to the element's background rendering.
+        /// The shader replaces the default rendering pipeline for this element's background.
+        /// </summary>
+        /// <param name="shader">The backend-specific shader object.</param>
+        /// <param name="setupUniforms">Optional callback to set shader uniforms each frame.</param>
+        public ElementBuilder CustomShader(object shader, Action<Quill.ShaderUniforms>? setupUniforms = null)
+        {
+            var shaderObj = shader;
+            var setup = setupUniforms;
+            var handle = _handle;
+            _paper.Draw(ref handle, (canvas, rect) =>
+            {
+                canvas.SetCustomShader(shaderObj);
+                if (setup != null)
+                {
+                    var uniforms = new Quill.ShaderUniforms();
+                    setup(uniforms);
+                    foreach (var kvp in uniforms.Values)
+                        canvas.SetShaderUniform(kvp.Key, kvp.Value);
+                }
+                canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, Color.White);
+                canvas.ClearCustomShader();
+            });
+            return this;
+        }
+
+        #endregion
+
+        #region Text Input
+
+        /// <summary>
+        /// Settings for text input controls (TextField and TextArea).
+        /// </summary>
+        public struct TextInputSettings
+        {
+            /// <summary>Font used to render the text</summary>
+            public FontFile Font;
+
+            /// <summary>Color of the text</summary>
+            public Color TextColor;
+
+            /// <summary>Placeholder text shown when the field is empty</summary>
+            public string Placeholder;
+
+            /// <summary>Color of the placeholder text</summary>
+            public Color PlaceholderColor;
+
+            /// <summary>Whether the input is read-only</summary>
+            public bool ReadOnly;
+
+            /// <summary>Maximum number of characters allowed (0 = no limit)</summary>
+            public int MaxLength;
+
+            /// <summary>Allow text to wrap instead of scrolling (For Multi-Line Only)</summary>
+            public bool DoWrap;
+
+            /// <summary>
+            /// Optional filter for character input. Return true to accept the character, false to reject it.
+            /// When null, all non-control characters are accepted.
+            /// </summary>
+            public Func<char, string, bool> CharFilter;
+
+            /// <summary>When true, all text is selected when the field gains focus.</summary>
+            public bool SelectAllOnFocus;
+
+            /// <summary>
+            /// When non-null, every visible character is replaced with this glyph for layout
+            /// and rendering — the underlying value is unchanged. Used by password fields.
+            /// Newlines are preserved unmasked so multi-line cursor math still works (though
+            /// password fields are typically single-line). Clipboard copy / cut is suppressed
+            /// while this is set so masked content can't be exfiltrated through Ctrl+C / X.
+            /// </summary>
+            public char? MaskChar;
+
+            /// <summary>
+            /// Programmatic value override. When non-null, the field's internal value is forced
+            /// to this string for the current frame, even when focused. Use this for explicit
+            /// pushes from outside the field — autocomplete picks, undo/redo, code-side rewrites
+            /// — where simply comparing the external value to internal state would be unsafe
+            /// (filters / formatters can round-trip stripped characters mid-typing, e.g. a
+            /// numeric field stripping the trailing "." in "0." before the decimal lands).
+            /// <para>Set this only on the frame where you want to force the change; on
+            /// subsequent frames the field's internal state is authoritative again.</para>
+            /// </summary>
+            public string ForceValue;
+
+            /// <summary>
+            /// Companion to <see cref="ForceValue"/>: when true and a force-update lands while
+            /// focused, the new text is fully selected so the user's next keystroke replaces
+            /// it. When the field isn't focused this flag is ignored (no selection on a
+            /// non-focused field).
+            /// </summary>
+            public bool ForceSelectAll;
+
+            /// <summary>Creates default text input settings</summary>
+            public static TextInputSettings Default => new TextInputSettings
+            {
+                Font = null,
+                TextColor = Color32.FromArgb(255, 250, 250, 250),
+                Placeholder = "",
+                PlaceholderColor = Color32.FromArgb(160, 200, 200, 200),
+                ReadOnly = false,
+                MaxLength = 0,
+                DoWrap = true,
+                SelectAllOnFocus = false,
+                MaskChar = null,
+                ForceValue = null,
+                ForceSelectAll = false,
+            };
+        }
+
+        /// <summary>
+        /// Returns the value to display for layout/render purposes. When a mask char is set,
+        /// every non-newline character is replaced with the mask. Newlines pass through so
+        /// multi-line cursor / selection math doesn't get confused.
+        /// </summary>
+        private static string GetDisplayValue(string value, in TextInputSettings settings)
+        {
+            if (!settings.MaskChar.HasValue || string.IsNullOrEmpty(value))
+                return value;
+            char mask = settings.MaskChar.Value;
+            var sb = new System.Text.StringBuilder(value.Length);
+            foreach (char c in value)
+                sb.Append(c == '\n' || c == '\r' ? c : mask);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Internal state container for text input data to reduce storage operations.
+        /// Supports both single-line and multi-line text input.
+        /// </summary>
+        private struct TextInputState
+        {
+            public string Value;
+            public int CursorPosition;
+            public int SelectionStart;
+            public int SelectionEnd;
+            public float ScrollOffsetX;
+            public float ScrollOffsetY;
+            public bool IsFocused;
+            public bool IsMultiLine;
+
+            public readonly bool HasSelection => SelectionStart >= 0 && SelectionEnd >= 0 && SelectionStart != SelectionEnd;
+
+            public void ClearSelection()
+            {
+                SelectionStart = -1;
+                SelectionEnd = -1;
+            }
+
+            public void DeleteSelection()
+            {
+                if (!HasSelection) return;
+
+                int start = Maths.Min(SelectionStart, SelectionEnd);
+                int end = Maths.Max(SelectionStart, SelectionEnd);
+                Value = Value.Remove(start, end - start);
+                CursorPosition = start;
+                ClearSelection();
+            }
+
+            public void ClampValues()
+            {
+                CursorPosition = Maths.Clamp(CursorPosition, 0, Value.Length);
+                SelectionStart = SelectionStart < 0 ? -1 : Maths.Clamp(SelectionStart, 0, Value.Length);
+                SelectionEnd = SelectionEnd < 0 ? -1 : Maths.Clamp(SelectionEnd, 0, Value.Length);
+            }
+
+            /// <summary>Gets the current line that contains the cursor</summary>
+            public readonly int GetCursorLine()
+            {
+                if (!IsMultiLine || string.IsNullOrEmpty(Value)) return 0;
+
+                int line = 0;
+                for (int i = 0; i < CursorPosition && i < Value.Length; i++)
+                {
+                    if (Value[i] == '\n') line++;
+                }
+                return line;
+            }
+
+            /// <summary>Gets all lines in the text</summary>
+            public readonly string[] GetLines()
+            {
+                if (string.IsNullOrEmpty(Value)) return new[] { "" };
+                return Value.Split('\n');
+            }
+
+            /// <summary>Gets the column position of the cursor within its line</summary>
+            public readonly int GetCursorColumn()
+            {
+                if (string.IsNullOrEmpty(Value)) return 0;
+                if (CursorPosition == 0) return 0;
+
+                int lastNewline = Value.LastIndexOf('\n', Maths.Min(CursorPosition - 1, Value.Length - 1));
+                return CursorPosition - (lastNewline + 1);
+            }
+
+            /// <summary>Clamps scroll offsets to valid ranges for text input</summary>
+            public void ClampScrollOffsets(float contentWidth, float contentHeight, float visibleWidth, float visibleHeight)
+            {
+                float maxScrollX = Maths.Max(0, contentWidth - visibleWidth);
+                float maxScrollY = Maths.Max(0, contentHeight - visibleHeight);
+
+                ScrollOffsetX = Maths.Clamp(ScrollOffsetX, 0, maxScrollX);
+                ScrollOffsetY = Maths.Clamp(ScrollOffsetY, 0, maxScrollY);
+            }
+        }
+
+        /// <summary>
+        /// Helper methods for text input state management.
+        /// </summary>
+        private TextInputState LoadTextInputState(string initialValue, bool isMultiLine)
+        {
+            var defaultState = new TextInputState
+            {
+                Value = initialValue ?? "",
+                CursorPosition = (initialValue ?? "").Length,
+                SelectionStart = -1,
+                SelectionEnd = -1,
+                ScrollOffsetX = 0.0f,
+                ScrollOffsetY = 0.0f,
+                IsFocused = false,
+                IsMultiLine = isMultiLine
+            };
+
+            var state = _paper.GetElementStorage(_handle, "TextInputState", defaultState);
+            state.IsFocused = _paper.IsElementFocused(_handle.Data.ID);
+            state.IsMultiLine = isMultiLine; // Ensure consistency
+            state.ClampValues();
+            return state;
+        }
+
+        /// <summary>
+        /// Loads state and reconciles it against the externally-provided value, with these rules:
+        /// <list type="bullet">
+        /// <item><description><see cref="TextInputSettings.ForceValue"/> set > apply unconditionally
+        /// (the caller explicitly asked for this push). Optionally select-all per
+        /// <see cref="TextInputSettings.ForceSelectAll"/>.</description></item>
+        /// <item><description>Field NOT focused > external value is authoritative (gizmos, undo,
+        /// code-side writes propagate in).</description></item>
+        /// <item><description>Field IS focused (no force) > internal state wins; the external
+        /// value is ignored. This avoids spurious select-alls when the caller's setter chain
+        /// round-trips through filters/formatters that strip in-progress characters (e.g. a
+        /// NumericField formatter stripping the trailing "." in "0.").</description></item>
+        /// </list>
+        /// Only safe to call once per frame, at the top of CreateTextInput where
+        /// <paramref name="initialValue"/> is fresh from user code. Inside deferred callbacks
+        /// (events, OnPostLayout render lambdas) the captured value is stale relative to storage
+        /// that may have been mutated earlier in the same frame > use LoadTextInputState there.
+        /// </summary>
+        private TextInputState SyncTextInputState(string initialValue, bool isMultiLine, in TextInputSettings settings)
+        {
+            var state = LoadTextInputState(initialValue, isMultiLine);
+
+            if (settings.ForceValue != null)
+            {
+                // Caller explicitly pushed a value > replace internal state regardless of focus.
+                string forced = settings.ForceValue;
+                state.Value = forced;
+                if (state.IsFocused && settings.ForceSelectAll)
+                {
+                    state.SelectionStart = 0;
+                    state.SelectionEnd = forced.Length;
+                    state.CursorPosition = forced.Length;
+                }
+                else
+                {
+                    state.CursorPosition = forced.Length;
+                    state.SelectionStart = -1;
+                    state.SelectionEnd = -1;
+                }
+                SaveTextInputState(state);
+                return state;
+            }
+
+            if (!state.IsFocused)
+            {
+                // Unfocused: external value is authoritative. Sync if it diverged.
+                string expected = initialValue ?? "";
+                if (state.Value != expected)
+                {
+                    state.Value = expected;
+                    state.CursorPosition = expected.Length;
+                    state.SelectionStart = -1;
+                    state.SelectionEnd = -1;
+                    SaveTextInputState(state);
+                }
+            }
+            // Focused without ForceValue: leave internal state alone. Callers that genuinely
+            // need to push a new value mid-edit (autocomplete, validator rewrite) must opt in
+            // via TextInputSettings.ForceValue.
+
+            return state;
+        }
+
+        private void SaveTextInputState(TextInputState state)
+        {
+            _paper.SetElementStorage(_handle, "TextInputState", state);
+        }
+
+        private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, float maxWidth = float.MaxValue)
+        {
+            var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+            var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = (float)fontSize;
+            settings.Quality = (FontQuality)_handle.Data._elementStyle.GetValue(GuiProp.TextQuality);
+            settings.Font = inputSettings.Font;
+            settings.LetterSpacing = (float)letterSpacing;
+            settings.Alignment = Scribe.TextAlignment.Left;
+            settings.MaxWidth = (float)maxWidth;
+            settings.WrapMode = (isMultiLine && inputSettings.DoWrap) ? Scribe.TextWrapMode.Wrap : TextWrapMode.NoWrap;
+
+            return settings;
+        }
+
+        private bool IsShiftPressed() => _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+        private bool IsControlPressed() => _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+
+        /// <summary>
+        /// Finds the start of the previous word from the current position
+        /// </summary>
+        private int FindPreviousWordStart(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position <= 0) return 0;
+
+            int pos = Maths.Min(position - 1, text.Length - 1);
+
+            // Skip whitespace
+            while (pos > 0 && char.IsWhiteSpace(text[pos]))
+                pos--;
+
+            // Skip word characters
+            while (pos > 0 && !char.IsWhiteSpace(text[pos]))
+                pos--;
+
+            // Move to start of word if we stopped at whitespace
+            if (pos > 0 && char.IsWhiteSpace(text[pos]))
+                pos++;
+
+            return pos;
+        }
+
+        /// <summary>
+        /// Finds the end of the next word from the current position
+        /// </summary>
+        private int FindNextWordEnd(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position >= text.Length) return text?.Length ?? 0;
+
+            int pos = position;
+
+            // Skip whitespace
+            while (pos < text.Length && char.IsWhiteSpace(text[pos]))
+                pos++;
+
+            // Skip word characters
+            while (pos < text.Length && !char.IsWhiteSpace(text[pos]))
+                pos++;
+
+            return pos;
+        }
+
+        /// <summary>
+        /// Finds the boundaries of the word at the given position
+        /// </summary>
+        private (int start, int end) FindWordBoundaries(string text, int position)
+        {
+            if (string.IsNullOrEmpty(text) || position < 0 || position >= text.Length)
+                return (position, position);
+
+            // If we're on whitespace, return the position as both start and end
+            if (char.IsWhiteSpace(text[position]))
+                return (position, position);
+
+            int start = position;
+            int end = position;
+
+            // Find start of word
+            while (start > 0 && !char.IsWhiteSpace(text[start - 1]))
+                start--;
+
+            // Find end of word
+            while (end < text.Length && !char.IsWhiteSpace(text[end]))
+                end++;
+
+            return (start, end);
+        }
+
+        private void MoveCursorVertical(ref TextInputState state, int direction, TextInputSettings settings)
+        {
+            if (!state.IsMultiLine) return;
+
+            var lines = state.GetLines();
+            int currentLine = state.GetCursorLine();
+            int targetLine = Maths.Clamp(currentLine + direction, 0, lines.Length - 1);
+
+            if (targetLine == currentLine) return;
+
+            int currentColumn = state.GetCursorColumn();
+
+            // Move to the same column in the target line, or end of line if shorter
+            int targetColumn = Maths.Min(currentColumn, lines[targetLine].Length);
+
+            // Calculate new cursor position
+            int newPosition = 0;
+            for (int i = 0; i < targetLine; i++)
+            {
+                newPosition += lines[i].Length;
+                // Only add +1 for newline if this isn't the last line in the original text
+                if (i < lines.Length - 1 || state.Value.EndsWith('\n'))
+                    newPosition += 1;
+            }
+            newPosition += targetColumn;
+
+            if (IsShiftPressed())
+            {
+                if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                state.CursorPosition = newPosition;
+                state.SelectionEnd = newPosition;
+            }
+            else
+            {
+                state.CursorPosition = newPosition;
+                state.ClearSelection();
+            }
+        }
+
+        private bool ProcessKeyCommand(ref TextInputState state, PaperKey key, TextInputSettings settings)
+        {
+            bool valueChanged = false;
+
+            switch (key)
+            {
+                case PaperKey.Backspace:
+                    if (state.HasSelection)
+                    {
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    else if (state.CursorPosition > 0)
+                    {
+                        state.Value = state.Value.Remove(state.CursorPosition - 1, 1);
+                        state.CursorPosition--;
+                        valueChanged = true;
+                    }
+                    break;
+
+                case PaperKey.Delete:
+                    if (state.HasSelection)
+                    {
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    else if (state.CursorPosition < state.Value.Length)
+                    {
+                        state.Value = state.Value.Remove(state.CursorPosition, 1);
+                        valueChanged = true;
+                    }
+                    break;
+
+                case PaperKey.Left:
+                    if (IsControlPressed())
+                    {
+                        // Ctrl+Left: Move to previous word
+                        int newPos = FindPreviousWordStart(state.Value, state.CursorPosition);
+                        if (IsShiftPressed())
+                        {
+                            if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                            state.CursorPosition = newPos;
+                            state.SelectionEnd = state.CursorPosition;
+                        }
+                        else
+                        {
+                            state.CursorPosition = newPos;
+                            state.ClearSelection();
+                        }
+                    }
+                    else if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        if (state.HasSelection)
+                            state.CursorPosition = Maths.Min(state.SelectionStart, state.SelectionEnd);
+                        else
+                            state.CursorPosition = Maths.Max(0, state.CursorPosition - 1);
+                        state.ClearSelection();
+                    }
+                    break;
+
+                case PaperKey.Right:
+                    if (IsControlPressed())
+                    {
+                        // Ctrl+Right: Move to next word
+                        int newPos = FindNextWordEnd(state.Value, state.CursorPosition);
+                        if (IsShiftPressed())
+                        {
+                            if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                            state.CursorPosition = newPos;
+                            state.SelectionEnd = state.CursorPosition;
+                        }
+                        else
+                        {
+                            state.CursorPosition = newPos;
+                            state.ClearSelection();
+                        }
+                    }
+                    else if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        if (state.HasSelection)
+                            state.CursorPosition = Maths.Max(state.SelectionStart, state.SelectionEnd);
+                        else
+                            state.CursorPosition = Maths.Min(state.Value.Length, state.CursorPosition + 1);
+                        state.ClearSelection();
+                    }
+                    break;
+
+                case PaperKey.Home:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = 0;
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        state.CursorPosition = 0;
+                        state.ClearSelection();
+                    }
+                    break;
+
+                case PaperKey.End:
+                    if (IsShiftPressed())
+                    {
+                        if (state.SelectionStart < 0) state.SelectionStart = state.CursorPosition;
+                        state.CursorPosition = state.Value.Length;
+                        state.SelectionEnd = state.CursorPosition;
+                    }
+                    else
+                    {
+                        state.CursorPosition = state.Value.Length;
+                        state.ClearSelection();
+                    }
+                    break;
+
+                case PaperKey.A when IsControlPressed():
+                    state.SelectionStart = 0;
+                    state.SelectionEnd = state.Value.Length;
+                    state.CursorPosition = state.SelectionEnd;
+                    break;
+
+                case PaperKey.C when IsControlPressed() && state.HasSelection:
+                    {
+                        // Masked fields (passwords) suppress copy so plaintext can't leave the field.
+                        if (settings.MaskChar.HasValue) break;
+                        int start = Maths.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Maths.Max(state.SelectionStart, state.SelectionEnd);
+                        _paper.SetClipboard(state.Value.Substring(start, end - start));
+                    }
+                    break;
+
+                case PaperKey.X when IsControlPressed() && state.HasSelection:
+                    {
+                        if (settings.MaskChar.HasValue) break;
+                        int start = Maths.Min(state.SelectionStart, state.SelectionEnd);
+                        int end = Maths.Max(state.SelectionStart, state.SelectionEnd);
+                        _paper.SetClipboard(state.Value.Substring(start, end - start));
+                        state.DeleteSelection();
+                        valueChanged = true;
+                    }
+                    break;
+
+                case PaperKey.V when IsControlPressed():
+                    {
+                        string clipText = _paper.GetClipboard();
+                        if (!string.IsNullOrEmpty(clipText))
+                        {
+                            // For single-line, replace newlines with spaces
+                            if (!state.IsMultiLine)
+                                clipText = clipText.Replace('\n', ' ').Replace('\r', ' ');
+
+                            // Apply character filter to pasted text
+                            if (settings.CharFilter != null)
+                            {
+                                string currentVal = state.Value;
+                                clipText = new string(clipText.Where(c => settings.CharFilter(c, currentVal)).ToArray());
+                            }
+
+                            // Check max length
+                            if (settings.MaxLength > 0)
+                            {
+                                int availableLength = settings.MaxLength - state.Value.Length;
+                                if (state.HasSelection)
+                                {
+                                    int selectionLength = Maths.Abs(state.SelectionEnd - state.SelectionStart);
+                                    availableLength += selectionLength;
+                                }
+                                if (availableLength > 0 && clipText.Length > availableLength)
+                                    clipText = clipText.Substring(0, availableLength);
+                            }
+
+                            if (!string.IsNullOrEmpty(clipText))
+                            {
+                                if (state.HasSelection) state.DeleteSelection();
+                                state.Value = state.Value.Insert(state.CursorPosition, clipText);
+                                state.CursorPosition += clipText.Length;
+                                valueChanged = true;
+                            }
+                        }
+                    }
+                    break;
+
+                // Seems a bit buggy in scribe so ignoring this for the time being
+                case PaperKey.Tab:
+                    if (!settings.ReadOnly)
+                    {
+                        if (state.HasSelection) state.DeleteSelection();
+
+                        // Check max length
+                        if (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength)
+                        {
+                            state.Value = state.Value.Insert(state.CursorPosition, "\t");
+                            state.CursorPosition++;
+                            valueChanged = true;
+                        }
+                    }
+                    break;
+
+                case PaperKey.Enter when state.IsMultiLine:
+                    if (state.HasSelection) state.DeleteSelection();
+
+                    // Check max length
+                    // Check max length and read-only
+                    if (!settings.ReadOnly && (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength))
+                    {
+                        state.Value = state.Value.Insert(state.CursorPosition, "\n");
+                        state.CursorPosition++;
+                        valueChanged = true;
+                    }
+                    break;
+
+                case PaperKey.Up when state.IsMultiLine:
+                    MoveCursorVertical(ref state, -1, settings);
+                    break;
+
+                case PaperKey.Down when state.IsMultiLine:
+                    MoveCursorVertical(ref state, 1, settings);
+                    break;
+            }
+
+            return valueChanged;
+        }
+
+        /// <summary>
+        /// Creates a single-line text field control that allows users to input and edit text.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="settings">Text input settings</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text field</returns>
+        public ElementBuilder TextField(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            return CreateTextInput(value, settings, onChange, false, intID);
+        }
+
+        /// <summary>
+        /// Creates a single-line text field control with simple parameters.
+        /// For more control, use the overload that takes TextInputSettings.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="font">Font used to render the text</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="placeholder">Optional placeholder text shown when the field is empty</param>
+        /// <param name="textColor">Color of the text</param>
+        /// <param name="placeholderColor">Color of the placeholder text</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text field</returns>
+        public ElementBuilder TextField(
+            string value,
+            FontFile font,
+            Action<string> onChange = null,
+            Color? textColor = null,
+            string placeholder = "",
+            Color? placeholderColor = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            var settings = TextInputSettings.Default;
+            settings.Font = font;
+            settings.TextColor = textColor ?? settings.TextColor;
+            settings.Placeholder = placeholder;
+            settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
+
+            return CreateTextInput(value, settings, onChange, false, intID);
+        }
+
+        /// <summary>
+        /// Creates a multi-line text area control that allows users to input and edit text with vertical scrolling.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="settings">Text input settings</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text area</returns>
+        public ElementBuilder TextArea(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            return CreateTextInput(value, settings, onChange, true, intID);
+        }
+
+        /// <summary>
+        /// Creates a multi-line text area control with simple parameters.
+        /// For more control, use the overload that takes TextInputSettings.
+        /// </summary>
+        /// <param name="value">Current text value</param>
+        /// <param name="font">Font used to render the text</param>
+        /// <param name="onChange">Optional callback when the text changes</param>
+        /// <param name="placeholder">Optional placeholder text shown when the area is empty</param>
+        /// <param name="textColor">Color of the text</param>
+        /// <param name="placeholderColor">Color of the placeholder text</param>
+        /// <param name="intID">Line number based identifier (auto-provided as Source Line Number)</param>
+        /// <returns>A builder for configuring the text area</returns>
+        public ElementBuilder TextArea(
+            string value,
+            FontFile font,
+            Action<string> onChange = null,
+            string placeholder = "",
+            Color? textColor = null,
+            Color? placeholderColor = null,
+            [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
+        {
+            var settings = TextInputSettings.Default;
+            settings.Font = font;
+            settings.TextColor = textColor ?? settings.TextColor;
+            settings.Placeholder = placeholder;
+            settings.PlaceholderColor = placeholderColor ?? settings.PlaceholderColor;
+
+            return CreateTextInput(value, settings, onChange, true, intID);
+        }
+
+        private ElementBuilder CreateTextInput(
+            string value,
+            TextInputSettings settings,
+            Action<string> onChange,
+            bool isMultiLine,
+            int intID)
+        {
+            Clip();
+
+            if(_paper.IsParentFocused && isMultiLine)
+            {
+                // If a text input field is focused and its a Multi-Line input field, Then Tab navigation is disabled
+                // Since we want tab to actually add the tab character
+                _paper.SkipKeyboardNavigation = true;
+            }
+
+            // Initialize state (sync against the freshly-provided external value once per frame)
+            var state = SyncTextInputState(value, isMultiLine, settings);
+
+            if (isMultiLine)
+            {
+                ContentSizer((width, height) =>
+                {
+                    var currentState = LoadTextInputState(value, isMultiLine);
+                    var textSettings = CreateTextLayoutSettings(settings, true, (float)(width ?? float.MaxValue));
+                    var textLayout = _paper.CreateLayout(GetDisplayValue(currentState.Value, settings), textSettings);
+
+                    // textSettings.PixelSize is in logical-with-DPI units (CreateTextLayoutSettings
+                    // pre-scales). textLayout.Size is pixel-space — divide by FramebufferScale to
+                    // reach logical-with-DPI for comparison.
+                    float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+                    return (width ?? textSettings.PixelSize,
+                            Maths.Max(height ?? textSettings.PixelSize * textSettings.LineHeight, textLayout.Size.Y * invFb));
+                });
+            }
+
+            // Handle focus changes
+            OnFocusChange((FocusEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                currentState.IsFocused = e.IsFocused;
+
+                if (e.IsFocused)
+                {
+                    if (settings.SelectAllOnFocus && currentState.Value.Length > 0)
+                    {
+                        currentState.SelectionStart = 0;
+                        currentState.SelectionEnd = currentState.Value.Length;
+                        currentState.CursorPosition = currentState.Value.Length;
+                    }
+                    else
+                    {
+                        currentState.CursorPosition = currentState.Value.Length;
+                        currentState.ClearSelection();
+                    }
+                    EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                }
+
+                SaveTextInputState(currentState);
+            });
+
+            // Handle mouse clicks for cursor positioning and Shift+Click range selection
+            OnPress((ClickEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var newPosition = Maths.Clamp(
+                    CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, clickPos, clickPosY),
+                    0, currentState.Value.Length);
+
+                if (IsShiftPressed())
+                {
+                    // Shift+Click: Extend or create selection to clicked position
+                    if (currentState.SelectionStart < 0)
+                    {
+                        // Start new selection from current cursor position
+                        currentState.SelectionStart = currentState.CursorPosition;
+                    }
+                    currentState.SelectionEnd = newPosition;
+                    currentState.CursorPosition = newPosition;
+                }
+                else
+                {
+                    // Regular click: Place cursor and clear selection
+                    currentState.CursorPosition = newPosition;
+                    currentState.ClearSelection();
+                }
+
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
+            });
+
+            // Handle float-click for word selection
+            OnDoubleClick((ClickEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var clickPos = e.RelativePosition.X + currentState.ScrollOffsetX;
+                var clickPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var clickPosition = Maths.Clamp(
+                    CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, clickPos, clickPosY),
+                    0, currentState.Value.Length);
+
+                // Select the word at the clicked position. Word boundaries are computed against the
+                // real string — masked text has no real word boundaries (it's all the same glyph).
+                var (wordStart, wordEnd) = FindWordBoundaries(currentState.Value, clickPosition);
+                if (wordStart != wordEnd)
+                {
+                    currentState.SelectionStart = wordStart;
+                    currentState.SelectionEnd = wordEnd;
+                    currentState.CursorPosition = wordEnd;
+                    EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                    SaveTextInputState(currentState);
+                }
+            });
+
+            // Handle dragging for text selection
+            OnDragStart((DragEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var pos = Maths.Clamp(CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
+
+                currentState.CursorPosition = pos;
+                currentState.SelectionStart = pos;
+                currentState.SelectionEnd = pos;
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
+            });
+
+            OnDragging((DragEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                if (currentState.SelectionStart < 0) return;
+
+                // Auto-scroll when dragging near edges
+                const float edgeScrollSensitivity = 20.0f;
+                const float scrollSpeed = 2.0f;
+
+                if (e.RelativePosition.X < edgeScrollSensitivity)
+                    currentState.ScrollOffsetX = Maths.Max(0, currentState.ScrollOffsetX - scrollSpeed);
+                else if (e.RelativePosition.X > e.ElementRect.Size.X - edgeScrollSensitivity)
+                    currentState.ScrollOffsetX += scrollSpeed;
+
+                if (isMultiLine)
+                {
+                    if (e.RelativePosition.Y < edgeScrollSensitivity)
+                        currentState.ScrollOffsetY = Maths.Max(0, currentState.ScrollOffsetY - scrollSpeed);
+                    else if (e.RelativePosition.Y > e.ElementRect.Size.Y - edgeScrollSensitivity)
+                        currentState.ScrollOffsetY += scrollSpeed;
+                }
+
+                // Clamp scroll offsets after auto-scroll (textLayout.Size is pixel-space; convert
+                // to logical via FramebufferScale).
+                var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, e.ElementRect.Size.X);
+                var displayValue = GetDisplayValue(currentState.Value, settings);
+                var textLayout = _paper.CreateLayout(displayValue, layoutSettings);
+                float visibleWidth = e.ElementRect.Size.X;
+                float visibleHeight = e.ElementRect.Size.Y;
+                float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+                currentState.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
+
+                var dragPos = e.RelativePosition.X + currentState.ScrollOffsetX;
+                var dragPosY = isMultiLine ? e.RelativePosition.Y + currentState.ScrollOffsetY : 0;
+                var pos = Maths.Clamp(CalculateTextPosition(displayValue, settings, isMultiLine, dragPos, dragPosY), 0, currentState.Value.Length);
+
+                currentState.CursorPosition = pos;
+                currentState.SelectionEnd = pos;
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
+            });
+
+            // Handle keyboard input
+            OnKeyPressed((KeyEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                if (!currentState.IsFocused) return;
+
+                bool valueChanged = ProcessKeyCommand(ref currentState, e.Key, settings);
+
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
+
+                if (valueChanged)
+                    onChange?.Invoke(currentState.Value);
+            });
+
+            // Handle character input
+            OnTextInput((TextInputEvent e) =>
+            {
+                var currentState = LoadTextInputState(value, isMultiLine);
+                if (!currentState.IsFocused || char.IsControl(e.Character) || settings.ReadOnly) return;
+
+                // Apply character filter if set
+                if (settings.CharFilter != null && !settings.CharFilter(e.Character, currentState.Value))
+                    return;
+
+                // Check max length
+                if (settings.MaxLength > 0 && currentState.Value.Length >= settings.MaxLength && !currentState.HasSelection)
+                    return;
+
+                if (currentState.HasSelection) currentState.DeleteSelection();
+
+                // For single-line, don't allow newlines
+                if (!isMultiLine && (e.Character == '\n' || e.Character == '\r'))
+                    return;
+
+                currentState.Value = currentState.Value.Insert(currentState.CursorPosition, e.Character.ToString());
+                currentState.CursorPosition++;
+
+                EnsureCursorVisible(ref currentState, settings, isMultiLine);
+                SaveTextInputState(currentState);
+                onChange?.Invoke(currentState.Value);
+            });
+
+            // Render cursor and selection
+            OnPostLayout((ElementHandle elHandle, Rect rect) =>
+            {
+                _paper.Draw(ref elHandle, (canvas, r) =>
+                {
+                    var renderState = LoadTextInputState(value, isMultiLine);
+                    var layoutSettings = CreateTextLayoutSettings(settings, isMultiLine, r.Size.X);
+
+                    canvas.SaveState();
+                    canvas.TransformBy(Transform2D.CreateTranslation(-renderState.ScrollOffsetX, -renderState.ScrollOffsetY));
+
+                    // TextLayout positions and widths come back in pixel space (Canvas rasterizes
+                    // at logical × FramebufferScale for HiDPI crispness); divide by FramebufferScale
+                    // to reach logical space, matching the widget's own coordinate system.
+                    float invFb = 1.0f / canvas.FramebufferScale;
+                    var fontSize = (float)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
+
+                    // Draw text or placeholder. Mask the visible text when MaskChar is set; the
+                    // underlying renderState.Value stays untouched so cursor / selection /
+                    // clipboard logic operates on the real string.
+                    var visibleValue = GetDisplayValue(renderState.Value, settings);
+                    if (string.IsNullOrEmpty(renderState.Value))
+                    {
+                        canvas.DrawText(settings.Placeholder, (float)(r.Min.X), (float)r.Min.Y, settings.PlaceholderColor, layoutSettings);
+                    }
+                    else
+                    {
+                        canvas.DrawText(visibleValue, (float)(r.Min.X), (float)r.Min.Y, settings.TextColor, layoutSettings);
+                    }
+
+                    // Draw selection and cursor if focused
+                    if (renderState.IsFocused)
+                    {
+                        _paper.CaptureKeyboard();
+
+                        // Draw selection background
+                        if (renderState.HasSelection)
+                        {
+                            int start = Maths.Min(renderState.SelectionStart, renderState.SelectionEnd);
+                            int end = Maths.Max(renderState.SelectionStart, renderState.SelectionEnd);
+
+                            var textLayout = _paper.CreateLayout(visibleValue, layoutSettings);
+                            var startPos = textLayout.GetCursorPosition(start) * invFb;
+                            var endPos = textLayout.GetCursorPosition(end) * invFb;
+
+                            canvas.SetFillColor(Color32.FromArgb(100, 100, 150, 255));
+
+                            if (isMultiLine && Maths.Abs(endPos.Y - startPos.Y) > fontSize / 2)
+                            {
+                                // Multi-line selection: Draw rectangles for each line
+                                float lineHeight = fontSize * layoutSettings.LineHeight;
+                                float currentY = startPos.Y;
+
+                                // Get line indices from Y positions
+                                int startLineIndex = (int)(startPos.Y / lineHeight);
+                                int endLineIndex = (int)(endPos.Y / lineHeight);
+
+                                // First line: from start position to end of line (line widths are
+                                // pixel-space on the layout; convert to logical).
+                                float firstLineWidth = startLineIndex < textLayout.Lines.Count ? textLayout.Lines[startLineIndex].Width * invFb : 0;
+
+                                canvas.BeginPath();
+                                canvas.RoundedRect(
+                                    r.Min.X + startPos.X,
+                                    r.Min.Y + currentY,
+                                    firstLineWidth - startPos.X,
+                                    lineHeight,
+                                    2, 2, 2, 2);
+                                canvas.Fill();
+
+                                // Middle lines: use actual line widths from textLayout
+                                currentY += lineHeight;
+                                int currentLineIndex = startLineIndex + 1;
+                                while (currentY < endPos.Y && currentLineIndex < textLayout.Lines.Count)
+                                {
+                                    float lineWidth = textLayout.Lines[currentLineIndex].Width * invFb;
+
+                                    canvas.BeginPath();
+                                    canvas.RoundedRect(
+                                        r.Min.X,
+                                        r.Min.Y + currentY,
+                                        lineWidth,
+                                        lineHeight,
+                                        2, 2, 2, 2);
+                                    canvas.Fill();
+                                    currentY += lineHeight;
+                                    currentLineIndex++;
+                                }
+
+                                // Last line: from start of line to end position
+                                if (endPos.X > 0)
+                                {
+                                    canvas.BeginPath();
+                                    canvas.RoundedRect(
+                                        r.Min.X,
+                                        r.Min.Y + endPos.Y,
+                                        endPos.X,
+                                        lineHeight,
+                                        2, 2, 2, 2);
+                                    canvas.Fill();
+                                }
+                            }
+                            else
+                            {
+                                // Single-line selection: Draw one rectangle
+                                canvas.BeginPath();
+                                canvas.RoundedRect(
+                                    r.Min.X + startPos.X,
+                                    r.Min.Y + startPos.Y,
+                                    endPos.X - startPos.X,
+                                    fontSize,
+                                    2, 2, 2, 2);
+                                canvas.Fill();
+                            }
+                        }
+
+                        // Draw blinking cursor
+                        if ((int)(_paper.Time * 2) % 2 == 0)
+                        {
+                            var textLayout = _paper.CreateLayout(visibleValue, layoutSettings);
+                            var cursorPos = textLayout.GetCursorPosition(renderState.CursorPosition);
+                            float cursorX = r.Min.X + (float)cursorPos.X / canvas.FramebufferScale;
+                            float cursorY = r.Min.Y + (float)cursorPos.Y / canvas.FramebufferScale;
+
+                            canvas.BeginPath();
+                            canvas.MoveTo(cursorX, cursorY);
+                            canvas.LineTo(cursorX, cursorY + fontSize);
+                            canvas.SetStrokeColor(settings.TextColor);
+                            canvas.SetStrokeWidth(1);
+                            canvas.Stroke();
+                        }
+                    }
+
+                    canvas.RestoreState();
+                });
+            });
+
+            return this;
+        }
+
+        // Helper methods for text field functionality
+
+        /// <summary>
+        /// Ensures the cursor is visible by adjusting scroll position if needed.
+        /// </summary>
+        private void EnsureCursorVisible(ref TextInputState state, TextInputSettings settings, bool isMultiLine)
+        {
+            // Scroll offsets are applied as a logical-space canvas transform (see line ~1966),
+            // so everything in this method must be in logical units. TextLayout cursor positions
+            // and Size are in pixel space and must be divided by FramebufferScale.
+            float invFb = 1.0f / _paper.Canvas.FramebufferScale;
+
+            if (isMultiLine)
+            {
+                var textLayout = _paper.CreateLayout(GetDisplayValue(state.Value, settings), CreateTextLayoutSettings(settings, true, _handle.Data.LayoutWidth));
+                var cursorPos = textLayout.GetCursorPosition(state.CursorPosition) * invFb;
+
+                float visibleWidth = _handle.Data.LayoutWidth;
+                float visibleHeight = _handle.Data.LayoutHeight;
+
+                const float margin = 10.0f;
+
+                // Horizontal scrolling
+                if (cursorPos.X < state.ScrollOffsetX + margin)
+                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
+                else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
+                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
+
+                // Vertical scrolling
+                if (cursorPos.Y < state.ScrollOffsetY + margin)
+                    state.ScrollOffsetY = Maths.Max(0, (float)cursorPos.Y - margin);
+                else if (cursorPos.Y > state.ScrollOffsetY + visibleHeight - margin)
+                    state.ScrollOffsetY = (float)cursorPos.Y - visibleHeight + margin;
+
+                // Clamp scroll offsets to content bounds (layout Size is pixel-space too).
+                state.ClampScrollOffsets((float)textLayout.Size.X * invFb, (float)textLayout.Size.Y * invFb, visibleWidth, visibleHeight);
+            }
+            else
+            {
+                // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
+                // pixel-space; convert to logical.
+                var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+                var displayValue = GetDisplayValue(state.Value, settings);
+                var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
+
+                float visibleWidth = _handle.Data.LayoutWidth;
+                const float margin = 20.0f;
+
+                if (cursorPos.X < state.ScrollOffsetX + margin)
+                    state.ScrollOffsetX = Maths.Max(0, (float)cursorPos.X - margin);
+                else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
+                    state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
+
+                // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
+                var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
+                state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
+            }
+        }
+
+        /// <summary>
+        /// Calculates the closest text position based on coordinates using TextLayout.
+        /// </summary>
+        private int CalculateTextPosition(string text, TextInputSettings settings, bool isMultiLine, float x, float y = 0)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            var maxWidth = isMultiLine ? _handle.Data.LayoutWidth : float.MaxValue;
+            var textLayout = _paper.CreateLayout(text, CreateTextLayoutSettings(settings, isMultiLine, maxWidth));
+            // x,y are in logical units; the layout is in pixel space. Scale to match.
+            float s = _paper.Canvas.FramebufferScale;
+            return textLayout.GetCursorIndex(new Float2(x * s, y * s));
+        }
+
+        /// <summary>
+        /// Calculates the cursor position for a specific character index using TextLayout.
+        /// </summary>
+        private Float2 GetCursorPositionFromIndex(string text, FontFile font, float fontSize, float letterSpacing, int index)
+        {
+            if (string.IsNullOrEmpty(text) || index <= 0) return Float2.Zero;
+            var settings = TextLayoutSettings.Default;
+            settings.Font = font;
+            settings.PixelSize = (float)fontSize;
+            settings.LetterSpacing = (float)letterSpacing;
+            settings.MaxWidth = float.MaxValue;
+            var textLayout = _paper.CreateLayout(text, settings);
+            return (Float2)textLayout.GetCursorPosition(index);
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Begins a new parent scope with this element as the parent.
+        /// Used with 'using' statements to create a hierarchical UI structure.
+        /// </summary>
+        /// <returns>This builder as an IDisposable to be used with 'using' statements</returns>
+        public IDisposable Enter()
+        {
+            var currentParent = _paper.CurrentParent;
+            if (currentParent.Equals(_handle))
+                throw new InvalidOperationException("Cannot enter the same element twice.");
+
+            // Push this element onto the stack
+            _paper._elementStack.Push(_handle);
+
+            return this;
+        }
+
+        /// <summary>
+        /// Ends the current parent scope by removing this element from the stack.
+        /// Called automatically at the end of a 'using' block.
+        /// </summary>
+        void IDisposable.Dispose()
+        {
+            // Pop this element from the stack when the using block ends
+            if (_paper._elementStack.Count > 1) // Don't pop the root
+                _paper._elementStack.Pop();
+        }
+    }
+}

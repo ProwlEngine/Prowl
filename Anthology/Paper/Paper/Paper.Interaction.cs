@@ -1,0 +1,987 @@
+﻿using System;
+using System.Collections.Generic;
+using Prowl.PaperUI.Events;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
+using Prowl.Vector.Spatial;
+
+namespace Prowl.PaperUI
+{
+    public partial class Paper
+    {
+        #region State Query Methods
+
+        /// <summary>
+        /// Checks if an element is currently hovered.
+        /// </summary>
+        public bool IsElementHovered(int id) => _elementsInBubblePath.Contains(id) || IsHookedToHoveredParent(id);
+
+        /// <summary>
+        /// Checks if an element is currently active (pressed).
+        /// </summary>
+        public bool IsElementActive(int id) => _activeElementId == id || IsHookedToActiveParent(id);
+
+        /// <summary>
+        /// Checks if an element has input focus.
+        /// </summary>
+        public bool IsElementFocused(int id) => _focusedElementId == id || IsHookedToFocusedParent(id);
+
+        /// <summary>
+        /// Checks if an element is currently being dragged.
+        /// </summary>
+        public bool IsElementDragging(int id) =>
+            (_isDragging.TryGetValue(id, out bool isDragging) && isDragging) || IsHookedToDraggingParent(id);
+
+        /// <summary>
+        /// Checks if the current parent element is hovered.
+        /// </summary>
+        public bool IsParentHovered => IsElementHovered(CurrentParent.Data.ID);
+
+        /// <summary>
+        /// Checks if the current parent element is active.
+        /// </summary>
+        public bool IsParentActive => _activeElementId == CurrentParent.Data.ID;
+
+        /// <summary>
+        /// Checks if the current parent element has input focus.
+        /// </summary>
+        public bool IsParentFocused => _focusedElementId == CurrentParent.Data.ID;
+
+        /// <summary>
+        /// Checks if the current parent element or any of its descendants has focus.
+        /// Equivalent to CSS :focus-within.
+        /// </summary>
+        public bool IsParentFocusWithin => IsElementFocusWithin(CurrentParent.Data.ID);
+
+        /// <summary>
+        /// Checks if an element or any of its descendants has focus.
+        /// Walks up from the focused element to see if it's a descendant.
+        /// </summary>
+        /// <summary>
+        /// Cached set of ancestor IDs of the focused element, computed at end of each frame.
+        /// Used by IsElementFocusWithin to check if an element contains focus,
+        /// even in immediate-mode where child elements may not exist yet during the draw phase.
+        /// </summary>
+        private HashSet<int> _focusWithinAncestors = new HashSet<int>();
+
+        public bool IsElementFocusWithin(int id)
+        {
+            // Check the cached ancestor set from the previous frame
+            return _focusWithinAncestors.Contains(id);
+        }
+
+        /// <summary>
+        /// Called at end of frame after HandleInteractions to cache the focus ancestor chain.
+        /// </summary>
+        private void UpdateFocusWithinCache()
+        {
+            _focusWithinAncestors.Clear();
+            if (_focusedElementId == 0) return;
+
+            ElementHandle current = FindElementByID(_focusedElementId);
+            int depth = 0;
+            while (current.IsValid && depth < 100)
+            {
+                _focusWithinAncestors.Add(current.Data.ID);
+                current = current.GetParentHandle();
+                depth++;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the current parent element is being dragged.
+        /// </summary>
+        public bool IsParentDragging => IsElementDragging(CurrentParent.Data.ID);
+
+        #endregion
+
+        #region Interaction Hooking
+
+        /// <summary>
+        /// Checks if an element is hooked to its parent's hover state.
+        /// Walks up the parent chain recursively through hooked elements.
+        /// </summary>
+        private bool IsHookedToHoveredParent(int childId)
+        {
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
+
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
+
+                if (_elementsInBubblePath.Contains(parent.Data.ID))
+                    return true;
+
+                // Continue walking up if parent is also hooked
+                current = parent;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if an element is hooked to its parent's active state.
+        /// Walks up the parent chain recursively through hooked elements.
+        /// </summary>
+        private bool IsHookedToActiveParent(int childId)
+        {
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
+
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
+
+                if (_activeElementId == parent.Data.ID)
+                    return true;
+
+                current = parent;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if an element is hooked to its parent's focus state.
+        /// Walks up the parent chain recursively through hooked elements.
+        /// </summary>
+        private bool IsHookedToFocusedParent(int childId)
+        {
+            ElementHandle current = FindElementByID(childId);
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (!data.IsHookedToParent) return false;
+
+                ElementHandle parent = current.GetParentHandle();
+                if (!parent.IsValid) return false;
+
+                if (_focusedElementId == parent.Data.ID)
+                    return true;
+
+                current = parent;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if an element is hooked to its parent's dragging state.
+        /// </summary>
+        private bool IsHookedToDraggingParent(int childId)
+        {
+            ElementHandle childElement = FindElementByID(childId);
+            if (!childElement.IsValid) return false;
+
+            ref ElementData childData = ref childElement.Data;
+            if (!childData.IsHookedToParent) return false;
+
+            ElementHandle parent = childElement.GetParentHandle();
+            if (!parent.IsValid) return false;
+
+            return _isDragging.TryGetValue(parent.Data.ID, out bool isDragging) && isDragging;
+        }
+
+        #endregion
+
+        #region Interaction State
+
+        // Drag threshold - minimum distance to move before starting drag
+        private const float DRAG_THRESHOLD = 5.0f; // pixels
+
+        // Element interaction state tracking
+        private int _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
+        private int _activeElementId = 0;      // Currently active (pressed) element
+        private int _focusedElementId = 0;     // Element with input focus
+
+        // State tracking collections
+        private Dictionary<int, bool> _wasHoveredState = new Dictionary<int, bool>();
+        private Dictionary<int, Float2> _dragStartPos = new Dictionary<int, Float2>();
+        private HashSet<int> _elementsInBubblePath = new HashSet<int>();
+        private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
+
+        // Layered elements collected after layout for independent hit testing.
+        // Each entry stores the element handle and the accumulated parent transform
+        // (including scroll offsets) so hit testing uses the correct coordinates.
+        private List<(ElementHandle handle, Transform2D parentTransform)> _layeredElements = new List<(ElementHandle, Transform2D)>();
+
+        // Public access to interaction state
+        public int HoveredElementId => _theHoveredElementId;
+        public int ActiveElementId => _activeElementId;
+        public int FocusedElementId => _focusedElementId;
+
+        /// <summary>
+        /// Programmatically set focus to an element.
+        /// If no element is specified, focuses the current parent.
+        /// </summary>
+        public void SetFocus(ElementHandle? element = null)
+        {
+            var target = element ?? CurrentParent;
+            if (!target.IsValid) return;
+            _focusedElementId = target.Data.ID;
+        }
+
+        /// <summary>Clear focus from any currently focused element.</summary>
+        public void ClearFocus() => _focusedElementId = 0;
+
+        public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
+
+        public bool SkipKeyboardNavigation = false;
+
+        #endregion
+
+        #region Interaction Processing
+
+        /// <summary>
+        /// Main interaction handling method called each frame.
+        /// </summary>
+        private void HandleInteractions()
+        {
+            // Reset hover state
+            _elementsInBubblePath.Clear();
+            int previousHoveredElementId = _theHoveredElementId;
+            _theHoveredElementId = 0;
+
+            // Find the topmost element under the pointer
+            var t = Transform2D.Identity;
+            ElementHandle topmostInteractable = FindTopmostInteractableElement(ref _rootElementHandle, t);
+
+            if (topmostInteractable.IsValid)
+            {
+                _theHoveredElementId = topmostInteractable.Data.ID;
+                BuildBubblePath(topmostInteractable);
+            }
+
+            // Process hover events
+            HandleHoverEvents(previousHoveredElementId);
+
+            // Process scroll events
+            if (_theHoveredElementId != 0 && PointerWheel != 0)
+            {
+                ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
+                if (hoveredElement.IsValid)
+                {
+                    ref ElementData data = ref hoveredElement.Data;
+                    var scrollEvt = new ScrollEvent(hoveredElement, data.LayoutRect, PointerPos, PointerWheel);
+                    data.OnScroll?.Invoke(scrollEvt);
+                    BubbleEventToParents(hoveredElement, scrollEvt);
+                }
+            }
+
+            // Process mouse button events
+            HandleMouseEvents();
+
+            // Process keyboard events for focused element
+            HandleKeyboardEvents();
+
+            // Cache the focus ancestor chain for next frame's IsElementFocusWithin checks
+            UpdateFocusWithinCache();
+
+            SkipKeyboardNavigation = false; // Reset keyboard navigation skip flag at end of frame
+        }
+
+        #endregion
+
+        #region Element Hit Testing
+
+        /// <summary>
+        /// Collects elements with non-Base layers. Called after layout, before interaction.
+        /// Any element with <see cref="ElementData.Layer"/> &gt; <see cref="Layer.Base"/> is
+        /// stored separately for layer-aware hit-testing.
+        /// </summary>
+        private void CollectLayeredElements(ElementHandle handle, Transform2D parentTransform = default)
+        {
+            if (!handle.IsValid) return;
+            ref ElementData data = ref handle.Data;
+
+            if (data.Layer > Layer.Base)
+            {
+                // Store the PARENT's accumulated transform (not this element's).
+                // HitTestElementTree will apply this element's own transform when testing.
+                _layeredElements.Add((handle, parentTransform));
+                return;
+            }
+
+            // Accumulate this element's transform for children
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            Transform2D combinedTransform = styleTransform * parentTransform;
+
+            Transform2D childTransform = combinedTransform;
+
+            foreach (var childIndex in data.ChildIndices)
+            {
+                var child = new ElementHandle(this, childIndex);
+                CollectLayeredElements(child, childTransform);
+            }
+        }
+
+        /// <summary>
+        /// Finds the topmost interactable element under the pointer. Walks layered elements
+        /// from highest layer to lowest (last-added wins ties so DFS-front of the same layer
+        /// hits first), then falls back to the Base tree.
+        /// </summary>
+        private ElementHandle FindTopmostInteractableElement(ref ElementHandle handle, Transform2D parentTransform)
+        {
+            // Find the highest layer present, hit-test that tier, then step down. O(N*L)
+            // in the worst case where N = layered count and L = distinct layers, but both
+            // are tiny in practice (a handful of popovers / modals / tooltips).
+            int currentLayer = int.MinValue;
+            bool any = false;
+            foreach (var (le, _) in _layeredElements)
+            {
+                if (le.Data.Layer > currentLayer) { currentLayer = le.Data.Layer; any = true; }
+            }
+
+            while (any)
+            {
+                // Last-added of this layer = front (DFS order), so iterate in reverse.
+                for (int i = _layeredElements.Count - 1; i >= 0; i--)
+                {
+                    var (layered, layeredTransform) = _layeredElements[i];
+                    if (layered.Data.Layer != currentLayer) continue;
+
+                    var found = HitTestElementTree(ref layered, layeredTransform);
+                    if (found.IsValid) return found;
+                }
+
+                // Step to the next-highest layer below the one we just tested.
+                int next = int.MinValue;
+                any = false;
+                foreach (var (le, _) in _layeredElements)
+                {
+                    int l = le.Data.Layer;
+                    if (l < currentLayer && l > next) { next = l; any = true; }
+                }
+                currentLayer = next;
+            }
+
+            // Finally, Base layer tree walk (skipping anything that landed in _layeredElements).
+            return HitTestBaseLayer(ref handle, parentTransform);
+        }
+
+        /// <summary>
+        /// Hit tests an element and its children as an independent tree (no parent clipping).
+        /// Used for Topmost/Overlay elements.
+        /// </summary>
+        private ElementHandle HitTestElementTree(ref ElementHandle handle, Transform2D parentTransform, bool isRoot = true)
+        {
+            if (!handle.IsValid) return default;
+            ref ElementData data = ref handle.Data;
+
+            Transform2D combinedTransform = parentTransform;
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            combinedTransform = styleTransform * combinedTransform;
+
+            var inverseTransform = combinedTransform.Inverse();
+            var local = inverseTransform.TransformPoint(PointerPos);
+            bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
+
+            // The layered root itself is not clipped by its original parent,
+            // but children within the layered tree respect their own scissor.
+            bool shouldCheckChildren = isRoot || data._scissorEnabled == false || isPointerOver;
+
+            Transform2D childTransform = combinedTransform;
+
+            if (shouldCheckChildren)
+            {
+                var childIndices = data.ChildIndices;
+                for (int i = childIndices.Count - 1; i >= 0; i--)
+                {
+                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
+                    var found = HitTestElementTree(ref childHandle, childTransform, false);
+                    if (found.IsValid) return found;
+                }
+            }
+
+            if (!isPointerOver || data.IsNotInteractable)
+                return default;
+
+            return handle;
+        }
+
+        /// <summary>
+        /// Hit tests the Base layer tree, skipping elements on other layers.
+        /// </summary>
+        private ElementHandle HitTestBaseLayer(ref ElementHandle handle, Transform2D parentTransform)
+        {
+            if (!handle.IsValid) return default;
+            ref ElementData data = ref handle.Data;
+
+            // Skip non-Base elements (they're handled independently)
+            if (data.Layer != Layer.Base) return default;
+
+            Transform2D combinedTransform = parentTransform;
+            var rect = new Rect(data.X, data.Y, data.X + data.LayoutWidth, data.Y + data.LayoutHeight);
+            Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
+            combinedTransform = styleTransform * combinedTransform;
+
+            var inverseTransform = combinedTransform.Inverse();
+            var local = inverseTransform.TransformPoint(PointerPos);
+            bool isPointerOver = IsPointOverElementData(data, local.X, local.Y);
+
+            bool shouldCheckChildren = data._scissorEnabled == false || isPointerOver;
+
+            Transform2D childTransform = combinedTransform;
+
+            var childIndices = data.ChildIndices;
+            if (shouldCheckChildren && childIndices.Count > 0)
+            {
+                for (int i = childIndices.Count - 1; i >= 0; i--)
+                {
+                    var childHandle = new ElementHandle(handle.Owner, childIndices[i]);
+                    var found = HitTestBaseLayer(ref childHandle, childTransform);
+                    if (found.IsValid) return found;
+                }
+            }
+
+            if (!isPointerOver || data.IsNotInteractable)
+                return default;
+
+            return handle;
+        }
+
+        /// <summary>
+        /// Tests if a point in local coordinates is within an element.
+        /// </summary>
+        private bool IsPointOverElementData(in ElementData data, float localX, float localY)
+        {
+            return  localX >= data.X &&
+                    localX <= data.X + data.LayoutWidth &&
+                    localY >= data.Y &&
+                    localY <= data.Y + data.LayoutHeight;
+        }
+
+        #endregion
+
+        #region Event Propagation
+
+        /// <summary>
+        /// Builds the hover path from an element all the way to the root.
+        /// This always walks to root so that IsElementHovered works for all ancestors.
+        /// StopPropagation only affects event dispatch (BubbleEventToParents), not hover state.
+        /// </summary>
+        private void BuildBubblePath(in ElementHandle handle)
+        {
+            ElementHandle current = handle;
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                _elementsInBubblePath.Add(data.ID);
+                current = current.GetParentHandle();
+            }
+        }
+
+        /// <summary>
+        /// Propagates an event up the element hierarchy.
+        /// Stops if the source element has StopPropagation set, if the event's
+        /// StopPropagation() was called, or if a parent element has StopPropagation set.
+        /// </summary>
+        private void BubbleEventToParents(in ElementHandle element, ElementEvent evt)
+        {
+            ref ElementData data = ref element.Data;
+            if (data.StopPropagation || evt.IsPropagationStopped)
+                return;
+
+            ElementHandle current = element.GetParentHandle();
+            while (current.IsValid)
+            {
+                data = ref current.Data;
+
+                // Retarget event to current parent and invoke its handler
+                evt.Retarget(current, data.LayoutRect);
+                InvokeHandler(data, evt);
+
+                if (data.StopPropagation || evt.IsPropagationStopped)
+                    break;
+                current = current.GetParentHandle();
+            }
+        }
+
+        /// <summary>
+        /// Invokes the appropriate event handler on the element based on the event type.
+        /// </summary>
+        private static void InvokeHandler(in ElementData data, ElementEvent evt)
+        {
+            switch (evt)
+            {
+                case DragEvent drag:
+                    // Determine which drag handler to invoke based on context.
+                    // The caller tags the event so we know which phase we're in.
+                    if (drag.Phase == DragPhase.Start)
+                        data.OnDragStart?.Invoke(drag);
+                    else if (drag.Phase == DragPhase.Dragging)
+                        data.OnDragging?.Invoke(drag);
+                    else if (drag.Phase == DragPhase.End)
+                        data.OnDragEnd?.Invoke(drag);
+                    break;
+                case ScrollEvent scroll:
+                    data.OnScroll?.Invoke(scroll);
+                    break;
+                case ClickEvent click:
+                    if (click.Phase == ClickPhase.Click)
+                        data.OnClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Press)
+                        data.OnPress?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Release)
+                        data.OnRelease?.Invoke(click);
+                    else if (click.Phase == ClickPhase.DoubleClick)
+                        data.OnDoubleClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.RightClick)
+                        data.OnRightClick?.Invoke(click);
+                    else if (click.Phase == ClickPhase.Held)
+                        data.OnHeld?.Invoke(click);
+                    break;
+                default:
+                    // ElementEvent base (hover/enter/leave) — handled separately
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Propagates an event to immediate hooked children of an element.
+        /// </summary>
+        private void PropagateEventToHookedChildren(in ElementHandle element, Action<ElementHandle> eventHandler)
+        {
+            ref ElementData data = ref element.Data;
+
+            // Early exit optimization - if this element has no hooked children, skip entirely
+            if (!data.IsAHookedParent)
+                return;
+
+            var childIndices = data.ChildIndices;
+            foreach (int childIndex in childIndices)
+            {
+                ElementHandle childElement = new ElementHandle(element.Owner, childIndex);
+                if (childElement.IsValid)
+                {
+                    ref ElementData childData = ref childElement.Data;
+                    if (childData.IsHookedToParent)
+                    {
+                        eventHandler(childElement);
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        /// <summary>
+        /// Handles hover, enter, and leave events.
+        /// </summary>
+        private void HandleHoverEvents(int previousHoveredElementId)
+        {
+            // Find elements that were previously hovered but are no longer in bubble path
+            var leftElements = new HashSet<int>(_wasHoveredState.Keys);
+            leftElements.ExceptWith(_elementsInBubblePath);
+
+            // Trigger leave events
+            foreach (var leftElementId in leftElements)
+            {
+                ElementHandle leftElement = FindElementByID(leftElementId);
+                if (leftElement.IsValid)
+                {
+                    ref ElementData data = ref leftElement.Data;
+                    if (data.OnLeave != null)
+                    {
+                        data.OnLeave(new ElementEvent(leftElement, data.LayoutRect, PointerPos));
+
+                        // Propagate leave event to hooked children
+                        PropagateEventToHookedChildren(leftElement, child => {
+                            ref ElementData childData = ref child.Data;
+                            childData.OnLeave?.Invoke(new ElementEvent(child, childData.LayoutRect, PointerPos));
+                        });
+                    }
+                }
+                _wasHoveredState[leftElementId] = false;
+            }
+
+            // Trigger enter and hover events
+            foreach (var hoveredId in _elementsInBubblePath)
+            {
+                ElementHandle hoveredElement = FindElementByID(hoveredId);
+                if (hoveredElement.IsValid)
+                {
+                    ref ElementData data = ref hoveredElement.Data;
+                    bool wasHovered = _wasHoveredState.TryGetValue(hoveredId, out bool hoveredState) && hoveredState;
+
+                    // Only trigger enter event if element wasn't hovered before
+                    if (!wasHovered && data.OnEnter != null)
+                    {
+                        data.OnEnter(new ElementEvent(hoveredElement, data.LayoutRect, PointerPos));
+
+                        // Propagate enter event to hooked children
+                        PropagateEventToHookedChildren(hoveredElement, child => {
+                            ref ElementData childData = ref child.Data;
+                            childData.OnEnter?.Invoke(new ElementEvent(child, childData.LayoutRect, PointerPos));
+                        });
+                    }
+
+                    // Always trigger hover event
+                    data.OnHover?.Invoke(new ElementEvent(hoveredElement, data.LayoutRect, PointerPos));
+
+                    // Propagate hover event to hooked children
+                    PropagateEventToHookedChildren(hoveredElement, child => {
+                        ref ElementData childData = ref child.Data;
+                        childData.OnHover?.Invoke(new ElementEvent(child, childData.LayoutRect, PointerPos));
+                    });
+
+                    _wasHoveredState[hoveredId] = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Handles mouse button events including clicks, drags, and releases.
+        /// </summary>
+        private void HandleMouseEvents()
+        {
+            // Handle press
+            if (IsPointerPressed(PaperMouseBtn.Left))
+            {
+                if (_theHoveredElementId != 0)
+                {
+                    _activeElementId = _theHoveredElementId;
+                    _dragStartPos[_activeElementId] = PointerPos;
+                    _isDragging[_activeElementId] = false;
+
+                    ElementHandle activeElement = FindElementByID(_activeElementId);
+                    if (activeElement.IsValid)
+                    {
+                        ref ElementData data = ref activeElement.Data;
+
+                        var pressEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Press);
+                        data.OnPress?.Invoke(pressEvt);
+                        PropagateClickToHookedChildren(activeElement, ClickPhase.Press);
+                        BubbleEventToParents(activeElement, pressEvt);
+
+                        // Update focus state
+                        if (data.IsFocusable)
+                        {
+                            if (_focusedElementId != _activeElementId)
+                            {
+                                data.OnFocusChange?.Invoke(new FocusEvent(activeElement, true));
+                                PropagateEventToHookedChildren(activeElement, child => {
+                                    ref ElementData childData = ref child.Data;
+                                    childData.OnFocusChange?.Invoke(new FocusEvent(child, true));
+                                });
+
+                                if (_focusedElementId != 0)
+                                {
+                                    ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
+                                    if (oldFocusedElement.IsValid)
+                                    {
+                                        ref ElementData oldData = ref oldFocusedElement.Data;
+                                        oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                                        PropagateEventToHookedChildren(oldFocusedElement, child => {
+                                            ref ElementData childData = ref child.Data;
+                                            childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
+                                        });
+                                    }
+                                }
+
+                                _focusedElementId = _activeElementId;
+                            }
+                        }
+                    }
+                }
+            }
+            // Handle release
+            else if (IsPointerReleased(PaperMouseBtn.Left))
+            {
+                if (_activeElementId != 0)
+                {
+                    ElementHandle activeElement = FindElementByID(_activeElementId);
+
+                    if (activeElement.IsValid)
+                    {
+                        ref ElementData data = ref activeElement.Data;
+
+                        bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
+
+                        // Handle drag end if element was being dragged
+                        if (wasDragging)
+                        {
+                            Float2 startPos = _dragStartPos[_activeElementId];
+                            Float2 endPos = PointerPos;
+                            Float2 delta = endPos - startPos;
+
+                            var dragEndEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, delta, DragPhase.End);
+                            data.OnDragEnd?.Invoke(dragEndEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, delta, DragPhase.End);
+                            BubbleEventToParents(activeElement, dragEndEvt);
+
+                            _isDragging[_activeElementId] = false;
+                        }
+
+                        // If released over the same element that was pressed AND not dragging, it's a click
+                        if (_theHoveredElementId == _activeElementId && !wasDragging)
+                        {
+                            var clickEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Click);
+                            data.OnClick?.Invoke(clickEvt);
+                            PropagateClickToHookedChildren(activeElement, ClickPhase.Click);
+                            BubbleEventToParents(activeElement, clickEvt);
+                        }
+
+                        // Release event
+                        var releaseEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Release);
+                        data.OnRelease?.Invoke(releaseEvt);
+                        PropagateClickToHookedChildren(activeElement, ClickPhase.Release);
+                        BubbleEventToParents(activeElement, releaseEvt);
+                    }
+
+                    _activeElementId = 0;
+                }
+            }
+            // Handle right-click
+            else if (IsPointerPressed(PaperMouseBtn.Right))
+            {
+                if (_theHoveredElementId != 0)
+                {
+                    ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
+                    if (hoveredElement.IsValid)
+                    {
+                        ref ElementData data = ref hoveredElement.Data;
+
+                        var rightClickEvt = new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Right, ClickPhase.RightClick);
+                        data.OnRightClick?.Invoke(rightClickEvt);
+                        PropagateClickToHookedChildren(hoveredElement, ClickPhase.RightClick, PaperMouseBtn.Right);
+                        BubbleEventToParents(hoveredElement, rightClickEvt);
+                    }
+                }
+            }
+
+            // Handle double-click
+            if (IsPointerDoubleClick(PaperMouseBtn.Left))
+            {
+                if (_theHoveredElementId != 0)
+                {
+                    ElementHandle hoveredElement = FindElementByID(_theHoveredElementId);
+                    if (hoveredElement.IsValid)
+                    {
+                        ref ElementData data = ref hoveredElement.Data;
+
+                        var dblClickEvt = new ClickEvent(hoveredElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.DoubleClick);
+                        data.OnDoubleClick?.Invoke(dblClickEvt);
+                        PropagateClickToHookedChildren(hoveredElement, ClickPhase.DoubleClick);
+                        BubbleEventToParents(hoveredElement, dblClickEvt);
+                    }
+                }
+            }
+
+            // Handle held + dragging
+            if (IsPointerDown(PaperMouseBtn.Left) && _activeElementId != 0)
+            {
+                ElementHandle activeElement = FindElementByID(_activeElementId);
+                if (activeElement.IsValid)
+                {
+                    ref ElementData data = ref activeElement.Data;
+
+                    var heldEvt = new ClickEvent(activeElement, data.LayoutRect, PointerPos, PaperMouseBtn.Left, ClickPhase.Held);
+                    data.OnHeld?.Invoke(heldEvt);
+                    PropagateClickToHookedChildren(activeElement, ClickPhase.Held);
+                    BubbleEventToParents(activeElement, heldEvt);
+
+                    if (IsPointerMoving)
+                    {
+                        bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
+                        Float2 startPos = _dragStartPos[_activeElementId];
+                        Float2 currentPos = PointerPos;
+                        float distanceMoved = Float2.Length(currentPos - startPos);
+
+                        // Only start dragging if we've moved beyond the threshold
+                        if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
+                        {
+                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            data.OnDragStart?.Invoke(dragStartEvt);
+                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            BubbleEventToParents(activeElement, dragStartEvt);
+
+                            _isDragging[_activeElementId] = true;
+                        }
+
+                        // Handle continuous dragging
+                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        data.OnDragging?.Invoke(draggingEvt);
+                        PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        BubbleEventToParents(activeElement, draggingEvt);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Propagates a click event to hooked children of an element.
+        /// </summary>
+        private void PropagateClickToHookedChildren(in ElementHandle element, ClickPhase phase, PaperMouseBtn button = PaperMouseBtn.Left)
+        {
+            PropagateEventToHookedChildren(element, child => {
+                ref ElementData childData = ref child.Data;
+                var evt = new ClickEvent(child, childData.LayoutRect, PointerPos, button, phase);
+                InvokeHandler(childData, evt);
+            });
+        }
+
+        /// <summary>
+        /// Propagates a drag event to hooked children of an element.
+        /// </summary>
+        private void PropagateDragToHookedChildren(in ElementHandle element, Float2 startPos, Float2 delta, Float2 totalDelta, DragPhase phase)
+        {
+            PropagateEventToHookedChildren(element, child => {
+                ref ElementData childData = ref child.Data;
+                var evt = new DragEvent(child, childData.LayoutRect, PointerPos, startPos, delta, totalDelta, phase);
+                InvokeHandler(childData, evt);
+            });
+        }
+
+        /// <summary>
+        /// Process keyboard events for the focused element and global navigation
+        /// </summary>
+        private void HandleKeyboardEvents()
+        {
+            // Process global navigation keys first (Tab)
+            if (!SkipKeyboardNavigation && IsKeyPressed(PaperKey.Tab))
+            {
+                HandleTabNavigation();
+                return; // Don't process other keys when Tab is pressed
+            }
+
+            // If no element has focus, there's nothing to do for other keys
+            if (_focusedElementId == 0)
+                return;
+
+            ElementHandle focusedElement = FindElementByID(_focusedElementId);
+            if (!focusedElement.IsValid)
+                return;
+
+            ref ElementData data = ref focusedElement.Data;
+
+            // Process key presses
+            foreach (var key in KeyValues)
+            {
+                if (IsKeyPressed(key))
+                {
+                    data.OnKeyPressed?.Invoke(new KeyEvent(focusedElement, key, IsKeyRepeating(key)));
+
+                    // Propagate Key Pressed to hooked children
+                    PropagateEventToHookedChildren(focusedElement, child => {
+                        ref ElementData childData = ref child.Data;
+                        childData.OnKeyPressed?.Invoke(new KeyEvent(child, key, IsKeyRepeating(key)));
+                    });
+                }
+            }
+
+            // Process text input
+            while (InputString.Count > 0)
+            {
+                char c = InputString.Dequeue();
+                data.OnTextInput?.Invoke(new TextInputEvent(focusedElement, c));
+
+                // Propagate Text Input to hooked children
+                PropagateEventToHookedChildren(focusedElement, child => {
+                    ref ElementData childData = ref child.Data;
+                    childData.OnTextInput?.Invoke(new TextInputEvent(child, c));
+                });
+            }
+        }
+
+        /// <summary>
+        /// Handles Tab key navigation between elements with TabIndex
+        /// </summary>
+        private void HandleTabNavigation()
+        {
+            // Get all elements with valid tab indices
+            var tabbableElements = new List<(int tabIndex, int elementId)>();
+
+            // Brute force search through all elements
+            for (int i = 0; i < _elementCount; i++)
+            {
+                ref ElementData data = ref _elements[i];
+                if (data.TabIndex >= 0 && data.IsFocusable && data.Visible)
+                {
+                    tabbableElements.Add((data.TabIndex, data.ID));
+                }
+            }
+
+            // If no tabbable elements, do nothing
+            if (tabbableElements.Count == 0)
+                return;
+
+            // Sort by tab index
+            tabbableElements.Sort((a, b) => a.tabIndex.CompareTo(b.tabIndex));
+
+            int nextElementId;
+
+            if (_focusedElementId == 0)
+            {
+                // No element focused, focus the first one (lowest TabIndex)
+                nextElementId = tabbableElements[0].elementId;
+            }
+            else
+            {
+                // Find current element in the list
+                int currentIndex = -1;
+                for (int i = 0; i < tabbableElements.Count; i++)
+                {
+                    if (tabbableElements[i].elementId == _focusedElementId)
+                    {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+
+                if (currentIndex == -1)
+                {
+                    // Current focused element doesn't have a TabIndex, focus first tabbable element
+                    nextElementId = tabbableElements[0].elementId;
+                }
+                else
+                {
+                    // Move to next element, wrapping around to first if at end
+                    int nextIndex = (currentIndex + 1) % tabbableElements.Count;
+                    nextElementId = tabbableElements[nextIndex].elementId;
+                }
+            }
+
+            // Focus the next element
+            ElementHandle nextElement = FindElementByID(nextElementId);
+            if (nextElement.IsValid)
+            {
+                // Update focused element
+                if (_focusedElementId != 0)
+                {
+                    ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
+                    if (oldFocusedElement.IsValid)
+                    {
+                        ref ElementData oldData = ref oldFocusedElement.Data;
+                        oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+
+                        // Propagate focus loss to hooked children
+                        PropagateEventToHookedChildren(oldFocusedElement, child => {
+                            ref ElementData childData = ref child.Data;
+                            childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
+                        });
+                    }
+                }
+
+                _focusedElementId = nextElementId;
+                ref ElementData nextData = ref nextElement.Data;
+                nextData.OnFocusChange?.Invoke(new FocusEvent(nextElement, true));
+
+                // Propagate focus gain to hooked children
+                PropagateEventToHookedChildren(nextElement, child => {
+                    ref ElementData childData = ref child.Data;
+                    childData.OnFocusChange?.Invoke(new FocusEvent(child, true));
+                });
+            }
+        }
+
+        #endregion
+    }
+}
