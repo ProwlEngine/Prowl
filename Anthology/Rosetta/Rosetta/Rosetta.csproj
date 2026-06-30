@@ -18,9 +18,6 @@
     <NeutralLanguage>en-AU</NeutralLanguage>
 
     <!-- Links -->
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Rosetta</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Rosetta</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>

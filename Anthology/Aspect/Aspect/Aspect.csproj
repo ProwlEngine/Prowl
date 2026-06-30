@@ -12,9 +12,6 @@
     <Company>Prowl Engine</Company>
     <Product>Prowl.Aspect</Product>
     <Description>Prowl.Aspect is an open-source Aspect-Oriented Programming (AOP) framework for C#, inspired by PostSharp. It uses IL weaving with Mono.Cecil to inject aspect behavior into your assemblies at compile-time, enabling powerful cross-cutting concerns like logging, caching, validation, and more with zero runtime overhead.</Description>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Aspect</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Aspect</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
     <PackageTags>aop;aspect;postsharp;il-weaving;cecil;logging;caching;validation;attributes</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

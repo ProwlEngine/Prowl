@@ -25,9 +25,6 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
 
     <!-- Links -->
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Photonic</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Photonic</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>

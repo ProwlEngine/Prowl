@@ -9,8 +9,6 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Title>Prowl.Paper</Title>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Paper</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
     <Description>A powerful immediate mode .net UI Library powering the Prowl Game Engine!</Description>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>

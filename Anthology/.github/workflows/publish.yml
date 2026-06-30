@@ -33,6 +33,11 @@ jobs:
       - name: Test
         run: dotnet test Anthology.slnx -c Release --no-build
 
+      # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
+      - name: Fetch Slang native binaries
+        working-directory: Slang/Native
+        run: dotnet run --project UpdateSources.csproj -c Release
+
       - name: Pack
         run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts
 

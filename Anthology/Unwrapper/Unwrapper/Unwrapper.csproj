@@ -19,9 +19,6 @@
     <NeutralLanguage>en-AU</NeutralLanguage>
 
     <!-- Links -->
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Unwrapper</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Unwrapper</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>

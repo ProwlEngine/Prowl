@@ -11,8 +11,6 @@
     <Title>Prowl.Drift</Title>
     <Authors>Wulferis</Authors>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Drift</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Drift</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

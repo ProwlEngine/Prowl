@@ -7,8 +7,6 @@
         <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
 
         <Description>A lightweight tokenizer for C#.</Description>
-        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Crumb</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
 
         <PackageTags>tokenizer token parser lexer</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>

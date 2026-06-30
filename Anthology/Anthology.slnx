@@ -14,6 +14,7 @@
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
     <Project Path="Aspect/Aspect/Aspect.csproj" />
     <Project Path="Drift/Drift/Drift.csproj" />
+    <Project Path="Slang/Prowl.Slang/Prowl.Slang.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
