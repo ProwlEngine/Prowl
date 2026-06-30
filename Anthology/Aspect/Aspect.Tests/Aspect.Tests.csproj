@@ -22,6 +22,24 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspect\Aspect.csproj" />
+    <!-- Build the weaver first (build-only) so it exists when we weave this assembly below. -->
+    <ProjectReference Include="..\Aspect.Weaver.Host\Aspect.Weaver.Host.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- The aspects only take effect once the IL weaver rewrites this assembly. Consumers get
+       this automatically from the NuGet build/ targets; here (ProjectReference) we run the
+       weaver ourselves, cross-platform, over the built test assembly. -->
+  <PropertyGroup>
+    <AspectWeaverDll>$(MSBuildThisFileDirectory)..\Aspect.Weaver.Host\bin\$(Configuration)\net8.0\Aspect.Weaver.Host.dll</AspectWeaverDll>
+  </PropertyGroup>
+
+  <Target Name="WeaveAspectsIntoTests" AfterTargets="Build" BeforeTargets="VSTest"
+          Condition="'$(DesignTimeBuild)' != 'true' And Exists('$(AspectWeaverDll)')">
+    <Message Text="Prowl.Aspect: weaving $(TargetPath)" Importance="high" />
+    <Exec Command="dotnet &quot;$(AspectWeaverDll)&quot; &quot;$(TargetPath)&quot;" ConsoleToMSBuild="true" />
+  </Target>
 
 </Project>
