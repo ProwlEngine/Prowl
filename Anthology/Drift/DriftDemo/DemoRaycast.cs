@@ -117,6 +117,8 @@ namespace DriftDemo
                 // Register each fan raycast for visualization
                 Program.RegisterRaycast(fanRay, fanHit);
             }
+
+            IsOnGround();
         }
 
         public void KeyDown(char key)
