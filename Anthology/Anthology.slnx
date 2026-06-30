@@ -1,3 +1,13 @@
 <Solution>
   <!-- Projects are added here as each library is folded in. -->
+  <Folder Name="/Vector/">
+    <Project Path="Vector/OpenTKSample/OpenTKSample.csproj" />
+    <Project Path="Vector/Vector/Vector.csproj" />
+  </Folder>
+  <Folder Name="/Vector/Samples/">
+    <Project Path="Vector/Samples/SoftwareRasterizer/SoftwareRasterizer.csproj" />
+  </Folder>
+  <Folder Name="/Vector/Tests/">
+    <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
+  </Folder>
 </Solution>

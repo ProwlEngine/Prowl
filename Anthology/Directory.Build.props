@@ -33,7 +33,7 @@
   <PropertyGroup Condition="'$(IsPackable)' != 'false'">
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <PackageId>Prowl.$(MSBuildProjectName)</PackageId>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
