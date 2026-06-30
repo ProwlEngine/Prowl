@@ -11,7 +11,6 @@
     <Authors>Prowl</Authors>
     <Description>Lightweight C# networking library with IL-weaved RPCs, SyncVars, and client-server architecture.</Description>
     <PackageTags>networking;multiplayer;rpc;syncvar;gamedev</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
     <!-- Ensure the weaver project is built before packing -->
     <BuildDependsOn>BuildWeaver;$(BuildDependsOn)</BuildDependsOn>

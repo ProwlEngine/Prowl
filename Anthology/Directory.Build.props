@@ -18,6 +18,9 @@
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/ProwlEngine/Anthology</PackageProjectUrl>
 
+    <!-- Every library is MIT; declared once here via SPDX expression (see the repo-root LICENSE). -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
     <!-- The frameworks every shipped library targets, kept in one place. Library projects
          opt in with <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and
          samples keep their own single TargetFramework and are left alone. -->

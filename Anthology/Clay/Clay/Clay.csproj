@@ -25,12 +25,10 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
 
     <!-- Links -->
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE" Pack="True" PackagePath="\" />
     <None Include="..\README.md" Pack="True" PackagePath="\" />
   </ItemGroup>
 

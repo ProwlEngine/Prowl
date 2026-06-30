@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
@@ -11,14 +11,9 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Description>A Hardware-Accelerated Anti-Aliased Vector Graphics Library made with .NET</Description>
     <PackageTags>vector-graphics;vector;graphics;canvas;2d;2d-graphics;game-development;graphics-library;anti-aliased;hardware-accelerated;prowl;rendering;bezier;path;gpu;fast</PackageTags>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

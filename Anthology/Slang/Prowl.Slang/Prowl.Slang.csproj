@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
@@ -20,7 +20,6 @@
 
         <PackageTags>shader compiler slang hlsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageLicenseFile>LICENSE</PackageLicenseFile>
 
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     </PropertyGroup>
@@ -47,7 +46,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="../LICENSE" Pack="true" PackagePath="\" />
         <None Include="../README.md" Pack="true" PackagePath="\" />
 
         <Content Include="$(WindowsX64LibPath)">

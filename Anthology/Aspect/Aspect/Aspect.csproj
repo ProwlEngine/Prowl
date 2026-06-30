@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.1;net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
@@ -13,7 +13,6 @@
     <Product>Prowl.Aspect</Product>
     <Description>Prowl.Aspect is an open-source Aspect-Oriented Programming (AOP) framework for C#, inspired by PostSharp. It uses IL weaving with Mono.Cecil to inject aspect behavior into your assemblies at compile-time, enabling powerful cross-cutting concerns like logging, caching, validation, and more with zero runtime overhead.</Description>
     <PackageTags>aop;aspect;postsharp;il-weaving;cecil;logging;caching;validation;attributes</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- Not GeneratePackageOnBuild: Aspect.Weaver.Host must build first (it depends on Aspect),
          then `dotnet pack` bundles the host's published tools. -->
@@ -23,10 +22,6 @@
 
   <ItemGroup>
     <!-- Include README and LICENSE -->
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

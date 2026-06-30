@@ -13,7 +13,6 @@
     <Description>A 32-bit and 64-bit Vector Mathematics Library. Built for the Prowl game engine.</Description>
     <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -30,10 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>

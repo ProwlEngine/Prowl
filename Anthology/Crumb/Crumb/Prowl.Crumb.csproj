@@ -10,7 +10,6 @@
 
         <PackageTags>tokenizer token parser lexer</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageLicenseFile>LICENSE</PackageLicenseFile>
 
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
 
@@ -23,7 +22,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../LICENSE" Pack="true" PackagePath="" />
         <None Include="../README.md" Pack="true" PackagePath="" />
     </ItemGroup>
 </Project>

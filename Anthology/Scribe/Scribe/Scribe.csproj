@@ -12,7 +12,6 @@
     <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
     <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,10 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
     <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
