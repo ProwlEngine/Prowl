@@ -108,7 +108,7 @@ internal class Tokenizer
 
         var quote = Token[0];
         if (token[^1] != quote)
-            throw new InvalidDataException($"Missing ending quote from string \"{token}\" at position {TokenPosition}");
+            throw new InvalidDataException($"Missing ending quote from string \"{token.ToString()}\" at position {TokenPosition}");
 
         var original = token;
         token = token[1..^1];
@@ -116,7 +116,7 @@ internal class Tokenizer
         while (!token.IsEmpty)
         {
             if (token[0] == quote)
-                throw new InvalidDataException($"Unescaped quote character in string \"{original}\" at position {TokenPosition}");
+                throw new InvalidDataException($"Unescaped quote character in string \"{original.ToString()}\" at position {TokenPosition}");
 
             if (token[0] == '\\')
             {
@@ -145,7 +145,7 @@ internal class Tokenizer
                         if (token[1] == quote)
                             s[len++] = quote;
                         else
-                            throw new InvalidDataException($"Invalid escape sequence in string \"{original}\" at position {TokenPosition}");
+                            throw new InvalidDataException($"Invalid escape sequence in string \"{original.ToString()}\" at position {TokenPosition}");
                         break;
                 }
 

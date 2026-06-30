@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -23,6 +23,11 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="True" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- 'dynamic' needs Microsoft.CSharp on netstandard2.1; it is in-box on net8+. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
 
   <!-- Build the generator first (build-only, not a runtime reference) so its DLL exists to pack below. -->

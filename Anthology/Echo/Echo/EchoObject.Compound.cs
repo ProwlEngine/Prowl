@@ -25,7 +25,8 @@ public sealed partial class EchoObject
             if (string.IsNullOrEmpty(tagName))
                 throw new ArgumentNullException(nameof(tagName));
 
-            ArgumentNullException.ThrowIfNull(value, nameof(value));
+            if (value is null)
+                throw new ArgumentNullException(nameof(value));
 
             if (value.Parent is not null)
                 throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));

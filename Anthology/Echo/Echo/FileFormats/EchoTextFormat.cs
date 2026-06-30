@@ -251,7 +251,7 @@ public sealed class EchoTextFormat : IFileFormat
             TextTokenType.BeginArray => ReadArrayTag(parser),
             TextTokenType.Value => ReadValueTag(parser),
             _ => throw new InvalidDataException(
-                $"Invalid token \"{parser.Token}\" found while reading a property at position {parser.TokenPosition}")
+                $"Invalid token \"{parser.Token.ToString()}\" found while reading a property at position {parser.TokenPosition}")
         };
     }
 
@@ -275,7 +275,7 @@ public sealed class EchoTextFormat : IFileFormat
                         throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
 
                     if (parser.TokenType != TextTokenType.NameValueSeparator)
-                        throw new InvalidDataException($"Invalid token \"{parser.Token}\" found while reading a compound property at position {parser.TokenPosition}");
+                        throw new InvalidDataException($"Invalid token \"{parser.Token.ToString()}\" found while reading a compound property at position {parser.TokenPosition}");
 
                     if (!parser.MoveNext())
                         throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
@@ -286,7 +286,7 @@ public sealed class EchoTextFormat : IFileFormat
 
                     continue;
                 default:
-                    throw new InvalidDataException($"Invalid token \"{parser.Token}\" found while reading a compound property at position {parser.TokenPosition}");
+                    throw new InvalidDataException($"Invalid token \"{parser.Token.ToString()}\" found while reading a compound property at position {parser.TokenPosition}");
             }
         }
 
@@ -343,7 +343,7 @@ public sealed class EchoTextFormat : IFileFormat
                     arr = Convert.FromBase64String(parser.Token.ToString());
                     continue;
                 default:
-                    throw new InvalidDataException($"Invalid token \"{parser.Token}\" found while reading a byte array at position {parser.TokenPosition}");
+                    throw new InvalidDataException($"Invalid token \"{parser.Token.ToString()}\" found while reading a byte array at position {parser.TokenPosition}");
             }
         }
 
@@ -370,7 +370,7 @@ public sealed class EchoTextFormat : IFileFormat
         if (parser.Token[0] >= '0' && parser.Token[0] <= '9' || parser.Token[0] is '+' or '-' or '.')
             return ReadNumberTag(parser);
 
-        throw new InvalidDataException($"Invalid value \"{parser.Token}\" found while reading a tag at position {parser.TokenPosition}");
+        throw new InvalidDataException($"Invalid value \"{parser.Token.ToString()}\" found while reading a tag at position {parser.TokenPosition}");
     }
 
     private static EchoObject ReadNumberTag(StringTagTokenizer parser)
@@ -392,7 +392,7 @@ public sealed class EchoTextFormat : IFileFormat
             'D' => new EchoObject(ParsePrimitive<double>(parser)),
             'M' => new EchoObject(ParsePrimitive<decimal>(parser)),
             >= '0' and <= '9' => new EchoObject((int)Convert.ChangeType(new string(parser.Token), typeof(int), CultureInfo.InvariantCulture)),
-            _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token}\" at position {parser.TokenPosition}")
+            _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token.ToString()}\" at position {parser.TokenPosition}")
         };
     }
 
