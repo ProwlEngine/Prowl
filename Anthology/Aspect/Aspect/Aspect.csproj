@@ -18,7 +18,8 @@
     <PackageTags>aop;aspect;postsharp;il-weaving;cecil;logging;caching;validation;attributes</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <!-- Not GeneratePackageOnBuild: Aspect.Weaver.Host must build first (it depends on Aspect),
+         then `dotnet pack` bundles the host's published tools. -->
     <IncludeBuildOutput>true</IncludeBuildOutput>
     <DevelopmentDependency>false</DevelopmentDependency>
   </PropertyGroup>

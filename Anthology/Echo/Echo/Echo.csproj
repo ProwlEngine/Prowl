@@ -30,9 +30,13 @@
     <None Include="..\README.md" Pack="True" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Build the generator first (build-only, not a runtime reference) so its DLL exists to pack below. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Echo.SourceGenerator\Echo.SourceGenerator.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Include the source generator in the NuGet package -->
-    <!-- Note: Build the Echo.SourceGenerator project before packing Echo -->
     <None Include="..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" Condition="Exists('..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll')" />
   </ItemGroup>
 

@@ -1,6 +1,6 @@
 using Prowl.Clay.Formats.Fbx;
 using Prowl.Clay.Formats.Gltf;
-using Prowl.Clay.Formats.Obj;
+using Prowl.Clay.Formats.Wavefront;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Clay.PostProcess;
 

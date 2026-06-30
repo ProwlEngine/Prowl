@@ -7,6 +7,7 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsRoslynComponent>true</IsRoslynComponent>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
