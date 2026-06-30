@@ -98,11 +98,9 @@ void main() {
         return;
     }
 
-    // Edge anti-aliasing
-    vec2 ps = fwidth(vUV);
-    vec2 ed = min(vUV, 1.0 - vUV);
-    float ea = smoothstep(0.0, ps.x, ed.x) * smoothstep(0.0, ps.y, ed.y);
-    ea = clamp(ea, 0.0, 1.0);
+    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
+    // vUV.x (1 = solid core, 0 = outer fringe edge).
+    float ea = clamp(vUV.x, 0.0, 1.0);
 
     vec2 lp = vPos / uDpiScale;
     fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(lp, 0.0, 1.0)).xy) * ea * mask;

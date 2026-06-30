@@ -160,11 +160,9 @@ float4 Fragment(VertexOutput input) : SV_Target
         return color * coverage * mask;
     }
 
-    // Edge anti-aliasing
-    float2 pixelSize = fwidth(input.fragTexCoord);
-    float2 edgeDistance = min(input.fragTexCoord, 1.0 - input.fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
+    // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
+    float edgeAlpha = clamp(input.fragTexCoord.x, 0.0, 1.0);
 
     float2 logicalPos = input.fragPos / DrawData.dpiScale;
     float4 fill = color * DrawData.texture0.Sample(mul(DrawData.brushTextureMat, float4(logicalPos, 0.0, 1.0)).xy);

@@ -127,11 +127,9 @@ void main()
         return;
     }
 
-    // Edge anti-aliasing
-    vec2 pixelSize = fwidth(fragTexCoord);
-    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
+    // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
+    float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
 
     vec2 logicalPos = fragPos / dpiScale;
     vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
