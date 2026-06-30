@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Prowl.Wicked</RootNamespace>
@@ -20,12 +20,8 @@
     <InternalsVisibleTo Include="Prowl.Wicked.Tests" />
   </ItemGroup>
 
-  <!-- Reference the weaver project (build-only, not a runtime dependency) -->
-  <ItemGroup>
-    <ProjectReference Include="..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
-                      ReferenceOutputAssembly="false"
-                      PrivateAssets="all" />
-  </ItemGroup>
+  <!-- The weaver is built by the BuildWeaver target below (a plain ProjectReference can't be
+       used here: the net8 weaver can't be referenced from the netstandard2.1 target). -->
 
   <!-- Pack the .targets files so consuming projects auto-weave -->
   <ItemGroup>
@@ -37,6 +33,7 @@
   <Target Name="BuildWeaver" BeforeTargets="Build">
     <MSBuild Projects="..\Prowl.Wicked.Weaver\Prowl.Wicked.Weaver.csproj"
              Targets="Publish"
+             RemoveProperties="TargetFramework"
              Properties="Configuration=$(Configuration);PublishDir=$(MSBuildThisFileDirectory)..\Prowl.Wicked.Weaver\bin\publish\" />
   </Target>
 

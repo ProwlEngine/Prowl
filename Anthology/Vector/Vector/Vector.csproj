@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
     <OutputType>Library</OutputType>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
+        <!-- Override the net10-only default from Crumb/Directory.Build.props (which the tests use). -->
+        <TargetFramework></TargetFramework>
+        <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
         <PackageId>Prowl.Crumb</PackageId>
 
         <Authors>Prowl Group</Authors>

@@ -21,10 +21,19 @@
     <!-- Every library is MIT; declared once here via SPDX expression (see the repo-root LICENSE). -->
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <!-- The frameworks every shipped library targets, kept in one place. Library projects
-         opt in with <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and
-         samples keep their own single TargetFramework and are left alone. -->
-    <ProwlTargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</ProwlTargetFrameworks>
+    <!-- Shared framework sets, kept in one place. Library projects opt into one of these via
+         <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and samples keep
+         their own single TargetFramework and are left alone.
+         - Default: the modern set every library supports.
+         - Compat: adds netstandard2.1 for libraries that also support Unity / older runtimes. -->
+    <ProwlTargetFrameworks>net8.0;net9.0;net10.0</ProwlTargetFrameworks>
+    <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0</ProwlTargetFrameworksCompat>
   </PropertyGroup>
+
+  <!-- Polyfills the language-feature attributes (init / required / records, etc.) that
+       netstandard2.1 lacks. Build-only; generates nothing on net8+ where the types exist. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+  </ItemGroup>
 
 </Project>
