@@ -59,12 +59,6 @@ git -C $repoRoot merge --allow-unrelated-histories --no-edit -m "Fold in $Name w
 git -C $repoRoot remote remove $remote
 Remove-Item -Recurse -Force $tmp
 
-# --- best-effort: add the library's projects to the solution (non-fatal) ---
-Get-ChildItem (Join-Path $repoRoot $Name) -Recurse -Filter *.csproj | ForEach-Object {
-  try { dotnet sln $solution add $_.FullName | Out-Null } catch { Write-Warning "Could not add $($_.Name) to solution" }
-}
-
 Write-Host ""
-Write-Host "Done. '$Name/' folded in." -ForegroundColor Green
+Write-Host "Done. '$Name/' folded in (merge committed)." -ForegroundColor Green
 Write-Host "Verify history:  git log --oneline -- $Name/"
-Write-Host "Next: clean up $Name's .csproj (see MIGRATION.md), then build." -ForegroundColor Yellow
