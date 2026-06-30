@@ -92,8 +92,7 @@ void main() {
         fragColor = color * coverage * mask;
         return;
     }
-    vec2 ps = fwidth(vUV), ed = min(vUV, 1.0-vUV);
-    float ea = clamp((ps.x>0.0?smoothstep(0.0,ps.x,ed.x):1.0)*(ps.y>0.0?smoothstep(0.0,ps.y,ed.y):1.0), 0.0, 1.0);
+    float ea = clamp(vUV.x, 0.0, 1.0); // coverage baked into geometry fringe, carried in vUV.x
     vec2 lp = vPos / uDpiScale;
     fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(lp, 0.0, 1.0)).xy) * ea * mask;
 }

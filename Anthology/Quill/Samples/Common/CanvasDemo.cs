@@ -550,7 +550,6 @@ namespace Common
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
             _canvas.Stroke();
 
-            // Dashed line
             _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 255, 100));
             _canvas.SetStrokeWidth(4);
 
@@ -558,14 +557,12 @@ namespace Common
             _canvas.MoveTo(0, 40 + 5);
             _canvas.LineTo(160, 40 - 5);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 255, 100, 100));
-            _canvas.SetStrokeDash(new List<float>() { 10, 5, 2, 2 }, 0);
             _canvas.Stroke();
 
             _canvas.BeginPath();
             _canvas.MoveTo(0, 60 + 5);
             _canvas.LineTo(160, 60 - 5);
             _canvas.SetStrokeColor(Color32.FromArgb(255, 100, 100, 255));
-            _canvas.SetStrokeDash(new List<float>() { 5, 5 }, 0);
             _canvas.Stroke();
 
             _canvas.RestoreState();

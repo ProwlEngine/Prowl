@@ -155,11 +155,9 @@ Shader "Quill/CanvasShader"
                     return color * tex2D(_MainTex, i.uv - float2(2.0, 0.0)) * mask;
                 }
 
-                // Edge anti-aliasing
-                float2 pixelSize = fwidth(i.uv);
-                float2 edgeDistance = min(i.uv, 1.0 - i.uv);
-                float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-                edgeAlpha = saturate(edgeAlpha);
+                // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and
+                // carried in i.uv.x (1 = solid core, 0 = outer fringe edge).
+                float edgeAlpha = saturate(i.uv.x);
 
                 // Texture sampling
                 float2 logicalPos = i.fragPos / _DpiScale;

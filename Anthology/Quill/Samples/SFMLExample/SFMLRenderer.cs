@@ -159,11 +159,9 @@ void main()
         return;
     }
     
-    // Edge anti-aliasing based on distance to edges by abusing fwidth and UVs
-    vec2 pixelSize = fwidth(fragTexCoord);
-    vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-    float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-    edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
+    // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
+    float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
     
     // Use world position transformed by texture matrix (convert to logical coords first)
     // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid

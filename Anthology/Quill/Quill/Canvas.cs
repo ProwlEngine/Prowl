@@ -355,8 +355,6 @@ namespace Prowl.Quill
         internal EndCapStyle strokeEndCap;
         internal float strokeWidth;
         internal float strokeScale;
-        internal List<float> strokeDashPattern;
-        internal float strokeDashOffset;
         internal float miterLimit;
         internal float tess_tol;
         internal float roundingMinDistance;
@@ -378,8 +376,6 @@ namespace Prowl.Quill
             strokeEndCap = EndCapStyle.Butt; // Default end cap style
             strokeWidth = 1f; // Default stroke width
             strokeScale = 1f; // Default stroke scale
-            strokeDashPattern = null; // Default: solid line
-            strokeDashOffset = 0.0f;   // Default: no offset
             miterLimit = 4; // Default miter limit
             tess_tol = 0.5f; // Default tessellation tolerance
             roundingMinDistance = 3; //Default _state.roundingMinDistance
@@ -678,37 +674,6 @@ namespace Prowl.Quill
         /// <param name="scale">The scale factor.</param>
         public void SetStrokeScale(float scale) => _state.strokeScale = scale;
 
-
-        /// <summary>
-        /// Sets the dash pattern for strokes.
-        /// </summary>
-        /// <param name="pattern">A list of floats representing the lengths of dashes and gaps (e.g., [dash1_len, gap1_len, dash2_len, ...]). 
-        /// If null or empty, a solid line will be drawn. If the number of elements in the array is odd, the elements of the array get copied and concatenated.</param>
-        /// <param name="offset">The offset at which to start the dash pattern along the path.</param>
-        public void SetStrokeDash(List<float> pattern, float offset = 0.0f)
-        {
-            int patternCount = pattern?.Count ?? 0;
-
-            // if the count is odd, duplicate the entire pattern and concatenate it
-            if (patternCount > 0 && patternCount % 2 != 0)
-            {
-                var newPattern = new List<float>(pattern);
-                newPattern.AddRange(pattern);
-                pattern = newPattern;
-            }
-
-            _state.strokeDashPattern = pattern;
-            _state.strokeDashOffset = offset;
-        }
-
-        /// <summary>
-        /// Clears any previously set stroke dash pattern, reverting to a solid line.
-        /// </summary>
-        public void ClearStrokeDash()
-        {
-            _state.strokeDashPattern = null;
-            _state.strokeDashOffset = 0.0f;
-        }
 
         /// <summary>
         /// Sets the miter limit for mitered joints. When the miter length would exceed this ratio of stroke width, the joint falls back to bevel.
@@ -1683,8 +1648,10 @@ namespace Prowl.Quill
             {
                 var copy = path.Points.ToArray();
                 for (int i = 0; i < copy.Length; i++)
-                    // TransformPoint converts to physical pixels; 0.5 offset aligns with pixel grid for AA (DPI-independent in pixel space)
-                    copy[i] = TransformPoint(copy[i]) + new Float2(0.5f, 0.5f);
+                    // True pixel-space positions: geometric-fringe AA centres coverage on the real
+                    // edge, so no half-pixel grid nudge is needed (and it would offset the fill
+                    // relative to strokes and convex fills, which use true positions too).
+                    copy[i] = TransformPoint(copy[i]);
                 var points = copy.Select(v => new ContourVertex() { Position = new Vec3() { X = v.X, Y = v.Y } }).ToArray();
 
                 tess.AddContour(points, ContourOrientation.Original);
@@ -1700,7 +1667,9 @@ namespace Prowl.Quill
             {
                 var vertex = vertices[i];
                 Float2 pos = new Float2(vertex.Position.X, vertex.Position.Y);
-                AddVertex(new Vertex(pos, new Float2(0.5f, 0.5f), _state.fillColor));
+                // uv.x = 1 -> full coverage. FillComplex itself has no fringe; FillComplexAA adds a
+                // fringed outline via Stroke().
+                AddVertex(new Vertex(pos, new Float2(1f, 1f), _state.fillColor));
             }
             // Create triangles
             for (int i = 0; i < indices.Length; i += 3)
@@ -1718,72 +1687,130 @@ namespace Prowl.Quill
             if (subPath.Points.Count < 3)
                 return;
 
-            // Transform each point
-            Float2 center = Float2.Zero;
-            var copy = subPath.Points.ToArray();
-            for (int i = 0; i < copy.Length; i++)
+            _fillRing.Clear();
+            for (int i = 0; i < subPath.Points.Count; i++)
+                _fillRing.Add(TransformPoint(subPath.Points[i]));
+
+            EmitConvexFillAA(_fillRing, _state.fillColor);
+        }
+
+        // Reusable scratch buffers for the convex fringe-fill helper (avoid per-call allocation).
+        private readonly List<Float2> _fillRing = new List<Float2>();
+        private readonly List<Float2> _fillMiters = new List<Float2>();
+        private readonly List<Float2> _fillEdges = new List<Float2>();
+
+        /// <summary>
+        /// Emits an anti-aliased convex (star-convex) fill for a ring of points already in
+        /// physical-pixel space. The solid core is inset by half a pixel (coverage 1) and a
+        /// one-pixel fringe ribbon fades to coverage 0 at the outer edge. Coverage is carried in
+        /// uv.x and multiplied in by the shader after the brush, so gradient and textured fills
+        /// stay anti-aliased.
+        /// </summary>
+        private void EmitConvexFillAA(List<Float2> ring, Color32 color)
+        {
+            int n = ring.Count;
+            // Drop any duplicated closing point(s) the caller left in.
+            while (n >= 2 && Float2.LengthSquared(ring[0] - ring[n - 1]) < 1e-6f)
+                n--;
+            if (n < 3)
+                return;
+
+            const float halfPixel = 0.5f; // inset/outset -> 1px fringe centred on the nominal edge
+
+            Float2 centroid = Float2.Zero;
+            for (int i = 0; i < n; i++)
+                centroid += ring[i];
+            centroid /= (float)n;
+
+            // Precompute each edge's unit direction once (edge i goes from ring[i] to ring[i+1]),
+            // so each vertex reuses its two adjacent edges instead of normalizing both afresh.
+            var edges = _fillEdges;
+            edges.Clear();
+            for (int i = 0; i < n; i++)
+                edges.Add(NormalizeSafe(ring[(i + 1) % n] - ring[i]));
+
+            // Per-vertex outward miter offset. miter = (nPrev + nNext) / (1 + dot(nPrev, nNext))
+            // keeps a constant perpendicular offset along both adjacent edges (nPrev/nNext are unit
+            // edge normals).
+            var miters = _fillMiters;
+            miters.Clear();
+            for (int i = 0; i < n; i++)
             {
-                var point = copy[i];
-                // TransformPoint converts to physical pixels; 0.5 offset aligns with pixel grid for AA (DPI-independent in pixel space)
-                point = TransformPoint(point) + new Float2(0.5f, 0.5f);
-                center += point;
-                copy[i] = point;
-            }
-            center /= copy.Length;
+                Float2 dPrev = edges[(i - 1 + n) % n];
+                Float2 dNext = edges[i];
+                Float2 nPrev = new Float2(-dPrev.Y, dPrev.X);
+                Float2 nNext = new Float2(-dNext.Y, dNext.X);
 
-            // Store the starting index to reference _vertices
-            uint startVertexIndex = (uint)_vertices.Count;
-
-            // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(center, new Float2(0.5f, 0.5f), _state.fillColor));
-
-            // Generate vertices around the path
-            // Note: copy[] is in physical pixel space after TransformPoint, so use 1.0 for one physical pixel expansion
-            int segments = copy.Length;
-            for (int i = 0; i < segments; i++) // Edge vertices have UV at 0,0 for anti-aliasing
-            {
-                Float2 dirToPoint = Float2.Normalize(copy[i] - center);
-                AddVertex(new Vertex(copy[i] + dirToPoint, new Float2(0, 0), _state.fillColor));
-            }
-
-            // Create triangles (fan from center to edges)
-            // Check orientation with just the first triangle
-            uint centerIdx = (uint)startVertexIndex;
-            uint first = (uint)(startVertexIndex + 1);
-            uint second = (uint)(startVertexIndex + 2);
-
-            Float2 centerPos = _vertices[(int)centerIdx].Position;
-            Float2 firstPos = _vertices[(int)first].Position;
-            Float2 secondPos = _vertices[(int)second].Position;
-
-            float cross = ((firstPos.X - centerPos.X) * (secondPos.Y - centerPos.Y)) -
-                           ((firstPos.Y - centerPos.Y) * (secondPos.X - centerPos.X));
-
-            bool clockwise = cross <= 0;
-
-            // Use the determined orientation for all triangles
-            for (int i = 0; i < segments; i++)
-            {
-                uint current = (uint)(startVertexIndex + 1 + i);
-                uint next = (uint)(startVertexIndex + 1 + ((i + 1) % segments));
-
-                if (clockwise)
-                {
-                    _indices.Add(centerIdx);
-                    _indices.Add(current);
-                    _indices.Add(next);
-                }
+                Float2 m = nPrev + nNext;
+                double denom = 1.0 + (nPrev.X * nNext.X + nPrev.Y * nNext.Y);
+                if (denom > 1e-3)
+                    m /= (float)denom;
                 else
-                {
-                    _indices.Add(centerIdx);
-                    _indices.Add(next);
-                    _indices.Add(current);
-                }
+                    m = nPrev; // near 180deg fold: fall back to a single edge normal
 
-                //AddTriangleCount(1);
+                double mLen = Float2.Length(m);
+                if (mLen > 4.0)
+                    m *= (float)(4.0 / mLen); // clamp so sharp corners don't spike the fringe
+                miters.Add(m);
             }
 
-            AddTriangleCount(segments);
+            // Orient the miters outward (consistent handedness across the convex ring): test the
+            // vertex farthest from the centroid, where outward unambiguously points away from it.
+            int far = 0; double farDist = -1;
+            for (int i = 0; i < n; i++)
+            {
+                double d = Float2.LengthSquared(ring[i] - centroid);
+                if (d > farDist) { farDist = d; far = i; }
+            }
+            if (miters[far].X * (ring[far].X - centroid.X) + miters[far].Y * (ring[far].Y - centroid.Y) < 0)
+                for (int i = 0; i < n; i++)
+                    miters[i] = -miters[i];
+
+            uint baseIndex = (uint)_vertices.Count;
+            Float2 coreUV = new Float2(1f, 0f);
+            Float2 fringeUV = new Float2(0f, 0f);
+
+            // Centroid fan apex (full coverage), then per-vertex inner (core) and outer (fringe).
+            AddVertex(new Vertex(centroid, coreUV, color));
+            for (int i = 0; i < n; i++)
+            {
+                Float2 offset = miters[i] * halfPixel;
+                AddVertex(new Vertex(ring[i] - offset, coreUV, color));   // inner: base + 1 + 2i
+                AddVertex(new Vertex(ring[i] + offset, fringeUV, color)); // outer: base + 2 + 2i
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                int next = (i + 1) % n;
+                uint inner0 = baseIndex + 1 + (uint)(i * 2);
+                uint outer0 = baseIndex + 2 + (uint)(i * 2);
+                uint inner1 = baseIndex + 1 + (uint)(next * 2);
+                uint outer1 = baseIndex + 2 + (uint)(next * 2);
+
+                // Core fan triangle.
+                _indices.Add(baseIndex);
+                _indices.Add(inner0);
+                _indices.Add(inner1);
+
+                // Fringe ribbon quad (inner0 -> outer0 -> outer1 -> inner1).
+                _indices.Add(inner0);
+                _indices.Add(outer0);
+                _indices.Add(outer1);
+                _indices.Add(inner0);
+                _indices.Add(outer1);
+                _indices.Add(inner1);
+            }
+
+            AddTriangleCount(n * 3);
+        }
+
+        private static Float2 NormalizeSafe(Float2 v)
+        {
+            double len2 = v.X * v.X + v.Y * v.Y;
+            if (len2 < 1e-12)
+                return Float2.Zero;
+            double inv = 1.0 / Maths.Sqrt(len2);
+            return new Float2((float)(v.X * inv), (float)(v.Y * inv));
         }
 
         /// <summary>
@@ -1804,49 +1831,30 @@ namespace Prowl.Quill
             if (subPath.Points.Count < 2)
                 return;
 
-            var copy = new List<Float2>(subPath.Points.Count);
-            // Transform each point
+            _strokePoints.Clear();
             for (int i = 0; i < subPath.Points.Count; i++)
-                copy.Add(TransformPoint(subPath.Points[i]));
+                _strokePoints.Add(TransformPoint(subPath.Points[i]));
 
-            List<float> dashPattern = null;
-            if (_state.strokeDashPattern != null)
-            {
-                dashPattern = new List<float>(_state.strokeDashPattern);
-                for (int i = 0; i < dashPattern.Count; i++)
-                {
-                    // Convert dash pattern from logical units to pixels
-                    dashPattern[i] = (dashPattern[i] * _state.strokeScale) * _framebufferScale;
-                }
-            }
-
-            // Convert stroke width and dash offset from logical units to pixels
+            // Geometry is in physical pixels, so the fringe is one physical pixel wide.
             float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _framebufferScale;
-            float pixelDashOffset = (_state.strokeDashOffset * _state.strokeScale) * _framebufferScale;
-            var triangles = PolylineMesher.Create(copy, pixelStrokeWidth, _pixelWidth, _state.strokeColor, _state.strokeJoint, _state.miterLimit, false, _state.strokeStartCap, _state.strokeEndCap, dashPattern, pixelDashOffset);
+            PolylineMesher.Create(_strokePoints, pixelStrokeWidth, 1.0f, _state.strokeColor,
+                _state.strokeJoint, _state.miterLimit, _state.strokeStartCap, _state.strokeEndCap,
+                _state.roundingMinDistance * _framebufferScale, out var verts, out var idxs);
 
+            if (idxs.Count == 0)
+                return;
 
-            // Store the starting index to reference _vertices
             uint startVertexIndex = (uint)_vertices.Count;
-            foreach (var triangle in triangles)
-            {
-                var color = triangle.Color;
-                AddVertex(new Vertex(triangle.V1, triangle.UV1, color));
-                AddVertex(new Vertex(triangle.V2, triangle.UV2, color));
-                AddVertex(new Vertex(triangle.V3, triangle.UV3, color));
-            }
+            for (int i = 0; i < verts.Count; i++)
+                AddVertex(verts[i]);
+            for (int i = 0; i < idxs.Count; i++)
+                _indices.Add(startVertexIndex + idxs[i]);
 
-            // Add triangle _indices
-            for (uint i = 0; i < triangles.Count; i++)
-            {
-                _indices.Add(startVertexIndex + (i * 3));
-                _indices.Add(startVertexIndex + (i * 3) + 1);
-                _indices.Add(startVertexIndex + (i * 3) + 2);
-                //AddTriangleCount(1);
-            }
-
-            AddTriangleCount(triangles.Count);
+            AddTriangleCount(idxs.Count / 3);
         }
+
+        // Reusable scratch buffer for stroke points in physical-pixel space.
+        private readonly List<Float2> _strokePoints = new List<Float2>();
 
         /// <summary>
         /// Fills and then strokes the current path using the current fill and stroke settings.
@@ -2066,37 +2074,47 @@ namespace Prowl.Quill
             if (width <= 0 || height <= 0)
                 return;
 
-            // Expand by a half-pixel on each side so the AA feather sits outside the requested rect.
-            x -= _pixelHalf;
-            y -= _pixelHalf;
-            width += _pixelWidth;
-            height += _pixelWidth;
+            // Dedicated fast path (no sqrt/centroid/scratch lists): an inset solid core plus a
+            // one-pixel fringe frame. The core is inset half a pixel and the fringe extends half a
+            // pixel outside the edge; coverage rides in uv.x (1 = core, 0 = outer fringe). The inset
+            // is clamped to the rect's half-extent so sub-pixel rects collapse instead of inverting.
+            float hpx = Maths.Min(_pixelHalf, width * 0.5f);
+            float hpy = Maths.Min(_pixelHalf, height * 0.5f);
 
-            // Apply transform to the four corners of the rectangle
-            Float2 topLeft = TransformPoint(new Float2(x, y));
-            Float2 topRight = TransformPoint(new Float2(x, y + height));
-            Float2 bottomRight = TransformPoint(new Float2(x + width, y + height));
-            Float2 bottomLeft = TransformPoint(new Float2(x + width, y));
+            Float2 i0 = TransformPoint(new Float2(x + hpx, y + hpy));
+            Float2 i1 = TransformPoint(new Float2(x + width - hpx, y + hpy));
+            Float2 i2 = TransformPoint(new Float2(x + width - hpx, y + height - hpy));
+            Float2 i3 = TransformPoint(new Float2(x + hpx, y + height - hpy));
+            Float2 o0 = TransformPoint(new Float2(x - _pixelHalf, y - _pixelHalf));
+            Float2 o1 = TransformPoint(new Float2(x + width + _pixelHalf, y - _pixelHalf));
+            Float2 o2 = TransformPoint(new Float2(x + width + _pixelHalf, y + height + _pixelHalf));
+            Float2 o3 = TransformPoint(new Float2(x - _pixelHalf, y + height + _pixelHalf));
 
-            // Store the starting index to reference _vertices
-            uint startVertexIndex = (uint)_vertices.Count;
+            uint b = (uint)_vertices.Count;
+            Float2 core = new Float2(1f, 0f);
+            Float2 fringe = new Float2(0f, 0f);
+            AddVertex(new Vertex(i0, core, color));
+            AddVertex(new Vertex(i1, core, color));
+            AddVertex(new Vertex(i2, core, color));
+            AddVertex(new Vertex(i3, core, color));
+            AddVertex(new Vertex(o0, fringe, color));
+            AddVertex(new Vertex(o1, fringe, color));
+            AddVertex(new Vertex(o2, fringe, color));
+            AddVertex(new Vertex(o3, fringe, color));
 
-            // Add all vertices with the transformed coordinates
-            AddVertex(new Vertex(topLeft, new Float2(0, 0), color));
-            AddVertex(new Vertex(topRight, new Float2(0, 1), color));
-            AddVertex(new Vertex(bottomRight, new Float2(1, 1), color));
-            AddVertex(new Vertex(bottomLeft, new Float2(1, 0), color));
+            // Solid core (2 triangles).
+            _indices.Add(b); _indices.Add(b + 1); _indices.Add(b + 2);
+            _indices.Add(b); _indices.Add(b + 2); _indices.Add(b + 3);
+            // Fringe frame (4 edges, 2 triangles each).
+            for (uint e = 0; e < 4; e++)
+            {
+                uint nx = (e + 1) & 3;
+                uint inE = b + e, inN = b + nx, outE = b + 4 + e, outN = b + 4 + nx;
+                _indices.Add(inE); _indices.Add(outE); _indices.Add(outN);
+                _indices.Add(inE); _indices.Add(outN); _indices.Add(inN);
+            }
 
-            // Add indexes for fill
-            _indices.Add(startVertexIndex);
-            _indices.Add(startVertexIndex + 1);
-            _indices.Add(startVertexIndex + 2);
-
-            _indices.Add(startVertexIndex);
-            _indices.Add(startVertexIndex + 2);
-            _indices.Add(startVertexIndex + 3);
-
-            AddTriangleCount(2);
+            AddTriangleCount(10);
         }
 
         /// <summary>
@@ -2144,117 +2162,82 @@ namespace Prowl.Quill
             brRadii = Maths.Min(brRadii, maxRadius);
             blRadii = Maths.Min(blRadii, maxRadius);
 
-            // Expand by a half-pixel on each side so the AA feather sits outside the requested rect.
-            x -= _pixelHalf;
-            y -= _pixelHalf;
-            width += _pixelWidth;
-            height += _pixelWidth;
+            // Dedicated fast path. Every outline vertex sits on a corner arc whose outward direction
+            // is its radial (cos, sin) - or, for a square corner, the diagonal - so no per-vertex
+            // normalize is needed. The solid core is inset half a pixel and a one-pixel fringe ribbon
+            // fades to coverage 0 (carried in uv.x). Positions use a precomputed transformed basis, so
+            // only a few full matrix transforms are needed.
+            float hp = _pixelHalf;
 
-            // Calculate segment counts for each corner based on radius size
-            int tlSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance));
-            int trSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / _state.roundingMinDistance));
-            int brSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * brRadii / 2 / _state.roundingMinDistance));
-            int blSegments = Maths.Max(1, (int)Maths.Ceiling(Maths.PI * blRadii / 2 / _state.roundingMinDistance));
+            int tlSegments = tlRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance)) : 0;
+            int trSegments = trRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / _state.roundingMinDistance)) : 0;
+            int brSegments = brRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * brRadii / 2 / _state.roundingMinDistance)) : 0;
+            int blSegments = blRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * blRadii / 2 / _state.roundingMinDistance)) : 0;
 
-            // Store the starting index to reference _vertices
-            uint startVertexIndex = (uint)_vertices.Count;
+            // Transform basis about the rect centre (affine: T(p) = c + (p - centre) . [ex, ey]).
+            float ccx = x + width / 2, ccy = y + height / 2;
+            Float2 c = TransformPoint(new Float2(ccx, ccy));
+            Float2 ex = TransformPoint(new Float2(ccx + 1, ccy)) - c;
+            Float2 ey = TransformPoint(new Float2(ccx, ccy + 1)) - c;
 
-            // Calculate the center point of the rectangle
-            Float2 center = TransformPoint(new Float2(x + width / 2, y + height / 2));
+            Float2 coreUV = new Float2(1f, 0f);
+            Float2 fringeUV = new Float2(0f, 0f);
+            uint b = (uint)_vertices.Count;
+            int ringCount = 0;
 
-            // Add center vertex with UV at 0.5,0.5 (no AA)
-            AddVertex(new Vertex(center, new Float2(0.5f, 0.5f), color));
+            Float2 ToPx(double px, double py) => c + ex * (float)(px - ccx) + ey * (float)(py - ccy);
 
-            List<Float2> points = new List<Float2>();
-
-            // Top-left corner
-            if (tlRadii > 0)
+            // Appends one corner's (inner core, outer fringe) vertex pairs and advances ringCount.
+            void EmitCorner(double cxc, double cyc, double radius, double startAngle, int segs,
+                            double sharpX, double sharpY, float sgnX, float sgnY)
             {
-                Float2 tlCenter = new Float2(x + tlRadii, y + tlRadii);
-                for (int i = 0; i <= tlSegments; i++)
+                if (radius > 0)
                 {
-                    float angle = Maths.PI + (Maths.PI / 2) * i / tlSegments;
-                    float vx = tlCenter.X + tlRadii * Maths.Cos(angle);
-                    float vy = tlCenter.Y + tlRadii * Maths.Sin(angle);
-                    points.Add(new Float2(vx, vy));
+                    double innerR = radius - hp; if (innerR < 0) innerR = 0;
+                    double outerR = radius + hp;
+                    double da = (Math.PI / 2) / segs;
+                    double dgx = Math.Cos(startAngle), dgy = Math.Sin(startAngle);
+                    double cda = Math.Cos(da), sda = Math.Sin(da);
+                    for (int j = 0; j <= segs; j++)
+                    {
+                        AddVertex(new Vertex(ToPx(cxc + innerR * dgx, cyc + innerR * dgy), coreUV, color));
+                        AddVertex(new Vertex(ToPx(cxc + outerR * dgx, cyc + outerR * dgy), fringeUV, color));
+                        ringCount++;
+                        double ndgx = dgx * cda - dgy * sda, ndgy = dgx * sda + dgy * cda;
+                        dgx = ndgx; dgy = ndgy;
+                    }
+                }
+                else
+                {
+                    // Square corner: half a pixel along each axis gives a 0.5px offset to both edges.
+                    AddVertex(new Vertex(ToPx(sharpX - sgnX * hp, sharpY - sgnY * hp), coreUV, color));
+                    AddVertex(new Vertex(ToPx(sharpX + sgnX * hp, sharpY + sgnY * hp), fringeUV, color));
+                    ringCount++;
                 }
             }
-            else
+
+            AddVertex(new Vertex(c, coreUV, color)); // index 0: fan apex
+
+            // Corners in ring order (TL -> TR -> BR -> BL), each arc sweeping +90 degrees.
+            EmitCorner(x + tlRadii, y + tlRadii, tlRadii, Maths.PI, tlSegments, x, y, -1f, -1f);
+            EmitCorner(x + width - trRadii, y + trRadii, trRadii, Maths.PI * 1.5f, trSegments, x + width, y, 1f, -1f);
+            EmitCorner(x + width - brRadii, y + height - brRadii, brRadii, 0f, brSegments, x + width, y + height, 1f, 1f);
+            EmitCorner(x + blRadii, y + height - blRadii, blRadii, Maths.PI * 0.5f, blSegments, x, y + height, -1f, 1f);
+
+            for (int k = 0; k < ringCount; k++)
             {
-                points.Add(new Float2(x, y));
+                int next = (k + 1) % ringCount;
+                uint inner0 = b + 1 + (uint)(k * 2);
+                uint outer0 = b + 2 + (uint)(k * 2);
+                uint inner1 = b + 1 + (uint)(next * 2);
+                uint outer1 = b + 2 + (uint)(next * 2);
+
+                _indices.Add(b); _indices.Add(inner0); _indices.Add(inner1);          // core fan
+                _indices.Add(inner0); _indices.Add(outer0); _indices.Add(outer1);     // fringe
+                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(inner1);
             }
 
-            // Top-right corner
-            if (trRadii > 0)
-            {
-                Float2 trCenter = new Float2(x + width - trRadii, y + trRadii);
-                for (int i = 0; i <= trSegments; i++)
-                {
-                    float angle = Maths.PI * 3 / 2 + (Maths.PI / 2) * i / trSegments;
-                    float vx = trCenter.X + trRadii * Maths.Cos(angle);
-                    float vy = trCenter.Y + trRadii * Maths.Sin(angle);
-                    points.Add(new Float2(vx, vy));
-                }
-            }
-            else
-            {
-                points.Add(new Float2(x + width, y));
-            }
-
-            // Bottom-right corner
-            if (brRadii > 0)
-            {
-                Float2 brCenter = new Float2(x + width - brRadii, y + height - brRadii);
-                for (int i = 0; i <= brSegments; i++)
-                {
-                    float angle = 0 + (Maths.PI / 2) * i / brSegments;
-                    float vx = brCenter.X + brRadii * Maths.Cos(angle);
-                    float vy = brCenter.Y + brRadii * Maths.Sin(angle);
-                    points.Add(new Float2(vx, vy));
-                }
-            }
-            else
-            {
-                points.Add(new Float2(x + width, y + height));
-            }
-
-            // Bottom-left corner
-            if (blRadii > 0)
-            {
-                Float2 blCenter = new Float2(x + blRadii, y + height - blRadii);
-                for (int i = 0; i <= blSegments; i++)
-                {
-                    float angle = Maths.PI / 2 + (Maths.PI / 2) * i / blSegments;
-                    float vx = blCenter.X + blRadii * Maths.Cos(angle);
-                    float vy = blCenter.Y + blRadii * Maths.Sin(angle);
-                    points.Add(new Float2(vx, vy));
-                }
-            }
-            else
-            {
-                points.Add(new Float2(x, y + height));
-            }
-
-            // Add all edge vertices
-            for (int i = 0; i < points.Count; i++)
-            {
-                Float2 transformedPoint = TransformPoint(points[i]);
-                AddVertex(new Vertex(transformedPoint, new Float2(0, 0), color));
-            }
-
-            // Create triangles (fan from center to edges)
-            for (int i = 0; i < points.Count; i++)
-            {
-                uint current = (uint)(startVertexIndex + 1 + i);
-                uint next = (uint)(startVertexIndex + 1 + ((i + 1) % points.Count));
-
-                _indices.Add((uint)startVertexIndex);  // Center
-                _indices.Add(next);                    // Next edge vertex
-                _indices.Add(current);                 // Current edge vertex
-
-                //AddTriangleCount(1);
-            }
-            AddTriangleCount(points.Count);
+            AddTriangleCount(ringCount * 3);
         }
 
         /// <summary>
@@ -2279,45 +2262,50 @@ namespace Prowl.Quill
             if (radius <= 0 || segments < 3)
                 return;
 
-            // Expand by a half-pixel so the AA feather sits outside the requested radius.
-            radius += _pixelHalf;
+            // Dedicated fast path: the outward direction at each vertex is just the radial unit
+            // vector, so no per-vertex normalize is needed. The solid core is inset half a pixel and
+            // a one-pixel fringe ribbon fades to coverage 0 (carried in uv.x). Positions use a
+            // precomputed transformed basis, so only the centre needs a full matrix transform.
+            float innerR = Maths.Max(0f, radius - _pixelHalf);
+            float outerR = radius + _pixelHalf;
 
-            // Store the starting index to reference _vertices
-            uint startVertexIndex = (uint)_vertices.Count;
+            Float2 center = TransformPoint(new Float2(x, y));
+            Float2 ex = TransformPoint(new Float2(x + 1, y)) - center; // transformed +X axis (px/unit)
+            Float2 ey = TransformPoint(new Float2(x, y + 1)) - center; // transformed +Y axis (px/unit)
 
-            Float2 transformedCenter = TransformPoint(new Float2(x, y));
+            uint b = (uint)_vertices.Count;
+            Float2 coreUV = new Float2(1f, 0f);
+            Float2 fringeUV = new Float2(0f, 0f);
 
-            // Add center vertex with UV at 0.5,0.5 (no AA, Since 0 or 1 in shader is considered edge of shape and get anti aliased)
-            AddVertex(new Vertex(transformedCenter, new Float2(0.5f, 0.5f), color));
+            AddVertex(new Vertex(center, coreUV, color)); // index 0: fan apex
 
-            // Generate vertices around the circle
-            for (int i = 0; i <= segments; i++)
-            {
-                float angle = 2 * Maths.PI * i / segments;
-                float vx = x + radius * Maths.Cos(angle);
-                float vy = y + radius * Maths.Sin(angle);
-
-                Float2 transformedPoint = TransformPoint(new Float2(vx, vy));
-
-                // Edge vertices have UV at 0,0 for anti-aliasing
-                AddVertex(new Vertex(
-                    transformedPoint,
-                    new Float2(0, 0),  // UV at edge for AA
-                    color
-                ));
-            }
-
-            // Create triangles (fan from center to edges)
+            double step = 2 * Math.PI / segments;
+            double cs = Math.Cos(step), sn = Math.Sin(step);
+            double dx = 1.0, dy = 0.0;
             for (int i = 0; i < segments; i++)
             {
-                _indices.Add((uint)startVertexIndex);                  // Center
-                _indices.Add((uint)(startVertexIndex + 1 + ((i + 1) % segments))); // Next edge vertex
-                _indices.Add((uint)(startVertexIndex + 1 + i));          // Current edge vertex
-
-                //AddTriangleCount(1);
+                Float2 radial = ex * (float)dx + ey * (float)dy; // outward direction in pixel space
+                AddVertex(new Vertex(center + radial * innerR, coreUV, color));   // 1 + 2i
+                AddVertex(new Vertex(center + radial * outerR, fringeUV, color)); // 2 + 2i
+                double ndx = dx * cs - dy * sn;
+                double ndy = dx * sn + dy * cs;
+                dx = ndx; dy = ndy;
             }
 
-            AddTriangleCount(segments);
+            for (int i = 0; i < segments; i++)
+            {
+                int next = (i + 1) % segments;
+                uint inner0 = b + 1 + (uint)(i * 2);
+                uint outer0 = b + 2 + (uint)(i * 2);
+                uint inner1 = b + 1 + (uint)(next * 2);
+                uint outer1 = b + 2 + (uint)(next * 2);
+
+                _indices.Add(b); _indices.Add(inner0); _indices.Add(inner1);          // core fan
+                _indices.Add(inner0); _indices.Add(outer0); _indices.Add(outer1);     // fringe
+                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(inner1);
+            }
+
+            AddTriangleCount(segments * 3);
         }
 
         /// <summary>
@@ -2352,57 +2340,19 @@ namespace Prowl.Quill
             float angleRange = endAngle - startAngle;
             float segmentAngle = angleRange / segments;
 
-            // Calculate the centroid of the pie section
-            // For a pie section, the centroid is not at the circle center but at
-            // a position ~2/3 toward the arc's midpoint
-            float midAngle = startAngle + angleRange / 2;
-            float centroidDistance = radius * 2 / 3 * Maths.Sin(angleRange / 2) / (angleRange / 2);
-            float centroidX = x + centroidDistance * Maths.Cos(midAngle);
-            float centroidY = y + centroidDistance * Maths.Sin(midAngle);
-
-            // Store the starting index to reference _vertices
-            uint startVertexIndex = (uint)_vertices.Count;
-
-            Float2 transformedCenter = TransformPoint(new Float2(x, y));
-            Float2 transformedCentroid = TransformPoint(new Float2(centroidX, centroidY));
-
-            // Add centroid vertex with UV at 0.5,0.5 (fully opaque, no AA)
-            AddVertex(new Vertex(transformedCentroid, new Float2(0.5f, 0.5f), color));
-
-            // Start path
-            AddVertex(new Vertex(transformedCenter, new Float2(0.0f, 0.0f), color));
-
-            // Generate vertices around the arc plus the two radial endpoints
+            // Outline ring = apex (circle centre) followed by the arc points. The fringe (half a
+            // pixel inside and outside the edge) is added by EmitConvexFillAA.
+            _fillRing.Clear();
+            _fillRing.Add(TransformPoint(new Float2(x, y)));
             for (int i = 0; i <= segments; i++)
             {
                 float angle = startAngle + i * segmentAngle;
                 float vx = x + radius * Maths.Cos(angle);
                 float vy = y + radius * Maths.Sin(angle);
-
-                Float2 transformedPoint = TransformPoint(new Float2(vx, vy));
-
-                // Offset for AA
-                var direction = Float2.Normalize(transformedPoint - transformedCenter);
-                transformedPoint += direction * _pixelWidth;
-
-                // Edge vertices have UV at 0,0 for anti-aliasing
-                AddVertex(new Vertex(transformedPoint, new Float2(0, 0), color));
+                _fillRing.Add(TransformPoint(new Float2(vx, vy)));
             }
 
-            // Close path
-            AddVertex(new Vertex(transformedCenter, new Float2(0.0f, 0.0f), color));
-
-            // Create triangles (fan from centroid to each pair of edge points)
-            for (int i = 0; i < segments + 2; i++)
-            {
-                _indices.Add(startVertexIndex);                  // Centroid
-                _indices.Add((uint)(startVertexIndex + 1 + i + 1));      // Next edge vertex
-                _indices.Add((uint)(startVertexIndex + 1 + i));          // Current edge vertex
-
-                //AddTriangleCount(1);
-            }
-
-            AddTriangleCount(segments + 2);
+            EmitConvexFillAA(_fillRing, color);
         }
         #endregion
 
