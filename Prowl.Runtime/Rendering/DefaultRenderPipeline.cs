@@ -90,6 +90,11 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static void ValidateDefaults()
     {
+        // SMOKE TEST: only the gizmo material is needed for the clear + gizmo path. The full
+        // default-resource setup is preserved below until the rest of the pipeline is reimplemented.
+        s_gizmo ??= new Material(Shader.LoadDefault(DefaultShader.Gizmos));
+
+#if false
         s_quadMesh ??= Mesh.GetFullscreenQuad();
         s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
         s_skybox ??= new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
@@ -104,6 +109,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // Pre-compute and upload BRDF integration LUT for PBR
         BRDFLutGenerator.UploadGlobal();
+#endif
     }
 
     #endregion
@@ -162,6 +168,32 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void Internal_Render(Camera camera, in RenderingData data)
     {
+        // ============================ SMOKE TEST ============================
+        // Reimplemented down to the two simplest pieces: clear the camera's target framebuffer
+        // and draw gizmos into it. The full forward pipeline is preserved verbatim under the
+        // `#if false` block below and will be brought back incrementally.
+        RenderTexture? target = camera.UpdateRenderData();
+        if (!target.IsValid())
+            return;
+
+        CameraSnapshot css = new(camera);
+        SetupGlobalUniforms(css);
+        AssignCameraMatrices(css.View, css.Projection);
+
+        CommandBuffer cmd = Graphics.GetCommandBuffer("SmokeTest");
+        cmd.SetRenderTarget(target!.frameBuffer);
+        cmd.SetViewport(0, 0, (uint)target.Width, (uint)target.Height);
+        cmd.ClearRenderTarget(true, true, camera.ClearColor);
+
+        if (data.DisplayGizmos)
+            RenderGizmos(cmd, css);
+
+        Graphics.Submit(cmd);
+
+        camera.SavePreviousViewProjectionMatrix();
+        return;
+
+#if false
         // =======================================================
         // 0. Setup
         bool isHDR = camera.HDR;
@@ -401,6 +433,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         prepass.Dispose();
         RenderTexture.ReleaseTemporaryRT(colorRT);
+#endif
     }
 
     private static void UploadFogUniforms(Scene scene)
@@ -648,6 +681,10 @@ public class DefaultRenderPipeline : RenderPipeline
     {
         Float4x4 vp = css.Projection * css.View;
         (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData();
+
+        // The Gizmos shader samples _CameraDepthTexture to dim occluded lines. The smoke test has no
+        // depth prepass, so bind a white texture (depth == far) and let every gizmo draw fully lit.
+        s_gizmo.SetTexture("_CameraDepthTexture", Texture2D.LoadDefault(DefaultTexture.White));
 
         if (wire.IsValid() || solid.IsValid())
         {

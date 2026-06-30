@@ -50,8 +50,6 @@ public class EditorApplication : Game
     private Scribe.FontFile? _builtinFont;
     private Scribe.FontFile? _builtinBoldFont;
 
-    public static Runtime.Resources.RenderTexture? SmokeTestRT { get; private set; }
-
     // Play mode state
     private Echo.EchoObject? _savedEditorScene;
     private int _savedActiveTabIndex = -1;
@@ -1860,14 +1858,7 @@ public class EditorApplication : Game
     /// </summary>
     public override void OnRender(Runtime.Resources.Scene? scene)
     {
-        // Don't render SceneView panel renders the editor camera to its own RT.
-
-        SmokeTestRT ??= new Runtime.Resources.RenderTexture(200, 200, false, [Prowl.Graphite.PixelFormat.R8_G8_B8_A8_UNorm]);
-        var smokeCmd = Runtime.Graphics.GetCommandBuffer("SmokeTest");
-        smokeCmd.SetRenderTarget(SmokeTestRT.frameBuffer);
-        smokeCmd.ClearRenderTarget(true, false, new Color(0f, 1f, 0f, 1f));
-        smokeCmd.SetRenderTarget(null);
-        Runtime.Graphics.Submit(smokeCmd);
+        // Don't render SceneView panel renders the editor camera to its own RT during OnGui.
     }
 
     /// <summary>

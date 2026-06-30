@@ -159,7 +159,6 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         if (_editorCamera == null || width <= 0 || height <= 0) return;
 
         var scene = Scene.Current;
-        var rt = EditorApplication.SmokeTestRT;
 
         if (scene == null)
         {
@@ -217,6 +216,13 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         // Update transform gizmo for selected objects (skip if scene editor consumed input)
         if (!sceneEditorConsumedInput)
             UpdateTransformGizmo(paper, scene, width, height);
+
+        // Render the editor camera into its own RenderTexture, then display it below. The frame is
+        // open during OnGui and Paper defers its draws to EndFrame, so this fills the RT before
+        // Paper samples it. Sized to the viewport (last frame's gizmos are already populated by OnUpdate).
+        _editorCamera.EnsureRenderTarget((uint)Math.Max(1f, width), (uint)Math.Max(1f, height));
+        _editorCamera.Render(scene);
+        var rt = _editorCamera.RenderTarget;
 
         if (rt != null && rt.MainTexture != null)
         {

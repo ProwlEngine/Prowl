@@ -139,7 +139,18 @@ public class GameViewPanel : DockPanel
                 rtH = targetH;
             }
 
-            var smokeRT = EditorApplication.SmokeTestRT;
+            // Render the scene's main camera into our own RT (game view shows no gizmos/grid).
+            EnsureRT(rtW, rtH);
+            Camera? mainCam = FindSceneCamera(scene);
+            if (mainCam != null && _rt != null)
+            {
+                var prevTarget = mainCam.Target;
+                mainCam.Target = _rt;
+                mainCam.Render(new RenderingData { DisplayGizmos = false, DisplayGrid = false });
+                mainCam.Target = prevTarget;
+            }
+
+            var smokeRT = _rt;
 
             // Display with letterboxing
             if (smokeRT != null && smokeRT.MainTexture != null)
@@ -460,6 +471,26 @@ public class GameViewPanel : DockPanel
             _gamePaper = new Paper(_gamePaperRenderer, w, h, new Quill.FontAtlasSettings());
         else
             _gamePaper.SetResolution(w, h);
+    }
+
+    private static Camera? FindSceneCamera(Scene scene)
+    {
+        foreach (var go in scene.AllObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
+            if (!go.CompareTag("Main Camera")) continue;
+            var cam = go.GetComponent<Camera>();
+            if (cam != null) return cam;
+        }
+
+        foreach (var go in scene.AllObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
+            var cam = go.GetComponent<Camera>();
+            if (cam != null) return cam;
+        }
+
+        return null;
     }
 
     private void EnsureRT(int w, int h)

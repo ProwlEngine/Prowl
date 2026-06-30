@@ -217,17 +217,17 @@ public static class RenderCommandExtensions
         if (src == null || dst == null)
             return;
 
-        if (copyColor
-            && src.DepthTarget.HasValue && dst.DepthTarget.HasValue)
-        {
-            cmd.CopyTexture(src.DepthTarget.Value.Target, dst.DepthTarget.Value.Target);
-        }
-
-        if (copyDepth)
+        if (copyColor)
         {
             int count = System.Math.Min(src.ColorTargets.Count, dst.ColorTargets.Count);
             for (int i = 0; i < count; i++)
                 cmd.CopyTexture(src.ColorTargets[i].Target, dst.ColorTargets[i].Target);
+        }
+
+        if (copyDepth
+            && src.DepthTarget.HasValue && dst.DepthTarget.HasValue)
+        {
+            cmd.CopyTexture(src.DepthTarget.Value.Target, dst.DepthTarget.Value.Target);
         }
     }
 
