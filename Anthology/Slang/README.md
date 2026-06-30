@@ -1,0 +1,1 @@
+This is a .NET wrapper over the [Slang](https://github.com/shader-slang/slang) shader compiler intended for use in the Prowl game engine.
