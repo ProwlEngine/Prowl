@@ -12,11 +12,11 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Unwrapper\Unwrapper.csproj" />
+    <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
   </ItemGroup>
 
   <ItemGroup>

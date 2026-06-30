@@ -11,7 +11,6 @@
     <!-- Package metadata -->
     <PackageId>Prowl.Clay</PackageId>
     <Title>Prowl.Clay</Title>
-    <Version>0.5.1</Version>
     <Authors>Wulferis</Authors>
     <Company>Prowl Engine</Company>
     <Description>3D model importing library for the Prowl Game Engine. Loads glTF2 / GLB / VRM, OBJ, and FBX (binary + ASCII) into a read-only Model graph with a configurable post-process pipeline (triangulation, tangent generation, bone limiting, coordinate conversion, mesh optimization).</Description>
@@ -39,11 +38,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+    <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Tests" />
+    <InternalsVisibleTo Include="Clay.Tests" />
     <InternalsVisibleTo Include="DiffDebugger" />
   </ItemGroup>
 

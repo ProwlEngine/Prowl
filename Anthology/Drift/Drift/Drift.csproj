@@ -13,7 +13,6 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Drift</RepositoryUrl>
     <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Drift</PackageProjectUrl>
-    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

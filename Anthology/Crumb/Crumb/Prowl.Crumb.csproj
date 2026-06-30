@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <PackageId>Prowl.Crumb</PackageId>
-        <Version>0.3.2</Version>
 
         <Authors>Prowl Group</Authors>
         <Owners>Prowl Group</Owners>

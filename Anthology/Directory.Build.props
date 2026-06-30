@@ -7,6 +7,7 @@
     <Company>Prowl</Company>
     <Product>Prowl</Product>
     <NeutralLanguage>en-AU</NeutralLanguage>
+    <LangVersion>latest</LangVersion>
 
     <!-- One version for the whole family. Bump this single line to release everything.
          Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the

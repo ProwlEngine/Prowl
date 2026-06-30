@@ -9,7 +9,6 @@
     <!-- Package metadata -->
     <PackageId>Prowl.Rosetta</PackageId>
     <Title>Prowl.Rosetta</Title>
-    <Version>1.1.0</Version>
     <Authors>Wulferis</Authors>
     <Description>A lightweight, backend-agnostic localization library for .NET. Static API, named interpolation, CLDR pluralization, gender variants, and pluggable providers.</Description>
     <PackageTags>localization;i18n;l10n;translation;gamedev;game-engine;prowl;dotnet;csharp;pluralization;cldr</PackageTags>
@@ -27,7 +26,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Tests" />
+    <InternalsVisibleTo Include="Rosetta.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,20 +1,26 @@
 <Solution>
-  <Folder Name="/Scribe/">
-    <Project Path="Scribe/Scribe/Scribe.csproj" />
-    <Project Path="Scribe/Tests/Scribe.Tests.csproj" />
-  </Folder>
-  <Folder Name="/Scribe/Samples/">
-    <Project Path="Scribe/Samples/RaylibTest/RaylibTest.csproj" />
-  </Folder>
-  <!-- Projects are added here as each library is folded in. -->
-  <Folder Name="/Vector/">
-    <Project Path="Vector/OpenTKSample/OpenTKSample.csproj" />
+  <Folder Name="/Libraries/">
     <Project Path="Vector/Vector/Vector.csproj" />
+    <Project Path="Scribe/Scribe/Scribe.csproj" />
+    <Project Path="Quill/Quill/Quill.csproj" />
+    <Project Path="Paper/Paper/Paper.csproj" />
+    <Project Path="Origami/Origami/Origami.csproj" />
+    <Project Path="Echo/Echo/Echo.csproj" />
+    <Project Path="Crumb/Crumb/Prowl.Crumb.csproj" />
+    <Project Path="Photonic/Photonic/Photonic.csproj" />
+    <Project Path="Unwrapper/Unwrapper/Unwrapper.csproj" />
+    <Project Path="Wicked/Prowl.Wicked/Prowl.Wicked.csproj" />
+    <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
+    <Project Path="Drift/Drift/Drift.csproj" />
   </Folder>
-  <Folder Name="/Vector/Samples/">
-    <Project Path="Vector/Samples/SoftwareRasterizer/SoftwareRasterizer.csproj" />
-  </Folder>
-  <Folder Name="/Vector/Tests/">
+  <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
+    <Project Path="Scribe/Tests/Scribe.Tests.csproj" />
+    <Project Path="Echo/Tests/Echo.Tests.csproj" />
+    <Project Path="Crumb/Tests/Prowl.Crumb.Tests.csproj" />
+    <Project Path="Unwrapper/Tests/Unwrapper.Tests.csproj" />
+    <Project Path="Wicked/Prowl.Wicked.Tests/Prowl.Wicked.Tests.csproj" />
+    <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
+    <Project Path="Paper/Tests/Paper.Tests.csproj" />
   </Folder>
 </Solution>

@@ -5,7 +5,6 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageId>Prowl.Origami</PackageId>
-    <Version>1.2.1</Version>
     <Authors>Wulferis</Authors>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Title>Prowl.Origami</Title>
@@ -30,8 +29,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Echo" Version="2.2.1" />
-    <PackageReference Include="Prowl.Paper" Version="2.0.1" />
+    <ProjectReference Include="..\..\Echo\Echo\Echo.csproj" />
+    <ProjectReference Include="..\..\Paper\Paper\Paper.csproj" />
   </ItemGroup>
 
 </Project>

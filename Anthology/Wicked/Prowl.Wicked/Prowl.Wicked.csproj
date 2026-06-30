@@ -8,7 +8,6 @@
 
     <!-- NuGet package metadata -->
     <PackageId>Prowl.Wicked</PackageId>
-    <Version>0.1.0</Version>
     <Authors>Prowl</Authors>
     <Description>Lightweight C# networking library with IL-weaved RPCs, SyncVars, and client-server architecture.</Description>
     <PackageTags>networking;multiplayer;rpc;syncvar;gamedev</PackageTags>
