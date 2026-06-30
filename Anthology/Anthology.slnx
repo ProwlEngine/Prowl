@@ -12,14 +12,11 @@
     <Project Path="Unwrapper/Unwrapper/Unwrapper.csproj" />
     <Project Path="Wicked/Prowl.Wicked/Prowl.Wicked.csproj" />
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
-    <Project Path="Aspect/Aspect/Aspect.csproj" />
     <Project Path="Drift/Drift/Drift.csproj" />
     <Project Path="Slang/Prowl.Slang/Prowl.Slang.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
-    <Project Path="Aspect/Aspect.Weaver/Aspect.Weaver.csproj" />
-    <Project Path="Aspect/Aspect.Weaver.Host/Aspect.Weaver.Host.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
@@ -30,7 +27,6 @@
     <Project Path="Unwrapper/Tests/Unwrapper.Tests.csproj" />
     <Project Path="Wicked/Prowl.Wicked.Tests/Prowl.Wicked.Tests.csproj" />
     <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
-    <Project Path="Aspect/Aspect.Tests/Aspect.Tests.csproj" />
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
   </Folder>
 </Solution>

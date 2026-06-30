@@ -22,7 +22,6 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Unwrapper`  | Prowl.Unwrapper   | Mesh Unwrapping for UV's 	      |
 | `Wicked`     | Prowl.Wicked      | High Level Networking Library    |
 | `Rosetta`    | Prowl.Rosetta     | Localization utilities           |
-| `Aspect`     | Prowl.Aspect      | Tiny Aspect-Oriented Programming |
 | `Drift`      | Prowl.Drift       | 2D Physics Engine                |
 | `Slang`      | Prowl.Slang       | Bindings for the Sland Compiler  |
 
