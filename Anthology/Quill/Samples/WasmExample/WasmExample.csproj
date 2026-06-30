@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <WasmMainJSPath>main.js</WasmMainJSPath>
+    <RunAOTCompilation>true</RunAOTCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+  </ItemGroup>
+
+  <!-- WASM has no filesystem, so embed Common's assets as resources instead of copying them -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Common\Fonts\Roboto.ttf" LogicalName="Fonts.Roboto.ttf" />
+    <EmbeddedResource Include="..\Common\Fonts\Alamak.ttf" LogicalName="Fonts.Alamak.ttf" />
+    <EmbeddedResource Include="..\Common\Textures\wall.png" LogicalName="Textures.wall.png" />
+    <EmbeddedResource Include="..\Common\SVGs\*.svg" />
+  </ItemGroup>
+
+  <!-- Copy index.html to AppBundle -->
+  <Target Name="CopyIndexHtml" AfterTargets="WasmBuildApp" Condition="'$(WasmAppDir)' != ''">
+    <Copy SourceFiles="index.html" DestinationFolder="$(WasmAppDir)" />
+  </Target>
+
+</Project>

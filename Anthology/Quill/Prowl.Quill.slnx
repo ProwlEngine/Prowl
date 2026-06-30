@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Samples/">
+    <Project Path="Samples/Common/Common.csproj" />
+    <Project Path="Samples/OpenTKExample/OpenTKExample.csproj" />
+    <Project Path="Samples/RaylibExample/RaylibExample.csproj" />
+    <Project Path="Samples/SFMLExample/SFMLExample.csproj" />
+    <Project Path="Samples/SilkNETExample/SilkNETExample.csproj" />
+    <Project Path="Samples/WasmExample/WasmExample.csproj" />
+    <Project Path="Samples/GraphiteExample/GraphiteExample.csproj" />
+  </Folder>
+  <Project Path="Quill/Quill.csproj" />
+</Solution>
