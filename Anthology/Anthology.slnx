@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/Scribe/">
+    <Project Path="Scribe/Scribe/Scribe.csproj" />
+    <Project Path="Scribe/Tests/Scribe.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Scribe/Samples/">
+    <Project Path="Scribe/Samples/RaylibTest/RaylibTest.csproj" />
+  </Folder>
   <!-- Projects are added here as each library is folded in. -->
   <Folder Name="/Vector/">
     <Project Path="Vector/OpenTKSample/OpenTKSample.csproj" />

@@ -1,27 +1,22 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
-    
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <NeutralLanguage>en-AU</NeutralLanguage>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+
     <Title>Prowl.Scribe</Title>
-    <Authors>Wulferis</Authors>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Scribe</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Prowl.Scribe</PackageProjectUrl>
-    <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
     <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
-    <Version>1.0.2</Version>
+    <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Tests" />
+    <InternalsVisibleTo Include="Scribe.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+    <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
   </ItemGroup>
-  
+
 </Project>
