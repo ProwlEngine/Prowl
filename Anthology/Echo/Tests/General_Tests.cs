@@ -1266,16 +1266,24 @@ public class General_Tests
         var original = new Dog { Species = "Canine", Breed = "Shiba Inu" };
 
         // Register a custom format handler for Dog
-        Serializer.RegisterFormat(new DogFormat());
+        var dogFormat = new DogFormat();
+        Serializer.RegisterFormat(dogFormat);
+        try
+        {
+            var serialized = Serializer.Serialize(original, new SerializationContext(TypeMode.Aggressive));
 
-        var serialized = Serializer.Serialize(original, new SerializationContext(TypeMode.Aggressive));
+            // Act
+            var deserialized = Serializer.Deserialize<IAnimal>(serialized);
 
-        // Act
-        var deserialized = Serializer.Deserialize<IAnimal>(serialized);
-
-        // Assert
-        Assert.IsType<Dog>(deserialized);
-        Assert.Equal("Processed: Shiba Inu", ((Dog)deserialized).Breed);
+            // Assert
+            Assert.IsType<Dog>(deserialized);
+            Assert.Equal("Processed: Shiba Inu", ((Dog)deserialized).Breed);
+        }
+        finally
+        {
+            // The format registry is static; remove it so it doesn't leak into other tests.
+            Serializer.UnregisterFormat(dogFormat);
+        }
     }
 
     // Custom format handler for Dog to test actual type handling

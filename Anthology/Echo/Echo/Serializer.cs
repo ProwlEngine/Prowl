@@ -74,6 +74,15 @@ public static class Serializer
         _formats = newFormats.AsReadOnly();
     }
 
+    /// <summary>
+    /// Removes a previously registered format. Has no effect if it was not registered.
+    /// </summary>
+    public static void UnregisterFormat(ISerializationFormat format)
+    {
+        _formatCache.Clear();
+        _formats = _formats.Where(f => !ReferenceEquals(f, format)).ToList().AsReadOnly();
+    }
+
     #region Public API
 
     public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto)
