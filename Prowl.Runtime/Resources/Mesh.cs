@@ -1524,12 +1524,15 @@ public class Mesh : EngineObject, ISerializable
             writer.Write((byte)indexFormat);
             writer.Write((byte)meshTopology);
 
-            writer.Write(vertices.Length);
-            foreach (Float3 vertex in vertices)
+            writer.Write(vertices?.Length ?? 0);
+            if (vertices != null)
             {
-                writer.Write(vertex.X);
-                writer.Write(vertex.Y);
-                writer.Write(vertex.Z);
+                foreach (Float3 vertex in vertices)
+                {
+                    writer.Write(vertex.X);
+                    writer.Write(vertex.Y);
+                    writer.Write(vertex.Z);
+                }
             }
 
             writer.Write(normals?.Length ?? 0);
