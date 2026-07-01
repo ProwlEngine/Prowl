@@ -89,8 +89,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => mass;
         set
         {
-            if (mass <= 0.0)
-                throw new ArgumentException("Mass can not be zero or negative.", nameof(mass));
+            if (value <= 0.0)
+                throw new ArgumentException("Mass can not be zero or negative.", nameof(value));
 
             mass = value;
             if (_body != null) _body.SetMassInertia(value);
