@@ -184,7 +184,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     public override bool Equals(object? obj) => obj is AssetRef<T> other && this == other;
 
-    public override int GetHashCode() => assetID != Guid.Empty ? assetID.GetHashCode() : (instance?.GetHashCode() ?? 0);
+    public override int GetHashCode() => AssetID != Guid.Empty ? AssetID.GetHashCode() : (instance?.GetHashCode() ?? 0);
 
     public static bool operator ==(AssetRef<T> a, AssetRef<T> b)
     {
@@ -192,7 +192,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
             return a.instance == b.instance;
         if (a.IsExplicitNull && b.IsExplicitNull)
             return true;
-        return a.assetID == b.assetID && a.assetID != Guid.Empty;
+        return a.AssetID == b.AssetID && a.AssetID != Guid.Empty;
     }
 
     public static bool operator !=(AssetRef<T> a, AssetRef<T> b) => !(a == b);
