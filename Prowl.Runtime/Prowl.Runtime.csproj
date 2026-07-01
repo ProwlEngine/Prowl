@@ -30,7 +30,7 @@
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
     <PackageReference Include="Prowl.Clay" Version="0.5.1" />
     <PackageReference Include="Prowl.Echo" Version="2.2.1" />
-    <PackageReference Include="Prowl.Paper" Version="1.9.0" />
+    <PackageReference Include="Prowl.Paper" Version="2.0.1" />
     <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
     <PackageReference Include="Prowl.Graphite" Version="0.7.1" />
     <PackageReference Include="Prowl.Graphite.Variants" Version="0.7.1" />

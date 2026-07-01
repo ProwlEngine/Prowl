@@ -6,6 +6,7 @@ Shader "Default/GameUI"
         _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
         _Tiling ("Tiling", Vector) = (1.0, 1.0, 0.0, 0.0)
         _Offset ("Offset", Vector) = (0.0, 0.0, 0.0, 0.0)
+        _SdfText ("SDF Text", Float) = 0.0
     }
 
     Pass
@@ -28,6 +29,7 @@ Shader "Default/GameUI"
             float4 _MainColor;
             float2 _Tiling;
             float2 _Offset;
+            float _SdfText;
         }
         ParameterBlock<MaterialData> Mat;
 
@@ -83,9 +85,24 @@ Shader "Default/GameUI"
             return output;
         }
 
+        // Single-channel SDF text: reconstruct sharp coverage from the distance field.
+		const float sdfPxRange = 4.0;
+		float sdfScreenPxRange(float2 uv) {
+			float2 unitRange = float2(sdfPxRange) / float2(textureSize(_MainTex, 0));
+			float2 screenTexSize = float2(1.0) / fwidth(uv);
+			return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+		}
+
         [shader("fragment")]
         float4 Fragment(Varyings input) : SV_Target
         {
+            if (Mat._SdfText > 0.5) {
+				float sd = Mat._MainTex.Sample(input.texCoord0).r;
+				float screenPxDistance = sdfScreenPxRange(texCoord0) * (sd - 0.5);
+				float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+				return input.vColor * Mat._MainColor * coverage;
+			}
+
             return Mat._MainTex.Sample(input.texCoord0) * input.vColor * Mat._MainColor;
         }
         ENDSLANG

@@ -31,8 +31,7 @@ public static class ScriptCompiler
     internal sealed class CompilationUnit
     {
         public required string Name;
-        public bool IsEditor;       // editor-side define/reference context
-        public bool IsEditorOnly;   // never shipped in a build
+        public bool IsEditorOnly;   // editor-side: gets editor-only packages/plugins, never shipped in a build
         public bool AllowUnsafe = true;
         public bool NoEngineReferences;
         public AsmDefFile? Source;  // null for the default Game/Editor assemblies
@@ -131,6 +130,13 @@ public static class ScriptCompiler
         if (dupes.Count > 0)
             return (new(), $"Duplicate assembly definition name(s): {string.Join(", ", dupes.Select(d => d.Key))}");
 
+        // Reject asmdef names reserved for the default assemblies - they would clobber the defaults.
+        var reserved = new[] { $"{project.Name}.Game", $"{project.Name}.Editor" };
+        var clashing = asmdefs.Where(a => reserved.Contains(a.Name, StringComparer.OrdinalIgnoreCase))
+            .Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (clashing.Count > 0)
+            return (new(), $"Assembly definition name(s) reserved for the default assemblies: {string.Join(", ", clashing)}");
+
         string defaultDefines = $"PROWL;PROWL_EDITOR;{GetVersionDefine()}";
         var activeDefines = new HashSet<string>(defaultDefines.Split(';'), StringComparer.OrdinalIgnoreCase);
 
@@ -138,8 +144,8 @@ public static class ScriptCompiler
         var byName = new Dictionary<string, CompilationUnit>(StringComparer.OrdinalIgnoreCase);
 
         // Default assemblies (scripts not owned by any asmdef).
-        var defaultGame = new CompilationUnit { Name = $"{project.Name}.Game", IsEditor = false, IsEditorOnly = false };
-        var defaultEditor = new CompilationUnit { Name = $"{project.Name}.Editor", IsEditor = true, IsEditorOnly = true };
+        var defaultGame = new CompilationUnit { Name = $"{project.Name}.Game", IsEditorOnly = false };
+        var defaultEditor = new CompilationUnit { Name = $"{project.Name}.Editor", IsEditorOnly = true };
         units.Add(defaultGame);
         units.Add(defaultEditor);
 
@@ -153,7 +159,6 @@ public static class ScriptCompiler
             var unit = new CompilationUnit
             {
                 Name = file.Name,
-                IsEditor = file.Definition.IncludedFor(BuildPlatforms.Editor),
                 IsEditorOnly = file.Definition.IsEditorOnly,
                 AllowUnsafe = file.Definition.AllowUnsafeCode,
                 NoEngineReferences = file.Definition.NoEngineReferences,
@@ -172,14 +177,16 @@ public static class ScriptCompiler
             foreach (var script in Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories))
             {
                 var owner = AssemblyDefinitionDatabase.FindOwner(script, asmdefs);
-                if (owner != null && byName.TryGetValue(owner.Name, out var ownerUnit))
+                if (owner != null)
                 {
-                    ownerUnit.Scripts.Add(script);
+                    // Owned by an asmdef. If that asmdef was excluded by define constraints it has no
+                    // unit, so the script is simply not compiled (it must NOT leak into the defaults).
+                    if (byName.TryGetValue(owner.Name, out var ownerUnit))
+                        ownerUnit.Scripts.Add(script);
                 }
                 else
                 {
-                    bool isEditor = IsEditorPath(project, script);
-                    (isEditor ? defaultEditor : defaultGame).Scripts.Add(script);
+                    (IsEditorPath(project, script) ? defaultEditor : defaultGame).Scripts.Add(script);
                 }
             }
         }
@@ -187,8 +194,10 @@ public static class ScriptCompiler
         // Resolve plugin and assembly references.
         var plugins = PluginScanner.ScanAll(project);
         var autoManaged = plugins.Where(p => p.IsManaged && p.AutoReferenced).ToList();
-        var managedByFile = plugins.Where(p => p.IsManaged)
-            .ToDictionary(p => p.FileName, p => p, StringComparer.OrdinalIgnoreCase);
+        // TryAdd (not ToDictionary) so duplicate plugin file names don't throw; first one wins.
+        var managedByFile = new Dictionary<string, PluginInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in plugins.Where(p => p.IsManaged))
+            managedByFile.TryAdd(p.FileName, p);
 
         // Set of unit names that actually produce a DLL (have scripts) - only these are referenceable.
         var producing = new HashSet<string>(units.Where(u => u.Scripts.Count > 0).Select(u => u.Name), StringComparer.OrdinalIgnoreCase);
@@ -206,8 +215,8 @@ public static class ScriptCompiler
             else
             {
                 // Game assemblies may only reference non-editor-only plugins (build separation);
-                // editor-side assemblies can reference everything.
-                pluginRefs = autoManaged.Where(p => unit.IsEditor || unit.IsEditorOnly || !p.EditorOnly);
+                // editor-only assemblies can reference everything.
+                pluginRefs = autoManaged.Where(p => unit.IsEditorOnly || !p.EditorOnly);
             }
             foreach (var p in pluginRefs)
                 unit.ManagedPluginPaths.Add(p!.AbsolutePath);
@@ -217,6 +226,8 @@ public static class ScriptCompiler
             {
                 foreach (var refName in unit.Source.Definition.References)
                 {
+                    if (refName.Equals(unit.Name, StringComparison.OrdinalIgnoreCase))
+                        continue; // ignore self-reference
                     if (producing.Contains(refName))
                         unit.AssemblyReferences.Add(refName);
                     else if (byName.ContainsKey(refName))
@@ -232,7 +243,13 @@ public static class ScriptCompiler
         foreach (var (file, unit) in asmdefUnits)
         {
             if (unit.Scripts.Count == 0 || !file.Definition.AutoReferenced) continue;
-            if (!unit.IsEditorOnly) defaultGame.AssemblyReferences.Add(unit.Name);
+
+            // The default Game ships to every player platform, so it may only auto-reference an asmdef
+            // that also ships everywhere - otherwise a build for an excluded platform would carry a
+            // dangling reference. The default Editor never ships, so it can reference anything.
+            bool shipsEverywhere = BuildPlatforms.Players.All(p => file.Definition.IncludedFor(p));
+            if (!unit.IsEditorOnly && shipsEverywhere)
+                defaultGame.AssemblyReferences.Add(unit.Name);
             defaultEditor.AssemblyReferences.Add(unit.Name);
         }
         if (defaultGame.Scripts.Count > 0)
@@ -296,6 +313,12 @@ public static class ScriptCompiler
         string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         string outputDir = Path.GetRelativePath(project.RootPath, project.ScriptAssemblyPath);
 
+        // Only the user's own output assemblies must be excluded from the engine-reference sweep -
+        // match them by exact name, never by a name prefix (a project named "Prowl" must still get
+        // Prowl.Echo etc.).
+        var unitNames = new HashSet<string>(allUnits.Select(u => u.Name), StringComparer.OrdinalIgnoreCase);
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         var sb = new StringBuilder();
         sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
         sb.AppendLine("  <PropertyGroup>");
@@ -305,10 +328,10 @@ public static class ScriptCompiler
         sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
         sb.AppendLine($"    <AllowUnsafeBlocks>{(unit.AllowUnsafe ? "true" : "false")}</AllowUnsafeBlocks>");
         sb.AppendLine("    <Nullable>enable</Nullable>");
-        sb.AppendLine($"    <OutputPath>{outputDir}</OutputPath>");
+        sb.AppendLine($"    <OutputPath>{Xml(outputDir)}</OutputPath>");
         sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
         sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");
-        sb.AppendLine($"    <AssemblyName>{unit.Name}</AssemblyName>");
+        sb.AppendLine($"    <AssemblyName>{Xml(unit.Name)}</AssemblyName>");
         sb.AppendLine($"    <DefineConstants>PROWL;PROWL_EDITOR;{GetVersionDefine()}</DefineConstants>");
         sb.AppendLine("  </PropertyGroup>");
 
@@ -317,26 +340,26 @@ public static class ScriptCompiler
         // Engine references (Private=true forces use of the HintPath instead of local probing).
         if (!unit.NoEngineReferences)
         {
-            AppendReference(sb, "Prowl.Runtime", Path.Combine(engineDir, "Prowl.Runtime.dll"), copyLocal: true);
-            AppendReference(sb, "Prowl.Editor", Path.Combine(engineDir, "Prowl.Editor.dll"), copyLocal: true);
+            AppendReference(sb, emitted, "Prowl.Runtime", Path.Combine(engineDir, "Prowl.Runtime.dll"), copyLocal: true);
+            AppendReference(sb, emitted, "Prowl.Editor", Path.Combine(engineDir, "Prowl.Editor.dll"), copyLocal: true);
 
             foreach (var dll in Directory.EnumerateFiles(engineDir, "*.dll"))
             {
                 string name = Path.GetFileNameWithoutExtension(dll);
-                if (name == "Prowl.Runtime" || name == "Prowl.Editor" || name.StartsWith(project.Name)) continue;
-                AppendReference(sb, name, dll, copyLocal: true);
+                if (name == "Prowl.Runtime" || name == "Prowl.Editor" || unitNames.Contains(name)) continue;
+                AppendReference(sb, emitted, name, dll, copyLocal: true);
             }
         }
 
         // Managed plugin references.
         foreach (var pluginPath in unit.ManagedPluginPaths)
-            AppendReference(sb, Path.GetFileNameWithoutExtension(pluginPath), pluginPath, copyLocal: true);
+            AppendReference(sb, emitted, Path.GetFileNameWithoutExtension(pluginPath), pluginPath, copyLocal: true);
 
         // Other user assemblies (built earlier; share OutputPath so they must not be copied over).
         foreach (var refName in unit.AssemblyReferences)
         {
             string dll = Path.Combine(project.ScriptAssemblyPath, $"{refName}.dll");
-            AppendReference(sb, refName, dll, copyLocal: false);
+            AppendReference(sb, emitted, refName, dll, copyLocal: false);
         }
 
         sb.AppendLine("  </ItemGroup>");
@@ -344,13 +367,13 @@ public static class ScriptCompiler
         // NuGet packages: non-editor packages flow to every assembly; editor-only packages only to
         // editor-side assemblies (preserving "any script may use any non-editor package").
         AppendNuGetPackages(sb, project, isEditorAssembly: false);
-        if (unit.IsEditor || unit.IsEditorOnly)
+        if (unit.IsEditorOnly)
             AppendNuGetPackages(sb, project, isEditorAssembly: true);
 
         // Compile items.
         sb.AppendLine("  <ItemGroup>");
         foreach (var script in unit.Scripts)
-            sb.AppendLine($"    <Compile Include=\"{Path.GetRelativePath(project.RootPath, script)}\" />");
+            sb.AppendLine($"    <Compile Include=\"{Xml(Path.GetRelativePath(project.RootPath, script))}\" />");
         sb.AppendLine("  </ItemGroup>");
 
         sb.AppendLine("</Project>");
@@ -358,13 +381,18 @@ public static class ScriptCompiler
         File.WriteAllText(unit.CsprojPath, sb.ToString());
     }
 
-    private static void AppendReference(StringBuilder sb, string include, string hintPath, bool copyLocal)
+    /// <summary>Appends a Reference item, skipping duplicates (by Include name) and XML-escaping values.</summary>
+    private static void AppendReference(StringBuilder sb, HashSet<string> emitted, string include, string hintPath, bool copyLocal)
     {
-        sb.AppendLine($"    <Reference Include=\"{include}\">");
-        sb.AppendLine($"      <HintPath>{hintPath}</HintPath>");
+        if (!emitted.Add(include)) return; // a later reference with the same name (e.g. plugin vs engine DLL) is dropped
+        sb.AppendLine($"    <Reference Include=\"{Xml(include)}\">");
+        sb.AppendLine($"      <HintPath>{Xml(hintPath)}</HintPath>");
         sb.AppendLine($"      <Private>{(copyLocal ? "true" : "false")}</Private>");
         sb.AppendLine("    </Reference>");
     }
+
+    /// <summary>XML-escapes a value for safe interpolation into a generated .csproj.</summary>
+    private static string Xml(string value) => System.Security.SecurityElement.Escape(value) ?? value;
 
     // ================================================================
     //  Helpers (kept stable for callers outside this class)
@@ -431,7 +459,7 @@ public static class ScriptCompiler
 
             sb.AppendLine("  <ItemGroup>");
             foreach (var pkg in filtered)
-                sb.AppendLine($"    <PackageReference Include=\"{pkg.Name}\" Version=\"{pkg.Version}\" />");
+                sb.AppendLine($"    <PackageReference Include=\"{Xml(pkg.Name)}\" Version=\"{Xml(pkg.Version)}\" />");
             sb.AppendLine("  </ItemGroup>");
         }
         catch

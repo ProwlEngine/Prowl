@@ -88,6 +88,15 @@ Shader "Paper/UI"
             return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
         }
 
+        // Single-channel SDF text: width of the distance range in atlas texels (matches Scribe's
+        // FontSystem.DistanceRange), and the screen-space span of one unit at this fragment.
+        const float sdfPxRange = 4.0;
+        float sdfScreenPxRange(vec2 uv) {
+            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+            vec2 screenTexSize = vec2(1.0) / fwidth(uv);
+            return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+        }
+
         [shader("vertex")]
         Varyings Vertex(VertexInput input)
         {
@@ -110,8 +119,14 @@ Shader "Paper/UI"
                 color = lerp(Mat.brushColor1, Mat.brushColor2, factor);
             }
 
+            // SDF text mode: UV.x >= 2.0. The atlas holds a single-channel signed distance field
+            // (replicated across RGB); reconstruct sharp coverage from it.
             if (input.fragTexCoord.x >= 2.0) {
-                return color * Mat.texture0.Sample(input.fragTexCoord - float2(2.0)) * mask;
+                float2 uv = input.fragTexCoord - float2(2.0);
+                float sd = Mat.texture0.Sample(uv).r;
+                float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
+                float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+                return color * coverage * mask;
             }
 
             float2 pixelSize = fwidth(input.fragTexCoord);
