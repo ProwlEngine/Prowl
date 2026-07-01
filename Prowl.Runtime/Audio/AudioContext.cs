@@ -454,7 +454,7 @@ public sealed class AudioBuffer
         {
             unsafe
             {
-                if (output?.Length < buffer.Length)
+                if (output == null || output.Length < buffer.Length)
                     output = new float[buffer.Length];
 
                 fixed (float* pSrc = &buffer[0], pDst = &output[0])
