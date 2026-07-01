@@ -246,6 +246,12 @@ public class Transform
         _version++;
     }
 
+    /// <summary>
+    /// Bump <see cref="Version"/> to signal the world transform changed for a reason other than a
+    /// local setter (e.g. reparenting under a new parent while keeping local values).
+    /// </summary>
+    public void MarkChanged() => _version++;
+
     private float MakeSafe(float v) => float.IsNaN(v) ? 0 : v;
     private Float3 MakeSafe(Float3 v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z));
     private Quaternion MakeSafe(Quaternion v) => new(MakeSafe(v.X), MakeSafe(v.Y), MakeSafe(v.Z), MakeSafe(v.W));
