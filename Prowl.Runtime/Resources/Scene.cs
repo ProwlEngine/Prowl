@@ -697,7 +697,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         // Renderables are now collected per-camera inside pipeline.Render()
 
-        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
+        // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a
+        // child camera once per active ancestor - Distinct() prevents rendering it multiple times.
+        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).Distinct().ToList();
 
         Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
 
