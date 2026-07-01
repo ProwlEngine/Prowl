@@ -14,8 +14,8 @@ internal unsafe partial class D3D11Buffer : DeviceBuffer
     private ComPtr<ID3D11Buffer> _buffer;
     private readonly object _accessViewLock = new();
 
-    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs = [];
-    private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs = [];
+    private Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs = [];
+    private Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs = [];
 
     private readonly uint _structureByteStride;
     private readonly bool _useTypedHlslBinding;
@@ -40,20 +40,27 @@ internal unsafe partial class D3D11Buffer : DeviceBuffer
         _structureByteStride = structureByteStride;
         _useTypedHlslBinding = useTypedHlslBinding;
 
+        CreateNativeBuffer();
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
+    }
+
+    private void CreateNativeBuffer()
+    {
         BufferDesc bd = new()
         {
-            ByteWidth = sizeInBytes,
-            BindFlags = (uint)D3D11Formats.VdToD3D11BindFlags(usage),
+            ByteWidth = SizeInBytes,
+            BindFlags = (uint)D3D11Formats.VdToD3D11BindFlags(Usage),
             Usage = Silk.NET.Direct3D11.Usage.Default,
         };
 
-        if ((usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
-            || (usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
+        if ((Usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly
+            || (Usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite)
         {
-            if (useTypedHlslBinding)
+            if (_useTypedHlslBinding)
             {
                 bd.MiscFlags |= (uint)ResourceMiscFlag.BufferStructured;
-                bd.StructureByteStride = structureByteStride;
+                bd.StructureByteStride = _structureByteStride;
             }
             else
             {
@@ -61,17 +68,17 @@ internal unsafe partial class D3D11Buffer : DeviceBuffer
             }
         }
 
-        if ((usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
+        if ((Usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
         {
             bd.MiscFlags |= (uint)ResourceMiscFlag.DrawindirectArgs;
         }
 
-        if ((usage & BufferUsage.Dynamic) == BufferUsage.Dynamic)
+        if ((Usage & BufferUsage.Dynamic) == BufferUsage.Dynamic)
         {
             bd.Usage = Silk.NET.Direct3D11.Usage.Dynamic;
             bd.CPUAccessFlags = (uint)CpuAccessFlag.Write;
         }
-        else if ((usage & BufferUsage.Staging) == BufferUsage.Staging)
+        else if ((Usage & BufferUsage.Staging) == BufferUsage.Staging)
         {
             bd.Usage = Silk.NET.Direct3D11.Usage.Staging;
             bd.CPUAccessFlags = (uint)(CpuAccessFlag.Read | CpuAccessFlag.Write);
@@ -81,8 +88,51 @@ internal unsafe partial class D3D11Buffer : DeviceBuffer
         SilkMarshal.ThrowHResult(_device->CreateBuffer(in bd, null, &pBuffer));
         _buffer = default;
         _buffer.Handle = pBuffer;
+    }
 
-        _gd.RecordBufferAllocation(Usage, SizeInBytes);
+    protected internal override void OrphanCore(GraphicsDevice device, ulong inFlightFrameId)
+    {
+        ComPtr<ID3D11Buffer> retiredBuffer = _buffer;
+        Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> retiredSrvs = _srvs;
+        Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> retiredUavs = _uavs;
+
+        lock (_accessViewLock)
+        {
+            _srvs = [];
+            _uavs = [];
+        }
+
+        CreateNativeBuffer();
+
+        device.DisposeWhenFrameComplete(
+            inFlightFrameId,
+            new RetiredNativeBuffer(retiredBuffer, retiredSrvs, retiredUavs));
+    }
+
+    private sealed class RetiredNativeBuffer : IDisposable
+    {
+        private readonly ComPtr<ID3D11Buffer> _buffer;
+        private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> _srvs;
+        private readonly Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> _uavs;
+
+        public RetiredNativeBuffer(
+            ComPtr<ID3D11Buffer> buffer,
+            Dictionary<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> srvs,
+            Dictionary<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> uavs)
+        {
+            _buffer = buffer;
+            _srvs = srvs;
+            _uavs = uavs;
+        }
+
+        public void Dispose()
+        {
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11ShaderResourceView>> kvp in _srvs)
+                kvp.Value.Dispose();
+            foreach (KeyValuePair<OffsetSizePair, ComPtr<ID3D11UnorderedAccessView>> kvp in _uavs)
+                kvp.Value.Dispose();
+            _buffer.Dispose();
+        }
     }
 
     public override string Name

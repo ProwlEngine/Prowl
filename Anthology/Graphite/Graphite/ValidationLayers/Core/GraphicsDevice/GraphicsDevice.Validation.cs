@@ -70,23 +70,6 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    private static void Map_CheckBufferNotInFlight(MappableResource resource, MapMode mode)
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer buffer)
-            buffer.CheckNotInFlightForWrite(nameof(Map));
-    }
-
-    private static void UpdateBuffer_CheckBufferNotInFlight(DeviceBuffer buffer)
-    {
-        if (!ValidationEnabled)
-            return;
-
-        buffer.CheckNotInFlightForWrite(nameof(UpdateBuffer));
-    }
-
     private static void Map_CheckResource(MappableResource resource, MapMode mode, uint subresource)
     {
         if (!ValidationEnabled)

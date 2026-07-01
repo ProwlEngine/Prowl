@@ -1,55 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace Prowl.Graphite;
 
 public abstract partial class CommandBuffer
 {
-    private List<DeviceBuffer>? _referencedBuffers;
-
-    private protected void TrackReferencedBuffer(DeviceBuffer buffer)
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        if (buffer != null)
-            (_referencedBuffers ??= new()).Add(buffer);
-    }
-
-    private protected void SetProperties_TrackReferencedBuffers(PropertySet properties)
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        foreach (KeyValuePair<PropertyID, PropertyEntry> entry in properties.Entries)
-        {
-            DeviceBufferRange? range = entry.Value.Buffer;
-            if (range.HasValue && range.Value.Buffer != null)
-                (_referencedBuffers ??= new()).Add(range.Value.Buffer);
-        }
-    }
-
-    private protected void ClearCachedState_ClearReferencedBuffers()
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        _referencedBuffers?.Clear();
-    }
-
-    internal void SubmitCommands_MarkReferencedBuffersInFlight(GraphicsDevice device, ulong frameId)
-    {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
-        if (_referencedBuffers == null)
-            return;
-
-        foreach (DeviceBuffer buffer in _referencedBuffers)
-            buffer.SubmitCommands_MarkInFlight(device, frameId);
-    }
-
     private static void SetVertexSource_CheckNonNull(IVertexSource source)
     {
         if (!GraphicsDevice.ValidationEnabled)

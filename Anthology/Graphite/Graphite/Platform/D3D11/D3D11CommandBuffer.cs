@@ -247,7 +247,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         bool has = _currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out uint count);
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
-        TrackReferencedBuffer(ib);
+        ib.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
 
         Format dxgiFmt = D3D11Formats.ToDxgiFormat(fmt);
 
@@ -426,6 +426,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     {
         PreDrawCommand();
 
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(indirectBuffer);
         uint currentOffset = offset;
         for (uint i = 0; i < drawCount; i++)
@@ -440,6 +441,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
         PreDrawCommand();
         ResolveAndBindIndexBuffer();
 
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(indirectBuffer);
         uint currentOffset = offset;
         for (uint i = 0; i < drawCount; i++)
@@ -475,6 +477,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
     private protected override void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset)
     {
         PreDispatchCommand();
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(indirectBuffer);
         Ctx->DispatchIndirect(d3d11Buffer.Buffer, offset);
     }
@@ -511,6 +514,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             case ResourceKind.UniformBuffer:
                 {
                     DeviceBufferRange range = ResolveUboD3D11(in elem, isCompute, setIdx);
+                    range.Buffer?.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
                     BindUniformBuffer(range, bindingIndex, stages);
                     break;
                 }
@@ -518,7 +522,10 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                 {
                     DeviceBufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
                     if (range.Buffer != null)
+                    {
+                        range.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
                         BindStorageBufferView(range, bindingIndex, stages);
+                    }
                     else
                         BindNullStorageBuffer(bindingIndex, stages);
                     break;
@@ -528,6 +535,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
                     DeviceBufferRange range = ResolveStorageBufferD3D11(in elem, isCompute, setIdx);
                     if (range.Buffer != null)
                     {
+                        range.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
                         ID3D11UnorderedAccessView* uav = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(range.Buffer)
                             .GetUnorderedAccessView(range.Offset, range.SizeInBytes);
 
@@ -783,7 +791,7 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
             _currentVertexSource.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
-            TrackReferencedBuffer(binding.Buffer);
+            binding.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
 
             D3D11Buffer d3d11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(binding.Buffer);
             UnbindUAVBuffer(binding.Buffer);
@@ -1309,6 +1317,8 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
             CopyBuffer(staging, 0, buffer, bufferOffsetInBytes, sizeInBytes);
             _submittedStagingBuffers.Add(staging);
         }
+
+        buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
     }
 
     private void UpdateSubresource_Workaround(
@@ -1348,6 +1358,9 @@ internal unsafe partial class D3D11CommandBuffer : CommandBuffer
 
     private protected override void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
+        source.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
+        destination.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
+
         D3D11Buffer srcD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(source);
         D3D11Buffer dstD3D11Buffer = Util.AssertSubtype<DeviceBuffer, D3D11Buffer>(destination);
 

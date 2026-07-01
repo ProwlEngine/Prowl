@@ -10,9 +10,9 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkBuffer : DeviceBuffer
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly VkBufferHandle _deviceBuffer;
-    private readonly VkMemoryBlock _memory;
-    private readonly MemoryRequirements _bufferMemoryRequirements;
+    private VkBufferHandle _deviceBuffer;
+    private VkMemoryBlock _memory;
+    private MemoryRequirements _bufferMemoryRequirements;
     public ResourceRefCount RefCount { get; }
     private bool _destroyed;
     private string _name;
@@ -32,25 +32,34 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         SizeInBytes = sizeInBytes;
         Usage = usage;
 
+        CreateNativeBuffer();
+
+        RefCount = new ResourceRefCount(DisposeCore);
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
+    }
+
+    private void CreateNativeBuffer()
+    {
         BufferUsageFlags vkUsage = BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit;
-        if ((usage & BufferUsage.VertexBuffer) == BufferUsage.VertexBuffer)
+        if ((Usage & BufferUsage.VertexBuffer) == BufferUsage.VertexBuffer)
         {
             vkUsage |= BufferUsageFlags.VertexBufferBit;
         }
-        if ((usage & BufferUsage.IndexBuffer) == BufferUsage.IndexBuffer)
+        if ((Usage & BufferUsage.IndexBuffer) == BufferUsage.IndexBuffer)
         {
             vkUsage |= BufferUsageFlags.IndexBufferBit;
         }
-        if ((usage & BufferUsage.UniformBuffer) == BufferUsage.UniformBuffer)
+        if ((Usage & BufferUsage.UniformBuffer) == BufferUsage.UniformBuffer)
         {
             vkUsage |= BufferUsageFlags.UniformBufferBit;
         }
-        if ((usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite
-            || (usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly)
+        if ((Usage & BufferUsage.StructuredBufferReadWrite) == BufferUsage.StructuredBufferReadWrite
+            || (Usage & BufferUsage.StructuredBufferReadOnly) == BufferUsage.StructuredBufferReadOnly)
         {
             vkUsage |= BufferUsageFlags.StorageBufferBit;
         }
-        if ((usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
+        if ((Usage & BufferUsage.IndirectBuffer) == BufferUsage.IndirectBuffer)
         {
             vkUsage |= BufferUsageFlags.IndirectBufferBit;
         }
@@ -58,10 +67,10 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         BufferCreateInfo bufferCI = new()
         {
             SType = StructureType.BufferCreateInfo,
-            Size = sizeInBytes,
+            Size = SizeInBytes,
             Usage = vkUsage
         };
-        _gd.Vk.CreateBuffer(gd.Device, in bufferCI, null, out _deviceBuffer).CheckResult();
+        _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _deviceBuffer).CheckResult();
 
         bool prefersDedicatedAllocation;
         if (_gd.GetBufferMemoryRequirements2 != null)
@@ -86,12 +95,12 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         }
         else
         {
-            _gd.Vk.GetBufferMemoryRequirements(gd.Device, _deviceBuffer, out _bufferMemoryRequirements);
+            _gd.Vk.GetBufferMemoryRequirements(_gd.Device, _deviceBuffer, out _bufferMemoryRequirements);
             prefersDedicatedAllocation = false;
         }
 
-        bool isStaging = (usage & BufferUsage.Staging) == BufferUsage.Staging;
-        bool hostVisible = isStaging || (usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
+        bool isStaging = (Usage & BufferUsage.Staging) == BufferUsage.Staging;
+        bool hostVisible = isStaging || (Usage & BufferUsage.Dynamic) == BufferUsage.Dynamic;
 
         MemoryPropertyFlags memoryPropertyFlags =
             hostVisible
@@ -101,7 +110,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         {
             // Use "host cached" memory for staging when available, for better performance of GPU -> CPU transfers
             bool hostCachedAvailable = _gd.Vk.TryFindMemoryType(
-                gd.PhysicalDeviceMemProperties,
+                _gd.PhysicalDeviceMemProperties,
                 _bufferMemoryRequirements.MemoryTypeBits,
                 memoryPropertyFlags | MemoryPropertyFlags.HostCachedBit,
                 out _);
@@ -111,8 +120,8 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             }
         }
 
-        VkMemoryBlock memoryToken = gd.MemoryManager.Allocate(
-            gd.PhysicalDeviceMemProperties,
+        VkMemoryBlock memoryToken = _gd.MemoryManager.Allocate(
+            _gd.PhysicalDeviceMemProperties,
             _bufferMemoryRequirements.MemoryTypeBits,
             memoryPropertyFlags,
             hostVisible,
@@ -122,11 +131,37 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             default,
             _deviceBuffer);
         _memory = memoryToken;
-        _gd.Vk.BindBufferMemory(gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
+        _gd.Vk.BindBufferMemory(_gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
+    }
 
-        RefCount = new ResourceRefCount(DisposeCore);
+    protected internal override void OrphanCore(GraphicsDevice device, ulong inFlightFrameId)
+    {
+        VkBufferHandle retiredBuffer = _deviceBuffer;
+        VkMemoryBlock retiredMemory = _memory;
 
-        _gd.RecordBufferAllocation(Usage, SizeInBytes);
+        CreateNativeBuffer();
+
+        device.DisposeWhenFrameComplete(inFlightFrameId, new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory));
+    }
+
+    private sealed class RetiredNativeBuffer : IDisposable
+    {
+        private readonly VkGraphicsDevice _gd;
+        private readonly VkBufferHandle _buffer;
+        private readonly VkMemoryBlock _memory;
+
+        public RetiredNativeBuffer(VkGraphicsDevice gd, VkBufferHandle buffer, VkMemoryBlock memory)
+        {
+            _gd = gd;
+            _buffer = buffer;
+            _memory = memory;
+        }
+
+        public void Dispose()
+        {
+            _gd.Vk.DestroyBuffer(_gd.Device, _buffer, null);
+            _gd.MemoryManager.Free(_memory);
+        }
     }
 
     public override string Name

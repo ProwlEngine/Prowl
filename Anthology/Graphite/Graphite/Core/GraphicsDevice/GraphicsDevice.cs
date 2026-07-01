@@ -15,6 +15,7 @@ public abstract partial class GraphicsDevice : IDisposable
 {
     private readonly object _deferredDisposalLock = new();
     private readonly List<IDisposable> _disposables = [];
+    private List<IDisposable>[] _frameRetiredDisposables;
     private Sampler _aniso4xSampler;
     private bool _disposed;
     private readonly object _nullTextureLock = new();
@@ -194,8 +195,37 @@ public abstract partial class GraphicsDevice : IDisposable
         ulong frameId = ++_frameIdCounter;
         uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
         Frame frame = BeginFrameCore(frameId, ringSlot);
+        FlushFrameRetiredDisposables(ringSlot);
         _currentFrame = frame;
         return frame;
+    }
+
+    /// <summary>
+    /// Schedules the given object for disposal once the frame identified by <paramref name="frameId"/> has completed
+    /// on the GPU. Unlike <see cref="DisposeWhenIdle"/>, this does not wait for the whole device to go idle: it is
+    /// freed the next time this frame's ring slot is reused, which <see cref="BeginFrame"/> already guarantees means
+    /// the prior occupant of that slot has finished on the GPU.
+    /// </summary>
+    /// <param name="frameId">The frame whose completion should gate disposal.</param>
+    /// <param name="disposable">An object to dispose once <paramref name="frameId"/> has completed.</param>
+    internal void DisposeWhenFrameComplete(ulong frameId, IDisposable disposable)
+    {
+        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
+        lock (_deferredDisposalLock)
+        {
+            _frameRetiredDisposables[ringSlot].Add(disposable);
+        }
+    }
+
+    private void FlushFrameRetiredDisposables(uint ringSlot)
+    {
+        lock (_deferredDisposalLock)
+        {
+            List<IDisposable> pending = _frameRetiredDisposables[ringSlot];
+            foreach (IDisposable disposable in pending)
+                disposable.Dispose();
+            pending.Clear();
+        }
     }
 
     /// <summary>
@@ -327,6 +357,9 @@ public abstract partial class GraphicsDevice : IDisposable
     protected void InitializeFrameOptions(GraphicsDeviceOptions options)
     {
         _maxFramesInFlight = options.MaxFramesInFlight == 0 ? 3 : options.MaxFramesInFlight;
+        _frameRetiredDisposables = new List<IDisposable>[_maxFramesInFlight];
+        for (int i = 0; i < _frameRetiredDisposables.Length; i++)
+            _frameRetiredDisposables[i] = [];
         _transientInitialSize = options.TransientBufferInitialSize == 0 ? 4 * 1024 * 1024 : options.TransientBufferInitialSize;
         _transientSoftCapBytes = options.TransientBufferSoftCapBytes == 0 ? 64 * 1024 * 1024 : options.TransientBufferSoftCapBytes;
         _transientHardCapBytes = options.TransientBufferHardCapBytes == 0 ? 256 * 1024 * 1024 : options.TransientBufferHardCapBytes;
@@ -472,7 +505,9 @@ public abstract partial class GraphicsDevice : IDisposable
     public MappedResource Map(MappableResource resource, MapMode mode, uint subresource)
     {
         Map_CheckResource(resource, mode, subresource);
-        Map_CheckBufferNotInFlight(resource, mode);
+
+        if ((mode == MapMode.Write || mode == MapMode.ReadWrite) && resource is DeviceBuffer mapBuffer)
+            mapBuffer.EnsureWritable();
 
         MappedResource mapped = MapCore(resource, mode, subresource);
         RecordBufferOp(BufferOpBin.Map, mapped.SizeInBytes);
@@ -807,7 +842,7 @@ public abstract partial class GraphicsDevice : IDisposable
         {
             return;
         }
-        UpdateBuffer_CheckBufferNotInFlight(buffer);
+        buffer.EnsureWritable();
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
         RecordBufferOp(BufferOpBin.Update, sizeInBytes);
     }

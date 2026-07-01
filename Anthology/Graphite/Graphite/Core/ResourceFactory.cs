@@ -154,7 +154,7 @@ public abstract partial class ResourceFactory
     {
         CreateBuffer_CheckDescription(ref description);
         DeviceBuffer buffer = CreateBufferCore(ref description);
-        buffer.CreateBuffer_SetTransientWrites(description.TransientWrites);
+        buffer.SetTransientWrites(description.TransientWrites);
         return buffer;
     }
 

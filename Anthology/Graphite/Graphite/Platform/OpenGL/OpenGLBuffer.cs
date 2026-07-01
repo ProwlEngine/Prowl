@@ -108,4 +108,45 @@ internal unsafe partial class OpenGLBuffer : DeviceBuffer, OpenGLDeferredResourc
         _gl.DeleteBuffer(_buffer);
         CheckLastError();
     }
+
+    protected internal override void OrphanCore(GraphicsDevice device, ulong inFlightFrameId)
+    {
+        if (!Created)
+            return;
+
+        uint retiredBuffer = _buffer;
+        Created = false;
+        _buffer = 0;
+
+        device.DisposeWhenFrameComplete(inFlightFrameId, new RetiredNativeBuffer(_gd, retiredBuffer));
+    }
+
+    private sealed class RetiredNativeBuffer : IDisposable, OpenGLDeferredResource
+    {
+        private readonly OpenGLGraphicsDevice _gd;
+        private readonly uint _buffer;
+
+        public RetiredNativeBuffer(OpenGLGraphicsDevice gd, uint buffer)
+        {
+            _gd = gd;
+            _buffer = buffer;
+        }
+
+        public bool Created => true;
+
+        public void EnsureResourcesCreated()
+        {
+        }
+
+        public void Dispose()
+        {
+            _gd.EnqueueDisposal(this);
+        }
+
+        public void DestroyGLResources()
+        {
+            _gd.GL.DeleteBuffer(_buffer);
+            CheckLastError();
+        }
+    }
 }

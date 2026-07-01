@@ -212,6 +212,7 @@ internal unsafe class OpenGLCommandExecutor
     {
         PreDrawCommand();
 
+        MarkBufferInFlight(indirectBuffer);
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
         _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
         CheckLastError();
@@ -238,6 +239,7 @@ internal unsafe class OpenGLCommandExecutor
     {
         PreDrawCommand();
 
+        MarkBufferInFlight(indirectBuffer);
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
         _gl.BindBuffer(BufferTargetARB.DrawIndirectBuffer, glBuffer.Buffer);
         CheckLastError();
@@ -289,11 +291,8 @@ internal unsafe class OpenGLCommandExecutor
 
     private void MarkBufferInFlight(DeviceBuffer buffer)
     {
-        if (!GraphicsDevice.ValidationEnabled)
-            return;
-
         if (buffer != null)
-            buffer.SubmitCommands_MarkInFlight(_gd, _gd.ExecutorActiveFrame.FrameId);
+            buffer.MarkInFlight(_gd, _gd.ExecutorActiveFrame.FrameId);
     }
 
     private void ResolveIndexBufferForDraw()
@@ -392,6 +391,7 @@ internal unsafe class OpenGLCommandExecutor
             return;
         }
 
+        MarkBufferInFlight(range.Buffer);
         OpenGLBuffer glUB = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
         glUB.EnsureResourcesCreated();
 
@@ -462,6 +462,7 @@ internal unsafe class OpenGLCommandExecutor
         }
 
         DeviceBufferRange range = entry.Buffer.Value;
+        MarkBufferInFlight(range.Buffer);
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(range.Buffer);
         glBuffer.EnsureResourcesCreated();
 
@@ -651,6 +652,7 @@ internal unsafe class OpenGLCommandExecutor
     {
         PreDispatchCommand();
 
+        MarkBufferInFlight(indirectBuffer);
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(indirectBuffer);
         _gl.BindBuffer(BufferTargetARB.DispatchIndirectBuffer, glBuffer.Buffer);
         CheckLastError();
@@ -1182,6 +1184,7 @@ internal unsafe class OpenGLCommandExecutor
 
     public void UpdateBuffer(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr dataPtr, uint sizeInBytes)
     {
+        MarkBufferInFlight(buffer);
         OpenGLBuffer glBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(buffer);
         glBuffer.EnsureResourcesCreated();
 
@@ -1517,6 +1520,8 @@ internal unsafe class OpenGLCommandExecutor
 
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
+        MarkBufferInFlight(source);
+        MarkBufferInFlight(destination);
         OpenGLBuffer srcGLBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(source);
         OpenGLBuffer dstGLBuffer = Util.AssertSubtype<DeviceBuffer, OpenGLBuffer>(destination);
 

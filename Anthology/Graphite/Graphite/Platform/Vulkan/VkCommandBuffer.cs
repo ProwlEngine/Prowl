@@ -280,6 +280,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         PreDrawCommand();
         BindVertexBuffersFromSource();
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
@@ -290,6 +291,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         PreDrawCommand();
         BindVertexBuffersFromSource();
         BindIndexBufferFromSource();
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndexedIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
@@ -309,7 +311,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             VertexLayoutDescription layout = layouts[slot];
             _currentVertexSource!.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
-            TrackReferencedBuffer(binding.Buffer);
+            binding.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
             buffers[slot] = vkBuffer.DeviceBuffer;
@@ -327,7 +329,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _currentIndexCount = indexCount;
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
-        TrackReferencedBuffer(ib);
+        ib.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
         _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));
@@ -423,6 +425,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         PreDispatchCommand();
 
+        indirectBuffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
         _gd.Vk.CmdDispatchIndirect(_cb, vkBuffer.DeviceBuffer, offset);
@@ -779,6 +782,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 case ResourceKind.UniformBuffer:
                     {
                         DeviceBufferRange range = ResolveUboRange(programKey, (uint)setIdx, in elem, reportMissing: false);
+                        range.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
                         VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         dst[n++] = vkBuf.DeviceBuffer.Handle;
                         dst[n++] = range.SizeInBytes;
@@ -789,6 +793,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 case ResourceKind.StructuredBufferReadWrite:
                     {
                         DeviceBufferRange range = ResolveStructuredRange(in elem, setIdx, reportMissing: false);
+                        range.Buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
                         VkBuffer vkBuf = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         dst[n++] = vkBuf.DeviceBuffer.Handle;
                         dst[n++] = range.Offset;
@@ -1154,6 +1159,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         VkBuffer stagingBuffer = GetStagingBuffer(sizeInBytes);
         _gd.UpdateBuffer(stagingBuffer, 0, source, sizeInBytes);
         CopyBuffer(stagingBuffer, 0, buffer, bufferOffsetInBytes, sizeInBytes);
+        buffer.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
     }
 
     private protected override void CopyBufferCore(
@@ -1164,6 +1170,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         uint sizeInBytes)
     {
         EnsureNoRenderPass();
+
+        source.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
+        destination.MarkInFlight(_gd, _gd.CurrentFrame.FrameId);
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
         _currentStagingInfo.Resources.Add(srcVkBuffer.RefCount);

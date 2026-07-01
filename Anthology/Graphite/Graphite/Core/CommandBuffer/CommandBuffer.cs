@@ -66,7 +66,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _framebufferOutputs = null;
         _currentVertexSource = null;
         _activeProperties.Clear();
-        ClearCachedState_ClearReferencedBuffers();
     }
 
     /// <summary>
@@ -148,7 +147,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
         _activeProperties.ApplyOther(properties);
-        SetProperties_TrackReferencedBuffers(properties);
         SetPropertiesCore(properties);
     }
 
@@ -376,7 +374,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
         Draw_PreDrawValidation();
-        TrackReferencedBuffer(indirectBuffer);
 
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
     }
@@ -409,7 +406,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndirect_CheckOffset(offset);
         DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
         Draw_PreDrawValidation();
-        TrackReferencedBuffer(indirectBuffer);
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
     }
@@ -444,7 +440,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
-        TrackReferencedBuffer(indirectBuffer);
         DispatchIndirectCore(indirectBuffer, offset);
     }
 
@@ -621,7 +616,6 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
             return;
         }
 
-        TrackReferencedBuffer(buffer);
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
     }
 
