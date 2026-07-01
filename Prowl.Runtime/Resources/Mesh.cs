@@ -694,8 +694,8 @@ public class Mesh : EngineObject, ISerializable
             throw new ArgumentNullException();
 
         bool empty = true;
-        Float3 minVec = Float3.One * 99999f;
-        Float3 maxVec = Float3.One * -99999f;
+        Float3 minVec = Float3.One * float.MaxValue;
+        Float3 maxVec = Float3.One * float.MinValue;
         foreach (Float3 ptVector in vertices)
         {
             minVec = Maths.Min(minVec, ptVector);
