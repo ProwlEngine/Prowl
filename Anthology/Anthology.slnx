@@ -13,7 +13,6 @@
     <Project Path="Wicked/Prowl.Wicked/Prowl.Wicked.csproj" />
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
     <Project Path="Drift/Drift/Drift.csproj" />
-    <Project Path="Slang/Prowl.Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
     <Project Path="Graphite/Compiler/Prowl.Graphite.Compiler.csproj" />
     <Project Path="Graphite/ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
