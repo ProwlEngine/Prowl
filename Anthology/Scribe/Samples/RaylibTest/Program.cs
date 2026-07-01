@@ -91,6 +91,36 @@ public sealed class RaylibMarkdownImageProvider : IMarkdownImageProvider, IDispo
 
 public class RaylibFontRenderer : IFontRenderer
 {
+    private const string SdfFragmentShader = @"#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+out vec4 finalColor;
+uniform sampler2D texture0;
+const float pxRange = 4.0;
+float median(float r, float g, float b) { return max(min(r, g), min(max(r, g), b)); }
+float screenPxRange() {
+    vec2 unitRange = vec2(pxRange) / vec2(textureSize(texture0, 0));
+    vec2 screenTexSize = vec2(1.0) / fwidth(fragTexCoord);
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+void main() {
+    vec3 s = texture(texture0, fragTexCoord).rgb;
+    float sd = median(s.r, s.g, s.b);
+    float d = screenPxRange() * (sd - 0.5);
+    float coverage = clamp(d + 0.5, 0.0, 1.0);
+    finalColor = vec4(fragColor.rgb, fragColor.a * coverage);
+}";
+
+    private Shader _sdfShader;
+    private bool _shaderLoaded;
+
+    private void EnsureShader()
+    {
+        if (_shaderLoaded) return;
+        _sdfShader = Raylib_cs.Raylib.LoadShaderFromMemory(null, SdfFragmentShader);
+        _shaderLoaded = true;
+    }
+
     public object CreateTexture(int width, int height)
     {
         unsafe
@@ -106,7 +136,8 @@ public class RaylibFontRenderer : IFontRenderer
                     Mipmaps = 1
                 };
                 var texture = Raylib_cs.Raylib.LoadTextureFromImage(image);
-                Raylib_cs.Raylib.SetTextureFilter(texture, TextureFilter.Point);
+                // Bilinear so the distance field interpolates smoothly between texels (SDF needs it).
+                Raylib_cs.Raylib.SetTextureFilter(texture, TextureFilter.Bilinear);
                 return texture;
             }
         }
@@ -115,23 +146,21 @@ public class RaylibFontRenderer : IFontRenderer
     public void UpdateTextureRegion(object texture, AtlasRect bounds, byte[] data)
     {
         if (texture is not Texture2D tex) return;
-        byte[] rgbaData = new byte[bounds.Width * bounds.Height * 4];
-        for (int i = 0; i < data.Length; i++)
-        {
-            rgbaData[i * 4] = 255;
-            rgbaData[i * 4 + 1] = 255;
-            rgbaData[i * 4 + 2] = 255;
-            rgbaData[i * 4 + 3] = data[i];
-        }
+        // Scribe supplies the region as RGBA (width*height*4: R=G=B=SDF, A=255), matching the
+        // R8G8B8A8 atlas texture, so upload it directly.
         Rectangle updateRect = new Rectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        Raylib_cs.Raylib.UpdateTextureRec(tex, updateRect, rgbaData);
+        Raylib_cs.Raylib.UpdateTextureRec(tex, updateRect, data);
     }
 
     public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
     {
         if (texture is not Texture2D tex) return;
         if (vertices.Length == 0 || indices.Length == 0) return;
+        EnsureShader();
+
+        // Flush any pending default-shader geometry, then draw the glyph quads through the SDF shader.
         Rlgl.DrawRenderBatchActive();
+        Raylib_cs.Raylib.BeginShaderMode(_sdfShader);
         Rlgl.Begin(DrawMode.Triangles);
         Rlgl.DisableBackfaceCulling();
         Rlgl.DisableDepthTest();
@@ -144,8 +173,9 @@ public class RaylibFontRenderer : IFontRenderer
             Rlgl.Vertex2f(vertex.Position.X, vertex.Position.Y);
         }
         Rlgl.End();
-        Rlgl.DrawRenderBatchActive();
+        Rlgl.DrawRenderBatchActive(); // flush while the SDF shader is still active
         Rlgl.SetTexture(0);
+        Raylib_cs.Raylib.EndShaderMode();
     }
 }
 
