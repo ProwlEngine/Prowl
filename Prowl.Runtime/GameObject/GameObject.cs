@@ -301,6 +301,12 @@ public class GameObject : EngineObject, ISerializable
             }
         }
 
+        // When worldPositionStays is true the local setters above already bumped the version; when
+        // false, the local values are unchanged but the new parent changes the world transform, so
+        // signal the change explicitly (world-space caches keyed on Version would otherwise go stale).
+        if (!worldPositionStays)
+            Transform.MarkChanged();
+
         HierarchyStateChanged();
 
         return true;
