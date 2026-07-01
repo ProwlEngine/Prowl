@@ -106,8 +106,9 @@ public abstract class Game
                 EndUpdate();
 
                 if (frameCounter++ % 60 == 0)
-                { 
-                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
+                {
+                    double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
+                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
                 }
 
             }
