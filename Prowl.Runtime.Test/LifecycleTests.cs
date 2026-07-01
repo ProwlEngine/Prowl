@@ -55,6 +55,43 @@ public class TestLifecycleComponent : MonoBehaviour
 /// </summary>
 public class LifecycleTests : RuntimeTestBase
 {
+    private sealed class StartOrderComponent : MonoBehaviour
+    {
+        public readonly List<string> Events = [];
+        public override void Start() => Events.Add("Start");
+        public override void FixedUpdate() => Events.Add("FixedUpdate");
+    }
+
+    // Adding a component to an object already in an active scene must fire OnAddedToScene (and OnEnable).
+    [Fact]
+    public void AddComponent_ToObjectInActiveScene_FiresOnAddedToScene()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        scene.Add(go); // in the scene before the component is added
+
+        var comp = go.AddComponent<TestLifecycleComponent>();
+
+        Assert.Contains("OnAddedToScene", comp.Events);
+        Assert.Contains("OnEnable", comp.Events);
+    }
+
+    // Start must run before a component's first FixedUpdate.
+    [Fact]
+    public void FixedUpdate_RunsStartBeforeFirstFixedUpdate()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        var comp = go.AddComponent<StartOrderComponent>();
+        scene.Add(go);
+
+        scene.FixedUpdate();
+
+        Assert.Contains("FixedUpdate", comp.Events);
+        Assert.True(comp.Events.IndexOf("Start") >= 0 && comp.Events.IndexOf("Start") < comp.Events.IndexOf("FixedUpdate"),
+            $"Start must precede FixedUpdate; got [{string.Join(", ", comp.Events)}]");
+    }
+
     /// <summary>
     /// Test 1: Adding GameObject to DISABLED Scene
     /// Expected: OnAddedToScene called, OnEnable NOT called (scene disabled)
