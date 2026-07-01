@@ -890,11 +890,13 @@ public class EditorAssetDatabase : IAssetDatabase
             // shader (cached in _shader.instance) until the editor restarts.
             var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
             DisposeAndRemove(guid);
+            ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             if (entry?.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.TryRemove(sub.Guid, out _);
+                    ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);
