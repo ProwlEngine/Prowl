@@ -527,10 +527,7 @@ public class GameObject : EngineObject, ISerializable
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
 
-        // Trigger OnEnable if the GameObject is in an active scene and enabled
-        Scene? scene = Scene;
-        if (scene.IsValid() && scene.IsActive && newComponent.EnabledInHierarchy)
-            newComponent.InternalOnEnable();
+        NotifyComponentAddedToScene(newComponent);
 
         return newComponent;
     }
@@ -567,9 +564,23 @@ public class GameObject : EngineObject, ISerializable
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
 
-        // Trigger OnEnable if the GameObject is in an active scene and enabled
+        NotifyComponentAddedToScene(comp);
+    }
+
+    /// <summary>
+    /// When a component is added to a GameObject that already lives in a scene, it is entering that
+    /// scene now: fire OnAddedToScene (mirroring Scene.AddObject), then OnEnable if the scene is
+    /// active and the component is enabled.
+    /// </summary>
+    private void NotifyComponentAddedToScene(MonoBehaviour comp)
+    {
         Scene? scene = Scene;
-        if (scene.IsValid() && scene.IsActive && comp.EnabledInHierarchy)
+        if (!scene.IsValid()) return;
+
+        try { comp.OnAddedToScene(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+
+        if (scene.IsActive && comp.EnabledInHierarchy)
             comp.InternalOnEnable();
     }
 
