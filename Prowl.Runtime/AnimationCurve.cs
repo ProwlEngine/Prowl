@@ -426,7 +426,7 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
 
     #region Inherited Methods
 
-    public int CompareTo(KeyFrame? other) => Position.CompareTo(other.Position);
+    public int CompareTo(KeyFrame? other) => other is null ? 1 : Position.CompareTo(other.Position);
     public bool Equals(KeyFrame? other) => (this == other);
     public override bool Equals(object? obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
     public override int GetHashCode() =>
