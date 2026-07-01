@@ -94,14 +94,16 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                Input.UpdateActions(delta);
+                // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
+                // UNSCALED delta
+                Input.UpdateActions(Time.UnscaledDeltaTime);
 
                 // UI input runs after low-level Input is fresh and before script Updates
                 UIEventSystem.Tick(time.Time);
 
                 BeginUpdate();
 
-                SimulationStep(delta);
+                SimulationStep(Time.DeltaTime);
 
                 EndUpdate();
 
@@ -259,11 +261,10 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                float delta = Time.DeltaTime;
-                Input.UpdateActions(delta);
+                Input.UpdateActions(Time.UnscaledDeltaTime);
 
                 BeginUpdate();
-                SimulationStep(delta);
+                SimulationStep(Time.DeltaTime);
                 EndUpdate();
 
                 frame++;
