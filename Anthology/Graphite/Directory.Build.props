@@ -1,4 +1,8 @@
 <Project>
+
+    <!-- Inherit the monorepo-wide settings (unified version, MIT license, repo) then add local config. -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
     <PropertyGroup>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
@@ -18,19 +22,12 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <IsPackable>true</IsPackable>
-        <Version>$(GraphiteVersion)</Version>
-
         <Authors>Prowl Group</Authors>
         <Owners>Prowl Group</Owners>
         <Company>Prowl Group</Company>
         <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
 
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageLicenseFile>LICENSE</PackageLicenseFile>
-
-        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Graphite</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
 
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -39,18 +36,14 @@
         <UseLocalProjectReferences Condition="'$(IsPacking)' == ''">true</UseLocalProjectReferences>
     </PropertyGroup>
 
+    <!-- Prowl.Vector is in this monorepo; reference it as a project. Anchored to this props file
+         so the path resolves the same for the libraries and the (deeper) test projects. -->
     <ItemGroup>
-        <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+        <ProjectReference Include="$(MSBuildThisFileDirectory)..\Vector\Vector\Vector.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)README.md"
-              Pack="true"
-              PackagePath="\" />
-    
-        <None Include="$(MSBuildThisFileDirectory)LICENSE"
-              Pack="true"
-              PackagePath="\" />
+        <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(IsPacking)' == 'true'">

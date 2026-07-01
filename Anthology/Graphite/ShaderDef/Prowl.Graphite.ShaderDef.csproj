@@ -13,7 +13,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Prowl.Crumb" Version="0.1.0" />
+        <ProjectReference Include="..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">

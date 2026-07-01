@@ -14,6 +14,10 @@
     <Project Path="Rosetta/Rosetta/Rosetta.csproj" />
     <Project Path="Drift/Drift/Drift.csproj" />
     <Project Path="Slang/Prowl.Slang/Prowl.Slang.csproj" />
+    <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
+    <Project Path="Graphite/Compiler/Prowl.Graphite.Compiler.csproj" />
+    <Project Path="Graphite/ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
+    <Project Path="Graphite/Variants/Prowl.Graphite.Variants.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
@@ -28,5 +32,9 @@
     <Project Path="Wicked/Prowl.Wicked.Tests/Prowl.Wicked.Tests.csproj" />
     <Project Path="Rosetta/Tests/Rosetta.Tests.csproj" />
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
+    <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
+    <Project Path="Graphite/Tests/Compiler/Prowl.Graphite.Compiler.Tests.csproj" />
+    <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
+    <Project Path="Graphite/Tests/Variants/Prowl.Graphite.Variants.Tests.csproj" />
   </Folder>
 </Solution>

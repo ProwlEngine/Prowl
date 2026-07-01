@@ -13,7 +13,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Prowl.Slang" Version="0.3.4" />
+        <ProjectReference Include="..\..\Slang\Prowl.Slang\Prowl.Slang.csproj" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
