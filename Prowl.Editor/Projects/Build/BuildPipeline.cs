@@ -254,12 +254,19 @@ public abstract class BuildPipeline
             }
         }, cancellation);
 
-        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        await process.WaitForExitAsync(cancellation).ConfigureAwait(false);
-
-        if (cancellation.IsCancellationRequested && !process.HasExited)
+        try
         {
-            process.Kill(entireProcessTree: true);
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellation).ConfigureAwait(false);
+        }
+        finally
+        {
+            // On cancellation the awaits above throw before we get here, so the kill must live in a
+            // finally - otherwise the dotnet/MSBuild process tree is orphaned and keeps running.
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+            }
         }
 
         return (process.ExitCode, stdoutBuilder.ToString(), stderrBuilder.ToString());
