@@ -128,6 +128,11 @@ public class AssetWatcher : IDisposable
                     if (existing.Type == FileEventType.Modified && evt.Type == FileEventType.Modified)
                         continue;
 
+                    // Rename + Modified = keep the Rename (it already implies the file's presence and
+                    // content). Letting the Modify win would drop OldPath and mint a duplicate GUID.
+                    if (existing.Type == FileEventType.Renamed && evt.Type == FileEventType.Modified)
+                        continue;
+
                     // Everything else: latest wins
                     coalesced[evt.Path] = evt;
                 }
