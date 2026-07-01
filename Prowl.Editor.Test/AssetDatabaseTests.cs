@@ -23,6 +23,25 @@ public class AssetDatabaseTests : EditorTestHarness
 {
     private Guid CreateScene(string path) => CreateSceneAsset(new Scene(), path);
 
+    // Copying an asset together with its .meta (VCS/user duplicate) must yield a distinct GUID for
+    // the copy - two files can't share one GUID (or one becomes invisible to the database).
+    [Fact]
+    public void CopiedAssetWithMeta_GetsDistinctGuid_OnReopen()
+    {
+        CreateScene("Original.scene");
+        File.Copy(AssetAbsolutePath("Original.scene"), AssetAbsolutePath("Copy.scene"));
+        File.Copy(AssetAbsolutePath("Original.scene.meta"), AssetAbsolutePath("Copy.scene.meta"));
+
+        ReopenDatabase();
+
+        Guid g1 = Assets.PathToGuid("Original.scene");
+        Guid g2 = Assets.PathToGuid("Copy.scene");
+
+        Assert.NotEqual(Guid.Empty, g1);
+        Assert.NotEqual(Guid.Empty, g2);
+        Assert.NotEqual(g1, g2);
+    }
+
     // ---------------------------------------------------------------------
     // CreateAsset / resolve / index
     // ---------------------------------------------------------------------
