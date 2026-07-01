@@ -46,6 +46,8 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void Update()
     {
+        if (handle == IntPtr.Zero) return;
+
         var up = -Transform.Up;
         var forward = Transform.Forward;
         var pos = Transform.Position;
