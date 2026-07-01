@@ -62,7 +62,11 @@ public static class AssetCollector
                 // Build the load path: everything after the last "Resources/" segment, no extension
                 string loadPath = GetResourceLoadPath(entry.Path);
                 if (!string.IsNullOrEmpty(loadPath))
+                {
+                    if (resourcesMap.ContainsKey(loadPath))
+                        Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
                     resourcesMap[loadPath] = entry.Guid;
+                }
             }
         }
 
