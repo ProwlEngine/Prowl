@@ -94,7 +94,33 @@ public class PhysicsWorld
     public int Substep = 2;
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
+    /// <summary>
+    /// Whether Transform edits are pushed into the physics system immediately (before physics queries),
+    /// or only batched right before the FixedUpdate step. Matches Unity's Physics.autoSyncTransforms:
+    /// when true, a query right after moving a Transform sees the new pose; when false, call
+    /// <see cref="SyncTransforms"/> manually (the pre-step sync still happens every FixedUpdate either way).
+    /// This only concerns the transform -> body direction; the body -> transform readback after a step
+    /// is separate and always runs for dynamic/kinematic bodies.
+    /// </summary>
     public bool AutoSyncTransforms = true;
+
+    // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
+    private readonly HashSet<Rigidbody3D> _syncBodies = [];
+
+    internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
+    internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+
+    /// <summary>
+    /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
+    /// before each simulation step and, when <see cref="AutoSyncTransforms"/> is on, before queries.
+    /// Call it manually to make Transform edits visible to queries when auto-sync is off. Only bodies
+    /// whose Transform actually changed since the last sync are updated, so it is cheap when idle.
+    /// </summary>
+    public void SyncTransforms()
+    {
+        foreach (var body in _syncBodies)
+            body?.SyncTransformToBody();
+    }
 
     /// <summary>
     /// When true, uses Jitter2's deterministic island-based solver instead of the regular parallel solver.
@@ -229,6 +255,10 @@ public class PhysicsWorld
         World.PersistentContactManifold = PersistentContactManifold;
         World.SpeculativeRelaxationFactor = SpeculativeRelaxationFactor;
 
+        // Push any user Transform edits into the bodies before stepping (always - this is the
+        // "sync prior to the physics step" that happens regardless of AutoSyncTransforms).
+        SyncTransforms();
+
         World.Step(Time.FixedDeltaTime, UseMultithreading);
     }
 
@@ -237,6 +267,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -251,6 +282,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -279,6 +311,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -293,6 +326,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -321,6 +355,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance, LayerMask layerMask)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -335,6 +370,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo, float maxDistance, LayerMask layerMask)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
@@ -397,6 +433,7 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
@@ -922,6 +959,7 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, LayerMask layerMask)
     {
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         var jPosition = new JVector(position.X, position.Y, position.Z);
         hits.Clear();
 

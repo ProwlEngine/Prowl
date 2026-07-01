@@ -41,6 +41,10 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     private float interpTimer = 0;
 
+    // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
+    // the user actually edited the Transform (not when the physics readback wrote it).
+    private uint _lastSyncedTransformVersion;
+
     /// <summary>
     /// How this body participates in the simulation: <see cref="MotionType.Dynamic"/>,
     /// <see cref="MotionType.Kinematic"/>, or <see cref="MotionType.Static"/>.
@@ -290,6 +294,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         UpdateProperties(_body);
         UpdateShapes(_body);
         UpdateTransform(_body);
+        _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
+        GameObject?.Scene?.Physics?.RegisterBody(this);
         _body.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,
@@ -360,6 +366,12 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (_body == null || _body.Handle.IsZero) return;
 
+        // Dynamic AND kinematic bodies move within the simulation (kinematic via LinearVelocity /
+        // MovePosition), so the transform must follow the body. Only static bodies don't move - writing
+        // their pose back would clobber a script-set transform. (This body->transform readback is
+        // independent of AutoSyncTransforms, which only governs the transform->body direction.)
+        if (motionType == MotionType.Static) return;
+
         interpTimer += Time.DeltaTime;
 
         //_body.PredictPose(interpTimer, out JVector predictedPosition, out JQuaternion predictedOrientation);
@@ -368,6 +380,10 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         Transform.Position = new Float3(predictedPosition.X, predictedPosition.Y, predictedPosition.Z);
         Transform.Rotation = new Quaternion(predictedOrientation.X, predictedOrientation.Y, predictedOrientation.Z, predictedOrientation.W);
+
+        // Remember the version we just wrote so the transform->body sync doesn't treat this
+        // physics-driven change as a user edit and push it straight back.
+        _lastSyncedTransformVersion = Transform.Version;
     }
 
     public override void FixedUpdate()
@@ -430,6 +446,7 @@ public sealed class Rigidbody3D : MonoBehaviour
             _body.BeginCollide -= OnJitterBeginCollide;
             _body.EndCollide -= OnJitterEndCollide;
 
+            GameObject.Scene.Physics.UnregisterBody(this);
             GameObject.Scene.Physics.World?.Remove(_body);
         }
     }
@@ -478,13 +495,25 @@ public sealed class Rigidbody3D : MonoBehaviour
             rb.SetMassInertia(mass);
     }
 
+    /// <summary>Unconditionally pushes the Transform pose into the body. WHEN this runs is controlled
+    /// by the caller (initial creation, the pre-step sync, or an auto-synced query).</summary>
     internal void UpdateTransform(RigidBody rb)
     {
-        if (GameObject?.Scene?.Physics.AutoSyncTransforms ?? true)
-        {
-            rb.Position = new JVector(Transform.Position.X, Transform.Position.Y, Transform.Position.Z);
-            rb.Orientation = new JQuaternion(Transform.Rotation.X, Transform.Rotation.Y, Transform.Rotation.Z, Transform.Rotation.W);
-        }
+        rb.Position = new JVector(Transform.Position.X, Transform.Position.Y, Transform.Position.Z);
+        rb.Orientation = new JQuaternion(Transform.Rotation.X, Transform.Rotation.Y, Transform.Rotation.Z, Transform.Rotation.W);
+    }
+
+    /// <summary>
+    /// Pushes the Transform into the physics body, but only if the Transform changed since the last
+    /// sync (a genuine user edit) - so it never clobbers the simulated pose. Called by the physics
+    /// world before each step and, when AutoSyncTransforms is on, before queries.
+    /// </summary>
+    internal void SyncTransformToBody()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+        if (Transform.Version == _lastSyncedTransformVersion) return;
+        UpdateTransform(_body);
+        _lastSyncedTransformVersion = Transform.Version;
     }
 
     public void AddForce(Float3 velocity)
