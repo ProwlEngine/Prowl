@@ -323,7 +323,11 @@ public class EditorAssetDatabase : IAssetDatabase
                 var entry = _guidToEntry[existingGuid];
                 long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
 
-                if (entry.LastModifiedTicks != currentTicks || !File.Exists(GetCachePath(existingGuid)))
+                // Reimport if the file changed, its cache is missing, OR the importer's version was
+                // bumped (a new editor build with changed import logic must re-run stale caches).
+                if (entry.LastModifiedTicks != currentTicks
+                    || !File.Exists(GetCachePath(existingGuid))
+                    || (importer != null && entry.ImporterVersion != importer.Version))
                     entry.NeedsReimport = true;
 
                 // Update GUID if meta was regenerated with different GUID
