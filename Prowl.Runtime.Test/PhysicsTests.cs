@@ -17,6 +17,16 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class PhysicsTests : RuntimeTestBase
 {
+    // The Mass setter must validate the incoming value (not the backing field); zero/negative mass
+    // would produce a NaN inverse mass in the solver.
+    [Fact]
+    public void Rigidbody3D_Mass_RejectsZeroAndNegative()
+    {
+        var rb = new Rigidbody3D();
+        Assert.Throws<ArgumentException>(() => rb.Mass = 0f);
+        Assert.Throws<ArgumentException>(() => rb.Mass = -5f);
+    }
+
     public override void Dispose()
     {
         // CollisionMatrix is global static state. Boolean32Matrix is a struct wrapping a uint[], so a

@@ -14,6 +14,22 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class SceneManagementTests : RuntimeTestBase
 {
+    // Disposing a scene must actually dispose its GameObjects (roots and children).
+    [Fact]
+    public void Dispose_MarksGameObjectsDisposed()
+    {
+        var scene = CreateScene();
+        var root = CreateGameObject("root");
+        var child = CreateGameObject("child");
+        child.SetParent(root);
+        scene.Add(root);
+
+        scene.Dispose();
+
+        Assert.True(root.IsDisposed, "Root GameObject should be disposed.");
+        Assert.True(child.IsDisposed, "Child GameObject should be disposed.");
+    }
+
     // ---- Add / Remove ----
 
     [Fact]
