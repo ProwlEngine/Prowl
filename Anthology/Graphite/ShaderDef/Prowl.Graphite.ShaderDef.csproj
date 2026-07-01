@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.ShaderDef</PackageId>
+        <Description>The ShaderDef language spec for Prowl.Graphite.</Description>
+        <PackageTags>graphics api DirectX Vulkan OpenGL Metal direct-x direct3D11 direct3D12</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Prowl.Crumb" Version="0.1.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
+        <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
+    </ItemGroup>
+</Project>

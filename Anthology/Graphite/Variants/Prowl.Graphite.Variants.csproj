@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <OutputType>Library</OutputType>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.Variants</PackageId>
+        <Description>The shared keyword and shader-variant system for Prowl.Graphite.</Description>
+        <PackageTags>graphics shader variant keyword</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
+        <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.Variants.Tests" />
+    </ItemGroup>
+</Project>

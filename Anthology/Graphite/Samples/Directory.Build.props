@@ -1,0 +1,11 @@
+<Project>
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Graphite/Prowl.Graphite.csproj" />
+    </ItemGroup>
+</Project>

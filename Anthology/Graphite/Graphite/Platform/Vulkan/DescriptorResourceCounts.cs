@@ -1,0 +1,33 @@
+namespace Prowl.Graphite.Vk;
+
+internal readonly struct DescriptorResourceCounts
+{
+    public readonly uint UniformBufferCount;
+    public readonly uint UniformBufferDynamicCount;
+    public readonly uint SampledImageCount;
+    public readonly uint SamplerCount;
+    public readonly uint StorageBufferCount;
+    public readonly uint StorageBufferDynamicCount;
+    public readonly uint StorageImageCount;
+    public readonly uint CombinedImageSamplerCount;
+
+    public DescriptorResourceCounts(
+        uint uniformBufferCount,
+        uint uniformBufferDynamicCount,
+        uint sampledImageCount,
+        uint samplerCount,
+        uint storageBufferCount,
+        uint storageBufferDynamicCount,
+        uint storageImageCount,
+        uint combinedImageSamplerCount)
+    {
+        UniformBufferCount = uniformBufferCount;
+        UniformBufferDynamicCount = uniformBufferDynamicCount;
+        SampledImageCount = sampledImageCount;
+        SamplerCount = samplerCount;
+        StorageBufferCount = storageBufferCount;
+        StorageBufferDynamicCount = storageBufferDynamicCount;
+        StorageImageCount = storageImageCount;
+        CombinedImageSamplerCount = combinedImageSamplerCount;
+    }
+}

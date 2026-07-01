@@ -1,0 +1,39 @@
+<Solution>
+    <Folder Name="/Tests/">
+        <Project Path="Tests/Graphite/Prowl.Graphite.Tests.csproj" />
+        <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
+        <Project Path="Tests/Compiler/Prowl.Graphite.Compiler.Tests.csproj" />
+        <Project Path="Tests/Variants/Prowl.Graphite.Variants.Tests.csproj" />
+    </Folder>
+    <Folder Name="/Graphite/">
+        <Project Path="Graphite/Prowl.Graphite.csproj" />
+    </Folder>
+    <Folder Name="/ShaderDef/">
+        <Project Path="ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
+    </Folder>
+    <Folder Name="/Compiler/">
+        <Project Path="Compiler/Prowl.Graphite.Compiler.csproj" />
+    </Folder>
+    <Folder Name="/Samples/" />
+    <Folder Name="/Samples/HelloTriangle/">
+        <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
+    </Folder>
+    <Folder Name="/Samples/CubeGrid/">
+        <Project Path="Samples/CubeGrid/CubeGrid.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Cube/">
+        <Project Path="Samples/Cube/Cube.csproj" />
+    </Folder>
+    <Folder Name="/Samples/TexturedQuad/">
+        <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Shared/">
+        <Project Path="Samples/Shared/Shared.csproj" />
+    </Folder>
+    <Folder Name="/Variants/">
+        <Project Path="Variants/Prowl.Graphite.Variants.csproj" />
+    </Folder>
+    <Folder Name="/Tools/">
+        <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
+    </Folder>
+</Solution>

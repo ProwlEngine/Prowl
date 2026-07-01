@@ -1,0 +1,65 @@
+<Project>
+    <PropertyGroup>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <!-- Centralized package versions -->
+    <PropertyGroup>
+        <SilkNetVersion>2.23.0</SilkNetVersion>
+        <GraphiteVersion>0.2.0</GraphiteVersion>
+    </PropertyGroup>
+
+    <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
+    <PropertyGroup>
+        <ExcludeVulkan>false</ExcludeVulkan>
+        <ExcludeD3D11>false</ExcludeD3D11>
+        <ExcludeOpenGL>false</ExcludeOpenGL>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <IsPackable>true</IsPackable>
+        <Version>$(GraphiteVersion)</Version>
+
+        <Authors>Prowl Group</Authors>
+        <Owners>Prowl Group</Owners>
+        <Company>Prowl Group</Company>
+        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
+
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
+        <RepositoryUrl>https://github.com/ProwlEngine/Prowl.Graphite</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+
+        <UseLocalProjectReferences Condition="'$(IsPacking)' == ''">true</UseLocalProjectReferences>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Prowl.Vector" Version="2.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)README.md"
+              Pack="true"
+              PackagePath="\" />
+    
+        <None Include="$(MSBuildThisFileDirectory)LICENSE"
+              Pack="true"
+              PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsPacking)' == 'true'">
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(IsPacking)' == 'true'">
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>portable</DebugType>
+    </PropertyGroup>
+</Project>

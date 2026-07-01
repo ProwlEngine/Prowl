@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <AllowUnsafeCode>true</AllowUnsafeCode>
+        <OutputType>Exe</OutputType>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_OPENGL</DefineConstants>
+        <StartupObject>Program</StartupObject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Shared xunit tooling comes from Tests/Directory.Build.props. -->
+        <PackageReference Include="xunit.console" Version="2.9.3" />
+        <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
+        <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="xunit.runner.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <None Remove="Shaders/**/*" />
+        <Content Include="Shaders/**/*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+</Project>
