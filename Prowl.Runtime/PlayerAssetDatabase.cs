@@ -227,8 +227,8 @@ public class PlayerAssetDatabase : IAssetDatabase
     {
         if (echo == null) return;
 
-        if (echo.TryGet("defaultScene", out var dsTag))
-            DefaultSceneGuid = Guid.Parse(dsTag.StringValue);
+        if (echo.TryGet("defaultScene", out var dsTag) && Guid.TryParse(dsTag.StringValue, out var ds))
+            DefaultSceneGuid = ds;
 
         if (echo.TryGet("assets", out var assetsTag) && assetsTag.TagType == EchoType.Compound)
             foreach (var kvp in assetsTag.Tags)
