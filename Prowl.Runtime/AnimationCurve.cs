@@ -153,8 +153,8 @@ public class AnimationCurve : ISerializable
                     return last.Value;
 
                 case CurveLoopType.Linear:
-                    // linear y = a*x +b with a tangeant of last point
-                    return last.Value + first.TangentOut * (position - last.Position);
+                    // linear y = a*x +b with the tangent of the last point
+                    return last.Value + last.TangentOut * (position - last.Position);
 
                 case CurveLoopType.Cycle:
                     //start -> end / start -> end
@@ -286,9 +286,7 @@ public class AnimationCurve : ISerializable
     private int GetNumberOfCycle(float position)
     {
         float cycle = (position - Keys[0].Position) / (Keys[Keys.Count - 1].Position - Keys[0].Position);
-        if (cycle < 0.0)
-            cycle--;
-        return (int)cycle;
+        return (int)Math.Floor(cycle);
     }
 
     private float GetCurvePosition(float position)
@@ -303,10 +301,7 @@ public class AnimationCurve : ISerializable
             {
                 if (prev.Continuity == CurveContinuity.Step)
                 {
-                    if (position >= 1.0)
-                    {
-                        return next.Value;
-                    }
+                    // Step holds the previous key's value across the whole segment until the next key.
                     return prev.Value;
                 }
                 float t = (position - prev.Position) / (next.Position - prev.Position);// to have t in [0,1]
@@ -431,7 +426,7 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
 
     #region Inherited Methods
 
-    public int CompareTo(KeyFrame? other) => Position.CompareTo(other.Position);
+    public int CompareTo(KeyFrame? other) => other is null ? 1 : Position.CompareTo(other.Position);
     public bool Equals(KeyFrame? other) => (this == other);
     public override bool Equals(object? obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
     public override int GetHashCode() =>
@@ -469,7 +464,7 @@ public class CurveKeyCollection : ICollection<KeyFrame>
             else
             {
                 _keys.RemoveAt(index);
-                _keys.Add(value);
+                Add(value); // sorted insert, not List.Add (which would append out of order)
             }
         }
     }

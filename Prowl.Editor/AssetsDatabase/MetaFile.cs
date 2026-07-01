@@ -89,7 +89,9 @@ public static class MetaFile
                     existing.Guid = forcedGuid.Value;
                     Write(metaPath, existing);
                 }
-                return existing;
+
+                if (existing.Guid != Guid.Empty)
+                    return existing;
             }
             catch { /* corrupted meta, recreate */ }
         }

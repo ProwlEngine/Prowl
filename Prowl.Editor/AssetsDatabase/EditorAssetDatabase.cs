@@ -68,6 +68,12 @@ public class EditorAssetDatabase : IAssetDatabase
             {
                 _guidToEntry[guid] = entry;
                 _pathToGuid[entry.Path] = guid;
+
+                // Seed the dependency graph from persisted dependencies. Without this, unchanged
+                // assets (not reimported on startup) have no graph edges after a reopen, so
+                // GetDependents/GetDependencies return empty until something is reimported.
+                if (entry.Dependencies is { Length: > 0 })
+                    _dependencies.SetDependencies(guid, entry.Dependencies);
             }
             Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
         }
@@ -157,23 +163,24 @@ public class EditorAssetDatabase : IAssetDatabase
         foreach (var entry in _guidToEntry.Values)
         {
             string path = entry.Path.Replace('\\', '/');
+
+            // Load path = everything after the last "Resources/" segment (or a leading "Resources/").
+            string? afterResources = null;
             int idx = path.LastIndexOf("/Resources/", StringComparison.OrdinalIgnoreCase);
-            if (idx < 0 && path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
-                idx = -1; // handle root Resources/ folder
+            if (idx >= 0)
+                afterResources = path[(idx + "/Resources/".Length)..];
+            else if (path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
+                afterResources = path["Resources/".Length..];
 
-            if (idx >= 0 || path.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase))
-            {
-                string afterResources = idx >= 0
-                    ? path[(idx + "/Resources/".Length)..]
-                    : path["Resources/".Length..];
+            if (afterResources == null) continue;
 
-                // Remove extension
-                int dotIdx = afterResources.LastIndexOf('.');
-                if (dotIdx >= 0) afterResources = afterResources[..dotIdx];
+            int dotIdx = afterResources.LastIndexOf('.');
+            if (dotIdx >= 0) afterResources = afterResources[..dotIdx];
+            if (string.IsNullOrEmpty(afterResources)) continue;
 
-                if (!string.IsNullOrEmpty(afterResources))
-                    map[afterResources] = entry.Guid;
-            }
+            if (map.ContainsKey(afterResources))
+                Runtime.Debug.LogWarning($"[Resources] Duplicate load path '{afterResources}': '{entry.Path}' overrides another asset.");
+            map[afterResources] = entry.Guid;
         }
         Runtime.GameResources.Initialize(map);
     }
@@ -389,7 +396,11 @@ public class EditorAssetDatabase : IAssetDatabase
                 var entry = _guidToEntry[existingGuid];
                 long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
 
-                if (entry.LastModifiedTicks != currentTicks || !File.Exists(GetCachePath(existingGuid)))
+                // Reimport if the file changed, its cache is missing, OR the importer's version was
+                // bumped (a new editor build with changed import logic must re-run stale caches).
+                if (entry.LastModifiedTicks != currentTicks
+                    || !File.Exists(GetCachePath(existingGuid))
+                    || (importer != null && entry.ImporterVersion != importer.Version))
                     entry.NeedsReimport = true;
 
                 // Update GUID if meta was regenerated with different GUID
@@ -425,12 +436,37 @@ public class EditorAssetDatabase : IAssetDatabase
             }
             else if (_guidToEntry.ContainsKey(meta.Guid))
             {
-                // GUID exists but at a different path the file was moved
                 var entry = _guidToEntry[meta.Guid];
                 string oldPath = entry.Path;
-                _pathToGuid.Remove(oldPath);
-                entry.Path = relativePath;
-                _pathToGuid[relativePath] = meta.Guid;
+                bool originalStillExists = File.Exists(Path.Combine(assetsPath, oldPath))
+                    && !oldPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase);
+
+                if (originalStillExists)
+                {
+                    // Two files share a GUID (the asset + its .meta were copied). A GUID must be unique,
+                    // so mint a fresh one for the copy and rewrite its .meta.
+                    var newGuid = Guid.NewGuid();
+                    meta.Guid = newGuid;
+                    MetaFile.Write(MetaFile.GetMetaPath(file), meta);
+
+                    var copyEntry = new AssetEntry
+                    {
+                        Guid = newGuid,
+                        Path = relativePath,
+                        ImporterType = importerName,
+                        ImporterVersion = meta.ImporterVersion,
+                        NeedsReimport = true
+                    };
+                    _guidToEntry[newGuid] = copyEntry;
+                    _pathToGuid[relativePath] = newGuid;
+                }
+                else
+                {
+                    // The original is gone: this is a move/rename - just repoint the entry.
+                    _pathToGuid.Remove(oldPath);
+                    entry.Path = relativePath;
+                    _pathToGuid[relativePath] = meta.Guid;
+                }
             }
             else
             {
@@ -601,7 +637,11 @@ public class EditorAssetDatabase : IAssetDatabase
             entry.MainAssetType = ctx.MainAsset.GetType();
             entry.Dependencies = ctx.Dependencies.ToArray();
 
-            // Process sub-assets IDs already assigned by ctx.AddSubAsset
+            // Process sub-assets IDs already assigned by ctx.AddSubAsset. Remember the previous set so
+            // sub-assets that disappear this import (renamed/removed) can be cleaned up below.
+            var previousSubGuids = entry.SubAssets?.Select(s => s.Guid).ToHashSet() ?? new HashSet<Guid>();
+            var newSubGuids = new HashSet<Guid>();
+
             if (ctx.SubAssets.Count > 0)
             {
                 var subEntries = new List<SubAssetEntry>();
@@ -623,12 +663,25 @@ public class EditorAssetDatabase : IAssetDatabase
                     });
 
                     _subAssetIndex[sub.AssetID] = (entry.Guid, i);
+                    newSubGuids.Add(sub.AssetID);
                 }
                 entry.SubAssets = subEntries.ToArray();
             }
             else
             {
                 entry.SubAssets = Array.Empty<SubAssetEntry>();
+            }
+
+            // Drop index entries, cached instances, caches and thumbnails for sub-assets that no
+            // longer exist (their derived GUIDs change with their name, so they'd leak otherwise).
+            foreach (var oldGuid in previousSubGuids)
+            {
+                if (newSubGuids.Contains(oldGuid)) continue;
+                _subAssetIndex.TryRemove(oldGuid, out _);
+                if (_loadedAssets.TryRemove(oldGuid, out var oldObj)) oldObj?.Dispose();
+                ThumbnailGenerator.DeleteThumbnail(oldGuid, _project.ThumbnailsPath);
+                string oldCache = GetCachePath(oldGuid);
+                if (File.Exists(oldCache)) try { File.Delete(oldCache); } catch { }
             }
 
             // Serialize main asset
@@ -960,11 +1013,13 @@ public class EditorAssetDatabase : IAssetDatabase
             // shader (cached in _shader.instance) until the editor restarts.
             var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
             DisposeAndRemove(guid);
+            ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             if (entry?.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.TryRemove(sub.Guid, out _);
+                    ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);

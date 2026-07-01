@@ -125,6 +125,7 @@ public sealed class AudioClip : EngineObject, ISerializable
         if(AudioContext.GetAudioClipHandle(hashCode, out IntPtr existingHandle))
         {
             handle = existingHandle;
+            AudioContext.AddRef(hashCode); // sharing an existing allocation - bump its ref-count
         }
         else
         {

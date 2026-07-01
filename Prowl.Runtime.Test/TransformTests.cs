@@ -23,6 +23,21 @@ public class TransformTests : RuntimeTestBase
 
     private Transform NewTransform(string name = "GO") => CreateGameObject(name).Transform;
 
+    // RotateAround takes DEGREES: the orbit and the spin must use the same unit.
+    [Fact]
+    public void RotateAround_UsesDegrees()
+    {
+        var t = NewTransform("orbit");
+        t.Position = new Float3(1, 0, 0);
+        t.RotateAround(new Float3(0, 0, 0), new Float3(0, 1, 0), 90f);
+
+        var p = t.Position;
+        // A 90 degree orbit about Y maps (1,0,0) onto the Z axis with unit radius.
+        Assert.True(Maths.Abs(p.X) < 0.01, $"X should be ~0 but was {p.X}");
+        Assert.True(Maths.Abs(p.Y) < 0.01, $"Y should be ~0 but was {p.Y}");
+        Assert.True(Maths.Abs(Maths.Abs(p.Z) - 1f) < 0.01, $"|Z| should be ~1 but was {p.Z}");
+    }
+
     // ---- Basics ----
 
     [Fact]

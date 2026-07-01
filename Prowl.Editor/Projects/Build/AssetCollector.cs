@@ -48,11 +48,13 @@ public static class AssetCollector
         }
 
         // Always include Resources/ folder assets regardless of dependency mode
+        var resourceGuids = new List<Guid>();
         foreach (var entry in db.GetAllEntries())
         {
             if (IsResourcesAsset(entry.Path))
             {
                 allAssets.Add(entry.Guid);
+                resourceGuids.Add(entry.Guid);
                 if (entry.SubAssets != null)
                     foreach (var sub in entry.SubAssets)
                         allAssets.Add(sub.Guid);
@@ -60,9 +62,18 @@ public static class AssetCollector
                 // Build the load path: everything after the last "Resources/" segment, no extension
                 string loadPath = GetResourceLoadPath(entry.Path);
                 if (!string.IsNullOrEmpty(loadPath))
+                {
+                    if (resourcesMap.ContainsKey(loadPath))
+                        Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
                     resourcesMap[loadPath] = entry.Guid;
+                }
             }
         }
+
+        // Resources assets are build entry points just like scenes - in DependenciesOnly mode their
+        // own transitive dependencies must be collected too, or they ship with broken references.
+        if (dependenciesOnly && resourceGuids.Count > 0)
+            allAssets.UnionWith(db.Dependencies.GetTransitiveDependencies(resourceGuids));
 
         // Ensure sub-assets of all collected parents are included
         foreach (var entry in db.GetAllEntries())

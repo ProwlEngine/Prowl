@@ -108,6 +108,20 @@ public class MetaFileTests : IDisposable
     }
 
     [Fact]
+    public void EnsureMeta_RegeneratesMetaWithEmptyGuid()
+    {
+        // A .meta that parses but has a blank/missing GUID would collide with every other Guid.Empty
+        // asset, so it must be regenerated rather than accepted.
+        string asset = AssetPath("blank.bytes");
+        MetaFile.Write(asset + ".meta", new MetaFileData { Guid = Guid.Empty, ImporterType = "DefaultImporter" });
+
+        var meta = MetaFile.EnsureMeta(asset, "DefaultImporter");
+
+        Assert.NotEqual(Guid.Empty, meta.Guid);
+        Assert.NotEqual(Guid.Empty, MetaFile.Read(asset + ".meta").Guid); // persisted back
+    }
+
+    [Fact]
     public void DeriveSubAssetGuid_IsDeterministic_AndNameSensitive()
     {
         var parent = Guid.NewGuid();

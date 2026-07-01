@@ -96,20 +96,23 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                Input.UpdateActions(delta);
+                // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
+                // UNSCALED delta
+                Input.UpdateActions(Time.UnscaledDeltaTime);
 
                 // UI input runs after low-level Input is fresh and before script Updates
                 UIEventSystem.Tick(time.Time);
 
                 BeginUpdate();
 
-                SimulationStep(delta);
+                SimulationStep(Time.DeltaTime);
 
                 EndUpdate();
 
                 if (frameCounter++ % 60 == 0)
                 {
-                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {1.0 / Time.DeltaTime}";
+                    double fps = delta > 0 ? 1.0 / delta : 0; // real (unscaled) frame rate
+                    Console.Title = $"{title} - {Window.InternalWindow.FramebufferSize.X}x{Window.InternalWindow.FramebufferSize.Y} - FPS: {fps:F0}";
                 }
 
             }
@@ -255,11 +258,10 @@ public abstract class Game
                 Time.TimeStack.Clear();
                 Time.TimeStack.Push(time);
 
-                float delta = Time.DeltaTime;
-                Input.UpdateActions(delta);
+                Input.UpdateActions(Time.UnscaledDeltaTime);
 
                 BeginUpdate();
-                SimulationStep(delta);
+                SimulationStep(Time.DeltaTime);
                 EndUpdate();
 
                 frame++;
@@ -306,6 +308,12 @@ public abstract class Game
                 currentScene?.FixedUpdate();
                 fixedTimeAccumulator -= Time.FixedDeltaTime;
             }
+
+            // If the iteration cap was hit there is still a backlog; discard it rather than replaying
+            // it over the next frames (avoids post-hitch slow-motion and the spiral of death).
+            if (fixedTimeAccumulator >= Time.FixedDeltaTime)
+                fixedTimeAccumulator = 0f;
+
             Application.IsGameplayExecuting = false;
         }
         else

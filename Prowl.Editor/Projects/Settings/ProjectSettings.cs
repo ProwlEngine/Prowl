@@ -162,52 +162,51 @@ public static class ProjectSettingsRegistry
 
         foreach (var entry in _entries)
         {
-            string path = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
-            if (File.Exists(path))
+            string yamlPath = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
+            string jsonPath = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
+            bool loaded = false;
+
+            if (File.Exists(yamlPath))
             {
                 try
                 {
-                    string yaml = File.ReadAllText(path);
-
-                    EchoObject serialized = EchoObject.ReadFromYaml(yaml);
-                    var loaded = (ProjectSettingsBase?)Serializer.Deserialize(serialized, entry.Type);
-                    if (loaded != null)
+                    EchoObject serialized = EchoObject.ReadFromYaml(File.ReadAllText(yamlPath));
+                    var data = (ProjectSettingsBase?)Serializer.Deserialize(serialized, entry.Type);
+                    if (data != null)
                     {
-                        // Copy fields from loaded to singleton
-                        CopyFields(loaded, entry.Instance);
+                        CopyFields(data, entry.Instance);
                         Debug.Log($"Loaded settings: {entry.Name}");
+                        loaded = true;
                     }
-
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to load settings '{entry.Name}': {ex.Message}");
+                    Debug.LogError($"Failed to load settings '{entry.Name}' from YAML: {ex.Message}");
                 }
             }
-            // If loading up the YAML fails, try loading up the JSON instead.
-            else if (File.Exists(Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json")))
+
+            // Fall back to JSON if YAML is absent OR failed to parse.
+            if (!loaded && File.Exists(jsonPath))
             {
                 try
                 {
-                    string json = File.ReadAllText(path);
-                    var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type,
+                    var data = (ProjectSettingsBase?)JsonSerializer.Deserialize(File.ReadAllText(jsonPath), entry.Type,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
-                    if (loaded != null)
+                    if (data != null)
                     {
-                        // Copy fields from loaded to singleton
-                        CopyFields(loaded, entry.Instance);
+                        CopyFields(data, entry.Instance);
                         Debug.Log($"Loaded settings: {entry.Name}");
+                        loaded = true;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to load settings '{entry.Name}': {ex.Message}");
+                    Debug.LogError($"Failed to load settings '{entry.Name}' from JSON: {ex.Message}");
                 }
             }
-            else
-            {
+
+            if (!loaded)
                 entry.Instance.ResetToDefaults();
-            }
 
             entry.Instance.Apply();
         }

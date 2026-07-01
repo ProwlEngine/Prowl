@@ -20,6 +20,9 @@ public static class AudioContext
     private static IntPtr audioContext;
     private static unsafe delegate* unmanaged[Cdecl]<ma_device_ptr, IntPtr, IntPtr, uint, void> deviceDataProc;
     private static Dictionary<UInt64, IntPtr> audioClipHandles = new Dictionary<UInt64, IntPtr>();
+    // Ref-count per shared handle: clips with identical data share one native allocation, so it must
+    // only be freed once the last clip using it is disposed (otherwise: double-free / use-after-free).
+    private static Dictionary<UInt64, int> audioClipRefCounts = new Dictionary<UInt64, int>();
     private static AudioBuffer outputBuffer = new AudioBuffer(8192);
 
     private static UInt32 sampleRate = 44100;
@@ -138,6 +141,7 @@ public static class AudioContext
         }
 
         audioClipHandles.Clear();
+        audioClipRefCounts.Clear();
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;
@@ -201,6 +205,14 @@ public static class AudioContext
             return;
 
         audioClipHandles.Add(clip.Hash, clip.Handle);
+        audioClipRefCounts[clip.Hash] = 1;
+    }
+
+    /// <summary>Register another clip sharing an already-cached handle (increments its ref-count).</summary>
+    internal static void AddRef(UInt64 hash)
+    {
+        if (audioClipRefCounts.TryGetValue(hash, out int count))
+            audioClipRefCounts[hash] = count + 1;
     }
 
     internal static void Remove(AudioClip clip)
@@ -208,12 +220,20 @@ public static class AudioContext
         if (clip.Hash == 0)
             return;
 
-        if (audioClipHandles.ContainsKey(clip.Hash))
+        if (!audioClipRefCounts.TryGetValue(clip.Hash, out int count))
+            return;
+
+        // Only free the shared native allocation when the last user releases it.
+        if (count <= 1)
         {
-            IntPtr handle = audioClipHandles[clip.Hash];
-            if (handle != IntPtr.Zero)
+            if (audioClipHandles.TryGetValue(clip.Hash, out IntPtr handle) && handle != IntPtr.Zero)
                 Marshal.FreeHGlobal(handle);
             audioClipHandles.Remove(clip.Hash);
+            audioClipRefCounts.Remove(clip.Hash);
+        }
+        else
+        {
+            audioClipRefCounts[clip.Hash] = count - 1;
         }
     }
 
@@ -454,7 +474,7 @@ public sealed class AudioBuffer
         {
             unsafe
             {
-                if (output?.Length < buffer.Length)
+                if (output == null || output.Length < buffer.Length)
                     output = new float[buffer.Length];
 
                 fixed (float* pSrc = &buffer[0], pDst = &output[0])

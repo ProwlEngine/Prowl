@@ -212,17 +212,22 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         return null;
     }
 
-    public bool GetKey(KeyCode key) => isKeyPressed[key];
+    // TryGetValue (not the indexer) so an unmapped key/button - e.g. KeyCode.Unknown, which isn't in
+    // the dictionaries - returns false instead of throwing KeyNotFoundException.
+    private static bool Down(Dictionary<KeyCode, bool> map, KeyCode key) => map.TryGetValue(key, out var v) && v;
+    private static bool Down(Dictionary<MouseButton, bool> map, MouseButton btn) => map.TryGetValue(btn, out var v) && v;
 
-    public bool GetKeyDown(KeyCode key) => isKeyPressed[key] && !wasKeyPressed[key];
+    public bool GetKey(KeyCode key) => Down(isKeyPressed, key);
 
-    public bool GetKeyUp(KeyCode key) => !isKeyPressed[key] && wasKeyPressed[key];
+    public bool GetKeyDown(KeyCode key) => Down(isKeyPressed, key) && !Down(wasKeyPressed, key);
 
-    public bool GetMouseButton(int button) => isMousePressed[(MouseButton)button];
+    public bool GetKeyUp(KeyCode key) => !Down(isKeyPressed, key) && Down(wasKeyPressed, key);
 
-    public bool GetMouseButtonDown(int button) => isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
+    public bool GetMouseButton(int button) => Down(isMousePressed, (MouseButton)button);
 
-    public bool GetMouseButtonUp(int button) => !isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
+    public bool GetMouseButtonDown(int button) => Down(isMousePressed, (MouseButton)button) && !Down(wasMousePressed, (MouseButton)button);
+
+    public bool GetMouseButtonUp(int button) => !Down(isMousePressed, (MouseButton)button) && Down(wasMousePressed, (MouseButton)button);
 
     public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
 

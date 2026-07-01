@@ -580,7 +580,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             ushort[] data = new ushort[indices.Length];
             for (int i = 0; i < indices.Length; i++)
             {
-                if (indices[i] >= ushort.MaxValue)
+                if (indices[i] > ushort.MaxValue)
                     throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
                 data[i] = (ushort)indices[i];
             }
@@ -737,8 +737,8 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             throw new ArgumentNullException();
 
         bool empty = true;
-        Float3 minVec = Float3.One * 99999f;
-        Float3 maxVec = Float3.One * -99999f;
+        Float3 minVec = Float3.One * float.MaxValue;
+        Float3 maxVec = Float3.One * float.MinValue;
         foreach (Float3 ptVector in vertices)
         {
             minVec = Maths.Min(minVec, ptVector);
@@ -1532,12 +1532,15 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             Float4[] boneIndices = GetVertexBufferAt<Float4>(STREAM_BLENDINDICES);
             Float4[] boneWeights = GetVertexBufferAt<Float4>(STREAM_BLENDWEIGHT);
 
-            writer.Write(vertices.Length);
-            foreach (Float3 vertex in vertices)
+            writer.Write(vertices?.Length ?? 0);
+            if (vertices != null)
             {
-                writer.Write(vertex.X);
-                writer.Write(vertex.Y);
-                writer.Write(vertex.Z);
+                foreach (Float3 vertex in vertices)
+                {
+                    writer.Write(vertex.X);
+                    writer.Write(vertex.Y);
+                    writer.Write(vertex.Z);
+                }
             }
 
             writer.Write(normals?.Length ?? 0);

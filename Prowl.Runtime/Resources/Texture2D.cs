@@ -146,7 +146,7 @@ public sealed class Texture2D : Texture, ISerializable
 
     private void ValidateRectOperation(int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
-        if (rectX < 0 || rectY >= Height)
+        if (rectX < 0 || rectX >= Width)
             throw new ArgumentOutOfRangeException(nameof(rectX), rectX, nameof(rectX) + " must be in the range [0, " + nameof(Width) + ")");
 
         if (rectY < 0 || rectY >= Height)

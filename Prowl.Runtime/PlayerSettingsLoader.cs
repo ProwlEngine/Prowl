@@ -209,7 +209,10 @@ public static class PlayerSettingsLoader
         try
         {
             string text = File.ReadAllText(path);
-            return JsonDocument.Parse(text).RootElement;
+            // Clone() detaches the element from the document so we can dispose the document (which
+            // returns its pooled buffer) instead of leaking it for the element's lifetime.
+            using var doc = JsonDocument.Parse(text);
+            return doc.RootElement.Clone();
         }
         catch
         {

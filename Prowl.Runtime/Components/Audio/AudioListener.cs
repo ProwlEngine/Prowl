@@ -46,6 +46,8 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void Update()
     {
+        if (handle == IntPtr.Zero) return;
+
         var up = -Transform.Up;
         var forward = Transform.Forward;
         var pos = Transform.Position;
@@ -58,15 +60,19 @@ public sealed class AudioListener : MonoBehaviour
         previousPosition = new Float3(prevX, prevY, prevZ);
         MiniAudioExNative.ma_ex_audio_listener_set_position(handle, (float)pos.X, (float)pos.Y, (float)pos.Z);
 
-
+        // Only compute velocity with a positive delta - a zero delta would produce Inf/NaN velocity
+        // and feed NaN into the Doppler calculation (AudioSource.Update guards the same way).
         float deltaTime = AudioContext.DeltaTime;
-        Float3 currentPosition = Transform.Position;
-        float dx = currentPosition.X - previousPosition.X;
-        float dy = currentPosition.Y - previousPosition.Y;
-        float dz = currentPosition.Z - previousPosition.Z;
-        var vel = new Float3(dx / deltaTime, dy / deltaTime, dz / deltaTime);
+        if (deltaTime > 0f)
+        {
+            Float3 currentPosition = Transform.Position;
+            var vel = new Float3(
+                (currentPosition.X - previousPosition.X) / deltaTime,
+                (currentPosition.Y - previousPosition.Y) / deltaTime,
+                (currentPosition.Z - previousPosition.Z) / deltaTime);
 
-        MiniAudioExNative.ma_ex_audio_listener_set_velocity(handle, (float)vel.X, (float)vel.Y, (float)vel.Z);
+            MiniAudioExNative.ma_ex_audio_listener_set_velocity(handle, (float)vel.X, (float)vel.Y, (float)vel.Z);
+        }
     }
 
     public override void OnDisable()

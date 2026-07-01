@@ -17,6 +17,16 @@ namespace Prowl.Runtime.Test;
 /// </summary>
 public class PhysicsTests : RuntimeTestBase
 {
+    // The Mass setter must validate the incoming value (not the backing field); zero/negative mass
+    // would produce a NaN inverse mass in the solver.
+    [Fact]
+    public void Rigidbody3D_Mass_RejectsZeroAndNegative()
+    {
+        var rb = new Rigidbody3D();
+        Assert.Throws<ArgumentException>(() => rb.Mass = 0f);
+        Assert.Throws<ArgumentException>(() => rb.Mass = -5f);
+    }
+
     public override void Dispose()
     {
         // CollisionMatrix is global static state. Boolean32Matrix is a struct wrapping a uint[], so a
@@ -73,6 +83,39 @@ public class PhysicsTests : RuntimeTestBase
         StepPhysics(scene);
 
         Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
+    }
+
+    // With AutoSyncTransforms on (default), a Transform edit is pushed into the body so a query made
+    // right after sees the new pose.
+    [Fact]
+    public void MovingRigidbodyTransform_IsSeenByQueries_WhenAutoSyncOn()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene);
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f));
+
+        rb.Transform.Position = new Float3(100, 0, 0);
+
+        Assert.False(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "body should no longer be at the origin");
+        Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "body should be at the new position");
+    }
+
+    // With AutoSyncTransforms off, queries don't auto-sync; the edit is only visible after a manual
+    // SyncTransforms() (or the next FixedUpdate pre-step sync).
+    [Fact]
+    public void MovingRigidbodyTransform_NeedsManualSync_WhenAutoSyncOff()
+    {
+        var scene = CreatePhysicsScene();
+        scene.Physics.AutoSyncTransforms = false;
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene);
+
+        rb.Transform.Position = new Float3(100, 0, 0);
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 0, 0), 0.4f), "query should still see the old pose (no auto-sync)");
+
+        scene.Physics.SyncTransforms();
+        Assert.True(scene.Physics.CheckSphere(new Float3(100, 0, 0), 0.4f), "manual sync should push the new pose");
     }
 
     [Fact]

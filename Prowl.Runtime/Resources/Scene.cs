@@ -561,10 +561,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Clear the physics world
         _physics.Clear();
 
-        // Dispose all GameObjects which will also remove them from the scene
+        // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
+        // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
+        // already-disposed children are no-ops.
         List<GameObject> allObjects = [.. AllObjects];
         foreach (GameObject g in allObjects)
-            g.OnDispose();
+            g.Dispose();
 
         // Clear any remaining references
         _allObj.Clear();
@@ -649,6 +651,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void FixedUpdate()
     {
+        // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
+        // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
+        _componentRegistry.RunStart();
+
         Physics.Update();
 
         _componentRegistry.RunFixedUpdate();
@@ -695,7 +701,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         // Renderables are now collected per-camera inside pipeline.Render()
 
-        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
+        // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a
+        // child camera once per active ancestor - Distinct() prevents rendering it multiple times.
+        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).Distinct().ToList();
 
         Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
 
