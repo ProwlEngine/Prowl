@@ -153,8 +153,8 @@ public class AnimationCurve : ISerializable
                     return last.Value;
 
                 case CurveLoopType.Linear:
-                    // linear y = a*x +b with a tangeant of last point
-                    return last.Value + first.TangentOut * (position - last.Position);
+                    // linear y = a*x +b with the tangent of the last point
+                    return last.Value + last.TangentOut * (position - last.Position);
 
                 case CurveLoopType.Cycle:
                     //start -> end / start -> end
