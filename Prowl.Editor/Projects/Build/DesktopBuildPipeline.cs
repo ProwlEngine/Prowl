@@ -69,9 +69,16 @@ public class DesktopBuildPipeline : BuildPipeline
                 ? settings.OutputDirectory
                 : Path.Combine(project.RootPath, settings.OutputDirectory);
 
-            // Clean destination so previous build artefacts don't linger
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
+            // The build never deletes files - it requires an empty (or new) output directory. This
+            // makes clobbering the project root / Assets / any existing data impossible by construction.
+            if (!IsUsableOutputDirectory(settings.OutputDirectory, outputDirectory))
+                return new BuildResult
+                {
+                    Success = false,
+                    Errors = $"Build output directory '{settings.OutputDirectory}' must be empty. " +
+                             "The build does not delete existing files - empty the folder or choose another."
+                };
+
             Directory.CreateDirectory(outputDirectory);
 
             string contentDir = Path.Combine(outputDirectory, "Content");
@@ -697,6 +704,20 @@ public class DesktopBuildPipeline : BuildPipeline
         string exe = Path.Combine(outputPath,
             Project.Current!.Name + (profile.Platform == BuildTarget.Windows ? ".exe" : ""));
         return exe;
+    }
+
+    /// <summary>
+    /// Whether the build may use the resolved output directory. The build never deletes files, so the
+    /// directory must be specified (non-empty path) and either not yet exist or be empty. This makes
+    /// clobbering the project root, Assets/, or any existing data impossible.
+    /// </summary>
+    public static bool IsUsableOutputDirectory(string rawOutput, string resolvedOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return false;
+        if (!Directory.Exists(resolvedOutput))
+            return true; // will be created
+        return !Directory.EnumerateFileSystemEntries(resolvedOutput).Any();
     }
 
     /// <summary>
