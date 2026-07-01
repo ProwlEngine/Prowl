@@ -30,15 +30,18 @@ jobs:
       - name: Build
         run: dotnet build Anthology.slnx -c Release --no-restore
 
-      # Clay.Tests needs uncommitted/licensed model assets (fails on its original repo too);
-      # excluded here but stays fully runnable locally. Everything else gates the release.
+      # Some suites need hardware CI lacks (they pass locally with it), so they're excluded:
+      # Clay (uncommitted model assets), Slang + Graphite.Compiler (Slang native binaries),
+      # Graphite (GPU backends on a headless runner). Everything else gates the release.
       - name: Test
-        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests"
+        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test&FullyQualifiedName!~Prowl.Graphite.Compiler.Tests&FullyQualifiedName!~Prowl.Graphite.Tests"
 
-      # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
+      # Slang's native binaries are not committed; fetch them (dotnet-script) so they pack into runtimes/.
       - name: Fetch Slang native binaries
         working-directory: Slang/Native
-        run: dotnet run --project UpdateSources.csproj -c Release
+        run: |
+          dotnet tool install -g dotnet-script
+          dotnet-script UpdateSources.csx
 
       - name: Pack
         run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts

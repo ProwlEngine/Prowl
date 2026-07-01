@@ -45,7 +45,7 @@ internal static partial class ProxyEmitter
 
         while (type != null)
         {
-            methods.AddRange(type.GetMethods(BindingFlags.Public | BindingFlags.Instance).Reverse());
+            methods.AddRange(Enumerable.Reverse(type.GetMethods(BindingFlags.Public | BindingFlags.Instance)));
             type = type.GetInterfaces().FirstOrDefault();
         }
 
