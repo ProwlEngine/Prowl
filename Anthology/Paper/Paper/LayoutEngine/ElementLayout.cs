@@ -250,11 +250,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (contentSize.HasValue)
                 {
                     // Recompute from floor so aspect-ratio output (if any) doesn't double-count.
-                    // For pure Auto (Floor=0, AutoFactor=1) this matches the legacy "computedMain = contentSize" behaviour.
+                    // Padding is folded in so an auto-sized leaf (e.g. a padded text chip) reserves room
+                    // for its padding, mirroring the children path (childrenMain/Cross include padding).
                     if (main.HasAuto)
-                        computedMain = main.Floor(parentMain) + main.AutoFactor * contentSize.Value.Item1;
+                        computedMain = main.Floor(parentMain) + main.AutoFactor * (contentSize.Value.Item1 + paddingMainBefore + paddingMainAfter);
                     if (cross.HasAuto)
-                        computedCross = cross.Floor(parentCross) + cross.AutoFactor * contentSize.Value.Item2;
+                        computedCross = cross.Floor(parentCross) + cross.AutoFactor * (contentSize.Value.Item2 + paddingCrossBefore + paddingCrossAfter);
                 }
             }
 
@@ -270,9 +271,9 @@ namespace Prowl.PaperUI.LayoutEngine
                 if (contentSize.HasValue)
                 {
                     if (minMainUnit.HasAuto)
-                        minMain = minMainUnit.Floor(parentMain) + minMainUnit.AutoFactor * contentSize.Value.Item1;
+                        minMain = minMainUnit.Floor(parentMain) + minMainUnit.AutoFactor * (contentSize.Value.Item1 + paddingMainBefore + paddingMainAfter);
                     if (minCrossUnit.HasAuto)
-                        minCross = minCrossUnit.Floor(parentCross) + minCrossUnit.AutoFactor * contentSize.Value.Item2;
+                        minCross = minCrossUnit.Floor(parentCross) + minCrossUnit.AutoFactor * (contentSize.Value.Item2 + paddingCrossBefore + paddingCrossAfter);
                 }
             }
 
