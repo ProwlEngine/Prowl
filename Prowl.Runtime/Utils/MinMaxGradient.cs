@@ -45,17 +45,17 @@ public class MinMaxGradient
     /// </summary>
     public Color Evaluate(float normalizedTime, Random? random)
     {
-        // Null random falls back to the Min side of any random mode (deterministic).
-        float t = random?.NextSingle() ?? 0f;
+        // Only draw from the RNG in random modes so Color/Gradient don't desync a seeded Random.
+        // Null random => Min side (deterministic).
         return Mode switch
         {
             MinMaxGradientMode.Color => ConstantColor,
             MinMaxGradientMode.Gradient => Gradient.Evaluate(normalizedTime),
-            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, t),
+            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, random?.NextSingle() ?? 0f),
             MinMaxGradientMode.RandomBetweenTwoGradients => Color.Lerp(
                 MinGradient.Evaluate(normalizedTime),
                 MaxGradient.Evaluate(normalizedTime),
-                t
+                random?.NextSingle() ?? 0f
             ),
             _ => ConstantColor
         };
@@ -66,16 +66,15 @@ public class MinMaxGradient
     /// </summary>
     public Color EvaluateInitial(Random? random)
     {
-        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxGradientMode.Color => ConstantColor,
             MinMaxGradientMode.Gradient => Gradient.Evaluate(0),
-            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, t),
+            MinMaxGradientMode.RandomBetweenTwoColors => Color.Lerp(MinColor, MaxColor, random?.NextSingle() ?? 0f),
             MinMaxGradientMode.RandomBetweenTwoGradients => Color.Lerp(
                 MinGradient.Evaluate(0),
                 MaxGradient.Evaluate(0),
-                t
+                random?.NextSingle() ?? 0f
             ),
             _ => ConstantColor
         };

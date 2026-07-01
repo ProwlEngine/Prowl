@@ -43,8 +43,8 @@ public class MinMaxCurve
     /// </summary>
     public float Evaluate(float normalizedTime, Random? random)
     {
-        // Null random falls back to the Min side of Random mode (deterministic).
-        float t = random?.NextSingle() ?? 0f;
+        // Only draw from the RNG in Random mode - otherwise Constant/Curve would still advance a
+        // seeded Random and desync deterministic playback. Null random => Min side (deterministic).
         return Mode switch
         {
             MinMaxCurveMode.Constant => ConstantValue,
@@ -52,7 +52,7 @@ public class MinMaxCurve
             MinMaxCurveMode.Random => Lerp(
                 (float)MinCurve.Evaluate(normalizedTime),
                 (float)MaxCurve.Evaluate(normalizedTime),
-                t
+                random?.NextSingle() ?? 0f
             ),
             _ => ConstantValue
         };
@@ -63,12 +63,11 @@ public class MinMaxCurve
     /// </summary>
     public float EvaluateInitial(Random? random)
     {
-        float t = random?.NextSingle() ?? 0f;
         return Mode switch
         {
             MinMaxCurveMode.Constant => ConstantValue,
             MinMaxCurveMode.Curve => (float)Curve.Evaluate(0),
-            MinMaxCurveMode.Random => Lerp(MinValue, MaxValue, t),
+            MinMaxCurveMode.Random => Lerp(MinValue, MaxValue, random?.NextSingle() ?? 0f),
             _ => ConstantValue
         };
     }
