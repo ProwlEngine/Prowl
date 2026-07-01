@@ -286,6 +286,13 @@ namespace Prowl.PaperUI.LayoutEngine
                 ? (computedMain, computedCross)
                 : (computedCross, computedMain);
 
+            // Content-box sizes (padding excluded). Percentage / fixed children resolve against these
+            // so they stay inside the parent's padding matching how stretch free-space is computed
+            // below and how children are positioned at the padding offset. Stretch children keep using
+            // the full actualParent* (the stretch loops subtract padding themselves).
+            float innerParentMain = Maths.Max(0f, actualParentMain - ownPaddingMainBefore - ownPaddingMainAfter);
+            float innerParentCross = Maths.Max(0f, actualParentCross - ownPaddingCrossBefore - ownPaddingCrossAfter);
+
             // Sum of all space and size flex factors on the main-axis
             float mainFlexSum = 0f;
 
@@ -414,24 +421,24 @@ namespace Prowl.PaperUI.LayoutEngine
                     actualParentMain, 0f, childMinMainAfter, childMaxMainAfter);
 
                 float computedChildMain = 0f;
-                float computedChildCross = childCross.ToPx(actualParentCross, 0f);
+                float computedChildCross = childCross.ToPx(innerParentCross, 0f);
 
                 // Get auto min cross size if needed
                 var childMinCrossUnit = GetMinCross(ref child, layoutType);
                 if (childMinCrossUnit.HasAuto)
                 {
-                    float? pCross = childMinCrossUnit.HasAuto ? null : (float?)actualParentCross;
+                    float? pCross = childMinCrossUnit.HasAuto ? null : (float?)innerParentCross;
                     var contentSize = ContentSizing(childHandle, layoutType, pCross, pCross);
                     if (contentSize.HasValue)
                     {
-                        computedChildCross = childMinCrossUnit.Floor(actualParentCross) + childMinCrossUnit.AutoFactor * contentSize.Value.Item2;
+                        computedChildCross = childMinCrossUnit.Floor(innerParentCross) + childMinCrossUnit.AutoFactor * contentSize.Value.Item2;
                     }
                 }
 
                 // Compute fixed-size child main and cross for non-stretch children
                 if (!childMain.HasGrow && !childCross.HasGrow)
                 {
-                    var childSize = DoLayout(childHandle, layoutType, actualParentMain, actualParentCross);
+                    var childSize = DoLayout(childHandle, layoutType, innerParentMain, innerParentCross);
                     computedChildMain = childSize.Main;
                     computedChildCross = childSize.Cross;
                 }
