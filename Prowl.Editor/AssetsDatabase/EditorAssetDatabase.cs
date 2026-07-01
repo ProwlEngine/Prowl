@@ -68,6 +68,12 @@ public class EditorAssetDatabase : IAssetDatabase
             {
                 _guidToEntry[guid] = entry;
                 _pathToGuid[entry.Path] = guid;
+
+                // Seed the dependency graph from persisted dependencies. Without this, unchanged
+                // assets (not reimported on startup) have no graph edges after a reopen, so
+                // GetDependents/GetDependencies return empty until something is reimported.
+                if (entry.Dependencies is { Length: > 0 })
+                    _dependencies.SetDependencies(guid, entry.Dependencies);
             }
             Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
         }
