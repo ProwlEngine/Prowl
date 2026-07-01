@@ -38,6 +38,7 @@ public static class EditorSceneManager
         CurrentScenePath = null;
         IsDirty = false;
         Undo.Clear();
+        Selection.Clear(); // drop references to the now-unloaded scene's objects
         SaveLastScenePath(null);
     }
 
@@ -75,6 +76,7 @@ public static class EditorSceneManager
             CurrentScenePath = relativePath;
             IsDirty = false;
             Undo.Clear();
+            Selection.Clear(); // drop references to the previous scene's (now disposed) objects
 
             SaveLastScenePath(relativePath);
             Debug.Log($"Opened scene: {relativePath}");
