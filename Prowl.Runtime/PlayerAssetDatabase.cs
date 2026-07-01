@@ -142,18 +142,24 @@ public class PlayerAssetDatabase : IAssetDatabase
 
     private byte[]? LoadFromPak(string entryName)
     {
-        foreach (var pak in _pakArchives)
+        // ZipArchive is not thread-safe. Serialize all pak reads on the same lock Get() uses (it is
+        // re-entrant, so Get -> LoadRawAsset -> LoadFromPak is fine) so a background Get and a
+        // main-thread LoadScene can't read the shared archive/stream concurrently.
+        lock (_loadLock)
         {
-            var entry = pak.GetEntry(entryName);
-            if (entry != null)
+            foreach (var pak in _pakArchives)
             {
-                using var stream = entry.Open();
-                using var ms = new MemoryStream();
-                stream.CopyTo(ms);
-                return ms.ToArray();
+                var entry = pak.GetEntry(entryName);
+                if (entry != null)
+                {
+                    using var stream = entry.Open();
+                    using var ms = new MemoryStream();
+                    stream.CopyTo(ms);
+                    return ms.ToArray();
+                }
             }
+            return null;
         }
-        return null;
     }
 
     private static byte[]? LoadFromEmbedded(string resourceName)
