@@ -558,7 +558,7 @@ public class Mesh : EngineObject, ISerializable
             ushort[] data = new ushort[indices.Length];
             for (int i = 0; i < indices.Length; i++)
             {
-                if (indices[i] >= ushort.MaxValue)
+                if (indices[i] > ushort.MaxValue)
                     throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
                 data[i] = (ushort)indices[i];
             }
