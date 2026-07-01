@@ -309,6 +309,12 @@ public abstract class Game
                 currentScene?.FixedUpdate();
                 fixedTimeAccumulator -= Time.FixedDeltaTime;
             }
+
+            // If the iteration cap was hit there is still a backlog; discard it rather than replaying
+            // it over the next frames (avoids post-hitch slow-motion and the spiral of death).
+            if (fixedTimeAccumulator >= Time.FixedDeltaTime)
+                fixedTimeAccumulator = 0f;
+
             Application.IsGameplayExecuting = false;
         }
         else
