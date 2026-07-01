@@ -81,7 +81,14 @@ public static class MetaFile
         string metaPath = GetMetaPath(absoluteAssetPath);
         if (File.Exists(metaPath))
         {
-            try { return Read(metaPath); }
+            try
+            {
+                var existing = Read(metaPath);
+                // A meta that parsed but has no valid GUID (blank/garbage/missing) would collide with
+                // every other Guid.Empty asset, regenerate it instead of accepting it.
+                if (existing.Guid != Guid.Empty)
+                    return existing;
+            }
             catch { /* corrupted meta, recreate */ }
         }
 
