@@ -651,6 +651,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void FixedUpdate()
     {
+        // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
+        // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
+        _componentRegistry.RunStart();
+
         Physics.Update();
 
         _componentRegistry.RunFixedUpdate();
