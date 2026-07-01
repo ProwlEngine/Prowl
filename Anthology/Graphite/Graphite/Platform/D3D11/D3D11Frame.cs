@@ -122,7 +122,7 @@ internal sealed class D3D11Frame : Frame
         if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
         {
             _gd._transientSoftCapWarned = true;
-            Console.Error.WriteLine($"[Graphite] Warning: Transient buffer soft cap of {_gd._transientSoftCapBytes} bytes exceeded in frame {_frameId}.");
+            _gd.OnWarning?.Invoke($"[Graphite] Warning: Transient buffer soft cap of {_gd._transientSoftCapBytes} bytes exceeded in frame {_frameId}.");
         }
     }
 }

@@ -1021,6 +1021,14 @@ public abstract partial class GraphicsDevice : IDisposable
     public MissingPropertyHandler? OnMissingProperty { get; set; }
 
     /// <summary>
+    /// Callback invoked when this instance wants to surface a non-fatal warning, such as an implicit
+    /// <see cref="DeviceBuffer"/> reallocation or a transient buffer soft cap being exceeded. Writes to
+    /// <see cref="Console.Error"/> by default; assign <see langword="null"/> to silence warnings, or replace it to
+    /// route them elsewhere.
+    /// </summary>
+    public GraphicsDeviceWarningHandler? OnWarning { get; set; } = message => Console.Error.WriteLine(message);
+
+    /// <summary>
     /// Gets a simple 4x anisotropic-filtered <see cref="Sampler"/> object owned by this instance.
     /// This object is created with <see cref="SamplerDescription.Aniso4x"/>.
     /// This property can only be used when <see cref="GraphicsDeviceFeatures.SamplerAnisotropy"/> is supported.

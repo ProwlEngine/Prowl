@@ -80,7 +80,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
         ulong frameId = _inFlightFrameId;
         if (_lastOrphanFrameId != 0 && frameId - _lastOrphanFrameId < OrphanWarningFrameWindow)
         {
-            Console.Error.WriteLine(
+            device.OnWarning?.Invoke(
                 $"DeviceBuffer '{Name}' was implicitly reallocated {frameId - _lastOrphanFrameId} frames after its previous reallocation. " +
                 "This buffer is being written to while still in flight on the GPU, which forces a hidden reallocation on every such write. " +
                 "If this buffer is rewritten every frame, use a StreamingBuffer instead.");
