@@ -464,7 +464,7 @@ public class CurveKeyCollection : ICollection<KeyFrame>
             else
             {
                 _keys.RemoveAt(index);
-                _keys.Add(value);
+                Add(value); // sorted insert, not List.Add (which would append out of order)
             }
         }
     }
