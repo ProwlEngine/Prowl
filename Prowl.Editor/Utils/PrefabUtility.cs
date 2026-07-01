@@ -48,8 +48,8 @@ public static class PrefabUtility
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         File.WriteAllText(absolutePath, echo.WriteToString());
 
-        // Ensure meta file exists so asset DB picks it up with a stable GUID
-        var meta = MetaFile.EnsureMeta(absolutePath, typeof(Importers.PrefabImporter).FullName!);
+        // Ensure meta file exists so asset DB picks it up with a stable GUID.
+        var meta = MetaFile.EnsureMeta(absolutePath, nameof(Importers.PrefabImporter));
         if (meta.Guid == Guid.Empty) return false;
 
         // Stamp the source GO as a prefab instance
