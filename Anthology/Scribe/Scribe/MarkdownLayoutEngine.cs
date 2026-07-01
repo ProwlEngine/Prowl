@@ -775,7 +775,7 @@ namespace Prowl.Scribe
 
                         // Recover pen origin / baseline, then place the padded distance-field quad.
                         // The region is in font units; scale it to this glyph's pixel size.
-                        var gm = fontSystem.GetGlyphMetrics(g.Font, g.Codepoint, ginst.PixelSize) ?? default;
+                        var gm = fontSystem.GetGlyphMetricsByIndex(g.Font, g.GlyphIndex, ginst.PixelSize) ?? default;
                         float sc = g.Font.ScaleForPixelHeight(ginst.PixelSize);
                         float penX = t.Pos.X + position.X + line.Position.X + ginst.Position.X - gm.OffsetX;
                         float baselineY = t.Pos.Y + position.Y + line.Position.Y + ginst.Position.Y - gm.OffsetY;

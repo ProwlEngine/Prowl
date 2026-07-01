@@ -109,7 +109,16 @@ namespace Prowl.Scribe
         public float PixelSize;
         public int CharIndex;
 
+        // Number of source characters this glyph's cluster covers. Normally 1, but a ligature (e.g.
+        // "fi") collapses several characters into one glyph - hit-testing interpolates within it.
+        public int CharCount;
+
         public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex)
+            : this(glyph, position, character, advanceWidth, pixelSize, charIndex, 1)
+        {
+        }
+
+        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex, int charCount)
         {
             Glyph = glyph;
             Position = position;
@@ -117,6 +126,7 @@ namespace Prowl.Scribe
             AdvanceWidth = advanceWidth;
             PixelSize = pixelSize;
             CharIndex = charIndex;
+            CharCount = charCount < 1 ? 1 : charCount;
         }
     }
 

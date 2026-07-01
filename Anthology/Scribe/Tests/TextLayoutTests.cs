@@ -141,7 +141,10 @@ namespace Tests
                     Assert.Equal(i, idx);
                 }
                 
-                Assert.True(layout.Size.Y >= pixelSize, $"Layout height should be at least pixel size {pixelSize}, got {layout.Size.Y}");
+                // Line height now derives from the font's real vertical metrics (ascent + |descent| +
+                // line gap) rather than a flat multiple of the pixel size, so it tracks the font and
+                // may sit a hair under the pixel size (e.g. zero line gap). Allow a small tolerance.
+                Assert.True(layout.Size.Y >= pixelSize - 1f, $"Layout height should be about pixel size {pixelSize}, got {layout.Size.Y}");
             }
         }
 
@@ -440,6 +443,55 @@ namespace Tests
             Assert.True(trailingNewlineLayout.Size.Y > singleLineLayout.Size.Y, "Trailing newline should be taller than single line");
             Assert.True(leadingNewlineLayout.Size.Y > singleLineLayout.Size.Y, "Leading newline should be taller than single line");
             Assert.True(standaloneNewlineLayout.Size.Y > singleLineLayout.Size.Y, "Standalone newline should be taller than single line");
+        }
+
+        [Fact]
+        public void FontMetricsAreParsed()
+        {
+            var fs = CreateSystem();
+            var font = fs.FallbackFonts.First();
+            Assert.True(font.UnitsPerEm > 0, "unitsPerEm should be parsed from the head table");
+            Assert.True(font.Ascent > 0, "ascent should be positive");
+            Assert.True(font.Descent <= 0, "descent is at/below the baseline (<= 0)");
+        }
+
+        [Fact]
+        public void KerningIsSane()
+        {
+            // Kerning for these classic pairs only ever pulls glyphs together (<= 0), never apart.
+            // Exercises the GPOS 'kern' feature / legacy kern resolution without depending on a
+            // specific font having kerning data.
+            var fs = CreateSystem();
+            var font = fs.FallbackFonts.First();
+            foreach (var pair in new[] { "AV", "VA", "Wa", "To", "Ya", "PA" })
+            {
+                float k = fs.GetKerning(font, pair[0], pair[1], 32f);
+                Assert.True(k <= 0.001f, $"Kerning for '{pair}' should not be positive, got {k}");
+            }
+        }
+
+        [Fact]
+        public void SurrogatePairsDoNotBreakLayout()
+        {
+            // A surrogate-pair codepoint (emoji) is a single cluster. Whether or not the font has the
+            // glyph, layout must not throw and cursor X must stay monotonic across the whole string.
+            var fs = CreateSystem();
+            var font = fs.FallbackFonts.First();
+            var settings = TextLayoutSettings.Default;
+            settings.PixelSize = 16;
+            settings.Font = font;
+
+            var text = "ab\U0001F600cd"; // 'ab' + U+1F600 (2 UTF-16 chars) + 'cd'
+            var layout = fs.CreateLayout(text, settings);
+            Assert.True(layout.Size.X > 0, "Layout should have positive width");
+
+            float prevX = float.NegativeInfinity;
+            for (int i = 0; i <= text.Length; i++)
+            {
+                var p = layout.GetCursorPosition(i);
+                Assert.True(p.X >= prevX - 0.001f, $"Cursor X should be monotonic across surrogates; index {i}");
+                prevX = p.X;
+            }
         }
     }
 }

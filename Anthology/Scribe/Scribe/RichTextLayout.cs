@@ -453,7 +453,7 @@ namespace Prowl.Scribe
             if (font == null) return cs.PixelSize * 0.25f;
             var g = fontSystem.GetOrCreateGlyph(' ', font, _settings.Quality);
             if (g == null) return cs.PixelSize * 0.25f;
-            var gm = fontSystem.GetGlyphMetrics(g.Font, g.Codepoint, cs.PixelSize);
+            var gm = fontSystem.GetGlyphMetricsByIndex(g.Font, g.GlyphIndex, cs.PixelSize);
             return gm?.AdvanceWidth ?? cs.PixelSize * 0.25f;
         }
 
@@ -585,7 +585,7 @@ namespace Prowl.Scribe
                 // Padded distance-field quad (includes the field margin), placed relative to the pen
                 // origin/baseline, then scaled per-glyph around its center for effects. The region is
                 // in font units; scale it to this glyph's pixel size at draw time.
-                var gm = fontSystem.GetGlyphMetrics(atlas.Font, atlas.Codepoint, g.PixelSize) ?? default;
+                var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, g.PixelSize) ?? default;
                 float sc = atlas.Font.ScaleForPixelHeight(g.PixelSize);
                 float penX = position.X + g.Position.X - gm.OffsetX;
                 float baselineY = position.Y + g.Position.Y - gm.OffsetY;
@@ -703,7 +703,7 @@ namespace Prowl.Scribe
         private float GlyphOffsetX(RichGlyph rg)
         {
             if (_fontSystem == null || rg.Glyph == null) return 0f;
-            var gm = _fontSystem.GetGlyphMetrics(rg.Glyph.Font, rg.Glyph.Codepoint, rg.PixelSize);
+            var gm = _fontSystem.GetGlyphMetricsByIndex(rg.Glyph.Font, rg.Glyph.GlyphIndex, rg.PixelSize);
             return gm?.OffsetX ?? 0f;
         }
 

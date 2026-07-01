@@ -243,49 +243,57 @@ namespace Prowl.Scribe
             // build TextLayoutSettings without specifying Quality would otherwise get no glyphs.
             if ((int)quality <= 0) quality = FontQuality.Normal;
 
-            var glyph = TryGetGlyphFromFont(font);
-            if (glyph != null)
-                return glyph;
+            int gi = font.FindGlyphIndex(codepoint);
+            if (gi > 0)
+                return GetOrAddGlyph(font, gi, quality);
 
-            // Check Fallback Fonts
+            // Check fallback fonts (must match the requested style).
             foreach (var f in fallbackFonts)
             {
                 if (f == font) continue;
-                if (f.Style != font.Style) continue; // Needs to match style to what the user requested
-
-                glyph = TryGetGlyphFromFont(f);
-                if (glyph != null)
-                    return glyph;
+                if (f.Style != font.Style) continue;
+                int fgi = f.FindGlyphIndex(codepoint);
+                if (fgi > 0)
+                    return GetOrAddGlyph(f, fgi, quality);
             }
 
             return null; // Glyph not found in any font
+        }
 
-            AtlasGlyph TryGetGlyphFromFont(FontFile font)
+        /// <summary>
+        /// Returns the atlas glyph for a specific glyph index in a specific font (no codepoint
+        /// lookup, no fallback). Used by the shaper for substituted glyphs such as ligatures.
+        /// </summary>
+        public AtlasGlyph GetOrCreateGlyphByIndex(int glyphIndex, FontFile font, FontQuality quality)
+        {
+            if (font == null) throw new ArgumentNullException(nameof(font));
+            if ((int)quality <= 0) quality = FontQuality.Normal;
+            if (glyphIndex <= 0) return null;
+            return GetOrAddGlyph(font, glyphIndex, quality);
+        }
+
+        private AtlasGlyph GetOrAddGlyph(FontFile font, int glyphIndex, FontQuality quality)
+        {
+            var key = new AtlasGlyph.CacheKey(glyphIndex, quality, font);
+            if (glyphCache.TryGetValue(key, out var cachedGlyph))
+                return cachedGlyph;
+
+            var glyph = AtlasGlyph.FromGlyphIndex(font, glyphIndex, quality);
+
+            if (TryAddGlyphToAtlas(glyph))
             {
-                if (font.FindGlyphIndex(codepoint) <= 0)
-                    return null;
-
-                var key = new AtlasGlyph.CacheKey(codepoint, quality, font);
-                if (glyphCache.TryGetValue(key, out var cachedGlyph))
-                    return cachedGlyph;
-
-                var glyph = new AtlasGlyph(codepoint, font, quality);
-
-                if (TryAddGlyphToAtlas(glyph))
-                {
-                    glyphCache[key] = glyph;
-                    return glyph;
-                }
-
-                if (AllowExpansion && TryExpandAtlas(glyph) && TryAddGlyphToAtlas(glyph))
-                {
-                    glyphCache[key] = glyph;
-                    return glyph;
-                }
-
                 glyphCache[key] = glyph;
                 return glyph;
             }
+
+            if (AllowExpansion && TryExpandAtlas(glyph) && TryAddGlyphToAtlas(glyph))
+            {
+                glyphCache[key] = glyph;
+                return glyph;
+            }
+
+            glyphCache[key] = glyph;
+            return glyph;
         }
 
         // Rasterizes a glyph's distance field into the atlas once per quality. The field is
@@ -375,6 +383,13 @@ namespace Prowl.Scribe
         {
             int glyphIndex = fontInfo.FindGlyphIndex(codepoint);
             if (glyphIndex == 0) return null;
+            return GetGlyphMetricsByIndex(fontInfo, glyphIndex, pixelSize);
+        }
+
+        /// <summary>Per-glyph horizontal metrics by glyph index (used by the shaper / substituted glyphs).</summary>
+        public GlyphMetrics? GetGlyphMetricsByIndex(FontFile fontInfo, int glyphIndex, float pixelSize)
+        {
+            if (glyphIndex <= 0) return null;
 
             float scale = fontInfo.ScaleForPixelHeight(pixelSize);
 
@@ -418,6 +433,96 @@ namespace Prowl.Scribe
             int kernAdvance = fontInfo.GetGlyphKerningAdvance(leftGlyph, rightGlyph);
 
             return kernAdvance * scale;
+        }
+
+        // Reusable GSUB shaping buffer (single-threaded, like the other caches).
+        private List<GsubGlyph> _shapeBuf;
+
+        /// <summary>
+        /// Shapes a character range [<paramref name="start"/>, <paramref name="end"/>) into a
+        /// positioned glyph run: codepoint mapping (surrogate-aware), GSUB substitution (ccmp/liga/
+        /// rlig) and GPOS pair kerning folded into each glyph's advance. The run is split into
+        /// maximal same-font segments (per fallback/selector resolution); shaping and kerning apply
+        /// within a segment. Results are appended to <paramref name="output"/>.
+        /// </summary>
+        internal void ShapeRun(string text, int start, int end, FontFile requestedFont,
+            Func<int, FontFile> selector, float pixelSize, FontQuality quality, List<ShapedGlyph> output)
+        {
+            output.Clear();
+            var buf = _shapeBuf ??= new List<GsubGlyph>();
+            buf.Clear();
+            FontFile runFont = null;
+
+            int i = start;
+            while (i < end)
+            {
+                char c = text[i];
+                int codepoint, charCount;
+                if (char.IsHighSurrogate(c) && i + 1 < end && char.IsLowSurrogate(text[i + 1]))
+                {
+                    codepoint = char.ConvertToUtf32(c, text[i + 1]);
+                    charCount = 2;
+                }
+                else
+                {
+                    codepoint = c;
+                    charCount = 1;
+                }
+
+                FontFile reqFont = selector != null ? (selector(i) ?? requestedFont) : requestedFont;
+                var ag = reqFont != null ? GetOrCreateGlyph(codepoint, reqFont, quality) : null;
+
+                if (ag == null)
+                {
+                    // Missing in every font: flush so shaping/kerning doesn't cross the gap, then skip.
+                    FlushSubRun(runFont, buf, pixelSize, quality, output);
+                    buf.Clear();
+                    runFont = null;
+                    i += charCount;
+                    continue;
+                }
+
+                if (runFont != null && !ReferenceEquals(ag.Font, runFont))
+                {
+                    FlushSubRun(runFont, buf, pixelSize, quality, output);
+                    buf.Clear();
+                }
+
+                runFont = ag.Font;
+                buf.Add(new GsubGlyph(ag.GlyphIndex, i, charCount));
+                i += charCount;
+            }
+
+            FlushSubRun(runFont, buf, pixelSize, quality, output);
+            buf.Clear();
+        }
+
+        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, float pixelSize, FontQuality quality, List<ShapedGlyph> output)
+        {
+            if (font == null || buf.Count == 0)
+                return;
+
+            font.ApplyGsub(buf);
+            float scale = font.ScaleForPixelHeight(pixelSize);
+
+            for (int k = 0; k < buf.Count; k++)
+            {
+                var gg = buf[k];
+                var atlas = GetOrCreateGlyphByIndex(gg.Glyph, font, quality);
+
+                int adv = 0, lsb = 0;
+                font.GetGlyphHorizontalMetrics(gg.Glyph, ref adv, ref lsb);
+                float advance = adv * scale;
+                if (k + 1 < buf.Count)
+                    advance += font.GetGlyphKerningAdvance(gg.Glyph, buf[k + 1].Glyph) * scale;
+
+                output.Add(new ShapedGlyph {
+                    Glyph = atlas,
+                    Advance = advance,
+                    Cluster = gg.Cluster,
+                    CharCount = gg.CharCount
+                });
+            }
         }
 
         #endregion
@@ -525,7 +630,7 @@ namespace Prowl.Scribe
                     // distance-field margin, so it is larger than the glyph's ink bounds. The region
                     // is in font units; scale it to this instance's pixel size at draw time.
                     float ps = glyphInstance.PixelSize;
-                    var gm = GetGlyphMetrics(glyph.Font, glyph.Codepoint, ps) ?? default;
+                    var gm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, ps) ?? default;
                     float sc = glyph.Font.ScaleForPixelHeight(ps);
 
                     float penX = position.X + line.Position.X + glyphInstance.Position.X - gm.OffsetX;

@@ -46,22 +46,36 @@ namespace Prowl.Scribe
             Quality = quality;
         }
 
+        private AtlasGlyph(FontFile font, int glyphIndex, FontQuality quality)
+        {
+            Codepoint = 0; // shaped/substituted glyph - no single source codepoint (e.g. a ligature)
+            GlyphIndex = glyphIndex;
+            Font = font;
+            Quality = quality;
+        }
+
+        /// <summary>Creates a glyph directly from a glyph index (for shaped/substituted glyphs).</summary>
+        internal static AtlasGlyph FromGlyphIndex(FontFile font, int glyphIndex, FontQuality quality)
+            => new AtlasGlyph(font, glyphIndex, quality);
+
+        // Cached by glyph INDEX (not codepoint): the distance field is identical regardless of which
+        // codepoint mapped to the glyph, and substituted glyphs (ligatures) have no codepoint at all.
         internal struct CacheKey : IEquatable<CacheKey>
         {
-            public readonly int Codepoint;
+            public readonly int GlyphIndex;
             public readonly FontQuality Quality;
             private readonly FontFile fontFace;
 
-            public CacheKey(int codepoint, FontQuality quality, FontFile fontFace)
+            public CacheKey(int glyphIndex, FontQuality quality, FontFile fontFace)
             {
-                Codepoint = codepoint;
+                GlyphIndex = glyphIndex;
                 Quality = quality;
                 this.fontFace = fontFace;
             }
 
             public bool Equals(CacheKey other)
             {
-                return Codepoint == other.Codepoint &&
+                return GlyphIndex == other.GlyphIndex &&
                        Quality == other.Quality &&
                        ReferenceEquals(fontFace, other.fontFace);
             }
@@ -73,7 +87,7 @@ namespace Prowl.Scribe
                 unchecked
                 {
                     int hash = 17;
-                    hash = hash * 23 + Codepoint;
+                    hash = hash * 23 + GlyphIndex;
                     hash = hash * 23 + (int)Quality;
                     hash = hash * 23 + (fontFace?.GetHashCode() ?? 0);
                     return hash;

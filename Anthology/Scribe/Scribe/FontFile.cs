@@ -8,7 +8,7 @@ using static Prowl.Scribe.Internal.Common;
 
 namespace Prowl.Scribe
 {
-    public class FontFile
+    public partial class FontFile
     {
         private Buf cff = null;
         private Buf charstrings = null;
@@ -18,16 +18,24 @@ namespace Prowl.Scribe
         private int fontstart;
         private int glyf;
         private int gpos;
+        private int gsub;
+        private int gdef;
+        private int os2;
         private Buf gsubrs = null;
         private int head;
         private int hhea;
         private int hmtx;
         private int index_map;
+        private bool _cmapSymbol; // selected cmap is an MS Symbol subtable (glyphs live at 0xF000+)
         private int indexToLocFormat;
         private int kern;
         private int loca;
         private int numGlyphs;
         private Buf subrs = null;
+
+        // Lookup-list indices of the GPOS 'kern' feature (latn/DFLT), resolved lazily. Empty when the
+        // font has no GPOS kerning (the legacy 'kern' table is used instead).
+        private List<int> _kernLookups;
 
         private readonly Dictionary<int, int> unicodeMapCache = new Dictionary<int, int>();
         private readonly Dictionary<(int, int), int> kerningMapCache = new Dictionary<(int, int), int>();
@@ -38,6 +46,9 @@ namespace Prowl.Scribe
         public int Ascent { get; private set; } = 0;
         public int Descent { get; private set; } = 0;
         public int Linegap { get; private set; } = 0;
+
+        /// <summary>Font design units per em (head.unitsPerEm); the scale denominator for em-relative sizing.</summary>
+        public int UnitsPerEm { get; private set; } = 0;
 
         public FontFile(FileInfo file)
         {
@@ -94,6 +105,9 @@ namespace Prowl.Scribe
 			this.hmtx = (int)FindTable(ptr, (uint)fontstart, "hmtx");
 			this.kern = (int)FindTable(ptr, (uint)fontstart, "kern");
 			this.gpos = (int)FindTable(ptr, (uint)fontstart, "GPOS");
+			this.gsub = (int)FindTable(ptr, (uint)fontstart, "GSUB");
+			this.gdef = (int)FindTable(ptr, (uint)fontstart, "GDEF");
+			this.os2 = (int)FindTable(ptr, (uint)fontstart, "OS/2");
 			if (cmap == 0 || this.head == 0 || this.hhea == 0 || this.hmtx == 0)
 				return 0;
 			if (this.glyf != 0)
@@ -155,30 +169,45 @@ namespace Prowl.Scribe
 				this.numGlyphs = 0xffff;
 			numTables = ttUSHORT(ptr + cmap + 2);
 			this.index_map = 0;
+			int fallbackMap = 0;      // Symbol (MS 3/0) or Mac (1/0), used only if no Unicode subtable.
+			bool fallbackSymbol = false;
 			for (i = 0; i < numTables; ++i)
 			{
 				var encoding_record = (uint)(cmap + 4 + 8 * i);
-				switch (ttUSHORT(ptr + encoding_record))
+				int platform = ttUSHORT(ptr + encoding_record);
+				int encoding = ttUSHORT(ptr + encoding_record + 2);
+				int subtable = (int)(cmap + ttULONG(ptr + encoding_record + 4));
+				switch (platform)
 				{
 					case STBTT_PLATFORM_ID_MICROSOFT:
-						switch (ttUSHORT(ptr + encoding_record + 2))
+						if (encoding == STBTT_MS_EID_UNICODE_BMP || encoding == STBTT_MS_EID_UNICODE_FULL)
+							this.index_map = subtable;
+						else if (encoding == 0 && fallbackMap == 0) // MS Symbol
 						{
-							case STBTT_MS_EID_UNICODE_BMP:
-							case STBTT_MS_EID_UNICODE_FULL:
-								this.index_map = (int)(cmap + ttULONG(ptr + encoding_record + 4));
-								break;
+							fallbackMap = subtable;
+							fallbackSymbol = true;
 						}
-
 						break;
 					case STBTT_PLATFORM_ID_UNICODE:
-						this.index_map = (int)(cmap + ttULONG(ptr + encoding_record + 4));
+						this.index_map = subtable;
+						break;
+					case 1: // Macintosh
+						if (fallbackMap == 0)
+							fallbackMap = subtable;
 						break;
 				}
 			}
 
 			if (this.index_map == 0)
-				return 0;
+			{
+				// No Unicode cmap; fall back to a Symbol or Mac subtable so symbol/legacy fonts map.
+				if (fallbackMap == 0)
+					return 0;
+				this.index_map = fallbackMap;
+				this._cmapSymbol = fallbackSymbol;
+			}
 			this.indexToLocFormat = ttUSHORT(ptr + this.head + 50);
+			this.UnitsPerEm = ttUSHORT(ptr + this.head + 18);
 
             GetFontVerticalMetrics(out int a, out int d, out int l);
             Ascent = a;
@@ -195,6 +224,15 @@ namespace Prowl.Scribe
         }
 
         public int FindGlyphIndex(int codepoint)
+		{
+			int g = FindGlyphIndexRaw(codepoint);
+			// MS Symbol fonts store glyphs in the 0xF000 private-use block; retry common codepoints there.
+			if (g == 0 && _cmapSymbol && codepoint >= 0x20 && codepoint <= 0xFF)
+				g = FindGlyphIndexRaw(0xF000 + codepoint);
+			return g;
+		}
+
+		private int FindGlyphIndexRaw(int codepoint)
 		{
 			if (unicodeMapCache.TryGetValue(codepoint, out var cached))
 				return cached;
@@ -364,28 +402,34 @@ namespace Prowl.Scribe
 
 		public int GetGlyphKerningAdvance(int g1, int g2)
 		{
-            //if (this.gpos != 0)
-            //{
-            //    int xAdvance = stbtt__GetGlyphGPOSInfoAdvance(g1, g2);
-            //    if (xAdvance != 0) return xAdvance;
-            //}
-            //
-            //if (this.kern != 0)
-            //    return stbtt__GetGlyphKernInfoAdvance(g1, g2);
-            //
-            //return 0;
-
             var key = (g1, g2);
             if (kerningMapCache.TryGetValue(key, out var kern))
                 return kern;
 
+            // Precedence: GPOS 'kern' feature (pair adjustment) if the font has one, else the legacy
+            // 'kern' table. A GPOS table without a 'kern' feature must not suppress a real kern table.
+            EnsureKernLookups();
             var xAdvance = 0;
-			if (this.gpos != 0)
-				xAdvance += GetGlyphGPOSInfoAdvance(g1, g2);
+			if (_kernLookups.Count > 0)
+				xAdvance = GetGlyphGPOSInfoAdvance(g1, g2);
 			else if (this.kern != 0)
-				xAdvance += GetGlyphKernInfoAdvance(g1, g2);
+				xAdvance = GetGlyphKernInfoAdvance(g1, g2);
 			kerningMapCache[key] = xAdvance;
 			return xAdvance;
+		}
+
+		// Resolves (once) the GPOS 'kern' feature lookups for the default script. Tries 'latn' first,
+		// then 'DFLT'; leaves the list empty when there is no GPOS kerning.
+		private void EnsureKernLookups()
+		{
+			if (_kernLookups != null)
+				return;
+			_kernLookups = new List<int>();
+			if (this.gpos == 0)
+				return;
+			var table = this.data + this.gpos;
+			if (!GetFeatureLookups(table, "latn", null, "kern", _kernLookups))
+				GetFeatureLookups(table, "DFLT", null, "kern", _kernLookups);
 		}
 
         public void GetGlyphHorizontalMetrics(int glyph_index, ref int advanceWidth, ref int leftSideBearing)
@@ -504,20 +548,24 @@ namespace Prowl.Scribe
 
         private void GetFontVerticalMetrics(out int ascent, out int descent, out int lineGap)
         {
+            // Prefer the OS/2 typographic metrics when the font requests them (fsSelection bit 7,
+            // USE_TYPO_METRICS); otherwise fall back to hhea. The OS/2 sTypo fields exist in every
+            // OS/2 version, and bit 7 is 0 on pre-v4 fonts so this is safe.
+            if (this.os2 != 0)
+            {
+                int fsSelection = ttUSHORT(this.data + this.os2 + 62);
+                if ((fsSelection & 0x0080) != 0)
+                {
+                    ascent = ttSHORT(this.data + this.os2 + 68);  // sTypoAscender
+                    descent = ttSHORT(this.data + this.os2 + 70); // sTypoDescender (negative)
+                    lineGap = ttSHORT(this.data + this.os2 + 72);  // sTypoLineGap
+                    return;
+                }
+            }
+
             ascent = ttSHORT(this.data + this.hhea + 4);
             descent = ttSHORT(this.data + this.hhea + 6);
             lineGap = ttSHORT(this.data + this.hhea + 8);
-        }
-
-        private int GetFontVerticalMetricsOS2(ref int typoAscent, ref int typoDescent, ref int typoLineGap)
-        {
-            var tab = (int)FindTable(this.data, (uint)this.fontstart, "OS/2");
-            if (tab == 0)
-                return 0;
-            typoAscent = ttSHORT(this.data + tab + 68);
-            typoDescent = ttSHORT(this.data + tab + 70);
-            typoLineGap = ttSHORT(this.data + tab + 72);
-            return 1;
         }
 
         private int GetGlyfOffset(int glyph_index)
@@ -1224,124 +1272,86 @@ namespace Prowl.Scribe
             return 0;
         }
 
+        // Pair-kerning xAdvance from the GPOS 'kern' feature lookups (type 2 pair adjustment, both
+        // formats, any valueFormat). Returns the first non-zero adjustment found, in font units.
         private int GetGlyphGPOSInfoAdvance(int glyph1, int glyph2)
         {
-            ushort lookupListOffset = 0;
-            FakePtr<byte> lookupList;
-            ushort lookupCount = 0;
-            FakePtr<byte> data;
-            var i = 0;
-            if (this.gpos == 0)
+            EnsureKernLookups();
+            if (_kernLookups.Count == 0)
                 return 0;
-            data = this.data + this.gpos;
-            if (ttUSHORT(data + 0) != 1)
-                return 0;
-            if (ttUSHORT(data + 2) != 0)
-                return 0;
-            lookupListOffset = ttUSHORT(data + 8);
-            lookupList = data + lookupListOffset;
-            lookupCount = ttUSHORT(lookupList);
-            for (i = 0; i < lookupCount; ++i)
-            {
-                var lookupOffset = ttUSHORT(lookupList + 2 + 2 * i);
-                var lookupTable = lookupList + lookupOffset;
-                var lookupType = ttUSHORT(lookupTable);
-                var subTableCount = ttUSHORT(lookupTable + 4);
-                var subTableOffsets = lookupTable + 6;
-                switch (lookupType)
-                {
-                    case 2:
-                    {
-                        var sti = 0;
-                        for (sti = 0; sti < subTableCount; sti++)
-                        {
-                            var subtableOffset = ttUSHORT(subTableOffsets + 2 * sti);
-                            var table = lookupTable + subtableOffset;
-                            var posFormat = ttUSHORT(table);
-                            var coverageOffset = ttUSHORT(table + 2);
-                            var coverageIndex = stbtt__GetCoverageIndex(table + coverageOffset, glyph1);
-                            if (coverageIndex == -1)
-                                continue;
-                            switch (posFormat)
-                            {
-                                case 1:
-                                {
-                                    var l = 0;
-                                    var r = 0;
-                                    var m = 0;
-                                    var straw = 0;
-                                    var needle = 0;
-                                    var valueFormat1 = ttUSHORT(table + 4);
-                                    var valueFormat2 = ttUSHORT(table + 6);
-                                    var valueRecordPairSizeInBytes = 2;
-                                    var pairSetCount = ttUSHORT(table + 8);
-                                    var pairPosOffset = ttUSHORT(table + 10 + 2 * coverageIndex);
-                                    var pairValueTable = table + pairPosOffset;
-                                    var pairValueCount = ttUSHORT(pairValueTable);
-                                    var pairValueArray = pairValueTable + 2;
-                                    if (valueFormat1 != 4)
-                                        return 0;
-                                    if (valueFormat2 != 0)
-                                        return 0;
-                                    needle = glyph2;
-                                    r = pairValueCount - 1;
-                                    l = 0;
-                                    while (l <= r)
-                                    {
-                                        ushort secondGlyph = 0;
-                                        FakePtr<byte> pairValue;
-                                        m = (l + r) >> 1;
-                                        pairValue = pairValueArray + (2 + valueRecordPairSizeInBytes) * m;
-                                        secondGlyph = ttUSHORT(pairValue);
-                                        straw = secondGlyph;
-                                        if (needle < straw)
-                                        {
-                                            r = m - 1;
-                                        }
-                                        else if (needle > straw)
-                                        {
-                                            l = m + 1;
-                                        }
-                                        else
-                                        {
-                                            var xAdvance = ttSHORT(pairValue + 2);
-                                            return xAdvance;
-                                        }
-                                    }
-                                }
-                                break;
-                                case 2:
-                                {
-                                    var valueFormat1 = ttUSHORT(table + 4);
-                                    var valueFormat2 = ttUSHORT(table + 6);
-                                    var classDef1Offset = ttUSHORT(table + 8);
-                                    var classDef2Offset = ttUSHORT(table + 10);
-                                    var glyph1class = stbtt__GetGlyphClass(table + classDef1Offset, glyph1);
-                                    var glyph2class = stbtt__GetGlyphClass(table + classDef2Offset, glyph2);
-                                    var class1Count = ttUSHORT(table + 12);
-                                    var class2Count = ttUSHORT(table + 14);
-                                    if (valueFormat1 != 4)
-                                        return 0;
-                                    if (valueFormat2 != 0)
-                                        return 0;
-                                    if (glyph1class >= 0 && glyph1class < class1Count && glyph2class >= 0 &&
-                                        glyph2class < class2Count)
-                                    {
-                                        var class1Records = table + 16;
-                                        var class2Records = class1Records + 2 * glyph1class * class2Count;
-                                        var xAdvance = ttSHORT(class2Records + 2 * glyph2class);
-                                        return xAdvance;
-                                    }
-                                }
-                                break;
-                            }
-                        }
 
-                        break;
+            var table = this.data + this.gpos;
+            foreach (int lookupIndex in _kernLookups)
+            {
+                var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
+                if (lookup.IsNull || (lookupType != 2 && lookupType != 9))
+                    continue;
+                for (int s = 0; s < subtableCount; s++)
+                {
+                    var st = GetSubtable(lookup, s);
+                    int type = lookupType;
+                    if (type == 9) // GPOS Extension Positioning: unwrap to the real subtable.
+                    {
+                        type = ttUSHORT(st + 2);
+                        st = st + (int)ttULONG(st + 4);
                     }
+                    if (type != 2)
+                        continue;
+
+                    int adv = PairPosAdvance(st, glyph1, glyph2);
+                    if (adv != 0)
+                        return adv;
                 }
             }
+            return 0;
+        }
 
+        // GPOS PairPos (LookupType 2) - returns value1.xAdvance for the (glyph1, glyph2) pair, or 0.
+        private int PairPosAdvance(FakePtr<byte> table, int glyph1, int glyph2)
+        {
+            int posFormat = ttUSHORT(table);
+            int coverageIndex = stbtt__GetCoverageIndex(table + ttUSHORT(table + 2), glyph1);
+            if (coverageIndex == -1)
+                return 0;
+
+            int valueFormat1 = ttUSHORT(table + 4);
+            int valueFormat2 = ttUSHORT(table + 6);
+            int value1Size = ValueRecordSize(valueFormat1);
+            int value2Size = ValueRecordSize(valueFormat2);
+
+            if (posFormat == 1)
+            {
+                var pairSet = table + ttUSHORT(table + 10 + 2 * coverageIndex);
+                int pairValueCount = ttUSHORT(pairSet);
+                var pairValueArray = pairSet + 2;
+                int recordSize = 2 + value1Size + value2Size; // secondGlyph + value1 + value2
+
+                int l = 0, r = pairValueCount - 1;
+                while (l <= r)
+                {
+                    int m = (l + r) >> 1;
+                    var record = pairValueArray + recordSize * m;
+                    int secondGlyph = ttUSHORT(record);
+                    if (glyph2 < secondGlyph) r = m - 1;
+                    else if (glyph2 > secondGlyph) l = m + 1;
+                    else return ValueXAdvance(record + 2, valueFormat1);
+                }
+                return 0;
+            }
+            else if (posFormat == 2)
+            {
+                int class1 = stbtt__GetGlyphClass(table + ttUSHORT(table + 8), glyph1);
+                int class2 = stbtt__GetGlyphClass(table + ttUSHORT(table + 10), glyph2);
+                int class1Count = ttUSHORT(table + 12);
+                int class2Count = ttUSHORT(table + 14);
+                if (class1 < 0 || class1 >= class1Count || class2 < 0 || class2 >= class2Count)
+                    return 0;
+
+                int recordSize = value1Size + value2Size; // class2Record = value1 + value2
+                var class1Records = table + 16;
+                var record = class1Records + (class1 * class2Count + class2) * recordSize;
+                return ValueXAdvance(record, valueFormat1);
+            }
             return 0;
         }
 

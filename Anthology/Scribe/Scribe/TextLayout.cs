@@ -110,7 +110,9 @@ namespace Prowl.Scribe
             int len = text.Length;
 
             float pixelSize = Settings.PixelSize;
-            float lineHeight = pixelSize * Settings.LineHeight;
+            // Real font line height (ascent + |descent| + line gap) rather than a flat multiple of the
+            // pixel size, so spacing matches the font's design and stays consistent with RichTextLayout.
+            float lineHeight = GetLineHeight(fontSystem) * Settings.LineHeight;
             float spaceWidth = GetSpaceWidth(fontSystem);
             float spaceAdvance = spaceWidth + Settings.WordSpacing;
             float tabWidth = spaceWidth * Settings.TabSize;
@@ -118,16 +120,13 @@ namespace Prowl.Scribe
             bool wrapEnabled = Settings.WrapMode == TextWrapMode.Wrap && Settings.MaxWidth > 0f;
             float maxWidth = Settings.MaxWidth;
 
-            // Kerning baseline: do NOT kern across whitespace.
-            // Track the previous glyph's index + font so we can call the by-glyph kerning
-            // overload (no FindGlyphIndex re-lookups) and only kern within a single font.
-            int lastGlyphForKerning = 0;
-            FontFile lastFontForKerning = null;
-
             // Reset the per-layout ascender cache (instance fields - see top of class).
             _asc1Font = null; _asc1Value = 0f;
             _asc2Font = null; _asc2Value = 0f;
             _ascenderCache?.Clear();
+
+            // Reusable shaped-glyph buffer for the current content word (kerning/ligatures folded in).
+            var wordGlyphs = _wordGlyphs ??= new List<ShapedGlyph>();
 
             while (i < len)
             {
@@ -141,8 +140,6 @@ namespace Prowl.Scribe
                     currentY += lineHeight;
                     i++;
                     line = new Line(new Float2(0, currentY), i);
-                    lastGlyphForKerning = 0;
-                    lastFontForKerning = null;
                     hasTrailingNewline = true;
                     continue;
                 }
@@ -153,8 +150,6 @@ namespace Prowl.Scribe
                     float tabStop = ((int)(currentX / tabWidth) + 1) * tabWidth;
                     currentX = tabStop;
                     i++;
-                    lastGlyphForKerning = 0; // do not kern across whitespace
-                    lastFontForKerning = null;
                     continue;
                 }
 
@@ -180,164 +175,51 @@ namespace Prowl.Scribe
                         currentX += runAdvance;
                     }
 
-                    lastGlyphForKerning = 0; // break kerning chain
-                    lastFontForKerning = null;
                     continue;
                 }
 
-                // Word [i..wordEnd)
+                // Content word [wordStart, wordEnd) - shaped once (kerning + ligatures folded in).
                 int wordStart = i;
                 int wordEnd = FindWordEnd(i);
-                
-                // We're processing actual content, so clear the trailing newline flag
                 hasTrailingNewline = false;
 
-                // -------- First pass: measure the word (only when wrapping is enabled) --------
-                // When wrap is off the per-word width is unused, so we skip the measure pass
-                // entirely and let the place pass resolve glyphs once.
-                float wordWidthNoLeadingKerning = 0f;
-                float firstLeadingKerning = 0f;
-                bool measured = false;
-                bool hadFirstGlyph = false;
-
-                if (wrapEnabled)
+                fontSystem.ShapeRun(text, wordStart, wordEnd, Settings.Font, Settings.FontSelector,
+                                    pixelSize, Settings.Quality, wordGlyphs);
+                if (wordGlyphs.Count == 0)
                 {
-                    int prevGlyphIndex = 0;
-                    FontFile prevGlyphFont = null;
+                    i = wordEnd;
+                    continue;
+                }
 
-                    for (int j = wordStart; j < wordEnd; j++)
+                // Word width: advance (kerning included) plus letter spacing per cluster.
+                float wordWidth = 0f;
+                for (int g = 0; g < wordGlyphs.Count; g++)
+                    wordWidth += wordGlyphs[g].Advance + Settings.LetterSpacing;
+
+                if (wrapEnabled && currentX + wordWidth > maxWidth)
+                {
+                    // Wrap before the word when the line already has content.
+                    if (line.Glyphs.Count > 0)
                     {
-                        char c = text[j];
-
-                        FontFile font = Settings.Font;
-                        if (Settings.FontSelector != null)
-                            font = Settings.FontSelector(j);
-                        var g = fontSystem.GetOrCreateGlyph(c, font, Settings.Quality);
-
-                        if (g == null) continue;
-
-                        var gm = fontSystem.GetGlyphMetrics(g.Font, c, pixelSize) ?? default;
-                        var adv = gm.AdvanceWidth + Settings.LetterSpacing;
-
-                        // internal kerning (within the word) - only kern within a single font
-                        if (prevGlyphIndex != 0 && ReferenceEquals(prevGlyphFont, g.Font))
-                            wordWidthNoLeadingKerning += fontSystem.GetKerningByGlyph(g.Font, prevGlyphIndex, g.GlyphIndex, pixelSize);
-
-                        wordWidthNoLeadingKerning += adv;
-
-                        if (!hadFirstGlyph)
-                        {
-                            hadFirstGlyph = true;
-
-                            // kerning between previous run (if any) and first glyph of this word
-                            if (lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
-                                firstLeadingKerning = fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
-                        }
-
-                        prevGlyphIndex = g.GlyphIndex;
-                        prevGlyphFont = g.Font;
+                        FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
+                        currentX = 0f;
+                        currentY += lineHeight;
+                        line = new Line(new Float2(0, currentY), wordStart);
                     }
 
-                    measured = true;
-
-                    // Word may be empty if all codepoints were missing; just skip it
-                    if (!hadFirstGlyph)
+                    // A word too wide for a whole line is split at cluster boundaries.
+                    if (wordWidth > maxWidth)
                     {
+                        PlaceLongWord(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
+                                      wordGlyphs, pixelSize, Settings.LetterSpacing, maxWidth);
                         i = wordEnd;
-                        lastGlyphForKerning = 0;
-                        lastFontForKerning = null;
                         continue;
                     }
-
-                    // -------- Wrapping decisions --------
-                    float prospective = currentX + (line.Glyphs.Count > 0 ? firstLeadingKerning : 0f) + wordWidthNoLeadingKerning;
-                    if (prospective > maxWidth)
-                    {
-                        // If current line has content, wrap before placing the word
-                        if (line.Glyphs.Count > 0)
-                        {
-                            FinalizeLine(ref line, currentY, lineHeight, wordStart, currentX);
-                            currentX = 0f;
-                            currentY += lineHeight;
-                            line = new Line(new Float2(0, currentY), wordStart);
-                            lastGlyphForKerning = 0; // new line: no leading kerning
-                            lastFontForKerning = null;
-                            firstLeadingKerning = 0f;
-                        }
-
-                        // If the word itself is too long for an empty line, split it (char-level)
-                        if (wordWidthNoLeadingKerning > maxWidth)
-                        {
-                            i = LayoutLongWordFast(fontSystem, ref line, ref currentX, ref currentY, lineHeight,
-                                                   wordStart, wordEnd, tabWidth, spaceAdvance, wrapEnabled, maxWidth);
-                            lastGlyphForKerning = 0;
-                            lastFontForKerning = null;
-                            continue;
-                        }
-                    }
                 }
 
-                // -------- Second pass for the word: actually place glyphs --------
-                // When measure ran, leading kerning was already computed (and reset to 0 if we wrapped).
-                // When measure was skipped, defer leading kerning to the first emitted glyph.
-                if (measured && firstLeadingKerning != 0f && line.Glyphs.Count > 0)
-                    currentX += firstLeadingKerning;
+                for (int g = 0; g < wordGlyphs.Count; g++)
+                    EmitShaped(fontSystem, line, wordGlyphs[g], ref currentX, pixelSize, Settings.LetterSpacing);
 
-                bool placedAnyThisWord = false;
-                int prevForKern = 0;
-                FontFile prevFontForKern = null;
-                for (int j = wordStart; j < wordEnd; j++)
-                {
-                    char c = text[j];
-
-                    FontFile font = Settings.Font;
-                    if (Settings.FontSelector != null)
-                        font = Settings.FontSelector(j);
-                    var g = fontSystem.GetOrCreateGlyph(c, font, Settings.Quality);
-
-                    if (g == null) continue;
-
-                    // Cross-word leading kerning (computed lazily when measure pass was skipped)
-                    if (!placedAnyThisWord && !measured && line.Glyphs.Count > 0
-                        && lastGlyphForKerning != 0 && ReferenceEquals(lastFontForKerning, g.Font))
-                    {
-                        currentX += fontSystem.GetKerningByGlyph(g.Font, lastGlyphForKerning, g.GlyphIndex, pixelSize);
-                    }
-
-                    if (prevForKern != 0 && ReferenceEquals(prevFontForKern, g.Font))
-                    {
-                        float k = fontSystem.GetKerningByGlyph(g.Font, prevForKern, g.GlyphIndex, pixelSize);
-                        if (k != 0f) currentX += k;
-                    }
-
-                    // Inlined glyph emit (was EmitGlyph local function - removed to avoid closure alloc)
-                    {
-                        var gm = fontSystem.GetGlyphMetrics(g.Font, c, pixelSize) ?? default;
-                        float advanceBase = gm.AdvanceWidth + Settings.LetterSpacing;
-                        float a = GetAscender(fontSystem, g.Font, pixelSize);
-                        line.Glyphs.Add(new GlyphInstance(
-                            g,
-                            new Float2(currentX + gm.OffsetX, gm.OffsetY + a),
-                            c, advanceBase, pixelSize, j));
-                        currentX += advanceBase;
-                        lastGlyphForKerning = g.GlyphIndex;
-                        lastFontForKerning = g.Font;
-                    }
-
-                    prevForKern = g.GlyphIndex;
-                    prevFontForKern = g.Font;
-                    placedAnyThisWord = true;
-                }
-
-                // If we skipped the measure pass and the word turned out to be all-missing, behave
-                // the same as the wrap-enabled path so cross-run kerning resets.
-                if (!measured && !placedAnyThisWord)
-                {
-                    lastGlyphForKerning = 0;
-                    lastFontForKerning = null;
-                }
-
-                // Move i past this word
                 i = wordEnd;
             }
 
@@ -347,73 +229,55 @@ namespace Prowl.Scribe
                 FinalizeLine(ref line, currentY, lineHeight, i, currentX);
         }
 
-        // Split a too-long word across lines, char by char, with minimal overhead.
-        // Note: we do not kern across line starts; inside a run we keep kerning.
-        private int LayoutLongWordFast(
-            FontSystem fontSystem,
-            ref Line line,
-            ref float currentX,
-            ref float currentY,
-            float lineHeight,
-            int start, int end,
-            float tabWidth,
-            float spaceAdvance,
-            bool wrapEnabled,
-            float maxWidth)
+        // Reusable shaped-glyph buffer for the current content word.
+        private List<ShapedGlyph> _wordGlyphs;
+
+        // Places an already-shaped word that is too wide for one line, breaking at cluster boundaries
+        // (never inside a ligature).
+        private void PlaceLongWord(FontSystem fontSystem, ref Line line, ref float currentX,
+            ref float currentY, float lineHeight, List<ShapedGlyph> glyphs, float pixelSize,
+            float letterSpacing, float maxWidth)
         {
-            float pixelSize = Settings.PixelSize;
-
-            int lastKernGlyph = 0;
-            FontFile lastKernFont = null;
-
-            for (int i = start; i < end; i++)
+            for (int g = 0; g < glyphs.Count; g++)
             {
-                char c = Text[i];
+                var sg = glyphs[g];
+                float adv = sg.Advance + letterSpacing;
 
-                FontFile font = Settings.Font;
-                if (Settings.FontSelector != null)
-                    font = Settings.FontSelector(i);
-                var g = fontSystem.GetOrCreateGlyph(c, font, Settings.Quality);
-
-                if (g == null) continue;
-
-                var gm = fontSystem.GetGlyphMetrics(g.Font, c, pixelSize) ?? default;
-                float adv = gm.AdvanceWidth + Settings.LetterSpacing;
-
-                // If next char doesn't fit, wrap (but not before placing at least one glyph)
-                float k = 0f;
-                if (lastKernGlyph != 0 && ReferenceEquals(lastKernFont, g.Font))
-                    k = fontSystem.GetKerningByGlyph(g.Font, lastKernGlyph, g.GlyphIndex, pixelSize);
-
-                if (wrapEnabled && line.Glyphs.Count > 0 && currentX + k + adv > maxWidth)
+                if (line.Glyphs.Count > 0 && currentX + adv > maxWidth)
                 {
-                    FinalizeLine(ref line, currentY, lineHeight, i, currentX);
+                    int clusterIndex = sg.Cluster;
+                    FinalizeLine(ref line, currentY, lineHeight, clusterIndex, currentX);
                     currentX = 0f;
                     currentY += lineHeight;
-                    line = new Line(new Float2(0, currentY), i);
-                    lastKernGlyph = 0; // break kerning across lines
-                    lastKernFont = null;
-                }
-                else if (wrapEnabled && line.Glyphs.Count == 0 && currentX + k + adv > maxWidth)
-                {
-                    // Single glyph doesn't fit on an empty line - still place it to avoid infinite loops.
-                    // (Alternatively, clamp to maxWidth.)
-                }
-                else
-                {
-                    if (k != 0f) currentX += k;
+                    line = new Line(new Float2(0, currentY), clusterIndex);
                 }
 
-                // Emit glyph
-                float a = GetAscender(fontSystem, g.Font, pixelSize);
-                var gi = new GlyphInstance(g, new Float2(currentX + gm.OffsetX, gm.OffsetY + a), c, adv, pixelSize, i);
-                line.Glyphs.Add(gi);
-                currentX += adv;
-                lastKernGlyph = g.GlyphIndex;
-                lastKernFont = g.Font;
+                EmitShaped(fontSystem, line, sg, ref currentX, pixelSize, letterSpacing);
+            }
+        }
+
+        // Emits one shaped glyph at the current pen X, advancing the pen. (Line.Glyphs is a reference,
+        // so passing the struct by value is fine - only its list is mutated here.)
+        private void EmitShaped(FontSystem fontSystem, Line line, ShapedGlyph sg, ref float currentX,
+            float pixelSize, float letterSpacing)
+        {
+            float advance = sg.Advance + letterSpacing;
+            var atlas = sg.Glyph;
+            if (atlas == null)
+            {
+                currentX += advance;
+                return;
             }
 
-            return end;
+            var gm = fontSystem.GetGlyphMetricsByIndex(atlas.Font, atlas.GlyphIndex, pixelSize) ?? default;
+            float a = GetAscender(fontSystem, atlas.Font, pixelSize);
+            char ch = sg.Cluster >= 0 && sg.Cluster < Text.Length ? Text[sg.Cluster] : '\0';
+
+            line.Glyphs.Add(new GlyphInstance(
+                atlas,
+                new Float2(currentX + gm.OffsetX, gm.OffsetY + a),
+                ch, advance, pixelSize, sg.Cluster, sg.CharCount));
+            currentX += advance;
         }
 
 
@@ -422,15 +286,27 @@ namespace Prowl.Scribe
         private float GlyphOffsetX(GlyphInstance gi)
         {
             if (_fontSystem == null || gi.Glyph == null) return 0f;
-            var gm = _fontSystem.GetGlyphMetrics(gi.Glyph.Font, gi.Glyph.Codepoint, gi.PixelSize);
+            var gm = _fontSystem.GetGlyphMetricsByIndex(gi.Glyph.Font, gi.Glyph.GlyphIndex, gi.PixelSize);
             return gm?.OffsetX ?? 0f;
+        }
+
+        // Natural line height of the primary font at the current size (ascent + |descent| + lineGap).
+        // Falls back to the pixel size when there is no font.
+        private float GetLineHeight(FontSystem fontSystem)
+        {
+            var font = Settings.Font;
+            if (font == null)
+                return Settings.PixelSize;
+            fontSystem.GetScaledVMetrics(font, Settings.PixelSize, out float asc, out float desc, out float gap);
+            float h = asc - desc + gap; // descent is negative
+            return h > 0f ? h : Settings.PixelSize;
         }
 
         private float GetSpaceWidth(FontSystem fontSystem)
         {
             var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font, Settings.Quality);
             if (spaceGlyph == null) return Settings.PixelSize * 0.25f;
-            var gm = fontSystem.GetGlyphMetrics(spaceGlyph.Font, spaceGlyph.Codepoint, Settings.PixelSize);
+            var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, Settings.PixelSize);
             return gm?.AdvanceWidth ?? Settings.PixelSize * 0.25f;
         }
 
@@ -556,8 +432,15 @@ namespace Prowl.Scribe
                             return new Float2(line.Position.X + glyphStart, line.Position.Y);
                         }
 
+                        // Inside a multi-character cluster (e.g. a ligature): interpolate within it.
+                        if (index < glyph.CharIndex + glyph.CharCount)
+                        {
+                            float frac = (index - glyph.CharIndex) / (float)glyph.CharCount;
+                            return new Float2(line.Position.X + glyphStart + glyph.AdvanceWidth * frac, line.Position.Y);
+                        }
+
                         currentX = glyphStart + glyph.AdvanceWidth;
-                        currentIndex = glyph.CharIndex + 1;
+                        currentIndex = glyph.CharIndex + glyph.CharCount;
                     }
 
                     int trailing = line.EndIndex - currentIndex;
@@ -618,12 +501,19 @@ namespace Prowl.Scribe
                 float glyphEnd = glyphStart + glyph.AdvanceWidth;
                 if (position.X < glyphEnd)
                 {
-                    float mid = glyphStart + glyph.AdvanceWidth * 0.5f;
-                    return position.X < mid ? glyph.CharIndex : glyph.CharIndex + 1;
+                    if (glyph.CharCount <= 1)
+                    {
+                        float mid = glyphStart + glyph.AdvanceWidth * 0.5f;
+                        return position.X < mid ? glyph.CharIndex : glyph.CharIndex + 1;
+                    }
+                    // Multi-character cluster: snap to the nearest character boundary inside it.
+                    float rel = glyph.AdvanceWidth > 0f ? (position.X - glyphStart) / glyph.AdvanceWidth : 0f;
+                    int within = (int)Math.Clamp(MathF.Round(rel * glyph.CharCount), 0, glyph.CharCount);
+                    return glyph.CharIndex + within;
                 }
 
                 currentX = glyphEnd;
-                currentIndex = glyph.CharIndex + 1;
+                currentIndex = glyph.CharIndex + glyph.CharCount;
             }
 
             int trailingSpaces = line.EndIndex - currentIndex;
