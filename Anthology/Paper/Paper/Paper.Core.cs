@@ -320,7 +320,12 @@ namespace Prowl.PaperUI
             var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
             if (boxShadow.IsVisible)
             {
-                float buffer = boxShadow.Blur * 0.5f;
+                // Soft falloff: the lit "core" of the brush box is the element box itself (no outward
+                // buffer), and the feather (full falloff width) is twice the blur. Together with the
+                // geometry buffer of one blur below, this keeps the OUTER radius at element+spread+blur
+                // while pushing the solid core inward by a blur, so the shadow reads as a smooth gradient
+                // instead of a near-solid shape with a thin fringe.
+                float buffer = 0f;
                 float sx = rect.Min.X + boxShadow.OffsetX - buffer - boxShadow.Spread;
                 float sy = rect.Min.Y + boxShadow.OffsetY - buffer - boxShadow.Spread;
                 float sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
@@ -332,7 +337,7 @@ namespace Prowl.PaperUI
                     sw,
                     sh,
                     radi,
-                    (float)boxShadow.Blur,
+                    (float)boxShadow.Blur * 2f,
                     boxShadow.Color,
                     Color32.FromArgb(0, boxShadow.Color));
 
