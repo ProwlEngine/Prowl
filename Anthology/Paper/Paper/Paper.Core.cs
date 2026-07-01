@@ -347,10 +347,17 @@ namespace Prowl.PaperUI
                 sw = rect.Size.X + (buffer * 2) + (boxShadow.Spread * 2);
                 sh = rect.Size.Y + (buffer * 2) + (boxShadow.Spread * 2);
 
-                _canvas.RoundedRectFilled(sx, sy, sw, sh,
-                    rounded.X, rounded.Y,
-                    rounded.Z, rounded.W,
-                    Prowl.Vector.Color.White);
+                // Paint the halo as a ring: the shadow geometry with the element's own rounded rect
+                // punched out (even-odd hole). Without this the shadow is painted under the element too,
+                // which shows through any translucent fill (a glass window/card revealing its own shadow).
+                _canvas.SaveState();
+                _canvas.SetFillColor(Prowl.Vector.Color.White);
+                _canvas.SetSolidity(WindingMode.OddEven);
+                _canvas.BeginPath();
+                AddRoundedContour(_canvas, sx, sy, sw, sh, rounded);
+                AddRoundedContour(_canvas, (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y, rounded);
+                _canvas.FillComplex();
+                _canvas.RestoreState();
 
                 _canvas.ClearBrush();
             }
@@ -434,9 +441,9 @@ namespace Prowl.PaperUI
             {
                 _canvas.BeginPath();
                 if(hasRounding)
-                    _canvas.RoundedRect(rect.Min.X-1, rect.Min.Y-1, rect.Size.X+1, rect.Size.Y+1, rounded.X, rounded.Y, rounded.Z, rounded.W);
+                    _canvas.RoundedRect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W);
                 else
-                    _canvas.Rect(rect.Min.X-1, rect.Min.Y-1, rect.Size.X+1, rect.Size.Y+1);
+                    _canvas.Rect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
                 _canvas.SetStrokeColor(borderColor);
                 _canvas.SetStrokeWidth(borderWidth);
                 _canvas.Stroke();
@@ -501,6 +508,30 @@ namespace Prowl.PaperUI
             }
 
             _canvas.RestoreState();
+        }
+
+        /// <summary>
+        /// Appends a closed rounded-rect contour to the canvas' current path (unlike
+        /// <see cref="Canvas.RoundedRect"/>, it does not call BeginPath), so several contours can be
+        /// combined in one path — e.g. an outer rect plus an inner hole for an even-odd fill.
+        /// </summary>
+        private static void AddRoundedContour(Canvas canvas, float x, float y, float w, float h, Float4 r)
+        {
+            if (w <= 0 || h <= 0) return;
+            float mr = MathF.Min(w, h) * 0.5f;
+            float tl = MathF.Min((float)r.X, mr), tr = MathF.Min((float)r.Y, mr);
+            float br = MathF.Min((float)r.Z, mr), bl = MathF.Min((float)r.W, mr);
+            float halfPi = MathF.PI * 0.5f;
+            canvas.MoveTo(x + tl, y);
+            canvas.LineTo(x + w - tr, y);
+            canvas.Arc(x + w - tr, y + tr, tr, -halfPi, 0f, false);
+            canvas.LineTo(x + w, y + h - br);
+            canvas.Arc(x + w - br, y + h - br, br, 0f, halfPi, false);
+            canvas.LineTo(x + bl, y + h);
+            canvas.Arc(x + bl, y + h - bl, bl, halfPi, MathF.PI, false);
+            canvas.LineTo(x, y + tl);
+            canvas.Arc(x + tl, y + tl, tl, MathF.PI, MathF.PI + halfPi, false);
+            canvas.ClosePath();
         }
 
         private void DrawText(in ElementHandle handle, float x, float y, float availableWidth, float availableHeight)
