@@ -35,6 +35,11 @@ namespace Prowl.PaperUI
         {
             Color LerpColor(Color a, Color b)
             {
+                // A fully-transparent endpoint carries no meaningful RGB (System.Drawing's Transparent
+                // is white), so adopt the other endpoint's RGB and only fade alpha. Otherwise a shadow
+                // animating in from None would sweep through a white glow before reaching its colour.
+                if (a.A == 0) a = Color.FromArgb(0, b.R, b.G, b.B);
+                if (b.A == 0) b = Color.FromArgb(0, a.R, a.G, a.B);
                 int r = (int)(a.R + (b.R - a.R) * t);
                 int g = (int)(a.G + (b.G - a.G) * t);
                 int bVal = (int)(a.B + (b.B - a.B) * t);
