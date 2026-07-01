@@ -286,9 +286,7 @@ public class AnimationCurve : ISerializable
     private int GetNumberOfCycle(float position)
     {
         float cycle = (position - Keys[0].Position) / (Keys[Keys.Count - 1].Position - Keys[0].Position);
-        if (cycle < 0.0)
-            cycle--;
-        return (int)cycle;
+        return (int)Math.Floor(cycle);
     }
 
     private float GetCurvePosition(float position)
@@ -303,10 +301,7 @@ public class AnimationCurve : ISerializable
             {
                 if (prev.Continuity == CurveContinuity.Step)
                 {
-                    if (position >= 1.0)
-                    {
-                        return next.Value;
-                    }
+                    // Step holds the previous key's value across the whole segment until the next key.
                     return prev.Value;
                 }
                 float t = (position - prev.Position) / (next.Position - prev.Position);// to have t in [0,1]
