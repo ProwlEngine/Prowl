@@ -561,10 +561,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Clear the physics world
         _physics.Clear();
 
-        // Dispose all GameObjects which will also remove them from the scene
+        // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
+        // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
+        // already-disposed children are no-ops.
         List<GameObject> allObjects = [.. AllObjects];
         foreach (GameObject g in allObjects)
-            g.OnDispose();
+            g.Dispose();
 
         // Clear any remaining references
         _allObj.Clear();
