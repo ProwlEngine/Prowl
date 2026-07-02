@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Slang/Prowl.Slang.csproj">
-      <Properties>DefineConstants=SLANG_CONSUME_GLSL</Properties>
+      <AdditionalProperties>DefineConstants=SLANG_CONSUME_GLSL</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
 

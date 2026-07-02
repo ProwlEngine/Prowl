@@ -11,26 +11,10 @@
     <!-- Package metadata -->
     <PackageId>Prowl.Clay</PackageId>
     <Title>Prowl.Clay</Title>
-    <Authors>Wulferis</Authors>
-    <Company>Prowl Engine</Company>
+    
     <Description>3D model importing library for the Prowl Game Engine. Loads glTF2 / GLB / VRM, OBJ, and FBX (binary + ASCII) into a read-only Model graph with a configurable post-process pipeline (triangulation, tangent generation, bone limiting, coordinate conversion, mesh optimization).</Description>
     <PackageTags>3d;model;import;gltf;glb;vrm;obj;fbx;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
-
-    <!-- Build -->
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <NeutralLanguage>en-AU</NeutralLanguage>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-
-    <!-- Links -->
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="..\README.md" Pack="True" PackagePath="\" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />

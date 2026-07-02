@@ -4,26 +4,13 @@
     <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>latest</LangVersion>
 
     <!-- Package metadata -->
     <PackageId>Prowl.Echo</PackageId>
     <Title>Prowl.Echo</Title>
-    <Authors>Wulferis</Authors>
     <Description>A high-performance .NET serializer with source generation. Supports complex object graphs, circular references, polymorphism, collections, and 470+ tests. Serializes to an in-memory graph that can be inspected, modified, and converted to binary or text.</Description>
     <PackageTags>serialization;serializer;source-generator;high-performance;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph</PackageTags>
-
-    <!-- Build -->
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <NeutralLanguage>en-AU</NeutralLanguage>
-
-    <!-- Links -->
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="..\README.md" Pack="True" PackagePath="\" />
-  </ItemGroup>
 
   <!-- 'dynamic' needs Microsoft.CSharp on netstandard2.1; it is in-box on net8+. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">

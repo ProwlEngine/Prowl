@@ -4,25 +4,16 @@
     <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
 
     <Title>Prowl.Scribe</Title>
     <Description>TrueType font parser, glyph layout engine, dynamic atlas packing, and Markdown renderer.</Description>
     <PackageTags>prowl;font;truetype;rasterizer;markdown;layout;rendering</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Scribe.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
   </ItemGroup>
 
   <ItemGroup>

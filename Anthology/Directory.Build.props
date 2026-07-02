@@ -1,39 +1,41 @@
 <Project>
 
-  <!-- Universal metadata shared by every project in the monorepo. Safe to apply everywhere:
-       tests and samples inherit it harmlessly since they are never published. -->
-  <PropertyGroup>
-    <Authors>Wulferis</Authors>
-    <Company>Prowl</Company>
-    <Product>Prowl</Product>
-    <NeutralLanguage>en-AU</NeutralLanguage>
-    <LangVersion>latest</LangVersion>
+     <!-- Universal metadata shared by every project in the monorepo. Safe to apply everywhere:
+          tests and samples inherit it harmlessly since they are never published. -->
+     <PropertyGroup>
+          <Authors>Prowl Contributors</Authors>
+          <Company>Prowl Group</Company>
+          <Owners>Prowl Group</Owners>
+          <Copyright>Copyright (c) Prowl Group 2026.</Copyright>
+          <Product>Prowl</Product>
+          <NeutralLanguage>en-AU</NeutralLanguage>
+          <LangVersion>latest</LangVersion>
 
-    <!-- One version for the whole family. Bump this single line to release everything.
-         Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
-         first Anthology publish of any package is never treated as older than NuGet has. -->
-    <Version>2.3.0</Version>
+          <!-- One version for the whole family. Bump this single line to release everything.
+               Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
+               first Anthology publish of any package is never treated as older than NuGet has. -->
+          <Version>2.3.0</Version>
 
-    <RepositoryUrl>https://github.com/ProwlEngine/Anthology</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/ProwlEngine/Anthology</PackageProjectUrl>
+          <RepositoryUrl>https://github.com/ProwlEngine/Anthology</RepositoryUrl>
+          <RepositoryType>git</RepositoryType>
+          <PackageProjectUrl>https://github.com/ProwlEngine/Anthology</PackageProjectUrl>
 
-    <!-- Every library is MIT; declared once here via SPDX expression (see the repo-root LICENSE). -->
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+          <!-- Every library is MIT; declared once here via SPDX expression (see the repo-root LICENSE). -->
+          <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-    <!-- Shared framework sets, kept in one place. Library projects opt into one of these via
-         <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and samples keep
-         their own single TargetFramework and are left alone.
-         - Default: the modern set every library supports.
-         - Compat: adds netstandard2.1 for libraries that also support Unity / older runtimes. -->
-    <ProwlTargetFrameworks>net8.0;net9.0;net10.0</ProwlTargetFrameworks>
-    <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0</ProwlTargetFrameworksCompat>
-  </PropertyGroup>
+          <!-- Shared framework sets, kept in one place. Library projects opt into one of these via
+               <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>; tests and samples keep
+               their own single TargetFramework and are left alone.
+               - Default: the modern set every library supports.
+               - Compat: adds netstandard2.1 for libraries that also support Unity / older runtimes. -->
+          <ProwlTargetFrameworks>net8.0;net9.0;net10.0</ProwlTargetFrameworks>
+          <ProwlTargetFrameworksCompat>netstandard2.1;net8.0;net9.0;net10.0</ProwlTargetFrameworksCompat>
+     </PropertyGroup>
 
-  <!-- Polyfills the language-feature attributes (init / required / records, etc.) that
-       netstandard2.1 lacks. Build-only; generates nothing on net8+ where the types exist. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
-    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
-  </ItemGroup>
+     <!-- Polyfills the language-feature attributes (init / required / records, etc.) that
+          netstandard2.1 lacks. Build-only; generates nothing on net8+ where the types exist. -->
+     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+       <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+     </ItemGroup>
 
 </Project>

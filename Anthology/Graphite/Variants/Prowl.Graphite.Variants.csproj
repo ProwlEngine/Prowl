@@ -11,12 +11,8 @@
         <PackageTags>graphics shader variant keyword</PackageTags>
     </PropertyGroup>
 
-    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
+    <ItemGroup>
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
-        <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
     </ItemGroup>
 
     <ItemGroup>

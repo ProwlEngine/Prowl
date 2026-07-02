@@ -1,30 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <!-- Override the net10-only default from Crumb/Directory.Build.props (which the tests use). -->
-        <TargetFramework></TargetFramework>
         <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
         <PackageId>Prowl.Crumb</PackageId>
-
-        <Authors>Prowl Group</Authors>
-        <Owners>Prowl Group</Owners>
-        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
-
+        <Title>Prowl.Crumb</Title>
+        
         <Description>A lightweight tokenizer for C#.</Description>
 
         <PackageTags>tokenizer token parser lexer</PackageTags>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
 
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <DebugType>portable</DebugType>
-        <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     </PropertyGroup>
-
-    <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="" />
-    </ItemGroup>
 </Project>

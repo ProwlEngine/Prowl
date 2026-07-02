@@ -14,16 +14,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Slang\Slang\Prowl.Slang.csproj" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(UseLocalProjectReferences)' == 'true'">
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\Variants\Prowl.Graphite.Variants.csproj" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(UseLocalProjectReferences)' != 'true'">
-        <PackageReference Include="Prowl.Graphite" Version="$(GraphiteVersion)" />
-        <PackageReference Include="Prowl.Graphite.Variants" Version="$(GraphiteVersion)" />
     </ItemGroup>
 
     <ItemGroup>

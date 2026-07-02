@@ -11,7 +11,6 @@
     <!-- Centralized package versions -->
     <PropertyGroup>
         <SilkNetVersion>2.23.0</SilkNetVersion>
-        <GraphiteVersion>0.2.0</GraphiteVersion>
     </PropertyGroup>
 
     <!-- Backend exclusion flags (set to true to exclude a backend from the build) -->
@@ -22,18 +21,17 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Authors>Prowl Group</Authors>
-        <Owners>Prowl Group</Owners>
-        <Company>Prowl Group</Company>
-        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
-
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
 
-        <UseLocalProjectReferences Condition="'$(IsPacking)' == ''">true</UseLocalProjectReferences>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>portable</DebugType>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
     <!-- Prowl.Vector is in this monorepo; reference it as a project. Anchored to this props file
@@ -46,13 +44,7 @@
         <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(IsPacking)' == 'true'">
+    <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
     </ItemGroup>
-
-    <PropertyGroup Condition="'$(IsPacking)' == 'true'">
-        <PublishRepositoryUrl>true</PublishRepositoryUrl>
-        <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <DebugType>portable</DebugType>
-    </PropertyGroup>
 </Project>

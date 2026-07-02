@@ -36,15 +36,13 @@ jobs:
       - name: Test
         run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test&FullyQualifiedName!~Prowl.Graphite.Compiler.Tests&FullyQualifiedName!~Prowl.Graphite.Tests"
 
-      # Slang's native binaries are not committed; fetch them (dotnet-script) so they pack into runtimes/.
+      # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
       - name: Fetch Slang native binaries
         working-directory: Slang/Native
-        run: |
-          dotnet tool install -g dotnet-script
-          dotnet-script UpdateSources.csx
+        run: dotnet run UpdateSources.cs
 
       - name: Pack
-        run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts
+        run: dotnet pack Anthology.slnx -c Release --no-build -o artifacts/nuget
 
       - name: NuGet auth (trusted publishing)
         uses: NuGet/login@v1
@@ -54,7 +52,7 @@ jobs:
 
       - name: Push to NuGet
         run: >
-          dotnet nuget push "artifacts/*.nupkg"
+          dotnet nuget push "artifacts/nuget/*.nupkg"
           --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate

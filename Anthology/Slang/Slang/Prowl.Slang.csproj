@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
         <OutputType>Library</OutputType>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -12,13 +12,8 @@
     <PropertyGroup>
         <PackageId>Prowl.Slang</PackageId>
 
-        <Authors>Prowl Group</Authors>
-        <Owners>Prowl Group</Owners>
-        <Copyright>Copyright (c) Prowl Group 2025.</Copyright>
-
         <Description>A cross-platform managed wrapper for the Slang shader compiler. Can be used to cross-compile Slang shaders to many Graphics API shader formats.</Description>
         <PackageTags>shader compiler slang hlsl glsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
 
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     </PropertyGroup>
@@ -40,8 +35,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="../README.md" Pack="true" PackagePath="\" />
-
         <Content Include="$(WindowsX64LibPath)">
             <Pack>true</Pack>
             <PackagePath>$(WindowsX64RuntimePath)</PackagePath>

@@ -5,20 +5,10 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageId>Prowl.$(AssemblyName)</PackageId>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Title>Prowl.Quill</Title>
-    <Authors>Wulferis</Authors>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Description>A Hardware-Accelerated Anti-Aliased Vector Graphics Library made with .NET</Description>
     <PackageTags>vector-graphics;vector;graphics;canvas;2d;2d-graphics;game-development;graphics-library;anti-aliased;hardware-accelerated;prowl;rendering;bezier;path;gpu;fast</PackageTags>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="..\README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Scribe\Scribe\Scribe.csproj" />
