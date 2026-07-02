@@ -402,3 +402,6 @@ FodyWeavers.xsd
 
 # Wulferis personal/local notes (not part of the repo)
 Wulferis_Local/
+
+# Slang native binary library cache
+Slang/Native/lib
