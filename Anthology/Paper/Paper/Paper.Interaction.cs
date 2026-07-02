@@ -775,6 +775,11 @@ namespace Prowl.PaperUI
                         BubbleEventToParents(hoveredElement, rightClickEvt);
                     }
                 }
+
+                // A right-click anywhere other than the currently focused element (including empty
+                // space) clears focus; right-clicking the focused element itself leaves it focused.
+                if (_focusedElementId != 0 && !IsElementFocused(_theHoveredElementId))
+                    ClearFocus();
             }
 
             // Handle double-click
