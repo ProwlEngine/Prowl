@@ -19,7 +19,7 @@ public class WebGLCanvasRenderer : ICanvasRenderer
     private double[] _brushBuffer = Array.Empty<double>();
 
     private const int VERTEX_SIZE = 20; // 8 position + 8 uv + 4 color
-    private const int DC_INFO_STRIDE = 2; // texId, elemCount
+    private const int DC_INFO_STRIDE = 3; // texId, fontTexId, elemCount
 
     public (int w, int h) GetCanvasSize()
     {
@@ -100,8 +100,10 @@ public class WebGLCanvasRenderer : ICanvasRenderer
 
             // Draw call info
             int texId = dc.Texture != null ? (int)dc.Texture : 0;
+            int fontTexId = dc.FontAtlas != null ? (int)dc.FontAtlas : 0;
             _drawCallInfoBuffer[di] = texId;
-            _drawCallInfoBuffer[di + 1] = dc.ElementCount;
+            _drawCallInfoBuffer[di + 1] = fontTexId;
+            _drawCallInfoBuffer[di + 2] = dc.ElementCount;
 
             // Scissor
             dc.GetScissor(out var scissorMat, out var scissorExt);

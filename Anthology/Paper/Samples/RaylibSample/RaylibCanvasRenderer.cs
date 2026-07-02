@@ -22,6 +22,7 @@ in vec2 fragPos;
 out vec4 finalColor;
 
 uniform sampler2D texture0;
+uniform sampler2D fontTexture; // dedicated font-atlas unit, so text batches with shapes
 uniform mat4 scissorMat;
 uniform vec2 scissorExt;
 
@@ -43,8 +44,6 @@ uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
 uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
 
 float calculateBrushFactor() {
-    if (brushType == 0) return 0.0;
-
     // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
     vec2 logicalPos = fragPos / dpiScale;
     vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
@@ -116,7 +115,7 @@ const float sdfPxRange = 4.0;
 
 // Screen-space width (in pixels) that one distance-field unit spans at this fragment.
 float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(uv);
     return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
@@ -136,7 +135,7 @@ void main()
     // Text mode: UV >= 2.0 means text rendering - fast path
     if (fragTexCoord.x >= 2.0) {
         vec2 uv = fragTexCoord - vec2(2.0);
-        float sd = texture(texture0, uv).r;
+        float sd = texture(fontTexture, uv).r;
         float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
         float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
         finalColor = color * coverage * mask;
@@ -241,6 +240,7 @@ void main()
     // Raylib render textures are stored bottom-up; the scene sample needs no extra flip.
     private const int BackdropFlipY = 0;
     int _backdropTexLoc;
+    int _fontTextureLoc;
     int _viewportSizeLoc;
     int _backdropBlurAmountLoc;
     int _backdropFlipYLoc;
@@ -269,6 +269,7 @@ void main()
         _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
         _dpiScaleLoc = GetShaderLocation(shader, "dpiScale");
 
+        _fontTextureLoc = GetShaderLocation(shader, "fontTexture");
         _backdropTexLoc = GetShaderLocation(shader, "backdropTexture");
         _viewportSizeLoc = GetShaderLocation(shader, "viewportSize");
         _backdropBlurAmountLoc = GetShaderLocation(shader, "backdropBlurAmount");
@@ -419,6 +420,10 @@ void main()
 
         // Set texture transform parameters
         SetShaderValueMatrix(shader, _brushTextureMatLoc, (Float4x4)drawCall.Brush.TextureMatrix);
+
+        // Font atlas on its own sampler so text batches with shapes (text samples it).
+        if (drawCall.FontAtlas is Texture2D fontTex)
+            SetShaderValueTexture(shader, _fontTextureLoc, fontTex);
 
         // Backdrop blur uniforms
         float blurAmount = (float)drawCall.Brush.BackdropBlur;

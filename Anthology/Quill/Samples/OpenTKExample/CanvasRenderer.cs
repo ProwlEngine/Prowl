@@ -23,6 +23,7 @@ namespace OpenTKExample
         private int _elementBufferObject;
         private int _projectionLocation;
         private int _textureSamplerLocation;
+        private int _fontTextureLoc;
         private int _scissorMatLoc = 0;
         private int _scissorExtLoc = 0;
 
@@ -143,6 +144,7 @@ namespace OpenTKExample
             // Get location of the projection uniform
             _projectionLocation = GL.GetUniformLocation(_shaderProgram, "projection");
             _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "texture0");
+            _fontTextureLoc = GL.GetUniformLocation(_shaderProgram, "fontTexture");
             _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
             _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
 
@@ -405,7 +407,8 @@ namespace OpenTKExample
 
             // Active texture unit for sampling
             GL.ActiveTexture(TextureUnit.Texture0);
-            GL.Uniform1(_textureSamplerLocation, 0); // texture unit 0
+            GL.Uniform1(_textureSamplerLocation, 0); // brush/shape texture on unit 0
+            GL.Uniform1(_fontTextureLoc, 1);         // font atlas on unit 1 (persists on this program)
 
             // Draw all draw calls in the canvas
             int indexOffset = 0;
@@ -415,7 +418,9 @@ namespace OpenTKExample
                 if (drawCall.Brush.BackdropBlur > 0f)
                     RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
 
-                // Handle texture binding
+                // Handle texture binding: font atlas on unit 1 (for text), brush/shape on unit 0.
+                // Bind unit 0 last so the active unit is left at 0 as the rest of the code expects.
+                (drawCall.FontAtlas as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture1);
                 (drawCall.Texture as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture0);
 
                 // Check for custom shader

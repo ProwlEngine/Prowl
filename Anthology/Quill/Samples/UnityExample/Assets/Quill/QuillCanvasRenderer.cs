@@ -43,6 +43,7 @@ namespace Quill.Unity
 
         // Shader property IDs
         private static readonly int _MainTexID = Shader.PropertyToID("_MainTex");
+        private static readonly int _FontTexID = Shader.PropertyToID("_FontTex");
         private static readonly int _ScissorMatID = Shader.PropertyToID("_ScissorMat");
         private static readonly int _ScissorExtID = Shader.PropertyToID("_ScissorExt");
         private static readonly int _BrushMatID = Shader.PropertyToID("_BrushMat");
@@ -243,6 +244,7 @@ namespace Quill.Unity
                 // Set texture
                 var texture = drawCall.Texture as Texture2D ?? _defaultTexture;
                 _material.SetTexture(_MainTexID, texture);
+                _material.SetTexture(_FontTexID, drawCall.FontAtlas as Texture2D ?? _defaultTexture);
 
                 // Set DPI scale
                 _material.SetFloat(_DpiScaleID, (float)canvas.FramebufferScale);
@@ -346,6 +348,7 @@ namespace Quill.Unity
                 // Set texture
                 var texture = drawCall.Texture as Texture2D ?? _defaultTexture;
                 _propertyBlock.SetTexture(_MainTexID, texture);
+                _propertyBlock.SetTexture(_FontTexID, drawCall.FontAtlas as Texture2D ?? _defaultTexture);
 
                 // Set DPI scale
                 _propertyBlock.SetFloat(_DpiScaleID, (float)canvas.FramebufferScale);

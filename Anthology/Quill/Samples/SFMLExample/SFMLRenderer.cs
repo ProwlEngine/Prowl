@@ -23,6 +23,7 @@ namespace SFMLExample
         // Shader sources directly corresponding to the OpenGL shaders
         private const string FRAGMENT_SHADER = @"
 uniform sampler2D texture0;
+uniform sampler2D fontTexture; // dedicated font-atlas unit, so text batches with shapes
 uniform mat4 scissorMat;
 uniform vec2 scissorExt;
 
@@ -47,15 +48,12 @@ varying vec2 v_position; // Add this
 
 const float sdfPxRange = 4.0;
 float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(uv);
     return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
 
 float calculateBrushFactor(vec2 fragPos) {
-    // No brush
-    if (brushType == 0) return 0.0;
-
     // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
     vec2 logicalPos = fragPos / dpiScale;
     vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
@@ -149,10 +147,10 @@ void main()
         color = mix(brushColor1, brushColor2, factor);
     }
     
-    // Text mode: UV >= 2.0 means text rendering - fast path
+    // Text mode: UV >= 2.0 - sampled from the dedicated font atlas unit (not texture0).
     if (fragTexCoord.x >= 2.0) {
         vec2 uv = fragTexCoord - vec2(2.0, 2.0);
-        float sd = texture(texture0, uv).r;
+        float sd = texture(fontTexture, uv).r;
         float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
         float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
         gl_FragColor = color * coverage * mask;
@@ -540,6 +538,9 @@ void main()
                             (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y));
                         _shader.SetUniform("brushParams2", new Vec2(
                             (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather));
+
+                        // Font atlas on its own sampler so text batches with shapes (text samples it).
+                        _shader.SetUniform("fontTexture", (drawCall.FontAtlas as TextureSFML)?.Handle ?? _defaultTexture);
 
                         // Set texture transform parameters
                         _shader.SetUniform("brushTextureMat", ToMat4(drawCall.Brush.TextureMatrix));

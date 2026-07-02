@@ -74,11 +74,19 @@ namespace Prowl.Quill
         internal Transform2D scissor;
         internal Float2 scissorExtent;
         internal int stateHash;
+        internal object? fontAtlas;
 
         /// <summary>
         /// Gets the texture from the brush. Returns null if no texture is set.
         /// </summary>
         public object? Texture => Brush.Texture;
+
+        /// <summary>
+        /// The font atlas texture for text in this draw call, or null if it contains no text.
+        /// Backends bind this to a dedicated sampler unit; the default shader samples it for text
+        /// fragments (UV >= 2) while shapes sample <see cref="Texture"/>.
+        /// </summary>
+        public object? FontAtlas => fontAtlas;
 
         /// <summary>
         /// Gets the custom shader from the brush. Returns null if no custom shader is set (uses default).
@@ -439,6 +447,11 @@ namespace Prowl.Quill
         private int _currentDrawStateHash;
         private bool _drawStateDirty = true;
 
+        // The font atlas texture bound to the dedicated font sampler unit. Persistent canvas state
+        // (not per-save/restore) that only changes when the atlas is (re)allocated, so text batches
+        // with shapes. Part of the draw-state hash so a change cleanly splits the batch.
+        private object? _currentFontAtlas;
+
         internal List<uint> _indices = new List<uint>();
         internal List<Vertex> _vertices = new List<Vertex>();
 
@@ -562,6 +575,21 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Approximate uniform scale (in logical units) of the current transform, taken from the
+        /// square root of the linear part's determinant. The hardcoded "Filled" primitives inset/
+        /// outset their anti-aliasing fringe in logical space before transforming, so dividing the
+        /// half-pixel fringe by this keeps it a constant ~1 physical pixel on screen at any zoom
+        /// (matching the polyline/stroke fringe, which is already built in pixel space).
+        /// </summary>
+        private float FringeHalfLogical()
+        {
+            var t = _state.transform;
+            double det = t.A * t.D - t.B * t.C;
+            double scale = Math.Sqrt(Math.Abs(det));
+            return scale > 1e-6 ? _pixelHalf / (float)scale : _pixelHalf;
+        }
+
+        /// <summary>
         /// Clears all accumulated geometry, draw calls, and resets the canvas state.
         /// </summary>
         internal void Clear()
@@ -600,6 +628,7 @@ namespace Prowl.Quill
                 hash = hash * 31 + _state.scissorExtent.GetHashCode();
                 hash = hash * 31 + _state.scissor.GetHashCode();
                 hash = hash * 31 + _state.brush.ComputeHash();
+                hash = hash * 31 + (_currentFontAtlas?.GetHashCode() ?? 0);
                 _currentDrawStateHash = hash;
             }
             _drawStateDirty = false;
@@ -732,12 +761,17 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Internal method for setting a texture that will be sampled using vertex UVs.
-        /// Used by TextRenderer for font atlas textures.
+        /// Sets the font atlas texture used by text draws. This is kept as a dedicated canvas-level
+        /// state (bound to a separate sampler unit by the backend) rather than the brush texture, so
+        /// text and shapes share a draw call and batch together. Text vertices are flagged by their
+        /// UV (>= 2) and sample this atlas; shapes sample the brush texture. It only changes when the
+        /// atlas is (re)allocated, so it rarely breaks a batch.
         /// </summary>
-        internal void SetFontTexture(object? texture)
+        internal void SetFontAtlas(object? texture)
         {
-            _state.brush.Texture = texture;
+            if (ReferenceEquals(_currentFontAtlas, texture))
+                return;
+            _currentFontAtlas = texture;
             InvalidateDrawState();
         }
 
@@ -1061,21 +1095,43 @@ namespace Prowl.Quill
         /// <param name="vertex">The vertex to add.</param>
         public void AddVertex(Vertex vertex)
         {
-            if (_globalAlpha != 1.0f)
-                vertex.a = (byte)(vertex.a * _globalAlpha);
+            _vertices.Add(Premultiply(vertex, _globalAlpha));
+        }
 
-            // Premultiply
+        /// <summary>
+        /// Adds a batch of vertices at once, applying global alpha and premultiplied alpha to each.
+        /// Reserves the buffer once so large meshes (strokes, glyph runs) don't grow it repeatedly.
+        /// </summary>
+        public void AddVertices(List<Vertex> verts)
+        {
+            float globalAlpha = _globalAlpha;
+            Reserve(_vertices, verts.Count);
+            for (int i = 0; i < verts.Count; i++)
+                _vertices.Add(Premultiply(verts[i], globalAlpha));
+        }
+
+        private static Vertex Premultiply(Vertex vertex, float globalAlpha)
+        {
+            if (globalAlpha != 1.0f)
+                vertex.a = (byte)(vertex.a * globalAlpha);
+
             if (vertex.a != 255)
             {
-                var alpha = vertex.a / 255f;
+                float alpha = vertex.a / 255f;
                 vertex.r = (byte)(vertex.r * alpha);
                 vertex.g = (byte)(vertex.g * alpha);
                 vertex.b = (byte)(vertex.b * alpha);
             }
 
+            return vertex;
+        }
 
-            // Add the vertex to the list
-            _vertices.Add(vertex);
+        // netstandard2.1 has no List.EnsureCapacity, so grow via the Capacity setter instead.
+        private static void Reserve<T>(List<T> list, int additional)
+        {
+            int needed = list.Count + additional;
+            if (list.Capacity < needed)
+                list.Capacity = needed;
         }
 
         /// <summary>
@@ -1130,6 +1186,7 @@ namespace Prowl.Quill
                 lastDrawCall.scissor = _state.scissor;
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
+                lastDrawCall.fontAtlas = _currentFontAtlas;
                 // Clone uniforms to avoid reference sharing between draw calls
                 if (lastDrawCall.Brush.Uniforms != null)
                     lastDrawCall.Brush.Uniforms = lastDrawCall.Brush.Uniforms.Clone();
@@ -1663,6 +1720,8 @@ namespace Prowl.Quill
 
             // Create vertices and triangles
             uint startVertexIndex = (uint)_vertices.Count;
+            Reserve(_vertices, vertices.Length);
+            Reserve(_indices, indices.Length);
             for (int i = 0; i < vertices.Length; i++)
             {
                 var vertex = vertices[i];
@@ -1845,8 +1904,8 @@ namespace Prowl.Quill
                 return;
 
             uint startVertexIndex = (uint)_vertices.Count;
-            for (int i = 0; i < verts.Count; i++)
-                AddVertex(verts[i]);
+            AddVertices(verts);
+            Reserve(_indices, idxs.Count);
             for (int i = 0; i < idxs.Count; i++)
                 _indices.Add(startVertexIndex + idxs[i]);
 
@@ -2078,17 +2137,20 @@ namespace Prowl.Quill
             // one-pixel fringe frame. The core is inset half a pixel and the fringe extends half a
             // pixel outside the edge; coverage rides in uv.x (1 = core, 0 = outer fringe). The inset
             // is clamped to the rect's half-extent so sub-pixel rects collapse instead of inverting.
-            float hpx = Maths.Min(_pixelHalf, width * 0.5f);
-            float hpy = Maths.Min(_pixelHalf, height * 0.5f);
+            // The fringe is expressed in logical units scaled down by the transform so it stays ~1
+            // physical pixel on screen at any zoom (see FringeHalfLogical).
+            float hp = FringeHalfLogical();
+            float hpx = Maths.Min(hp, width * 0.5f);
+            float hpy = Maths.Min(hp, height * 0.5f);
 
             Float2 i0 = TransformPoint(new Float2(x + hpx, y + hpy));
             Float2 i1 = TransformPoint(new Float2(x + width - hpx, y + hpy));
             Float2 i2 = TransformPoint(new Float2(x + width - hpx, y + height - hpy));
             Float2 i3 = TransformPoint(new Float2(x + hpx, y + height - hpy));
-            Float2 o0 = TransformPoint(new Float2(x - _pixelHalf, y - _pixelHalf));
-            Float2 o1 = TransformPoint(new Float2(x + width + _pixelHalf, y - _pixelHalf));
-            Float2 o2 = TransformPoint(new Float2(x + width + _pixelHalf, y + height + _pixelHalf));
-            Float2 o3 = TransformPoint(new Float2(x - _pixelHalf, y + height + _pixelHalf));
+            Float2 o0 = TransformPoint(new Float2(x - hp, y - hp));
+            Float2 o1 = TransformPoint(new Float2(x + width + hp, y - hp));
+            Float2 o2 = TransformPoint(new Float2(x + width + hp, y + height + hp));
+            Float2 o3 = TransformPoint(new Float2(x - hp, y + height + hp));
 
             uint b = (uint)_vertices.Count;
             Float2 core = new Float2(1f, 0f);
@@ -2166,8 +2228,9 @@ namespace Prowl.Quill
             // is its radial (cos, sin) - or, for a square corner, the diagonal - so no per-vertex
             // normalize is needed. The solid core is inset half a pixel and a one-pixel fringe ribbon
             // fades to coverage 0 (carried in uv.x). Positions use a precomputed transformed basis, so
-            // only a few full matrix transforms are needed.
-            float hp = _pixelHalf;
+            // only a few full matrix transforms are needed. The fringe is scaled down by the transform
+            // so it stays ~1 physical pixel on screen at any zoom (see FringeHalfLogical).
+            float hp = FringeHalfLogical();
 
             int tlSegments = tlRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * tlRadii / 2 / _state.roundingMinDistance)) : 0;
             int trSegments = trRadii > 0 ? Maths.Max(1, (int)Maths.Ceiling(Maths.PI * trRadii / 2 / _state.roundingMinDistance)) : 0;
@@ -2265,9 +2328,11 @@ namespace Prowl.Quill
             // Dedicated fast path: the outward direction at each vertex is just the radial unit
             // vector, so no per-vertex normalize is needed. The solid core is inset half a pixel and
             // a one-pixel fringe ribbon fades to coverage 0 (carried in uv.x). Positions use a
-            // precomputed transformed basis, so only the centre needs a full matrix transform.
-            float innerR = Maths.Max(0f, radius - _pixelHalf);
-            float outerR = radius + _pixelHalf;
+            // precomputed transformed basis, so only the centre needs a full matrix transform. The
+            // fringe is scaled down by the transform so it stays ~1 physical pixel at any zoom.
+            float hp = FringeHalfLogical();
+            float innerR = Maths.Max(0f, radius - hp);
+            float outerR = radius + hp;
 
             Float2 center = TransformPoint(new Float2(x, y));
             Float2 ex = TransformPoint(new Float2(x + 1, y)) - center; // transformed +X axis (px/unit)
