@@ -795,21 +795,30 @@ namespace Prowl.PaperUI
                         Float2 currentPos = PointerPos;
                         float distanceMoved = Float2.Length(currentPos - startPos);
 
+                        // Total movement since the initial click; TotalDelta always measures from there.
+                        Float2 totalDelta = currentPos - startPos;
+
                         // Only start dragging if we've moved beyond the threshold
                         if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
                         {
-                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            // First drag frame: report the movement accumulated since the click
+                            // (including the threshold pixels) rather than just this frame's delta, so
+                            // the drag begins from the original press position with nothing lost.
+                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, totalDelta, totalDelta, DragPhase.Start);
                             data.OnDragStart?.Invoke(dragStartEvt);
-                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            PropagateDragToHookedChildren(activeElement, startPos, totalDelta, totalDelta, DragPhase.Start);
                             BubbleEventToParents(activeElement, dragStartEvt);
 
                             _isDragging[_activeElementId] = true;
                         }
 
-                        // Handle continuous dragging
-                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        // Per-frame delta. On the frame the drag starts it spans the whole distance from
+                        // the initial click; on later frames it is just the movement since last frame.
+                        Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
+
+                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
                         data.OnDragging?.Invoke(draggingEvt);
-                        PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
                         BubbleEventToParents(activeElement, draggingEvt);
                     }
                 }
