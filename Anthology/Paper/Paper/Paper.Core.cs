@@ -206,6 +206,10 @@ namespace Prowl.PaperUI
             // Post-layout callbacks
             CallPostLayoutRecursive(RootElement);
 
+            // Compute per-element subtree culling bounds now that positions are final, so
+            // RenderElement can skip subtrees that fall entirely outside the clip.
+            ComputeCullingBounds(_rootElementHandle);
+
             // Collect layered elements for independent hit testing
             _layeredElements.Clear();
             CollectLayeredElements(_rootElementHandle, Transform2D.Identity);
@@ -313,6 +317,16 @@ namespace Prowl.PaperUI
             // Apply element transform
             Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
             _canvas.TransformBy(styleTransform);
+
+            // Cull: if this whole subtree (including its shadow) lies outside the current clip and
+            // nothing in it escapes to a higher layer, skip drawing it and all of its children.
+            if (!data._cullHasLayerBreakout && _canvas.GetCurrentClipRect(out var clip) &&
+                (data._cullMaxX < clip.Min.X || data._cullMinX > clip.Max.X ||
+                 data._cullMaxY < clip.Min.Y || data._cullMinY > clip.Max.Y))
+            {
+                _canvas.RestoreState();
+                return;
+            }
 
             // Draw box shadow before background
             var rounded = (Float4)data._elementStyle.GetValue(GuiProp.Rounded);
@@ -508,6 +522,79 @@ namespace Prowl.PaperUI
             }
 
             _canvas.RestoreState();
+        }
+
+        /// <summary>
+        /// Computes, for <paramref name="handle"/> and every descendant, the axis-aligned bounds of
+        /// its whole subtree (in the element's own local space, grown to include box shadow) and
+        /// whether the subtree contains a higher-layer element that escapes clipping. Results are
+        /// stored on each element for <see cref="RenderElement"/> to cull against; returns this
+        /// element's subtree bounds so the parent can fold them in under the child's transform.
+        /// </summary>
+        private Rect ComputeCullingBounds(ElementHandle handle)
+        {
+            ref var data = ref handle.Data;
+
+            // Own visual bounds: the layout rect grown by the border and box shadow (glow) reach.
+            var rect = data.LayoutRect;
+            float minX = rect.Min.X, minY = rect.Min.Y, maxX = rect.Max.X, maxY = rect.Max.Y;
+
+            float border = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            if (border > 0f)
+            {
+                minX -= border; minY -= border; maxX += border; maxY += border;
+            }
+
+            var shadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
+            if (shadow.IsVisible)
+            {
+                float reach = shadow.Spread + shadow.Blur;
+                minX = Maths.Min(minX, rect.Min.X + shadow.OffsetX - reach);
+                minY = Maths.Min(minY, rect.Min.Y + shadow.OffsetY - reach);
+                maxX = Maths.Max(maxX, rect.Max.X + shadow.OffsetX + reach);
+                maxY = Maths.Max(maxY, rect.Max.Y + shadow.OffsetY + reach);
+            }
+
+            bool breakout = false;
+
+            for (int i = 0; i < data.ChildIndices.Count; i++)
+            {
+                var child = new ElementHandle(this, data.ChildIndices[i]);
+                Rect cb = ComputeCullingBounds(child);
+
+                ref var childData = ref child.Data;
+
+                // Fold the child in under its own style transform, matching what RenderElement applies.
+                Transform2D xform = childData._elementStyle.GetTransformForElement(childData.LayoutRect);
+                cb = TransformBoundsAABB(xform, cb);
+
+                minX = Maths.Min(minX, cb.Min.X);
+                minY = Maths.Min(minY, cb.Min.Y);
+                maxX = Maths.Max(maxX, cb.Max.X);
+                maxY = Maths.Max(maxY, cb.Max.Y);
+
+                breakout = breakout || childData._cullHasLayerBreakout || childData.Layer > data.Layer;
+            }
+
+            data._cullMinX = minX; data._cullMinY = minY;
+            data._cullMaxX = maxX; data._cullMaxY = maxY;
+            data._cullHasLayerBreakout = breakout;
+
+            return new Rect(minX, minY, maxX, maxY);
+        }
+
+        // Axis-aligned bounds of a rectangle after mapping its corners through 'xform'.
+        private static Rect TransformBoundsAABB(Transform2D xform, Rect r)
+        {
+            var p0 = xform.TransformPoint(new Float2(r.Min.X, r.Min.Y));
+            var p1 = xform.TransformPoint(new Float2(r.Max.X, r.Min.Y));
+            var p2 = xform.TransformPoint(new Float2(r.Max.X, r.Max.Y));
+            var p3 = xform.TransformPoint(new Float2(r.Min.X, r.Max.Y));
+            float lx = Maths.Min(Maths.Min(p0.X, p1.X), Maths.Min(p2.X, p3.X));
+            float ly = Maths.Min(Maths.Min(p0.Y, p1.Y), Maths.Min(p2.Y, p3.Y));
+            float hx = Maths.Max(Maths.Max(p0.X, p1.X), Maths.Max(p2.X, p3.X));
+            float hy = Maths.Max(Maths.Max(p0.Y, p1.Y), Maths.Max(p2.Y, p3.Y));
+            return new Rect(lx, ly, hx, hy);
         }
 
         /// <summary>
