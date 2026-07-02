@@ -1140,6 +1140,30 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Flex-wrap the parent-directed children: when they overrun this element's main axis they
+        /// flow onto a new line, and the element auto-grows on the cross axis to fit every line.
+        /// Use the container's <c>RowBetween</c>/<c>ColBetween</c> as the gap between items and lines.
+        /// <para>
+        /// Children should use a fixed or auto CROSS size. A child that is Stretch/Grow on the cross
+        /// axis spans the full container height and overlaps the lines below it (it is sized before
+        /// lines are formed); this is warned about once at runtime.
+        /// </para>
+        /// </summary>
+        public ElementBuilder WrapContent(bool wrap = true)
+        {
+            _handle.Data.ContentWrap = wrap;
+            return this;
+        }
+
+        /// <summary>How leftover space on each wrapped line is distributed (implies <see cref="WrapContent"/>).</summary>
+        public ElementBuilder WrapJustify(WrapJustify justify)
+        {
+            _handle.Data.WrapJustify = justify;
+            _handle.Data.ContentWrap = true;
+            return this;
+        }
+
+        /// <summary>
         /// Sets an image to be drawn inside the element, filling the element's layout rect.
         /// </summary>
         /// <param name="texture">The texture object (created via the renderer's CreateTexture).</param>
