@@ -63,7 +63,11 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
         _inFlightFrameId = frameId;
     }
 
-    private bool IsInFlight => _inFlightDevice != null && _inFlightFrameId != 0 && !_inFlightDevice.IsFrameComplete(_inFlightFrameId);
+    private bool IsInFlight =>
+        _inFlightDevice != null
+        && _inFlightFrameId != 0
+        && !_inFlightDevice.IsFrameOpen(_inFlightFrameId)
+        && !_inFlightDevice.IsFrameComplete(_inFlightFrameId);
 
     /// <summary>
     /// Called before a CPU-side write to this buffer (via <see cref="GraphicsDevice.Map(MappableResource, MapMode)"/>

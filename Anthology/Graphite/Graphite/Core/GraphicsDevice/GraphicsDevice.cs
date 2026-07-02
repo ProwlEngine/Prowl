@@ -282,6 +282,13 @@ public abstract partial class GraphicsDevice : IDisposable
     public bool IsFrameComplete(Frame frame) => IsFrameComplete(frame.FrameId);
 
     /// <summary>
+    /// Returns whether <paramref name="frameId"/> identifies the currently open (still being recorded) frame.
+    /// A frame in this state has not been submitted yet, so nothing referencing it is actually in flight on
+    /// the GPU, even though it has not "completed" either.
+    /// </summary>
+    internal bool IsFrameOpen(ulong frameId) => _currentFrame != null && _currentFrame.FrameId == frameId;
+
+    /// <summary>
     /// Blocks the calling thread until the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU.
     /// </summary>
     /// <param name="frameId">The frame ID to wait for.</param>
