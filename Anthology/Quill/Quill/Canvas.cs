@@ -1021,6 +1021,52 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Returns the current clip region as an axis-aligned rectangle in the active transform's
+        /// local space (the same space drawing coordinates are given in). When no scissor is set the
+        /// whole viewport is used. Returns false only when there is nothing to clip against (unset
+        /// viewport), meaning callers should not cull. Consumers such as Paper use this to skip
+        /// elements that fall entirely outside the clip.
+        /// </summary>
+        public bool GetCurrentClipRect(out Rect rect)
+        {
+            rect = default;
+            var inv = _state.transform.Inverse();
+
+            if (_state.scissorExtent.X < 0)
+            {
+                // No scissor: the clip is the whole viewport. Map its screen corners into local space.
+                if (_width <= 0 || _height <= 0)
+                    return false;
+                rect = LocalBounds(inv, 0, 0, _width, _height);
+                return true;
+            }
+
+            // The scissor is an axis-aligned box in the space it was set in; bring it into the current
+            // local space and take its extents (mirrors the IntersectScissor math above).
+            var pxform = inv * _state.scissor;
+            float ex = _state.scissorExtent.X / _framebufferScale;
+            float ey = _state.scissorExtent.Y / _framebufferScale;
+            float tex = ex * Maths.Abs(pxform.A) + ey * Maths.Abs(pxform.C);
+            float tey = ex * Maths.Abs(pxform.B) + ey * Maths.Abs(pxform.D);
+            rect = new Rect(pxform.E - tex, pxform.F - tey, pxform.E + tex, pxform.F + tey);
+            return true;
+        }
+
+        // Axis-aligned bounds of a screen-space rectangle mapped through 'inv' into local space.
+        private static Rect LocalBounds(Transform2D inv, float minX, float minY, float maxX, float maxY)
+        {
+            var p0 = inv.TransformPoint(new Float2(minX, minY));
+            var p1 = inv.TransformPoint(new Float2(maxX, minY));
+            var p2 = inv.TransformPoint(new Float2(maxX, maxY));
+            var p3 = inv.TransformPoint(new Float2(minX, maxY));
+            float lx = Maths.Min(Maths.Min(p0.X, p1.X), Maths.Min(p2.X, p3.X));
+            float ly = Maths.Min(Maths.Min(p0.Y, p1.Y), Maths.Min(p2.Y, p3.Y));
+            float hx = Maths.Max(Maths.Max(p0.X, p1.X), Maths.Max(p2.X, p3.X));
+            float hy = Maths.Max(Maths.Max(p0.Y, p1.Y), Maths.Max(p2.Y, p3.Y));
+            return new Rect(lx, ly, hx, hy);
+        }
+
+        /// <summary>
         /// Resets the scissor rectangle
         /// </summary>
         public void ResetScissor()
