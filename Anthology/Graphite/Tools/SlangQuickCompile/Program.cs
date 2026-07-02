@@ -1,6 +1,10 @@
+#:property ImplicitUsings=disable
+#:project ../../Compiler/Prowl.Graphite.Compiler.csproj
+
 using System;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -14,7 +18,7 @@ namespace SlangQuickCompile;
 // Known-good generator for the compiler test suite.
 //
 // Usage (from the repo root, or any subdirectory):
-//   dotnet run --project Tools/SlangQuickCompile -- [--dump] [--write] [shaderName ...]
+//   dotnet run Tools/SlangQuickCompile/Program.cs -- [--dump] [--write] [shaderName ...]
 //     --dump    list the files each shader would produce (default when no flag given)
 //     --write   (re)write the KnownGood output files
 internal static class Program
@@ -134,7 +138,7 @@ internal static class Program
 
     static string LocateDirectory(string relative)
     {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        DirectoryInfo? dir = new(SourceDirectory());
 
         while (dir != null)
         {
@@ -145,6 +149,8 @@ internal static class Program
             dir = dir.Parent;
         }
 
-        throw new DirectoryNotFoundException($"Could not locate '{relative}' from {AppContext.BaseDirectory}.");
+        throw new DirectoryNotFoundException($"Could not locate '{relative}' from {SourceDirectory()}.");
     }
+
+    static string SourceDirectory([CallerFilePath] string filePath = "") => Path.GetDirectoryName(filePath)!;
 }
