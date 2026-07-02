@@ -108,6 +108,13 @@ namespace Prowl.PaperUI.LayoutEngine
         internal bool _scissorEnabled;
         internal bool _clampToScreen;
 
+        // Culling bounds: the element's whole-subtree extent in its own local (layout) space, grown
+        // to cover box shadow and every descendant. _cullHasLayerBreakout is set when any descendant
+        // sits on a higher layer and therefore escapes this element's clip. Recomputed each frame
+        // after layout; RenderElement uses them to skip fully-clipped subtrees.
+        internal float _cullMinX, _cullMinY, _cullMaxX, _cullMaxY;
+        internal bool _cullHasLayerBreakout;
+
         /// <summary>
         /// Layer assignment. Defaults to <see cref="Layer.Base"/> (0). Higher values render later
         /// and are hit-tested first. Use <see cref="Layer.Overlay"/> / <see cref="Layer.Topmost"/>
