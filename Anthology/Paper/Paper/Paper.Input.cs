@@ -92,6 +92,9 @@ namespace Prowl.PaperUI
         // Double-click tracking
         private float[] _pointerLastClickTime;
         private Float2[] _pointerLastClickPos;
+        // Set when a press completes a double-click, so the release that follows does not re-arm the
+        // window; without this a third click keeps chaining into further double-clicks.
+        private bool[] _pointerDoubleClickConsumed;
         private const float MaxDoubleClickTime = 0.25f;
 
         #endregion
@@ -144,6 +147,7 @@ namespace Prowl.PaperUI
             _pointerClickPos = new Float2[MouseValues.Length];
             _pointerLastClickTime = new float[MouseValues.Length];
             _pointerLastClickPos = new Float2[MouseValues.Length];
+            _pointerDoubleClickConsumed = new bool[MouseValues.Length];
 
             // Initialize clipboard handler
             _clipboardHandler = null;
@@ -290,10 +294,28 @@ namespace Prowl.PaperUI
             // Update mouse state
             for (var i = 0; i < _pointerCurState.Length; ++i)
             {
-                if (_pointerPrevState[i] && !_pointerCurState[i]) // Just released
+                bool justPressed = !_pointerPrevState[i] && _pointerCurState[i];
+                bool justReleased = _pointerPrevState[i] && !_pointerCurState[i];
+
+                // If this press falls inside the armed window near the last click, it completes a
+                // double-click. Flag it and disarm now so the matching release does not re-arm.
+                if (justPressed && _time < _pointerLastClickTime[i] &&
+                    Float2.LengthSquared(PointerPos - _pointerLastClickPos[i]) < 2)
                 {
-                    _pointerLastClickTime[i] = _time + MaxDoubleClickTime;
-                    _pointerLastClickPos[i] = PointerPos;
+                    _pointerDoubleClickConsumed[i] = true;
+                    _pointerLastClickTime[i] = 0.0f;
+                }
+
+                if (justReleased)
+                {
+                    if (_pointerDoubleClickConsumed[i])
+                        // Second click of a pair: reset so the next click starts a fresh single click.
+                        _pointerDoubleClickConsumed[i] = false;
+                    else
+                    {
+                        _pointerLastClickTime[i] = _time + MaxDoubleClickTime;
+                        _pointerLastClickPos[i] = PointerPos;
+                    }
                 }
 
                 _pointerPrevState[i] = _pointerCurState[i];
@@ -332,6 +354,8 @@ namespace Prowl.PaperUI
                 _pointerPrevState[i] = false;
                 _pointerPressedTime[i] = 0;
                 _pointerClickPos[i] = Float2.Zero;
+                _pointerLastClickTime[i] = 0;
+                _pointerDoubleClickConsumed[i] = false;
             }
 
             LastButtonPressed = PaperMouseBtn.Unknown;
