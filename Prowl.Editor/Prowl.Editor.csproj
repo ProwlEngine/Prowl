@@ -23,12 +23,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Prowl.Origami" Version="1.2.0" />
-    <PackageReference Include="Prowl.Photonic" Version="0.1.1" />
-    <PackageReference Include="Prowl.Rosetta" Version="1.1.0" />
-    <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
-    <PackageReference Include="Prowl.Graphite.Compiler" Version="0.7.1" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="0.7.1" />
+    <PackageReference Include="Prowl.Origami" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Photonic" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Rosetta" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Graphite.Compiler" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlVersion)" />
   </ItemGroup>
 
   <ItemGroup>

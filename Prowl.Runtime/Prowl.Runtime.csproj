@@ -28,12 +28,12 @@
   <ItemGroup>
     <PackageReference Include="Jitter2" Version="2.8.5" />
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
-    <PackageReference Include="Prowl.Clay" Version="0.5.1" />
-    <PackageReference Include="Prowl.Echo" Version="2.2.1" />
-    <PackageReference Include="Prowl.Paper" Version="2.0.1" />
-    <PackageReference Include="Prowl.Unwrapper" Version="0.1.0" />
-    <PackageReference Include="Prowl.Graphite" Version="0.7.1" />
-    <PackageReference Include="Prowl.Graphite.Variants" Version="0.7.1" />
+    <PackageReference Include="Prowl.Clay" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Echo" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Paper" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Graphite" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Graphite.Variants" Version="$(ProwlVersion)" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.23.0" />
