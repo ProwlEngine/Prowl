@@ -23,6 +23,7 @@ namespace SilkExample
         private uint _ebo;
         private int _projectionLocation;
         private int _textureSamplerLocation;
+        private int _fontTextureLocation;
         private int _scissorMatLocation;
         private int _scissorExtLocation;
         private int _brushMatLocation;
@@ -139,6 +140,7 @@ namespace SilkExample
             // Get all uniform locations at once
             _projectionLocation = _gl.GetUniformLocation(_program, "projection");
             _textureSamplerLocation = _gl.GetUniformLocation(_program, "texture0");
+            _fontTextureLocation = _gl.GetUniformLocation(_program, "fontTexture");
             _scissorMatLocation = _gl.GetUniformLocation(_program, "scissorMat");
             _scissorExtLocation = _gl.GetUniformLocation(_program, "scissorExt");
             _brushMatLocation = _gl.GetUniformLocation(_program, "brushMat");
@@ -265,7 +267,8 @@ namespace SilkExample
             _gl.UseProgram(_program);
             SetProjectionMatrix();
             _gl.BindVertexArray(_vao);
-            _gl.Uniform1(_textureSamplerLocation, 0); // Use texture unit 0
+            _gl.Uniform1(_textureSamplerLocation, 0); // brush/shape texture on unit 0
+            _gl.Uniform1(_fontTextureLocation, 1);    // font atlas on unit 1
         }
         
         private unsafe void UploadGeometryData(Canvas canvas)
@@ -392,7 +395,8 @@ namespace SilkExample
             if (drawCall.Brush.BackdropBlur > 0f)
                 RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
 
-            // Bind texture
+            // Bind font atlas on unit 1 (for text), then brush/shape texture on unit 0.
+            ((drawCall.FontAtlas as TextureSilk) ?? _defaultTexture).Use(TextureUnit.Texture1);
             TextureSilk texture = (drawCall.Texture as TextureSilk) ?? _defaultTexture;
             texture.Use(TextureUnit.Texture0);
 

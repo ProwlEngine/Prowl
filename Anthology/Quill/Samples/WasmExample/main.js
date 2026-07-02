@@ -10,7 +10,7 @@ let ebo = null;
 let textures = new Map();
 let whiteTexture = null;
 
-let uViewportLoc, uTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
+let uViewportLoc, uTextureLoc, uFontTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
 let uBrushMatLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
 let uBrushParamsLoc, uBrushParams2Loc, uBrushTextureMatLoc;
 
@@ -45,6 +45,7 @@ in vec2 vUV;
 in vec4 vColor;
 in vec2 vPos;
 uniform sampler2D uTexture;
+uniform sampler2D uFontTexture; // dedicated font-atlas unit, so text batches with shapes
 uniform mat4 uScissorMat;
 uniform vec2 uScissorExt;
 uniform float uDpiScale;
@@ -59,7 +60,6 @@ out vec4 fragColor;
 
 // ============== Canvas functions ==============
 float calculateBrushFactor() {
-    if (uBrushType == 0) return 0.0;
     vec2 lp = vPos / uDpiScale, tp = (uBrushMat * vec4(lp, 0.0, 1.0)).xy;
     if (uBrushType == 1) { vec2 s=uBrushParams.xy,e=uBrushParams.zw,l=e-s; float len=length(l); if(len<0.001)return 0.0; return clamp(dot(tp-s,l)/(len*len),0.0,1.0); }
     if (uBrushType == 2) { vec2 c=uBrushParams.xy; if(uBrushParams.w<0.001)return 0.0; return clamp(smoothstep(uBrushParams.z,uBrushParams.w,length(tp-c)),0.0,1.0); }
@@ -75,7 +75,7 @@ float scissorMask(vec2 p) {
 
 const float sdfPxRange = 4.0;
 float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(uTexture, 0));
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(uFontTexture, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(uv);
     return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
@@ -86,7 +86,7 @@ void main() {
     if (uBrushType > 0) color = mix(uBrushColor1, uBrushColor2, calculateBrushFactor());
     if (vUV.x >= 2.0) {
         vec2 uv = vUV - vec2(2.0);
-        float sd = texture(uTexture, uv).r;
+        float sd = texture(uFontTexture, uv).r; // font atlas on the dedicated unit
         float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
         float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
         fragColor = color * coverage * mask;
@@ -140,6 +140,7 @@ const webgl = {
 
         uViewportLoc = gl.getUniformLocation(program, 'uViewport');
         uTextureLoc = gl.getUniformLocation(program, 'uTexture');
+        uFontTextureLoc = gl.getUniformLocation(program, 'uFontTexture');
         uScissorMatLoc = gl.getUniformLocation(program, 'uScissorMat');
         uScissorExtLoc = gl.getUniformLocation(program, 'uScissorExt');
         uDpiScaleLoc = gl.getUniformLocation(program, 'uDpiScale');
@@ -230,20 +231,26 @@ const webgl = {
         // Reinterpret Int32Array as Uint32Array (same memory layout for values < 2^31)
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indexDataI32.buffer, indexDataI32.byteOffset, indexDataI32.length), gl.DYNAMIC_DRAW);
 
-        gl.activeTexture(gl.TEXTURE0);
-        gl.uniform1i(uTextureLoc, 0);
+        gl.uniform1i(uTextureLoc, 0);     // brush/shape texture on unit 0
+        gl.uniform1i(uFontTextureLoc, 1); // font atlas on unit 1
 
         let indexOffset = 0;
-        // drawCallInfo: [texId, elemCount] per draw call = 2 ints each
-        const dcStride = 2;
+        // drawCallInfo: [texId, fontTexId, elemCount] per draw call = 3 ints each
+        const dcStride = 3;
         const dcCount = drawCallInfoI32.length;
 
         for (let i = 0; i < dcCount; i += dcStride) {
             const texId = drawCallInfoI32[i];
-            const elemCount = drawCallInfoI32[i + 1];
+            const fontTexId = drawCallInfoI32[i + 1];
+            const elemCount = drawCallInfoI32[i + 2];
             const dcIndex = (i / dcStride) | 0;
 
-            // Texture
+            // Font atlas on unit 1 (for text)
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, (fontTexId > 0 && textures.has(fontTexId)) ? textures.get(fontTexId).glTex : whiteTexture);
+
+            // Shape/brush texture on unit 0
+            gl.activeTexture(gl.TEXTURE0);
             if (texId > 0 && textures.has(texId)) {
                 gl.bindTexture(gl.TEXTURE_2D, textures.get(texId).glTex);
             } else {

@@ -31,7 +31,8 @@ struct FragmentData
 {
     float4x4 projection;
     Sampler2D<float4> texture0;
-    float2 atlasTexelSize;       // 1 / texture0 size, for the text distance-field screen range
+    Sampler2D<float4> fontTexture; // dedicated font-atlas unit, so text batches with shapes
+    float2 atlasTexelSize;       // 1 / font atlas size, for the text distance-field screen range
     float4x4 scissorMat;
     float2 scissorExt;
 
@@ -65,11 +66,8 @@ VertexOutput Vertex(VertexInput input)
 }
 
 
-float calculateBrushFactor(float2 fragPos, float2 fragTexCoord) 
+float calculateBrushFactor(float2 fragPos, float2 fragTexCoord)
 {
-    if (DrawData.brushType == BrushType.None) 
-        return 0.0;
-    
     float2 logicalPos = fragPos / DrawData.dpiScale;
     float2 transformedPoint = (mul(DrawData.brushMat, float4(logicalPos, 0.0, 1.0))).xy;
 
@@ -154,7 +152,7 @@ float4 Fragment(VertexOutput input) : SV_Target
     if (input.fragTexCoord.x >= 2.0)
     {
         float2 uv = input.fragTexCoord - float2(2.0);
-        float sd = DrawData.texture0.Sample(uv).r;
+        float sd = DrawData.fontTexture.Sample(uv).r;
         float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
         float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
         return color * coverage * mask;

@@ -224,8 +224,28 @@ namespace Prowl.PaperUI
             _focusedElementId = target.Data.ID;
         }
 
-        /// <summary>Clear focus from any currently focused element.</summary>
-        public void ClearFocus() => _focusedElementId = 0;
+        /// <summary>
+        /// Clear focus from any currently focused element, firing <c>OnFocusChange(false)</c> on it
+        /// (and its hooked children) so it can react to losing focus.
+        /// </summary>
+        public void ClearFocus()
+        {
+            if (_focusedElementId == 0) return;
+
+            // Clear first so a handler that re-enters ClearFocus sees no focus and stops.
+            ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
+            _focusedElementId = 0;
+
+            if (oldFocusedElement.IsValid)
+            {
+                ref ElementData oldData = ref oldFocusedElement.Data;
+                oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                PropagateEventToHookedChildren(oldFocusedElement, child => {
+                    ref ElementData childData = ref child.Data;
+                    childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
+                });
+            }
+        }
 
         public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
@@ -755,6 +775,11 @@ namespace Prowl.PaperUI
                         BubbleEventToParents(hoveredElement, rightClickEvt);
                     }
                 }
+
+                // A right-click anywhere other than the currently focused element (including empty
+                // space) clears focus; right-clicking the focused element itself leaves it focused.
+                if (_focusedElementId != 0 && !IsElementFocused(_theHoveredElementId))
+                    ClearFocus();
             }
 
             // Handle double-click
@@ -795,21 +820,30 @@ namespace Prowl.PaperUI
                         Float2 currentPos = PointerPos;
                         float distanceMoved = Float2.Length(currentPos - startPos);
 
+                        // Total movement since the initial click; TotalDelta always measures from there.
+                        Float2 totalDelta = currentPos - startPos;
+
                         // Only start dragging if we've moved beyond the threshold
                         if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
                         {
-                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            // First drag frame: report the movement accumulated since the click
+                            // (including the threshold pixels) rather than just this frame's delta, so
+                            // the drag begins from the original press position with nothing lost.
+                            var dragStartEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, totalDelta, totalDelta, DragPhase.Start);
                             data.OnDragStart?.Invoke(dragStartEvt);
-                            PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Start);
+                            PropagateDragToHookedChildren(activeElement, startPos, totalDelta, totalDelta, DragPhase.Start);
                             BubbleEventToParents(activeElement, dragStartEvt);
 
                             _isDragging[_activeElementId] = true;
                         }
 
-                        // Handle continuous dragging
-                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        // Per-frame delta. On the frame the drag starts it spans the whole distance from
+                        // the initial click; on later frames it is just the movement since last frame.
+                        Float2 frameDelta = wasDragging ? PointerDelta : totalDelta;
+
+                        var draggingEvt = new DragEvent(activeElement, data.LayoutRect, PointerPos, startPos, frameDelta, totalDelta, DragPhase.Dragging);
                         data.OnDragging?.Invoke(draggingEvt);
-                        PropagateDragToHookedChildren(activeElement, startPos, PointerDelta, PointerDelta, DragPhase.Dragging);
+                        PropagateDragToHookedChildren(activeElement, startPos, frameDelta, totalDelta, DragPhase.Dragging);
                         BubbleEventToParents(activeElement, draggingEvt);
                     }
                 }

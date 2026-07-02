@@ -54,8 +54,13 @@ namespace Common
             // Update rotation based on time
             _rotation += deltaTime * 30f; // 30 degrees per second
 
+            // Camera: zoom and rotate pivot around the view centre (not the world origin), then pan.
+            // The pan accumulator (OpenTKWindow) already divides mouse delta by zoom, so panning
+            // tracks the cursor 1:1 at any zoom.
             _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
-            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y) * Transform2D.CreateRotation(rotate) * Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateRotation(rotate));
+            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y));
             _canvas.SetStrokeScale(zoom);
 
             //_canvas.SetTexture(_texture);
@@ -325,8 +330,9 @@ namespace Common
 
             _canvas.ClearBrushTexture();
 
-            // 13. Backdrop Blur Demo (frosted glass over its own shapes)
-            DrawBackdropBlurDemo(50, 850, 700, 200);
+            // 13. Backdrop Blur Demo (frosted glass over its own shapes) - full-width 5th row,
+            // same 150px height as the other cells so it lines up with the grid.
+            DrawBackdropBlurDemo(50, 850, 700, 150);
 
             // Restore the canvas state
             _canvas.RestoreState();
@@ -1201,7 +1207,8 @@ namespace Common
                 _canvas.RestoreState();
             }
 
-            _canvas.RestoreState();
+            _canvas.RestoreState(); // closes the path-text SaveState
+            _canvas.RestoreState(); // closes the outer SaveState at the top of this method (was leaking)
         }
 
         #endregion

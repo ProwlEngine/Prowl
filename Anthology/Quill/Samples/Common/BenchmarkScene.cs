@@ -45,8 +45,11 @@ namespace Common
             _canvas.ResetState();
             _canvas.SaveState();
 
+            // Zoom/rotate pivot around the view centre (not the world origin), then pan.
             _canvas.TransformBy(Transform2D.CreateTranslation(_width / 2, _height / 2));
-            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y) * Transform2D.CreateRotation(rotate) * Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateScale(zoom, zoom));
+            _canvas.TransformBy(Transform2D.CreateRotation(rotate));
+            _canvas.TransformBy(Transform2D.CreateTranslation(offset.X, offset.Y));
             _canvas.SetStrokeScale(zoom);
 
             // Run the benchmark

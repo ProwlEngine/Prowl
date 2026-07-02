@@ -3,6 +3,7 @@ Shader "Quill/CanvasShader"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
+        _FontTex ("Font Atlas", 2D) = "white" {}
     }
     SubShader
     {
@@ -41,6 +42,7 @@ Shader "Quill/CanvasShader"
             };
 
             sampler2D _MainTex;
+            sampler2D _FontTex; // dedicated font-atlas unit, so text batches with shapes
             float4x4 _ScissorMat;
             float2 _ScissorExt;
 
@@ -56,8 +58,6 @@ Shader "Quill/CanvasShader"
 
             float calculateBrushFactor(float2 pixelPos)
             {
-                if (_BrushType == 0) return 0.0;
-
                 float2 logicalPos = pixelPos / _DpiScale;
                 float2 transformedPoint = mul(_BrushMat, float4(logicalPos, 0.0, 1.0)).xy;
 
@@ -149,10 +149,10 @@ Shader "Quill/CanvasShader"
                     color = lerp(_BrushColor1, _BrushColor2, factor);
                 }
 
-                // Text mode: UV >= 2.0 means text rendering
+                // Text mode: UV >= 2.0 - sampled from the dedicated font atlas unit (not _MainTex).
                 if (i.uv.x >= 2.0)
                 {
-                    return color * tex2D(_MainTex, i.uv - float2(2.0, 0.0)) * mask;
+                    return color * tex2D(_FontTex, i.uv - float2(2.0, 0.0)) * mask;
                 }
 
                 // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and

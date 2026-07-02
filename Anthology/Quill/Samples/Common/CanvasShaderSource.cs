@@ -40,6 +40,7 @@ in vec2 fragPos;
 out vec4 finalColor;
 
 uniform sampler2D texture0;
+uniform sampler2D fontTexture;      // dedicated font-atlas unit, so text batches with shapes
 uniform mat4 scissorMat;
 uniform vec2 scissorExt;
 
@@ -66,13 +67,12 @@ const float sdfPxRange = 4.0;
 // Screen-space width (in pixels) that one distance-field unit spans at this fragment. Derived from
 // texture-coordinate derivatives, so glyphs stay crisp at any canvas zoom or DPI automatically.
 float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
     vec2 screenTexSize = vec2(1.0) / fwidth(uv);
     return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
 
 float calculateBrushFactor() {
-    if (brushType == 0) return 0.0;
     vec2 logicalPos = fragPos / dpiScale;
     vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
@@ -118,10 +118,10 @@ void main()
         color = mix(brushColor1, brushColor2, factor);
     }
 
-    // Text mode: UV >= 2.0
+    // Text mode: UV >= 2.0. Sampled from the dedicated font atlas unit (not texture0).
     if (fragTexCoord.x >= 2.0) {
         vec2 uv = fragTexCoord - vec2(2.0);
-        float sd = texture(texture0, uv).r;
+        float sd = texture(fontTexture, uv).r;
         float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
         float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
         finalColor = color * coverage * mask;

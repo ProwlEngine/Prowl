@@ -93,7 +93,9 @@ namespace Prowl.Quill
         /// </summary>
         public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
         {
-            _canvas.SetFontTexture(texture);
+            // Bind the font atlas as dedicated canvas state (a separate sampler unit) rather than the
+            // brush texture, so this text batches into the same draw call as surrounding shapes.
+            _canvas.SetFontAtlas(texture);
 
             // UV offset of 2.0 signals text mode to shader (UV >= 2 means text)
             var uvOffset = new Float2(2.0f, 2.0f);
@@ -119,8 +121,8 @@ namespace Prowl.Quill
 
                 _canvas.AddTriangle(index, index + 1, index + 2);
             }
-
-            _canvas.SetFontTexture(null);
+            // The atlas stays bound as canvas state (persistent, part of the batch hash) so shapes
+            // drawn after this text keep batching with it.
         }
 
         private static FontColor ToFSColor(Prowl.Vector.Color32 color)

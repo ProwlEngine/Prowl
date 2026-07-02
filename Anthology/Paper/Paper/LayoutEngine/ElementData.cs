@@ -8,6 +8,23 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.LayoutEngine
 {
+    /// <summary>How leftover main-axis space is distributed across items on a wrapped line.</summary>
+    public enum WrapJustify
+    {
+        /// <summary>Pack items at the start of each line (leftover space trails at the end).</summary>
+        Start,
+        /// <summary>Center items on each line.</summary>
+        Center,
+        /// <summary>Pack items at the end of each line.</summary>
+        End,
+        /// <summary>Distribute leftover space as equal gaps between items.</summary>
+        SpaceBetween,
+        /// <summary>Distribute leftover space as equal gaps around every item.</summary>
+        SpaceAround,
+        /// <summary>Grow every item on the line equally so the line consumes the full width.</summary>
+        Fill,
+    }
+
     public struct ElementData
     {
         public int ID;
@@ -73,6 +90,11 @@ namespace Prowl.PaperUI.LayoutEngine
         public TextWrapMode WrapMode;
         public TextAlignment TextAlignment;
 
+        /// <summary>Flex-wrap: parent-directed children flow onto new lines when they overrun the main axis.</summary>
+        public bool ContentWrap;
+        /// <summary>How leftover main-axis space on each wrapped line is distributed.</summary>
+        public WrapJustify WrapJustify;
+
         // Cached text layout objects (RichText is persisted across frames via element storage so
         // animation start time survives — see Paper.Core.cs ProcessText / DrawText paths.)
         internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
@@ -85,6 +107,13 @@ namespace Prowl.PaperUI.LayoutEngine
         internal ElementStyle _elementStyle;
         internal bool _scissorEnabled;
         internal bool _clampToScreen;
+
+        // Culling bounds: the element's whole-subtree extent in its own local (layout) space, grown
+        // to cover box shadow and every descendant. _cullHasLayerBreakout is set when any descendant
+        // sits on a higher layer and therefore escapes this element's clip. Recomputed each frame
+        // after layout; RenderElement uses them to skip fully-clipped subtrees.
+        internal float _cullMinX, _cullMinY, _cullMaxX, _cullMaxY;
+        internal bool _cullHasLayerBreakout;
 
         /// <summary>
         /// Layer assignment. Defaults to <see cref="Layer.Base"/> (0). Higher values render later
@@ -130,6 +159,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 FontStyle = FontStyle.Regular,
                 WrapMode = TextWrapMode.NoWrap,
                 TextAlignment = TextAlignment.Left,
+                ContentWrap = false,
+                WrapJustify = WrapJustify.Start,
                 _quillMarkdown = null,
                 _quillRichText = null,
                 _textLayout = null,

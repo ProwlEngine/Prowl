@@ -11,6 +11,10 @@ namespace Prowl.PaperUI.LayoutEngine
         private const float DEFAULT_MAX = float.MaxValue;
         private const float DEFAULT_PADDING = 0f;
 
+        // Element IDs already warned about cross-stretch inside a wrap container, so the warning
+        // fires once per element instead of every frame.
+        private static readonly HashSet<int> _warnedWrapCrossStretch = new HashSet<int>();
+
         internal static UISize Layout(ElementHandle elementHandle, Paper gui)
         {
             ref var data = ref elementHandle.Data;
@@ -286,6 +290,13 @@ namespace Prowl.PaperUI.LayoutEngine
                 ? (computedMain, computedCross)
                 : (computedCross, computedMain);
 
+            // Content-box sizes (padding excluded). Percentage / fixed children resolve against these
+            // so they stay inside the parent's padding matching how stretch free-space is computed
+            // below and how children are positioned at the padding offset. Stretch children keep using
+            // the full actualParent* (the stretch loops subtract padding themselves).
+            float innerParentMain = Maths.Max(0f, actualParentMain - ownPaddingMainBefore - ownPaddingMainAfter);
+            float innerParentCross = Maths.Max(0f, actualParentCross - ownPaddingCrossBefore - ownPaddingCrossAfter);
+
             // Sum of all space and size flex factors on the main-axis
             float mainFlexSum = 0f;
 
@@ -414,24 +425,24 @@ namespace Prowl.PaperUI.LayoutEngine
                     actualParentMain, 0f, childMinMainAfter, childMaxMainAfter);
 
                 float computedChildMain = 0f;
-                float computedChildCross = childCross.ToPx(actualParentCross, 0f);
+                float computedChildCross = childCross.ToPx(innerParentCross, 0f);
 
                 // Get auto min cross size if needed
                 var childMinCrossUnit = GetMinCross(ref child, layoutType);
                 if (childMinCrossUnit.HasAuto)
                 {
-                    float? pCross = childMinCrossUnit.HasAuto ? null : (float?)actualParentCross;
+                    float? pCross = childMinCrossUnit.HasAuto ? null : (float?)innerParentCross;
                     var contentSize = ContentSizing(childHandle, layoutType, pCross, pCross);
                     if (contentSize.HasValue)
                     {
-                        computedChildCross = childMinCrossUnit.Floor(actualParentCross) + childMinCrossUnit.AutoFactor * contentSize.Value.Item2;
+                        computedChildCross = childMinCrossUnit.Floor(innerParentCross) + childMinCrossUnit.AutoFactor * contentSize.Value.Item2;
                     }
                 }
 
                 // Compute fixed-size child main and cross for non-stretch children
                 if (!childMain.HasGrow && !childCross.HasGrow)
                 {
-                    var childSize = DoLayout(childHandle, layoutType, actualParentMain, actualParentCross);
+                    var childSize = DoLayout(childHandle, layoutType, innerParentMain, innerParentCross);
                     computedChildMain = childSize.Main;
                     computedChildCross = childSize.Cross;
                 }
@@ -940,6 +951,136 @@ namespace Prowl.PaperUI.LayoutEngine
                 // Ensure we're still respecting min/max constraints
                 computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
                 computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+            }
+
+            // ── Flex-wrap (opt-in via WrapContent) ─────────────────────
+            // Only runs for containers that requested it; the normal single-line path below is
+            // untouched for everything else. Parent-directed children flow onto new lines when they
+            // overrun the main axis; the container auto-grows on the cross axis to fit all lines.
+            //
+            // LIMITATION: children should use a fixed or auto CROSS size. A child that is Stretch/Grow
+            // on the cross axis was already sized against the whole container's cross extent (that pass
+            // runs before lines exist here), so it spans the full container height and overlaps the
+            // lines below it rather than filling only its own line. Detected below and warned once.
+            if (element.ContentWrap && numParentDirectedChildren > 0)
+            {
+                float availMain = Maths.Max(0f, actualParentMain - ownPaddingMainBefore - ownPaddingMainAfter);
+                float betweenMain = elementChildMainBetween.ToPx(actualParentMain, 0f);
+                var justify = element.WrapJustify;
+
+                float PackMain(ChildElementInfo c)
+                {
+                    var cm = GetMain(ref c.Element.Data, layoutType);
+                    if (cm.HasGrow)
+                    {
+                        float mn = GetMinMain(ref c.Element.Data, layoutType).ToPx(availMain, 0f);
+                        return mn > 0f ? mn : 1f; // grow children need a MinWidth to pack sensibly
+                    }
+                    return c.Main;
+                }
+
+                // Group parent-directed children into lines by their footprint.
+                var lines = new List<(int Start, int Count, float Used, float Cross)>();
+                int li = 0;
+                while (li < numParentDirectedChildren)
+                {
+                    int start = li;
+                    float used = 0f, lineCross = 0f;
+                    while (li < numParentDirectedChildren)
+                    {
+                        var c = children[li];
+                        if (GetCross(ref c.Element.Data, layoutType).HasGrow && _warnedWrapCrossStretch.Add(c.Element.Data.ID))
+                            Console.WriteLine($"Warning: WrapContent child (id {c.Element.Data.ID}) is Stretch/Grow on the cross axis; it will span the full container and overlap other lines. Use a fixed or auto cross size inside a wrapping container.");
+                        float fp = c.MainBefore + PackMain(c) + c.MainAfter;
+                        float add = li == start ? fp : betweenMain + fp;
+                        if (li > start && used + add > availMain + 0.5f) break; // always keep at least one per line
+                        used += add;
+                        lineCross = Maths.Max(lineCross, c.CrossBefore + c.Cross + c.CrossAfter);
+                        li++;
+                    }
+                    lines.Add((start, li - start, used, lineCross));
+                }
+
+                // Fill: grow every item on the line so it consumes the full main axis (re-layout each
+                // at its new width so stretch content reflows). Items should be Grow/Stretch on main.
+                if (justify == WrapJustify.Fill)
+                {
+                    foreach (var ln in lines)
+                    {
+                        if (ln.Count == 0) continue;
+                        float spacing = betweenMain * (ln.Count - 1);
+                        float margins = 0f;
+                        for (int k = ln.Start; k < ln.Start + ln.Count; k++)
+                            margins += children[k].MainBefore + children[k].MainAfter;
+                        float per = Maths.Max(1f, (availMain - spacing - margins) / ln.Count);
+                        for (int k = ln.Start; k < ln.Start + ln.Count; k++)
+                        {
+                            var c = children[k];
+                            var cs = DoLayout(c.Element, layoutType, per, actualParentCross);
+                            c.Main = cs.Main; // honor the child's own min/max clamp, not the raw share
+                            c.Cross = cs.Cross;
+                        }
+                    }
+                }
+
+                // Cross size = stacked line heights (+ inter-line gaps). The wrapping/stacking axis is
+                // this element's OWN cross axis; map it back to the returned main/cross using the same
+                // parent-vs-own swap the rest of the layout uses (a Row inside a Column reports its
+                // vertical extent as `computedMain`).
+                float totalCross = 0f;
+                for (int k = 0; k < lines.Count; k++)
+                    totalCross += lines[k].Cross + (k > 0 ? betweenMain : 0f);
+
+                if (paddingAxesFlipped)
+                {
+                    if (main.HasAuto)
+                    {
+                        computedMain = main.Floor(parentMain) + main.AutoFactor * (totalCross + paddingMainBefore + paddingMainAfter);
+                        computedMain = Maths.Min(maxMain, Maths.Max(minMain, computedMain));
+                    }
+                }
+                else if (cross.HasAuto)
+                {
+                    computedCross = cross.Floor(parentCross) + cross.AutoFactor * (totalCross + paddingCrossBefore + paddingCrossAfter);
+                    computedCross = Maths.Min(maxCross, Maths.Max(minCross, computedCross));
+                }
+
+                // Position each line, applying the justify to leftover main space.
+                float crossPos = ownPaddingCrossBefore;
+                foreach (var ln in lines)
+                {
+                    float leftover = Maths.Max(0f, availMain - ln.Used);
+                    float mainStart = ownPaddingMainBefore;
+                    float extraGap = 0f;
+                    switch (justify)
+                    {
+                        case WrapJustify.Center: mainStart += leftover * 0.5f; break;
+                        case WrapJustify.End: mainStart += leftover; break;
+                        case WrapJustify.SpaceBetween: if (ln.Count > 1) extraGap = leftover / (ln.Count - 1); break;
+                        case WrapJustify.SpaceAround: if (ln.Count > 0) { extraGap = leftover / ln.Count; mainStart += extraGap * 0.5f; } break;
+                    }
+
+                    float mp = mainStart;
+                    for (int k = ln.Start; k < ln.Start + ln.Count; k++)
+                    {
+                        var c = children[k];
+                        mp += c.MainBefore;
+                        SetElementBounds(c.Element, layoutType, mp, crossPos + c.CrossBefore, c.Main, c.Cross);
+                        mp += c.Main + c.MainAfter + betweenMain + extraGap;
+                    }
+                    crossPos += ln.Cross + betweenMain;
+                }
+
+                // Self-directed children keep their normal placement.
+                for (int k = numParentDirectedChildren; k < children.Count; k++)
+                {
+                    var c = children[k];
+                    if (c.Element.Data.PositionType == PositionType.SelfDirected)
+                        SetElementBounds(c.Element, layoutType,
+                            c.MainBefore + ownPaddingMainBefore, c.CrossBefore + ownPaddingCrossBefore, c.Main, c.Cross);
+                }
+
+                return new UISize(computedMain, computedCross);
             }
 
             // Set bounds for all children (positioned along this element's own axes; see ownPadding*).
