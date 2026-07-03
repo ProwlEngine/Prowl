@@ -31,12 +31,12 @@ const string ReleaseTag = "v2026.5";
 ];
 
 (string, string)[] binaryMappings = [
-    ($"libslang-glsl-module-{Release}.so", "libslang-glsl-module.so"),
-    ($"libslang-glslang-{Release}.so", "libslang-glslang.so"),
-    ($"libslang-compiler.so.0.{Release}", "libslang-compiler.so"),
+    ($"libslang-glsl-module-{Release}.so", $"libslang-glsl-module-{Release}.so"),
+    ($"libslang-glslang-{Release}.so", $"libslang-glslang-{Release}.so"),
+    ($"libslang-compiler.so.0.{Release}", $"libslang-compiler.so"),
 
-    ($"libslang-glsl-module-{Release}.dylib", "libslang-glsl-module.dylib"),
-    ($"libslang-glslang-{Release}.dylib", "libslang-glslang.dylib"),
+    ($"libslang-glsl-module-{Release}.dylib", $"libslang-glsl-module-{Release}.dylib"),
+    ($"libslang-glslang-{Release}.dylib", $"libslang-glslang-{Release}.dylib"),
     ($"libslang-compiler.0.{Release}.dylib", "libslang-compiler.dylib"),
 
     ("slang-glsl-module.dll", "slang-glsl-module.dll"),

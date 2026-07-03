@@ -1,6 +1,3 @@
-#:property ImplicitUsings=disable
-#:project ../../Compiler/Prowl.Graphite.Compiler.csproj
-
 using System;
 using System.IO;
 using System.Linq;

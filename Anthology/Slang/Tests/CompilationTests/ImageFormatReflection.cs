@@ -11,7 +11,7 @@ public class ImageFormatReflection
         string userSourceBody =
 """
 Texture2D<uint4> g_tex : register(t0);
-float4 fragMain(float4 pos:SV_Position) : SV_Position
+float4 fragMain(float4 pos:SV_Position) : SV_Target
 {
     return pos;
 }

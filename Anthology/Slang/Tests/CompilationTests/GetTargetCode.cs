@@ -29,7 +29,7 @@ float4 vertMain(float4 pos) : SV_Position
         TargetDescription targetDesc = new()
         {
             Format = CompileTarget.SpirvAsm,
-            Profile = GlobalSession.FindProfile("sm_5_0")
+            Profile = GlobalSession.FindProfile("spirv_1_5")
         };
 
         SessionDescription sessionDesc = new()

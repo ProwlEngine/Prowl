@@ -13,7 +13,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Slang\Slang\Prowl.Slang.csproj" />
+        <PackageReference Include="Prowl.Slang" Version="2.3.1" />
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
         <ProjectReference Include="..\Variants\Prowl.Graphite.Variants.csproj" />
     </ItemGroup>
