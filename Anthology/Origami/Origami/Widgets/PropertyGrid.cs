@@ -391,27 +391,27 @@ public static class PropertyGridRenderer
         var ink = theme.Ink;
 
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .RowBetween(m.SpacingMedium).Margin(0, 0, 0, m.SpacingSmall).Enter())
+            .Padding(12, 12, 4, 4).RowBetween(8).Enter())
         {
-            if (isOverridden)
+            // Override (prefab) / mixed (multi-select) marker: a small accent / amber dot before the label.
+            if (isOverridden || isMixed)
             {
-                paper.Box($"{id}_ov").Width(3).Height(m.RowHeight)
-                    .BackgroundColor(theme.Primary.C400).Rounded(m.SmallRounding);
-            }
-            else if (isMixed)
-            {
-                // Amber bar marks a field whose value differs across the multi-object selection.
-                paper.Box($"{id}_mx").Width(3).Height(m.RowHeight)
-                    .BackgroundColor(theme.Amber.C400).Rounded(m.SmallRounding);
+                var dot = isOverridden ? theme.Primary.C500 : theme.Amber.C400;
+                using (paper.Box($"{id}_ov").Width(8).Height(m.RowHeight).IsNotInteractable().Enter())
+                    paper.Box($"{id}_ovd").Width(5).Height(5).Rounded(3)
+                        .Margin(1, UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch())
+                        .BackgroundColor(dot).IsNotInteractable();
             }
 
             if (font != null && !string.IsNullOrEmpty(label))
             {
                 bool isNumeric = IsNumericType(fieldType);
                 var lbl = paper.Box($"{id}_lbl")
-                    .Width(m.LabelWidth).Height(m.RowHeight).Padding(m.PaddingSmall, 0, 0, 0)
-                    .Text(label, font).TextColor(isMixed ? theme.Amber.C400 : ink.C500)
-                    .FontSize(m.FontSize);
+                    .Width(m.LabelWidth).Height(m.RowHeight)
+                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Text(label, font)
+                    .TextColor(isMixed ? theme.Amber.C400 : isOverridden ? theme.Primary.C700 : ink.C300)
+                    .FontSize(m.FontSize - 1f).Alignment(TextAlignment.MiddleLeft);
 
                 if (isNumeric && !Origami.IsReadOnly)
                 {

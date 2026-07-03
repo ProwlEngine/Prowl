@@ -73,13 +73,16 @@ public sealed class ButtonBuilder
     private ButtonStyle _style = ButtonStyle.Filled;
 
     private UnitValue? _width;
-    private float _height = 26f;
+    private float _height = 32f;
     private float _padX = 14f;
+    private float _fontScale = 1f;
     private bool _iconOnly;
     private float? _roundingOverride;
 
     private string? _leadingIcon;
     private string? _trailingIcon;
+    private Action<Canvas, Rect>? _leadingIconDraw;
+    private Action<Canvas, Rect>? _trailingIconDraw;
     private bool _loading;
     private Action? _customContent;
 
@@ -134,9 +137,9 @@ public sealed class ButtonBuilder
     public ButtonBuilder FullWidth() { _width = UnitValue.Stretch(); return this; }
     public ButtonBuilder FitContent() { _width = UnitValue.Auto; return this; }
 
-    public ButtonBuilder Small()  { _height = 22; _padX = 10; return this; }
-    public ButtonBuilder Medium() { _height = 26; _padX = 14; return this; }
-    public ButtonBuilder Large()  { _height = 34; _padX = 20; return this; }
+    public ButtonBuilder Small()  { _height = 26; _padX = 10; _fontScale = 0.92f; return this; }
+    public ButtonBuilder Medium() { _height = 32; _padX = 14; _fontScale = 1f;    return this; }
+    public ButtonBuilder Large()  { _height = 38; _padX = 18; _fontScale = 1.08f; return this; }
 
     /// <summary>Square aspect for icon-only buttons. Width/height match, no asymmetric padding.</summary>
     public ButtonBuilder IconOnly()
@@ -154,6 +157,10 @@ public sealed class ButtonBuilder
     public ButtonBuilder Label(string text) { _label = text ?? string.Empty; return this; }
     public ButtonBuilder LeadingIcon(string glyph) { _leadingIcon = glyph; return this; }
     public ButtonBuilder TrailingIcon(string glyph) { _trailingIcon = glyph; return this; }
+
+    /// <summary>Vector leading icon: the host paints into the icon slot rect. Works without an icon font.</summary>
+    public ButtonBuilder LeadingIcon(Action<Canvas, Rect> draw) { _leadingIconDraw = draw; return this; }
+    public ButtonBuilder TrailingIcon(Action<Canvas, Rect> draw) { _trailingIconDraw = draw; return this; }
 
     /// <summary>Replaces the leading slot with a spinner and suppresses clicks while true.</summary>
     public ButtonBuilder Loading(bool loading = true) { _loading = loading; return this; }
@@ -195,10 +202,10 @@ public sealed class ButtonBuilder
     /// </summary>
     private float MeasureContentWidth(Prowl.Scribe.FontFile? font, float fontSize)
     {
-        bool hasLeading = _loading || !string.IsNullOrEmpty(_leadingIcon);
-        bool hasTrailing = !string.IsNullOrEmpty(_trailingIcon);
+        bool hasLeading = _loading || !string.IsNullOrEmpty(_leadingIcon) || _leadingIconDraw != null;
+        bool hasTrailing = !string.IsNullOrEmpty(_trailingIcon) || _trailingIconDraw != null;
         bool hasLabel = !string.IsNullOrEmpty(_label);
-        const float gap = 6f;
+        const float gap = 7f;
 
         float content = 0f;
         if (hasLeading) content += fontSize;
@@ -227,8 +234,9 @@ public sealed class ButtonBuilder
         if (Origami.IsReadOnly) _disabled = true;
         var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
-        var font = _theme.Font;
+        var font = _theme.Medium ?? _theme.Font;   // .w2btn is weight 500
         var metrics = _theme.Metrics;
+        float fontSize = metrics.FontSize * _fontScale;
 
         bool interactive = !_disabled && !_loading;
 
@@ -246,7 +254,7 @@ public sealed class ButtonBuilder
         }
         else
         {
-            widthValue = MeasureContentWidth(font, metrics.FontSize);
+            widthValue = MeasureContentWidth(font, fontSize);
         }
         float roundingValue = _roundingOverride ?? metrics.Rounding;
 
@@ -317,10 +325,12 @@ public sealed class ButtonBuilder
                 Ramp = ramp,
                 Ink = ink,
                 Font = font,
-                FontSize = metrics.FontSize,
+                FontSize = fontSize,
                 Label = _label,
                 LeadingIcon = _leadingIcon,
                 TrailingIcon = _trailingIcon,
+                LeadingIconDraw = _leadingIconDraw,
+                TrailingIconDraw = _trailingIconDraw,
                 Loading = _loading,
                 Disabled = _disabled,
                 Shadow = _shadow,
@@ -358,11 +368,11 @@ public sealed class ButtonBuilder
 
             // Optional content callback runs as actual children (uses normal layout).
             if (_customContent != null) _customContent();
-        }
 
-        // Tooltip overlay on Topmost — same pattern as Slider's value bubble.
-        if (!string.IsNullOrEmpty(_tooltip) && font != null)
-            DrawTooltipOverlay();
+            // Hover tooltip routed through the shared TooltipSystem (drawn in Origami.EndFrame).
+            if (!string.IsNullOrEmpty(_tooltip) && isHovered)
+                TooltipSystem.Hover(handle.Data.ID, _tooltip!);
+        }
     }
 
     // ── Painting ───────────────────────────────────────────────────────
@@ -379,6 +389,8 @@ public sealed class ButtonBuilder
         public string Label;
         public string? LeadingIcon;
         public string? TrailingIcon;
+        public Action<Canvas, Rect>? LeadingIconDraw;
+        public Action<Canvas, Rect>? TrailingIconDraw;
         public bool Loading;
         public bool Disabled;
         public bool Shadow;
@@ -398,198 +410,220 @@ public sealed class ButtonBuilder
 
     private static void PaintDefault(Canvas canvas, Rect rect, in ButtonRenderSnapshot s)
     {
-        float x = (float)rect.Min.X;
-        float y = (float)rect.Min.Y;
-        float w = (float)rect.Size.X;
-        float h = (float)rect.Size.Y;
+        float x = (float)rect.Min.X, y = (float)rect.Min.Y;
+        float w = (float)rect.Size.X, h = (float)rect.Size.Y;
 
-        // Press scale-down (0.97 at full press) + optional pulse.
+        BtnColors c = ResolveColors(in s);
+
+        // Press scale-down + optional pulse + hover lift (filled buttons rise 1px like the prototype).
         float scale = 1f - 0.03f * s.PressT;
         if (s.Pulse) scale += 0.015f * MathF.Sin(s.Time * 4f);
-        float dx = w * (1f - scale) * 0.5f;
-        float dy = h * (1f - scale) * 0.5f;
+        float dx = w * (1f - scale) * 0.5f, dy = h * (1f - scale) * 0.5f;
         x += dx; y += dy; w *= scale; h *= scale;
+        if (c.Lift) y -= 1.5f * s.HoverT;
 
-        ResolveColors(in s, out Color bg, out Color border, out Color labelCol, out bool drawBorder, out bool drawShadow);
+        float r = s.Rounding;
 
-        // Drop shadow under the button (skipped for Ghost / Link).
-        if (drawShadow && s.Style != ButtonStyle.Ghost && s.Style != ButtonStyle.Link)
+        // Coloured glow (filled variants) or a soft drop shadow.
+        if (c.DrawGlow)
+            PaintGlow(canvas, x, y, w, h, r, c.Glow, 4f, 18f, -4f);
+        else if (s.Shadow && s.Style != ButtonStyle.Ghost && s.Style != ButtonStyle.Link)
         {
-            byte alpha = (byte)Math.Clamp((int)((40 + 20 * s.HoverT) * (s.Disabled ? 0.3f : 1f)), 0, 120);
-            canvas.RoundedRectFilled(x + 1f, y + 2f, w, h, s.Rounding, Color.FromArgb(alpha, 0, 0, 0));
+            byte a = (byte)Math.Clamp((int)(50 + 20 * s.HoverT), 0, 120);
+            canvas.RoundedRectFilled(x + 1f, y + 3f, w, h, r, Color.FromArgb(a, 0, 0, 0));
         }
 
-        // Background (Filled / Soft / Outline-on-hover / Ghost-on-hover).
-        if (bg.A > 0)
-            canvas.RoundedRectFilled(x, y, w, h, s.Rounding, bg);
-
-        // Border (Outline only — uses two-rect hairline trick).
-        if (drawBorder)
+        // Background: gradient (filled variants) or solid fill.
+        if (c.Gradient)
         {
-            canvas.RoundedRectFilled(x, y, w, h, s.Rounding, border);
-            // Inset fill to expose the rim.
-            Color innerBg = bg.A > 0 ? bg : Color.Transparent;
-            if (innerBg.A > 0)
-                canvas.RoundedRectFilled(x + 1f, y + 1f, w - 2f, h - 2f, MathF.Max(0, s.Rounding - 1), innerBg);
+            canvas.SaveState();
+            canvas.SetLinearBrush(x, y, x + w, y + h, c.BgTop, c.BgBottom);
+            canvas.BeginPath();
+            canvas.RoundedRect(x, y, w, h, r);
+            canvas.Fill();
+            canvas.RestoreState();
+        }
+        else if (c.BgTop.A > 0)
+        {
+            canvas.RoundedRectFilled(x, y, w, h, r, c.BgTop);
         }
 
-        // Focus ring — sits just outside the button when focused. Painted via two filled
-        // rects so we don't need a stroke pass.
+        // Border hairline (secondary / soft / outline).
+        if (c.DrawBorder && c.Border.A > 0)
+        {
+            canvas.SaveState();
+            canvas.SetStrokeColor(c.Border);
+            canvas.SetStrokeWidth(1f);
+            canvas.BeginPath();
+            canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, r);
+            canvas.Stroke();
+            canvas.RestoreState();
+        }
+
+        // Focus ring just outside the button.
         if (s.FocusT > 0.02f && !s.Disabled)
         {
-            float ringT = s.FocusT;
-            float pad = 1.5f;
-            byte ringA = (byte)Math.Clamp((int)(180 * ringT), 0, 255);
-            Color ringCol = ChooseFocusRingColor(in s);
-            ringCol = Color.FromArgb(ringA, ringCol.R, ringCol.G, ringCol.B);
-
-            canvas.RoundedRectFilled(x - pad, y - pad, w + pad * 2, h + pad * 2,
-                s.Rounding + pad, ringCol);
-            canvas.RoundedRectFilled(x, y, w, h, s.Rounding, bg.A > 0 ? bg : s.Theme.Neutral.C200);
-            // After re-painting the inner rect we need to re-apply the border too.
-            if (drawBorder)
-            {
-                canvas.RoundedRectFilled(x, y, w, h, s.Rounding, border);
-                Color innerBg = bg.A > 0 ? bg : Color.Transparent;
-                if (innerBg.A > 0)
-                    canvas.RoundedRectFilled(x + 1f, y + 1f, w - 2f, h - 2f, MathF.Max(0, s.Rounding - 1), innerBg);
-            }
+            float pad = 2.5f;
+            byte ringA = (byte)Math.Clamp((int)(200 * s.FocusT), 0, 255);
+            Color ring = ChooseFocusRingColor(in s);
+            canvas.SaveState();
+            canvas.SetStrokeColor(Color.FromArgb(ringA, ring.R, ring.G, ring.B));
+            canvas.SetStrokeWidth(2f);
+            canvas.BeginPath();
+            canvas.RoundedRect(x - pad, y - pad, w + pad * 2f, h + pad * 2f, r + pad);
+            canvas.Stroke();
+            canvas.RestoreState();
         }
 
         if (s.Font == null) return;
 
-        // Content layout: optional spinner / leading icon, label, optional trailing icon.
-        float padX = s.PadX;
-        float contentH = s.FontSize;
-        float contentY = y + (h - contentH) * 0.5f;
-
-        // Loading state replaces the leading slot with a spinner.
-        bool drawLeading = s.Loading || !string.IsNullOrEmpty(s.LeadingIcon);
-        bool drawTrailing = !string.IsNullOrEmpty(s.TrailingIcon);
+        // Content row: leading (spinner / vector / glyph), label, trailing.
+        bool drawLeading = s.Loading || !string.IsNullOrEmpty(s.LeadingIcon) || s.LeadingIconDraw != null;
+        bool drawTrailing = (!string.IsNullOrEmpty(s.TrailingIcon) || s.TrailingIconDraw != null) && !s.IconOnly;
         bool drawLabel = !string.IsNullOrEmpty(s.Label) && !s.IconOnly;
 
         float iconSize = s.FontSize;
-        float iconLabelGap = 6f;
+        const float gap = 7f;
+        Color labelCol = c.Label;
 
-        // Pre-measure to center.
         Float2 labelSize = drawLabel ? canvas.MeasureText(s.Label, s.FontSize, s.Font) : new Float2(0, 0);
-        float contentW = (drawLeading ? iconSize + (drawLabel ? iconLabelGap : 0) : 0)
+        float contentW = (drawLeading ? iconSize + (drawLabel ? gap : 0) : 0)
                        + (drawLabel ? (float)labelSize.X : 0)
-                       + (drawTrailing ? iconLabelGap + iconSize : 0);
-
-        float contentX = s.IconOnly
-            ? x + (w - iconSize) * 0.5f
-            : x + (w - contentW) * 0.5f;
+                       + (drawTrailing ? gap + iconSize : 0);
+        float contentX = s.IconOnly ? x + (w - iconSize) * 0.5f : x + (w - contentW) * 0.5f;
+        float contentY = y + (h - s.FontSize) * 0.5f;
 
         if (drawLeading)
         {
-            float lx = contentX;
-            float ly = y + (h - iconSize) * 0.5f;
+            float lx = contentX, ly = y + (h - iconSize) * 0.5f;
             if (s.Loading)
                 PaintSpinner(canvas, lx + iconSize * 0.5f, ly + iconSize * 0.5f, iconSize * 0.45f, labelCol, s.Time);
+            else if (s.LeadingIconDraw != null)
+                s.LeadingIconDraw(canvas, new Rect(new Float2(lx, ly), new Float2(lx + iconSize, ly + iconSize)));
             else if (s.LeadingIcon != null)
                 canvas.DrawText(s.LeadingIcon, lx, ly, labelCol, s.FontSize, s.Font);
-            contentX += iconSize + (drawLabel ? iconLabelGap : 0);
+            contentX += iconSize + (drawLabel ? gap : 0);
         }
 
         if (drawLabel)
         {
             canvas.DrawText(s.Label, contentX, contentY, labelCol, s.FontSize, s.Font);
-
-            // Link-style hover underline.
             if (s.Style == ButtonStyle.Link && s.HoverT > 0.05f)
             {
                 float ulY = contentY + (float)labelSize.Y - 1f;
                 byte ulA = (byte)Math.Clamp((int)(255 * s.HoverT), 0, 255);
-                canvas.RectFilled(contentX, ulY, (float)labelSize.X, 1f,
-                    Color.FromArgb(ulA, labelCol.R, labelCol.G, labelCol.B));
+                canvas.RectFilled(contentX, ulY, (float)labelSize.X, 1f, Color.FromArgb(ulA, labelCol.R, labelCol.G, labelCol.B));
             }
-
-            contentX += (float)labelSize.X + (drawTrailing ? iconLabelGap : 0);
+            contentX += (float)labelSize.X + (drawTrailing ? gap : 0);
         }
 
-        if (drawTrailing && !s.IconOnly)
+        if (drawTrailing)
         {
             float ty = y + (h - iconSize) * 0.5f;
-            canvas.DrawText(s.TrailingIcon!, contentX, ty, labelCol, s.FontSize, s.Font);
+            if (s.TrailingIconDraw != null)
+                s.TrailingIconDraw(canvas, new Rect(new Float2(contentX, ty), new Float2(contentX + iconSize, ty + iconSize)));
+            else if (s.TrailingIcon != null)
+                canvas.DrawText(s.TrailingIcon, contentX, ty, labelCol, s.FontSize, s.Font);
         }
     }
 
-    /// <summary>Resolve background, border, and label colors for the current style + state.</summary>
-    private static void ResolveColors(in ButtonRenderSnapshot s,
-        out Color bg, out Color border, out Color labelCol, out bool drawBorder, out bool drawShadow)
+    private struct BtnColors
     {
-        var ramp = s.Ramp;
-        var ink = s.Ink;
+        public Color BgTop, BgBottom; public bool Gradient;
+        public Color Border; public bool DrawBorder;
+        public Color Label;
+        public Color Glow; public bool DrawGlow;
+        public bool Lift;
+    }
+
+    private static Color Alpha(Color c, float a) => Color.FromArgb((int)Math.Clamp(a * 255f, 0, 255), c.R, c.G, c.B);
+    private static Color MulA(Color c, float f) => Color.FromArgb((int)Math.Clamp(c.A * f, 0, 255), c.R, c.G, c.B);
+
+    /// <summary>Resolve the full paint recipe (fill, gradient, border, glow, label) for the style + state.</summary>
+    private static BtnColors ResolveColors(in ButtonRenderSnapshot s)
+    {
+        var ramp = s.Ramp; var ink = s.Ink; var neutral = s.Theme.Neutral; var primary = s.Theme.Primary;
         bool isDefault = s.Variant == OrigamiVariant.Default;
         bool isSubtle  = s.Variant == OrigamiVariant.Subtle;
-        var fillRamp = isDefault ? s.Theme.Neutral
-                     : isSubtle  ? s.Theme.Neutral
-                     : ramp;
-
-        Color baseFill = isSubtle ? s.Theme.Neutral.C300
-                       : fillRamp.C500;
-        Color hoverFill = OrigamiRamp.LerpColor(baseFill, fillRamp.C600, 0.6f);
-        Color pressFill = OrigamiRamp.LerpColor(baseFill, fillRamp.C400, 0.5f);
-
-        // White-ish text on saturated fills, neutral text on subtle/default fills.
-        Color filledLabel = (isDefault || isSubtle) ? ink.C500 : ink.C700;
+        bool saturated = !isDefault && !isSubtle;
+        var r = new BtnColors { Label = ink.C500 };
 
         switch (s.Style)
         {
             case ButtonStyle.Filled:
-                bg = OrigamiRamp.LerpColor(baseFill, hoverFill, s.HoverT);
-                bg = OrigamiRamp.LerpColor(bg, pressFill, s.PressT);
-                border = Color.Transparent;
-                drawBorder = false;
-                labelCol = filledLabel;
-                drawShadow = s.Shadow;
+                if (saturated)
+                {
+                    // 135deg gradient (C500 -> C600) + coloured glow, brightening on hover, dipping on press.
+                    Color top = OrigamiRamp.LerpColor(ramp.C500, ramp.C700, 0.22f * s.HoverT);
+                    Color bot = OrigamiRamp.LerpColor(ramp.C600, ramp.C700, 0.22f * s.HoverT);
+                    top = OrigamiRamp.LerpColor(top, ramp.C400, 0.5f * s.PressT);
+                    bot = OrigamiRamp.LerpColor(bot, ramp.C400, 0.5f * s.PressT);
+                    r.BgTop = top; r.BgBottom = bot; r.Gradient = true;
+                    r.Label = ink.C700;
+                    r.Glow = Alpha(ramp.C500, 0.45f + 0.2f * s.HoverT); r.DrawGlow = true;
+                    r.Lift = true;
+                }
+                else
+                {
+                    // Secondary: raised neutral surface + subtle border that warms toward the accent on hover.
+                    Color bg = OrigamiRamp.LerpColor(neutral.C500, neutral.C600, s.HoverT);
+                    r.BgTop = r.BgBottom = bg;
+                    r.Border = OrigamiRamp.LerpColor(neutral.C200, primary.C500, 0.5f * s.HoverT);
+                    r.DrawBorder = true;
+                    r.Label = ink.C500;
+                }
                 break;
 
             case ButtonStyle.Outline:
-                Color outlineFill = OrigamiRamp.LerpColor(Color.Transparent, fillRamp.C500, 0.18f * s.HoverT);
-                bg = outlineFill;
-                border = isDefault ? s.Theme.Neutral.C500 : ramp.C500;
-                drawBorder = true;
-                labelCol = isDefault ? ink.C500 : ramp.C600;
-                drawShadow = false;
+                r.BgTop = r.BgBottom = Alpha(saturated ? ramp.C500 : neutral.C500, 0.16f * s.HoverT);
+                r.Border = saturated ? ramp.C500 : neutral.C500;
+                r.DrawBorder = true;
+                r.Label = saturated ? ramp.C600 : ink.C500;
                 break;
 
             case ButtonStyle.Ghost:
-                Color ghostFill = OrigamiRamp.LerpColor(Color.Transparent, fillRamp.C400, 0.30f * s.HoverT);
-                bg = ghostFill;
-                border = Color.Transparent;
-                drawBorder = false;
-                labelCol = isDefault ? ink.C500 : ramp.C600;
-                drawShadow = false;
+                Color ghostTint = saturated ? ramp.C500 : primary.C500; // accent hover for the neutral ghost
+                r.BgTop = r.BgBottom = Alpha(ghostTint, 0.14f * s.HoverT);
+                r.Label = saturated ? ramp.C600 : OrigamiRamp.LerpColor(ink.C400, ink.C500, s.HoverT);
                 break;
 
             case ButtonStyle.Soft:
-                Color softBase = isDefault ? s.Theme.Neutral.C300 : ramp.C200;
-                Color softHover = isDefault ? s.Theme.Neutral.C400 : ramp.C300;
-                bg = OrigamiRamp.LerpColor(softBase, softHover, s.HoverT);
-                border = Color.Transparent;
-                drawBorder = false;
-                labelCol = isDefault ? ink.C500 : ramp.C600;
-                drawShadow = false;
+                // Tinted fill + coloured rim + coloured label (the prototype's "Delete" button).
+                Color tint = saturated ? ramp.C500 : neutral.C700;
+                r.BgTop = r.BgBottom = Alpha(tint, 0.14f + 0.08f * s.HoverT);
+                r.Border = Alpha(tint, 0.30f);
+                r.DrawBorder = true;
+                r.Label = saturated ? ramp.C500 : ink.C500;
                 break;
 
             case ButtonStyle.Link:
             default:
-                bg = Color.Transparent;
-                border = Color.Transparent;
-                drawBorder = false;
-                labelCol = isDefault ? ink.C500 : ramp.C600;
-                drawShadow = false;
+                r.Label = saturated ? ramp.C600 : ink.C500;
                 break;
         }
 
         if (s.Disabled)
         {
-            bg = OrigamiRamp.LerpColor(bg, s.Theme.Neutral.C300, 0.6f);
-            border = OrigamiRamp.LerpColor(border, s.Theme.Neutral.C400, 0.6f);
-            labelCol = s.Ink.C300;
+            r.Gradient = false; r.DrawGlow = false; r.Lift = false;
+            r.BgTop = MulA(r.BgTop, 0.4f); r.BgBottom = r.BgTop;
+            r.Border = MulA(r.Border, 0.4f);
+            r.Label = Alpha(r.Label, 0.4f);
         }
+        return r;
+    }
+
+    /// <summary>Feathered coloured glow under a filled button (emulates the prototype box-shadow).</summary>
+    private static void PaintGlow(Canvas canvas, float x, float y, float w, float h, float rounding, Color glow, float offY, float blur, float spread)
+    {
+        float cx = x + w * 0.5f, cy = y + h * 0.5f + offY;
+        float bw = w + spread * 2f, bh = h + spread * 2f;
+        canvas.SaveState();
+        canvas.SetBoxBrush(cx, cy, bw, bh, rounding, blur, glow, Color.FromArgb(0, glow.R, glow.G, glow.B));
+        canvas.BeginPath();
+        float pad = blur + 6f;
+        canvas.Rect(x - pad, y + offY - pad, w + pad * 2f, h + pad * 2f);
+        canvas.Fill();
+        canvas.RestoreState();
     }
 
     private static Color ChooseFocusRingColor(in ButtonRenderSnapshot s)
@@ -620,57 +654,4 @@ public sealed class ButtonBuilder
         canvas.RestoreState();
     }
 
-    // ── Tooltip ────────────────────────────────────────────────────────
-
-    private void DrawTooltipOverlay()
-    {
-        var thandle = _paper.CurrentParent;
-        string tt = _tooltip!;
-        var font = _theme.Font!;
-        float fontSize = _theme.Metrics.FontSize - 1f;
-        Color ttBg = _theme.Neutral.C500;
-        Color ttFg = _theme.Ink.C500;
-        string ttId = _id;
-
-        using (_paper.Box($"{_id}_tt")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, 0)
-            .Width(1).Height(1)
-            .Layer(Layer.Topmost)
-            .HookToParent()
-            .IsNotInteractable()
-            .Enter())
-        {
-            bool wantTooltip = _paper.IsElementHovered(thandle.Data.ID);
-            float ttAnim = _paper.AnimateBool(wantTooltip, 0.16f, id: $"{ttId}_ttf");
-            if (ttAnim < 0.01f) return;
-
-            _paper.Draw((canvas, _) =>
-            {
-                var tr = thandle.Data.LayoutRect;
-                float trX = (float)tr.Min.X;
-                float trY = (float)tr.Min.Y;
-                float trW = (float)tr.Size.X;
-
-                var ts = canvas.MeasureText(tt, fontSize, font);
-                float padX = 6f, padY = 2f;
-                float bw = (float)ts.X + padX * 2f;
-                float bh = (float)ts.Y + padY * 2f;
-                float slide = (1f - ttAnim) * 4f;
-                float bx = trX + trW * 0.5f - bw * 0.5f;
-                float by = trY - bh - 6f + slide;
-
-                byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
-                byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
-                byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
-
-                canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
-                    Color.FromArgb(aShadow, 0, 0, 0));
-                canvas.RoundedRectFilled(bx, by, bw, bh, 3f,
-                    Color.FromArgb(aBody, ttBg.R, ttBg.G, ttBg.B));
-                canvas.DrawText(tt, bx + padX, by + padY,
-                    Color.FromArgb(aText, ttFg.R, ttFg.G, ttFg.B), fontSize, font);
-            });
-        }
-    }
 }

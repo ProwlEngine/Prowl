@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 
@@ -41,10 +42,21 @@ public sealed class BreadcrumbItem
     public string Icon;
     public object? UserData;
 
+    /// <summary>Optional vector leading icon (host paints into the slot rect). Works without an icon font.</summary>
+    public Action<Prowl.Quill.Canvas, Prowl.Vector.Rect>? IconDraw;
+
     public BreadcrumbItem(string label, string icon = "", object? userData = null)
     {
         Label = label;
         Icon = icon;
+        UserData = userData;
+    }
+
+    public BreadcrumbItem(string label, Action<Prowl.Quill.Canvas, Prowl.Vector.Rect> iconDraw, object? userData = null)
+    {
+        Label = label;
+        Icon = string.Empty;
+        IconDraw = iconDraw;
         UserData = userData;
     }
 }
@@ -174,25 +186,58 @@ public sealed class BreadcrumbBuilder
                 int idx = i;
                 bool isActive = i == activeIdx;
                 bool isLast = i == _items.Count - 1;
-                bool hasIcon = _showIcons && !string.IsNullOrEmpty(item.Icon);
+                bool hasIcon = _showIcons && (!string.IsNullOrEmpty(item.Icon) || item.IconDraw != null);
                 bool showLabel = !(i == 0 && _truncateFirst && hasIcon);
 
                 // Separator (before all except first)
-                if (i > 0 && _separator != BreadcrumbSeparator.None && !string.IsNullOrEmpty(sepText))
+                if (i > 0 && _separator != BreadcrumbSeparator.None)
                 {
-                    _paper.Box($"{_id}_sep_{i}")
-                        .Width(UnitValue.Auto).Height(_height)
-                        .Padding(1, 1, 0, 0)
-                        .IsNotInteractable()
-                        .Text(sepText, font)
-                        .TextColor(ink.C300)
-                        .FontSize(isSepIcon ? sepFontSize : fontSize)
-                        .Alignment(TextAlignment.MiddleCenter);
+                    if (isSepIcon && string.IsNullOrEmpty(sepText))
+                    {
+                        // Vector chevron/arrow fallback (no icon font bundled).
+                        bool arrow = _separator == BreadcrumbSeparator.Arrow;
+                        Color sepCol = ink.C100;
+                        _paper.Box($"{_id}_sep_{i}")
+                            .Width(14).Height(_height)
+                            .IsNotInteractable()
+                            .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
+                            {
+                                float cx = (float)(rr.Min.X + rr.Size.X / 2), cy = (float)(rr.Min.Y + rr.Size.Y / 2);
+                                canvas.SaveState();
+                                canvas.SetStrokeColor(sepCol);
+                                canvas.SetStrokeWidth(1.3f);
+                                canvas.SetStrokeCap(EndCapStyle.Round);
+                                canvas.SetStrokeJoint(JointStyle.Round);
+                                canvas.BeginPath();
+                                if (arrow)
+                                {
+                                    canvas.MoveTo(cx - 3.5f, cy); canvas.LineTo(cx + 3.5f, cy);
+                                    canvas.MoveTo(cx + 1f, cy - 3f); canvas.LineTo(cx + 3.5f, cy); canvas.LineTo(cx + 1f, cy + 3f);
+                                }
+                                else
+                                {
+                                    canvas.MoveTo(cx - 1.8f, cy - 3.4f); canvas.LineTo(cx + 1.8f, cy); canvas.LineTo(cx - 1.8f, cy + 3.4f);
+                                }
+                                canvas.Stroke();
+                                canvas.RestoreState();
+                            }));
+                    }
+                    else if (!string.IsNullOrEmpty(sepText))
+                    {
+                        _paper.Box($"{_id}_sep_{i}")
+                            .Width(UnitValue.Auto).Height(_height)
+                            .Padding(1, 1, 0, 0)
+                            .IsNotInteractable()
+                            .Text(sepText, font)
+                            .TextColor(ink.C300)
+                            .FontSize(isSepIcon ? sepFontSize : fontSize)
+                            .Alignment(TextAlignment.MiddleCenter);
+                    }
                 }
 
                 // Segment button
                 Color textColor = isActive
-                    ? (_variant == OrigamiVariant.Default ? ink.C500 : ramp.C500)
+                    ? (_variant == OrigamiVariant.Default ? _theme.Primary.C700 : ramp.C500) // acc-300 for the current crumb
                     : ink.C300;
                 Color hoverBg = _theme.Neutral.C500;
 
@@ -207,13 +252,30 @@ public sealed class BreadcrumbBuilder
                     // Icon
                     if (hasIcon)
                     {
-                        _paper.Box($"{_id}_ico_{i}")
-                            .Width(m.IconWidth).Height(_height)
-                            .IsNotInteractable()
-                            .Text(item.Icon, font)
-                            .TextColor(isActive ? textColor : ink.C400)
-                            .FontSize(fontSize - 1)
-                            .Alignment(TextAlignment.MiddleCenter);
+                        if (item.IconDraw != null)
+                        {
+                            var draw = item.IconDraw;
+                            float isz = fontSize;
+                            _paper.Box($"{_id}_ico_{i}")
+                                .Width(m.IconWidth).Height(_height)
+                                .IsNotInteractable()
+                                .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
+                                {
+                                    float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f);
+                                    float iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
+                                    draw(canvas, new Prowl.Vector.Rect(new Prowl.Vector.Float2(ix, iy), new Prowl.Vector.Float2(ix + isz, iy + isz)));
+                                }));
+                        }
+                        else
+                        {
+                            _paper.Box($"{_id}_ico_{i}")
+                                .Width(m.IconWidth).Height(_height)
+                                .IsNotInteractable()
+                                .Text(item.Icon, font)
+                                .TextColor(isActive ? textColor : ink.C400)
+                                .FontSize(fontSize - 1)
+                                .Alignment(TextAlignment.MiddleCenter);
+                        }
                     }
 
                     // Label

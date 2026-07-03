@@ -6,290 +6,157 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// A menu item for the Origami app bar. Supports nested submenus, separators,
-/// checked state, enabled state, and dynamic labels.
+/// Fluent builder for an Origami application bar: a glass pill holding a brand mark, tags, a
+/// flexible spacer, icon action buttons and an avatar, laid out left-to-right in the order added.
+/// Construct via <see cref="Origami.AppBar(Paper, string)"/>, chain items, then call <see cref="Show"/>.
 /// </summary>
-public sealed class AppMenuItem
-{
-    public string Label;
-    public Action? OnClick;
-    public List<AppMenuItem> SubItems = [];
-    public bool IsSeparator;
-    public Func<bool>? IsCheckedFunc;
-    public Func<bool>? IsEnabledFunc;
-    public Func<string>? DynamicLabelFunc;
-    public string Icon = "";
-    private bool _enabled = true;
-
-    public bool IsEnabled { get => IsEnabledFunc?.Invoke() ?? _enabled; set => _enabled = value; }
-    public string DisplayLabel => DynamicLabelFunc?.Invoke() ?? Label;
-    public bool IsChecked => IsCheckedFunc?.Invoke() ?? false;
-    public bool HasSubItems => SubItems.Count > 0;
-
-    public AppMenuItem(string label, Action? onClick = null) { Label = label; OnClick = onClick; }
-    public static AppMenuItem Separator() => new("") { IsSeparator = true };
-}
-
-/// <summary>
-/// Fluent builder for an Origami application bar (menubar or footer/statusbar).
-/// Supports three sections: left, center, right. The left section can hold menu items
-/// that open dropdown menus. Center and right sections accept arbitrary content callbacks.
-///
-/// Usage:
-/// <code>
-/// Origami.AppBar(paper, "main_menu")
-///     .Menu("File", fileMenuItems)
-///     .Menu("Edit", editMenuItems)
-///     .Center(p => { /* flap, play buttons */ })
-///     .Right(p => { /* version label, FPS */ })
-///     .Show();
-/// </code>
-/// </summary>
+/// <remarks>Self-contained (Paper + Origami only). Icons are supplied as <c>Action&lt;Canvas, Rect&gt;</c>
+/// draw callbacks so the bar has no dependency on any particular icon set.</remarks>
 public sealed class AppBarBuilder
 {
+    private enum Kind { Brand, Tag, Spacer, Action, Avatar }
+    private sealed class Item
+    {
+        public Kind Kind;
+        public string Id = "";
+        public string Text = "";
+        public Action<Canvas, Rect>? Icon;
+        public Action? OnClick;
+        public Color Color;
+    }
+
     private readonly Paper _paper;
     private readonly string _id;
     private readonly OrigamiTheme _theme;
-
-    private readonly List<(string Label, List<AppMenuItem> Items)> _menus = [];
-    private Action<Paper>? _leftContent;
-    private Action<Paper>? _centerContent;
-    private Action<Paper>? _rightContent;
-    private float _height = 28f;
-    private bool _bottom; // true = position at bottom of screen
-    private Color? _bgOverride;
+    private readonly List<Item> _items = new();
+    private float _height = 44f;
 
     internal AppBarBuilder(Paper paper, string id, OrigamiTheme theme)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper ?? throw new ArgumentNullException(nameof(paper));
+        _id = id ?? throw new ArgumentNullException(nameof(id));
+        _theme = theme ?? throw new ArgumentNullException(nameof(theme));
     }
 
-    /// <summary>Add a top-level menu with dropdown items.</summary>
-    public AppBarBuilder Menu(string label, List<AppMenuItem> items) { _menus.Add((label, items)); return this; }
+    /// <summary>Brand mark: an accent-tile logo (drawn from <paramref name="icon"/>) followed by a title.</summary>
+    public AppBarBuilder Brand(Action<Canvas, Rect> icon, string title)
+    {
+        _items.Add(new Item { Kind = Kind.Brand, Icon = icon, Text = title ?? "" });
+        return this;
+    }
 
-    /// <summary>Custom content drawn in the left section (after menus).</summary>
-    public AppBarBuilder Left(Action<Paper> draw) { _leftContent = draw; return this; }
+    /// <summary>A small mono tag pill (e.g. a version like "v0.1").</summary>
+    public AppBarBuilder Tag(string text)
+    {
+        _items.Add(new Item { Kind = Kind.Tag, Text = text ?? "" });
+        return this;
+    }
 
-    /// <summary>Custom content drawn centered in the bar.</summary>
-    public AppBarBuilder Center(Action<Paper> draw) { _centerContent = draw; return this; }
+    /// <summary>A flexible gap that pushes following items to the right.</summary>
+    public AppBarBuilder Spacer()
+    {
+        _items.Add(new Item { Kind = Kind.Spacer });
+        return this;
+    }
 
-    /// <summary>Custom content drawn right-aligned in the bar.</summary>
-    public AppBarBuilder Right(Action<Paper> draw) { _rightContent = draw; return this; }
+    /// <summary>A square icon button.</summary>
+    public AppBarBuilder Action(string id, Action<Canvas, Rect> icon, Action onClick)
+    {
+        _items.Add(new Item { Kind = Kind.Action, Id = id, Icon = icon, OnClick = onClick });
+        return this;
+    }
 
-    /// <summary>Bar height in pixels. Default 28.</summary>
-    public AppBarBuilder Height(float h) { _height = h; return this; }
+    /// <summary>A circular avatar showing initials (defaults to the accent colour).</summary>
+    public AppBarBuilder Avatar(string id, string text, Color? color = null)
+    {
+        _items.Add(new Item { Kind = Kind.Avatar, Id = id, Text = text ?? "", Color = color ?? _theme.Primary.C500 });
+        return this;
+    }
 
-    /// <summary>Position at the bottom of the screen instead of the top.</summary>
-    public AppBarBuilder Bottom() { _bottom = true; return this; }
+    /// <summary>Bar height in pixels (default 44).</summary>
+    public AppBarBuilder Height(float height) { _height = MathF.Max(24f, height); return this; }
 
-    /// <summary>Override the background color.</summary>
-    public AppBarBuilder Background(Color color) { _bgOverride = color; return this; }
-
+    /// <summary>Render the app bar.</summary>
     public void Show()
     {
-        var font = _theme.Font;
         var ink = _theme.Ink;
-        var icons = _theme.Icons;
-        var metrics = _theme.Metrics;
+        var font = _theme.Font;
+        var titleFont = _theme.SemiBold ?? font;
+        var monoFont = _theme.Mono ?? font;
         if (font == null) return;
 
-        float posY = _bottom ? _paper.Height - _height : 0;
-        var bg = _bgOverride ?? _theme.Neutral.C200;
+        const float gap = 10f;
+        var acc = _theme.Primary.C500;
 
-        using (_paper.Row(_id)
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, posY)
-            .Size(_paper.Percent(100), _height)
-            .BackgroundColor(bg)
-            .ChildLeft(metrics.Padding).RowBetween(0)
+        using (_paper.Row(_id).Width(UnitValue.Percentage(100)).Height(_height).Rounded(9).Padding(12, 12, 0, 0)
+            .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            var barHandle = _paper.CurrentParent;
-
-            // ── Left: Menus ─────────────────────────────────
-            float menuPad = metrics.HeaderPadX + metrics.Spacing;
-            int openMenuIdx = _paper.GetElementStorage(barHandle, "openMenu", -1);
-
-            for (int i = 0; i < _menus.Count; i++)
+            // Gaps are explicit left margins: a Row's RowBetween is suppressed once children set an
+            // explicit main-axis margin, which every item does here for vertical centering.
+            bool first = true;
+            for (int i = 0; i < _items.Count; i++)
             {
-                int idx = i;
-                var (label, items) = _menus[i];
-                bool isOpen = openMenuIdx == idx;
+                var it = _items[i];
+                float lm = first ? 0f : gap;
 
-                float textW = (float)_paper.MeasureText(label, metrics.FontSize, font).X;
-                float btnW = textW + menuPad * 2;
-
-                using (_paper.Box($"{_id}_m_{idx}")
-                    .Height(_height).Width(btnW)
-                    .BackgroundColor(isOpen ? ink.C200 : Color.Transparent)
-                    .Hovered.BackgroundColor(ink.C200).End()
-                    .Rounded(metrics.Rounding)
-                    .OnClick(idx, (ci, _) =>
-                    {
-                        int cur = _paper.GetElementStorage(barHandle, "openMenu", -1);
-                        _paper.SetElementStorage(barHandle, "openMenu", cur == ci ? -1 : ci);
-                    })
-                    .Enter())
+                switch (it.Kind)
                 {
-                    // Draw label via canvas for crisp centering
-                    var capturedLabel = label;
-                    var capturedTextW = textW;
-                    _paper.Draw((canvas, rect) =>
-                    {
-                        float x = (float)rect.Min.X + ((float)rect.Size.X - capturedTextW) * 0.5f;
-                        var sz = canvas.MeasureText(capturedLabel, metrics.FontSize, font);
-                        float y = (float)rect.Min.Y + ((float)rect.Size.Y - (float)sz.Y) * 0.5f;
-                        canvas.DrawText(capturedLabel, x, y, ink.C500, metrics.FontSize, font);
-                    });
+                    case Kind.Brand:
+                        var brandIcon = it.Icon;
+                        using (_paper.Box($"{_id}_logo").Size(28).Rounded(8).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                            .BackgroundColor(acc).Enter())
+                            _paper.Draw((canvas, r) => brandIcon?.Invoke(canvas, r));
+                        _paper.Box($"{_id}_title").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                            .Margin(gap, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                            .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSize)
+                            .TextColor(ink.C500).Alignment(TextAlignment.MiddleLeft);
+                        break;
 
-                    // Hover-switch while a menu is open
-                    if (openMenuIdx >= 0 && openMenuIdx != idx && _paper.IsParentHovered)
-                        _paper.SetElementStorage(barHandle, "openMenu", idx);
-                }
-            }
+                    case Kind.Tag:
+                        _paper.Box($"{_id}_tag{i}").Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5)
+                            .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch()).Padding(6, 6, 2, 2)
+                            .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
+                            .Text(it.Text, monoFont!).FontSize(_theme.Metrics.FontSizeSmall - 3.5f)
+                            .TextColor(ink.C200).Alignment(TextAlignment.MiddleCenter);
+                        break;
 
-            // Left custom content
-            _leftContent?.Invoke(_paper);
+                    case Kind.Spacer:
+                        _paper.Box($"{_id}_sp{i}").Width(UnitValue.Stretch()).Height(1);
+                        first = true; // next item after a spacer needs no leading gap
+                        continue;
 
-            // ── Center ──────────────────────────────────────
-            if (_centerContent != null)
-            {
-                _paper.Box($"{_id}_csp").Width(UnitValue.Stretch()); // left spacer
-                _centerContent(_paper);
-                _paper.Box($"{_id}_csp2").Width(UnitValue.Stretch()); // right spacer
-            }
-            else
-            {
-                _paper.Box($"{_id}_sp").Width(UnitValue.Stretch()); // fill remaining
-            }
+                    case Kind.Action:
+                        var icon = it.Icon;
+                        var onClick = it.OnClick;
+                        using (_paper.Box($"{_id}_a_{it.Id}").Size(27).Rounded(7)
+                            .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                            .Hovered.BackgroundColor(_theme.Hover).End()
+                            .OnClick(0, (_, _) => onClick?.Invoke())
+                            .Enter())
+                            _paper.Draw((canvas, r) => icon?.Invoke(canvas, r));
+                        break;
 
-            // ── Right ───────────────────────────────────────
-            _rightContent?.Invoke(_paper);
-
-            // ── Dropdown rendering (outside the row content but reads state) ────
-            int openMenu = _paper.GetElementStorage(barHandle, "openMenu", -1);
-            if (openMenu >= 0 && openMenu < _menus.Count)
-            {
-                var openItems = _menus[openMenu].Items;
-                if (openItems.Count > 0)
-                {
-                    // Backdrop
-                    _paper.Box($"{_id}_dd_bg")
-                        .PositionType(PositionType.SelfDirected)
-                        .Position(-9999, -9999).Size(99999, 99999)
-                        .BackgroundColor(Color.FromArgb(85, 0, 0, 0))
-                        .Layer(Layer.Topmost)
-                        .StopEventPropagation()
-                        .OnClick(0, (_, _) => _paper.SetElementStorage(barHandle, "openMenu", -1));
-
-                    // Calculate X position from measured menu button widths
-                    float ddX = metrics.Padding;
-                    for (int i = 0; i < openMenu; i++)
-                    {
-                        float tw = (float)_paper.MeasureText(_menus[i].Label, metrics.FontSize, font).X;
-                        ddX += tw + menuPad * 2;
-                    }
-
-                    float ddY = _bottom ? -1 : _height - 1; // above for bottom bar, below for top
-
-                    RenderDropdown(_paper, $"{_id}_dd", openItems, ddX,
-                        _bottom ? 0 : ddY, font, ink, _theme,
-                        () => _paper.SetElementStorage(barHandle, "openMenu", -1),
-                        _bottom);
-                }
-            }
-        }
-    }
-
-    // ── Dropdown rendering ───────────────────────────────────
-
-    private const float DropdownW = 220f;
-
-    private static void RenderDropdown(Paper paper, string id, List<AppMenuItem> items,
-        float x, float y, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme,
-        Action close, bool openUpward = false)
-    {
-        var m = theme.Metrics;
-
-        using (paper.Column(id)
-            .PositionType(PositionType.SelfDirected)
-            .Position(x, y)
-            .Width(DropdownW).Height(UnitValue.Auto)
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(m.ContainerRounding)
-            .Padding(m.PaddingSmall, m.PaddingSmall, m.PaddingSmall, m.PaddingSmall)
-            .Layer(Layer.Topmost)
-            .ClampToScreen()
-            .BoxShadow(0, 2, 16, -4, Color.FromArgb(100, 0, 0, 0))
-            .StopEventPropagation()
-            .Enter())
-        {
-            for (int i = 0; i < items.Count; i++)
-            {
-                var item = items[i];
-                int idx = i;
-
-                if (item.IsSeparator)
-                {
-                    paper.Box($"{id}_sep_{idx}").Height(1).Margin(m.Spacing, m.Spacing, m.Spacing, m.Spacing)
-                        .BackgroundColor(ink.C200);
-                    continue;
+                    case Kind.Avatar:
+                        using (_paper.Box($"{_id}_av_{it.Id}").Size(24).Rounded(12)
+                            .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                            .BackgroundColor(it.Color).Enter())
+                            _paper.Box($"{_id}_av_{it.Id}_t").Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
+                                .IsNotInteractable()
+                                .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSizeSmall - 2f)
+                                .TextColor(Color.White).Alignment(TextAlignment.MiddleCenter);
+                        break;
                 }
 
-                bool enabled = item.IsEnabled;
-                var textColor = enabled ? ink.C500 : ink.C300;
-                string label = item.DisplayLabel;
-
-                var row = paper.Row($"{id}_i_{idx}").Height(m.RowHeight)
-                    .Rounded(m.SmallRounding)
-                    .Hovered.BackgroundColor(enabled ? theme.Primary.C400 : Color.Transparent).End();
-
-                if (enabled && item.OnClick != null && !item.HasSubItems)
-                    row.OnClick(item, (it, _) => { it.OnClick?.Invoke(); close(); });
-
-                using (row.Enter())
-                {
-                    // Check mark
-                    paper.Box($"{id}_chk_{idx}").Width(m.RowHeight).Height(m.RowHeight)
-                        .Text(item.IsChecked ? theme.Icons.Check : "", font)
-                        .TextColor(textColor).FontSize(m.FontSize - 1)
-                        .Alignment(TextAlignment.MiddleCenter);
-
-                    // Icon
-                    if (!string.IsNullOrEmpty(item.Icon))
-                    {
-                        paper.Box($"{id}_ico_{idx}").Width(m.IconBoxWidth).Height(m.RowHeight)
-                            .Text(item.Icon, font).TextColor(textColor)
-                            .FontSize(m.FontSize - 1)
-                            .Alignment(TextAlignment.MiddleCenter);
-                    }
-
-                    // Label
-                    paper.Box($"{id}_lbl_{idx}")
-                        .Width(UnitValue.Stretch()).Height(m.RowHeight)
-                        .Text(label, font).TextColor(textColor)
-                        .FontSize(m.FontSize)
-                        .Alignment(TextAlignment.MiddleLeft);
-
-                    // Submenu arrow
-                    if (item.HasSubItems)
-                    {
-                        paper.Box($"{id}_arr_{idx}").Width(m.IconBoxWidth).Height(m.RowHeight)
-                            .Text(theme.Icons.ChevronRight, font).TextColor(ink.C400)
-                            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-
-                        if (paper.IsParentHovered)
-                            RenderDropdown(paper, $"{id}_s_{idx}", item.SubItems,
-                                DropdownW - m.SpacingLarge, 0, font, ink, theme, close);
-                    }
-                }
+                first = false;
             }
         }
     }

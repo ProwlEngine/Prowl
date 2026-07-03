@@ -53,6 +53,8 @@ public sealed class DropdownBuilder<T>
     private float _itemHeight = 24f;
     private UnitValue _width = UnitValue.Stretch();
     private float _height = 24f;
+    private string? _prefixLabel;
+    private bool _hideChevron;
 
     internal DropdownBuilder(Paper paper, string id, T value, Action<T> setter,
         IReadOnlyList<T> items, OrigamiTheme theme)
@@ -131,6 +133,18 @@ public sealed class DropdownBuilder<T>
     /// <summary>Text shown inside the popover when filtering returns no items.</summary>
     public DropdownBuilder<T> EmptyText(string text) { _emptyText = text ?? string.Empty; return this; }
 
+    /// <summary>Hide the trailing chevron.</summary>
+    public DropdownBuilder<T> NoChevron(bool hide = true) { _hideChevron = hide; return this; }
+
+    /// <summary>
+    /// Inspector "Tag / Layer" style: a muted <paramref name="label"/> on the left, the value pushed
+    /// to the right, and no chevron (the whole row is still the click target). Matches Nebula's <c>.sel</c>.
+    /// </summary>
+    public DropdownBuilder<T> Inline(string label)
+    {
+        _prefixLabel = label; _hideChevron = true; return this;
+    }
+
     // ── Terminator ─────────────────────────────────────────────────────
 
     /// <summary>Render the dropdown.</summary>
@@ -155,13 +169,11 @@ public sealed class DropdownBuilder<T>
         ElementHandle trigHandle = default;
 
         bool subtle = _variant == OrigamiVariant.Subtle;
-        Color trigBg     = subtle ? Color.Transparent
-                                  : (_variant == OrigamiVariant.Default ? _theme.Neutral.C200 : ramp.C200);
-        Color trigBorder = subtle ? Color.Transparent
-                                  : (_variant == OrigamiVariant.Default ? _theme.Neutral.C400 : ramp.C400);
-        Color trigBorderHover = subtle ? _theme.Neutral.C400 : ramp.C500;
+        Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
+        Color trigBorder = subtle ? Color.Transparent : Color.FromArgb(30, 178, 150, 255);
+        Color trigBorderHover = _theme.BorderStrong;
         Color chevColor  = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
-                                  ? ink.C400 : ramp.C600;
+                                  ? ink.C300 : ramp.C600;
 
         // Use Row so children flow left-to-right; per-child Margin (not ChildLeft/Right)
         // gives reliable label-stretches-chevron-on-right layout.
@@ -195,33 +207,48 @@ public sealed class DropdownBuilder<T>
             {
                 if (font != null)
                 {
-                    // Label stretches to consume the row; chevron sits flush against the right edge.
                     var m = _theme.Metrics;
-                    _paper.Box($"{_id}_lbl")
+
+                    // Inline (.sel) prefix label on the left.
+                    if (_prefixLabel != null)
+                    {
+                        _paper.Box($"{_id}_pfx")
+                            .Width(UnitValue.Auto)
+                            .Margin(m.Padding, m.SpacingMedium, 0, 0)
+                            .Alignment(TextAlignment.MiddleLeft)
+                            .IsNotInteractable()
+                            .Text(_prefixLabel, font)
+                            .TextColor(ink.C300)
+                            .FontSize(m.FontSize - 2);
+                    }
+
+                    // Value. With a prefix it is pushed to the right; otherwise it stretches.
+                    var lbl = _paper.Box($"{_id}_lbl")
                         .Width(UnitValue.Stretch())
-                        .Margin(m.SpacingLarge, m.PaddingSmall, 0, 0)
-                        .Alignment(TextAlignment.MiddleLeft)
+                        .Margin(_prefixLabel != null ? 0 : m.SpacingLarge, _prefixLabel != null ? m.Padding : m.PaddingSmall, 0, 0)
+                        .Alignment(_prefixLabel != null ? TextAlignment.MiddleRight : TextAlignment.MiddleLeft)
                         .IsNotInteractable()
                         .Text(triggerText, font)
                         .TextColor(isEmpty ? ink.C300 : ink.C500)
                         .FontSize(m.FontSize);
 
-                    string chev = isOpen
-                        ? (string.IsNullOrEmpty(icons.ChevronUp) ? "^" : icons.ChevronUp)
-                        : (string.IsNullOrEmpty(icons.ChevronDown) ? "v" : icons.ChevronDown);
-                    _paper.Box($"{_id}_chev")
-                        .Width(m.IconWidth)
-                        .Margin(0, m.Padding, 0, 0)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .IsNotInteractable()
-                        .Text(chev, font).TextColor(chevColor).FontSize(m.FontSize * 0.85f);
+                    if (!_hideChevron)
+                    {
+                        bool up = isOpen;
+                        var chevCol = chevColor;
+                        _paper.Box($"{_id}_chev")
+                            .Width(m.IconWidth)
+                            .Margin(0, m.Padding, 0, 0)
+                            .IsNotInteractable()
+                            .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) => DropdownInternal.DrawChevron(canvas, rr, up, chevCol)));
+                    }
                 }
             }
 
             if (isOpen)
             {
                 // Modal backdrop dims everything behind the popover and catches outside clicks.
-                DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: true);
+                DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: false);
 
                 var p = new DropdownInternal.PopoverParams<T>
                 {

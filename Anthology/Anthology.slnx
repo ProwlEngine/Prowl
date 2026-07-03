@@ -22,6 +22,9 @@
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
   </Folder>
+  <Folder Name="/Samples/">
+    <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
     <Project Path="Scribe/Tests/Scribe.Tests.csproj" />

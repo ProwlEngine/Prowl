@@ -96,8 +96,9 @@ public sealed class SkeletonBuilder
 
     public void Show()
     {
-        Color baseColor = _baseColorOverride ?? _theme.Ink.C200;
-        Color shimmerColor = _shimmerColorOverride ?? _theme.Ink.C300;
+        // Nebula "w2skel": translucent white base, shimmering to a brighter translucent white.
+        Color baseColor = _baseColorOverride ?? Color.FromArgb(13, 255, 255, 255);    // rgba(255,255,255,0.05)
+        Color shimmerColor = _shimmerColorOverride ?? Color.FromArgb(28, 255, 255, 255); // rgba(255,255,255,0.11)
         float radius = ResolveRadius();
 
         var snap = new SkeletonSnapshot
@@ -126,7 +127,7 @@ public sealed class SkeletonBuilder
         {
             SkeletonShape.Pill   => MathF.Min(_width, _height) * 0.5f,
             SkeletonShape.Circle => MathF.Min(_width, _height) * 0.5f,
-            _                    => _radiusOverride ?? _theme.Metrics.Rounding,
+            _                    => _radiusOverride ?? 6f,
         };
     }
 
@@ -156,24 +157,24 @@ public sealed class SkeletonBuilder
 
         if (!s.Shimmer) return;
 
-        // Shimmer: a soft horizontal band sweeping left to right, clipped by re-drawing
-        // the shape path and using a feathered box brush.
-        float t = (s.Time * 0.55f) % 1.4f;          // travel cycle (a bit of pause at the ends)
-        float ease = SmoothStep01(t / 1.4f);
-        float bandW = MathF.Max(s.W * 0.5f, s.H * 2f);
+        // Shimmer: a soft light band swept left → right over ~1.3s with an ease-in-out feel,
+        // clipped to the shape and drawn additively over the base with a feathered box brush.
+        float t = (s.Time % 1.3f) / 1.3f;           // 1.3s sweep cycle
+        float ease = SmoothStep01(t);
+        float bandW = MathF.Max(s.W * 0.6f, s.H * 2.5f);
         float travel = s.W + bandW;
         float bandCx = x - bandW * 0.5f + travel * ease;
         float bandCy = y + s.H * 0.5f;
 
-        var bright = new Color32(s.ShimmerColor.R, s.ShimmerColor.G, s.ShimmerColor.B, (byte)170);
+        var bright = new Color32(s.ShimmerColor.R, s.ShimmerColor.G, s.ShimmerColor.B, s.ShimmerColor.A);
         var fade = new Color32(s.ShimmerColor.R, s.ShimmerColor.G, s.ShimmerColor.B, (byte)0);
 
         canvas.SaveState();
         DrawShapePath(canvas, x, y, s);
         canvas.SetBoxBrush(
             bandCx, bandCy,
-            bandW * 0.30f, s.H * 4f,
-            0f, bandW * 0.40f,
+            bandW * 0.35f, s.H * 4f,
+            0f, bandW * 0.5f,
             bright, fade);
         canvas.Fill();
         canvas.RestoreState();

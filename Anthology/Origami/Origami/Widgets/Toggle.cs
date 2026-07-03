@@ -5,6 +5,7 @@ using System;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 
@@ -380,6 +381,14 @@ public sealed class ToggleBuilder
         return Color.FromArgb(alpha, c.R, c.G, c.B);
     }
 
+    /// <summary>Overshooting ease so the knob springs slightly past its target (prototype cubic-bezier feel).</summary>
+    private static float EaseOutBack(float t)
+    {
+        const float c1 = 1.4f, c3 = c1 + 1f;
+        float p = t - 1f;
+        return 1f + c3 * p * p * p + c1 * p * p;
+    }
+
     // ── Switch (single Box + Canvas Draw) ──────────────────────────────
 
     private void DrawSwitch(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
@@ -392,16 +401,18 @@ public sealed class ToggleBuilder
 
         // Capture every per-frame value the closure needs — the builder doesn't survive past Show().
         var onRamp = OnRamp();
-        Color offBg   = _theme.Neutral.C300;
+        Color offBg   = Color.FromArgb(26, 255, 255, 255); // light translucent pill (prototype .tg)
         Color onBg    = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color trackBg = OrigamiRamp.LerpColor(offBg, onBg, t);
-        Color knobFill   = _theme.Ink.C500;
+        Color borderCol  = _theme.Neutral.C200;
+        Color knobFill   = _theme.Ink.C600;
         Color textOnFg   = _theme.Ink.C600;
         Color textOffFg  = _theme.Ink.C500;
         Color glyphOffFg = _theme.Ink.C300;
         if (_disabled)
         {
-            trackBg  = OrigamiRamp.LerpColor(trackBg, _theme.Neutral.C400, 0.5f);
+            // Fade the whole control to ~40% (prototype disabled toggle is just dimmed, not recoloured).
+            trackBg  = Color.FromArgb((int)(trackBg.A * 0.4f), trackBg.R, trackBg.G, trackBg.B);
             knobFill = _theme.Ink.C300;
         }
 
@@ -422,12 +433,37 @@ public sealed class ToggleBuilder
                 float h = (float)rect.Size.Y;
                 float pad   = MathF.Max(2f, h * 0.12f);
                 float knob  = h - pad * 2f;
-                float knobX = x + pad + (w - knob - pad * 2f) * t;
+                float knobX = x + pad + (w - knob - pad * 2f) * EaseOutBack(t); // springy slide
                 float knobY = y + pad;
                 float textBoxW = w - knob - pad * 2f;
 
+                // On-glow beneath the track (fades in with the value). Save/Restore so the box
+                // brush never leaks into the track / knob / text draws that follow.
+                if (t > 0.02f)
+                {
+                    Color glow = Color.FromArgb((int)(95 * t), onBg.R, onBg.G, onBg.B);
+                    canvas.SaveState();
+                    canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 2f, w - 2f, h - 2f, h * 0.5f, 13f, glow, Color.FromArgb(0, onBg.R, onBg.G, onBg.B));
+                    canvas.BeginPath();
+                    canvas.Rect(x - 16f, y - 10f, w + 32f, h + 28f);
+                    canvas.Fill();
+                    canvas.RestoreState();
+                }
+
                 // Track — single hardware-accelerated rounded rect.
                 canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
+
+                // Off-state hairline border (fades out as it turns on).
+                if (t < 0.98f)
+                {
+                    canvas.SaveState();
+                    canvas.SetStrokeColor(Color.FromArgb((int)(borderCol.A * (1f - t)), borderCol.R, borderCol.G, borderCol.B));
+                    canvas.SetStrokeWidth(1f);
+                    canvas.BeginPath();
+                    canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, h * 0.5f);
+                    canvas.Stroke();
+                    canvas.RestoreState();
+                }
 
                 // OnText — visible on the left while on (the side the knob has vacated).
                 if (font != null && !string.IsNullOrEmpty(onText) && t > 0.05f)
@@ -468,8 +504,6 @@ public sealed class ToggleBuilder
 
     private void DrawCheckbox(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
-        var font    = _theme.Font;
-        var icons   = _theme.Icons;
         var metrics = _theme.Metrics;
 
         bool isIndet = _indeterminate == true;
@@ -487,9 +521,8 @@ public sealed class ToggleBuilder
             fill = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.5f);
 
         Color glyphFg = WithAlpha(_theme.Ink.C700, effT);
-        string glyphText = isIndet ? "−" : (!string.IsNullOrEmpty(icons.Check) ? icons.Check : "✓");
-        bool drawGlyph = effT > 0.05f && font != null;
-        float radius = MathF.Min(metrics.Rounding, _size * 0.25f);
+        bool drawMark = effT > 0.05f;
+        float radius = _size * 0.32f;
 
         using (_paper.Box($"{_id}_chk")
             .Width(_size).Height(_size)
@@ -508,13 +541,28 @@ public sealed class ToggleBuilder
                 canvas.RoundedRectFilled(x, y, w, h, radius, border);
                 canvas.RoundedRectFilled(x + 1, y + 1, w - 2, h - 2, MathF.Max(0, radius - 1), fill);
 
-                if (drawGlyph)
+                // Vector check / dash (the UI font has no tick glyph).
+                if (drawMark)
                 {
-                    float fs = h * 0.75f;
-                    var ts = canvas.MeasureText(glyphText, fs, font!);
-                    float gx = x + (w - (float)ts.X) * 0.5f;
-                    float gy = y + (h - (float)ts.Y) * 0.5f;
-                    canvas.DrawText(glyphText, gx, gy, glyphFg, fs, font!);
+                    canvas.SaveState();
+                    canvas.SetStrokeColor(glyphFg);
+                    canvas.SetStrokeWidth(MathF.Max(1.4f, h * 0.12f));
+                    canvas.SetStrokeCap(EndCapStyle.Round);
+                    canvas.SetStrokeJoint(JointStyle.Round);
+                    canvas.BeginPath();
+                    if (isIndet)
+                    {
+                        canvas.MoveTo(x + w * 0.28f, y + h * 0.5f);
+                        canvas.LineTo(x + w * 0.72f, y + h * 0.5f);
+                    }
+                    else
+                    {
+                        canvas.MoveTo(x + w * 0.26f, y + h * 0.52f);
+                        canvas.LineTo(x + w * 0.43f, y + h * 0.68f);
+                        canvas.LineTo(x + w * 0.74f, y + h * 0.34f);
+                    }
+                    canvas.Stroke();
+                    canvas.RestoreState();
                 }
             });
         }
@@ -524,16 +572,13 @@ public sealed class ToggleBuilder
 
     private void DrawRadio(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
+        // Prototype .w2rdot: 2px ring (bd-strong, accent when on) + an 8px accent dot with a glow.
         var onRamp = OnRamp();
         Color onColor = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C600 : onRamp.C500;
-        Color border = _disabled ? _theme.Neutral.C400
-                     : t > 0.5f ? onColor
-                     : (_variant == OrigamiVariant.Default || _variant == OrigamiVariant.Subtle)
-                         ? _theme.Neutral.C500 : ramp.C500;
-        Color bg = _theme.Neutral.C200;
-        Color innerColor = _disabled ? _theme.Ink.C300 : onColor;
+        Color offBorder = _theme.BorderStrong; // bd-strong
+        Color ringCol = _disabled ? _theme.Neutral.C400 : OrigamiRamp.LerpColor(offBorder, onColor, t);
+        Color dotCol = _disabled ? _theme.Ink.C300 : onColor;
         float anim = t;
-        float dotMaxFrac = 0.66f;
 
         using (_paper.Box($"{_id}_radio")
             .Width(_size).Height(_size)
@@ -551,13 +596,31 @@ public sealed class ToggleBuilder
                 float cx = x + w * 0.5f;
                 float cy = y + h * 0.5f;
 
-                // Outer ring + inner fill via two CircleFilled (cheap, GPU-AA, no stroke pass).
-                canvas.CircleFilled(cx, cy, r, border);
-                canvas.CircleFilled(cx, cy, MathF.Max(0, r - 1f), bg);
+                // Dot glow (fades in with the value). Save/Restore so the box brush never leaks
+                // into the ring stroke / dot fill that follow.
+                if (anim > 0.02f && !_disabled)
+                {
+                    Color glow = Color.FromArgb((int)(90 * anim), onColor.R, onColor.G, onColor.B);
+                    canvas.SaveState();
+                    canvas.SetBoxBrush(cx, cy, r, r, r, 7f, glow, Color.FromArgb(0, onColor.R, onColor.G, onColor.B));
+                    canvas.BeginPath();
+                    canvas.Rect(x - 8f, y - 8f, w + 16f, h + 16f);
+                    canvas.Fill();
+                    canvas.RestoreState();
+                }
 
-                float dotR = r * dotMaxFrac * anim;
+                // Ring (stroked so the centre stays transparent).
+                canvas.SaveState();
+                canvas.SetStrokeColor(ringCol);
+                canvas.SetStrokeWidth(2f);
+                canvas.BeginPath();
+                canvas.Circle(cx, cy, r - 1f);
+                canvas.Stroke();
+                canvas.RestoreState();
+
+                float dotR = r * 0.47f * anim;
                 if (dotR >= 0.5f)
-                    canvas.CircleFilled(cx, cy, dotR, innerColor);
+                    canvas.CircleFilled(cx, cy, dotR, dotCol);
             });
         }
     }

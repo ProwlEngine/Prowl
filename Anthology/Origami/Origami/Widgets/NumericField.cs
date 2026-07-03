@@ -7,6 +7,7 @@ using System.Numerics;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 
@@ -38,7 +39,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 26f;
+    private float _height = 32f;
     private bool _readOnly;
     private string _placeholder = "";
     private bool _selectAllOnFocus;
@@ -58,6 +59,10 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private Action? _trailingIconClick;
     private string? _prefixText;
     private Color? _prefixColor;
+    private string? _suffixText;
+    private bool _stepper;
+    private bool _dragLabel;
+    private bool _prefixCompact;
 
     internal NumericFieldBuilder(Paper paper, string id, T value, Action<T> setter, OrigamiTheme theme)
     {
@@ -128,6 +133,19 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         return this;
     }
 
+    /// <summary>Muted mono unit suffix inside the field (e.g. "kg", "%").</summary>
+    public NumericFieldBuilder<T> Suffix(string text) { _suffixText = text; return this; }
+
+    /// <summary>Show up/down stepper buttons on the right that increment/decrement by the step.</summary>
+    public NumericFieldBuilder<T> Stepper(bool enabled = true) { _stepper = enabled; return this; }
+
+    /// <summary>Make the <see cref="Prefix"/> label a horizontal scrub handle (drag to change the value).
+    /// <paramref name="compact"/> tightens the label padding (for vector axis tags).</summary>
+    public NumericFieldBuilder<T> DraggableLabel(string text, Color color, bool compact = false)
+    {
+        _prefixText = text; _prefixColor = color; _dragLabel = true; _prefixCompact = compact; return this;
+    }
+
     // ── Terminator ──────────────────────────────────────────────────
 
     public void Show()
@@ -160,6 +178,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             .Placeholder(_placeholder)
             .SelectAllOnFocus(_selectAllOnFocus)
             .SubmitOnEnter()
+            .Mono()
             .CharFilter(NumericCharFilter);
 
         if (!string.IsNullOrEmpty(_leadingIconGlyph))
@@ -167,13 +186,82 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         if (!string.IsNullOrEmpty(_trailingIconGlyph))
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
         if (!string.IsNullOrEmpty(_prefixText))
+        {
             tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200));
+            if (_dragLabel) tb.PrefixDrag(AddDelta);
+            if (_prefixCompact) tb.PrefixPad(5, 2);
+        }
+        if (!string.IsNullOrEmpty(_suffixText)) tb.Suffix(_suffixText!);
+        if (_stepper) tb.TrailingContent(DrawStepper);
 
         if (_error != null) tb.Error(_error);
         if (_helperText != null) tb.HelperText(_helperText);
         if (stringValidator != null) tb.Validator(stringValidator);
 
         tb.Show();
+    }
+
+    // ── Stepper / scrub ─────────────────────────────────────────────
+
+    private void DrawStepper()
+    {
+        var ink = _theme.Ink;
+        Color bdSoft = _theme.BorderSoft;
+        Color hover = _theme.Hover;
+        float h = _height;
+
+        _paper.Box($"{_id}_stepdiv").Width(1).Height(h).BackgroundColor(bdSoft).IsNotInteractable();
+        using (_paper.Column($"{_id}_step").Width(22).Height(h).Enter())
+        {
+            StepBtn($"{_id}_stup", true, h * 0.5f, hover, ink.C200);
+            StepBtn($"{_id}_stdn", false, h - h * 0.5f, hover, ink.C200);
+        }
+    }
+
+    private void StepBtn(string bid, bool up, float bh, Color hover, Color icon)
+    {
+        float r = MathF.Max(0f, _theme.Metrics.Rounding - 1f);
+        var b = _paper.Box(bid).Width(22).Height(bh)
+            .Rounded(0f, up ? r : 0f, up ? 0f : r, 0f)   // round the outer corner against the field
+            .Hovered.BackgroundColor(hover).End()
+            .OnClick(0, (_, _) => Increment(up ? 1 : -1));
+        b.OnPostLayout((hh, r) => _paper.Draw(ref hh, (canvas, rr) =>
+        {
+            float cx = (float)(rr.Min.X + rr.Size.X * 0.5f);
+            float cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
+            canvas.SaveState();
+            canvas.SetStrokeColor(icon);
+            canvas.SetStrokeWidth(1.3f);
+            canvas.SetStrokeCap(EndCapStyle.Round);
+            canvas.SetStrokeJoint(JointStyle.Round);
+            canvas.BeginPath();
+            if (up) { canvas.MoveTo(cx - 3f, cy + 1.5f); canvas.LineTo(cx, cy - 1.6f); canvas.LineTo(cx + 3f, cy + 1.5f); }
+            else { canvas.MoveTo(cx - 3f, cy - 1.5f); canvas.LineTo(cx, cy + 1.6f); canvas.LineTo(cx + 3f, cy - 1.5f); }
+            canvas.Stroke();
+            canvas.RestoreState();
+        }));
+    }
+
+    private void Increment(int dir)
+    {
+        T s = _step ?? T.One;
+        T nv = _value + s * T.CreateChecked(dir);
+        if (_min is T mn && nv < mn) nv = mn;
+        if (_max is T mx && nv > mx) nv = mx;
+        _setter(nv);
+    }
+
+    private void AddDelta(float dx)
+    {
+        float mult = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift) ? 10f
+                   : _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl) ? 0.1f : 1f;
+        double cur = Convert.ToDouble(_value, _culture);
+        double stepv = _step is T s ? Convert.ToDouble(s, _culture) : (s_isFloatingPoint ? 0.1 : 1.0);
+        cur += dx * stepv * 0.5 * mult;
+        if (!s_isFloatingPoint) cur = Math.Round(cur);
+        if (_min is T mn) cur = Math.Max(cur, Convert.ToDouble(mn, _culture));
+        if (_max is T mx) cur = Math.Min(cur, Convert.ToDouble(mx, _culture));
+        _setter(T.CreateChecked(cur));
     }
 
     // ── Internals ───────────────────────────────────────────────────

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
@@ -49,6 +50,10 @@ public sealed class DatePickerBuilder
     private DateTime? _rangeEnd;
     private Action<DateTime>? _rangeEndSetter;
 
+    // Inline (embedded) mode
+    private bool _inline;
+    private float _inlineWidth = 240f;
+
     internal DatePickerBuilder(Paper paper, string id, DateTime value, Action<DateTime> setter, OrigamiTheme theme)
     {
         _paper = paper;
@@ -72,6 +77,10 @@ public sealed class DatePickerBuilder
     public DatePickerBuilder Success(bool s = true) { _success = s; return this; }
 
     /// <summary>Enable range picking. The builder's value is the start, rangeEnd is the end.</summary>
+    /// <summary>Render the calendar inline (embedded, no field/popup). Fully functional — single
+    /// date or, with <see cref="Range"/>, a two-click date range. Width is a fixed pixel value.</summary>
+    public DatePickerBuilder Inline(float width = 240f) { _inline = true; _inlineWidth = MathF.Max(180f, width); return this; }
+
     public DatePickerBuilder Range(System.DateTime rangeEnd, Action<System.DateTime> rangeEndSetter)
     {
         _rangeEnd = rangeEnd;
@@ -81,6 +90,8 @@ public sealed class DatePickerBuilder
 
     public void Show()
     {
+        if (_inline) { ShowInline(); return; }
+
         if (Origami.IsReadOnly) _readOnly = true;
         var m = _theme.Metrics;
         var font = _theme.Font;
@@ -91,14 +102,14 @@ public sealed class DatePickerBuilder
 
         Color borderColor = _error != null ? _theme.Red.C400
             : _success ? _theme.Green.C400
-            : (_variant == OrigamiVariant.Default ? _theme.Neutral.C400 : ramp.C400);
+            : (_variant == OrigamiVariant.Default ? _theme.BorderSoft : ramp.C400);
         Color hoverBorder = _error != null ? _theme.Red.C500
             : _success ? _theme.Green.C500
-            : (_variant == OrigamiVariant.Default ? ramp.C500 : ramp.C500);
+            : ramp.C500;
 
         var trigger = _paper.Row(_id)
             .Width(_width).Height(m.RowHeight)
-            .BackgroundColor(_theme.Neutral.C200)
+            .BackgroundColor(_theme.Glass)
             .BorderColor(borderColor).BorderWidth(1)
             .Hovered.BorderColor(hoverBorder).End()
             .Rounded(m.Rounding);
@@ -134,13 +145,21 @@ public sealed class DatePickerBuilder
                     .Text(displayText, font).TextColor(ink.C500)
                     .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                string icon = _mode == DatePickerMode.Time ? _theme.Icons.Clock : _theme.Icons.ChevronDown;
-                if (!string.IsNullOrEmpty(icon))
-                    _paper.Box($"{_id}_ico")
-                        .Width(m.RowHeight).Height(m.RowHeight)
-                        .IsNotInteractable()
-                        .Text(icon, font).TextColor(ink.C300)
-                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                // Trailing affordance — drawn as a vector (the icon font ships no glyph).
+                bool clock = _mode == DatePickerMode.Time;
+                Color icoColor = ink.C300;
+                using (_paper.Box($"{_id}_ico")
+                    .Width(m.RowHeight).Height(m.RowHeight)
+                    .IsNotInteractable().Enter())
+                {
+                    _paper.Draw((canvas, rect) =>
+                    {
+                        float cx = (float)(rect.Min.X + rect.Size.X * 0.5);
+                        float cy = (float)(rect.Min.Y + rect.Size.Y * 0.5);
+                        if (clock) OrigamiCalendar.DrawClock(canvas, cx, cy, icoColor);
+                        else OrigamiCalendar.DrawCaretDown(canvas, cx, cy, icoColor);
+                    });
+                }
             }
         }
 
@@ -152,6 +171,83 @@ public sealed class DatePickerBuilder
                 .Margin(2, 2, 2, 0).IsNotInteractable()
                 .Text(_error, font).TextColor(_theme.Red.C500)
                 .FontSize(m.FontSizeSmall).Alignment(TextAlignment.Left);
+        }
+    }
+
+    private void ShowInline()
+    {
+        var m = _theme.Metrics;
+        var font = _theme.Font;
+        if (font == null) return;
+        bool isRange = _rangeEndSetter != null;
+
+        using (_paper.Column(_id)
+            .Width(UnitValue.Pixels(_inlineWidth)).Height(UnitValue.Auto)
+            .BackgroundColor(_theme.Glass)
+            .BorderColor(_theme.BorderSoft).BorderWidth(1)
+            .Rounded(m.ContainerRounding)
+            .Padding(11, 11, 11, 11).ColBetween(m.SpacingMedium)
+            .Enter())
+        {
+            var h = _paper.CurrentParent;
+            int baseCode = _value.Year * 12 + (_value.Month - 1);
+            int viewCode = _paper.GetElementStorage(h, "vm", baseCode);
+            int vy = viewCode / 12, vm = viewCode % 12 + 1;
+            bool selectingEnd = isRange && _paper.GetElementStorage(h, "selEnd", false);
+
+            System.DateTime? rStart = null, rEnd = null;
+            if (isRange)
+            {
+                rStart = _value.Date;
+                if (_rangeEnd.HasValue) rEnd = _rangeEnd.Value.Date;
+                if (rStart.HasValue && rEnd.HasValue && rEnd < rStart) (rStart, rEnd) = (rEnd, rStart);
+            }
+
+            OrigamiCalendar.DrawBody(_paper, _id, font, _theme, _inlineWidth - 22f, vy, vm,
+                onPrev: () => _paper.SetElementStorage(h, "vm", viewCode - 1),
+                onNext: () => _paper.SetElementStorage(h, "vm", viewCode + 1),
+                onTitle: null,
+                stateOf: date =>
+                {
+                    var f = new CalDayFlags
+                    {
+                        Disabled = _disabledDate?.Invoke(date) ?? false,
+                        Today = date.Date == System.DateTime.Now.Date,
+                    };
+                    if (isRange)
+                    {
+                        f.RangeStart = rStart.HasValue && date.Date == rStart.Value;
+                        f.RangeEnd = rEnd.HasValue && date.Date == rEnd.Value;
+                        f.InRange = rStart.HasValue && rEnd.HasValue
+                            && date.Date > rStart.Value && date.Date < rEnd.Value;
+                    }
+                    else f.Selected = date.Date == _value.Date;
+                    return f;
+                },
+                onHover: null,
+                onPick: date =>
+                {
+                    var picked = new System.DateTime(date.Year, date.Month, date.Day,
+                        _value.Hour, _value.Minute, _value.Second);
+                    if (isRange)
+                    {
+                        if (!selectingEnd)
+                        {
+                            _setter(picked);
+                            _rangeEndSetter!(picked);
+                            _paper.SetElementStorage(h, "selEnd", true);
+                        }
+                        else
+                        {
+                            var start = _value; var end = picked;
+                            if (end < start) (start, end) = (end, start);
+                            _setter(start);
+                            _rangeEndSetter!(end);
+                            _paper.SetElementStorage(h, "selEnd", false);
+                        }
+                    }
+                    else _setter(picked);
+                });
         }
     }
 
@@ -173,6 +269,275 @@ public sealed class DatePickerBuilder
             _ => _value.ToString(),
         };
     }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Standalone / inline calendar
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Static entry points for rendering the Nebula <c>.w2cal</c> calendar directly in the
+/// normal layout flow (a showcase or an embedded date panel), reusing the exact grid the
+/// popup date picker draws.
+/// </summary>
+public static class DatePicker
+{
+    /// <summary>
+    /// Draw a <c>.w2cal</c> calendar card inline. The displayed month starts at
+    /// <paramref name="month"/> and the header chevrons navigate from there (view state is
+    /// kept in element storage keyed by <paramref name="id"/>). <paramref name="selectedDay"/>
+    /// and <paramref name="today"/> are day-of-month numbers that highlight only while the view
+    /// is on <paramref name="month"/>. <paramref name="onPick"/> receives the clicked day.
+    /// </summary>
+    public static void Calendar(Paper paper, string id, DateTime month,
+        int? selectedDay = null, Action<int>? onPick = null,
+        int? today = null, float width = 260f)
+    {
+        var theme = Origami.Current;
+        var font = theme.Font;
+        if (font == null) return;
+        var m = theme.Metrics;
+
+        int baseCode = month.Year * 12 + (month.Month - 1);
+
+        using (paper.Column(id)
+            .Width(width).Height(UnitValue.Auto)
+            .BackgroundColor(theme.Glass)
+            .BorderColor(theme.BorderSoft).BorderWidth(1)
+            .Rounded(m.ContainerRounding)
+            .Padding(11, 11, 11, 11)
+            .Enter())
+        {
+            int code = paper.GetRootStorage<int>($"{id}_cm");
+            if (code <= 0) code = baseCode;
+            int viewYear = code / 12;
+            int viewMonth = code % 12 + 1;
+            bool onBase = viewYear == month.Year && viewMonth == month.Month;
+            int captured = code;
+
+            OrigamiCalendar.DrawBody(paper, id, font, theme, width - 22f, viewYear, viewMonth,
+                onPrev: () => paper.SetRootStorage($"{id}_cm", captured - 1),
+                onNext: () => paper.SetRootStorage($"{id}_cm", captured + 1),
+                onTitle: null,
+                stateOf: date => new CalDayFlags
+                {
+                    Selected = onBase && selectedDay.HasValue && date.Day == selectedDay.Value,
+                    Today = onBase && today.HasValue && date.Day == today.Value,
+                },
+                onHover: null,
+                onPick: onPick != null ? d => onPick(d.Day) : null);
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  Shared calendar renderer (.w2cal)
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>Per-day visual state fed to the shared calendar grid.</summary>
+internal struct CalDayFlags
+{
+    public bool Disabled;
+    public bool Today;
+    public bool Selected;
+    public bool InRange;
+    public bool RangeStart;
+    public bool RangeEnd;
+}
+
+/// <summary>
+/// Draws the Nebula <c>.w2cal</c> calendar body (header + weekday row + day grid). Shared by
+/// the popup <see cref="DatePickerModal"/> and the inline <see cref="DatePicker.Calendar"/>.
+/// Callers own the surrounding container and all state; this class only paints and reports
+/// clicks/hovers.
+/// </summary>
+internal static class OrigamiCalendar
+{
+    // ── Nebula literals ──────────────────────────────────────────
+    /// <summary>glass-in — the translucent card fill.</summary>
+    /// <summary>bd-soft — the hairline lavender border.</summary>
+    /// <summary>hover wash — rgba(168,85,247,0.12).</summary>
+
+    private static readonly string[] DowLetters = { "S", "M", "T", "W", "T", "F", "S" };
+
+    private const float Gap = 2f;
+    private const float DayRound = 6f;
+
+    public static void DrawBody(Paper paper, string id, Scribe.FontFile font, OrigamiTheme theme,
+        float contentWidth, int viewYear, int viewMonth,
+        Action? onPrev, Action? onNext, Action? onTitle,
+        Func<DateTime, CalDayFlags> stateOf,
+        Action<DateTime>? onHover, Action<DateTime>? onPick)
+    {
+        var m = theme.Metrics;
+        var ink = theme.Ink;
+        var accent = theme.Primary.C500;
+
+        float cell = (contentWidth - Gap * 6f) / 7f;
+        float titleSize = m.FontSize - 1f;
+        float dowSize = MathF.Max(9f, m.FontSizeSmall - 2f);
+        float daySize = m.FontSizeSmall;
+        var titleFont = theme.SemiBold ?? font;
+
+        using (paper.Column($"{id}_cal").Width(contentWidth).Height(UnitValue.Auto).Enter())
+        {
+            // ── Header: ‹  Month Year  › ──
+            using (paper.Row($"{id}_head").Width(UnitValue.Stretch()).Height(m.HeaderHeight)
+                .Margin(0, 0, 0, 9).Enter())
+            {
+                Chevron(paper, $"{id}_prev", true, m.HeaderHeight, ink.C300, onPrev);
+
+                var title = paper.Box($"{id}_title")
+                    .Width(UnitValue.Stretch()).Height(m.HeaderHeight)
+                    .Text($"{MonthName(viewMonth)} {viewYear}", titleFont)
+                    .TextColor(ink.C500).FontSize(titleSize)
+                    .Alignment(TextAlignment.MiddleCenter);
+                if (onTitle != null) title.OnClick(_ => onTitle());
+                else title.IsNotInteractable();
+
+                Chevron(paper, $"{id}_next", false, m.HeaderHeight, ink.C300, onNext);
+            }
+
+            // ── Weekday row ──
+            using (paper.Row($"{id}_dow").Width(UnitValue.Stretch()).Height(cell * 0.62f)
+                .Margin(0, 0, 0, 2).RowBetween(Gap).Enter())
+            {
+                for (int i = 0; i < 7; i++)
+                    paper.Box($"{id}_dow_{i}").Width(cell).Height(cell * 0.62f)
+                        .IsNotInteractable()
+                        .Text(DowLetters[i], font).TextColor(ink.C200)
+                        .FontSize(dowSize).Alignment(TextAlignment.MiddleCenter);
+            }
+
+            // ── Day grid ──
+            int daysInMonth = DateTime.DaysInMonth(viewYear, viewMonth);
+            var first = new DateTime(viewYear, viewMonth, 1);
+            int firstDow = (int)first.DayOfWeek; // Sunday = 0
+            int rows = (firstDow + daysInMonth + 6) / 7;
+
+            using (paper.Column($"{id}_grid").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                .ColBetween(Gap).Enter())
+            {
+                for (int r = 0; r < rows; r++)
+                {
+                    using (paper.Row($"{id}_r{r}").Width(UnitValue.Stretch()).Height(cell)
+                        .RowBetween(Gap).Enter())
+                    {
+                        for (int c = 0; c < 7; c++)
+                        {
+                            int idx = r * 7 + c;
+                            var date = first.AddDays(idx - firstDow);
+                            string cid = $"{id}_d{r}_{c}";
+                            bool inMonth = date.Month == viewMonth && date.Year == viewYear;
+
+                            // Leading / trailing days from adjacent months — dimmed, inert.
+                            if (!inMonth)
+                            {
+                                paper.Box(cid).Width(cell).Height(cell).IsNotInteractable()
+                                    .Text(date.Day.ToString(), font).TextColor(ink.C100)
+                                    .FontSize(daySize).Alignment(TextAlignment.MiddleCenter);
+                                continue;
+                            }
+
+                            var f = stateOf(date);
+                            bool onAccent = f.Selected || f.RangeStart || f.RangeEnd;
+
+                            Color bg = onAccent ? accent
+                                : f.InRange ? Color.FromArgb(40, accent.R, accent.G, accent.B)
+                                : Color.Transparent;
+                            Color fg = f.Disabled ? ink.C100
+                                : onAccent ? Color.White
+                                : ink.C400;
+
+                            var day = paper.Box(cid).Width(cell).Height(cell)
+                                .BackgroundColor(bg).Rounded(DayRound)
+                                .Text(date.Day.ToString(), font).TextColor(fg)
+                                .FontSize(daySize).Alignment(TextAlignment.MiddleCenter);
+
+                            // Today ring — only when the cell isn't already filled.
+                            if (f.Today && !onAccent)
+                                day.BorderColor(accent).BorderWidth(1);
+
+                            if (f.Disabled) { day.IsNotInteractable(); continue; }
+
+                            day.Hovered.BackgroundColor(onAccent ? accent : theme.Hover).End();
+
+                            if (onHover != null) day.OnHover(date, (d, _) => onHover(d));
+                            if (onPick != null) day.OnClick(date, (d, _) => onPick(d));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Vector glyphs (icon font ships empty) ────────────────────
+
+    private static void Chevron(Paper paper, string id, bool left, float size, Color color, Action? onClick)
+    {
+        var b = paper.Box(id).Width(size).Height(size).Rounded(DayRound);
+        if (onClick != null) b.Hovered.BackgroundColor(Origami.Current.Hover).End().OnClick(_ => onClick());
+        else b.IsNotInteractable();
+
+        using (b.Enter())
+            paper.Draw((canvas, rect) =>
+            {
+                float cx = (float)(rect.Min.X + rect.Size.X * 0.5);
+                float cy = (float)(rect.Min.Y + rect.Size.Y * 0.5);
+                canvas.SaveState();
+                canvas.BeginPath();
+                canvas.SetStrokeColor(color);
+                canvas.SetStrokeWidth(1.4f);
+                canvas.SetStrokeCap(EndCapStyle.Round);
+                canvas.SetStrokeJoint(JointStyle.Round);
+                float dx = left ? 1.8f : -1.8f;
+                canvas.MoveTo(cx + dx, cy - 3.6f);
+                canvas.LineTo(cx - dx, cy);
+                canvas.LineTo(cx + dx, cy + 3.6f);
+                canvas.Stroke();
+                canvas.RestoreState();
+            });
+    }
+
+    internal static void DrawCaretDown(Canvas canvas, float cx, float cy, Color color)
+    {
+        canvas.SaveState();
+        canvas.BeginPath();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.4f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.SetStrokeJoint(JointStyle.Round);
+        canvas.MoveTo(cx - 3.2f, cy - 1.6f);
+        canvas.LineTo(cx, cy + 1.8f);
+        canvas.LineTo(cx + 3.2f, cy - 1.6f);
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    internal static void DrawClock(Canvas canvas, float cx, float cy, Color color)
+    {
+        canvas.SaveState();
+        canvas.BeginPath();
+        canvas.Arc(cx, cy, 4.2f, 0f, MathF.PI * 2f);
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.3f);
+        canvas.Stroke();
+        canvas.BeginPath();
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.MoveTo(cx, cy - 2.4f);
+        canvas.LineTo(cx, cy);
+        canvas.LineTo(cx + 2.2f, cy + 1.2f);
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    internal static string MonthName(int month) => month switch
+    {
+        1 => "January", 2 => "February", 3 => "March", 4 => "April",
+        5 => "May", 6 => "June", 7 => "July", 8 => "August",
+        9 => "September", 10 => "October", 11 => "November", 12 => "December",
+        _ => "",
+    };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -199,6 +564,9 @@ internal sealed class DatePickerModal : IModal
     private int _viewYear;
     private int _viewMonth;
     private bool _yearPickerOpen;
+
+    private const float PopWidth = 280f;
+    private const float Pad = 11f;
 
     public bool CloseOnBackdrop => true;
     public bool CloseOnEscape => true;
@@ -229,18 +597,16 @@ internal sealed class DatePickerModal : IModal
         var font = theme.Font;
         if (font == null) return;
 
-        float popW = 280f;
-
         using (paper.Column($"{_id}_dpop")
             .PositionType(PositionType.SelfDirected)
             .Position(_anchorX, _anchorY)
-            .Width(popW).Height(UnitValue.Auto)
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(theme.Ink.C200).BorderWidth(1)
+            .Width(PopWidth).Height(UnitValue.Auto)
+            .BackgroundColor(theme.Popover)                 // solid popover, crisp over content
+            .BorderColor(theme.BorderStrong).BorderWidth(1)    // bd-strong
             .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 4, 20, 0, Color.FromArgb(90, 0, 0, 0))
-            .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
-            .ColBetween(m.Spacing)
+            .BoxShadow(0, 14, 40, 0, theme.Shadow)
+            .Padding(Pad, Pad, Pad, Pad)
+            .ColBetween(m.SpacingMedium)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()
@@ -248,12 +614,12 @@ internal sealed class DatePickerModal : IModal
         {
             if (_yearPickerOpen)
             {
-                DrawYearPicker(paper, font, theme, m, popW);
+                DrawYearPicker(paper, font, theme, m, PopWidth);
                 return;
             }
 
             if (_mode != DatePickerMode.Time)
-                DrawCalendar(paper, font, theme, m, popW);
+                DrawCalendar(paper, font, theme, m);
 
             if (_mode != DatePickerMode.Date)
                 DrawTimePicker(paper, font, theme, m);
@@ -274,212 +640,88 @@ internal sealed class DatePickerModal : IModal
         }
     }
 
-    private void DrawCalendar(Paper paper, Scribe.FontFile font, OrigamiTheme theme, OrigamiMetrics m, float popW)
+    private void DrawCalendar(Paper paper, Scribe.FontFile font, OrigamiTheme theme, OrigamiMetrics m)
     {
-        var ink = theme.Ink;
-        var primary = theme.Primary;
-
-        // Month/Year navigation header
-        using (paper.Row($"{_id}_nav").Height(m.RowHeight).RowBetween(m.Spacing).Enter())
-        {
-            Origami.IconButton(paper, $"{_id}_prev", theme.Icons.ChevronLeft, () =>
-            {
-                _viewMonth--;
-                if (_viewMonth < 1) { _viewMonth = 12; _viewYear--; }
-            }).Height(m.CompactHeight).Show();
-
-            // Clickable month/year label - click year to open year picker
-            _paper_Box(paper, $"{_id}_myr", $"{MonthName(_viewMonth)} {_viewYear}", font,
-                ink.C500, m.FontSize, TextAlignment.MiddleCenter, () => _yearPickerOpen = true);
-
-            Origami.IconButton(paper, $"{_id}_next", theme.Icons.ChevronRight, () =>
-            {
-                _viewMonth++;
-                if (_viewMonth > 12) { _viewMonth = 1; _viewYear++; }
-            }).Height(m.CompactHeight).Show();
-        }
-
-        // Day-of-week headers
-        float cellW = (popW - m.PaddingLarge * 2) / 7f;
-        float cellH = m.RowHeight;
-        string[] days = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
-
-        using (paper.Row($"{_id}_dow").Height(cellH).Enter())
-        {
-            for (int i = 0; i < 7; i++)
-                paper.Box($"{_id}_dh_{i}")
-                    .Width(cellW).Height(cellH).IsNotInteractable()
-                    .Text(days[i], font).TextColor(ink.C300)
-                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-        }
-
-        // Calendar grid
-        int daysInMonth = System.DateTime.DaysInMonth(_viewYear, _viewMonth);
-        int firstDay = (int)new System.DateTime(_viewYear, _viewMonth, 1).DayOfWeek;
-        int totalCells = firstDay + daysInMonth;
-        int rows = (totalCells + 6) / 7;
         bool isRange = _rangeEndSetter != null;
-        float pill = cellH * 0.5f;
 
-        // Compute the effective range for display (including hover preview)
+        // Effective range for display (including hover preview), lo <= hi.
         System.DateTime? rangeStart = null, rangeEndDisp = null;
         if (isRange)
         {
             if (_selectingEnd && _hoverDate.HasValue)
             {
-                // Previewing: show range from selected start to hover
                 rangeStart = _value.Date;
                 rangeEndDisp = _hoverDate.Value.Date;
-                if (rangeEndDisp < rangeStart)
-                    (rangeStart, rangeEndDisp) = (rangeEndDisp, rangeStart);
             }
             else if (_rangeEnd.HasValue)
             {
                 rangeStart = _value.Date;
                 rangeEndDisp = _rangeEnd.Value.Date;
-                if (rangeEndDisp < rangeStart)
-                    (rangeStart, rangeEndDisp) = (rangeEndDisp, rangeStart);
             }
+            if (rangeStart.HasValue && rangeEndDisp < rangeStart)
+                (rangeStart, rangeEndDisp) = (rangeEndDisp, rangeStart);
         }
 
-        for (int row = 0; row < rows; row++)
-        {
-            using (paper.Row($"{_id}_r_{row}").Height(cellH).Enter())
+        OrigamiCalendar.DrawBody(paper, _id, font, theme, PopWidth - Pad * 2f, _viewYear, _viewMonth,
+            onPrev: () => { _viewMonth--; if (_viewMonth < 1) { _viewMonth = 12; _viewYear--; } },
+            onNext: () => { _viewMonth++; if (_viewMonth > 12) { _viewMonth = 1; _viewYear++; } },
+            onTitle: () => _yearPickerOpen = true,
+            stateOf: date =>
             {
-                for (int col = 0; col < 7; col++)
+                var f = new CalDayFlags
                 {
-                    int cellIdx = row * 7 + col;
-                    int day = cellIdx - firstDay + 1;
-
-                    if (day < 1 || day > daysInMonth)
-                    {
-                        paper.Box($"{_id}_c_{row}_{col}").Width(cellW).Height(cellH);
-                        continue;
-                    }
-
-                    var date = new System.DateTime(_viewYear, _viewMonth, day);
-                    bool isDisabled = _disabledDate?.Invoke(date) ?? false;
-                    bool isToday = date.Date == System.DateTime.Now.Date;
-
-                    // Range state
-                    bool isRangeStart = rangeStart.HasValue && date.Date == rangeStart.Value;
-                    bool isRangeEnd = rangeEndDisp.HasValue && date.Date == rangeEndDisp.Value;
-                    bool isInRange = rangeStart.HasValue && rangeEndDisp.HasValue
-                        && date.Date >= rangeStart.Value && date.Date <= rangeEndDisp.Value;
-                    bool isSelected = !isRange && date.Date == _value.Date;
-                    bool isEndpoint = isRangeStart || isRangeEnd;
-
-                    // Background + rounding for pill-shaped range
-                    Color bg;
-                    float roundTL = 0, roundTR = 0, roundBR = 0, roundBL = 0;
-
-                    if (isSelected)
-                    {
-                        bg = primary.C400;
-                        roundTL = roundTR = roundBR = roundBL = pill;
-                    }
-                    else if (isRangeStart && isRangeEnd)
-                    {
-                        // Single day range (start == end)
-                        bg = primary.C400;
-                        roundTL = roundTR = roundBR = roundBL = pill;
-                    }
-                    else if (isRangeStart)
-                    {
-                        // Pill on left, flat on right to connect to range
-                        bg = primary.C400;
-                        roundTL = roundBL = pill;
-                        roundTR = roundBR = 0;
-                    }
-                    else if (isRangeEnd)
-                    {
-                        // Flat on left, pill on right
-                        bg = primary.C400;
-                        roundTL = roundBL = 0;
-                        roundTR = roundBR = pill;
-                    }
-                    else if (isInRange)
-                    {
-                        bg = Color.FromArgb(50, primary.C400.R, primary.C400.G, primary.C400.B);
-                    }
-                    else
-                    {
-                        bg = Color.Transparent;
-                    }
-
-                    Color fg = isDisabled ? ink.C200
-                        : (isSelected || isEndpoint) ? Color.White
-                        : isToday ? primary.C500
-                        : ink.C500;
-
-                    int d = day;
-                    var cell = paper.Box($"{_id}_c_{row}_{col}")
-                        .Width(cellW).Height(cellH)
-                        .BackgroundColor(bg)
-                        .Rounded(roundTL, roundTR, roundBR, roundBL)
-                        .Text(day.ToString(), font).TextColor(fg)
-                        .FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
-
-                    if (!isDisabled)
-                    {
-                        cell.Hovered.BackgroundColor(isSelected || isEndpoint ? primary.C500 : theme.Neutral.C500).End();
-
-                        // Track hover for range preview
-                        if (isRange && _selectingEnd)
-                        {
-                            cell.OnHover(d, (dd, _) =>
-                            {
-                                _hoverDate = new System.DateTime(_viewYear, _viewMonth, dd);
-                            });
-                        }
-
-                        cell.OnClick(d, (dd, _) =>
-                        {
-                            var newDate = new System.DateTime(_viewYear, _viewMonth, dd,
-                                _value.Hour, _value.Minute, _value.Second);
-
-                            if (isRange)
-                            {
-                                if (!_selectingEnd)
-                                {
-                                    _value = newDate;
-                                    _setter(newDate);
-                                    _rangeEnd = null;
-                                    _hoverDate = null;
-                                    _selectingEnd = true;
-                                }
-                                else
-                                {
-                                    var start = _value;
-                                    var end = newDate;
-                                    if (end < start) (start, end) = (end, start);
-                                    _value = start;
-                                    _setter(start);
-                                    _rangeEnd = end;
-                                    _rangeEndSetter!(end);
-                                    _selectingEnd = false;
-                                    _hoverDate = null;
-                                    Modal.Pop();
-                                }
-                            }
-                            else
-                            {
-                                _value = newDate;
-                                _setter(newDate);
-                                if (_mode == DatePickerMode.Date)
-                                    Modal.Pop();
-                            }
-                        });
-                    }
+                    Disabled = _disabledDate?.Invoke(date) ?? false,
+                    Today = date.Date == System.DateTime.Now.Date,
+                };
+                if (isRange)
+                {
+                    f.RangeStart = rangeStart.HasValue && date.Date == rangeStart.Value;
+                    f.RangeEnd = rangeEndDisp.HasValue && date.Date == rangeEndDisp.Value;
+                    f.InRange = rangeStart.HasValue && rangeEndDisp.HasValue
+                        && date.Date > rangeStart.Value && date.Date < rangeEndDisp.Value;
                 }
+                else f.Selected = date.Date == _value.Date;
+                return f;
+            },
+            onHover: (isRange && _selectingEnd) ? new Action<System.DateTime>(d => _hoverDate = d) : null,
+            onPick: date => OnDayPicked(date, isRange));
+    }
+
+    private void OnDayPicked(System.DateTime date, bool isRange)
+    {
+        var newDate = new System.DateTime(date.Year, date.Month, date.Day,
+            _value.Hour, _value.Minute, _value.Second);
+
+        if (isRange)
+        {
+            if (!_selectingEnd)
+            {
+                _value = newDate;
+                _setter(newDate);
+                _rangeEnd = null;
+                _hoverDate = null;
+                _selectingEnd = true;
+            }
+            else
+            {
+                var start = _value;
+                var end = newDate;
+                if (end < start) (start, end) = (end, start);
+                _value = start;
+                _setter(start);
+                _rangeEnd = end;
+                _rangeEndSetter!(end);
+                _selectingEnd = false;
+                _hoverDate = null;
+                Modal.Pop();
             }
         }
-
-        // Clear hover when mouse leaves the calendar area
-        if (isRange && _selectingEnd)
+        else
         {
-            // If pointer isn't over any day cell this frame, the hover callbacks won't fire
-            // and _hoverDate stays from last frame - that's fine for smooth preview
+            _value = newDate;
+            _setter(newDate);
+            if (_mode == DatePickerMode.Date)
+                Modal.Pop();
         }
     }
 
@@ -539,7 +781,7 @@ internal sealed class DatePickerModal : IModal
     private void DrawYearPicker(Paper paper, Scribe.FontFile font, OrigamiTheme theme, OrigamiMetrics m, float popW)
     {
         var ink = theme.Ink;
-        var primary = theme.Primary;
+        var accent = theme.Primary.C500;
 
         // Header with back button
         using (paper.Row($"{_id}_yh").Height(m.RowHeight).Enter())
@@ -547,14 +789,14 @@ internal sealed class DatePickerModal : IModal
             Origami.IconButton(paper, $"{_id}_yback", theme.Icons.ChevronLeft, () =>
                 _yearPickerOpen = false).Height(m.CompactHeight).Show();
             paper.Box($"{_id}_ytitle").Width(UnitValue.Stretch()).Height(m.RowHeight)
-                .Text("Select Year", font).TextColor(ink.C500)
-                .FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
+                .Text("Select Year", theme.SemiBold ?? font).TextColor(ink.C500)
+                .FontSize(m.FontSize - 1f).Alignment(TextAlignment.MiddleCenter)
                 .IsNotInteractable();
         }
 
         // Year grid (4 columns, showing +/- 6 years from current view)
         int startYear = _viewYear - 6;
-        float cellW = (popW - m.PaddingLarge * 2) / 4f;
+        float cellW = (popW - Pad * 2) / 4f;
 
         for (int row = 0; row < 3; row++)
         {
@@ -566,14 +808,14 @@ internal sealed class DatePickerModal : IModal
                     bool isCurrent = yr == _viewYear;
                     bool isThisYear = yr == System.DateTime.Now.Year;
 
-                    Color bg = isCurrent ? primary.C400 : Color.Transparent;
-                    Color fg = isCurrent ? Color.White : isThisYear ? primary.C500 : ink.C500;
+                    Color bg = isCurrent ? accent : Color.Transparent;
+                    Color fg = isCurrent ? Color.White : isThisYear ? accent : ink.C400;
 
                     int capturedYr = yr;
                     paper.Box($"{_id}_y_{yr}")
                         .Width(cellW).Height(m.RowHeight + 4)
                         .BackgroundColor(bg).Rounded(m.Rounding)
-                        .Hovered.BackgroundColor(isCurrent ? primary.C500 : theme.Neutral.C500).End()
+                        .Hovered.BackgroundColor(isCurrent ? accent : theme.Hover).End()
                         .Text(yr.ToString(), font).TextColor(fg)
                         .FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
                         .OnClick(capturedYr, (y, _) =>
@@ -585,23 +827,4 @@ internal sealed class DatePickerModal : IModal
             }
         }
     }
-
-    // Helper to create a clickable text box
-    private static void _paper_Box(Paper paper, string id, string text, Scribe.FontFile font,
-        Color color, float fontSize, TextAlignment align, Action onClick)
-    {
-        paper.Box(id)
-            .Width(UnitValue.Stretch()).Height(Origami.Current.Metrics.RowHeight)
-            .Text(text, font).TextColor(color)
-            .FontSize(fontSize).Alignment(align)
-            .OnClick(_ => onClick());
-    }
-
-    private static string MonthName(int month) => month switch
-    {
-        1 => "January", 2 => "February", 3 => "March", 4 => "April",
-        5 => "May", 6 => "June", 7 => "July", 8 => "August",
-        9 => "September", 10 => "October", 11 => "November", 12 => "December",
-        _ => "",
-    };
 }

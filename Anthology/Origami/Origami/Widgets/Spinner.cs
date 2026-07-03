@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
@@ -26,6 +27,12 @@ public enum SpinnerStyle
 
     /// <summary>Two counter-rotating arcs, one inner and one outer.</summary>
     DualArc,
+
+    /// <summary>Four vertical bars pulsing in a sequenced wave (equaliser style).</summary>
+    Bars,
+
+    /// <summary>Faint full ring with an accent arc at the top, rotating (prototype .w2spin).</summary>
+    Ring,
 }
 
 /// <summary>Preset diameter for an Origami spinner.</summary>
@@ -73,6 +80,8 @@ public sealed class SpinnerBuilder
     public SpinnerBuilder Dots() => Style(SpinnerStyle.Dots);
     public SpinnerBuilder Pulse() => Style(SpinnerStyle.Pulse);
     public SpinnerBuilder DualArc() => Style(SpinnerStyle.DualArc);
+    public SpinnerBuilder Bars() => Style(SpinnerStyle.Bars);
+    public SpinnerBuilder Ring() => Style(SpinnerStyle.Ring);
 
     // ── Variant / colour ─────────────────────────────────────────
 
@@ -121,10 +130,19 @@ public sealed class SpinnerBuilder
             Time = (float)_paper.Time * _speed,
         };
 
-        using (_paper.Row(_id).Height(rowH).RowBetween(8).Enter())
+        // Dots/Bars are wider than tall — reserve the real footprint so callers (e.g. a chat bubble)
+        // size around it instead of clipping.
+        float glyphW = _style switch
+        {
+            SpinnerStyle.Dots => diameter * 1.6f,
+            SpinnerStyle.Bars => diameter * 1.4f,
+            _ => diameter,
+        };
+
+        using (_paper.Row(_id).Width(UnitValue.Auto).Height(rowH).RowBetween(8).Enter())
         {
             using (_paper.Box($"{_id}_glyph")
-                .Width(diameter).Height(rowH)
+                .Width(glyphW).Height(rowH)
                 .IsNotInteractable().Enter())
             {
                 _paper.Draw((canvas, rect) => Paint(canvas, rect, in snap));
@@ -184,6 +202,55 @@ public sealed class SpinnerBuilder
             case SpinnerStyle.Dots:    PaintDots(canvas, cx, cy, r, s.Color, s.Time); break;
             case SpinnerStyle.Pulse:   PaintPulse(canvas, cx, cy, r, s.Color, s.Time); break;
             case SpinnerStyle.DualArc: PaintDualArc(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Bars:    PaintBars(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Ring:    PaintRing(canvas, cx, cy, r, s.Color, s.Time); break;
+        }
+    }
+
+    /// <summary>Faint full ring + a rotating accent arc at the top (prototype .w2spin, spinSlow 0.8s).</summary>
+    private static void PaintRing(Canvas canvas, float cx, float cy, float r, Color color, float time)
+    {
+        float thick = MathF.Max(1.5f, r * 0.23f);   // 2.5px border @ r=11
+        float rr = r - thick * 0.5f;
+        canvas.SaveState();
+        canvas.BeginPath();
+        canvas.Arc(cx, cy, rr, 0f, Maths.PI * 2f);
+        canvas.SetStrokeColor(Color32.FromArgb(31, 255, 255, 255)); // rgba(255,255,255,0.12)
+        canvas.SetStrokeWidth(thick);
+        canvas.Stroke();
+
+        float rot = time * (Maths.PI * 2f / 0.8f);
+        float top = -Maths.PI * 0.5f + rot;
+        canvas.BeginPath();
+        canvas.Arc(cx, cy, rr, top - 0.85f, top + 0.85f);
+        canvas.SetStrokeColor(Color32.FromArgb(255, color.R, color.G, color.B));
+        canvas.SetStrokeWidth(thick);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    /// <summary>Four bars pulsing scaleY+opacity (prototype .w2bars / w2barpulse 1s, delays .12).</summary>
+    private static void PaintBars(Canvas canvas, float cx, float cy, float r, Color color, float time)
+    {
+        const int n = 4;
+        float bw = r * 0.36f;          // 4px @ r=11
+        float gap = r * 0.27f;         // 1.5px margins each side
+        float step = bw + gap;
+        float x0 = cx - (n * step - gap) * 0.5f;
+        float maxH = r * 1.64f;        // 18px @ r=11
+        const float period = 1f;
+
+        for (int i = 0; i < n; i++)
+        {
+            float t = ((time - 0.12f * i) / period) % 1f;
+            if (t < 0f) t += 1f;
+            // w2barpulse: 0/100% -> scaleY .4 op .5; 50% -> scaleY 1 op 1
+            float p = 0.5f - 0.5f * MathF.Cos(t * Maths.PI * 2f);
+            float h = maxH * (0.4f + 0.6f * p);
+            byte alpha = (byte)Math.Clamp((int)((0.5f + 0.5f * p) * 255f), 0, 255);
+            float bx = x0 + i * step;
+            canvas.RoundedRectFilled(bx, cy - h * 0.5f, bw, h, bw * 0.5f, Color.FromArgb(alpha, color.R, color.G, color.B));
         }
     }
 
@@ -220,24 +287,27 @@ public sealed class SpinnerBuilder
         canvas.RestoreState();
     }
 
-    /// <summary>Three dots bouncing on a sine wave, staggered by phase.</summary>
+    /// <summary>Three dots pulsing scale+opacity (prototype .w2dots / w2bounce 1.2s, delays .15/.3).</summary>
     private static void PaintDots(Canvas canvas, float cx, float cy, float r, Color color, float time)
     {
-        float dotR = r * 0.30f;
-        float gap = r * 0.55f;
-        float xs = cx - gap;
+        float dotR = r * 0.32f;        // 7px dia @ r=11
+        float spacing = r * 0.75f;
+        float baseX = cx - spacing;
+        const float period = 1.2f;
+        System.ReadOnlySpan<float> delays = stackalloc float[] { 0f, 0.15f, 0.3f };
 
         for (int i = 0; i < 3; i++)
         {
-            float phase = i * (Maths.PI / 3f);
-            float bounce = MathF.Sin(time * Maths.PI * 2.4f - phase);
-            // ramp 0..1 with mid above center, ease out
-            float t = MathF.Max(0f, bounce);
-            float dy = -t * r * 0.5f;
-            byte alpha = (byte)Math.Clamp((int)(160 + 95 * t), 0, 255);
+            float t = ((time - delays[i]) / period) % 1f;
+            if (t < 0f) t += 1f;
+            // w2bounce: 0/80/100% -> (opacity .3, scale .7); 40% -> (opacity 1, scale 1)
+            float p = t < 0.4f ? t / 0.4f : (t < 0.8f ? 1f - (t - 0.4f) / 0.4f : 0f);
+            p = p * p * (3f - 2f * p); // ease-in-out
+            float scale = 0.7f + 0.3f * p;
+            byte alpha = (byte)Math.Clamp((int)((0.3f + 0.7f * p) * 255f), 0, 255);
 
             canvas.BeginPath();
-            canvas.Circle(xs + i * gap, cy + dy, dotR);
+            canvas.Circle(baseX + i * spacing, cy, dotR * scale);
             canvas.SetFillColor(Color.FromArgb(alpha, color.R, color.G, color.B));
             canvas.Fill();
         }

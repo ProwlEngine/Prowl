@@ -31,6 +31,8 @@ public class DockSpace
     private DockNode? _hoveredLeaf;
     private DockZone _hoveredZone;
     private Rect _hoveredLeafRect;
+    private int _hoveredTabIndex;         // insertion index when _hoveredZone == DockZone.Tab
+    private float _hoveredTabCaretX;      // absolute X of the insertion caret
 
     // --- Root docking ---
     private DockZone _rootHoveredZone;
@@ -41,6 +43,10 @@ public class DockSpace
 
     // --- Layout cache ---
     private readonly Dictionary<DockNode, Rect> _leafRects = new();
+    // Per-leaf tab-bar geometry (absolute), for computing tab-insertion drops.
+    private readonly Dictionary<DockNode, (Rect Bar, float[] Edges)> _tabBars = new();
+    // Which floating window a leaf belongs to (null = it's in the root tree). For z-ordered hit testing.
+    private readonly Dictionary<DockNode, FloatingWindow?> _leafOwner = new();
 
     // --- Drop preview animation ---
     private Rect _previewRect;
@@ -80,6 +86,8 @@ public class DockSpace
 
         // Clear per-frame state
         _leafRects.Clear();
+        _tabBars.Clear();
+        _leafOwner.Clear();
         _hoveredLeaf = null;
         _hoveredZone = DockZone.None;
         _rootHoveredZone = DockZone.None;
@@ -110,7 +118,9 @@ public class DockSpace
             }
 
             ComputeHoveredZone(paper, m);
-            if (_hoveredLeaf != null)
+            if (_hoveredZone == DockZone.Tab)
+                DrawTabInsertionCaret(paper, theme);
+            else if (_hoveredLeaf != null)
                 DrawDockIndicators(paper, m, icons, font);
             DrawRootDockIndicators(paper, m, theme);
         }
@@ -199,84 +209,92 @@ public class DockSpace
     {
         if (node.Tabs == null || node.Tabs.Count == 0) return;
         float tabH = m.TabBarHeight;
+        float cr = m.ContainerRounding;
 
-        if (fw == null)
-            _leafRects[node] = new Rect(new Float2(x, y), new Float2(x + w, y + h));
+        // Floating-window content is drawn in the window's local space (0,0), so offset the cached
+        // hit rects by the window position to get absolute (screen) coords. Registering floating leaves
+        // makes a floating window a valid drop target too — it behaves like a second root.
+        float ox = fw?.Position.X ?? 0f, oy = fw?.Position.Y ?? 0f;
+        _leafRects[node] = new Rect(new Float2(x + ox, y + oy), new Float2(x + w + ox, y + h + oy));
+        _leafOwner[node] = fw;
 
-        // Single container for the whole leaf we draw the merged tab+panel shape via canvas
-        using (paper.Box($"leaf_{node.GetHashCode()}")
+        var bodyColor = theme.Neutral.C400;
+        var tabBarColor = theme.Neutral.C300;
+        var borderColor = theme.Neutral.C200;
+        int id = node.GetHashCode();
+
+        // Frosted glass: with backdrop blur on, thin the fill so the blurred content behind shows
+        // through as frost. Without blur the surfaces stay their normal (near-opaque) tint.
+        float winBlur = m.WindowBackdropBlur;
+        if (winBlur > 0f)
+        {
+            bodyColor = Color.FromArgb(158, bodyColor.R, bodyColor.G, bodyColor.B);
+            tabBarColor = Color.FromArgb(178, tabBarColor.R, tabBarColor.G, tabBarColor.B);
+        }
+
+        using (paper.Box($"leaf_{id}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
             .Enter())
         {
-            // Compute tab widths based on text
-            float iconW = 10f; // Space for icon
+            // Frosted-glass window: body fill + tab-bar strip drawn as two non-overlapping
+            // translucent fills, so the alpha never doubles up where they meet. Each blurs the
+            // content behind it (backdrop blur), so the translucent fill reads as a tint over frost.
+            paper.Box($"leaf_body_{id}")
+                .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, h - tabH)
+                .IsNotInteractable()
+                .BackdropBlur(winBlur)
+                .BackgroundColor(bodyColor).RoundedBottom(cr);
+
+            var tabbar = paper.Box($"leaf_tabbar_{id}")
+                .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, tabH)
+                .BackdropBlur(winBlur)
+                .BackgroundColor(tabBarColor).RoundedTop(cr);
+            // In a floating window, dragging the tab-bar background (behind the tabs) moves the whole
+            // window — the tabs sit on top with StopEventPropagation, so a tab drag still detaches it.
+            if (fw != null)
+                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta);
+            else
+                tabbar.IsNotInteractable();
+
+            // Tab widths from measured label text (+ optional icon + close affordance).
+            float iconW = 16f;
             float[] tabWidths = new float[node.Tabs.Count];
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 float textW = 60;
                 if (font != null)
-                {
-                    var measured = paper.MeasureText(node.Tabs[i].Title, m.FontSize, font, 0);
-                    textW = (float)measured.X;
-                }
-                bool hasIcon = !string.IsNullOrEmpty(node.Tabs[i].Icon);
-                tabWidths[i] = (hasIcon ? iconW : 0) + textW + m.TabPadding * 3 + m.TabCloseSize + 3;
+                    textW = (float)paper.MeasureText(node.Tabs[i].Title, m.FontSize, font, 0).X;
+                bool hasIco = !string.IsNullOrEmpty(node.Tabs[i].Icon);
+                bool showsClose = i == node.ActiveTabIndex;  // active tab expands to fit its close button
+                tabWidths[i] = m.TabPadding * 2 + (hasIco ? iconW : 0) + textW + (showsClose ? m.TabCloseSize + 4 : 0);
             }
-
-            // Draw merged background via canvas (inactive tab bgs + active tab shape + panel body)
-            int activeIdx = node.ActiveTabIndex;
-            var panelColor = theme.Neutral.C400;
-            var neutralColor = theme.Neutral.C300;
-            var rounding = m.Rounding;
-            var tabGap = m.TabGap;
-            paper.Box($"leaf_bg_{node.GetHashCode()}")
-                .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
-                .IsNotInteractable()
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                {
-                    DrawMergedTabShape(canvas, r, tabWidths, activeIdx, tabH, panelColor, neutralColor, rounding, tabGap);
-                }));
-
-            // Outline drawn via DrawForeground on the leaf container (renders after all children)
-            {
-                var inkColor = theme.Ink.C200;
-                var leafParent = paper.CurrentParent;
-                paper.DrawForeground(ref leafParent, (canvas, r) =>
-                {
-                    StrokeMergedTabShape(canvas, r, tabWidths, activeIdx, tabH, inkColor, rounding, tabGap);
-                });
-            }
-
-            // Compute tab X positions
             float[] tabPositions = new float[node.Tabs.Count];
-            float tabX = 0;
-            for (int i = 0; i < node.Tabs.Count; i++)
+            float acc = 0;
+            for (int i = 0; i < node.Tabs.Count; i++) { tabPositions[i] = acc; acc += tabWidths[i] + m.TabGap; }
+
+            // Cache the tab-bar geometry (absolute) so a drag can compute a between-tabs insertion index.
+            if (node.Tabs.Count > 0)
             {
-                tabPositions[i] = tabX;
-                tabX += tabWidths[i] + m.TabGap;
+                var edges = new float[node.Tabs.Count + 1];
+                for (int i = 0; i < node.Tabs.Count; i++) edges[i] = x + ox + tabPositions[i];
+                edges[node.Tabs.Count] = x + ox + tabPositions[node.Tabs.Count - 1] + tabWidths[node.Tabs.Count - 1];
+                _tabBars[node] = (new Rect(new Float2(x + ox, y + oy), new Float2(x + w + ox, y + tabH + oy)), edges);
             }
 
-            // Draw inactive tabs FIRST (behind), then active tab ON TOP
-            for (int pass = 0; pass < 2; pass++)
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 bool isActive = i == node.ActiveTabIndex;
-                if (pass == 0 && isActive) continue;  // skip active on first pass
-                if (pass == 1 && !isActive) continue;  // skip inactive on second pass
-
                 var tab = node.Tabs[i];
                 int ci = i;
                 float tw = tabWidths[i];
                 float tx = tabPositions[i];
 
-                float inactiveOffset = isActive ? 0 : 6f;
-                float inactiveH = isActive ? tabH : tabH - inactiveOffset;
-
-
-                var tabEl = paper.Box($"t_{node.GetHashCode()}_{i}")
+                var tabEl = paper.Box($"t_{id}_{i}")
                     .PositionType(PositionType.SelfDirected)
-                    .Position(tx, inactiveOffset).Size(tw, inactiveH)
-                    .RoundedTop(m.Rounding)
+                    .Position(tx, 0).Size(tw, tabH)
+                    .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
+                    .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
+                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(70, 168, 85, 247)).End()
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -290,281 +308,120 @@ public class DockSpace
                         _dragPos = e.PointerPosition;
                         _prevDragPos = e.PointerPosition;
 
-                        if (srcFw != null)
-                        {
-                            _dragSourceNode = srcNode;
-                            _dragSourceWindow = srcFw;
-                            int fwIdx = FloatingWindows.IndexOf(srcFw);
-                            if (fwIdx >= 0) BringToFront(fwIdx);
-                        }
-                        else
-                        {
-                            srcNode.RemoveTab(srcIdx);
-                            var newNode = DockNode.Leaf(_draggedPanel);
-                            var newFw = new FloatingWindow(newNode,
-                                e.PointerPosition - new Float2(100, 15),
-                                new Float2(400, 300));
-                            FloatingWindows.Add(newFw);
-                            _dragSourceNode = newNode;
-                            _dragSourceWindow = newFw;
-                            CleanupTree();
-                        }
+                        // Detach the tab immediately into a new floating window that follows the cursor —
+                        // uniform whether it came from the root or another floating window. This makes
+                        // pulling a tab out remove it right away, and lets it be dropped back onto its own
+                        // former leaf (it's no longer the drag source).
+                        srcNode.RemoveTab(srcIdx);
+                        var newNode = DockNode.Leaf(_draggedPanel);
+                        var newFw = new FloatingWindow(newNode,
+                            e.PointerPosition - new Float2(100, 15),
+                            srcFw?.Size ?? new Float2(400, 300));
+                        FloatingWindows.Add(newFw);
+                        _dragSourceNode = newNode;
+                        _dragSourceWindow = newFw;
+                        CleanupTree();
                     });
+
+                // Full-height separator on the left edge of every tab after the first.
+                if (i > 0)
+                    paper.Box($"t_div_{id}_{i}")
+                        .PositionType(PositionType.SelfDirected).Position(tx, 0).Size(1, tabH)
+                        .IsNotInteractable().BackgroundColor(borderColor);
 
                 bool hasIcon = !string.IsNullOrEmpty(tab.Icon);
                 float contentX = tx + m.TabPadding;
 
-                // Icon
                 if (hasIcon && font != null)
                 {
-                    paper.Box($"t_ico_{node.GetHashCode()}_{i}")
+                    paper.Box($"t_ico_{id}_{i}")
                         .PositionType(PositionType.SelfDirected)
-                        .Position(contentX, inactiveOffset).Size(iconW, inactiveH)
+                        .Position(contentX, 0).Size(iconW, tabH)
                         .IsNotInteractable()
                         .Text(tab.Icon, font)
-                        .TextColor(isActive ? theme.Blue.C400 : theme.Ink.C300)
-                        .FontSize((m.FontSize - 1) * 0.75f)
+                        .TextColor(isActive ? theme.Primary.C700 : theme.Ink.C300)
+                        .FontSize(m.FontSize)
                         .Alignment(TextAlignment.MiddleCenter);
                     contentX += iconW;
                 }
 
-                // Title label
+                bool showClose = isActive;
                 if (font != null)
                 {
-                    paper.Box($"t_lbl_{node.GetHashCode()}_{i}")
+                    float lblW = tw - (contentX - tx) - m.TabPadding - (showClose ? m.TabCloseSize + 4 : 0);
+                    paper.Box($"t_lbl_{id}_{i}")
                         .PositionType(PositionType.SelfDirected)
-                        .Position(contentX, inactiveOffset)
-                        .Height(inactiveH)
-                        .Width(tw - m.TabPadding * 2 - m.TabCloseSize - (hasIcon ? iconW : 0) + 4)
+                        .Position(contentX, 0).Height(tabH).Width(lblW)
                         .IsNotInteractable()
                         .Text(tab.Title, font)
                         .TextColor(isActive ? theme.Ink.C500 : theme.Ink.C300)
                         .FontSize(m.FontSize)
-                        .Alignment(TextAlignment.MiddleCenter);
+                        .Alignment(TextAlignment.MiddleLeft);
                 }
 
-                // Close button (X)
-                paper.Box($"t_close_{node.GetHashCode()}_{i}")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(tx + tw - m.TabCloseSize - m.TabPadding + 2, inactiveOffset + (inactiveH - m.TabCloseSize) / 2)
-                    .Size(m.TabCloseSize, m.TabCloseSize)
-                    .Rounded(m.TabCloseSize / 2)
-                    .StopEventPropagation()
-                    .OnClick((node, ci, fw), (cap, e) =>
-                    {
-                        cap.Item1.RemoveTab(cap.Item2);
-                    })
-                    .Text(icons.Close, font!)
-                    .TextColor(isActive ? theme.Ink.C400 : theme.Ink.C300)
-                    .FontSize(15f)
-                    .Alignment(TextAlignment.MiddleCenter);
+                if (showClose)
+                {
+                    // The icon font's glyphs are empty, so stroke the "x" onto the canvas.
+                    var closeCol = theme.Ink.C400;
+                    float closeSz = m.TabCloseSize;
+                    paper.Box($"t_close_{id}_{i}")
+                        .PositionType(PositionType.SelfDirected)
+                        .Position(tx + tw - closeSz - m.TabPadding + 2, (tabH - closeSz) / 2)
+                        .Size(closeSz, closeSz)
+                        .Rounded(closeSz / 2)
+                        .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
+                        .StopEventPropagation()
+                        .OnClick((node, ci, fw), (cap, e) => cap.Item1.RemoveTab(cap.Item2))
+                        .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
+                        {
+                            float ccx = (float)(rr.Min.X + rr.Size.X / 2);
+                            float ccy = (float)(rr.Min.Y + rr.Size.Y / 2);
+                            float q = closeSz * 0.22f;
+                            canvas.SaveState();
+                            canvas.SetStrokeColor(closeCol);
+                            canvas.SetStrokeWidth(1.3f);
+                            canvas.SetStrokeCap(EndCapStyle.Round);
+                            canvas.BeginPath();
+                            canvas.MoveTo(ccx - q, ccy - q); canvas.LineTo(ccx + q, ccy + q);
+                            canvas.MoveTo(ccx + q, ccy - q); canvas.LineTo(ccx - q, ccy + q);
+                            canvas.Stroke();
+                            canvas.RestoreState();
+                        }));
+                }
+
+                if (isActive)
+                    paper.Box($"t_ul_{id}")
+                        .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
+                        .IsNotInteractable()
+                        .BackgroundColor(theme.Primary.C500)
+                        .BoxShadow(0, 0, 8, 0, Color.FromArgb(140, 168, 85, 247));
             }
 
-            // Content area
-            float cy = tabH, ch = h - tabH;
+            // Hairline under the tab bar.
+            paper.Box($"leaf_tabdiv_{id}")
+                .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, 1)
+                .IsNotInteractable().BackgroundColor(borderColor);
+
+            // Content area (clipped to the panel body).
+            float ch = h - tabH;
             if (ch > 0)
             {
-                using (paper.Box($"c_{node.GetHashCode()}")
-                    .PositionType(PositionType.SelfDirected).Position(0, cy).Size(w, ch)
+                using (paper.Box($"c_{id}")
+                    .PositionType(PositionType.SelfDirected).Position(0, tabH).Size(w, ch)
+                    .RoundedBottom(cr).Clip() // round the content to the window's bottom corners
                     .Enter())
                 {
                     if (node.ActiveTabIndex < node.Tabs.Count)
                         node.Tabs[node.ActiveTabIndex].OnGUI(paper, w, ch);
-
                 }
             }
+
+            // Outer glass border, drawn last so it sits above the body and content edges.
+            paper.Box($"leaf_border_{id}")
+                .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
+                .IsNotInteractable()
+                .BorderColor(borderColor).BorderWidth(1).Rounded(cr);
         }
-    }
-
-    private static void DrawMergedTabShape(Canvas canvas, Rect r,
-        float[] tabWidths, int activeIdx, float tabH,
-        Color panelColor, Color neutralColor, float rounding, float tabGap)
-    {
-        float x = (float)r.Min.X, y = (float)r.Min.Y;
-        float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = rounding;
-        float ir = rounding + 2;
-
-        float panelTop = y + tabH;
-
-        if (activeIdx < 0 || activeIdx >= tabWidths.Length)
-        {
-            // No active tab just draw panel body
-            canvas.RoundedRectFilled(x, panelTop, w, h - tabH, 0, rad, rad, rad, panelColor);
-            return;
-        }
-
-        // Draw inactive tab backgrounds FIRST (behind the active tab shape)
-        float inactiveOffset = 6f;
-        float itx = x;
-        for (int i = 0; i < tabWidths.Length; i++)
-        {
-            if (i != activeIdx)
-            {
-                canvas.RoundedRectFilled(itx, y + inactiveOffset, tabWidths[i], tabH - inactiveOffset,
-                    rad, rad, 0, 0, neutralColor);
-            }
-            itx += tabWidths[i] + tabGap;
-        }
-
-        // Compute active tab X position
-        float tabX = x;
-        for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + tabGap;
-        float tw = tabWidths[activeIdx];
-
-        bool isFirst = activeIdx == 0;
-        float k = 0.5522847498f; // Kappa cubic bezier approximation of quarter circle
-
-        float bottom = y + h;
-        float right = x + w;
-
-        // Draw the entire merged shape (tab + panel body) as one path
-        canvas.SetFillColor(panelColor);
-        canvas.BeginPath();
-
-        if (isFirst)
-        {
-            // Start at bottom-left with rounded corner
-            canvas.MoveTo(x, bottom - rad);
-            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
-        }
-        else
-        {
-            // Start at bottom-left with rounded corner
-            canvas.MoveTo(x, bottom - rad);
-            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
-        }
-
-        // Bottom edge
-        canvas.LineTo(right - rad, bottom);
-
-        // Bottom-right rounded corner
-        canvas.BezierCurveTo(right - rad * (1 - k), bottom, right, bottom - rad * (1 - k), right, bottom - rad);
-
-        // Right edge up to panel top
-        canvas.LineTo(right, panelTop + rad);
-
-        // Top-right of panel body rounded corner
-        canvas.BezierCurveTo(right, panelTop + rad * (1 - k), right - rad * (1 - k), panelTop, right - rad, panelTop);
-
-        // Panel top edge right of tab to right scoop
-        canvas.LineTo(tabX + tw + ir, panelTop);
-
-        // Right inverse scoop (down from panel surface into tab right side)
-        canvas.BezierCurveTo(tabX + tw + ir * (1 - k), panelTop,
-                              tabX + tw, panelTop - ir * (1 - k),
-                              tabX + tw, panelTop - ir);
-
-        // Tab right side going up
-        canvas.LineTo(tabX + tw, y + rad);
-
-        // Tab top-right rounded corner
-        canvas.BezierCurveTo(tabX + tw, y + rad * (1 - k), tabX + tw - rad * (1 - k), y, tabX + tw - rad, y);
-
-        // Tab top edge
-        canvas.LineTo(tabX + rad, y);
-
-        // Tab top-left rounded corner
-        canvas.BezierCurveTo(tabX + rad * (1 - k), y, tabX, y + rad * (1 - k), tabX, y + rad);
-
-        if (isFirst)
-        {
-            // Tab left side goes straight down to bottom-left start
-            canvas.LineTo(tabX, bottom - rad);
-        }
-        else
-        {
-            // Tab left side down to scoop
-            canvas.LineTo(tabX, panelTop - ir);
-
-            // Left inverse scoop (from tab left side out to panel surface)
-            canvas.BezierCurveTo(tabX, panelTop - ir * (1 - k),
-                                  tabX - ir * (1 - k), panelTop,
-                                  tabX - ir, panelTop);
-
-            // Panel top edge left of tab to left side
-            canvas.LineTo(x, panelTop);
-
-            // Left edge down to start
-            canvas.LineTo(x, bottom - rad);
-        }
-
-        canvas.ClosePath();
-        canvas.FillComplexAA();
-    }
-
-    /// <summary>
-    /// Draw the outline of the merged tab+panel shape. Called via DrawForeground so it renders on top of all content.
-    /// </summary>
-    private static void StrokeMergedTabShape(Canvas canvas, Rect r,
-        float[] tabWidths, int activeIdx, float tabH,
-        Color strokeColor, float rounding, float tabGap)
-    {
-        float x = (float)r.Min.X, y = (float)r.Min.Y;
-        float w = (float)r.Size.X, h = (float)r.Size.Y;
-        float rad = rounding;
-        float ir = rounding + 2;
-        float panelTop = y + tabH;
-
-        if (activeIdx < 0 || activeIdx >= tabWidths.Length) return;
-
-        float tabX = x;
-        for (int i = 0; i < activeIdx; i++)
-            tabX += tabWidths[i] + tabGap;
-        float tw = tabWidths[activeIdx];
-
-        bool isFirst = activeIdx == 0;
-        float k = 0.5522847498f;
-        float bottom = y + h;
-        float right = x + w;
-
-        canvas.SetStrokeColor(strokeColor);
-        canvas.SetStrokeWidth(1f);
-        canvas.BeginPath();
-
-        if (isFirst)
-        {
-            canvas.MoveTo(x, bottom - rad);
-            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
-        }
-        else
-        {
-            canvas.MoveTo(x, bottom - rad);
-            canvas.BezierCurveTo(x, bottom - rad * (1 - k), x + rad * (1 - k), bottom, x + rad, bottom);
-        }
-
-        canvas.LineTo(right - rad, bottom);
-        canvas.BezierCurveTo(right - rad * (1 - k), bottom, right, bottom - rad * (1 - k), right, bottom - rad);
-        canvas.LineTo(right, panelTop + rad);
-        canvas.BezierCurveTo(right, panelTop + rad * (1 - k), right - rad * (1 - k), panelTop, right - rad, panelTop);
-        canvas.LineTo(tabX + tw + ir, panelTop);
-
-        canvas.BezierCurveTo(tabX + tw + ir * (1 - k), panelTop,
-                              tabX + tw, panelTop - ir * (1 - k),
-                              tabX + tw, panelTop - ir);
-
-        canvas.LineTo(tabX + tw, y + rad);
-        canvas.BezierCurveTo(tabX + tw, y + rad * (1 - k), tabX + tw - rad * (1 - k), y, tabX + tw - rad, y);
-        canvas.LineTo(tabX + rad, y);
-        canvas.BezierCurveTo(tabX + rad * (1 - k), y, tabX, y + rad * (1 - k), tabX, y + rad);
-
-        if (isFirst)
-        {
-            canvas.LineTo(tabX, bottom - rad);
-        }
-        else
-        {
-            canvas.LineTo(tabX, panelTop - ir);
-            canvas.BezierCurveTo(tabX, panelTop - ir * (1 - k),
-                                  tabX - ir * (1 - k), panelTop,
-                                  tabX - ir, panelTop);
-            canvas.LineTo(x, panelTop);
-            canvas.LineTo(x, bottom - rad);
-        }
-
-        canvas.ClosePath();
-        canvas.Stroke();
     }
 
     // ================================================================
@@ -659,64 +516,78 @@ public class DockSpace
     {
         Float2 mouse = paper.PointerPos;
 
-        // Check root edge zones first
+        // Floating windows are drawn on top -> check them front-to-back first. A window under the cursor
+        // captures the hover, so the root (and any window behind it) is ignored.
+        for (int i = FloatingWindows.Count - 1; i >= 0; i--)
+        {
+            var fw = FloatingWindows[i];
+            if (fw == _dragSourceWindow) continue;   // the window we're dragging follows the cursor; ignore it
+            if (!Hit(mouse, fw.Position.X, fw.Position.Y, fw.Size.X, fw.Size.Y)) continue;
+            HoverLeaves(mouse, m, fw);
+            return;   // block fall-through even if the cursor sits on a splitter gap inside the window
+        }
+
+        // Root edge zones (dock to the outer edges of the whole space).
         float edgeW = m.IndicatorSize + m.IndicatorGap;
         float bx = _dockSpaceBounds.Min.X, by = _dockSpaceBounds.Min.Y;
         float bw = _dockSpaceBounds.Size.X, bh = _dockSpaceBounds.Size.Y;
-
         if (mouse.X >= bx && mouse.X <= bx + bw && mouse.Y >= by && mouse.Y <= by + bh)
         {
-            // Top root zone
-            if (mouse.Y >= by && mouse.Y <= by + edgeW)
-            {
-                _rootHoveredZone = DockZone.RootTop;
-                return;
-            }
-            // Bottom root zone
-            if (mouse.Y >= by + bh - edgeW && mouse.Y <= by + bh)
-            {
-                _rootHoveredZone = DockZone.RootBottom;
-                return;
-            }
-            // Left root zone
-            if (mouse.X >= bx && mouse.X <= bx + edgeW)
-            {
-                _rootHoveredZone = DockZone.RootLeft;
-                return;
-            }
-            // Right root zone
-            if (mouse.X >= bx + bw - edgeW && mouse.X <= bx + bw)
-            {
-                _rootHoveredZone = DockZone.RootRight;
-                return;
-            }
+            if (mouse.Y >= by && mouse.Y <= by + edgeW) { _rootHoveredZone = DockZone.RootTop; return; }
+            if (mouse.Y >= by + bh - edgeW && mouse.Y <= by + bh) { _rootHoveredZone = DockZone.RootBottom; return; }
+            if (mouse.X >= bx && mouse.X <= bx + edgeW) { _rootHoveredZone = DockZone.RootLeft; return; }
+            if (mouse.X >= bx + bw - edgeW && mouse.X <= bx + bw) { _rootHoveredZone = DockZone.RootRight; return; }
         }
-
         _rootHoveredZone = DockZone.None;
 
-        // Check leaf zones
+        // Root leaves.
+        HoverLeaves(mouse, m, null);
+    }
+
+    // Resolve the hovered leaf + zone among the leaves owned by <paramref name="owner"/> (null = root tree):
+    // tab-bar insertion takes priority, then the center/edge dock indicators.
+    private void HoverLeaves(Float2 mouse, OrigamiMetrics m, FloatingWindow? owner)
+    {
+        foreach (var (node, tb) in _tabBars)
+        {
+            if (_leafOwner.GetValueOrDefault(node) != owner || node == _dragSourceNode) continue;
+            if (!Hit(mouse, (float)tb.Bar.Min.X, (float)tb.Bar.Min.Y, (float)tb.Bar.Size.X, (float)tb.Bar.Size.Y)) continue;
+            var edges = tb.Edges;
+            int idx = edges.Length - 1;
+            float caret = edges[edges.Length - 1];
+            for (int t = 0; t < edges.Length - 1; t++)
+            {
+                float mid = (edges[t] + edges[t + 1]) / 2f;
+                if (mouse.X < mid) { idx = t; caret = edges[t]; break; }
+            }
+            _hoveredLeaf = node;
+            _hoveredLeafRect = _leafRects.TryGetValue(node, out var lr) ? lr : tb.Bar;
+            _hoveredZone = DockZone.Tab;
+            _hoveredTabIndex = idx;
+            _hoveredTabCaretX = caret;
+            return;
+        }
+
         foreach (var (node, rect) in _leafRects)
         {
-            // Don't show dock indicators on the panel we're dragging from
-            // (if it's a single-tab floating window being moved)
+            if (_leafOwner.GetValueOrDefault(node) != owner) continue;
             if (_dragSourceWindow != null && _dragSourceNode == node) continue;
-
-            if (mouse.X < rect.Min.X || mouse.X > rect.Max.X ||
-                mouse.Y < rect.Min.Y || mouse.Y > rect.Max.Y) continue;
-
+            if (mouse.X < rect.Min.X || mouse.X > rect.Max.X || mouse.Y < rect.Min.Y || mouse.Y > rect.Max.Y) continue;
             _hoveredLeaf = node;
             _hoveredLeafRect = rect;
             float cx = rect.Min.X + rect.Size.X / 2;
             float cy = rect.Min.Y + rect.Size.Y / 2;
-            _hoveredZone = GetZoneFromIndicator(mouse, cx, cy, m);
+            // Floating windows stay single-leaf (tabs only) — offer just the center (add-as-tab), no split.
+            _hoveredZone = GetZoneFromIndicator(mouse, cx, cy, m, centerOnly: owner != null);
             return;
         }
     }
 
-    private DockZone GetZoneFromIndicator(Float2 mouse, float cx, float cy, OrigamiMetrics m)
+    private DockZone GetZoneFromIndicator(Float2 mouse, float cx, float cy, OrigamiMetrics m, bool centerOnly = false)
     {
         float s = m.IndicatorSize, g = m.IndicatorGap, hs = s / 2;
         if (Hit(mouse, cx - hs, cy - hs, s, s)) return DockZone.Center;
+        if (centerOnly) return DockZone.None;
         if (Hit(mouse, cx - hs, cy - hs - g - s, s, s)) return DockZone.Top;
         if (Hit(mouse, cx - hs, cy + hs + g, s, s)) return DockZone.Bottom;
         if (Hit(mouse, cx - hs - g - s, cy - hs, s, s)) return DockZone.Left;
@@ -726,6 +597,23 @@ public class DockSpace
 
     private static bool Hit(Float2 p, float x, float y, float w, float h)
         => p.X >= x && p.X <= x + w && p.Y >= y && p.Y <= y + h;
+
+    // A vertical accent caret marking where a dragged tab will be inserted in the hovered tab bar.
+    private void DrawTabInsertionCaret(Paper paper, OrigamiTheme theme)
+    {
+        if (_hoveredLeaf == null || !_tabBars.TryGetValue(_hoveredLeaf, out var tb)) return;
+        float barTop = (float)tb.Bar.Min.Y;
+        float barH = (float)tb.Bar.Size.Y;
+        paper.Box("tab_caret")
+            .PositionType(PositionType.SelfDirected)
+            .Position(_hoveredTabCaretX - 1.5f, barTop + 2)
+            .Size(3, barH - 4)
+            .Layer(Layer.Topmost)
+            .IsNotInteractable()
+            .Rounded(1.5f)
+            .BackgroundColor(theme.Primary.C500)
+            .BoxShadow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+    }
 
     // ================================================================
     //  INDICATORS + PREVIEW
@@ -747,6 +635,10 @@ public class DockSpace
         var bd = Color.FromArgb(85, theme.Blue.C600);
 
         Ind(paper, "di_c", cx - hs, cy - hs, s, _hoveredZone == DockZone.Center ? hi : bg, bd, icons.Duplicate, font);
+
+        // Floating windows stay single-leaf (add-as-tab only), so don't offer the split arrows.
+        if (_leafOwner.GetValueOrDefault(_hoveredLeaf) != null) return;
+
         Ind(paper, "di_t", cx - hs, cy - hs - g - s, s, _hoveredZone == DockZone.Top ? hi : bg, bd, icons.ArrowUp, font);
         Ind(paper, "di_b", cx - hs, cy + hs + g, s, _hoveredZone == DockZone.Bottom ? hi : bg, bd, icons.ArrowDown, font);
         Ind(paper, "di_l", cx - hs - g - s, cy - hs, s, _hoveredZone == DockZone.Left ? hi : bg, bd, icons.ArrowLeft, font);
@@ -944,6 +836,8 @@ public class DockSpace
             // Dock it
             if (_hoveredZone == DockZone.Center)
                 _hoveredLeaf.InsertTab(_draggedPanel);
+            else if (_hoveredZone == DockZone.Tab)
+                _hoveredLeaf.InsertTab(_draggedPanel, _hoveredTabIndex);   // between-tabs insert / reorder
             else
                 SplitLeaf(_hoveredLeaf, _draggedPanel, _hoveredZone);
 

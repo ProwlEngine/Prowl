@@ -322,16 +322,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                         _onDragEnd?.Invoke();
                     });
 
-                    // Mouse wheel — step.
-                    trackBuilder.OnScroll(e =>
-                    {
-                        T step = _wheelStep ?? _step ?? DefaultKeyStep();
-                        T applied = ApplyModifiers(step);
-                        T delta = T.CreateChecked(Math.Sign(e.Delta)) * applied;
-                        T newV = SliderInternal.Clamp(clampedValue + delta, _min, _max);
-                        if (_step.HasValue) newV = SliderInternal.Snap(newV, _min, _step.Value);
-                        _setter(newV);
-                    });
+                    // Note: no mouse-wheel handler — it fights with an enclosing ScrollView.
                 }
 
                 using (trackBuilder.Enter())
@@ -427,13 +418,13 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         double centerT = _bipolar ? SliderInternal.ValueToT(_bipolarCenter, _min, _max, _logarithmic) : 0.0;
 
         OrigamiRamp onRamp = OnRamp();
-        Color trackBg   = _theme.Neutral.C300;
+        Color trackBg   = Color.FromArgb(20, 255, 255, 255); // light translucent groove
         Color fill      = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
-        Color thumbCol  = _theme.Ink.C500;
+        Color thumbCol  = _theme.Ink.C600;
         Color tickCol   = ink.C300;
         if (_disabled)
         {
-            trackBg  = _theme.Neutral.C300;
+            trackBg  = Color.FromArgb(14, 255, 255, 255);
             fill     = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
             thumbCol = ink.C300;
         }
@@ -583,18 +574,13 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             }
             else
             {
-                // Soft halo when active.
-                if (activeAnim > 0.01f && !_disabled)
+                // Purple glow ring around a white thumb (prototype box-shadow 0 0 0 3px acc/0.3).
+                if (!_disabled)
                 {
-                    Color halo = OrigamiRamp.LerpColor(Color.Transparent, fill, activeAnim * 0.35f);
-                    canvas.CircleFilled(thumbCx, thumbCy, thumbR + 4f, halo);
+                    float ringA = 0.30f + 0.30f * MathF.Max(hoverAnim, activeAnim);
+                    canvas.CircleFilled(thumbCx, thumbCy, thumbR + 3f, Color.FromArgb((int)(ringA * 255), fill.R, fill.G, fill.B));
                 }
-
-                // Thumb body — outer rim then inner fill (cheap two-circle border).
-                Color rim = _disabled ? _theme.Neutral.C400
-                          : isDragging ? fill : ink.C400;
-                canvas.CircleFilled(thumbCx, thumbCy, thumbR, rim);
-                canvas.CircleFilled(thumbCx, thumbCy, MathF.Max(0, thumbR - 1.5f), thumbCol);
+                canvas.CircleFilled(thumbCx, thumbCy, thumbR, _disabled ? _theme.Neutral.C400 : thumbCol);
             }
 
         });

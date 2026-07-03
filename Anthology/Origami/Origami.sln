@@ -4,6 +4,8 @@ VisualStudioVersion = 18.0.11121.172
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Origami", "Origami\Origami.csproj", "{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Origami.Sample.OpenTK", "Samples\OpenTK\Origami.Sample.OpenTK.csproj", "{4DB860E9-79DE-D0D7-F113-96559038C881}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EEFD9941-A7AA-4E93-BD0C-10B0BFD4FB66}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DB860E9-79DE-D0D7-F113-96559038C881}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DB860E9-79DE-D0D7-F113-96559038C881}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DB860E9-79DE-D0D7-F113-96559038C881}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DB860E9-79DE-D0D7-F113-96559038C881}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

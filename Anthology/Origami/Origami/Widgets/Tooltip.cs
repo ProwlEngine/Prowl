@@ -5,6 +5,8 @@ using System;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
@@ -83,7 +85,7 @@ public static class TooltipSystem
 
         var ink = theme.Ink;
         var m = theme.Metrics;
-        float fontSize = m.FontSize - 1;
+        float fontSize = m.FontSize - 1;        // ~11.5px
         float titleFontSize = m.FontSize;
 
         bool hasTitle = !string.IsNullOrEmpty(content.Title);
@@ -91,7 +93,8 @@ public static class TooltipSystem
         bool hasShortcut = !string.IsNullOrEmpty(content.Shortcut);
         bool hasText = !string.IsNullOrEmpty(content.Text);
 
-        float padX = m.SpacingLarge, padY = m.Padding;
+        // .w2tip padding: 6px 11px
+        const float padX = 11f, padY = 6f;
 
         // Estimate width - cap at MaxWidth so long text wraps instead of stretching
         float textW = 0;
@@ -114,21 +117,25 @@ public static class TooltipSystem
         if (tooltipX + tooltipW > screenW - 4) tooltipX = screenW - tooltipW - 4;
         if (tooltipX < 4) tooltipX = 4;
 
-        Color bgColor = Color.FromArgb(240, theme.Neutral.C400.R, theme.Neutral.C400.G, theme.Neutral.C400.B);
+        Color bgColor = Color.FromArgb(255, 42, 36, 64);   // #2a2440
+
+        float arrowPx = (float)pos.X;
+        float arrowPy = (float)pos.Y;
 
         using (paper.Column("tt_root")
             .PositionType(PositionType.SelfDirected)
             .Position(tooltipX, tooltipY)
             .Width(tooltipW).Height(UnitValue.Auto)
             .BackgroundColor(bgColor)
-            .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(m.Rounding)
-            .BoxShadow(0, 2, 8, -2, Color.FromArgb(80, 0, 0, 0))
+            .Rounded(7f)
+            .BoxShadow(0, 6, 20, 0, Color.FromArgb(128, 0, 0, 0))
             .Padding(padX, padX, padY, padY)
             .ColBetween(m.SpacingSmall)
             .Layer(Layer.Topmost + 1000)
             .ClampToScreen()
             .IsNotInteractable()
+            .OnPostLayout((handle, rect) => paper.Draw(ref handle,
+                (canvas, r) => DrawArrow(canvas, r, arrowPx, arrowPy, bgColor)))
             .Enter())
         {
             if (hasTitle || hasIcon)
@@ -137,7 +144,7 @@ public static class TooltipSystem
                 {
                     if (hasIcon)
                         paper.Box("tt_ico").Width(m.IconWidth).Height(18)
-                            .Text(content.Icon!, font).TextColor(ink.C400)
+                            .Text(content.Icon!, font).TextColor(ink.C300)
                             .FontSize(fontSize).Alignment(TextAlignment.MiddleCenter);
 
                     if (hasTitle)
@@ -156,7 +163,7 @@ public static class TooltipSystem
             {
                 var textBox = paper.Box("tt_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                     .Text(content.Text, font)
-                    .TextColor(hasTitle ? ink.C400 : ink.C500)
+                    .TextColor(hasTitle ? ink.C300 : ink.C500)
                     .FontSize(fontSize).Alignment(TextAlignment.Left);
                 if (needsWrap)
                     textBox.Wrap(Scribe.TextWrapMode.Wrap);
@@ -169,6 +176,34 @@ public static class TooltipSystem
 
             content.CustomDraw?.Invoke(paper);
         }
+    }
+
+    /// <summary>
+    /// Draw the little 8px arrow (an 45deg-rotated square) on the bubble edge that faces the
+    /// anchor. Placed on the top edge when the bubble sits below the pointer, on the bottom edge
+    /// when it was flipped above.
+    /// </summary>
+    private static void DrawArrow(Canvas canvas, Rect rect, float pointerX, float pointerY, Color color)
+    {
+        const float half = 5.6f;   // half-diagonal of an 8px square rotated 45deg
+        float left = (float)rect.Min.X;
+        float top = (float)rect.Min.Y;
+        float right = (float)(rect.Min.X + rect.Size.X);
+        float bottom = (float)(rect.Min.Y + rect.Size.Y);
+
+        float edgeY = pointerY >= bottom ? bottom : top;   // opposite edge points at the anchor
+        float ax = Math.Clamp(pointerX, left + 7f + half, right - 7f - half);
+
+        canvas.SaveState();
+        canvas.BeginPath();
+        canvas.MoveTo(ax, edgeY - half);
+        canvas.LineTo(ax + half, edgeY);
+        canvas.LineTo(ax, edgeY + half);
+        canvas.LineTo(ax - half, edgeY);
+        canvas.ClosePath();
+        canvas.SetFillColor(color);
+        canvas.Fill();
+        canvas.RestoreState();
     }
 }
 

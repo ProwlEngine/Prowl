@@ -8,6 +8,7 @@ using System.Text;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 
@@ -51,7 +52,7 @@ public sealed class MultiDropdownBuilder<T>
     private string _emptyText = "No results";
     private float _itemHeight = 24f;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 24f;
+    private float _height = 32f;
     private int _summaryItemLimit = 2;
     private string _summaryFormat = "{0} selected";
 
@@ -137,16 +138,13 @@ public sealed class MultiDropdownBuilder<T>
         ElementHandle trigHandle = default;
 
         bool subtle = _variant == OrigamiVariant.Subtle;
-        Color trigBg     = subtle ? Color.Transparent
-                                  : (_variant == OrigamiVariant.Default ? _theme.Neutral.C200 : ramp.C200);
-        Color trigBorder = subtle ? Color.Transparent
-                                  : (_variant == OrigamiVariant.Default ? _theme.Neutral.C400 : ramp.C400);
-        Color trigBorderHover = subtle ? _theme.Neutral.C400 : ramp.C500;
-        Color chevColor  = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
-                                  ? ink.C400 : ramp.C600;
-
+        Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
+        Color trigBorder = subtle ? Color.Transparent : Color.FromArgb(30, 178, 150, 255);
+        Color trigBorderHover = _theme.BorderStrong;
+        // Flex-wrap field (prototype .w2field: height auto, minHeight 32, padding 4, gap 4).
         var trigger = _paper.Row(_id)
-            .Width(_width).Height(_height)
+            .Width(_width).Height(UnitValue.Auto).MinHeight(_height)
+            .WrapContent().RowBetween(4).Padding(4, 4, 4, 4)
             .BackgroundColor(trigBg)
             .BorderColor(trigBorder).BorderWidth(1)
             .Hovered.BorderColor(trigBorderHover).End()
@@ -168,34 +166,36 @@ public sealed class MultiDropdownBuilder<T>
                 var ctx = new DropdownTriggerContext(isOpen, triggerText, isEmpty, ramp, ink, _theme);
                 _customTrigger(ctx);
             }
-            else
+            else if (font != null)
             {
-                if (font != null)
+                // Selected values render as removable chips (prototype .w2chip) that wrap onto new
+                // lines as they fill; the field grows in height to fit every line.
+                if (!isEmpty)
                 {
-                    _paper.Box($"{_id}_lbl")
-                        .Width(UnitValue.Stretch())
-                        .Margin(8, 4, 0, 0)
-                        .Alignment(TextAlignment.MiddleLeft)
-                        .IsNotInteractable()
-                        .Text(triggerText, font)
-                        .TextColor(isEmpty ? ink.C300 : ink.C500)
-                        .FontSize(_theme.Metrics.FontSize);
-
-                    string chev = isOpen
-                        ? (string.IsNullOrEmpty(icons.ChevronUp) ? "^" : icons.ChevronUp)
-                        : (string.IsNullOrEmpty(icons.ChevronDown) ? "v" : icons.ChevronDown);
-                    _paper.Box($"{_id}_chev")
-                        .Width(14)
-                        .Margin(0, 6, 0, 0)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .IsNotInteractable()
-                        .Text(chev, font).TextColor(chevColor).FontSize(_theme.Metrics.FontSize * 0.85f);
+                    int ci = 0;
+                    foreach (var item in _selected)
+                    {
+                        var captured = item;
+                        MultiChip($"{_id}_chip_{ci}", disp(item), () => { _selected.Remove(captured); _setter(_selected.ToList()); });
+                        ci++;
+                    }
                 }
+
+                // Trailing add affordance (prototype's <input placeholder="Add layer…">). Clicking
+                // anywhere on the field opens the popover, so this is just the labelled hint.
+                _paper.Box($"{_id}_add")
+                    .Width(UnitValue.Auto).MinWidth(70).Height(22)
+                    .Margin(4, 4, 0, 0)
+                    .Alignment(TextAlignment.MiddleLeft)
+                    .IsNotInteractable()
+                    .Text(_placeholder, font)
+                    .TextColor(ink.C300)
+                    .FontSize(_theme.Metrics.FontSize - 0.5f);
             }
 
             if (isOpen)
             {
-                DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: true);
+                DropdownInternal.RenderBackdrop(_paper, $"{_id}_bd", trigHandle, dim: false);
 
                 var p = new DropdownInternal.PopoverParams<T>
                 {
@@ -233,6 +233,48 @@ public sealed class MultiDropdownBuilder<T>
                     TriggerHeight = _height,
                 };
                 DropdownInternal.RenderPopover(p);
+            }
+        }
+    }
+
+    // A removable selection chip inside the trigger (prototype .w2chip: accent-tint fill + rim + x).
+    private void MultiChip(string id, string label, Action onRemove)
+    {
+        var font = _theme.Font;
+        Color bg = _theme.Selected;   // acc-dim (0.16)
+        Color bd = Color.FromArgb(115, 168, 85, 247);  // ~0.45 — reads brighter, matches prototype
+        Color tx = _theme.Primary.C700;                 // acc-300
+
+        using (_paper.Row(id).Width(UnitValue.Auto).Height(22)
+            .Padding(9, 3, 0, 0).Rounded(6)
+            .BackgroundColor(bg).BorderColor(bd).BorderWidth(1)
+            .Enter())
+        {
+            _paper.Box($"{id}_l").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                .IsNotInteractable()
+                .Text(label, font!).TextColor(tx).FontSize(_theme.Metrics.FontSize - 2f).Alignment(TextAlignment.MiddleLeft);
+
+            var rm = onRemove;
+            var xcol = tx;
+            using (_paper.Box($"{id}_x").Size(15).Rounded(4).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                .Hovered.BackgroundColor(Color.FromArgb(64, 168, 85, 247)).End()
+                .StopEventPropagation().OnClick(_ => rm())
+                .Enter())
+            {
+                _paper.Draw((canvas, r) =>
+                {
+                    float cx = (float)(r.Min.X + r.Size.X / 2), cy = (float)(r.Min.Y + r.Size.Y / 2);
+                    canvas.SaveState();
+                    canvas.SetStrokeColor(xcol);
+                    canvas.SetStrokeWidth(1.1f);
+                    canvas.SetStrokeCap(EndCapStyle.Round);
+                    canvas.BeginPath();
+                    canvas.MoveTo(cx - 2.2f, cy - 2.2f); canvas.LineTo(cx + 2.2f, cy + 2.2f);
+                    canvas.MoveTo(cx + 2.2f, cy - 2.2f); canvas.LineTo(cx - 2.2f, cy + 2.2f);
+                    canvas.Stroke();
+                    canvas.RestoreState();
+                });
             }
         }
     }

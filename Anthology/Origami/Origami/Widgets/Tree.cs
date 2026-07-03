@@ -6,6 +6,9 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
+using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
 
@@ -29,6 +32,13 @@ public sealed class TreeNode
 
     /// <summary>Icon glyph (FontAwesome etc.) shown before the label. Empty = no icon.</summary>
     public string Icon = "";
+
+    /// <summary>
+    /// Optional vector icon painter. Given the canvas and a centred square icon rect (~13px),
+    /// the host draws a coloured node-type icon. Takes precedence over <see cref="Icon"/> and
+    /// works without an icon font (Origami's glyphs are empty). The rect is in screen space.
+    /// </summary>
+    public Action<Canvas, Rect>? IconDraw;
 
     /// <summary>Icon color override. Null = use default ink color.</summary>
     public Color? IconColor;
@@ -138,7 +148,7 @@ public sealed class TreeBuilder
 
     // Layout - default to 0 meaning "use theme HeaderHeight"
     private float _rowHeight;
-    private float _indentSize = 16f;
+    private float _indentSize = 14f;
     private float _width;
     private float _height;
     private float _padding = 4f;
@@ -315,9 +325,9 @@ public sealed class TreeBuilder
         var metrics = _theme.Metrics;
         float rounding = metrics.Rounding;
 
-        // Resolve row height from theme if not explicitly set
+        // Resolve row height. Nebula rows are 24px tall (prototype .w2trow height).
         if (_rowHeight <= 0)
-            _rowHeight = metrics.HeaderHeight;
+            _rowHeight = 24f;
 
         // Expand state storage key prefix
         string expandPrefix = $"{_id}_exp_";
@@ -426,28 +436,37 @@ public sealed class TreeBuilder
         TreeNode node, int index, bool isSelected, bool isExpanded,
         bool isExpandable, bool isPinged)
     {
-        float indent = node.Depth * _indentSize;
+        // Indentation: 6px base left padding + 14px per depth level (prototype .w2trow).
+        float indent = 6f + node.Depth * _indentSize;
         string rowId = $"{_id}_r_{node.Id}";
         string expKey = $"{_id}_exp_{node.Id}";
         int capturedIndex = index;
         var capturedNode = node;
         bool disabled = node.Disabled;
 
-        var accentColor = _theme.Primary.C400;
+        // Accent (#A855F7) for drop tints / indicators.
+        var accentColor = _theme.Primary.C500;
+        const float rowRounding = 6f;
+
+        // Selection is a 90deg accent gradient painted via canvas (see below); hover is a soft
+        // purple wash. Drop-into gets a translucent accent tint.
+        Color selLeft = Color.FromArgb(230, 168, 85, 247);  // rgba(168,85,247,0.9)
+        Color selRight = Color.FromArgb(179, 150, 80, 240); // rgba(150,80,240,0.7)
+        Color hoverBg = _theme.Hover;   // rgba(168,85,247,0.12)
 
         bool isDropInto = node.DropIndicator == TreeDropPosition.Into;
-        Color rowBg = isSelected ? accentColor
-            : isDropInto ? Color.FromArgb(60, accentColor.R, accentColor.G, accentColor.B)
+        Color rowBg = isDropInto
+            ? Color.FromArgb(60, accentColor.R, accentColor.G, accentColor.B)
             : Color.Transparent;
-        Color rowHover = isSelected ? accentColor : _theme.Ink.C200;
 
         // Build the row element
         var row = _paper.Row(rowId)
             .Height(_rowHeight)
             .BackgroundColor(rowBg)
-            .Hovered.BackgroundColor(rowHover).End()
-            .Rounded(_theme.Metrics.Rounding)
-            .ChildLeft(indent);
+            .Hovered.BackgroundColor(hoverBg).End()
+            .Rounded(rowRounding)
+            .ChildLeft(indent)
+            .ChildRight(6);
 
         // Click handling
         if (!disabled)
@@ -551,14 +570,32 @@ public sealed class TreeBuilder
 
         using (row.Enter())
         {
-            // ---- Expand arrow ----
+            // ---- Selection gradient (90deg accent, painted behind the row content) ----
+            if (isSelected)
+            {
+                _paper.Draw((canvas, r) =>
+                {
+                    float x = (float)r.Min.X, y = (float)r.Min.Y;
+                    float w = (float)r.Size.X, h = (float)r.Size.Y;
+                    canvas.SaveState();
+                    canvas.SetLinearBrush(x, y, x + w, y, selLeft, selRight);
+                    canvas.BeginPath();
+                    canvas.RoundedRect(x, y, w, h, rowRounding);
+                    canvas.Fill();
+                    canvas.RestoreState();
+                });
+            }
+
+            // ---- Caret ----
+            // 12px slot. Expandable nodes draw a vector chevron that rotates from
+            // pointing-right (collapsed) to pointing-down (expanded). Leaves reserve the gap.
             if (isExpandable)
             {
-                _paper.Box($"{rowId}_arr")
-                    .Width(14).Height(_rowHeight)
-                    .Text(isExpanded ? _theme.Icons.ChevronDown : _theme.Icons.ChevronRight, font)
-                    .TextColor(ink.C400)
-                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
+                float caretT = _paper.AnimateBool(isExpanded, 0.15f, id: $"{rowId}_caret");
+                Color caretCol = isSelected ? ink.C600 : ink.C200;
+
+                var caret = _paper.Box($"{rowId}_arr")
+                    .Width(12).Height(_rowHeight)
                     .StopEventPropagation()
                     .OnClick(_ =>
                     {
@@ -585,10 +622,13 @@ public sealed class TreeBuilder
                             }
                         }
                     });
+
+                using (caret.Enter())
+                    _paper.Draw((canvas, r) => DrawCaret(canvas, r, caretT, caretCol));
             }
             else
             {
-                _paper.Box($"{rowId}_arr").Width(14).Height(_rowHeight);
+                _paper.Box($"{rowId}_arr").Width(12).Height(_rowHeight);
             }
 
             // ---- Checkbox ----
@@ -617,21 +657,67 @@ public sealed class TreeBuilder
 
     }
 
+    /// <summary>
+    /// Vector disclosure chevron. Points right when collapsed and rotates to point down as
+    /// <paramref name="t"/> animates 0..1 (expand progress).
+    /// </summary>
+    private static void DrawCaret(Canvas canvas, Rect rect, float t, Color color)
+    {
+        float cx = (float)(rect.Min.X + rect.Size.X * 0.5);
+        float cy = (float)(rect.Min.Y + rect.Size.Y * 0.5);
+
+        canvas.SaveState();
+        canvas.TransformBy(Transform2D.CreateTranslation(cx, cy));
+        canvas.TransformBy(Transform2D.CreateRotation(90f * t));
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.5f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.SetStrokeJoint(JointStyle.Round);
+        canvas.BeginPath();
+        canvas.MoveTo(-2f, -3.5f);
+        canvas.LineTo(1.5f, 0f);
+        canvas.LineTo(-2f, 3.5f);
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
     private void DrawDefaultContent(Prowl.Scribe.FontFile? font, OrigamiRamp ink,
         OrigamiMetrics metrics, TreeNode node, string rowId, bool isSelected, bool disabled)
     {
-        if (font == null) return;
-
-        // Icon
-        if (!string.IsNullOrEmpty(node.Icon))
+        // ---- Node type icon (~13px). Vector hook preferred; glyph is a legacy fallback. ----
+        if (node.IconDraw != null)
         {
-            Color iconColor = node.IconColor ?? (disabled ? ink.C200 : ink.C400);
+            var draw = node.IconDraw;
+            using (_paper.Box($"{rowId}_ico")
+                .Width(13).Height(_rowHeight)
+                .Margin(6, 0, 0, 0)
+                .IsNotInteractable()
+                .Enter())
+            {
+                _paper.Draw((canvas, r) =>
+                {
+                    const float size = 13f;
+                    float cx = (float)(r.Min.X + r.Size.X * 0.5);
+                    float cy = (float)(r.Min.Y + r.Size.Y * 0.5);
+                    draw(canvas, new Rect(
+                        new Float2(cx - size * 0.5f, cy - size * 0.5f),
+                        new Float2(cx + size * 0.5f, cy + size * 0.5f)));
+                });
+            }
+        }
+        else if (font != null && !string.IsNullOrEmpty(node.Icon))
+        {
+            Color iconColor = node.IconColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
             _paper.Box($"{rowId}_ico")
-                .Width(16).Height(_rowHeight)
+                .Width(13).Height(_rowHeight)
+                .Margin(6, 0, 0, 0)
+                .IsNotInteractable()
                 .Text(node.Icon, font)
                 .TextColor(iconColor)
-                .FontSize(metrics.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
+                .FontSize(metrics.FontSize).Alignment(TextAlignment.MiddleCenter);
         }
+
+        if (font == null) return;
 
         // Label or rename field
         if (node.IsRenaming && _onRenamed != null)
@@ -653,12 +739,15 @@ public sealed class TreeBuilder
         }
         else
         {
-            Color labelColor = node.LabelColor ?? (disabled ? ink.C200 : ink.C500);
+            // Row text is `t` (#c0bbd2); a selected row flips to white.
+            Color labelColor = node.LabelColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
             _paper.Box($"{rowId}_lbl")
-                .Height(_rowHeight).ChildLeft(4)
+                .Width(UnitValue.Stretch()).Height(_rowHeight)
+                .Margin(6, 0, 0, 0)
+                .IsNotInteractable()
                 .Text(node.Label, font)
                 .TextColor(labelColor)
-                .FontSize(metrics.FontSize - 1)
+                .FontSize(metrics.FontSize)
                 .Alignment(TextAlignment.MiddleLeft);
         }
 
@@ -666,20 +755,22 @@ public sealed class TreeBuilder
         if (!string.IsNullOrEmpty(node.Badge))
         {
             _paper.Box($"{rowId}_badge")
-                .Width(UnitValue.Stretch()).Height(_rowHeight)
+                .Width(UnitValue.Auto).Height(_rowHeight)
+                .Margin(6, 0, 0, 0)
+                .IsNotInteractable()
                 .Text(node.Badge, font)
-                .TextColor(node.BadgeColor ?? ink.C300)
+                .TextColor(isSelected ? ink.C600 : (node.BadgeColor ?? ink.C300))
                 .FontSize(metrics.FontSize - 2)
-                .Alignment(TextAlignment.MiddleRight)
-                .ChildRight(4);
+                .Alignment(TextAlignment.MiddleRight);
         }
 
         // Trailing icon (e.g., visibility eye)
         if (!string.IsNullOrEmpty(node.TrailingIcon))
         {
-            Color trailColor = node.TrailingIconColor ?? ink.C400;
+            Color trailColor = node.TrailingIconColor ?? (isSelected ? ink.C600 : ink.C400);
             var trailBox = _paper.Box($"{rowId}_trail")
                 .Width(18).Height(_rowHeight)
+                .Margin(6, 0, 0, 0)
                 .Text(node.TrailingIcon, font)
                 .TextColor(trailColor)
                 .FontSize(9f).Alignment(TextAlignment.MiddleCenter)

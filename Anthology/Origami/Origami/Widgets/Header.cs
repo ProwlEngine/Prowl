@@ -27,6 +27,8 @@ public enum HeaderStyle
     Separator,
     /// <summary>Subtle underline below the text.</summary>
     Underline,
+    /// <summary>Foldout / component header row: vector chevron, leading icon, title, checkbox and "more" dots.</summary>
+    Component,
 }
 
 /// <summary>
@@ -52,6 +54,15 @@ public sealed class HeaderBuilder
     private float _lineThickness = 1f;
     private float _topMargin = 6f;
     private float _bottomMargin = 2f;
+
+    // Component-row extras (all vector-drawn; the UI font ships no glyphs).
+    private bool _chevron;
+    private bool _chevronExpanded = true;
+    private bool _checkbox;
+    private bool _checkboxOn;
+    private bool _more;
+    private Action<Quill.Canvas, Rect>? _iconDraw;
+    private Action? _onClick;
 
     internal HeaderBuilder(Paper paper, string id, string label, OrigamiTheme theme)
     {
@@ -83,6 +94,26 @@ public sealed class HeaderBuilder
 
     /// <summary>Text with an underline accent below it.</summary>
     public HeaderBuilder Underline() => Style(HeaderStyle.Underline);
+
+    /// <summary>Foldout / component header row (vector chevron + icon + title + checkbox + more).</summary>
+    public HeaderBuilder Component() => Style(HeaderStyle.Component);
+
+    // ── Component row parts ──────────────────────────────────────
+
+    /// <summary>Show a leading disclosure chevron (down when <paramref name="expanded"/>, else right).</summary>
+    public HeaderBuilder Chevron(bool expanded = true) { _chevron = true; _chevronExpanded = expanded; return this; }
+
+    /// <summary>Show a trailing checkbox with a vector check when <paramref name="on"/>.</summary>
+    public HeaderBuilder Checkbox(bool on) { _checkbox = true; _checkboxOn = on; return this; }
+
+    /// <summary>Show a trailing vertical "more options" ellipsis.</summary>
+    public HeaderBuilder More(bool show = true) { _more = show; return this; }
+
+    /// <summary>Vector leading icon (acc-300) drawn into a reserved, row-tall cell.</summary>
+    public HeaderBuilder IconDraw(Action<Quill.Canvas, Rect> draw) { _iconDraw = draw; return this; }
+
+    /// <summary>Make the header row clickable (foldout toggle, section collapse, ...).</summary>
+    public HeaderBuilder OnClick(Action onClick) { _onClick = onClick; return this; }
 
     // ── Appearance ───────────────────────────────────────────────
 
@@ -122,26 +153,42 @@ public sealed class HeaderBuilder
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
         var ramp = _variant == OrigamiVariant.Default ? ink : _theme.Get(_variant);
+        bool isComponent = _style == HeaderStyle.Component;
 
-        float fontSize = _fontSizeOverride ?? metrics.FontSize + 1;
+        // Component title is 600 (semi-bold); the uppercase section label is 700 (bold).
+        var labelFont = (isComponent ? _theme.SemiBold : _theme.Bold) ?? font;
+
+        // Section label ~= 11px (metrics-2); component title ~= 12.5px (metrics).
+        float fontSize = _fontSizeOverride ?? (isComponent ? metrics.FontSize : metrics.FontSize - 2f);
         float rowHeight = _height > 0 ? _height : metrics.HeaderHeight + 4;
         float rounding = metrics.Rounding;
 
-        Color textColor = _variant == OrigamiVariant.Default ? ink.C500 : ramp.C500;
-        Color lineColor = _variant == OrigamiVariant.Default ? ink.C200 : ramp.C300;
-        Color boxBg = _variant == OrigamiVariant.Default ? ink.C100 : ramp.C200;
-        Color badgeColor = ink.C300;
+        // Section label: UPPERCASE, wide tracking, acc-300. Component title: t-hi, normal case.
+        bool uppercase = !isComponent;
+        float letterSpacing = uppercase ? fontSize * 0.06f : 0f;
+        string label = uppercase ? (_label ?? string.Empty).ToUpperInvariant() : (_label ?? string.Empty);
+
+        Color textColor = isComponent
+            ? ink.C500                                                  // t-hi title
+            : (_variant == OrigamiVariant.Default ? _theme.Primary.C700 // acc-300 section label
+                                                  : ramp.C500);
+        Color lineColor = _variant == OrigamiVariant.Default
+            ? _theme.BorderSoft          // bd-soft
+            : ramp.C300;
+        Color boxBg = _variant == OrigamiVariant.Default ? _theme.Neutral.C300 : ramp.C200; // glass-head
+        Color badgeColor = ink.C200;                                    // t-lo
 
         // Capture everything the paint callback needs into a snapshot struct
         // so the closure doesn't capture `this` (the builder is transient).
         var snap = new HeaderSnapshot
         {
-            Label = _label,
+            Label = label,
             Icon = _icon,
             Badge = _badge,
             Style = _style,
-            Font = font,
+            Font = labelFont,
             FontSize = fontSize,
+            LetterSpacing = letterSpacing,
             TextColor = textColor,
             LineColor = lineColor,
             BoxBg = boxBg,
@@ -150,13 +197,42 @@ public sealed class HeaderBuilder
             Rounding = rounding,
             Pad = 8f,
             IconGap = 4f,
+            Chevron = _chevron,
+            ChevronExpanded = _chevronExpanded,
+            Checkbox = _checkbox,
+            CheckboxOn = _checkboxOn,
+            More = _more,
+            IconDraw = _iconDraw,
+            ChevronColor = ink.C200,        // t-lo
+            AccentColor = _theme.Primary.C500,   // acc
+            CheckColor = ink.C600,          // white
+            MoreColor = ink.C200,           // t-lo
         };
 
-        // Single box - all drawing happens in the canvas callback
-        using (_paper.Box(_id)
+        // Single box - all drawing happens in the canvas callback.
+        var box = _paper.Box(_id)
             .Height(rowHeight)
-            .Margin(0, 0, _topMargin, _bottomMargin)
-            .IsNotInteractable().Enter())
+            .Margin(0, 0, _topMargin, _bottomMargin);
+
+        // The component/foldout row carries the .w2hdrrow chrome: glass-in fill, bd-soft border, radius 8.
+        if (isComponent)
+            box.BackgroundColor(_theme.Glass)
+               .BorderColor(_theme.BorderSoft).BorderWidth(1)
+               .Rounded(8f);
+
+        if (_onClick != null)
+        {
+            var click = _onClick;
+            if (!isComponent) box.Rounded(rounding);
+            box.OnClick(_ => click());
+            box.Hovered.BackgroundColor(_theme.Hover).End(); // hover
+        }
+        else
+        {
+            box.IsNotInteractable();
+        }
+
+        using (box.Enter())
         {
             _paper.Draw((canvas, rect) => Paint(canvas, rect, in snap));
         }
@@ -172,6 +248,7 @@ public sealed class HeaderBuilder
         public HeaderStyle Style;
         public Prowl.Scribe.FontFile Font;
         public float FontSize;
+        public float LetterSpacing;
         public Color TextColor;
         public Color LineColor;
         public Color BoxBg;
@@ -180,6 +257,18 @@ public sealed class HeaderBuilder
         public float Rounding;
         public float Pad;
         public float IconGap;
+
+        // Component-row parts
+        public bool Chevron;
+        public bool ChevronExpanded;
+        public bool Checkbox;
+        public bool CheckboxOn;
+        public bool More;
+        public Action<Quill.Canvas, Rect>? IconDraw;
+        public Color ChevronColor;
+        public Color AccentColor;
+        public Color CheckColor;
+        public Color MoreColor;
     }
 
     // ── Canvas paint ─────────────────────────────────────────────
@@ -196,8 +285,15 @@ public sealed class HeaderBuilder
         bool hasBadge = !string.IsNullOrEmpty(s.Badge);
         bool hasLabel = !string.IsNullOrEmpty(s.Label);
 
+        // Component row is laid out separately (vector parts + spacer + right cluster).
+        if (s.Style == HeaderStyle.Component)
+        {
+            DrawComponentRow(canvas, s, x, y, w, h, cy);
+            return;
+        }
+
         // Measure text segments
-        Float2 labelSize = hasLabel ? canvas.MeasureText(s.Label, s.FontSize, s.Font) : Float2.Zero;
+        Float2 labelSize = hasLabel ? canvas.MeasureText(s.Label, s.FontSize, s.Font, s.LetterSpacing) : Float2.Zero;
         Float2 iconSize = hasIcon ? canvas.MeasureText(s.Icon!, s.FontSize - 1, s.Font) : Float2.Zero;
         Float2 badgeSize = hasBadge ? canvas.MeasureText(s.Badge!, s.FontSize - 2, s.Font) : Float2.Zero;
 
@@ -299,9 +395,9 @@ public sealed class HeaderBuilder
 
     private static void DrawLabel(Quill.Canvas canvas, in HeaderSnapshot s, float x, float y, float h)
     {
-        Float2 size = canvas.MeasureText(s.Label, s.FontSize, s.Font);
+        Float2 size = canvas.MeasureText(s.Label, s.FontSize, s.Font, s.LetterSpacing);
         float ty = y + (h - (float)size.Y) * 0.5f;
-        canvas.DrawText(s.Label, x, ty, s.TextColor, s.FontSize, s.Font);
+        canvas.DrawText(s.Label, x, ty, s.TextColor, s.FontSize, s.Font, s.LetterSpacing);
     }
 
     private static void DrawBadge(Quill.Canvas canvas, in HeaderSnapshot s, float x, float y, float h)
@@ -309,5 +405,112 @@ public sealed class HeaderBuilder
         Float2 size = canvas.MeasureText(s.Badge!, s.FontSize - 2, s.Font);
         float ty = y + (h - (float)size.Y) * 0.5f;
         canvas.DrawText(s.Badge!, x, ty, s.BadgeColor, s.FontSize - 2, s.Font);
+    }
+
+    // ── Component header row ─────────────────────────────────────
+
+    private static void DrawComponentRow(Quill.Canvas canvas, in HeaderSnapshot s,
+        float x, float y, float w, float h, float cy)
+    {
+        float pad = s.Pad;
+        float gap = s.IconGap + 2f;
+        float cx = x + pad;
+
+        // Leading disclosure chevron (~12px, t-lo).
+        if (s.Chevron)
+        {
+            float sz = s.FontSize * 0.78f;
+            DrawChevron(canvas, cx + sz * 0.5f, cy, sz, s.ChevronExpanded, s.ChevronColor);
+            cx += sz + gap;
+        }
+
+        // Leading icon (~14px, acc-300) — caller-supplied vector draw.
+        if (s.IconDraw != null)
+        {
+            float sz = s.FontSize * 0.9f;
+            s.IconDraw(canvas, new Rect(cx, cy - sz * 0.5f, cx + sz, cy + sz * 0.5f));
+            cx += sz + gap;
+        }
+
+        // Title.
+        if (!string.IsNullOrEmpty(s.Label))
+        {
+            Float2 ts = canvas.MeasureText(s.Label, s.FontSize, s.Font, s.LetterSpacing);
+            canvas.DrawText(s.Label, cx, cy - (float)ts.Y * 0.5f, s.TextColor, s.FontSize, s.Font, s.LetterSpacing);
+        }
+
+        // Right cluster (laid out right-to-left): more dots, then checkbox.
+        float rx = x + w - pad;
+        if (s.More)
+        {
+            rx -= MathF.Max(2f, s.FontSize * 0.16f);
+            DrawMoreDots(canvas, rx, cy, s.FontSize, s.MoreColor);
+            rx -= gap + MathF.Max(2f, s.FontSize * 0.16f);
+        }
+        if (s.Checkbox)
+        {
+            float box = s.FontSize * 0.95f;
+            rx -= box;
+            DrawCheckbox(canvas, rx, cy - box * 0.5f, box, s.CheckboxOn, s.AccentColor, s.CheckColor);
+        }
+    }
+
+    private static void DrawChevron(Quill.Canvas canvas, float cx, float cy, float size, bool down, Color color)
+    {
+        float half = size * 0.5f;
+        float q = size * 0.28f;
+        canvas.SaveState();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(MathF.Max(1.4f, size * 0.14f));
+        canvas.SetStrokeCap(Quill.EndCapStyle.Round);
+        canvas.SetStrokeJoint(Quill.JointStyle.Round);
+        canvas.BeginPath();
+        if (down)
+        {
+            canvas.MoveTo(cx - half + q, cy - q * 0.5f);
+            canvas.LineTo(cx, cy + q * 0.7f);
+            canvas.LineTo(cx + half - q, cy - q * 0.5f);
+        }
+        else
+        {
+            canvas.MoveTo(cx - q * 0.5f, cy - half + q);
+            canvas.LineTo(cx + q * 0.7f, cy);
+            canvas.LineTo(cx - q * 0.5f, cy + half - q);
+        }
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    private static void DrawCheckbox(Quill.Canvas canvas, float x, float y, float size, bool on, Color accent, Color check)
+    {
+        float r = size * 0.28f;
+        Color border = on ? accent : Origami.Current.BorderStrong; // bd-strong
+        Color fill = on ? accent : Origami.Current.Glass;          // acc / glass-in
+        canvas.RoundedRectFilled(x, y, size, size, r, border);
+        canvas.RoundedRectFilled(x + 1, y + 1, size - 2, size - 2, MathF.Max(0, r - 1), fill);
+
+        if (on)
+        {
+            canvas.SaveState();
+            canvas.SetStrokeColor(check);
+            canvas.SetStrokeWidth(MathF.Max(1.4f, size * 0.13f));
+            canvas.SetStrokeCap(Quill.EndCapStyle.Round);
+            canvas.SetStrokeJoint(Quill.JointStyle.Round);
+            canvas.BeginPath();
+            canvas.MoveTo(x + size * 0.26f, y + size * 0.52f);
+            canvas.LineTo(x + size * 0.43f, y + size * 0.68f);
+            canvas.LineTo(x + size * 0.74f, y + size * 0.34f);
+            canvas.Stroke();
+            canvas.RestoreState();
+        }
+    }
+
+    private static void DrawMoreDots(Quill.Canvas canvas, float cx, float cy, float fontSize, Color color)
+    {
+        float r = MathF.Max(1f, fontSize * 0.08f);
+        float gap = fontSize * 0.26f;
+        canvas.CircleFilled(cx, cy - gap, r, color);
+        canvas.CircleFilled(cx, cy, r, color);
+        canvas.CircleFilled(cx, cy + gap, r, color);
     }
 }

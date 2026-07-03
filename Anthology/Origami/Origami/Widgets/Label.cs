@@ -79,12 +79,22 @@ public sealed class LabelBuilder
     private Action? _onClick;
 
     private float? _fontSizeOverride;
+    private Prowl.Scribe.FontFile? _fontOverride;
     private Color? _colorOverride;
     private float? _widthOverride;
     private float? _heightOverride;
     private float _padX = 4f;
     private float _padY = 0f;
     private float _iconGap = 4f;
+    private float _letterSpacingEm;
+    private bool _uppercase;
+
+    // Leading vector-draw hook (used for semantic dots and any glyph-less icon,
+    // since OrigamiIcons ships empty strings by default).
+    private Action<Canvas, Rect>? _leadingDraw;
+    private float _leadingDrawWidth;
+    private bool _dot;
+    private Color? _dotColor;
 
     // Decorations
     private bool _bg;
@@ -248,22 +258,112 @@ public sealed class LabelBuilder
         return this;
     }
 
+    // ── Nebula presets ───────────────────────────────────────────
+    // Thin wrappers over the primitives above that reproduce the prototype's named
+    // text roles. Weight (700/600) has no analogue in the single-weight UI font, so
+    // emphasis is carried by size + brighter ink stops.
+
+    /// <summary>Bright section heading (t-hi, ~17px, bold) with tight tracking.</summary>
+    public LabelBuilder Heading() { _size = LabelSize.LG; _colorOverride = _theme.Ink.C500; _fontOverride = _theme.Bold; _letterSpacingEm = -0.01f; return this; }
+
+    /// <summary>Bright sub-heading (t-hi, ~13.5px, semi-bold).</summary>
+    public LabelBuilder Subheading() { _size = LabelSize.SM; _colorOverride = _theme.Ink.C500; _fontOverride = _theme.SemiBold; return this; }
+
+    /// <summary>Default body copy (t, ~12.5px).</summary>
+    public LabelBuilder Body() { _size = LabelSize.MD; return this; }
+
+    /// <summary>Small muted caption (t-lo, ~11.5px).</summary>
+    public LabelBuilder Caption() { _size = LabelSize.XS; _colorOverride = _theme.Ink.C200; return this; }
+
+    /// <summary>De-emphasised secondary text (t-lo).</summary>
+    public LabelBuilder Muted() => Variant(OrigamiVariant.Subtle);
+
+    /// <summary>UPPERCASE form field label — t-lo, ~11px, wide tracking.</summary>
+    public LabelBuilder FieldLabel()
+    {
+        _size = LabelSize.XS;
+        _uppercase = true;
+        _colorOverride = _theme.Ink.C200;   // t-lo
+        _fontOverride = _theme.SemiBold;     // 600
+        _letterSpacingEm = 0.05f;
+        return this;
+    }
+
+    /// <summary>Accent hyperlink — acc-300, underlined.</summary>
+    public LabelBuilder Link()
+    {
+        _colorOverride = _theme.Primary.C700; // acc-300
+        _underline = true;
+        _decorColor = _theme.Primary.C700;
+        return this;
+    }
+
+    /// <summary>Inline code / mono badge — glass-in fill, bd-soft border, bright text.
+    /// A true monospace face is unavailable (single UI font); glyphs use the UI font.</summary>
+    public LabelBuilder Code()
+    {
+        _size = LabelSize.XS;
+        _colorOverride = _theme.Ink.C500;                   // t-hi
+        _heightOverride = ResolveFontSize() + 6f;           // hug like a badge
+        _bg = true;
+        _bgColor = _theme.Glass;           // glass-in
+        _bgRounding = _theme.Metrics.SmallRounding;         // 5
+        _border = true;
+        _borderColor = _theme.BorderSoft;   // bd-soft
+        _borderThickness = 1f;
+        _padX = 6f;
+        _padY = 1f;
+        return this;
+    }
+
+    /// <summary>Leading 7px semantic dot in the current (variant) colour.</summary>
+    public LabelBuilder Dot(Color? color = null) { _dot = true; _dotColor = color; return this; }
+
+    /// <summary>Per-glyph tracking in em (relative to the resolved font size).</summary>
+    public LabelBuilder LetterSpacing(float em) { _letterSpacingEm = em; return this; }
+
+    /// <summary>Vector leading icon drawn into a reserved <paramref name="width"/>-wide, row-tall cell.</summary>
+    public LabelBuilder LeadingIcon(Action<Canvas, Rect> draw, float width)
+    {
+        _leadingDraw = draw;
+        _leadingDrawWidth = MathF.Max(1f, width);
+        return this;
+    }
+
     // ── Terminator ───────────────────────────────────────────────
 
     public void Show()
     {
-        var font = _theme.Font;
+        var font = _fontOverride ?? _theme.Font;
         if (font == null) return;
 
         float fontSize = ResolveFontSize();
+        float letterSpacing = _letterSpacingEm * fontSize;
         Color textColor = ResolveTextColor();
         Color decorColor = _decorColor ?? textColor;
         Color bgColor = _bgColor ?? ResolveBgColor();
         Color borderColor = _borderColor ?? ResolveBorderColor();
         Color insetHi = _insetHighlight ?? _theme.Ink.C600;
 
+        string text = _uppercase ? _text.ToUpperInvariant() : _text;
+
+        // A semantic dot is just a synthesised leading vector-draw (variant-coloured circle).
+        Action<Canvas, Rect>? leadingDraw = _leadingDraw;
+        float leadingDrawWidth = _leadingDrawWidth;
+        if (_dot && leadingDraw == null)
+        {
+            Color dotColor = _dotColor ?? textColor;
+            leadingDraw = (cv, r) =>
+            {
+                float cx = (float)(r.Min.X + r.Size.X * 0.5f);
+                float cy = (float)(r.Min.Y + r.Size.Y * 0.5f);
+                cv.CircleFilled(cx, cy, MathF.Min((float)r.Size.X, (float)r.Size.Y) * 0.5f, dotColor);
+            };
+            leadingDrawWidth = 7f;
+        }
+
         // Pre-measure for content-width sizing if no explicit width is given.
-        float measuredW = MeasureContentWidth(font, fontSize);
+        float measuredW = MeasureContentWidth(font, fontSize, text, leadingDrawWidth, letterSpacing);
         float boxWidth = _widthOverride ?? measuredW;
         // Default box height to the theme's row-height metric so a bare
         // Origami.Label(...).Show() matches the editor's row geometry.
@@ -271,9 +371,12 @@ public sealed class LabelBuilder
 
         var snap = new LabelSnapshot
         {
-            Text = _text,
+            Text = text,
             LeadingIcon = _leadingIcon,
             TrailingIcon = _trailingIcon,
+            LeadingDraw = leadingDraw,
+            LeadingDrawWidth = leadingDrawWidth,
+            LetterSpacing = letterSpacing,
             Font = font,
             FontSize = fontSize,
             TextColor = textColor,
@@ -340,49 +443,50 @@ public sealed class LabelBuilder
         float baseSz = _theme.Metrics.FontSize;
         return _size switch
         {
-            LabelSize.XS => baseSz - 3f,
-            LabelSize.SM => baseSz - 1f,
-            LabelSize.LG => baseSz + 3f,
-            LabelSize.XL => baseSz + 6f,
-            _ => baseSz,
+            LabelSize.XS => baseSz - 2f,   // ~11px caption / field label
+            LabelSize.SM => baseSz + 2f,   // ~13.5px sub-heading
+            LabelSize.LG => baseSz + 6f,   // ~17px heading
+            LabelSize.XL => baseSz + 12f,  // display
+            _ => baseSz,                    // ~12.5px body
         };
     }
 
     private Color ResolveTextColor()
     {
         if (_colorOverride.HasValue) return _colorOverride.Value;
-        if (_disabled) return _theme.Ink.C300;
-        if (_variant == OrigamiVariant.Default) return _theme.Ink.C500;
-        if (_variant == OrigamiVariant.Subtle) return _theme.Ink.C300;
+        if (_disabled) return _theme.Ink.C100;                          // t-dim
+        if (_variant == OrigamiVariant.Default) return _theme.Ink.C400; // body "t"
+        if (_variant == OrigamiVariant.Subtle) return _theme.Ink.C200;  // t-lo
         return _theme.Get(_variant).C500;
     }
 
     private Color ResolveBgColor()
     {
         if (_variant == OrigamiVariant.Default || _variant == OrigamiVariant.Subtle)
-            return _theme.Ink.C100;
+            return _theme.Glass; // glass-in
         return _theme.Get(_variant).C200;
     }
 
     private Color ResolveBorderColor()
     {
         if (_variant == OrigamiVariant.Default || _variant == OrigamiVariant.Subtle)
-            return _theme.Ink.C200;
+            return _theme.BorderSoft; // bd-soft
         return _theme.Get(_variant).C300;
     }
 
-    private float MeasureContentWidth(FontFile font, float fontSize)
+    private float MeasureContentWidth(FontFile font, float fontSize, string text, float leadingDrawWidth, float letterSpacing)
     {
-        bool hasLead = !string.IsNullOrEmpty(_leadingIcon);
+        bool hasLead = leadingDrawWidth > 0f || !string.IsNullOrEmpty(_leadingIcon);
         bool hasTrail = !string.IsNullOrEmpty(_trailingIcon);
-        bool hasText = !string.IsNullOrEmpty(_text);
+        bool hasText = !string.IsNullOrEmpty(text);
 
         float content = 0f;
-        if (hasLead) content += (float)_paper.MeasureText(_leadingIcon!, fontSize, font).X;
+        if (leadingDrawWidth > 0f) content += leadingDrawWidth;
+        else if (!string.IsNullOrEmpty(_leadingIcon)) content += (float)_paper.MeasureText(_leadingIcon!, fontSize, font).X;
         if (hasText)
         {
             if (hasLead) content += _iconGap;
-            content += (float)_paper.MeasureText(_text, fontSize, font).X;
+            content += (float)_paper.MeasureText(text, fontSize, font).X + letterSpacing * MathF.Max(0, text.Length - 1);
         }
         if (hasTrail)
         {
@@ -399,6 +503,9 @@ public sealed class LabelBuilder
         public string Text;
         public string? LeadingIcon;
         public string? TrailingIcon;
+        public Action<Canvas, Rect>? LeadingDraw;
+        public float LeadingDrawWidth;
+        public float LetterSpacing;
         public FontFile Font;
         public float FontSize;
 
@@ -460,11 +567,14 @@ public sealed class LabelBuilder
         }
 
         // Measure pieces
-        bool hasLead = !string.IsNullOrEmpty(s.LeadingIcon);
+        bool hasLeadDraw = s.LeadingDraw != null;
+        bool hasLead = hasLeadDraw || !string.IsNullOrEmpty(s.LeadingIcon);
         bool hasTrail = !string.IsNullOrEmpty(s.TrailingIcon);
         bool hasText = !string.IsNullOrEmpty(s.Text);
 
-        Float2 leadSize = hasLead ? canvas.MeasureText(s.LeadingIcon!, s.FontSize, s.Font) : Float2.Zero;
+        Float2 leadSize = hasLeadDraw
+            ? new Float2(s.LeadingDrawWidth, s.LeadingDrawWidth)
+            : (!string.IsNullOrEmpty(s.LeadingIcon) ? canvas.MeasureText(s.LeadingIcon!, s.FontSize, s.Font) : Float2.Zero);
         Float2 trailSize = hasTrail ? canvas.MeasureText(s.TrailingIcon!, s.FontSize, s.Font) : Float2.Zero;
 
         float innerLeft = x + s.PadX;
@@ -482,11 +592,11 @@ public sealed class LabelBuilder
         Float2 textSize = Float2.Zero;
         if (hasText)
         {
-            textSize = canvas.MeasureText(drawnText, s.FontSize, s.Font);
+            textSize = canvas.MeasureText(drawnText, s.FontSize, s.Font, s.LetterSpacing);
             if (s.Truncation == LabelTruncation.Ellipsis && (float)textSize.X > textBudget)
             {
-                drawnText = Ellipsize(canvas, drawnText, textBudget, s.FontSize, s.Font);
-                textSize = canvas.MeasureText(drawnText, s.FontSize, s.Font);
+                drawnText = Ellipsize(canvas, drawnText, textBudget, s.FontSize, s.Font, s.LetterSpacing);
+                textSize = canvas.MeasureText(drawnText, s.FontSize, s.Font, s.LetterSpacing);
             }
         }
 
@@ -509,11 +619,19 @@ public sealed class LabelBuilder
         float leadTop = ResolveVAlign(s.VAlign, y, h, (float)leadSize.Y, s.PadY);
         float trailTop = ResolveVAlign(s.VAlign, y, h, (float)trailSize.Y, s.PadY);
 
-        // Draw leading icon
+        // Draw leading icon (vector hook takes precedence over a glyph)
         if (hasLead)
         {
-            DrawTextWithEffects(canvas, s.LeadingIcon!, cursor, leadTop, s.FontSize, s.Font,
-                s.TextColor, in s);
+            if (hasLeadDraw)
+            {
+                var cell = new Rect(cursor, leadTop, cursor + (float)leadSize.X, leadTop + (float)leadSize.Y);
+                s.LeadingDraw!(canvas, cell);
+            }
+            else
+            {
+                DrawTextWithEffects(canvas, s.LeadingIcon!, cursor, leadTop, s.FontSize, s.Font,
+                    s.TextColor, 0f, in s);
+            }
             cursor += (float)leadSize.X;
             if (hasText || hasTrail) cursor += s.IconGap;
         }
@@ -522,7 +640,7 @@ public sealed class LabelBuilder
         if (hasText)
         {
             DrawTextWithEffects(canvas, drawnText, cursor, textTop, s.FontSize, s.Font,
-                s.TextColor, in s);
+                s.TextColor, s.LetterSpacing, in s);
 
             // Underline / double underline / strikethrough are positioned relative to the text box.
             float textRight = cursor + (float)textSize.X;
@@ -549,7 +667,7 @@ public sealed class LabelBuilder
         if (hasTrail)
         {
             DrawTextWithEffects(canvas, s.TrailingIcon!, cursor, trailTop, s.FontSize, s.Font,
-                s.TextColor, in s);
+                s.TextColor, 0f, in s);
         }
     }
 
@@ -558,15 +676,15 @@ public sealed class LabelBuilder
     /// (behind), then inset highlight, then the main text on top.
     /// </summary>
     private static void DrawTextWithEffects(Canvas canvas, string text, float x, float y,
-        float fontSize, FontFile font, Color color, in LabelSnapshot s)
+        float fontSize, FontFile font, Color color, float letterSpacing, in LabelSnapshot s)
     {
         if (s.HasShadow)
-            canvas.DrawText(text, x + s.ShadowDx, y + s.ShadowDy, s.ShadowColor, fontSize, font);
+            canvas.DrawText(text, x + s.ShadowDx, y + s.ShadowDy, s.ShadowColor, fontSize, font, letterSpacing);
 
         if (s.HasInset)
-            canvas.DrawText(text, x + 1f, y + 1f, s.InsetHighlight, fontSize, font);
+            canvas.DrawText(text, x + 1f, y + 1f, s.InsetHighlight, fontSize, font, letterSpacing);
 
-        canvas.DrawText(text, x, y, color, fontSize, font);
+        canvas.DrawText(text, x, y, color, fontSize, font, letterSpacing);
     }
 
     private static float ResolveVAlign(LabelVAlign align, float y, float h, float contentH, float padY)
@@ -589,11 +707,11 @@ public sealed class LabelBuilder
         canvas.Stroke();
     }
 
-    private static string Ellipsize(Canvas canvas, string text, float maxWidth, float fontSize, FontFile font)
+    private static string Ellipsize(Canvas canvas, string text, float maxWidth, float fontSize, FontFile font, float letterSpacing)
     {
         if (maxWidth <= 0f || string.IsNullOrEmpty(text)) return string.Empty;
         const string ell = "...";
-        float ellW = (float)canvas.MeasureText(ell, fontSize, font).X;
+        float ellW = (float)canvas.MeasureText(ell, fontSize, font, letterSpacing).X;
         if (ellW > maxWidth) return string.Empty;
 
         // Binary search the longest prefix that fits with the ellipsis appended.
@@ -601,7 +719,7 @@ public sealed class LabelBuilder
         while (lo < hi)
         {
             int mid = (lo + hi + 1) >> 1;
-            float w = (float)canvas.MeasureText(text.Substring(0, mid) + ell, fontSize, font).X;
+            float w = (float)canvas.MeasureText(text.Substring(0, mid) + ell, fontSize, font, letterSpacing).X;
             if (w <= maxWidth) lo = mid;
             else hi = mid - 1;
         }
