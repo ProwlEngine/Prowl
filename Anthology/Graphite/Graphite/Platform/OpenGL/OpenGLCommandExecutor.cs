@@ -292,7 +292,7 @@ internal unsafe class OpenGLCommandExecutor
     private void MarkBufferInFlight(DeviceBuffer buffer)
     {
         if (buffer != null)
-            buffer.MarkInFlight(_gd, _gd.ExecutorActiveFrame.FrameId);
+            buffer.MarkInFlight(_gd, _gd.ExecutorActiveFrameOrNull?.FrameId ?? 0);
     }
 
     private void ResolveIndexBufferForDraw()
