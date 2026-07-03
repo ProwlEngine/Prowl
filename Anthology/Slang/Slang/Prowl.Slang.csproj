@@ -17,8 +17,6 @@
         <PackageTags>shader compiler slang hlsl glsl shader-programs spirv spir-v Vulkan OpenGL DirectX Metal</PackageTags>
 
         <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-
-        <PackageOutputPath>$(MSBuildThisFileDirectory)../../LocalFeed</PackageOutputPath>
     </PropertyGroup>
 
     <PropertyGroup>
