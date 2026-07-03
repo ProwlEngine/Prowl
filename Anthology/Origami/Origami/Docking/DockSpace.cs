@@ -673,14 +673,17 @@ public class DockSpace
         DrawDropPreview(paper, m);
     }
 
-    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, string icon, FontFile? font)
+    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
     {
+        var iconCol = Color.FromArgb(230, 235, 240, 255);
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
-            .Text(icon, font!)
-            .TextColor(Color.FromArgb(230, 235, 240, 255))
-            .FontSize(s * 0.45f)
-            .Alignment(TextAlignment.MiddleCenter);
+            .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>
+            {
+                float inset = (float)rr.Size.X * 0.28f;
+                var inner = new Rect(new Float2(rr.Min.X + inset, rr.Min.Y + inset), new Float2(rr.Max.X - inset, rr.Max.Y - inset));
+                icon?.Draw(canvas, inner, iconCol);
+            }));
     }
 
     private void DrawDropPreview(Paper paper, OrigamiMetrics m)

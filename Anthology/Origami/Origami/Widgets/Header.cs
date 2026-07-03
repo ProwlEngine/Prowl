@@ -61,7 +61,7 @@ public sealed class HeaderBuilder
     private bool _checkbox;
     private bool _checkboxOn;
     private bool _more;
-    private Action<Quill.Canvas, Rect>? _iconDraw;
+    private IOrigamiIcon? _iconObj;
     private Action? _onClick;
 
     internal HeaderBuilder(Paper paper, string id, string label, OrigamiTheme theme)
@@ -109,8 +109,8 @@ public sealed class HeaderBuilder
     /// <summary>Show a trailing vertical "more options" ellipsis.</summary>
     public HeaderBuilder More(bool show = true) { _more = show; return this; }
 
-    /// <summary>Vector leading icon (acc-300) drawn into a reserved, row-tall cell.</summary>
-    public HeaderBuilder IconDraw(Action<Quill.Canvas, Rect> draw) { _iconDraw = draw; return this; }
+    /// <summary>Leading icon (acc-300) drawn into a reserved, row-tall cell.</summary>
+    public HeaderBuilder Icon(IOrigamiIcon? icon) { _iconObj = icon; return this; }
 
     /// <summary>Make the header row clickable (foldout toggle, section collapse, ...).</summary>
     public HeaderBuilder OnClick(Action onClick) { _onClick = onClick; return this; }
@@ -202,7 +202,7 @@ public sealed class HeaderBuilder
             Checkbox = _checkbox,
             CheckboxOn = _checkboxOn,
             More = _more,
-            IconDraw = _iconDraw,
+            IconObj = _iconObj,
             ChevronColor = ink.C200,        // t-lo
             AccentColor = _theme.Primary.C500,   // acc
             CheckColor = ink.C600,          // white
@@ -264,7 +264,7 @@ public sealed class HeaderBuilder
         public bool Checkbox;
         public bool CheckboxOn;
         public bool More;
-        public Action<Quill.Canvas, Rect>? IconDraw;
+        public IOrigamiIcon? IconObj;
         public Color ChevronColor;
         public Color AccentColor;
         public Color CheckColor;
@@ -424,11 +424,11 @@ public sealed class HeaderBuilder
             cx += sz + gap;
         }
 
-        // Leading icon (~14px, acc-300) — caller-supplied vector draw.
-        if (s.IconDraw != null)
+        // Leading icon (~14px, acc-300).
+        if (s.IconObj != null)
         {
             float sz = s.FontSize * 0.9f;
-            s.IconDraw(canvas, new Rect(cx, cy - sz * 0.5f, cx + sz, cy + sz * 0.5f));
+            s.IconObj.Draw(canvas, new Rect(cx, cy - sz * 0.5f, cx + sz, cy + sz * 0.5f), s.AccentColor);
             cx += sz + gap;
         }
 

@@ -146,7 +146,7 @@ namespace OrigamiSample
         {
             using (P.Row("W2Top").Height(46).Padding(14, 14, 0, 0).Enter())
             {
-                Icon(P, "w2topIco", SvgIcon.Grid3, 15, Palette.Acc300, 1.3f, 0);
+                Icon(P, "w2topIco", OrigamiIconSet.Grid, 15, Palette.Acc300, 1.3f, 0);
                 P.Box("w2topTitle").Width(P.Auto).Height(P.Auto).Margin(10, 0, P.Stretch(), P.Stretch())
                     .Text("Widget Playground", _geistSemi).FontSize(13 * Palette.TS).TextColor(Palette.THi).Alignment(TextAlignment.MiddleLeft);
                 Tag(P, "w2topTag", "PROWL.UI - 33 components", 10);
@@ -154,7 +154,7 @@ namespace OrigamiSample
                 using (P.Row("w2search").Width(170).Height(28).Rounded(8).Margin(0, 0, P.Stretch(), P.Stretch())
                     .BackgroundColor(Palette.GlassIn).BorderColor(Palette.BdSoft).BorderWidth(1).Enter())
                 {
-                    Icon(P, "w2searchIco", SvgIcon.Search, 12, Palette.TLo, 1.4f, 10);
+                    Icon(P, "w2searchIco", OrigamiIconSet.Search, 12, Palette.TLo, 1.4f, 10);
                     P.Box("w2searchPh").Width(P.Stretch()).Height(P.Auto).Margin(6, 10, P.Stretch(), P.Stretch())
                         .Text("Search", _mono).FontSize(11.5f * Palette.TS).TextColor(Palette.TMid).Alignment(TextAlignment.MiddleLeft);
                 }
@@ -294,12 +294,12 @@ namespace OrigamiSample
                 {
                     DemoLabel(P, "mblab2", "App bar");
                     Origami.AppBar(P, "appbar")
-                        .Brand(IconMid(SvgIcon.Cube, Palette.White, 15), "Chimera")
+                        .Brand(IconDraw(OrigamiIconSet.Cube, Palette.White), "Chimera")
                         .Tag("v0.1")
                         .Spacer()
-                        .Action("search", IconMid(SvgIcon.Search, Palette.TMid, 15), () => { })
-                        .Action("bolt", IconMid(SvgIcon.Bolt, Palette.TMid, 15), () => { })
-                        .Action("gear", IconMid(SvgIcon.Gear, Palette.TMid, 15), () => { })
+                        .Action("search", IconDraw(OrigamiIconSet.Search, Palette.TMid), () => { })
+                        .Action("bolt", IconDraw(OrigamiIconSet.Bolt, Palette.TMid), () => { })
+                        .Action("gear", IconDraw(OrigamiIconSet.Gear, Palette.TMid), () => { })
                         .Avatar("k", "K")
                         .Show();
                 }
@@ -309,8 +309,8 @@ namespace OrigamiSample
         private (string Label, Action<ContextBuilder> Build)[] MenuBarMenus() => new (string, Action<ContextBuilder>)[]
         {
             ("File", b => b
-                .Item("New Scene", () => { }, iconDraw: IconDraw(SvgIcon.Plus, Palette.TMid), shortcut: "Ctrl N")
-                .Item("Open Scene", () => { }, iconDraw: IconDraw(SvgIcon.FolderOpen, Palette.TMid), shortcut: "Ctrl O")
+                .Item("New Scene", () => { }, iconDraw: IconDraw(OrigamiIconSet.Plus, Palette.TMid), shortcut: "Ctrl N")
+                .Item("Open Scene", () => { }, iconDraw: IconDraw(OrigamiIconSet.FolderOpen, Palette.TMid), shortcut: "Ctrl O")
                 .Submenu("Open Recent", s => s
                     .Item("Planet.scene", () => { })
                     .Item("Terrain.scene", () => { })
@@ -318,7 +318,7 @@ namespace OrigamiSample
                     .Separator()
                     .Item("Clear Recent", () => { }))
                 .Separator()
-                .Item("Save", () => { }, iconDraw: IconDraw(SvgIcon.Doc, Palette.TMid), shortcut: "Ctrl S")
+                .Item("Save", () => { }, iconDraw: IconDraw(OrigamiIconSet.Document, Palette.TMid), shortcut: "Ctrl S")
                 .Item("Save As...", () => { }, shortcut: "Ctrl Shift S")
                 .Separator()
                 .Item("Exit", () => { }, shortcut: "Alt F4")),
@@ -328,24 +328,24 @@ namespace OrigamiSample
                 .Item("Redo", () => { }, enabled: false, shortcut: "Ctrl Y")
                 .Separator()
                 .Item("Cut", () => { }, shortcut: "Ctrl X")
-                .Item("Copy", () => { }, iconDraw: IconDraw(SvgIcon.Layers, Palette.TMid), shortcut: "Ctrl C")
+                .Item("Copy", () => { }, iconDraw: IconDraw(OrigamiIconSet.Layers, Palette.TMid), shortcut: "Ctrl C")
                 .Item("Paste", () => { }, shortcut: "Ctrl V")
                 .Separator()
-                .Item("Project Settings", () => { }, iconDraw: IconDraw(SvgIcon.Gear, Palette.TMid))),
+                .Item("Project Settings", () => { }, iconDraw: IconDraw(OrigamiIconSet.Gear, Palette.TMid))),
 
             ("Assets", b => b
                 .Submenu("Create", s => s
-                    .Item("Folder", () => { }, iconDraw: IconDraw(SvgIcon.Folder, Palette.C(251, 191, 36)))
-                    .Item("Material", () => { }, iconDraw: IconDraw(SvgIcon.Material, Palette.C(217, 107, 216)))
-                    .Item("Script", () => { }, iconDraw: IconDraw(SvgIcon.Script, Palette.C(74, 222, 128)))
+                    .Item("Folder", () => { }, iconDraw: IconDraw(OrigamiIconSet.Folder, Palette.C(251, 191, 36)))
+                    .Item("Material", () => { }, iconDraw: IconDraw(OrigamiIconSet.Material, Palette.C(217, 107, 216)))
+                    .Item("Script", () => { }, iconDraw: IconDraw(OrigamiIconSet.Script, Palette.C(74, 222, 128)))
                     .Item("Shader", () => { }))
-                .Item("Import New Asset...", () => { }, iconDraw: IconDraw(SvgIcon.FolderOpen, Palette.TMid))
+                .Item("Import New Asset...", () => { }, iconDraw: IconDraw(OrigamiIconSet.FolderOpen, Palette.TMid))
                 .Item("Refresh", () => { }, shortcut: "Ctrl R")
                 .Separator()
-                .Item("Show in Explorer", () => { }, iconDraw: IconDraw(SvgIcon.Link, Palette.TMid))),
+                .Item("Show in Explorer", () => { }, iconDraw: IconDraw(OrigamiIconSet.Link, Palette.TMid))),
 
             ("GameObject", b => b
-                .Item("Create Empty", () => { }, iconDraw: IconDraw(SvgIcon.Cube, Palette.Acc300))
+                .Item("Create Empty", () => { }, iconDraw: IconDraw(OrigamiIconSet.Cube, Palette.Acc300))
                 .Submenu("3D Object", s => s
                     .Item("Cube", () => { })
                     .Item("Sphere", () => { })
@@ -369,18 +369,11 @@ namespace OrigamiSample
                 .Item("Console", () => { })),
 
             ("Help", b => b
-                .Item("Documentation", () => { }, iconDraw: IconDraw(SvgIcon.Link, Palette.TMid))
-                .Item("About Prowl", () => { }, iconDraw: IconDraw(SvgIcon.Cube, Palette.Acc300))),
+                .Item("Documentation", () => { }, iconDraw: IconDraw(OrigamiIconSet.Link, Palette.TMid))
+                .Item("About Prowl", () => { }, iconDraw: IconDraw(OrigamiIconSet.Cube, Palette.Acc300))),
         };
 
         // A vector icon centered at `size` within whatever rect it's handed (for widget icon slots).
-        private static Action<Canvas, Rect> IconMid(string path, Color color, float size) => (vg, r) =>
-        {
-            float ox = (float)(r.Min.X + (r.Size.X - size) / 2);
-            float oy = (float)(r.Min.Y + (r.Size.Y - size) / 2);
-            SvgIcon.Draw(vg, path, ox, oy, size, color, 1.6f);
-        };
-
         // ── Slider ───────────────────────────────────────────────────────────────
         private void SliderDemo(Paper P)
         {
@@ -434,7 +427,7 @@ namespace OrigamiSample
             };
             var pathItems = new[]
             {
-                new BreadcrumbItem("~", IconDraw(SvgIcon.Folder, Palette.C(251, 191, 36))),
+                new BreadcrumbItem("~", IconDraw(OrigamiIconSet.Folder, Palette.C(251, 191, 36))),
                 new BreadcrumbItem("prowl"), new BreadcrumbItem("chimera"),
             };
             using (P.Column("bcdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
@@ -494,13 +487,13 @@ namespace OrigamiSample
         {
             var t = Origami.Table(P, "tbl", _tableSel, i => _tableSel = i)
                 .Column("Name", 1.7f, sortable: true).Column("Type", 1f).Column("Size", 0.8f).Column("Modified", 1f);
-            t.Row().Cell("PlanetGen_Mesh", Palette.THi, IconDraw(SvgIcon.Cube, Palette.C(168, 85, 247)))
+            t.Row().Cell("PlanetGen_Mesh", Palette.THi, IconDraw(OrigamiIconSet.Cube, Palette.C(168, 85, 247)))
                 .Cell("Mesh", Palette.TMid).Cell("2.4 MB", Palette.TLo).Cell("2m ago", Palette.TLo);
-            t.Row().Cell("Atmosphere_M", Palette.THi, IconDraw(SvgIcon.Material, Palette.C(217, 107, 216)))
+            t.Row().Cell("Atmosphere_M", Palette.THi, IconDraw(OrigamiIconSet.Material, Palette.C(217, 107, 216)))
                 .Cell("Material", Palette.TMid).Cell("512 KB", Palette.TLo).Cell("1h ago", Palette.TLo);
-            t.Row().Cell("PlanetGenerator", Palette.THi, IconDraw(SvgIcon.Script, Palette.C(74, 222, 128)))
+            t.Row().Cell("PlanetGenerator", Palette.THi, IconDraw(OrigamiIconSet.Script, Palette.C(74, 222, 128)))
                 .Cell("Script", Palette.TMid).Cell("8 KB", Palette.TLo).Cell("1h ago", Palette.TLo);
-            t.Row().Cell("Grass_Albedo", Palette.THi, IconDraw(SvgIcon.Layers, Palette.C(96, 165, 250)))
+            t.Row().Cell("Grass_Albedo", Palette.THi, IconDraw(OrigamiIconSet.Layers, Palette.C(96, 165, 250)))
                 .Cell("Texture", Palette.TMid).Cell("4.0 MB", Palette.TLo).Cell("yesterday", Palette.TLo);
             t.Show();
         }
@@ -508,14 +501,14 @@ namespace OrigamiSample
         // ── Tree ─────────────────────────────────────────────────────────────────
         private void TreeDemo(Paper P)
         {
-            Action<Canvas, Rect> folder = IconDraw(SvgIcon.Folder, Palette.C(251, 191, 36));
+            IOrigamiIcon folder = IconDraw(OrigamiIconSet.Folder, Palette.C(251, 191, 36));
             var nodes = new List<TreeNode>
             {
-                new() { Id = "qp", Label = "Quadtree Planet", Depth = 0, HasChildren = true, DefaultExpanded = true, IconDraw = IconDraw(SvgIcon.Globe, Palette.Acc) },
-                new() { Id = "hero", Label = "Character_Hero", Depth = 1, IsLeaf = true, IconDraw = IconDraw(SvgIcon.Cube, Palette.C(96, 165, 250)) },
+                new() { Id = "qp", Label = "Quadtree Planet", Depth = 0, HasChildren = true, DefaultExpanded = true, IconDraw = IconDraw(OrigamiIconSet.Globe, Palette.Acc) },
+                new() { Id = "hero", Label = "Character_Hero", Depth = 1, IsLeaf = true, IconDraw = IconDraw(OrigamiIconSet.Cube, Palette.C(96, 165, 250)) },
                 new() { Id = "env", Label = "Environment", Depth = 1, HasChildren = true, DefaultExpanded = true, IconDraw = folder },
                 new() { Id = "props", Label = "Props", Depth = 2, IsLeaf = true, IconDraw = folder },
-                new() { Id = "anim", Label = "Animaster", Depth = 1, IsLeaf = true, IconDraw = IconDraw(SvgIcon.Bolt, Palette.C(74, 222, 128)) },
+                new() { Id = "anim", Label = "Animaster", Depth = 1, IsLeaf = true, IconDraw = IconDraw(OrigamiIconSet.Bolt, Palette.C(74, 222, 128)) },
             };
             Origami.Tree(P, "hierarchy", 240f, 176f).Nodes(nodes)
                 .IsSelected(n => n.Id == _treeSel).OnSelect(e => _treeSel = e.Node.Id).Show();
@@ -546,7 +539,7 @@ namespace OrigamiSample
                     P.Box("lblg1").Width(16);
                     Origami.Label(P, "lbdis", "Disabled").Disabled().Show();
                     P.Box("lblg2").Width(16);
-                    Origami.Label(P, "lbico", "With icon").LeadingIcon(IconDraw(SvgIcon.Bolt, Palette.Acc300), 14).Show();
+                    Origami.Label(P, "lbico", "With icon").LeadingIcon(IconDraw(OrigamiIconSet.Bolt, Palette.Acc300), 14).Show();
                     P.Box("lblg3").Width(16);
                     Origami.Label(P, "lbcode", "code_label").Code().Show();
                 }
@@ -591,7 +584,7 @@ namespace OrigamiSample
                 {
                     DemoLabel(P, "hdl1", "Component / Foldout header");
                     Origami.Header(P, "hdcomp", "Rigidbody").Component()
-                        .Chevron(true).IconDraw(IconDraw(SvgIcon.Cube, Palette.Acc300)).Checkbox(true).More().Show();
+                        .Chevron(true).Icon(IconDraw(OrigamiIconSet.Cube, Palette.Acc300)).Checkbox(true).More().Show();
                 }
                 using (P.Column("hdb2").Width(P.Percent(100)).Height(P.Auto).ColBetween(4).Enter())
                 {
@@ -607,7 +600,7 @@ namespace OrigamiSample
             using (P.Column("fldemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(7).Enter())
             {
                 Origami.Foldout(P, "fldA", "Transform").Expanded(_foldA, v => _foldA = v)
-                    .Icon(IconDraw(SvgIcon.Cube, Palette.Acc300))
+                    .Icon(IconDraw(OrigamiIconSet.Cube, Palette.Acc300))
                     .Body(() => Origami.Label(P, "fldA_b", "Position, Rotation & Scale fields").Body().TextColor(Palette.TMid).Show());
                 Origami.Foldout(P, "fldB", "Advanced").Expanded(_foldB, v => _foldB = v)
                     .Body(() => Origami.Label(P, "fldB_b", "Collapsed section content.").Body().TextColor(Palette.TMid).Show());
@@ -617,11 +610,11 @@ namespace OrigamiSample
         // ── Accordion (single-open stack of foldouts) ────────────────────────────
         private void AccordionDemo(Paper P)
         {
-            (string id, string title, string icon, string body)[] items =
+            (string id, string title, SvgIcon icon, string body)[] items =
             {
-                ("mesh", "Mesh Renderer", SvgIcon.Cube, "Casts shadows - 2 materials"),
-                ("mat", "Material", SvgIcon.Material, "Albedo, Metallic & Normal maps"),
-                ("coll", "Collider", SvgIcon.Layers, "Convex - Physics layer 3"),
+                ("mesh", "Mesh Renderer", OrigamiIconSet.Cube, "Casts shadows - 2 materials"),
+                ("mat", "Material", OrigamiIconSet.Material, "Albedo, Metallic & Normal maps"),
+                ("coll", "Collider", OrigamiIconSet.Layers, "Convex - Physics layer 3"),
             };
             var acc = Origami.Accordion(P, "acdemo").DefaultOpen("mesh");
             foreach (var it in items)
@@ -658,7 +651,7 @@ namespace OrigamiSample
             using (P.Column("todemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
             {
                 using (P.Row("tor1").Width(P.Percent(100)).Height(P.Auto).Enter())
-                    Origami.Button(P, "toTrig", "Trigger toast").Primary().LeadingIcon(IconDraw(SvgIcon.Bolt, Palette.White))
+                    Origami.Button(P, "toTrig", "Trigger toast").Primary().LeadingIcon(IconDraw(OrigamiIconSet.Bolt, Palette.White))
                         .OnClick(() => Origami.Toast("Scene saved").Message("just now").Success().Show()).Show();
 
                 DemoLabel(P, "tol", "Variants");
@@ -680,7 +673,7 @@ namespace OrigamiSample
                     P.Box("tipg1").Width(8);
                     Origami.Button(P, "tipb2", "Rebuild").Tooltip("Regenerate the planet mesh").OnClick(() => { }).Show();
                     P.Box("tipg2").Width(8);
-                    Origami.Button(P, "tipb3", "").IconOnly().LeadingIcon(IconDraw(SvgIcon.Gear, Palette.THi)).Tooltip("Settings").Show();
+                    Origami.Button(P, "tipb3", "").IconOnly().LeadingIcon(IconDraw(OrigamiIconSet.Gear, Palette.THi)).Tooltip("Settings").Show();
                 }
             }
         }
@@ -855,7 +848,7 @@ namespace OrigamiSample
                 using (P.Row("pghead").Width(P.Percent(100)).Height(P.Auto).Padding(11, 11, 8, 8)
                     .BackgroundColor(Palette.GlassIn).RoundedTop(9).Enter())
                 {
-                    Icon(P, "pghico", SvgIcon.Cube, 13, Palette.Acc300, 1.5f, 0);
+                    Icon(P, "pghico", OrigamiIconSet.Cube, 13, Palette.Acc300, 1.5f, 0);
                     P.Box("pght").Width(P.Auto).Height(P.Auto).Margin(9, 0, P.Stretch(), P.Stretch())
                         .Text("Rigidbody", _geistSemi).FontSize(12 * Palette.TS).TextColor(Palette.THi).Alignment(TextAlignment.MiddleLeft);
                 }
@@ -974,9 +967,9 @@ namespace OrigamiSample
             using (P.Column("moddemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(12).Enter())
             {
                 using (P.Row("modtr").Width(P.Percent(100)).Height(P.Auto).Enter())
-                    Origami.Button(P, "modopen", "Open modal").Primary().LeadingIcon(IconDraw(SvgIcon.Expand, Palette.White))
+                    Origami.Button(P, "modopen", "Open modal").Primary().LeadingIcon(IconDraw(OrigamiIconSet.Expand, Palette.White))
                         .OnClick(() => Origami.Modal("Regenerate Planet")
-                            .Icon(IconDraw(SvgIcon.Bolt, Palette.Acc300))
+                            .Icon(IconDraw(OrigamiIconSet.Bolt, Palette.Acc300))
                             .Content(ModalBody("modbig_msg", "Rebuild the quadtree mesh using the current seed and atmosphere settings? This may take a few seconds."))
                             .Button("Cancel", () => Modal.Pop())
                             .PrimaryButton("Regenerate", () => Modal.Pop())
@@ -984,7 +977,7 @@ namespace OrigamiSample
 
                 DemoLabel(P, "modl", "Anatomy");
                 Origami.Modal("Delete asset?")
-                    .Icon(IconDraw(SvgIcon.Warn, Palette.C(251, 191, 36)))
+                    .Icon(IconDraw(OrigamiIconSet.Warning, Palette.C(251, 191, 36)))
                     .Content(ModalBody("modmini_msg", "This will permanently remove \"PlanetGen_Mesh\". This cannot be undone."))
                     .Button("Cancel", () => { })
                     .DangerButton("Delete", () => { })
@@ -997,12 +990,12 @@ namespace OrigamiSample
         {
             ContextMenu.Preview(P, "ctxdemo", b => b
                 .Header("PlanetGen_Mesh")
-                .Item("Open", () => { }, iconDraw: IconDraw(SvgIcon.FolderOpen, Palette.TMid), shortcut: "Ctrl O")
-                .Item("Duplicate", () => { }, iconDraw: IconDraw(SvgIcon.Layers, Palette.TMid), shortcut: "Ctrl D")
-                .Item("Rename", () => { }, iconDraw: IconDraw(SvgIcon.Pencil, Palette.TMid), shortcut: "F2")
+                .Item("Open", () => { }, iconDraw: IconDraw(OrigamiIconSet.FolderOpen, Palette.TMid), shortcut: "Ctrl O")
+                .Item("Duplicate", () => { }, iconDraw: IconDraw(OrigamiIconSet.Layers, Palette.TMid), shortcut: "Ctrl D")
+                .Item("Rename", () => { }, iconDraw: IconDraw(OrigamiIconSet.Pencil, Palette.TMid), shortcut: "F2")
                 .Separator()
-                .Item("Copy Path", () => { }, iconDraw: IconDraw(SvgIcon.Link, Palette.TMid))
-                .Item("Delete", () => { }, iconDraw: IconDraw(SvgIcon.Trash, Palette.C(251, 113, 133)), shortcut: "Del", danger: true));
+                .Item("Copy Path", () => { }, iconDraw: IconDraw(OrigamiIconSet.Link, Palette.TMid))
+                .Item("Delete", () => { }, iconDraw: IconDraw(OrigamiIconSet.Trash, Palette.C(251, 113, 133)), shortcut: "Del", danger: true));
         }
 
         // ── Progress Bar ─────────────────────────────────────────────────────────
@@ -1036,7 +1029,7 @@ namespace OrigamiSample
             using (P.Column("fddwrap").Width(P.Percent(100)).Height(P.Auto).ColBetween(10).Enter())
             {
                 using (P.Row("fdtr").Width(P.Percent(100)).Height(P.Auto).Enter())
-                    Origami.Button(P, "fdopen", "Open dialog").Primary().LeadingIcon(IconDraw(SvgIcon.FolderOpen, Palette.White))
+                    Origami.Button(P, "fdopen", "Open dialog").Primary().LeadingIcon(IconDraw(OrigamiIconSet.FolderOpen, Palette.White))
                         .OnClick(() => FileDialog.Open(FileDialogMode.Open, _ => { }, AppContext.BaseDirectory)).Show();
 
                 FileDialog.DrawEmbedded(P, "fddemo", 640f, 340f, startPath: AppContext.BaseDirectory);
@@ -1069,9 +1062,9 @@ namespace OrigamiSample
                 DemoLabel(P, "bgl2", "Segmented / icons");
                 using (P.Row("bgr2").Width(P.Percent(100)).Height(P.Auto).Enter())
                     Origami.ButtonGroup(P, "bgSeg", _bgSeg, v => _bgSeg = v).Segmented()
-                        .Item("", IconDraw(SvgIcon.List, Palette.TMid))
-                        .Item("", IconDraw(SvgIcon.Grid3, Palette.TMid))
-                        .Item("", IconDraw(SvgIcon.Layers, Palette.TMid)).Show();
+                        .Item("", IconDraw(OrigamiIconSet.List, Palette.TMid))
+                        .Item("", IconDraw(OrigamiIconSet.Grid, Palette.TMid))
+                        .Item("", IconDraw(OrigamiIconSet.Layers, Palette.TMid)).Show();
             }
         }
 
@@ -1114,9 +1107,9 @@ namespace OrigamiSample
             {
                 DemoLabel(P, "tal1", "Underline");
                 Origami.Tabs(P, "tabU", _tabU, v => _tabU = v).Underline()
-                    .Tab("Scene", IconDraw(SvgIcon.Cube, Palette.THi))
-                    .Tab("Game", IconDraw(SvgIcon.Layers, Palette.THi))
-                    .Tab("Assets", IconDraw(SvgIcon.Folder, Palette.THi), "12").Show();
+                    .Tab("Scene", IconDraw(OrigamiIconSet.Cube, Palette.THi))
+                    .Tab("Game", IconDraw(OrigamiIconSet.Layers, Palette.THi))
+                    .Tab("Assets", IconDraw(OrigamiIconSet.Folder, Palette.THi), "12").Show();
 
                 P.Box("tabgap").Width(P.Percent(100)).Height(14);
                 DemoLabel(P, "tal2", "Pills");
@@ -1142,9 +1135,9 @@ namespace OrigamiSample
                 DemoLabel(P, "bl2", "With icons");
                 using (P.Row("br2").Width(P.Percent(100)).Height(P.Auto).Margin(0, 0, 0, 12).Enter())
                 {
-                    Btn(P, "bcre", "Create", b => b.Primary().LeadingIcon(IconDraw(SvgIcon.Plus, Palette.White)));
-                    Btn(P, "bopn", "Open", b => b.LeadingIcon(IconDraw(SvgIcon.FolderOpen, Palette.THi)));
-                    Btn(P, "bgear", "", b => b.IconOnly().LeadingIcon(IconDraw(SvgIcon.Gear, Palette.THi)));
+                    Btn(P, "bcre", "Create", b => b.Primary().LeadingIcon(IconDraw(OrigamiIconSet.Plus, Palette.White)));
+                    Btn(P, "bopn", "Open", b => b.LeadingIcon(IconDraw(OrigamiIconSet.FolderOpen, Palette.THi)));
+                    Btn(P, "bgear", "", b => b.IconOnly().LeadingIcon(IconDraw(OrigamiIconSet.Gear, Palette.THi)));
                     Btn(P, "bdis", "Disabled", b => b.Primary().Disabled());
                 }
 
@@ -1186,8 +1179,7 @@ namespace OrigamiSample
             }
         }
 
-        private static Action<Canvas, Rect> IconDraw(string path, Color color)
-            => (vg, r) => SvgIcon.Draw(vg, path, (float)r.Min.X, (float)r.Min.Y, (float)r.Size.X, color, 1.6f);
+        private static IOrigamiIcon IconDraw(SvgIcon icon, Color color) => icon.Tinted(color);
 
         private void Btn(Paper P, string id, string label, Func<ButtonBuilder, ButtonBuilder> cfg)
         {
@@ -1209,10 +1201,10 @@ namespace OrigamiSample
                 .Text(text, _mono).FontSize(9.5f * Palette.TS).TextColor(Palette.TLo).Alignment(TextAlignment.MiddleCenter);
         }
 
-        private void Icon(Paper P, string id, string path, float size, Color color, float sw, float leftM)
+        private void Icon(Paper P, string id, SvgIcon icon, float size, Color color, float sw, float leftM)
         {
-            using (P.Box(id).Size(size).Margin(leftM, 0, P.Stretch(), P.Stretch()).Enter())
-                P.Draw((vg, rect) => SvgIcon.Draw(vg, path, (float)rect.Min.X, (float)rect.Min.Y, size, color, sw));
+            P.Box(id).Size(size).Margin(leftM, 0, P.Stretch(), P.Stretch())
+                .Icon(P, icon, color, sw);
         }
     }
 }

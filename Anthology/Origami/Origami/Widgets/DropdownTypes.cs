@@ -320,12 +320,11 @@ internal static class DropdownInternal
                     .TabIndex(0)
                     .Enter())
                 {
-                    if (!string.IsNullOrEmpty(icons.Search))
+                    if (icons.Search != null)
                     {
                         paper.Box($"{p.Id}_search_ic")
-                            .Width(14)
-                            .Alignment(TextAlignment.MiddleLeft)
-                            .Text(icons.Search, font).TextColor(ink.C300).FontSize(p.Theme.Metrics.FontSize * 0.85f);
+                            .Width(14).Height(14).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                            .Icon(paper, icons.Search, ink.C300);
                     }
 
                     paper.Box($"{p.Id}_search_tf")
@@ -346,13 +345,12 @@ internal static class DropdownInternal
                             placeholderColor: ink.C300,
                             intID: (p.Id + "_search").GetHashCode());
 
-                    if (!string.IsNullOrEmpty(searchText) && !string.IsNullOrEmpty(icons.Close))
+                    if (!string.IsNullOrEmpty(searchText) && icons.Close != null)
                     {
                         paper.Box($"{p.Id}_search_clr")
                             .Rounded(8).Size(16)
-                            .Alignment(TextAlignment.MiddleCenter)
                             .Hovered.BackgroundColor(p.Theme.Neutral.C300).End()
-                            .Text(icons.Close, font).TextColor(ink.C400).FontSize(p.Theme.Metrics.FontSize)
+                            .Icon(paper, icons.Close, ink.C400, 1.3f)
                             .OnClick(e =>
                             {
                                 paper.SetElementStorage(p.TriggerHandle, KeySearch, string.Empty);
@@ -490,12 +488,9 @@ internal static class DropdownInternal
 
                     paper.Box($"{p.Id}_pg_prev")
                         .Width(20).Height(paginationH).Rounded(3)
-                        .Alignment(TextAlignment.MiddleCenter)
                         .BackgroundColor(canPrev ? p.Theme.Neutral.C300 : p.Theme.Neutral.C200)
                         .Hovered.BackgroundColor(canPrev ? ramp.C400 : p.Theme.Neutral.C200).End()
-                        .Text(string.IsNullOrEmpty(icons.ChevronLeft) ? "<" : icons.ChevronLeft, font)
-                        .TextColor(canPrev ? ink.C500 : ink.C300)
-                        .FontSize(p.Theme.Metrics.FontSize * 0.85f)
+                        .Icon(paper, icons.ChevronLeft, canPrev ? ink.C500 : ink.C300, size: 13f)
                         .OnClick(e =>
                         {
                             if (!canPrev) return;
@@ -511,12 +506,9 @@ internal static class DropdownInternal
 
                     paper.Box($"{p.Id}_pg_next")
                         .Width(20).Height(paginationH).Rounded(3)
-                        .Alignment(TextAlignment.MiddleCenter)
                         .BackgroundColor(canNext ? p.Theme.Neutral.C300 : p.Theme.Neutral.C200)
                         .Hovered.BackgroundColor(canNext ? ramp.C400 : p.Theme.Neutral.C200).End()
-                        .Text(string.IsNullOrEmpty(icons.ChevronRight) ? ">" : icons.ChevronRight, font)
-                        .TextColor(canNext ? ink.C500 : ink.C300)
-                        .FontSize(p.Theme.Metrics.FontSize * 0.85f)
+                        .Icon(paper, icons.ChevronRight, canNext ? ink.C500 : ink.C300, size: 13f)
                         .OnClick(e =>
                         {
                             if (!canNext) return;

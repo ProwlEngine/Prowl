@@ -34,11 +34,10 @@ public sealed class TreeNode
     public string Icon = "";
 
     /// <summary>
-    /// Optional vector icon painter. Given the canvas and a centred square icon rect (~13px),
-    /// the host draws a coloured node-type icon. Takes precedence over <see cref="Icon"/> and
-    /// works without an icon font (Origami's glyphs are empty). The rect is in screen space.
+    /// Optional node-type icon (~13px), drawn tinted to <see cref="IconColor"/>. Takes precedence
+    /// over the glyph <see cref="Icon"/>.
     /// </summary>
-    public Action<Canvas, Rect>? IconDraw;
+    public IOrigamiIcon? IconDraw;
 
     /// <summary>Icon color override. Null = use default ink color.</summary>
     public Color? IconColor;
@@ -687,7 +686,8 @@ public sealed class TreeBuilder
         // ---- Node type icon (~13px). Vector hook preferred; glyph is a legacy fallback. ----
         if (node.IconDraw != null)
         {
-            var draw = node.IconDraw;
+            var icon = node.IconDraw;
+            Color iconCol = node.IconColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
             using (_paper.Box($"{rowId}_ico")
                 .Width(13).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
@@ -699,9 +699,9 @@ public sealed class TreeBuilder
                     const float size = 13f;
                     float cx = (float)(r.Min.X + r.Size.X * 0.5);
                     float cy = (float)(r.Min.Y + r.Size.Y * 0.5);
-                    draw(canvas, new Rect(
+                    icon.Draw(canvas, new Rect(
                         new Float2(cx - size * 0.5f, cy - size * 0.5f),
-                        new Float2(cx + size * 0.5f, cy + size * 0.5f)));
+                        new Float2(cx + size * 0.5f, cy + size * 0.5f)), iconCol);
                 });
             }
         }

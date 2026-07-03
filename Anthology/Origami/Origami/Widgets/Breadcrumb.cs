@@ -42,8 +42,8 @@ public sealed class BreadcrumbItem
     public string Icon;
     public object? UserData;
 
-    /// <summary>Optional vector leading icon (host paints into the slot rect). Works without an icon font.</summary>
-    public Action<Prowl.Quill.Canvas, Prowl.Vector.Rect>? IconDraw;
+    /// <summary>Optional leading icon, drawn tinted to the crumb's text colour.</summary>
+    public IOrigamiIcon? IconDraw;
 
     public BreadcrumbItem(string label, string icon = "", object? userData = null)
     {
@@ -52,7 +52,7 @@ public sealed class BreadcrumbItem
         UserData = userData;
     }
 
-    public BreadcrumbItem(string label, Action<Prowl.Quill.Canvas, Prowl.Vector.Rect> iconDraw, object? userData = null)
+    public BreadcrumbItem(string label, IOrigamiIcon iconDraw, object? userData = null)
     {
         Label = label;
         Icon = string.Empty;
@@ -163,20 +163,22 @@ public sealed class BreadcrumbBuilder
 
         int activeIdx = _activeIndex ?? (_highlightLast ? _items.Count - 1 : -1);
         float fontSize = m.FontSize;
-        float sepFontSize = m.FontSize - 2;
+
+        IOrigamiIcon? sepIcon = _separator switch
+        {
+            BreadcrumbSeparator.Chevron => _theme.Icons.ChevronRight,
+            BreadcrumbSeparator.Arrow => _theme.Icons.ArrowRight,
+            _ => null,
+        };
 
         string sepText = _separator switch
         {
-            BreadcrumbSeparator.Chevron => _theme.Icons.ChevronRight,
             BreadcrumbSeparator.Slash => "/",
             BreadcrumbSeparator.Backslash => "\\",
             BreadcrumbSeparator.Dot => ".",
-            BreadcrumbSeparator.Arrow => _theme.Icons.ArrowRight,
             BreadcrumbSeparator.Custom => _customSeparator,
             _ => "",
         };
-
-        bool isSepIcon = _separator == BreadcrumbSeparator.Chevron || _separator == BreadcrumbSeparator.Arrow;
 
         using (_paper.Row(_id).Width(_width).Height(_height).RowBetween(0).Enter())
         {
@@ -192,34 +194,18 @@ public sealed class BreadcrumbBuilder
                 // Separator (before all except first)
                 if (i > 0 && _separator != BreadcrumbSeparator.None)
                 {
-                    if (isSepIcon && string.IsNullOrEmpty(sepText))
+                    if (sepIcon != null)
                     {
-                        // Vector chevron/arrow fallback (no icon font bundled).
-                        bool arrow = _separator == BreadcrumbSeparator.Arrow;
-                        Color sepCol = ink.C100;
+                        Color sepCol = ink.C300;
                         _paper.Box($"{_id}_sep_{i}")
                             .Width(14).Height(_height)
                             .IsNotInteractable()
                             .OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
                             {
+                                float sz = 12f;
                                 float cx = (float)(rr.Min.X + rr.Size.X / 2), cy = (float)(rr.Min.Y + rr.Size.Y / 2);
-                                canvas.SaveState();
-                                canvas.SetStrokeColor(sepCol);
-                                canvas.SetStrokeWidth(1.3f);
-                                canvas.SetStrokeCap(EndCapStyle.Round);
-                                canvas.SetStrokeJoint(JointStyle.Round);
-                                canvas.BeginPath();
-                                if (arrow)
-                                {
-                                    canvas.MoveTo(cx - 3.5f, cy); canvas.LineTo(cx + 3.5f, cy);
-                                    canvas.MoveTo(cx + 1f, cy - 3f); canvas.LineTo(cx + 3.5f, cy); canvas.LineTo(cx + 1f, cy + 3f);
-                                }
-                                else
-                                {
-                                    canvas.MoveTo(cx - 1.8f, cy - 3.4f); canvas.LineTo(cx + 1.8f, cy); canvas.LineTo(cx - 1.8f, cy + 3.4f);
-                                }
-                                canvas.Stroke();
-                                canvas.RestoreState();
+                                var ir = new Prowl.Vector.Rect(new Prowl.Vector.Float2(cx - sz / 2, cy - sz / 2), new Prowl.Vector.Float2(cx + sz / 2, cy + sz / 2));
+                                sepIcon.Draw(canvas, ir, sepCol, 1.3f);
                             }));
                     }
                     else if (!string.IsNullOrEmpty(sepText))
@@ -230,7 +216,7 @@ public sealed class BreadcrumbBuilder
                             .IsNotInteractable()
                             .Text(sepText, font)
                             .TextColor(ink.C300)
-                            .FontSize(isSepIcon ? sepFontSize : fontSize)
+                            .FontSize(fontSize)
                             .Alignment(TextAlignment.MiddleCenter);
                     }
                 }
@@ -254,7 +240,8 @@ public sealed class BreadcrumbBuilder
                     {
                         if (item.IconDraw != null)
                         {
-                            var draw = item.IconDraw;
+                            var icon = item.IconDraw;
+                            Color icoCol = isActive ? textColor : ink.C400;
                             float isz = fontSize;
                             _paper.Box($"{_id}_ico_{i}")
                                 .Width(m.IconWidth).Height(_height)
@@ -263,7 +250,7 @@ public sealed class BreadcrumbBuilder
                                 {
                                     float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f);
                                     float iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
-                                    draw(canvas, new Prowl.Vector.Rect(new Prowl.Vector.Float2(ix, iy), new Prowl.Vector.Float2(ix + isz, iy + isz)));
+                                    icon.Draw(canvas, new Prowl.Vector.Rect(new Prowl.Vector.Float2(ix, iy), new Prowl.Vector.Float2(ix + isz, iy + isz)), icoCol);
                                 }));
                         }
                         else

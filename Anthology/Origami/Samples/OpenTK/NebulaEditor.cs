@@ -158,7 +158,7 @@ namespace OrigamiSample
                 using (P.Box("WmLogo").Size(20).Rounded(6).Margin(0, 0, P.Stretch(), P.Stretch())
                     .BackgroundLinearGradient(0, 0, 1, 1, Palette.Acc, Palette.C(189, 107, 255))
                     .Enter())
-                    P.Draw((vg, r) => SvgIcon.Draw(vg, SvgIcon.Mark, (float)r.Min.X + 4, (float)r.Min.Y + 4, 12, Palette.White, 1.2f));
+                    P.Draw((vg, r) => OrigamiIconSet.Mark.Draw(vg, new Rect(new Float2((float)r.Min.X + 4, (float)r.Min.Y + 4), new Float2((float)r.Min.X + 16, (float)r.Min.Y + 16)), Palette.White, 1.2f));
 
                 P.Box("WmText").Width(P.Auto).Height(P.Auto).Margin(9, 0, P.Stretch(), P.Stretch())
                     .Text("PROWL", _grotesk).FontSize(13 * Palette.TS).LetterSpacing(3f).TextColor(Palette.THi).Alignment(TextAlignment.MiddleLeft);

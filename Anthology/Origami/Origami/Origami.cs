@@ -537,6 +537,10 @@ public static class Origami
     public static ButtonBuilder IconButton(Paper paper, string id, string glyph, Action? onClick = null)
         => new ButtonBuilder(paper, id, string.Empty, onClick, Current).IconOnly().LeadingIcon(glyph);
 
+    /// <summary>Square icon-only button drawn from an <see cref="IOrigamiIcon"/>.</summary>
+    public static ButtonBuilder IconButton(Paper paper, string id, IOrigamiIcon? icon, Action? onClick = null)
+        => new ButtonBuilder(paper, id, string.Empty, onClick, Current).IconOnly().LeadingIcon(icon);
+
     /// <summary>
     /// Begin building a segmented control. Caller supplies the current selected index and a setter;
     /// chain <see cref="ButtonGroupBuilder.Item"/> for each segment.

@@ -92,6 +92,7 @@ public sealed class LabelBuilder
     // Leading vector-draw hook (used for semantic dots and any glyph-less icon,
     // since OrigamiIcons ships empty strings by default).
     private Action<Canvas, Rect>? _leadingDraw;
+    private IOrigamiIcon? _leadingIconObj;
     private float _leadingDrawWidth;
     private bool _dot;
     private Color? _dotColor;
@@ -322,10 +323,10 @@ public sealed class LabelBuilder
     /// <summary>Per-glyph tracking in em (relative to the resolved font size).</summary>
     public LabelBuilder LetterSpacing(float em) { _letterSpacingEm = em; return this; }
 
-    /// <summary>Vector leading icon drawn into a reserved <paramref name="width"/>-wide, row-tall cell.</summary>
-    public LabelBuilder LeadingIcon(Action<Canvas, Rect> draw, float width)
+    /// <summary>Leading icon drawn into a reserved <paramref name="width"/>-wide, row-tall cell.</summary>
+    public LabelBuilder LeadingIcon(IOrigamiIcon? icon, float width)
     {
-        _leadingDraw = draw;
+        _leadingIconObj = icon;
         _leadingDrawWidth = MathF.Max(1f, width);
         return this;
     }
@@ -350,6 +351,11 @@ public sealed class LabelBuilder
         // A semantic dot is just a synthesised leading vector-draw (variant-coloured circle).
         Action<Canvas, Rect>? leadingDraw = _leadingDraw;
         float leadingDrawWidth = _leadingDrawWidth;
+        if (_leadingIconObj != null && leadingDraw == null)
+        {
+            var icon = _leadingIconObj;
+            leadingDraw = (cv, r) => icon.Draw(cv, r, textColor);
+        }
         if (_dot && leadingDraw == null)
         {
             Color dotColor = _dotColor ?? textColor;
