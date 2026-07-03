@@ -183,4 +183,19 @@ public sealed partial class PropertySet
         }
         return entry;
     }
+
+
+    /// <summary>
+    /// Creates an independent copy of this set's current entries. Backends that defer consumption of a
+    /// <see cref="PropertySet"/> past the call to <see cref="CommandBuffer.SetProperties"/> (OpenGL) must
+    /// snapshot rather than hold a reference to the caller's set, since callers are expected to be able to
+    /// reuse and mutate the same <see cref="PropertySet"/> instance between calls.
+    /// </summary>
+    internal PropertySet Snapshot()
+    {
+        PropertySet snapshot = new(_entries.Count);
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _entries)
+            snapshot._entries[kv.Key] = kv.Value.Clone();
+        return snapshot;
+    }
 }

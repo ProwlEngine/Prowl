@@ -459,7 +459,7 @@ internal unsafe class OpenGLNoAllocCommandEntryList : OpenGLCommandEntryList, ID
 
     public void SetProperties(PropertySet ps)
     {
-        NoAllocSetPropertiesEntry entry = new(Track(ps));
+        NoAllocSetPropertiesEntry entry = new(Track(ps.Snapshot()));
         AddEntry(SetPropertiesEntryID, ref entry);
     }
 
