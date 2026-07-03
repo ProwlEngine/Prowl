@@ -37,10 +37,9 @@ public sealed class ContextBuilder
     /// <param name="shortcut">Optional trailing keyboard hint, e.g. "Ctrl D", "F2", "Del".</param>
     /// <param name="danger">Render the row in the danger (red) colour.</param>
     /// <param name="on">Render the row in the active/accent colour (the <c>.on</c> variant).</param>
-    /// <param name="iconDraw">Optional leading vector icon. Stroke colour/width are pre-set to the
-    /// row's current text colour; override inside the callback if needed.</param>
+    /// <param name="iconDraw">Optional leading icon, drawn tinted to the row's current text colour.</param>
     public ContextBuilder Item(string label, Action onClick, bool enabled = true, string icon = "",
-        string shortcut = "", bool danger = false, bool on = false, Action<Canvas, Rect>? iconDraw = null)
+        string shortcut = "", bool danger = false, bool on = false, IOrigamiIcon? iconDraw = null)
     {
         Items.Add(new CtxItem
         {
@@ -97,7 +96,7 @@ public sealed class ContextBuilder
     {
         public string Label = "", Icon = "", Shortcut = "";
         public Action? OnClick;
-        public Action<Canvas, Rect>? IconDraw;
+        public IOrigamiIcon? IconDraw;
         public bool Enabled = true;
         public bool Danger;
         public bool On;
@@ -144,7 +143,7 @@ public sealed class ContextBuilder
         {
             if (IconDraw != null)
             {
-                var draw = IconDraw;
+                var icon = IconDraw;
                 using (paper.Box(boxId).Width(IconSize).Height(RowHeight).IsNotInteractable().Enter())
                     paper.Draw((canvas, rect) =>
                     {
@@ -153,12 +152,7 @@ public sealed class ContextBuilder
                         float ix = (float)(rect.Min.X + (rect.Size.X - sz) * 0.5f);
                         float iy = (float)(rect.Min.Y + (rect.Size.Y - sz) * 0.5f);
                         var cell = new Prowl.Vector.Rect(ix, iy, ix + sz, iy + sz);
-                        canvas.SaveState();
-                        canvas.SetStrokeColor(color);
-                        canvas.SetStrokeWidth(1.5f);
-                        canvas.SetStrokeCap(EndCapStyle.Round);
-                        draw(canvas, cell);
-                        canvas.RestoreState();
+                        icon.Draw(canvas, cell, color);
                     });
             }
             else if (!string.IsNullOrEmpty(Icon))

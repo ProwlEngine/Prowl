@@ -410,15 +410,11 @@ public sealed class TextFieldBuilder
                     drewTrailing = true;
                 }
 
-                if (_isPassword && font != null)
+                if (_isPassword)
                 {
-                    // Eye / Eye-Slash glyph would be nicest here; absent that, fall back to
-                    // 'O' / 'X' so the toggle is still legible without a dedicated icon font.
-                    string eye = pwShow ? (string.IsNullOrEmpty(icons.CheckboxOff) ? "x" : icons.CheckboxOff)
-                                        : (string.IsNullOrEmpty(icons.CheckboxOn)  ? "o" : icons.CheckboxOn);
                     var capturedRow = rowHandle;
-                    DrawIcon($"{_id}_eye", eye, ink.C400, leftPad: 4, rightPad: 6,
-                        click: () => _paper.SetElementStorage(capturedRow, "pwShow", !pwShow), font);
+                    DrawObjIcon($"{_id}_eye", pwShow ? icons.EyeOff : icons.Eye, ink.C400, leftPad: 4, rightPad: 6,
+                        click: () => _paper.SetElementStorage(capturedRow, "pwShow", !pwShow));
                     drewTrailing = true;
                 }
 
@@ -494,6 +490,15 @@ public sealed class TextFieldBuilder
         {
             box.IsNotInteractable();
         }
+    }
+
+    private void DrawObjIcon(string id, IOrigamiIcon? icon, Color color, float leftPad, float rightPad, Action? click)
+    {
+        var box = _paper.Box(id).Width(16).Height(_height).Margin(leftPad, rightPad, 0, 0)
+            .Icon(_paper, icon, color, size: 15f);
+
+        if (click != null) box.OnClick(_ => click());
+        else box.IsNotInteractable();
     }
 
     // Vector search magnifier / clear-X (the icon font ships empty glyphs).

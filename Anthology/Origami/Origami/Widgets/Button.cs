@@ -81,8 +81,8 @@ public sealed class ButtonBuilder
 
     private string? _leadingIcon;
     private string? _trailingIcon;
-    private Action<Canvas, Rect>? _leadingIconDraw;
-    private Action<Canvas, Rect>? _trailingIconDraw;
+    private IOrigamiIcon? _leadingIconObj;
+    private IOrigamiIcon? _trailingIconObj;
     private bool _loading;
     private Action? _customContent;
 
@@ -158,9 +158,9 @@ public sealed class ButtonBuilder
     public ButtonBuilder LeadingIcon(string glyph) { _leadingIcon = glyph; return this; }
     public ButtonBuilder TrailingIcon(string glyph) { _trailingIcon = glyph; return this; }
 
-    /// <summary>Vector leading icon: the host paints into the icon slot rect. Works without an icon font.</summary>
-    public ButtonBuilder LeadingIcon(Action<Canvas, Rect> draw) { _leadingIconDraw = draw; return this; }
-    public ButtonBuilder TrailingIcon(Action<Canvas, Rect> draw) { _trailingIconDraw = draw; return this; }
+    /// <summary>Leading icon drawn by an <see cref="IOrigamiIcon"/> (vector / font / custom), tinted to the label colour.</summary>
+    public ButtonBuilder LeadingIcon(IOrigamiIcon? icon) { _leadingIconObj = icon; return this; }
+    public ButtonBuilder TrailingIcon(IOrigamiIcon? icon) { _trailingIconObj = icon; return this; }
 
     /// <summary>Replaces the leading slot with a spinner and suppresses clicks while true.</summary>
     public ButtonBuilder Loading(bool loading = true) { _loading = loading; return this; }
@@ -202,8 +202,8 @@ public sealed class ButtonBuilder
     /// </summary>
     private float MeasureContentWidth(Prowl.Scribe.FontFile? font, float fontSize)
     {
-        bool hasLeading = _loading || !string.IsNullOrEmpty(_leadingIcon) || _leadingIconDraw != null;
-        bool hasTrailing = !string.IsNullOrEmpty(_trailingIcon) || _trailingIconDraw != null;
+        bool hasLeading = _loading || !string.IsNullOrEmpty(_leadingIcon) || _leadingIconObj != null;
+        bool hasTrailing = !string.IsNullOrEmpty(_trailingIcon) || _trailingIconObj != null;
         bool hasLabel = !string.IsNullOrEmpty(_label);
         const float gap = 7f;
 
@@ -329,8 +329,8 @@ public sealed class ButtonBuilder
                 Label = _label,
                 LeadingIcon = _leadingIcon,
                 TrailingIcon = _trailingIcon,
-                LeadingIconDraw = _leadingIconDraw,
-                TrailingIconDraw = _trailingIconDraw,
+                LeadingIconObj = _leadingIconObj,
+                TrailingIconObj = _trailingIconObj,
                 Loading = _loading,
                 Disabled = _disabled,
                 Shadow = _shadow,
@@ -389,8 +389,8 @@ public sealed class ButtonBuilder
         public string Label;
         public string? LeadingIcon;
         public string? TrailingIcon;
-        public Action<Canvas, Rect>? LeadingIconDraw;
-        public Action<Canvas, Rect>? TrailingIconDraw;
+        public IOrigamiIcon? LeadingIconObj;
+        public IOrigamiIcon? TrailingIconObj;
         public bool Loading;
         public bool Disabled;
         public bool Shadow;
@@ -478,8 +478,8 @@ public sealed class ButtonBuilder
         if (s.Font == null) return;
 
         // Content row: leading (spinner / vector / glyph), label, trailing.
-        bool drawLeading = s.Loading || !string.IsNullOrEmpty(s.LeadingIcon) || s.LeadingIconDraw != null;
-        bool drawTrailing = (!string.IsNullOrEmpty(s.TrailingIcon) || s.TrailingIconDraw != null) && !s.IconOnly;
+        bool drawLeading = s.Loading || !string.IsNullOrEmpty(s.LeadingIcon) || s.LeadingIconObj != null;
+        bool drawTrailing = (!string.IsNullOrEmpty(s.TrailingIcon) || s.TrailingIconObj != null) && !s.IconOnly;
         bool drawLabel = !string.IsNullOrEmpty(s.Label) && !s.IconOnly;
 
         float iconSize = s.FontSize;
@@ -498,8 +498,8 @@ public sealed class ButtonBuilder
             float lx = contentX, ly = y + (h - iconSize) * 0.5f;
             if (s.Loading)
                 PaintSpinner(canvas, lx + iconSize * 0.5f, ly + iconSize * 0.5f, iconSize * 0.45f, labelCol, s.Time);
-            else if (s.LeadingIconDraw != null)
-                s.LeadingIconDraw(canvas, new Rect(new Float2(lx, ly), new Float2(lx + iconSize, ly + iconSize)));
+            else if (s.LeadingIconObj != null)
+                s.LeadingIconObj.Draw(canvas, new Rect(new Float2(lx, ly), new Float2(lx + iconSize, ly + iconSize)), labelCol);
             else if (s.LeadingIcon != null)
                 canvas.DrawText(s.LeadingIcon, lx, ly, labelCol, s.FontSize, s.Font);
             contentX += iconSize + (drawLabel ? gap : 0);
@@ -520,8 +520,8 @@ public sealed class ButtonBuilder
         if (drawTrailing)
         {
             float ty = y + (h - iconSize) * 0.5f;
-            if (s.TrailingIconDraw != null)
-                s.TrailingIconDraw(canvas, new Rect(new Float2(contentX, ty), new Float2(contentX + iconSize, ty + iconSize)));
+            if (s.TrailingIconObj != null)
+                s.TrailingIconObj.Draw(canvas, new Rect(new Float2(contentX, ty), new Float2(contentX + iconSize, ty + iconSize)), labelCol);
             else if (s.TrailingIcon != null)
                 canvas.DrawText(s.TrailingIcon, contentX, ty, labelCol, s.FontSize, s.Font);
         }

@@ -37,7 +37,7 @@ public sealed class FoldoutBuilder
     private bool? _toggleValue;
     private Action<bool>? _toggleSetter;
     private string? _badge;
-    private Action<Canvas, Prowl.Vector.Rect>? _iconDraw;
+    private IOrigamiIcon? _icon;
 
     private Color? _headerBgOverride;
     private Color? _bodyBgOverride;
@@ -98,7 +98,7 @@ public sealed class FoldoutBuilder
     /// preset to the acc-300 accent (<c>theme.Primary.C700</c>); the action receives the icon's
     /// canvas and bounds — draw a path and <c>Stroke()</c> (or override the stroke color yourself).
     /// </summary>
-    public FoldoutBuilder Icon(Action<Canvas, Prowl.Vector.Rect> draw) { _iconDraw = draw; return this; }
+    public FoldoutBuilder Icon(IOrigamiIcon? icon) { _icon = icon; return this; }
 
     // ── Per-instance style overrides ───────────────────────────────────
 
@@ -197,9 +197,9 @@ public sealed class FoldoutBuilder
                 leftPad = 0f;
 
                 // Optional leading accent icon (acc-300), vertically centered in the header.
-                if (_iconDraw != null)
+                if (_icon != null)
                 {
-                    var draw = _iconDraw;
+                    var icon = _icon;
                     using (_paper.Box($"{_id}_icon")
                         .Width(14f).Height(headH)
                         .Margin(0, gap, 0, 0)
@@ -212,13 +212,7 @@ public sealed class FoldoutBuilder
                             float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f);
                             float iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
                             var cell = new Prowl.Vector.Rect(ix, iy, ix + isz, iy + isz);
-                            canvas.SaveState();
-                            canvas.SetStrokeColor(accIcon);
-                            canvas.SetStrokeWidth(1.5f);
-                            canvas.SetStrokeCap(EndCapStyle.Round);
-                            canvas.SetStrokeJoint(JointStyle.Round);
-                            draw(canvas, cell);
-                            canvas.RestoreState();
+                            icon.Draw(canvas, cell, accIcon);
                         });
                     }
                 }

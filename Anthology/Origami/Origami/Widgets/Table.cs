@@ -18,7 +18,7 @@ public sealed class TableCell
 {
     internal string Text = "";
     internal Color Color;
-    internal Action<Prowl.Quill.Canvas, Prowl.Vector.Rect>? Icon;
+    internal IOrigamiIcon? Icon;
     internal TextAlignment Align = TextAlignment.MiddleLeft;
 }
 
@@ -42,7 +42,7 @@ public sealed class TableRow
     }
 
     /// <summary>Append a text cell with a leading vector icon (host paints into the slot rect).</summary>
-    public TableRow Cell(string text, Color color, Action<Prowl.Quill.Canvas, Prowl.Vector.Rect> icon)
+    public TableRow Cell(string text, Color color, IOrigamiIcon icon)
     {
         Cells.Add(new TableCell { Text = text, Color = color, Icon = icon });
         return this;
@@ -340,7 +340,8 @@ public sealed class TableBuilder
 
                             if (cell.Icon != null)
                             {
-                                var draw = cell.Icon;
+                                var icon = cell.Icon;
+                                var iconCol = cell.Color;
                                 float isz = bodyFont;
                                 _paper.Box($"{_id}_r{i}c{c}i")
                                     .Width(19).Height(hRow)
@@ -349,9 +350,9 @@ public sealed class TableBuilder
                                     {
                                         float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f);
                                         float iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
-                                        draw(canvas, new Prowl.Vector.Rect(
+                                        icon.Draw(canvas, new Prowl.Vector.Rect(
                                             new Prowl.Vector.Float2(ix, iy),
-                                            new Prowl.Vector.Float2(ix + isz, iy + isz)));
+                                            new Prowl.Vector.Float2(ix + isz, iy + isz)), iconCol);
                                     }));
                             }
 

@@ -28,7 +28,7 @@ public sealed class AppBarBuilder
         public Kind Kind;
         public string Id = "";
         public string Text = "";
-        public Action<Canvas, Rect>? Icon;
+        public IOrigamiIcon? Icon;
         public Action? OnClick;
         public Color Color;
     }
@@ -47,7 +47,7 @@ public sealed class AppBarBuilder
     }
 
     /// <summary>Brand mark: an accent-tile logo (drawn from <paramref name="icon"/>) followed by a title.</summary>
-    public AppBarBuilder Brand(Action<Canvas, Rect> icon, string title)
+    public AppBarBuilder Brand(IOrigamiIcon icon, string title)
     {
         _items.Add(new Item { Kind = Kind.Brand, Icon = icon, Text = title ?? "" });
         return this;
@@ -68,7 +68,7 @@ public sealed class AppBarBuilder
     }
 
     /// <summary>A square icon button.</summary>
-    public AppBarBuilder Action(string id, Action<Canvas, Rect> icon, Action onClick)
+    public AppBarBuilder Action(string id, IOrigamiIcon icon, Action onClick)
     {
         _items.Add(new Item { Kind = Kind.Action, Id = id, Icon = icon, OnClick = onClick });
         return this;
@@ -114,7 +114,7 @@ public sealed class AppBarBuilder
                         var brandIcon = it.Icon;
                         using (_paper.Box($"{_id}_logo").Size(28).Rounded(8).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(acc).Enter())
-                            _paper.Draw((canvas, r) => brandIcon?.Invoke(canvas, r));
+                            _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), Color.White));
                         _paper.Box($"{_id}_title").Width(UnitValue.Auto).Height(UnitValue.Auto)
                             .Margin(gap, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSize)
@@ -142,7 +142,7 @@ public sealed class AppBarBuilder
                             .Hovered.BackgroundColor(_theme.Hover).End()
                             .OnClick(0, (_, _) => onClick?.Invoke())
                             .Enter())
-                            _paper.Draw((canvas, r) => icon?.Invoke(canvas, r));
+                            _paper.Draw((canvas, r) => icon?.Draw(canvas, Center(r, 16f), ink.C300));
                         break;
 
                     case Kind.Avatar:
@@ -159,5 +159,11 @@ public sealed class AppBarBuilder
                 first = false;
             }
         }
+    }
+
+    private static Rect Center(Rect r, float size)
+    {
+        float cx = (float)(r.Min.X + r.Size.X / 2), cy = (float)(r.Min.Y + r.Size.Y / 2);
+        return new Rect(new Float2(cx - size / 2, cy - size / 2), new Float2(cx + size / 2, cy + size / 2));
     }
 }

@@ -254,8 +254,8 @@ public static class FileDialog
             Reload();
         }
 
-        Action<Canvas, Rect> Ico(IconPainter p, Color col) =>
-            (canvas, rect) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col);
+        IOrigamiIcon Ico(IconPainter p, Color col) =>
+            new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
 
         void RowContextMenu(int kind, string name, string path, bool isDir)
         {
@@ -548,8 +548,7 @@ public static class FileDialog
                         var painter = it.IsDir ? DrawFolder : FileGlyph(ext);
                         var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, ext);
                         table.Row()
-                            .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400,
-                                  (canvas, rect) => DrawIcon(canvas, rect, painter, (float)rect.Size.X, iconCol))
+                            .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400, Ico(painter, iconCol))
                             .CellRight(it.IsDir ? "" : FormatSize(it.Size), ink.C200)
                             .Cell(it.Kind == 1 ? "" : it.Mod.ToString("yyyy-MM-dd  HH:mm"), ink.C200);
                     }

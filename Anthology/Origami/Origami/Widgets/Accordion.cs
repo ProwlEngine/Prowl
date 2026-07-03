@@ -24,7 +24,7 @@ public sealed class AccordionBuilder
     {
         public string Id = "";
         public string Title = "";
-        public Action<Canvas, Rect>? Icon;
+        public IOrigamiIcon? Icon;
         public Action Body = static () => { };
     }
 
@@ -44,7 +44,7 @@ public sealed class AccordionBuilder
     }
 
     /// <summary>Add a section with a leading icon.</summary>
-    public AccordionBuilder Section(string id, string title, Action<Canvas, Rect>? icon, Action body)
+    public AccordionBuilder Section(string id, string title, IOrigamiIcon? icon, Action body)
     {
         _sections.Add(new SectionDef { Id = id, Title = title ?? "", Icon = icon, Body = body ?? (static () => { }) });
         return this;

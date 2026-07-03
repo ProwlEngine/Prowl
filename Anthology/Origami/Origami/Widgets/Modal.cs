@@ -60,7 +60,7 @@ public sealed class DialogModal : IModal
     public bool CloseOnEscape { get; set; } = true;
 
     /// <summary>Optional leading vector icon in the title bar (host paints into the slot rect).</summary>
-    public Action<Canvas, Prowl.Vector.Rect>? Icon;
+    public IOrigamiIcon? Icon;
 
     public DialogModal Button(string label, Action onClick, OrigamiVariant variant = OrigamiVariant.Default)
     {
@@ -134,14 +134,14 @@ public sealed class DialogModal : IModal
         {
             if (Icon != null)
             {
-                var draw = Icon;
+                var icon = Icon;
                 paper.Box($"{idp}_hico").Width(15).Height(headH).IsNotInteractable()
                     .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>
                     {
                         const float sz = 15f;
                         float ix = (float)(rr.Min.X + (rr.Size.X - sz) * 0.5f);
                         float iy = (float)(rr.Min.Y + (rr.Size.Y - sz) * 0.5f);
-                        draw(canvas, new Prowl.Vector.Rect(ix, iy, ix + sz, iy + sz));
+                        icon.Draw(canvas, new Prowl.Vector.Rect(ix, iy, ix + sz, iy + sz), ink.C500);
                     }));
             }
 
@@ -368,7 +368,7 @@ public sealed class ModalBuilder
     private float _height;
     private bool _closeOnBackdrop;
     private bool _closeOnEscape = true;
-    private Action<Canvas, Prowl.Vector.Rect>? _icon;
+    private IOrigamiIcon? _icon;
     private readonly List<(string Label, Action OnClick, OrigamiVariant Variant)> _buttons = [];
 
     internal ModalBuilder(string title) => _title = title;
@@ -377,7 +377,7 @@ public sealed class ModalBuilder
     public ModalBuilder Content(Action<Paper> draw) { _content = draw; return this; }
 
     /// <summary>Set an optional leading vector icon in the title bar.</summary>
-    public ModalBuilder Icon(Action<Canvas, Prowl.Vector.Rect> draw) { _icon = draw; return this; }
+    public ModalBuilder Icon(IOrigamiIcon? icon) { _icon = icon; return this; }
 
     /// <summary>Set body content to a simple text message.</summary>
     public ModalBuilder Message(string text)

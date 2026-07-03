@@ -67,8 +67,8 @@ public sealed class TabsBuilder
     // ── Tabs ──────────────────────────────────────────────────────────
 
     public TabsBuilder Tab(string label) { _items.Add(new TabItem(label, null, null, null)); return this; }
-    public TabsBuilder Tab(string label, Action<Canvas, Rect> icon) { _items.Add(new TabItem(label, icon, null, null)); return this; }
-    public TabsBuilder Tab(string label, Action<Canvas, Rect>? icon, string? badge) { _items.Add(new TabItem(label, icon, null, badge)); return this; }
+    public TabsBuilder Tab(string label, IOrigamiIcon icon) { _items.Add(new TabItem(label, icon, null, null)); return this; }
+    public TabsBuilder Tab(string label, IOrigamiIcon? icon, string? badge) { _items.Add(new TabItem(label, icon, null, badge)); return this; }
     public TabsBuilder GlyphTab(string label, string glyph, string? badge = null) { _items.Add(new TabItem(label, null, glyph, badge)); return this; }
 
     // ── Optional behaviours ───────────────────────────────────────────
@@ -204,7 +204,7 @@ public sealed class TabsBuilder
         public bool Pills;
         public float PadX, FontSize, HoverT, SelT, CloseInset;
         public string Label;
-        public Action<Canvas, Rect>? Icon;
+        public IOrigamiIcon? Icon;
         public string? Glyph, Badge;
         public OrigamiTheme Theme;
         public OrigamiRamp Accent;
@@ -270,7 +270,7 @@ public sealed class TabsBuilder
         if (hasIcon)
         {
             float iy = y + (h - iconSize) * 0.5f;
-            if (s.Icon != null) s.Icon(canvas, new Rect(new Float2(cx, iy), new Float2(cx + iconSize, iy + iconSize)));
+            if (s.Icon != null) s.Icon.Draw(canvas, new Rect(new Float2(cx, iy), new Float2(cx + iconSize, iy + iconSize)), labelCol);
             else canvas.DrawText(s.Glyph!, cx, iy, labelCol, s.FontSize, s.Font);
             cx += iconSize + gap;
         }
@@ -302,5 +302,5 @@ public sealed class TabsBuilder
         canvas.RestoreState();
     }
 
-    private readonly record struct TabItem(string Label, Action<Canvas, Rect>? Icon, string? Glyph, string? Badge);
+    private readonly record struct TabItem(string Label, IOrigamiIcon? Icon, string? Glyph, string? Badge);
 }

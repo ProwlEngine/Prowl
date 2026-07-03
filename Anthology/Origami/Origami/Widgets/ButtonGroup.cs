@@ -91,7 +91,7 @@ public sealed class ButtonGroupBuilder
     }
 
     /// <summary>Append an item with a vector leading icon (host paints into the slot rect).</summary>
-    public ButtonGroupBuilder Item(string label, Action<Canvas, Rect> icon, string? tooltip = null)
+    public ButtonGroupBuilder Item(string label, IOrigamiIcon icon, string? tooltip = null)
     {
         _items.Add(new ButtonGroupItem(label, null, icon, tooltip, true));
         return this;
@@ -240,7 +240,7 @@ public sealed class ButtonGroupBuilder
         public float SegRound;
         public string Label;
         public string? LeadingIcon;
-        public Action<Canvas, Rect>? IconDraw;
+        public IOrigamiIcon? IconDraw;
         public OrigamiTheme Theme;
         public OrigamiRamp SelRamp;
         public OrigamiRamp Ink;
@@ -312,7 +312,7 @@ public sealed class ButtonGroupBuilder
         {
             float iy = y + (h - iconSize) * 0.5f;
             if (s.IconDraw != null)
-                s.IconDraw(canvas, new Rect(new Float2(cx, iy), new Float2(cx + iconSize, iy + iconSize)));
+                s.IconDraw.Draw(canvas, new Rect(new Float2(cx, iy), new Float2(cx + iconSize, iy + iconSize)), labelCol);
             else
                 canvas.DrawText(s.LeadingIcon!, cx, iy, labelCol, s.FontSize, s.Font);
             cx += iconSize + (drawLabel ? gap : 0);
@@ -382,5 +382,5 @@ public sealed class ButtonGroupBuilder
         }
     }
 
-    private readonly record struct ButtonGroupItem(string Label, string? LeadingIcon, Action<Canvas, Rect>? IconDraw, string? Tooltip, bool Enabled);
+    private readonly record struct ButtonGroupItem(string Label, string? LeadingIcon, IOrigamiIcon? IconDraw, string? Tooltip, bool Enabled);
 }
