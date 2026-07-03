@@ -29,7 +29,8 @@ void main()
 
         SessionDescription sessionDesc = new()
         {
-            Targets = [targetDesc]
+            Targets = [targetDesc],
+            AllowGLSLSyntax = true
         };
 
         Session session = GlobalSession.CreateSession(sessionDesc);

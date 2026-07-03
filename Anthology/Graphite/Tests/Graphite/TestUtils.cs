@@ -231,10 +231,12 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
             CommandBuffer cl = RF.CreateCommandBuffer();
+            Frame _f = GD.BeginFrame();
             cl.Begin();
             cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
             cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+            _f.SubmitCommands(cl);
+            GD.EndFrame(_f);
             GD.WaitForIdle();
         }
 

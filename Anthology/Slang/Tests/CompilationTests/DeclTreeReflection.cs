@@ -22,7 +22,7 @@ struct MyFuncPropertyAttribute
 [Differentiable]
 float ordinaryFunc(no_diff float x, int y) { return x + y; }
 
-float4 fragMain(float4 pos:SV_Position) : SV_Position
+float4 fragMain(float4 pos:SV_Position) : SV_Target
 {
     return pos;
 }
@@ -162,10 +162,10 @@ T foo<T, U>(T t, U u) { return t; }
         Assert.Equal(2U, typeParamTConstraintCount);
 
         TypeReflection typeParamTConstraintType1 = genericReflection.GetTypeParameterConstraintType(typeParamT, 1);
-        Assert.Equal("IFloat", typeParamTConstraintType1.FullName);
+        Assert.Equal("IArithmetic", typeParamTConstraintType1.FullName);
 
         TypeReflection typeParamTConstraintType2 = genericReflection.GetTypeParameterConstraintType(typeParamT, 0);
-        Assert.Equal("IArithmetic", typeParamTConstraintType2.FullName);
+        Assert.Equal("IFloat", typeParamTConstraintType2.FullName);
 
         DeclReflection innerStruct = genericReflection.InnerDecl;
         Assert.Equal(DeclKind.Struct, innerStruct.Kind);
