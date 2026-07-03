@@ -1,8 +1,8 @@
 #!/usr/bin/env dotnet run
 
-#:package Prowl.Echo@2.2.1
-#:package Prowl.Graphite@0.6.1
-#:package Prowl.Graphite.Compiler@0.6.1
+#:package Prowl.Echo@2.3.0
+#:package Prowl.Graphite@2.3.0
+#:package Prowl.Graphite.Compiler@2.3.0
 
 #:sdk Microsoft.NET.Sdk
 

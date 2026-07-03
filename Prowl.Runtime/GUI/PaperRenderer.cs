@@ -284,9 +284,16 @@ public class PaperRenderer : ICanvasRenderer
         }
 
         Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
+        // Font atlas on its own sampler so text batches with shapes (text samples fontTexture).
+        Texture2D fontTex = (drawCall.FontAtlas as Texture2D) ?? _defaultTexture;
 
         _properties.SetMatrix("projection", _projection);
         _properties.SetTexture("texture0", texture.Handle, texture.Sampler);
+        _properties.SetTexture("fontTexture", fontTex.Handle, fontTex.Sampler);
+
+        // 1 / font atlas size, so the text shader's distance-field screen range is correct at any zoom.
+        Int2 texSize = GetTextureSize(fontTex);
+        _properties.SetFloat2("atlasTexelSize", new Float2(texSize.X > 0 ? 1f / texSize.X : 0f, texSize.Y > 0 ? 1f / texSize.Y : 0f));
 
         drawCall.GetScissor(out Float4x4 scissorMat, out Float2 scissorExt);
         _properties.SetMatrix("scissorMat", scissorMat);
