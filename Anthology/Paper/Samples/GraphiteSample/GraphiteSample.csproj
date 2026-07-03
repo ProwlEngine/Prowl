@@ -10,8 +10,6 @@
     <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
     <PackageReference Include="Silk.NET.Input.SDL" Version="2.22.0" />
 
-    <PackageReference Include="Prowl.Graphite" Version="0.6.0" />
-    <PackageReference Include="Prowl.Graphite.Compiler" Version="0.6.0" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
   </ItemGroup>
 
@@ -21,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.csproj" />
+    <ProjectReference Include="..\..\..\Graphite\Graphite\Prowl.Graphite.csproj" />
+    <ProjectReference Include="..\..\..\Graphite\Compiler\Prowl.Graphite.Compiler.csproj" />
   </ItemGroup>
 
 </Project>
