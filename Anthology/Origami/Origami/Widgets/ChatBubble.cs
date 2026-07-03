@@ -116,55 +116,75 @@ public sealed class ChatBubbleBuilder
         var ink = _theme.Ink;
         var ramp = _theme.Get(_variant);
 
-        Color bubbleBg = _bgColor ?? (_variant == OrigamiVariant.Default
-            ? _theme.Neutral.C400 : ramp.C300);
-        Color headerCol = _headerColor ?? (_variant == OrigamiVariant.Default ? ink.C400 : ramp.C600);
-        float rounding = m.ContainerRounding;
-        float tail = _showTail ? _tailSize : 0;
+        bool me = _variant != OrigamiVariant.Default;          // saturated variant = own message
+        Color solidBg = _bgColor ?? _theme.Neutral.C500;       // "them": raised surface
+        Color gradTop = ramp.C500, gradBot = ramp.C600;        // "me": accent gradient
+        Color border = _theme.Neutral.C200;
+        bool drawBorder = !me && _bgColor == null;
+        Color headerCol = _headerColor ?? (me ? ramp.C700 : ink.C400);
+        Color footerCol = me ? Color.FromArgb(180, 255, 255, 255) : ink.C300;
+
         bool hasAvatar = _avatarTexture != null || _avatarInitials != null;
         bool avatarOnLeft = hasAvatar && _tail == BubbleTailDirection.Left;
         bool avatarOnRight = hasAvatar && _tail == BubbleTailDirection.Right;
 
-        // Outer row: [avatar] [bubble] or [bubble] [avatar]
-        using (_paper.Row($"{_id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto)
-            .RowBetween(m.SpacingLarge).Enter())
+        // Corner radii: one corner is cut short to read as the "tail" (prototype has no pointer triangle).
+        const float radius = 14f, tailR = 5f;
+        float tl = radius, tr = radius, br = radius, bl = radius;
+        if (_showTail)
+        {
+            if (_tail == BubbleTailDirection.Left) bl = tailR;
+            else if (_tail == BubbleTailDirection.Right) br = tailR;
+            else if (_tail == BubbleTailDirection.Top) tl = tailR;
+            else br = tailR;
+        }
+
+        // Outer row: [avatar] [bubble] (them) or right-aligned [bubble] (me). Avatar carries the gap.
+        var row = _paper.Row($"{_id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto);
+        if (_tail == BubbleTailDirection.Right) row.Margin(UnitValue.Stretch(), 0, 0, 0);
+        using (row.Enter())
         {
             if (avatarOnLeft)
                 DrawAvatar(font, m);
 
-            // The bubble: a column that sizes to content, with canvas-drawn background
-            float marginL = _showTail && _tail == BubbleTailDirection.Left ? tail : 0;
-            float marginR = _showTail && _tail == BubbleTailDirection.Right ? tail : 0;
-            float marginT = _showTail && _tail == BubbleTailDirection.Top ? tail : 0;
-            float marginB = _showTail && _tail == BubbleTailDirection.Bottom ? tail : 0;
-
-            // Capture for lambda
-            var capturedBg = bubbleBg;
-            var capturedTail = _tail;
-            var capturedShowTail = _showTail;
-            var capturedTailSize = _tailSize;
-            var capturedRounding = rounding;
+            bool capMe = me; bool capBorder = drawBorder;
+            Color capBg = solidBg, capTop = gradTop, capBot = gradBot, capBd = border;
+            float cTl = tl, cTr = tr, cBr = br, cBl = bl;
 
             using (_paper.Column($"{_id}_wrap")
                 .Width(UnitValue.Auto).MaxWidth(_maxWidth)
                 .Height(UnitValue.Auto)
-                .Margin(marginL, marginR, marginT, marginB)
-                .Padding(m.PaddingLarge, m.PaddingLarge, m.Padding + 2, m.Padding + 2)
+                .Padding(13, 13, 9, 9)
                 .ColBetween(m.SpacingSmall)
                 .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                 {
-                    // Draw bubble shape behind all content
-                    float bx = (float)r.Min.X - marginL;
-                    float by = (float)r.Min.Y - marginT;
-                    float bw = (float)r.Size.X + marginL + marginR;
-                    float bh = (float)r.Size.Y + marginT + marginB;
-                    DrawBubbleShape(canvas, bx + marginL, by + marginT,
-                        bw - marginL - marginR, bh - marginT - marginB,
-                        capturedRounding, capturedBg, capturedTail, capturedShowTail, capturedTailSize);
+                    float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
+                    if (capMe)
+                    {
+                        canvas.SaveState();
+                        canvas.SetLinearBrush(x, y, x + w, y + h, capTop, capBot);
+                        canvas.BeginPath();
+                        canvas.RoundedRect(x, y, w, h, cTl, cTr, cBr, cBl);
+                        canvas.Fill();
+                        canvas.RestoreState();
+                    }
+                    else
+                    {
+                        canvas.RoundedRectFilled(x, y, w, h, cTl, cTr, cBr, cBl, capBg);
+                        if (capBorder)
+                        {
+                            canvas.SaveState();
+                            canvas.SetStrokeColor(capBd);
+                            canvas.SetStrokeWidth(1f);
+                            canvas.BeginPath();
+                            canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, cTl, cTr, cBr, cBl);
+                            canvas.Stroke();
+                            canvas.RestoreState();
+                        }
+                    }
                 }))
                 .Enter())
             {
-                // Header
                 if (!string.IsNullOrEmpty(_header) && font != null)
                 {
                     _paper.Box($"{_id}_hdr")
@@ -175,18 +195,16 @@ public sealed class ChatBubbleBuilder
                         .Alignment(TextAlignment.Left);
                 }
 
-                // User content
                 _content(_paper);
 
-                // Footer
                 if (!string.IsNullOrEmpty(_footer) && font != null)
                 {
                     _paper.Box($"{_id}_ftr")
-                        .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                        .Width(UnitValue.Stretch()).Height(UnitValue.Auto).Margin(0, 0, 2, 0)
                         .IsNotInteractable()
-                        .Text(_footer, font).TextColor(ink.C300)
-                        .FontSize(m.FontSizeSmall)
-                        .Alignment(TextAlignment.Right);
+                        .Text(_footer, font).TextColor(footerCol)
+                        .FontSize(m.FontSizeSmall - 1f)
+                        .Alignment(TextAlignment.Left);
                 }
             }
 
@@ -198,12 +216,17 @@ public sealed class ChatBubbleBuilder
     private void DrawAvatar(FontFile? font, OrigamiMetrics m)
     {
         float size = _avatarSize;
+        // Gap between the avatar and the bubble (RowBetween is overridden by the stretch margins below).
+        float gap = m.SpacingLarge;
+        float aml = _tail == BubbleTailDirection.Right ? gap : 0f;
+        float amr = _tail == BubbleTailDirection.Left ? gap : 0f;
 
         if (_avatarTexture != null)
         {
             var capturedTex = _avatarTexture;
             _paper.Box($"{_id}_av")
                 .Width(size).Height(size)
+                .Margin(aml, amr, UnitValue.Stretch(), 0) // bottom-align + gap to the bubble
                 .IsNotInteractable()
                 .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                 {
@@ -223,6 +246,7 @@ public sealed class ChatBubbleBuilder
             var fontSize = m.FontSize;
             _paper.Box($"{_id}_av")
                 .Width(size).Height(size)
+                .Margin(aml, amr, UnitValue.Stretch(), 0) // bottom-align + gap to the bubble
                 .IsNotInteractable()
                 .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
                 {
@@ -235,72 +259,5 @@ public sealed class ChatBubbleBuilder
                         Color32.FromArgb(255, 255, 255, 255), fontSize, font);
                 }));
         }
-    }
-
-    private static void DrawBubbleShape(Canvas canvas, float x, float y, float w, float h,
-        float rounding, Color bg, BubbleTailDirection tail, bool showTail, float tailSize)
-    {
-        float r = MathF.Min(rounding, MathF.Min(w, h) * 0.4f);
-        float k = 0.5522847498f;
-
-        canvas.SetFillColor(Color32.FromArgb((byte)bg.A, (byte)bg.R, (byte)bg.G, (byte)bg.B));
-        canvas.BeginPath();
-
-        canvas.MoveTo(x + r, y);
-
-        // Top edge
-        if (showTail && tail == BubbleTailDirection.Top)
-        {
-            float tx = x + w * 0.5f - tailSize * 0.5f;
-            canvas.LineTo(tx, y);
-            canvas.LineTo(tx + tailSize * 0.5f, y - tailSize);
-            canvas.LineTo(tx + tailSize, y);
-        }
-        canvas.LineTo(x + w - r, y);
-
-        // Top-right corner
-        canvas.BezierCurveTo(x + w - r * (1 - k), y, x + w, y + r * (1 - k), x + w, y + r);
-
-        // Right edge
-        if (showTail && tail == BubbleTailDirection.Right)
-        {
-            float ty = y + h * 0.3f;
-            canvas.LineTo(x + w, ty);
-            canvas.LineTo(x + w + tailSize, ty + tailSize * 0.5f);
-            canvas.LineTo(x + w, ty + tailSize);
-        }
-        canvas.LineTo(x + w, y + h - r);
-
-        // Bottom-right corner
-        canvas.BezierCurveTo(x + w, y + h - r * (1 - k), x + w - r * (1 - k), y + h, x + w - r, y + h);
-
-        // Bottom edge
-        if (showTail && tail == BubbleTailDirection.Bottom)
-        {
-            float tx = x + w * 0.5f - tailSize * 0.5f;
-            canvas.LineTo(tx + tailSize, y + h);
-            canvas.LineTo(tx + tailSize * 0.5f, y + h + tailSize);
-            canvas.LineTo(tx, y + h);
-        }
-        canvas.LineTo(x + r, y + h);
-
-        // Bottom-left corner
-        canvas.BezierCurveTo(x + r * (1 - k), y + h, x, y + h - r * (1 - k), x, y + h - r);
-
-        // Left edge
-        if (showTail && tail == BubbleTailDirection.Left)
-        {
-            float ty = y + h * 0.3f + tailSize;
-            canvas.LineTo(x, ty);
-            canvas.LineTo(x - tailSize, ty - tailSize * 0.5f);
-            canvas.LineTo(x, ty - tailSize);
-        }
-        canvas.LineTo(x, y + r);
-
-        // Top-left corner
-        canvas.BezierCurveTo(x, y + r * (1 - k), x + r * (1 - k), y, x + r, y);
-
-        canvas.ClosePath();
-        canvas.FillComplexAA();
     }
 }

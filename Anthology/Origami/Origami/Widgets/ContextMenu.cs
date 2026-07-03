@@ -6,6 +6,8 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
@@ -28,9 +30,30 @@ public sealed class ContextBuilder
     internal Action? CloseAction;
 
     /// <summary>Add a clickable menu item.</summary>
-    public ContextBuilder Item(string label, Action onClick, bool enabled = true, string icon = "")
+    /// <param name="label">Row label.</param>
+    /// <param name="onClick">Invoked on click (menu closes afterwards).</param>
+    /// <param name="enabled">When false the row is dimmed and non-interactive.</param>
+    /// <param name="icon">Optional text/glyph icon (glyph font may be empty — prefer <paramref name="iconDraw"/>).</param>
+    /// <param name="shortcut">Optional trailing keyboard hint, e.g. "Ctrl D", "F2", "Del".</param>
+    /// <param name="danger">Render the row in the danger (red) colour.</param>
+    /// <param name="on">Render the row in the active/accent colour (the <c>.on</c> variant).</param>
+    /// <param name="iconDraw">Optional leading vector icon. Stroke colour/width are pre-set to the
+    /// row's current text colour; override inside the callback if needed.</param>
+    public ContextBuilder Item(string label, Action onClick, bool enabled = true, string icon = "",
+        string shortcut = "", bool danger = false, bool on = false, Action<Canvas, Rect>? iconDraw = null)
     {
-        Items.Add(new CtxItem { Label = label, OnClick = onClick, Enabled = enabled, Icon = icon });
+        Items.Add(new CtxItem
+        {
+            Label = label, OnClick = onClick, Enabled = enabled, Icon = icon,
+            Shortcut = shortcut, Danger = danger, On = on, IconDraw = iconDraw,
+        });
+        return this;
+    }
+
+    /// <summary>Add a non-interactive uppercase section header at the top of a group.</summary>
+    public ContextBuilder Header(string text)
+    {
+        Items.Add(new CtxHeader { Text = text });
         return this;
     }
 
@@ -57,47 +80,117 @@ public sealed class ContextBuilder
         return this;
     }
 
+    // ── Shared row geometry / palette (Nebula .w2menu spec) ───
+
+    internal const float RowHeight = 30f;
+    internal const float RowFont = 16f;   // .w2mrow font-size (Origami metric scale ~= 12px browser)
+    internal const float SubFont = 13f;   // .k shortcut / header
+    internal const float IconSize = 15f;  // leading vector icon
+    internal const float RowPadX = 9f;    // .w2mrow padding-x
+    internal const float RowGap = 9f;     // .w2mrow flex gap
+
+    // rgba(168,85,247,0.12) — .w2mrow:hover background.
+
     // ── Item types ───────────────────────────────────────────
 
     internal sealed class CtxItem : IContextItem
     {
-        public string Label = "", Icon = "";
+        public string Label = "", Icon = "", Shortcut = "";
         public Action? OnClick;
+        public Action<Canvas, Rect>? IconDraw;
         public bool Enabled = true;
+        public bool Danger;
+        public bool On;
 
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
-            var m = theme.Metrics;
-            var textColor = Enabled ? ink.C500 : ink.C300;
-            float rowH = m.RowHeight;
 
             var row = paper.Row($"{id}_i_{index}")
-                .Height(rowH)
-                .Hovered.BackgroundColor(Enabled ? theme.Primary.C400 : Color.Transparent).End()
-                .Rounded(m.SmallRounding);
+                .Height(RowHeight)
+                .Padding(RowPadX, RowPadX, 0, 0)
+                .RowBetween(RowGap)
+                .Rounded(6f)
+                .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
                 row.OnClick(0, (_, _) => { OnClick?.Invoke(); close(); });
 
             using (row.Enter())
             {
-                if (!string.IsNullOrEmpty(Icon))
-                {
-                    paper.Box($"{id}_ico_{index}")
-                        .Width(m.RowHeight).Height(rowH).ChildLeft(m.SpacingLarge)
-                        .Text(Icon, font).TextColor(textColor)
-                        .FontSize(m.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
-                }
-                else
-                {
-                    paper.Box($"{id}_pad_{index}").Width(m.SpacingLarge);
-                }
+                bool hovered = Enabled && paper.IsParentHovered;
+                Color txt = !Enabled ? ink.C100                     // t-dim (disabled)
+                          : Danger  ? theme.Red.C500                // .danger
+                          : On      ? theme.Primary.C700            // .on = acc-300
+                          : hovered ? ink.C500                      // hover = t-hi
+                          :           ink.C400;                     // t
+
+                DrawLeadingIcon(paper, $"{id}_ico_{index}", font, txt);
 
                 paper.Box($"{id}_l_{index}")
-                    .Width(UnitValue.Stretch()).Height(rowH)
-                    .Text(Label, font).TextColor(textColor)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .Width(UnitValue.Stretch()).Height(RowHeight)
+                    .Text(Label, font).TextColor(txt)
+                    .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
+
+                if (!string.IsNullOrEmpty(Shortcut))
+                    paper.Box($"{id}_k_{index}")
+                        .Width(UnitValue.Auto).Height(RowHeight)
+                        .Text(Shortcut, font).TextColor(Enabled ? ink.C200 : ink.C100)   // t-lo
+                        .FontSize(SubFont).Alignment(TextAlignment.MiddleRight);
+            }
+        }
+
+        private void DrawLeadingIcon(Paper paper, string boxId, Scribe.FontFile font, Color color)
+        {
+            if (IconDraw != null)
+            {
+                var draw = IconDraw;
+                using (paper.Box(boxId).Width(IconSize).Height(RowHeight).IsNotInteractable().Enter())
+                    paper.Draw((canvas, rect) =>
+                    {
+                        // Center a square icon cell vertically within the full-height row box.
+                        float sz = IconSize;
+                        float ix = (float)(rect.Min.X + (rect.Size.X - sz) * 0.5f);
+                        float iy = (float)(rect.Min.Y + (rect.Size.Y - sz) * 0.5f);
+                        var cell = new Prowl.Vector.Rect(ix, iy, ix + sz, iy + sz);
+                        canvas.SaveState();
+                        canvas.SetStrokeColor(color);
+                        canvas.SetStrokeWidth(1.5f);
+                        canvas.SetStrokeCap(EndCapStyle.Round);
+                        draw(canvas, cell);
+                        canvas.RestoreState();
+                    });
+            }
+            else if (!string.IsNullOrEmpty(Icon))
+            {
+                paper.Box(boxId).Width(IconSize).Height(RowHeight)
+                    .Text(Icon, font).TextColor(color)
+                    .FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
+            }
+            else
+            {
+                paper.Box(boxId).Width(IconSize);   // reserve space so labels stay aligned
+            }
+        }
+    }
+
+    internal sealed class CtxHeader : IContextItem
+    {
+        public string Text = "";
+
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        {
+            using (paper.Row($"{id}_h_{index}")
+                .Height(UnitValue.Auto)
+                .Padding(RowPadX, RowPadX, 6, 4)
+                .IsNotInteractable()
+                .Enter())
+            {
+                paper.Box($"{id}_ht_{index}")
+                    .Width(UnitValue.Stretch()).Height(14)
+                    .Text(Text.ToUpperInvariant(), theme.Medium ?? font)
+                    .TextColor(theme.Ink.C100)                      // t-dim
+                    .FontSize(SubFont).Alignment(TextAlignment.MiddleLeft);
             }
         }
     }
@@ -112,29 +205,30 @@ public sealed class ContextBuilder
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
-            var m = theme.Metrics;
-            var textColor = Enabled ? ink.C500 : ink.C300;
-            float rowH = m.RowHeight;
 
             var row = paper.Row($"{id}_i_{index}")
-                .Height(rowH)
-                .Hovered.BackgroundColor(Enabled ? theme.Primary.C400 : Color.Transparent).End()
-                .Rounded(m.SmallRounding);
+                .Height(RowHeight)
+                .Padding(RowPadX, RowPadX, 0, 0)
+                .RowBetween(RowGap)
+                .Rounded(6f)
+                .Hovered.BackgroundColor(Enabled ? theme.Hover : Color.Transparent).End();
 
             if (Enabled)
                 row.OnClick(0, (_, _) => { OnClick?.Invoke(); });
 
             using (row.Enter())
             {
+                bool hovered = Enabled && paper.IsParentHovered;
+                Color txt = !Enabled ? ink.C100 : hovered ? ink.C500 : ink.C400;
+
                 Origami.Checkbox(paper, $"{id}_t_{index}",
                         GetValue?.Invoke() ?? false, _ => { })
                     .NoLabel().ReadOnly().Show();
 
                 paper.Box($"{id}_l_{index}")
-                    .Width(UnitValue.Stretch()).Height(rowH)
-                    .ChildLeft(m.Spacing)
-                    .Text(Label, font).TextColor(textColor)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .Width(UnitValue.Stretch()).Height(RowHeight)
+                    .Text(Label, font).TextColor(txt)
+                    .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
             }
         }
     }
@@ -143,10 +237,10 @@ public sealed class ContextBuilder
     {
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
-            var m = theme.Metrics;
+            // .c2sep — 1px bd line, ~5px vertical margin, ~4px horizontal inset.
             paper.Box($"{id}_sep_{index}")
-                .Height(1).Margin(m.PaddingLarge, m.Spacing, m.PaddingLarge, m.Spacing)
-                .BackgroundColor(theme.Ink.C200);
+                .Height(1).Margin(4, 4, 5, 5)
+                .BackgroundColor(Color.FromArgb(33, 178, 150, 255));   // bd
         }
     }
 
@@ -158,38 +252,40 @@ public sealed class ContextBuilder
         public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
         {
             var ink = theme.Ink;
-            var m = theme.Metrics;
-            float rowH = m.RowHeight;
 
             using (paper.Row($"{id}_i_{index}")
-                .Height(rowH)
-                .Hovered.BackgroundColor(theme.Primary.C400).End()
-                .Rounded(m.SmallRounding).Enter())
+                .Height(RowHeight)
+                .Padding(RowPadX, RowPadX, 0, 0)
+                .RowBetween(RowGap)
+                .Rounded(6f)
+                .Hovered.BackgroundColor(theme.Hover).End()
+                .Enter())
             {
+                bool hovered = paper.IsParentHovered;
+                Color txt = hovered ? ink.C500 : ink.C400;
+
                 if (!string.IsNullOrEmpty(Icon))
-                {
                     paper.Box($"{id}_ico_{index}")
-                        .Width(m.RowHeight).Height(rowH).ChildLeft(m.SpacingLarge)
-                        .Text(Icon, font).TextColor(ink.C500)
-                        .FontSize(m.FontSize - 1).Alignment(TextAlignment.MiddleCenter);
-                }
+                        .Width(IconSize).Height(RowHeight)
+                        .Text(Icon, font).TextColor(txt)
+                        .FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
                 else
-                {
-                    paper.Box($"{id}_pad_{index}").Width(m.SpacingLarge);
-                }
+                    paper.Box($"{id}_pad_{index}").Width(IconSize);
 
                 paper.Box($"{id}_l_{index}")
-                    .Width(UnitValue.Stretch()).Height(rowH)
-                    .Text(Label, font).TextColor(ink.C500)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .Width(UnitValue.Stretch()).Height(RowHeight)
+                    .Text(Label, font).TextColor(txt)
+                    .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
 
-                paper.Box($"{id}_a_{index}")
-                    .Width(m.CompactHeight).Height(rowH)
-                    .Text(theme.Icons.ChevronRight, font).TextColor(ink.C400)
-                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                Color arrow = txt;
+                using (paper.Box($"{id}_a_{index}").Width(12).Height(RowHeight).IsNotInteractable().Enter())
+                    paper.Draw((canvas, rect) => ContextMenu.DrawChevron(canvas, rect, arrow));
 
                 if (paper.IsParentHovered && Sub != null)
-                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 192, 0, close);
+                    // Overlap the parent panel by ~2px so the submenu reads as attached, not detached.
+                    // Row-relative: 200 menu width - 5 col pad - ~2 overlap (row padding is not added to
+                    // self-directed children) = 193.
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 193f, 0, close);
             }
         }
     }
@@ -210,12 +306,18 @@ public static class ContextMenu
     private static bool _openedThisDraw;
     private static IModal? _modalHandle;
 
+    // Nebula .w2menu container literals.
+    private const float MenuRadius = 9f;
+    private const float MenuPad = 5f;
+    private const float MenuWidth = 200f;
+
     public static bool IsOpen => _isOpen;
 
     /// <summary>Open a context menu at the given screen position.</summary>
     public static void Show(float x, float y, Action<ContextBuilder> build)
     {
         Close(); // close any existing
+        _openedThisDraw = true; // an explicit open counts as this frame's open (dedups with RightClickMenu)
         _isOpen = true;
         _x = x;
         _y = y;
@@ -241,10 +343,6 @@ public static class ContextMenu
         _buildMenu = null;
     }
 
-    /// <summary>
-    /// Attach a right-click context menu to the current parent element.
-    /// Call this inside an element's Enter() scope.
-    /// </summary>
     /// <summary>
     /// Attach a right-click context menu to the current parent element.
     /// Call this inside an element's Enter() scope.
@@ -276,34 +374,98 @@ public static class ContextMenu
         RenderMenu(paper, "octx", builder, _x, _y, Close, layer: layer);
     }
 
-    /// <summary>Render a menu panel at the given position. Used internally and for submenus.</summary>
+    /// <summary>Render a positioned menu panel at the given screen position. Used for popups and submenus.</summary>
     internal static void RenderMenu(Paper paper, string id, ContextBuilder builder, float x, float y,
         Action close, int layer = Layer.Topmost + 501)
     {
         var theme = Origami.Current;
-        var m = theme.Metrics;
         var font = theme.Font;
         if (font == null) return;
 
         var menuBox = paper.Box($"{id}_menu")
             .PositionType(PositionType.SelfDirected)
             .Position(x, y)
-            .Width(200).Height(UnitValue.Auto)
-            .BackgroundColor(theme.Neutral.C200)
-            .BorderColor(theme.Ink.C200).BorderWidth(1)
-            .Rounded(m.ContainerRounding)
+            .Width(MenuWidth).Height(UnitValue.Auto)
+            .BackgroundColor(theme.Popover)
+            .BorderColor(theme.BorderStrong).BorderWidth(1)
+            .Rounded(MenuRadius)
             .Layer(layer)
             .ClampToScreen()
-            .BoxShadow(0, 2, 16, -4, Color.FromArgb(120, 0, 0, 0))
+            .BoxShadow(0, 14, 40, 0, theme.Shadow)
             .StopEventPropagation();
 
         using (menuBox.Enter())
+            DrawMenuBody(paper, id, builder, font, theme, close);
+    }
+
+    /// <summary>
+    /// Render a static, inline <c>.w2menu</c> panel in the current layout flow (for showcases /
+    /// documentation). Mirrors <see cref="Toasts.Preview"/>: normal flow, fixed width, no backdrop
+    /// or positioning. Rows still hover; clicks fire their callbacks but there is nothing to close.
+    /// </summary>
+    public static void Preview(Paper paper, string id, Action<ContextBuilder> build)
+    {
+        var theme = Origami.Current;
+        var font = theme.Font;
+        if (font == null) return;
+
+        var builder = new ContextBuilder();
+        build(builder);
+
+        var menuBox = paper.Box($"{id}_menu")
+            .Width(MenuWidth).Height(UnitValue.Auto)
+            .BackgroundColor(theme.Popover)
+            .BorderColor(theme.BorderStrong).BorderWidth(1)
+            .Rounded(MenuRadius)
+            .BoxShadow(0, 14, 40, 0, theme.Shadow);
+
+        using (menuBox.Enter())
+            DrawMenuBody(paper, id, builder, font, theme, static () => { });
+    }
+
+    /// <summary>
+    /// Render a menu panel at an absolute screen position on a caller-chosen <paramref name="layer"/>,
+    /// with a caller-owned <paramref name="close"/> action. Unlike <see cref="Show"/> this adds no
+    /// backdrop and no modal push, so the caller controls focus/dismissal and stacking. Used by menu
+    /// bars that keep the bar itself above their own dropdown.
+    /// </summary>
+    public static void Panel(Paper paper, string id, float x, float y, int layer,
+        Action close, Action<ContextBuilder> build)
+    {
+        var builder = new ContextBuilder();
+        build(builder);
+        RenderMenu(paper, id, builder, x, y, close, layer);
+    }
+
+    /// <summary>Draw the padded item column shared by the popup and inline previews.</summary>
+    private static void DrawMenuBody(Paper paper, string id, ContextBuilder builder,
+        Scribe.FontFile font, OrigamiTheme theme, Action close)
+    {
+        using (paper.Column($"{id}_col")
+            .Padding(MenuPad, MenuPad, MenuPad, MenuPad)
+            .Height(UnitValue.Auto)
+            .Enter())
         {
-            using (paper.Column($"{id}_col").Margin(m.PaddingSmall, m.PaddingSmall, m.PaddingSmall, m.PaddingSmall).Height(UnitValue.Auto).Enter())
-            {
-                for (int i = 0; i < builder.Items.Count; i++)
-                    builder.Items[i].Draw(paper, id, i, font, theme, close);
-            }
+            for (int i = 0; i < builder.Items.Count; i++)
+                builder.Items[i].Draw(paper, id, i, font, theme, close);
         }
+    }
+
+    /// <summary>Draw a small trailing chevron (submenu affordance) centred in its box.</summary>
+    internal static void DrawChevron(Canvas canvas, Rect rect, Color color)
+    {
+        float cx = (float)(rect.Min.X + rect.Size.X * 0.5);
+        float cy = (float)(rect.Min.Y + rect.Size.Y * 0.5);
+
+        canvas.SaveState();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.5f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.BeginPath();
+        canvas.MoveTo(cx - 1.5f, cy - 3.2f);
+        canvas.LineTo(cx + 2f, cy);
+        canvas.LineTo(cx - 1.5f, cy + 3.2f);
+        canvas.Stroke();
+        canvas.RestoreState();
     }
 }

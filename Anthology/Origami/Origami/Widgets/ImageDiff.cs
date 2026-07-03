@@ -27,10 +27,10 @@ public sealed class ImageDiffBuilder
     private readonly object _imageB;
 
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 256f;
+    private float _height = 156f;
     private float _splitPos = 0.5f;
-    private float _barWidth = 3f;
-    private float _handleSize = 24f;
+    private float _barWidth = 2f;
+    private float _handleSize = 26f;
     private float _edgePad = 16f;
 
     internal ImageDiffBuilder(Paper paper, string id, object imageA, object imageB, OrigamiTheme theme)
@@ -57,10 +57,13 @@ public sealed class ImageDiffBuilder
         var capturedHandleSize = _handleSize;
         var capturedEdgePad = _edgePad;
         var primary = _theme.Primary;
+        var font = _theme.Font;
 
+        // .w2diff: 9px radius, 1px soft border, clipped, dark fallback behind the images.
         var container = _paper.Box($"{_id}_box")
             .Width(_width).Height(_height)
-            .Rounded(m.Rounding)
+            .Rounded(9f)
+            .BorderColor(_theme.BorderSoft).BorderWidth(1)
             .Clip()
             .BackgroundColor(Color.FromArgb(255, 20, 20, 24));
 
@@ -122,36 +125,88 @@ public sealed class ImageDiffBuilder
                         canvas.ClearBrushTexture();
                     }
 
-                    // Vertical bar
+                    float cy = y + h * 0.5f;
+
+                    // .w2diff-handle glow — box-shadow 0 0 10px acc-glow behind the white line.
+                    canvas.SaveState();
+                    Color accGlow = Color.FromArgb(128, 168, 85, 247);
+                    canvas.SetBoxBrush(splitX, cy, capturedBarW, h - 4f, 1f, 10f,
+                        accGlow, Color.FromArgb(0, 168, 85, 247));
+                    canvas.BeginPath();
+                    canvas.Rect(splitX - 16f, y, 32f, h);
+                    canvas.Fill();
+                    canvas.RestoreState();
+
+                    // .w2diff-handle — 2px white vertical line at the split.
                     float barHalf = capturedBarW * 0.5f;
                     canvas.RectFilled(splitX - barHalf, y, capturedBarW, h,
-                        Color32.FromArgb(220, 255, 255, 255));
+                        Color32.FromArgb(255, 255, 255, 255));
 
-                    // Handle circle in center of bar
+                    // .w2diff-grip — soft drop shadow (box-shadow 0 2px 12px rgba(0,0,0,0.55)).
                     float handleR = capturedHandleSize * 0.5f;
-                    float cy = y + h * 0.5f;
-                    var priCol = Color32.FromArgb(255, (byte)primary.C400.R, (byte)primary.C400.G, (byte)primary.C400.B);
-                    canvas.CircleFilled(splitX, cy, handleR, priCol);
+                    canvas.SaveState();
+                    canvas.SetBoxBrush(splitX, cy + 2f, capturedHandleSize, capturedHandleSize,
+                        handleR, 12f, Color.FromArgb(140, 0, 0, 0), Color.FromArgb(0, 0, 0, 0));
+                    canvas.BeginPath();
+                    float shPad = handleR + 20f;
+                    canvas.Rect(splitX - shPad, cy + 2f - shPad, shPad * 2f, shPad * 2f);
+                    canvas.Fill();
+                    canvas.RestoreState();
 
-                    // Arrow glyphs on handle
+                    // .w2diff-grip — 26px accent circle (#A855F7).
+                    var accCol = Color32.FromArgb(255, (byte)primary.C500.R, (byte)primary.C500.G, (byte)primary.C500.B);
+                    canvas.CircleFilled(splitX, cy, handleR, accCol);
+
+                    // White left-right drag glyph ("<->") on the grip.
                     canvas.SetStrokeColor(Color32.FromArgb(255, 255, 255, 255));
-                    canvas.SetStrokeWidth(2f);
-                    float arrowH = handleR * 0.4f;
-                    float arrowW = handleR * 0.3f;
+                    canvas.SetStrokeWidth(1.6f);
+                    float lineLen = handleR * 0.42f;
+                    float ah = handleR * 0.26f;
 
-                    // Left arrow
+                    // Shaft
                     canvas.BeginPath();
-                    canvas.MoveTo(splitX - arrowW * 0.3f, cy - arrowH);
-                    canvas.LineTo(splitX - arrowW * 1.3f, cy);
-                    canvas.LineTo(splitX - arrowW * 0.3f, cy + arrowH);
+                    canvas.MoveTo(splitX - lineLen, cy);
+                    canvas.LineTo(splitX + lineLen, cy);
                     canvas.Stroke();
 
-                    // Right arrow
+                    // Left arrowhead
                     canvas.BeginPath();
-                    canvas.MoveTo(splitX + arrowW * 0.3f, cy - arrowH);
-                    canvas.LineTo(splitX + arrowW * 1.3f, cy);
-                    canvas.LineTo(splitX + arrowW * 0.3f, cy + arrowH);
+                    canvas.MoveTo(splitX - lineLen + ah, cy - ah);
+                    canvas.LineTo(splitX - lineLen, cy);
+                    canvas.LineTo(splitX - lineLen + ah, cy + ah);
                     canvas.Stroke();
+
+                    // Right arrowhead
+                    canvas.BeginPath();
+                    canvas.MoveTo(splitX + lineLen - ah, cy - ah);
+                    canvas.LineTo(splitX + lineLen, cy);
+                    canvas.LineTo(splitX + lineLen - ah, cy + ah);
+                    canvas.Stroke();
+
+                    // .w2diff-tag — "Before" bottom-left, "After" bottom-right pills.
+                    if (font != null)
+                    {
+                        const float tagFont = 10f;
+                        const float padTX = 8f, padTY = 2f, margin = 8f;
+                        Color tagBg = Color.FromArgb(140, 0, 0, 0);
+                        Color tagFg = Color.FromArgb(255, 255, 255, 255);
+
+                        var bs = canvas.MeasureText("Before", tagFont, font);
+                        float bpw = (float)bs.X + padTX * 2f;
+                        float bph = (float)bs.Y + padTY * 2f;
+                        float bpx = x + margin;
+                        float bpy = y + h - margin - bph;
+                        canvas.RoundedRectFilled(bpx, bpy, bpw, bph, 6f, tagBg);
+                        canvas.DrawText("Before", bpx + padTX, bpy + padTY, tagFg, tagFont, font);
+
+                        var as_ = canvas.MeasureText("After", tagFont, font);
+                        float apw = (float)as_.X + padTX * 2f;
+                        float aph = (float)as_.Y + padTY * 2f;
+                        float apx = x + w - margin - apw;
+                        float apy = y + h - margin - aph;
+                        canvas.RoundedRectFilled(apx, apy, apw, aph, 6f, tagBg);
+                        canvas.DrawText("After", apx + padTX, apy + padTY, tagFg, tagFont, font);
+                    }
                 }));
         }
     }

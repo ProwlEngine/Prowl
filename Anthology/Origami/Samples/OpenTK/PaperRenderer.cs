@@ -1,0 +1,501 @@
+using Common;
+using OpenTK.Mathematics;
+using OpenTK.Graphics.OpenGL4;
+
+using Prowl.Quill;
+using Prowl.Vector;
+using Prowl.Vector.Geometry;
+
+namespace OpenTKSample
+{
+    internal class PaperRenderer : ICanvasRenderer
+    {
+        // Use shared shader source from Common
+        public static string STROKE_FRAGMENT_SHADER => CanvasShaderSource.FragmentShader;
+        private static string DEFAULT_VERTEX_SHADER => CanvasShaderSource.VertexShader;
+
+        // OpenGL objects
+        private int _shaderProgram;
+        private int _vertexArrayObject;
+        private int _vertexBufferObject;
+        private int _elementBufferObject;
+        private int _projectionLocation;
+        private int _textureSamplerLocation;
+        private int _fontTextureLoc;
+        private int _scissorMatLoc = 0;
+        private int _scissorExtLoc = 0;
+
+        static int _brushMatLoc;
+        static int _brushTypeLoc;
+        static int _brushColor1Loc;
+        static int _brushColor2Loc;
+        static int _brushParamsLoc;
+        static int _brushParams2Loc;
+        static int _brushTextureMatLoc;
+        static int _dpiScaleLoc;
+
+        private Matrix4 _projection;
+        private TextureTK _defaultTexture;
+        private int _fbWidth;
+        private int _fbHeight;
+
+        // Backdrop blur (dual Kawase)
+        private int _backdropTexLoc;
+        private int _viewportSizeLoc;
+        private int _backdropBlurAmountLoc;
+        private int _blurDownProgram;
+        private int _blurUpProgram;
+        private int _downSrcLoc, _downHalfpixelLoc, _downOffsetLoc;
+        private int _upSrcLoc, _upHalfpixelLoc, _upOffsetLoc;
+        private int _blurVao;          // empty VAO for fullscreen-triangle draws
+        private int _blurFbo;          // reused framebuffer for the blur passes
+        private const int MaxBlurLevels = 6;
+        private int[] _blurTex = new int[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
+        private Vector2i[] _blurSize = new Vector2i[MaxBlurLevels];
+        private int _blurBaseW;        // viewport size the pyramid was built for
+        private int _blurBaseH;
+
+        public bool SupportsBackdropBlur => true;
+
+        /// <summary>
+        /// Initialize the renderer with the window dimensions
+        /// </summary>
+        public void Initialize(int width, int height)
+        {
+            InitializeShaders();
+
+            // Create OpenGL buffer objects
+            _vertexArrayObject = GL.GenVertexArray();
+            _vertexBufferObject = GL.GenBuffer();
+            _elementBufferObject = GL.GenBuffer();
+
+            // Backdrop blur objects
+            _blurVao = GL.GenVertexArray();
+            _blurFbo = GL.GenFramebuffer();
+
+            // Set the default texture
+            TextureTK texture = TextureTK.CreateNew(1, 1);
+            byte[] pixelData = new byte[] { 255, 255, 255, 255 };
+            texture.SetData(new IntRect(0, 0, 1, 1), pixelData);
+            _defaultTexture = texture;
+
+            UpdateProjection(width, height);
+        }
+
+        /// <summary>
+        /// Update the projection matrix when the window is resized
+        /// </summary>
+        public void UpdateProjection(int width, int height)
+        {
+            _fbWidth = width;
+            _fbHeight = height;
+            _projection = Matrix4.CreateOrthographicOffCenter(0, width, height, 0, -1, 1);
+        }
+
+        /// <summary>
+        /// Clean up OpenGL resources
+        /// </summary>
+        public void Cleanup()
+        {
+            GL.DeleteBuffer(_vertexBufferObject);
+            GL.DeleteBuffer(_elementBufferObject);
+            GL.DeleteVertexArray(_vertexArrayObject);
+            GL.DeleteProgram(_shaderProgram);
+            DeleteBlurObjects();
+        }
+
+        private void DeleteBlurObjects()
+        {
+            if (_blurDownProgram != 0) GL.DeleteProgram(_blurDownProgram);
+            if (_blurUpProgram != 0) GL.DeleteProgram(_blurUpProgram);
+            if (_blurVao != 0) GL.DeleteVertexArray(_blurVao);
+            if (_blurFbo != 0) GL.DeleteFramebuffer(_blurFbo);
+            for (int i = 0; i < MaxBlurLevels; i++)
+            {
+                if (_blurTex[i] != 0) GL.DeleteTexture(_blurTex[i]);
+                _blurTex[i] = 0;
+            }
+            _blurDownProgram = _blurUpProgram = _blurVao = _blurFbo = 0;
+            _blurBaseW = _blurBaseH = 0;
+        }
+
+        private void InitializeShaders()
+        {
+            _shaderProgram = GL.CreateProgram();
+
+            // Compile vertex shader
+            int vertexShader = GL.CreateShader(ShaderType.VertexShader);
+            GL.ShaderSource(vertexShader, DEFAULT_VERTEX_SHADER);
+            GL.CompileShader(vertexShader);
+
+            // Compile fragment shader
+            int fragmentShader = GL.CreateShader(ShaderType.FragmentShader);
+            GL.ShaderSource(fragmentShader, STROKE_FRAGMENT_SHADER);
+            GL.CompileShader(fragmentShader);
+
+            // Link the program
+            GL.AttachShader(_shaderProgram, vertexShader);
+            GL.AttachShader(_shaderProgram, fragmentShader);
+            GL.LinkProgram(_shaderProgram);
+
+            // Clean up shader objects
+            GL.DeleteShader(vertexShader);
+            GL.DeleteShader(fragmentShader);
+
+            // Get location of the projection uniform
+            _projectionLocation = GL.GetUniformLocation(_shaderProgram, "projection");
+            _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "texture0");
+            _fontTextureLoc = GL.GetUniformLocation(_shaderProgram, "fontTexture");
+            _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
+            _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
+
+            _brushMatLoc = GL.GetUniformLocation(_shaderProgram, "brushMat");
+            _brushTypeLoc = GL.GetUniformLocation(_shaderProgram, "brushType");
+            _brushColor1Loc = GL.GetUniformLocation(_shaderProgram, "brushColor1");
+            _brushColor2Loc = GL.GetUniformLocation(_shaderProgram, "brushColor2");
+            _brushParamsLoc = GL.GetUniformLocation(_shaderProgram, "brushParams");
+            _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
+            _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
+            _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
+            _backdropTexLoc = GL.GetUniformLocation(_shaderProgram, "backdropTexture");
+            _viewportSizeLoc = GL.GetUniformLocation(_shaderProgram, "viewportSize");
+            _backdropBlurAmountLoc = GL.GetUniformLocation(_shaderProgram, "backdropBlurAmount");
+
+            // Compile the dual Kawase down/up programs used for backdrop blur passes
+            _blurDownProgram = BuildBlurProgram(CanvasShaderSource.BlurDownsampleShader);
+            _downSrcLoc = GL.GetUniformLocation(_blurDownProgram, "src");
+            _downHalfpixelLoc = GL.GetUniformLocation(_blurDownProgram, "halfpixel");
+            _downOffsetLoc = GL.GetUniformLocation(_blurDownProgram, "offset");
+
+            _blurUpProgram = BuildBlurProgram(CanvasShaderSource.BlurUpsampleShader);
+            _upSrcLoc = GL.GetUniformLocation(_blurUpProgram, "src");
+            _upHalfpixelLoc = GL.GetUniformLocation(_blurUpProgram, "halfpixel");
+            _upOffsetLoc = GL.GetUniformLocation(_blurUpProgram, "offset");
+        }
+
+        private static int BuildBlurProgram(string fragmentSource)
+        {
+            int program = GL.CreateProgram();
+            int vs = GL.CreateShader(ShaderType.VertexShader);
+            GL.ShaderSource(vs, CanvasShaderSource.BlurVertexShader);
+            GL.CompileShader(vs);
+            int fs = GL.CreateShader(ShaderType.FragmentShader);
+            GL.ShaderSource(fs, fragmentSource);
+            GL.CompileShader(fs);
+            GL.AttachShader(program, vs);
+            GL.AttachShader(program, fs);
+            GL.LinkProgram(program);
+            GL.DeleteShader(vs);
+            GL.DeleteShader(fs);
+            return program;
+        }
+
+        private Matrix4 ToTK(Float4x4 mat) => new Matrix4(
+            (float)mat[0, 0], (float)mat[1, 0], (float)mat[2, 0], (float)mat[3, 0],
+            (float)mat[0, 1], (float)mat[1, 1], (float)mat[2, 1], (float)mat[3, 1],
+            (float)mat[0, 2], (float)mat[1, 2], (float)mat[2, 2], (float)mat[3, 2],
+            (float)mat[0, 3], (float)mat[1, 3], (float)mat[2, 3], (float)mat[3, 3]
+        );
+
+        private OpenTK.Mathematics.Vector4 ToTK(Prowl.Vector.Float4 v) => new OpenTK.Mathematics.Vector4(
+            (float)v.X, (float)v.Y, (float)v.Z, (float)v.W
+        );
+
+        private OpenTK.Mathematics.Vector4 ToTK(Color32 color) => new OpenTK.Mathematics.Vector4(
+            color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f
+        );
+
+        private void SetCustomUniforms(int program, ShaderUniforms uniforms)
+        {
+            foreach (var kvp in uniforms.Values)
+            {
+                int loc = GL.GetUniformLocation(program, kvp.Key);
+                if (loc < 0) continue;
+
+                switch (kvp.Value)
+                {
+                    case float f:
+                        GL.Uniform1(loc, f);
+                        break;
+                    case int i:
+                        GL.Uniform1(loc, i);
+                        break;
+                    case Float2 v2:
+                        GL.Uniform2(loc, (float)v2.X, (float)v2.Y);
+                        break;
+                    case Float3 v3:
+                        GL.Uniform3(loc, (float)v3.X, (float)v3.Y, (float)v3.Z);
+                        break;
+                    case Float4 v4:
+                        GL.Uniform4(loc, (float)v4.X, (float)v4.Y, (float)v4.Z, (float)v4.W);
+                        break;
+                    case Float4x4 mat:
+                        var tkMat = ToTK(mat);
+                        GL.UniformMatrix4(loc, false, ref tkMat);
+                        break;
+                }
+            }
+        }
+
+        public object CreateTexture(uint width, uint height)
+        {
+            return TextureTK.CreateNew(width, height);
+        }
+
+        public Int2 GetTextureSize(object texture)
+        {
+            if (texture is not TextureTK tkTexture)
+                throw new ArgumentException("Invalid texture type");
+
+            return new Int2((int)tkTexture.Width, (int)tkTexture.Height);
+        }
+
+        public void SetTextureData(object texture, IntRect bounds, byte[] data)
+        {
+            if (texture is not TextureTK tkTexture)
+                throw new ArgumentException("Invalid texture type");
+            tkTexture.SetData(bounds, data);
+        }
+
+        private static int CreateBlurTexture(int w, int h)
+        {
+            int tex = GL.GenTexture();
+            GL.BindTexture(TextureTarget.Texture2D, tex);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, w, h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+            return tex;
+        }
+
+        private void EnsureBlurTargets(int baseW, int baseH)
+        {
+            if (_blurTex[0] != 0 && _blurBaseW == baseW && _blurBaseH == baseH)
+                return;
+            for (int i = 0; i < MaxBlurLevels; i++)
+                if (_blurTex[i] != 0) GL.DeleteTexture(_blurTex[i]);
+
+            // Level 0 is half the viewport; each subsequent level halves again.
+            for (int i = 0; i < MaxBlurLevels; i++)
+            {
+                int w = Math.Max(1, baseW >> (i + 1));
+                int h = Math.Max(1, baseH >> (i + 1));
+                _blurSize[i] = new Vector2i(w, h);
+                _blurTex[i] = CreateBlurTexture(w, h);
+            }
+            _blurBaseW = baseW;
+            _blurBaseH = baseH;
+        }
+
+        /// <summary>
+        /// Maps a pixel blur radius onto a number of dual Kawase down/up iterations plus a continuous
+        /// sample offset, so the blur scales smoothly with radius. These two constants are the knobs
+        /// to tune if the visual radius does not match the requested pixels.
+        /// </summary>
+        private static void ComputeBlurParams(float radius, out int iterations, out float offset)
+        {
+            // A dual Kawase pyramid of n iterations with sample offset o spreads light by roughly
+            // o * 2^(n+1) source texels. We pick n from the radius and solve o so the product equals
+            // the requested radius: that keeps the effective blur continuous even as n steps.
+            float r = MathF.Max(radius, 2f);
+            iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
+            offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        }
+
+        /// <summary>
+        /// Captures the framebuffer behind the shape and dual-Kawase blurs it into _blurTex[0],
+        /// restoring the default framebuffer/viewport so the caller can draw the masking shape that
+        /// samples the blurred texture (bound on texture unit 3).
+        /// </summary>
+        private void RenderBackdropBlur(float radius)
+        {
+            EnsureBlurTargets(_fbWidth, _fbHeight);
+            ComputeBlurParams(radius, out int iterations, out float offset);
+
+            GL.Disable(EnableCap.Blend);
+            GL.BindVertexArray(_blurVao);
+            GL.ActiveTexture(TextureUnit.Texture0);
+
+            // Capture the default framebuffer into level 0 (half res) via a linear blit.
+            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _blurFbo);
+            GL.FramebufferTexture2D(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _blurTex[0], 0);
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+            GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _blurSize[0].X, _blurSize[0].Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
+
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _blurFbo);
+
+            // Downsample chain: level 0 -> 1 -> ... -> iterations.
+            GL.UseProgram(_blurDownProgram);
+            GL.Uniform1(_downSrcLoc, 0);
+            GL.Uniform1(_downOffsetLoc, offset);
+            for (int i = 0; i < iterations; i++)
+                BlurPass(_blurTex[i], _blurTex[i + 1], _blurSize[i + 1], _downHalfpixelLoc, _blurSize[i]);
+
+            // Upsample chain: level iterations -> ... -> 0.
+            GL.UseProgram(_blurUpProgram);
+            GL.Uniform1(_upSrcLoc, 0);
+            GL.Uniform1(_upOffsetLoc, offset);
+            for (int i = iterations; i > 0; i--)
+                BlurPass(_blurTex[i], _blurTex[i - 1], _blurSize[i - 1], _upHalfpixelLoc, _blurSize[i - 1]);
+
+            // Restore state for canvas drawing.
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            GL.Viewport(0, 0, _fbWidth, _fbHeight);
+            GL.Enable(EnableCap.Blend);
+            GL.BindVertexArray(_vertexArrayObject);
+
+            // Bind the blurred result (level 0) on unit 3 for the canvas shader composite.
+            GL.ActiveTexture(TextureUnit.Texture3);
+            GL.BindTexture(TextureTarget.Texture2D, _blurTex[0]);
+            GL.ActiveTexture(TextureUnit.Texture0);
+        }
+
+        /// <summary>
+        /// Runs one Kawase pass: samples <paramref name="srcTex"/> into <paramref name="dstTex"/>
+        /// (sized <paramref name="dstSize"/>), with halfpixel derived from <paramref name="halfpixelBasis"/>.
+        /// </summary>
+        private void BlurPass(int srcTex, int dstTex, Vector2i dstSize, int halfpixelLoc, Vector2i halfpixelBasis)
+        {
+            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, dstTex, 0);
+            GL.Viewport(0, 0, dstSize.X, dstSize.Y);
+            GL.Uniform2(halfpixelLoc, 0.5f / halfpixelBasis.X, 0.5f / halfpixelBasis.Y);
+            GL.BindTexture(TextureTarget.Texture2D, srcTex);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        }
+
+        public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
+        {
+
+            // Skip if canvas is empty
+            if (drawCalls.Count == 0)
+                return;
+
+            // Configure OpenGL state
+            GL.Disable(EnableCap.DepthTest);
+            GL.Enable(EnableCap.Blend);
+            GL.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
+
+            // Use shader and set projection
+            GL.UseProgram(_shaderProgram);
+            GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+            // Bind vertex array
+            GL.BindVertexArray(_vertexArrayObject);
+
+            // Upload vertex data (20 bytes per vertex)
+            GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
+            GL.BufferData(BufferTarget.ArrayBuffer, canvas.Vertices.Count * Vertex.SizeInBytes, canvas.Vertices.ToArray(), BufferUsageHint.StreamDraw);
+
+            int stride = Vertex.SizeInBytes; // 20
+
+            // Position (location 0): vec2 at offset 0
+            GL.EnableVertexAttribArray(0);
+            GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, stride, 0);
+
+            // TexCoord (location 1): vec2 at offset 8
+            GL.EnableVertexAttribArray(1);
+            GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 8);
+
+            // Color (location 2): vec4 ubyte normalized at offset 16
+            GL.EnableVertexAttribArray(2);
+            GL.VertexAttribPointer(2, 4, VertexAttribPointerType.UnsignedByte, true, stride, 16);
+
+            // Upload index data
+            GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.Indices.Count * sizeof(uint), canvas.Indices.ToArray(), BufferUsageHint.StreamDraw);
+
+            // Active texture unit for sampling
+            GL.ActiveTexture(TextureUnit.Texture0);
+            GL.Uniform1(_textureSamplerLocation, 0); // texture unit 0
+            GL.Uniform1(_fontTextureLoc, 1);         // texture unit 1: persistent font atlas
+
+            // Draw all draw calls in the canvas
+            int indexOffset = 0;
+            foreach (var drawCall in drawCalls)
+            {
+                // Backdrop blur: capture and blur the framebuffer behind this shape first.
+                if (drawCall.Brush.BackdropBlur > 0f)
+                    RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
+
+                // Handle texture binding. Bind the font atlas to unit 1 first, then the brush
+                // texture to unit 0 last so the active unit stays 0 for the rest of the setup.
+                (drawCall.FontAtlas as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture1);
+                (drawCall.Texture as TextureTK ?? _defaultTexture).Use(TextureUnit.Texture0);
+
+                // Check for custom shader
+                if (drawCall.Shader is int customProgram)
+                {
+                    // Use custom shader
+                    GL.UseProgram(customProgram);
+
+                    // Set projection (required for all shaders to work correctly)
+                    int projLoc = GL.GetUniformLocation(customProgram, "projection");
+                    if (projLoc >= 0)
+                        GL.UniformMatrix4(projLoc, false, ref _projection);
+
+                    // Set texture sampler
+                    int texLoc = GL.GetUniformLocation(customProgram, "texture0");
+                    if (texLoc >= 0)
+                        GL.Uniform1(texLoc, 0);
+
+                    // Set user-provided uniforms
+                    if (drawCall.ShaderUniforms != null)
+                        SetCustomUniforms(customProgram, drawCall.ShaderUniforms);
+                }
+                else
+                {
+                    // Use default shader
+                    GL.UseProgram(_shaderProgram);
+                    GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+
+                    // Set DPI scale for converting pixel coords to logical coords in shader
+                    GL.Uniform1(_dpiScaleLoc, (float)canvas.FramebufferScale);
+
+                    // Set scissor rectangle
+                    drawCall.GetScissor(out var scissor, out var extent);
+                    var tkScissor = ToTK(scissor);
+                    GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
+                    GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
+
+                    // Set brush parameters
+                    var brushMat = ToTK(drawCall.Brush.BrushMatrix);
+                    GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
+                    GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
+                    GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
+                    GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
+                    GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y);
+                    GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
+
+                    // Set texture transform parameters
+                    var textureMat = ToTK(drawCall.Brush.TextureMatrix);
+                    GL.UniformMatrix4(_brushTextureMatLoc, false, ref textureMat);
+
+                    // Backdrop blur: viewport size for screen->uv, blurred texture on unit 3
+                    GL.Uniform2(_viewportSizeLoc, (float)_fbWidth, (float)_fbHeight);
+                    GL.Uniform1(_backdropTexLoc, 3);
+                    GL.Uniform1(_backdropBlurAmountLoc, (float)drawCall.Brush.BackdropBlur);
+                }
+
+                GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
+                indexOffset += drawCall.ElementCount;
+            }
+
+            // Clean up
+            GL.BindVertexArray(0);
+        }
+
+        public void Dispose()
+        {
+            // Dispose of OpenGL resources
+            GL.DeleteBuffer(_vertexBufferObject);
+            GL.DeleteBuffer(_elementBufferObject);
+            GL.DeleteVertexArray(_vertexArrayObject);
+            GL.DeleteProgram(_shaderProgram);
+            DeleteBlurObjects();
+            // Dispose of the default texture
+            _defaultTexture?.Dispose();
+        }
+    }
+}

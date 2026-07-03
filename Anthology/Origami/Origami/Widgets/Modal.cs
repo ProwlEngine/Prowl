@@ -6,6 +6,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 using Color = System.Drawing.Color;
 
@@ -33,6 +34,15 @@ public interface IModal
     /// <param name="layer">The layer this modal should render on (backdrop is layer - 1).</param>
     /// <param name="stackIndex">Position in the stack (0 = bottom). Use for visual offset.</param>
     void Draw(Paper paper, int layer, int stackIndex);
+
+    /// <summary>
+    /// Render this modal's window content INLINE in the current layout flow (no backdrop, no
+    /// positioning, no stack) so the very same modal can be reused as an embedded panel. This is
+    /// what lets the modal system as a whole support embedding — a floating modal and an embedded
+    /// one share one render path. Default: not embeddable; embeddable modals override it.
+    /// </summary>
+    void DrawEmbedded(Paper paper, string id)
+        => throw new NotSupportedException($"{GetType().Name} does not support embedding.");
 }
 
 /// <summary>
@@ -44,10 +54,13 @@ public sealed class DialogModal : IModal
     public string Title = "";
     public Action<Paper>? DrawContent;
     public List<(string Label, Action OnClick, OrigamiVariant Variant)> Buttons = [];
-    public float Width = 400f;
+    public float Width = 344f;
     public float Height;
     public bool CloseOnBackdrop { get; set; }
     public bool CloseOnEscape { get; set; } = true;
+
+    /// <summary>Optional leading vector icon in the title bar (host paints into the slot rect).</summary>
+    public Action<Canvas, Prowl.Vector.Rect>? Icon;
 
     public DialogModal Button(string label, Action onClick, OrigamiVariant variant = OrigamiVariant.Default)
     {
@@ -55,80 +68,145 @@ public sealed class DialogModal : IModal
         return this;
     }
 
+    // Nebula .w2modal / .w2mm tokens.
+
     public void Draw(Paper paper, int layer, int stackIndex)
     {
         var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
-        var ink = theme.Ink;
-        if (font == null) return;
+        if (theme.Font == null) return;
 
         float screenW = (float)paper.ScreenRect.Size.X;
         float screenH = (float)paper.ScreenRect.Size.Y;
         float offsetY = stackIndex * 20f;
         float dialogX = (screenW - Width) / 2;
-        float dialogY = screenH * 0.25f + offsetY;
+        float dialogY = screenH * 0.24f + offsetY;
 
-        var dialogBuilder = paper.Column($"omd_dlg_{stackIndex}")
+        var container = paper.Column($"omd_dlg_{stackIndex}")
             .PositionType(PositionType.SelfDirected)
             .Position(dialogX, dialogY)
-            .Width(Width);
-
-        if (Height > 0) dialogBuilder.Height(Height);
-        else dialogBuilder.Height(UnitValue.Auto);
-
-        using (dialogBuilder
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(ink.C200).BorderWidth(1)
-            .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 4, 20, 0, Color.FromArgb(80, 0, 0, 0))
+            .Width(Width).Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
+            .BackgroundColor(theme.Popover)
+            .BorderColor(theme.BorderStrong).BorderWidth(1)
+            .Rounded(13f).Clip()
+            .BoxShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
             .Layer(layer)
-            .StopEventPropagation()
+            .StopEventPropagation();
+
+        using (container.Enter())
+            DrawInner(paper, $"omd_{stackIndex}", embedded: false, onClose: () => Modal.Remove(this));
+    }
+
+    /// <summary>Fixed embedded width in px; null = stretch to fill. Set by <see cref="ModalBuilder.ShowEmbedded"/>.</summary>
+    public float? EmbeddedWidth;
+
+    /// <summary>
+    /// Render this modal's window chrome inline in the current layout flow (no backdrop, no
+    /// overlay layer) — the embedded half of the shared render path. Use for anatomy previews /
+    /// embedding a dialog inside a panel.
+    /// </summary>
+    public void DrawEmbedded(Paper paper, string id)
+    {
+        if (Origami.Current.Font == null) return;
+        var container = paper.Column(id)
+            .Width(EmbeddedWidth.HasValue ? UnitValue.Pixels(EmbeddedWidth.Value) : UnitValue.Stretch())
+            .Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
+            .BorderColor(Origami.Current.BorderSoft).BorderWidth(1)
+            .Rounded(9f).Clip();
+
+        using (container.Enter())
+            DrawInner(paper, id, embedded: true, onClose: null);
+    }
+
+    private void DrawInner(Paper paper, string idp, bool embedded, Action? onClose)
+    {
+        var theme = Origami.Current;
+        var m = theme.Metrics;
+        var font = theme.Font!;
+        var ink = theme.Ink;
+        float radius = embedded ? 9f : 13f;
+        float headH = m.FontSize + 18f;
+
+        // ── Head (.w2mm-head): glass-in strip, leading icon + title + close X ──
+        using (paper.Row($"{idp}_head").Width(UnitValue.Stretch()).Height(headH)
+            .BackgroundColor(theme.Glass).RoundedTop(radius)
+            .Padding(11, 11, 0, 0).RowBetween(8)
             .Enter())
         {
-            // Title bar
-            paper.Box($"omd_title_{stackIndex}")
-                .Height(m.RowHeight + m.PaddingLarge)
-                .BackgroundColor(theme.Neutral.C200)
-                .Rounded(m.ContainerRounding, m.ContainerRounding, 0, 0)
-                .Text(Title, font)
-                .TextColor(ink.C500)
-                .FontSize(theme.Metrics.FontSize + 1)
-                .Alignment(TextAlignment.MiddleCenter);
-
-            // Content
-            using (paper.Column($"omd_body_{stackIndex}")
-                .Width(UnitValue.Stretch())
-                .Height(UnitValue.Auto)
-                .Padding(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.PaddingLarge)
-                .ColBetween(m.SpacingMedium)
-                .Enter())
+            if (Icon != null)
             {
-                DrawContent?.Invoke(paper);
+                var draw = Icon;
+                paper.Box($"{idp}_hico").Width(15).Height(headH).IsNotInteractable()
+                    .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>
+                    {
+                        const float sz = 15f;
+                        float ix = (float)(rr.Min.X + (rr.Size.X - sz) * 0.5f);
+                        float iy = (float)(rr.Min.Y + (rr.Size.Y - sz) * 0.5f);
+                        draw(canvas, new Prowl.Vector.Rect(ix, iy, ix + sz, iy + sz));
+                    }));
             }
 
-            // Buttons
-            if (Buttons.Count > 0)
+            paper.Box($"{idp}_title").Width(UnitValue.Stretch()).Height(headH)
+                .Text(Title, theme.SemiBold ?? font).TextColor(ink.C500)
+                .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
+
+            if (onClose != null)
             {
-                using (paper.Row($"omd_btns_{stackIndex}")
-                    .Height(m.RowHeight + m.CompactHeight)
-                    .ChildRight(m.PaddingLarge).ChildBottom(m.SpacingLarge)
-                    .RowBetween(m.SpacingLarge)
-                    .ChildLeft(UnitValue.Stretch())
-                    .Enter())
-                {
-                    for (int b = 0; b < Buttons.Count; b++)
+                var close = onClose;
+                paper.Box($"{idp}_x").Width(18).Height(18)
+                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Rounded(5f)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(0, (_, _) => close())
+                    .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>
                     {
-                        var (label, onClick, variant) = Buttons[b];
-                        var btn = Origami.Button(paper, $"omd_btn_{stackIndex}_{b}", label, onClick).Width(80);
-                        if (variant == OrigamiVariant.Primary || (variant == OrigamiVariant.Default && b == 0))
-                            btn.Primary();
-                        else if (variant == OrigamiVariant.Danger) btn.Danger();
-                        else if (variant == OrigamiVariant.Success) btn.Success();
-                        else if (variant == OrigamiVariant.Warning) btn.Warning();
-                        else if (variant == OrigamiVariant.Info) btn.Info();
-                        btn.Show();
-                    }
+                        float cx = (float)(rr.Min.X + rr.Size.X * 0.5f);
+                        float cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
+                        canvas.SaveState();
+                        canvas.SetStrokeColor(ink.C200);
+                        canvas.SetStrokeWidth(1.4f);
+                        canvas.SetStrokeCap(EndCapStyle.Round);
+                        canvas.BeginPath();
+                        canvas.MoveTo(cx - 3.2f, cy - 3.2f); canvas.LineTo(cx + 3.2f, cy + 3.2f);
+                        canvas.MoveTo(cx + 3.2f, cy - 3.2f); canvas.LineTo(cx - 3.2f, cy + 3.2f);
+                        canvas.Stroke();
+                        canvas.RestoreState();
+                    }));
+            }
+        }
+
+        paper.Box($"{idp}_hdiv").Width(UnitValue.Stretch()).Height(1).BackgroundColor(theme.BorderSoft).IsNotInteractable();
+
+        // ── Body (.w2mm-body): t-mid text, padding 11 ──
+        using (paper.Column($"{idp}_body")
+            .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+            .Padding(11, 11, 11, 11).ColBetween(m.SpacingMedium)
+            .TextColor(ink.C300).FontSize(m.FontSize)
+            .Enter())
+        {
+            DrawContent?.Invoke(paper);
+        }
+
+        // ── Foot (.w2mm-foot): right-aligned buttons, border-top ──
+        if (Buttons.Count > 0)
+        {
+            paper.Box($"{idp}_fdiv").Width(UnitValue.Stretch()).Height(1).BackgroundColor(theme.BorderSoft).IsNotInteractable();
+            using (paper.Row($"{idp}_foot").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                .Padding(11, 11, 10, 10).RowBetween(8).ChildLeft(UnitValue.Stretch())
+                .Enter())
+            {
+                for (int b = 0; b < Buttons.Count; b++)
+                {
+                    var (label, onClick, variant) = Buttons[b];
+                    var btn = Origami.Button(paper, $"{idp}_btn_{b}", label, onClick);
+                    if (embedded) btn.Small();
+                    bool primaryDefault = variant == OrigamiVariant.Primary
+                        || (variant == OrigamiVariant.Default && b == Buttons.Count - 1);
+                    if (primaryDefault) btn.Primary();
+                    else if (variant == OrigamiVariant.Danger) btn.Danger().Soft();
+                    else if (variant == OrigamiVariant.Success) btn.Success();
+                    else if (variant == OrigamiVariant.Warning) btn.Warning();
+                    else if (variant == OrigamiVariant.Info) btn.Info();
+                    btn.Show();
                 }
             }
         }
@@ -184,6 +262,12 @@ public static class Modal
 
     /// <summary>Pop all modals.</summary>
     public static void PopAll() => _stack.Clear();
+
+    /// <summary>
+    /// Render any embeddable modal INLINE in the current layout flow (no stack, no backdrop) — the
+    /// same content it would draw when floating. Throws if the modal doesn't support embedding.
+    /// </summary>
+    public static void DrawEmbedded(Paper paper, string id, IModal modal) => modal.DrawEmbedded(paper, id);
 
     // ── Convenience shortcuts ────────────────────────────────
 
@@ -280,16 +364,20 @@ public sealed class ModalBuilder
 {
     private string _title;
     private Action<Paper>? _content;
-    private float _width = 400f;
+    private float _width = 344f;
     private float _height;
     private bool _closeOnBackdrop;
     private bool _closeOnEscape = true;
+    private Action<Canvas, Prowl.Vector.Rect>? _icon;
     private readonly List<(string Label, Action OnClick, OrigamiVariant Variant)> _buttons = [];
 
     internal ModalBuilder(string title) => _title = title;
 
     /// <summary>Set the modal body content via a draw callback.</summary>
     public ModalBuilder Content(Action<Paper> draw) { _content = draw; return this; }
+
+    /// <summary>Set an optional leading vector icon in the title bar.</summary>
+    public ModalBuilder Icon(Action<Canvas, Prowl.Vector.Rect> draw) { _icon = draw; return this; }
 
     /// <summary>Set body content to a simple text message.</summary>
     public ModalBuilder Message(string text)
@@ -325,13 +413,14 @@ public sealed class ModalBuilder
     public ModalBuilder DangerButton(string label, Action onClick)
         => Button(label, onClick, OrigamiVariant.Danger);
 
-    /// <summary>Push the configured modal onto the stack.</summary>
-    public void Show()
+    /// <summary>Build the configured <see cref="DialogModal"/> without pushing it.</summary>
+    public DialogModal Build()
     {
         var entry = new DialogModal
         {
             Title = _title,
             DrawContent = _content,
+            Icon = _icon,
             Width = _width,
             Height = _height,
             CloseOnBackdrop = _closeOnBackdrop,
@@ -339,6 +428,17 @@ public sealed class ModalBuilder
         };
         foreach (var (label, onClick, variant) in _buttons)
             entry.Button(label, onClick, variant);
-        Modal.Push(entry);
+        return entry;
+    }
+
+    /// <summary>Push the configured modal onto the stack.</summary>
+    public void Show() => Modal.Push(Build());
+
+    /// <summary>Render the configured modal's window chrome inline (embedded, no overlay/backdrop).</summary>
+    public void ShowEmbedded(Paper paper, string id, float? width = null)
+    {
+        var m = Build();
+        m.EmbeddedWidth = width;
+        m.DrawEmbedded(paper, id);
     }
 }

@@ -2,11 +2,12 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Drawing;
-
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+
+using Color = System.Drawing.Color;
 
 namespace Prowl.OrigamiUI;
 
@@ -31,9 +32,12 @@ public sealed class FoldoutBuilder
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private bool _defaultExpanded;
+    private bool? _expandedOverride;
+    private Action<bool>? _onExpandChanged;
     private bool? _toggleValue;
     private Action<bool>? _toggleSetter;
     private string? _badge;
+    private Action<Canvas, Prowl.Vector.Rect>? _iconDraw;
 
     private Color? _headerBgOverride;
     private Color? _bodyBgOverride;
@@ -64,6 +68,18 @@ public sealed class FoldoutBuilder
     public FoldoutBuilder DefaultExpanded(bool expanded = true) { _defaultExpanded = expanded; return this; }
 
     /// <summary>
+    /// Controlled expansion: the caller owns the open state. Overrides the internal storage so the
+    /// foldout renders exactly <paramref name="value"/>; <paramref name="onChanged"/> fires with the
+    /// requested state when the header is clicked. Use this for accordions (single-open groups).
+    /// </summary>
+    public FoldoutBuilder Expanded(bool value, Action<bool> onChanged)
+    {
+        _expandedOverride = value;
+        _onExpandChanged = onChanged ?? throw new ArgumentNullException(nameof(onChanged));
+        return this;
+    }
+
+    /// <summary>
     /// Add an enable toggle next to the header chevron. The label dims when <paramref name="value"/> is false;
     /// <paramref name="setter"/> fires on click.
     /// </summary>
@@ -76,6 +92,13 @@ public sealed class FoldoutBuilder
 
     /// <summary>Right-aligned text on the header — use for counts, summaries, status indicators.</summary>
     public FoldoutBuilder Badge(string? text) { _badge = text; return this; }
+
+    /// <summary>
+    /// Optional leading vector icon, drawn between the caret and the label. The stroke color is
+    /// preset to the acc-300 accent (<c>theme.Primary.C700</c>); the action receives the icon's
+    /// canvas and bounds — draw a path and <c>Stroke()</c> (or override the stroke color yourself).
+    /// </summary>
+    public FoldoutBuilder Icon(Action<Canvas, Prowl.Vector.Rect> draw) { _iconDraw = draw; return this; }
 
     // ── Per-instance style overrides ───────────────────────────────────
 
@@ -91,156 +114,216 @@ public sealed class FoldoutBuilder
     {
         ArgumentNullException.ThrowIfNull(drawContents);
 
-        var ramp = _theme.Get(_variant);
         var ink = _theme.Ink;
         var metrics = _theme.Metrics;
-        var icons = _theme.Icons;
-        float rounding = _roundingOverride ?? metrics.Rounding;
+        float rounding = _roundingOverride ?? 9f;
+
+        // Nebula "w2fold" tokens.
+        Color bdSoft      = _theme.BorderSoft;   // --bd-soft
+        Color glassIn     = _theme.Glass;       // --glass-in
+        Color hoverPurple = _theme.Hover;    // rgba(168,85,247,0.12)
+        Color caretCol    = ink.C200;                            // --t-lo
+        Color labelCol    = ink.C500;                            // --t-hi
+        Color badgeCol    = ink.C300;                            // --t-mid
+        Color accIcon     = _theme.Primary.C700;                 // --acc-300
+
         bool hasToggle = _toggleValue.HasValue;
         bool isEnabled = _toggleValue ?? true;
 
-        // Subtle suppresses idle bg; everything else uses C300 unless overridden.
+        // Subtle suppresses the idle glass fill; everything else uses glass-in unless overridden.
         Color headerBg = _headerBgOverride
-            ?? (_variant == OrigamiVariant.Subtle ? Color.Transparent : ramp.C300);
+            ?? (_variant == OrigamiVariant.Subtle ? Color.Transparent : glassIn);
 
-        // Probe expand state up front (we need it to choose corner rounding).
-        // The header element itself stores it; we declare the row first, then read.
-        // No ChildLeft/Right on the header — first/last visible children carry their
-        // own edge padding so layout doesn't depend on flaky child-padding semantics.
-        var header = _paper.Row($"{_id}_header")
-            .Height(metrics.HeaderHeight);
+        float headH = metrics.FontSize + 18f;   // ~9px vertical padding around the label
+        const float padX = 11f;                  // header horizontal padding
+        const float gap  = 8f;                   // flex gap between header children
 
-        bool expanded = _paper.GetElementStorage(header._handle, "exp", _defaultExpanded);
-
-        // First we need the animation value, lets grab it here so we can skip creating the body at all if animation is 0
-        // But also since the Header needs rounded at the bottom to stay 0 while the body exists
-        float anim = 0f;
-        using (header.Enter())
-        {
-            anim = _paper.AnimateBool(expanded, 0.2f);
-        }
-
-        // Header rounding: full when collapsed, top-only when expanded so it reads as
-        // continuous with the body wrapper below it. Bottom margin removed when expanded
-        // so the body sits flush against the header (no visual gap).
-        if (expanded || anim > float.Epsilon)
-        {
-            header.Rounded(rounding, rounding, 0, 0);
-            header.Margin(UnitValue.Auto, UnitValue.Auto, 2, 0);
-        }
-        else
-        {
-            header.Rounded(rounding);
-            header.Margin(UnitValue.Auto, 2);
-        }
-
-        if (headerBg.A > 0)
-            header.BackgroundColor(headerBg);
-        header.Hovered.BackgroundColor(ramp.C500).End();
-        header.OnClick(_ => _paper.SetElementStorage(header._handle, "exp", !expanded));
-
-        if (_theme.Font != null)
-        {
-            using (header.Enter())
-            {
-                bool drawChevron = !string.IsNullOrEmpty(icons.ChevronDown) && !string.IsNullOrEmpty(icons.ChevronRight);
-                bool drawToggleGlyph = hasToggle && !string.IsNullOrEmpty(icons.CheckboxOn) && !string.IsNullOrEmpty(icons.CheckboxOff);
-                bool drawBadge = !string.IsNullOrEmpty(_badge);
-
-                // Edge padding is carried by the first/last visible child instead of the header's
-                // ChildLeft/Right. `leftPad` is consumed by whichever child draws first.
-                float leftPad = metrics.HeaderPadX;
-                float rightPad = metrics.HeaderPadX;
-
-                // Disclosure chevron — skipped (and its width reclaimed by the label) when no glyph is set.
-                if (drawChevron)
-                {
-                    _paper.Box($"{_id}_arrow")
-                        .Width(metrics.IconWidth).MaxWidth(metrics.IconWidth)
-                        .Margin(leftPad, 0, UnitValue.Auto, UnitValue.Auto)
-                        .Alignment(TextAlignment.MiddleLeft)
-                        .Text(expanded ? icons.ChevronDown : icons.ChevronRight, _theme.Font)
-                        .TextColor(ink.C300)
-                        .FontSize(metrics.FontSize * 0.7f);
-                    leftPad = 0;
-                }
-
-                // Enable toggle (uses checkbox glyphs when available; otherwise we still register
-                // the click target as a small bg-only box so the user can toggle, and dim the
-                // label as feedback).
-                if (hasToggle)
-                {
-                    var setter = _toggleSetter!;
-                    var toggleBox = _paper.Box($"{_id}_chk")
-                        .Width(metrics.IconWidth).Height(metrics.HeaderHeight)
-                        .Margin(leftPad, 0, 0, 0)
-                        .Alignment(TextAlignment.MiddleCenter);
-                    if (drawToggleGlyph)
-                        toggleBox.Text(isEnabled ? icons.CheckboxOn : icons.CheckboxOff, _theme.Font)
-                                 .TextColor(ink.C500)
-                                 .FontSize(metrics.FontSize);
-                    toggleBox.OnClick(0, (_, e) => { e.StopPropagation(); setter(!isEnabled); });
-                    leftPad = 0;
-                }
-
-                // Label — fills remaining width. Carries leftPad if it's the first child,
-                // and rightPad when there's no badge after it.
-                _paper.Box($"{_id}_lbl")
-                    .Width(UnitValue.Stretch())
-                    .Margin(leftPad, drawBadge ? 0 : rightPad, 0, 0)
-                    .Text(_label, _theme.Font)
-                    .TextColor(hasToggle && !isEnabled ? ink.C300 : ink.C500)
-                    .Alignment(TextAlignment.MiddleLeft)
-                    .FontSize(metrics.FontSize);
-
-                // Badge — last child, carries rightPad.
-                if (drawBadge)
-                {
-                    _paper.Box($"{_id}_badge")
-                        .Width(UnitValue.Auto).Height(metrics.HeaderHeight)
-                        .Margin(metrics.BadgePadLeft, rightPad, 0, 0)
-                        .Text(_badge, _theme.Font)
-                        .TextColor(ink.C300)
-                        .FontSize(metrics.FontSize - 1f)
-                        .Alignment(TextAlignment.MiddleRight);
-                }
-            }
-        }
-
-        // ── Body ──────────────────────────────────────────────────
-
-        if (!expanded && anim <= float.Epsilon)
-            return;
-
-        // Outer wrapper: same surface as the header (so the two read as one card),
-        // bottom-rounded only, with small inner padding so the inset panel doesn't
-        // hug the rounded corner. No top margin/padding — sits flush with the header.
-        Color bodyBg = _bodyBgOverride ?? headerBg;
-
-        var bodyWrapper = _paper.Column($"{_id}_body")
+        // Outer card: 1px bd-soft border, radius 9, overflow hidden.
+        var container = _paper.Column($"{_id}")
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
-            .Rounded(0, 0, rounding, rounding);
-        if (bodyBg.A > 0) bodyWrapper.BackgroundColor(bodyBg);
-        if (_bodyOutlined) bodyWrapper.BorderColor(ramp.C500).BorderWidth(1f);
+            .Rounded(rounding)
+            .BorderColor(bdSoft)
+            .BorderWidth(1f)
+            .Clip();
 
-        using (bodyWrapper.Enter())
+        using (container.Enter())
         {
-            // Inner panel — recessed darker fill with its own rounded corners. Sized to
-            // children; callers wrap content in a ScrollView themselves if they want one.
-            var inner = _paper.Box($"{_id}_inner")
+            var header = _paper.Row($"{_id}_header")
+                .Width(UnitValue.Stretch())
+                .Height(headH);
+
+            bool expanded = _expandedOverride ?? _paper.GetElementStorage(header._handle, "exp", _defaultExpanded);
+
+            // Grab the open/close animation value up front so we can skip the body when fully closed.
+            float anim;
+            using (header.Enter())
+                anim = _paper.AnimateBool(expanded, 0.2f);
+
+            if (headerBg.A > 0)
+                header.BackgroundColor(headerBg);
+            header.Hovered.BackgroundColor(hoverPurple).End();
+            // Round the header fill to match the clipped rounded container (a rectangular clip alone
+            // leaves square top corners poking over the border): top-only when a body follows, else all.
+            if (expanded || anim > float.Epsilon)
+                header.RoundedTop(rounding);
+            else
+                header.Rounded(rounding);
+            if (_onExpandChanged != null)
+                header.OnClick(_ => _onExpandChanged(!expanded));
+            else
+                header.OnClick(_ => _paper.SetElementStorage(header._handle, "exp", !expanded));
+
+            using (header.Enter())
+            {
+                float leftPad = padX;
+
+                // Disclosure caret — vector (the glyph font is empty). Points right when collapsed
+                // and rotates to point down as the foldout opens, driven by `anim`.
+                using (_paper.Box($"{_id}_arrow")
+                    .Width(14f).Height(headH)
+                    .Margin(leftPad, gap, 0, 0)
+                    .IsNotInteractable()
+                    .Enter())
+                {
+                    float a = anim;
+                    _paper.Draw((canvas, rr) =>
+                    {
+                        float cx = (float)(rr.Min.X + rr.Size.X * 0.5f);
+                        float cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
+                        DrawCaret(canvas, cx, cy, a, caretCol);
+                    });
+                }
+                leftPad = 0f;
+
+                // Optional leading accent icon (acc-300), vertically centered in the header.
+                if (_iconDraw != null)
+                {
+                    var draw = _iconDraw;
+                    using (_paper.Box($"{_id}_icon")
+                        .Width(14f).Height(headH)
+                        .Margin(0, gap, 0, 0)
+                        .IsNotInteractable()
+                        .Enter())
+                    {
+                        _paper.Draw((canvas, rr) =>
+                        {
+                            const float isz = 14f;
+                            float ix = (float)(rr.Min.X + (rr.Size.X - isz) * 0.5f);
+                            float iy = (float)(rr.Min.Y + (rr.Size.Y - isz) * 0.5f);
+                            var cell = new Prowl.Vector.Rect(ix, iy, ix + isz, iy + isz);
+                            canvas.SaveState();
+                            canvas.SetStrokeColor(accIcon);
+                            canvas.SetStrokeWidth(1.5f);
+                            canvas.SetStrokeCap(EndCapStyle.Round);
+                            canvas.SetStrokeJoint(JointStyle.Round);
+                            draw(canvas, cell);
+                            canvas.RestoreState();
+                        });
+                    }
+                }
+
+                if (_theme.Font != null)
+                {
+                    bool drawBadge = !string.IsNullOrEmpty(_badge);
+
+                    // Enable toggle (optional). The glyph font is empty, so this reads as a small
+                    // click target that dims the label as feedback.
+                    if (hasToggle)
+                    {
+                        var setter = _toggleSetter!;
+                        _paper.Box($"{_id}_chk")
+                            .Width(metrics.IconWidth).Height(headH)
+                            .Margin(0, gap, 0, 0)
+                            .Alignment(TextAlignment.MiddleCenter)
+                            .OnClick(0, (_, e) => { e.StopPropagation(); setter(!isEnabled); });
+                    }
+
+                    // Label — fills the remaining width; carries the right edge padding when no badge follows.
+                    _paper.Box($"{_id}_lbl")
+                        .Width(UnitValue.Stretch())
+                        .Margin(leftPad, drawBadge ? 0 : padX, 0, 0)
+                        .Text(_label, _theme.SemiBold ?? _theme.Font)
+                        .TextColor(hasToggle && !isEnabled ? ink.C300 : labelCol)
+                        .Alignment(TextAlignment.MiddleLeft)
+                        .FontSize(metrics.FontSize);
+
+                    // Badge — last child, carries the right edge padding.
+                    if (drawBadge)
+                    {
+                        _paper.Box($"{_id}_badge")
+                            .Width(UnitValue.Auto).Height(headH)
+                            .Margin(metrics.BadgePadLeft, padX, 0, 0)
+                            .Text(_badge, _theme.Font)
+                            .TextColor(badgeCol)
+                            .FontSize(metrics.FontSize - 1f)
+                            .Alignment(TextAlignment.MiddleRight);
+                    }
+                }
+            }
+
+            // ── Body ──────────────────────────────────────────────────
+
+            if (!expanded && anim <= float.Epsilon)
+                return;
+
+            Color bodyBg = _bodyBgOverride ?? Color.Transparent;
+
+            // Body wrapper collapses via an animated height and is clipped so content wipes in/out.
+            var body = _paper.Column($"{_id}_body")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Lerp(0, UnitValue.Auto, anim))
-                .Margin(_theme.Metrics.PaddingSmall)
-                .Padding(_theme.Metrics.PaddingSmall)
-                .BackgroundColor(ramp.C100)
-                .Clip()
-                .Rounded(rounding);
+                .Clip();
+            if (bodyBg.A > 0)
+                body.BackgroundColor(bodyBg);
 
-            using (inner.Enter())
+            using (body.Enter())
             {
-                drawContents();
+                // 1px bd-soft rule separating the header from the body (CSS border-top).
+                _paper.Box($"{_id}_sep")
+                    .Width(UnitValue.Stretch()).Height(1f)
+                    .BackgroundColor(bdSoft)
+                    .IsNotInteractable();
+
+                var content = _paper.Box($"{_id}_inner")
+                    .Width(UnitValue.Stretch())
+                    .Height(UnitValue.Auto)
+                    .Padding(12f, 12f, 10f, 10f)
+                    .TextColor(ink.C300)                 // --t-mid body text
+                    .FontSize(metrics.FontSize);
+                if (_bodyOutlined)
+                    content.BorderColor(bdSoft).BorderWidth(1f);
+
+                using (content.Enter())
+                    drawContents();
             }
         }
+    }
+
+    // Two-segment chevron. Base shape points right (collapsed); rotates 90° to point down as
+    // `anim` goes 0 → 1. Points from the prototype: (-2,-3.5) → (1.5,0) → (-2,3.5) about the center.
+    private static void DrawCaret(Canvas canvas, float cx, float cy, float anim, Color color)
+    {
+        float th = anim * (MathF.PI * 0.5f);
+        float cos = MathF.Cos(th), sin = MathF.Sin(th);
+
+        float ax = cx + (-2f) * cos - (-3.5f) * sin;
+        float ay = cy + (-2f) * sin + (-3.5f) * cos;
+        float bx = cx + (1.5f) * cos;
+        float by = cy + (1.5f) * sin;
+        float dx = cx + (-2f) * cos - (3.5f) * sin;
+        float dy = cy + (-2f) * sin + (3.5f) * cos;
+
+        canvas.SaveState();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.5f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.SetStrokeJoint(JointStyle.Round);
+        canvas.BeginPath();
+        canvas.MoveTo(ax, ay);
+        canvas.LineTo(bx, by);
+        canvas.LineTo(dx, dy);
+        canvas.Stroke();
+        canvas.RestoreState();
     }
 }

@@ -295,12 +295,13 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     {
         bool vertical = _vertical;
         var onRamp = OnRamp();
-        Color trackBg  = _theme.Neutral.C300;
+        Color trackBg  = Color.FromArgb(20, 255, 255, 255); // light translucent groove
         Color fill     = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
-        Color thumbCol = _theme.Ink.C500;
+        Color thumbCol = _theme.Ink.C600;
         Color tickCol  = ink.C300;
         if (_disabled)
         {
+            trackBg  = Color.FromArgb(14, 255, 255, 255);
             fill     = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
             thumbCol = ink.C300;
         }
@@ -470,15 +471,13 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private void DrawThumb(Canvas canvas, float cx, float cy, float r, Color fill, Color body, OrigamiRamp ink,
         bool isActive, float activeAnim)
     {
-        if (isActive && activeAnim > 0.01f && !_disabled)
+        // Purple glow ring around a white handle (prototype box-shadow 0 0 0 3px acc/0.28).
+        if (!_disabled)
         {
-            Color halo = OrigamiRamp.LerpColor(Color.Transparent, fill, activeAnim * 0.35f);
-            canvas.CircleFilled(cx, cy, r + 4f, halo);
+            float ringA = 0.28f + 0.30f * activeAnim;
+            canvas.CircleFilled(cx, cy, r + 3f, Color.FromArgb((int)(ringA * 255), fill.R, fill.G, fill.B));
         }
-        Color rim = _disabled ? _theme.Neutral.C400
-                  : isActive ? fill : ink.C400;
-        canvas.CircleFilled(cx, cy, r, rim);
-        canvas.CircleFilled(cx, cy, MathF.Max(0, r - 1.5f), body);
+        canvas.CircleFilled(cx, cy, r, _disabled ? _theme.Neutral.C400 : body);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────

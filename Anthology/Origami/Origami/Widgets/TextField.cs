@@ -33,11 +33,16 @@ public sealed class TextFieldBuilder
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 26f;
+    private float _height = 32f;
     private bool _readOnly;
     private int _maxLength;
     private string _placeholder = "";
     private bool _selectAllOnFocus;
+    private bool _mono;
+    private string? _suffixText;
+    private Action? _trailingContent;
+    private Action<float>? _prefixDrag;
+    private float _prefixPadL = 10f, _prefixPadR = 4f;
 
     // Slots
     private string? _leadingIconGlyph;
@@ -164,6 +169,21 @@ public sealed class TextFieldBuilder
     /// </summary>
     public TextFieldBuilder Prefix(string text, Color color) { _prefixText = text; _prefixColor = color; return this; }
 
+    /// <summary>Small muted mono suffix inside the field, after the input (e.g. "kg", "%", "px").</summary>
+    public TextFieldBuilder Suffix(string text) { _suffixText = text; return this; }
+
+    /// <summary>Render the input text in the theme's monospace face (for value/code fields).</summary>
+    public TextFieldBuilder Mono(bool mono = true) { _mono = mono; return this; }
+
+    /// <summary>Render caller content in the trailing slot (e.g. a numeric stepper).</summary>
+    public TextFieldBuilder TrailingContent(Action render) { _trailingContent = render; return this; }
+
+    /// <summary>Make the <see cref="Prefix"/> label a horizontal drag handle; callback gets the pixel delta X.</summary>
+    public TextFieldBuilder PrefixDrag(Action<float> onDelta) { _prefixDrag = onDelta; return this; }
+
+    /// <summary>Left/right padding around the <see cref="Prefix"/> label (default 10/4). Use tight values for vector axis tags.</summary>
+    public TextFieldBuilder PrefixPad(float left, float right) { _prefixPadL = left; _prefixPadR = right; return this; }
+
     // ── Filtering ──────────────────────────────────────────────────────
 
     public TextFieldBuilder CharFilter(Func<char, string, bool> filter) { _charFilter = filter; return this; }
@@ -245,29 +265,33 @@ public sealed class TextFieldBuilder
         }
         bool hasError = !string.IsNullOrEmpty(errorMsg);
 
-        // Borders: idle uses the variant ramp (or neutral for Default/Subtle); error
-        // overrides with the danger ramp; focus-state border uses ramp.C500.
+        // Nebula .w2field: glass-in fill, bd-soft border; focus goes accent; error goes red.
+        Color glassIn = _theme.Glass;
+        Color bdSoft = _theme.BorderSoft;
         Color bgColor     = subtle ? Color.Transparent
-                                   : (_variant == OrigamiVariant.Default ? _theme.Neutral.C200 : ramp.C200);
+                                   : (_variant == OrigamiVariant.Default ? glassIn : ramp.C200);
         Color idleBorder  = hasError ? _theme.Red.C500
                           : subtle    ? Color.Transparent
-                                      : (_variant == OrigamiVariant.Default ? _theme.Neutral.C400 : ramp.C400);
-        Color focusBorder = hasError ? _theme.Red.C500 : ramp.C500;
+                                      : (_variant == OrigamiVariant.Default ? bdSoft : ramp.C400);
+        Color focusBorder = hasError ? _theme.Red.C500
+                          : (_variant == OrigamiVariant.Default ? _theme.Primary.C500 : ramp.C500);
 
         // Total widget height = field row + helper line (when present).
         float helperH = (hasError || !string.IsNullOrEmpty(_helperText)) ? 16f : 0f;
         float fieldH  = _multiLine ? ComputeMultiLineHeight() : _height;
 
-        using (_paper.Column(_id).Width(_width).Height(fieldH).Enter())
+        using (_paper.Column(_id).Width(_width).Height(fieldH + helperH).Enter())
         {
             ElementHandle rowHandle = default;
 
             // ── Field row (border, slots, text element) ────────────────
+            // Soft accent glow on focus (not a hard ring).
+            Color glowColor = hasError ? Color.FromArgb(130, 251, 113, 133) : Color.FromArgb(130, 168, 85, 247);
             var rowBuilder = _paper.Row($"{_id}_row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
                 .BorderColor(idleBorder).BorderWidth(1)
-                .Focused.BorderColor(focusBorder).End()
+                .Focused.BorderColor(focusBorder).BoxShadow(0, 0, 10, 1, glowColor).End()
                 .Rounded(_theme.Metrics.Rounding)
                 .TabIndex(0);
 
@@ -276,39 +300,37 @@ public sealed class TextFieldBuilder
                 rowHandle = _paper.CurrentParent;
 
                 // Leading slot ─────────────────────────────────────────
-                if (_isSearch && !string.IsNullOrEmpty(icons.Search))
+                if (_isSearch)
                 {
-                    DrawIcon($"{_id}_lead", icons.Search, ink.C300, leftPad: 8, rightPad: 4, click: null, font);
+                    DrawVecIcon($"{_id}_lead", "search", ink.C300, leftPad: 10, rightPad: 4, click: null, fieldH);
                 }
                 else if (!string.IsNullOrEmpty(_leadingIconGlyph))
                 {
                     DrawIcon($"{_id}_lead", _leadingIconGlyph!, ink.C400, leftPad: 8, rightPad: 4, click: _leadingIconClick, font);
                 }
 
-                // Prefix badge ────────────────────────────────────────
+                // Prefix (.pre) ────────────────────────────────────────
+                // Simple padded colored label before the input (channel tag / draggable label).
                 if (!string.IsNullOrEmpty(_prefixText) && font != null)
                 {
-                    float pfxH = _height - 4;
-                    float pfxRound = MathF.Max(1, _theme.Metrics.Rounding - 2);
-                    var pfxBg = _prefixColor.HasValue
-                        ? Color.FromArgb(20, _prefixColor.Value.R, _prefixColor.Value.G, _prefixColor.Value.B)
-                        : Color.FromArgb(20, ink.C400.R, ink.C400.G, ink.C400.B);
-                    var pfxFg = _prefixColor ?? ink.C500;
-                    _paper.Box($"{_id}_pfx")
-                        .Height(pfxH).Width(pfxH)
-                        .Margin(2, 0, 2, 0)
-                        .Rounded(pfxRound)
-                        .BackgroundColor(pfxBg)
+                    var pfx = _paper.Box($"{_id}_pfx")
+                        .Height(fieldH).Width(UnitValue.Auto)
+                        .Margin(_prefixPadL, _prefixPadR, 0, 0)
                         .Text(_prefixText!, font)
-                        .TextColor(pfxFg)
+                        .TextColor(_prefixColor ?? ink.C200)
                         .FontSize(_theme.Metrics.FontSize - 1)
-                        .Alignment(TextAlignment.MiddleCenter)
-                        .IsNotInteractable();
+                        .Alignment(TextAlignment.MiddleCenter);
+                    if (_prefixDrag != null)
+                    {
+                        var d = _prefixDrag;
+                        pfx.OnDragging(_ => d((float)_paper.PointerDelta.X));
+                    }
+                    else pfx.IsNotInteractable();
                 }
 
                 // The edit element ─────────────────────────────────────
                 var settings = ElementBuilder.TextInputSettings.Default;
-                settings.Font = font;
+                settings.Font = (_mono && !_isSearch) ? (_theme.Mono ?? font) : font;
                 settings.TextColor = ink.C500;
                 settings.PlaceholderColor = ink.C300;
                 settings.Placeholder = _placeholder;
@@ -335,7 +357,7 @@ public sealed class TextFieldBuilder
                     _paper.SetElementStorage(rowHandle, KeyForcePending, false);
                 }
 
-                bool noLeftPad = _isSearch || !string.IsNullOrEmpty(_leadingIconGlyph);
+                bool noLeftPad = _isSearch || !string.IsNullOrEmpty(_leadingIconGlyph) || !string.IsNullOrEmpty(_prefixText);
                 float editLeftPad = noLeftPad ? 0 : 8;
 
                 // Inner edit element. HookToParent + IsNotInteractable lets the row collect
@@ -358,13 +380,25 @@ public sealed class TextFieldBuilder
                         onChange: v => _setter(v ?? string.Empty),
                         intID: _id.GetHashCode());
 
+                // Suffix (.suf) — muted mono unit after the input.
+                if (!string.IsNullOrEmpty(_suffixText) && font != null)
+                {
+                    _paper.Box($"{_id}_suf").Width(UnitValue.Auto).Height(fieldH)
+                        .Margin(2, 10, 0, 0)
+                        .Text(_suffixText!, _theme.Mono ?? font)
+                        .TextColor(ink.C200)
+                        .FontSize(_theme.Metrics.FontSize - 3)
+                        .Alignment(TextAlignment.MiddleRight)
+                        .IsNotInteractable();
+                }
+
                 // Trailing slot ────────────────────────────────────────
                 bool drewTrailing = false;
 
-                if (_showClearButton && !string.IsNullOrEmpty(_value) && !_readOnly && !string.IsNullOrEmpty(icons.Close))
+                if (_showClearButton && !string.IsNullOrEmpty(_value) && !_readOnly)
                 {
                     var capturedRowForClear = rowHandle;
-                    DrawIcon($"{_id}_clear", icons.Close, ink.C400, leftPad: 4, rightPad: _isPassword ? 0 : 6,
+                    DrawVecIcon($"{_id}_clear", "x", ink.C400, leftPad: 4, rightPad: _isPassword ? 0 : 8,
                         click: () =>
                         {
                             _setter(string.Empty);
@@ -372,7 +406,7 @@ public sealed class TextFieldBuilder
                             // (without this, the focused-state-wins rule would leave the old
                             // text visible until blur).
                             QueueForceUpdate(capturedRowForClear, string.Empty);
-                        }, font);
+                        }, fieldH);
                     drewTrailing = true;
                 }
 
@@ -385,6 +419,12 @@ public sealed class TextFieldBuilder
                     var capturedRow = rowHandle;
                     DrawIcon($"{_id}_eye", eye, ink.C400, leftPad: 4, rightPad: 6,
                         click: () => _paper.SetElementStorage(capturedRow, "pwShow", !pwShow), font);
+                    drewTrailing = true;
+                }
+
+                if (!drewTrailing && _trailingContent != null)
+                {
+                    _trailingContent();
                     drewTrailing = true;
                 }
 
@@ -454,6 +494,36 @@ public sealed class TextFieldBuilder
         {
             box.IsNotInteractable();
         }
+    }
+
+    // Vector search magnifier / clear-X (the icon font ships empty glyphs).
+    private void DrawVecIcon(string id, string kind, Color color, float leftPad, float rightPad, Action? click, float fieldH)
+    {
+        var box = _paper.Box(id).Width(16).Height(fieldH).Margin(leftPad, rightPad, 0, 0);
+        if (click != null) box.OnClick(_ => click());
+        else box.IsNotInteractable();
+        box.OnPostLayout((h, r) => _paper.Draw(ref h, (canvas, rr) =>
+        {
+            float cx = (float)(rr.Min.X + rr.Size.X * 0.5f);
+            float cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
+            canvas.SaveState();
+            canvas.SetStrokeColor(color);
+            canvas.SetStrokeWidth(1.5f);
+            canvas.SetStrokeCap(Prowl.Quill.EndCapStyle.Round);
+            if (kind == "search")
+            {
+                canvas.BeginPath(); canvas.Circle(cx - 1.2f, cy - 1.2f, 3.6f); canvas.Stroke();
+                canvas.BeginPath(); canvas.MoveTo(cx + 1.6f, cy + 1.6f); canvas.LineTo(cx + 4.4f, cy + 4.4f); canvas.Stroke();
+            }
+            else // "x"
+            {
+                canvas.BeginPath();
+                canvas.MoveTo(cx - 3f, cy - 3f); canvas.LineTo(cx + 3f, cy + 3f);
+                canvas.MoveTo(cx + 3f, cy - 3f); canvas.LineTo(cx - 3f, cy + 3f);
+                canvas.Stroke();
+            }
+            canvas.RestoreState();
+        }));
     }
 
     private void DrawAutoCompletePopover(ElementHandle rowHandle, OrigamiRamp ramp)

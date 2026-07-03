@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8" />
+<style>
+  @font-face { font-family: 'GeistLocal'; src: url('Fonts/Geist-Regular.ttf') format('truetype'); font-weight: 400; }
+  html, body { margin: 0; padding: 0; }
+  #stage { position: relative; width: 700px; height: 260px; background: #15121d; overflow: hidden; }
+  .ln { position: absolute; left: 24px; font-family: 'GeistLocal'; font-weight: 400; line-height: 1;
+        color: #f0eef7; white-space: nowrap; -webkit-font-smoothing: antialiased; }
+</style></head>
+<body>
+  <div id="stage">
+    <!-- (fontSizePx, topY, text) — identical to TextCompare.cs Lines -->
+    <div class="ln" style="top:18px;  font-size:12px;">The quick brown fox jumps over the lazy dog</div>
+    <div class="ln" style="top:48px;  font-size:14px;">The quick brown fox jumps over the lazy dog</div>
+    <div class="ln" style="top:82px;  font-size:16px;">The quick brown fox jumps over the lazy dog</div>
+    <div class="ln" style="top:122px; font-size:20px;">The quick brown fox jumps over the lazy dog</div>
+    <div class="ln" style="top:172px; font-size:13px;">Did the atmosphere shader compile?</div>
+    <div class="ln" style="top:205px; font-size:24px;">Abg Prowl 0123 - Widget</div>
+  </div>
+</body></html>

@@ -12,21 +12,21 @@ public sealed class OrigamiMetrics
     // ── Corner rounding ────────────────────────────────────────
 
     /// <summary>Default corner radius for controls (buttons, inputs, dropdowns).</summary>
-    public float Rounding = 4f;
+    public float Rounding = 8f;
 
     /// <summary>Larger corner radius for containers (modals, popovers, panels).</summary>
-    public float ContainerRounding = 8f;
+    public float ContainerRounding = 10f;
 
     /// <summary>Small corner radius for inline elements (badges, highlight bars).</summary>
-    public float SmallRounding = 2f;
+    public float SmallRounding = 5f;
 
     // ── Heights ────────────────────────────────────────────────
 
     /// <summary>Standard row/control height (text fields, dropdowns, sliders).</summary>
-    public float RowHeight = 24f;
+    public float RowHeight = 28f;
 
     /// <summary>Default header (clickable row) height.</summary>
-    public float HeaderHeight = 22f;
+    public float HeaderHeight = 26f;
 
     /// <summary>Height for compact items (icon buttons, small controls).</summary>
     public float CompactHeight = 20f;
@@ -76,10 +76,10 @@ public sealed class OrigamiMetrics
     // ── Font ───────────────────────────────────────────────────
 
     /// <summary>Base font size for widget text.</summary>
-    public float FontSize = 12f;
+    public float FontSize = 16f;
 
     /// <summary>Smaller font size for secondary/muted text.</summary>
-    public float FontSizeSmall = 10f;
+    public float FontSizeSmall = 13f;
 
     // ── Label ──────────────────────────────────────────────────
 
@@ -89,10 +89,14 @@ public sealed class OrigamiMetrics
     // ── Docking ───────────────────────────────────────────────
 
     /// <summary>Tab bar height in dock leaves.</summary>
-    public float TabBarHeight = 26f;
+    public float TabBarHeight = 32f;
+
+    /// <summary>Backdrop-blur radius (px) behind each dock window's glass, for the frosted effect.
+    /// Requires a renderer with backdrop-blur support; 0 disables it.</summary>
+    public float WindowBackdropBlur = 22f;
 
     /// <summary>Horizontal padding inside each tab.</summary>
-    public float TabPadding = 12f;
+    public float TabPadding = 11f;
 
     /// <summary>Gap between tabs.</summary>
     public float TabGap = 0f;
@@ -100,11 +104,11 @@ public sealed class OrigamiMetrics
     /// <summary>Size of the close button inside a tab.</summary>
     public float TabCloseSize = 14f;
 
-    /// <summary>Width/height of the splitter handle between dock panes.</summary>
-    public float SplitterSize = 14f;
+    /// <summary>Width/height of the splitter gap between dock panes (shows the desktop behind).</summary>
+    public float SplitterSize = 8f;
 
     /// <summary>Content padding inside a dock leaf.</summary>
-    public float DockPadding = 4f;
+    public float DockPadding = 0f;
 
     /// <summary>Size of each dock zone indicator square.</summary>
     public float IndicatorSize = 28f;

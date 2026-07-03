@@ -8,7 +8,28 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Vector;
 
+using SDColor = System.Drawing.Color;
+
 namespace Prowl.OrigamiUI;
+
+/// <summary>
+/// The scroll view's live viewport, handed to the <see cref="ScrollViewBuilder.Body(Action{ScrollViewport})"/>
+/// callback. Content is offset by (<see cref="ScrollX"/>, <see cref="ScrollY"/>); <see cref="Width"/> /
+/// <see cref="Height"/> are the visible inner area (padding and any scrollbar already subtracted).
+/// Use these to virtualize long lists: render only the rows intersecting [ScrollY, ScrollY+Height].
+/// </summary>
+public readonly struct ScrollViewport
+{
+    public readonly float ScrollX;
+    public readonly float ScrollY;
+    public readonly float Width;
+    public readonly float Height;
+
+    public ScrollViewport(float scrollX, float scrollY, float width, float height)
+    {
+        ScrollX = scrollX; ScrollY = scrollY; Width = width; Height = height;
+    }
+}
 
 /// <summary>
 /// Fluent builder for an Origami scroll view. Construct via <see cref="Origami.ScrollView"/>;
@@ -45,6 +66,8 @@ public sealed class ScrollViewBuilder
     private bool _forceScrollbar;
     private float _scrollbarSize = 6f;
     private float _wheelStep = 30f;
+    private bool _trapScroll = true;
+    private bool _smoothScroll = true;
 
     internal ScrollViewBuilder(Paper paper, string id, float width, float height, OrigamiTheme theme)
     {
@@ -108,10 +131,31 @@ public sealed class ScrollViewBuilder
     /// <summary>Scroll-wheel step in pixels per click (default 30).</summary>
     public ScrollViewBuilder WheelStep(float step) { _wheelStep = MathF.Max(1f, step); return this; }
 
+    /// <summary>When true (default), a wheel scroll this view actually consumes stops propagating to
+    /// ancestor scroll views (so scrolling a nested list/table doesn't also scroll the page behind it).</summary>
+    public ScrollViewBuilder TrapScroll(bool trap = true) { _trapScroll = trap; return this; }
+
+    /// <summary>
+    /// When true (default) the content eases to the scroll offset (0.33s). Turn OFF for virtualized
+    /// content: the visible window is computed from the target offset, so easing the content toward it
+    /// would leave the rows mismatched (blank gaps) mid-animation. Virtualized lists snap instead.
+    /// </summary>
+    public ScrollViewBuilder SmoothScroll(bool smooth = true) { _smoothScroll = smooth; return this; }
+
     // ── Terminator ─────────────────────────────────────────────────────
 
     /// <summary>Render the scroll view. <paramref name="drawContents"/> draws inside the (scrollable) content area.</summary>
     public void Body(Action drawContents)
+    {
+        ArgumentNullException.ThrowIfNull(drawContents);
+        Body(_ => drawContents());
+    }
+
+    /// <summary>
+    /// Render the scroll view, handing the content callback the live <see cref="ScrollViewport"/>
+    /// (scroll offset + visible size) so it can virtualize long content.
+    /// </summary>
+    public void Body(Action<ScrollViewport> drawContents)
     {
         ArgumentNullException.ThrowIfNull(drawContents);
 
@@ -142,6 +186,8 @@ public sealed class ScrollViewBuilder
                     scroll -= (float)e.Delta * _wheelStep;
                     scroll = Clamp(scroll, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollX", scroll);
+                    // Don't let an ancestor scroll view also consume this wheel event.
+                    if (_trapScroll && maxScroll > 0f) e.StopPropagation();
                 }
                 else if (_vertical)
                 {
@@ -151,6 +197,7 @@ public sealed class ScrollViewBuilder
                     scroll -= (float)e.Delta * _wheelStep;
                     scroll = Clamp(scroll, 0f, maxScroll);
                     _paper.SetElementStorage(outerHandle, "scrollY", scroll);
+                    if (_trapScroll && maxScroll > 0f) e.StopPropagation();
                 }
             });
 
@@ -200,10 +247,11 @@ public sealed class ScrollViewBuilder
             var content = _paper.Column($"{_id}_content")
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - scrollX, _padTop - scrollY)
-                .Transition(GuiProp.Top, 0.33f, Easing.EaseOut)
-                .Transition(GuiProp.Left, 0.33f, Easing.EaseOut)
                 .Height(UnitValue.Auto)
                 .ColBetween(_colSpacing);
+            if (_smoothScroll)
+                content.Transition(GuiProp.Top, 0.33f, Easing.EaseOut)
+                       .Transition(GuiProp.Left, 0.33f, Easing.EaseOut);
 
             if (_horizontal) content.Width(UnitValue.Auto);
             else             content.Width(viewportW);
@@ -217,7 +265,8 @@ public sealed class ScrollViewBuilder
 
             using (content.Enter())
             {
-                drawContents();
+                float viewportH = _height - _padTop - _padBottom - hBarH;
+                drawContents(new ScrollViewport(scrollX, scrollY, viewportW, viewportH));
             }
 
             // ── Scrollbar tracks + thumbs ────────────────────────────
@@ -231,7 +280,7 @@ public sealed class ScrollViewBuilder
                     .PositionType(PositionType.SelfDirected)
                     .Position(_width - vBarW, _height - hBarH)
                     .Width(vBarW).Height(hBarH)
-                    .BackgroundColor(ramp.C200)
+                    .BackgroundColor(ScrollTrackColor())
                     .IsNotInteractable();
             }
 
@@ -278,12 +327,12 @@ public sealed class ScrollViewBuilder
         float thumbH = MathF.Max(20f, trackH * ratio);
         float thumbY = maxScroll > 0f ? (scrollY / maxScroll) * (trackH - thumbH) : 0f;
 
-        // Track (subtle column on the right edge so the thumb has somewhere to sit).
+        // Track stays transparent (the thumb floats over the content, like the prototype's overlay bars).
         _paper.Box($"{_id}_vtrack")
             .PositionType(PositionType.SelfDirected)
             .Position(_width - _scrollbarSize, 0)
             .Width(_scrollbarSize).Height(trackH)
-            .BackgroundColor(ramp.C200)
+            .BackgroundColor(ScrollTrackColor())
             .IsNotInteractable();
 
         var thumb = _paper.Box($"{_id}_vthumb")
@@ -291,8 +340,8 @@ public sealed class ScrollViewBuilder
             .Position(_width - _scrollbarSize, thumbY)
             .Transition(GuiProp.Top, 0.1f, Easing.EaseOut)
             .Width(_scrollbarSize).Height(thumbH)
-            .BackgroundColor(ramp.C500)
-            .Hovered.BackgroundColor(ramp.C600).End()
+            .BackgroundColor(ScrollThumbColor())
+            .Hovered.BackgroundColor(ScrollThumbHoverColor()).End()
             .Rounded(_scrollbarSize / 2f);
 
         // Drag the thumb to scroll. Snapshot both scrollY *and* the pointer Y at drag start;
@@ -330,7 +379,7 @@ public sealed class ScrollViewBuilder
             .PositionType(PositionType.SelfDirected)
             .Position(0, _height - _scrollbarSize)
             .Width(trackW).Height(_scrollbarSize)
-            .BackgroundColor(ramp.C200)
+            .BackgroundColor(ScrollTrackColor())
             .IsNotInteractable();
 
         var thumb = _paper.Box($"{_id}_hthumb")
@@ -338,8 +387,8 @@ public sealed class ScrollViewBuilder
             .Position(thumbX, _height - _scrollbarSize)
             .Transition(GuiProp.Left, 0.1f, Easing.EaseOut)
             .Width(thumbW).Height(_scrollbarSize)
-            .BackgroundColor(ramp.C500)
-            .Hovered.BackgroundColor(ramp.C600).End()
+            .BackgroundColor(ScrollThumbColor())
+            .Hovered.BackgroundColor(ScrollThumbHoverColor()).End()
             .Rounded(_scrollbarSize / 2f);
 
         var capturedHandle = outerHandle;
@@ -361,4 +410,10 @@ public sealed class ScrollViewBuilder
     }
 
     private static float Clamp(float v, float lo, float hi) => MathF.Max(lo, MathF.Min(hi, v));
+
+    // Overlay scrollbar styling: a translucent lavender thumb over a transparent track, so bars
+    // float above content instead of sitting in a filled gutter.
+    private SDColor ScrollTrackColor() => SDColor.FromArgb(0, 0, 0, 0);
+    private SDColor ScrollThumbColor() => SDColor.FromArgb(44, _theme.Ink.C400);
+    private SDColor ScrollThumbHoverColor() => SDColor.FromArgb(96, _theme.Ink.C400);
 }

@@ -11,6 +11,8 @@ public enum SplitDirection { Horizontal, Vertical }
 public enum DockZone
 {
     None, Top, Bottom, Left, Right, Center,
+    // Drop into a leaf's tab bar at a specific index (reorder / move between tabs)
+    Tab,
     // Root-level zones (dock to DockSpace outer edges)
     RootTop, RootBottom, RootLeft, RootRight,
 }

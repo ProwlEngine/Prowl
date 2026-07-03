@@ -6,6 +6,7 @@ using System.Drawing;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 
 namespace Prowl.OrigamiUI;
 
@@ -62,7 +63,7 @@ public readonly struct DropdownTriggerContext
     public readonly OrigamiRamp Surface;
     /// <summary>Active ink ramp.</summary>
     public readonly OrigamiRamp Ink;
-    /// <summary>Active theme.</summary>
+    /// <summary>Active p.Theme.</summary>
     public readonly OrigamiTheme Theme;
 
     internal DropdownTriggerContext(bool isOpen, string displayText, bool isEmpty,
@@ -268,8 +269,8 @@ internal static class DropdownInternal
         float popoverWidth = p.PopoverWidth ?? p.TriggerWidth;
 
         // Layout sizing.
-        float padX = 4f;
-        float padY = 4f;
+        float padX = 5f;
+        float padY = 5f;
         float searchH = p.Searchable ? 24f : 0f;
         float searchGap = p.Searchable ? 4f : 0f;
         float paginationH = p.PageSize > 0 && pageCount > 1 ? 24f : 0f;
@@ -281,8 +282,9 @@ internal static class DropdownInternal
         float listH = MathF.Min(listMax, visibleCount * p.ItemHeight);
         float popH = padY * 2 + searchH + searchGap + listH + paginationH + paginationGap;
 
-        Color popBorder = p.Variant is OrigamiVariant.Default or OrigamiVariant.Subtle
-            ? p.Theme.Neutral.C400 : ramp.C400;
+        // Solid menu surface (prototype .w2menu: rgba(24,20,36,0.98)) + a stronger purple rim.
+        Color popBg = p.Theme.Popover;
+        Color popBorder = p.Theme.BorderStrong;
         // StopEventPropagation: the popover is logically a child of the trigger element, so
         // without this any click inside (search bar, page button, item row) bubbles up to the
         // trigger and re-toggles the open state — closing the dropdown unintentionally.
@@ -291,9 +293,10 @@ internal static class DropdownInternal
             .Position(0, popY)
             .Width(popoverWidth)
             .Height(popH)
-            .BackgroundColor(p.Theme.Neutral.C200)
+            .BackgroundColor(popBg)
             .BorderColor(popBorder).BorderWidth(1)
-            .Rounded(p.Theme.Metrics.Rounding)
+            .BoxShadow(0, 14, 40, -6, p.Theme.Shadow)
+            .Rounded(9)
             .Padding(padX, padX, padY, padY)
             .ColBetween(searchGap)
             .HookToParent()
@@ -386,25 +389,19 @@ internal static class DropdownInternal
                             var rowCtx = new DropdownItemContext(li, selected, highlighted, !enabled,
                                 p.ItemHeight, ramp, ink, p.Theme);
 
-                            // Row background colors: selected > highlighted > hover > none.
-                            // Subtle variant stays neutral; everything else paints with the variant ramp.
-                            bool useRamp = p.Variant != OrigamiVariant.Subtle;
-                            Color selRampBg  = useRamp ? ramp.C400 : p.Theme.Neutral.C400;
-                            Color hlRampBg   = useRamp ? ramp.C300 : p.Theme.Neutral.C300;
-                            Color hoverRampBg= useRamp ? ramp.C500 : p.Theme.Neutral.C400;
-                            Color rowBg = Color.Transparent;
-                            if (selected) rowBg = selRampBg;
-                            else if (highlighted) rowBg = hlRampBg;
+                            // Selected + hovered rows both wash with the accent tint (prototype .w2mrow.on2 / :hover).
+                            Color hoverTint = Color.FromArgb((int)(0.12f * 255), 168, 85, 247);
+                            Color rowBg = (selected || highlighted) ? hoverTint : Color.Transparent;
 
                             int capturedReal = realIdx;
                             T capturedItem = item;
                             var row = paper.Row($"{p.Id}_r_{realIdx}")
                                 .Height(p.ItemHeight)
                                 .BackgroundColor(rowBg)
-                                .Hovered.BackgroundColor(enabled ? hoverRampBg : rowBg).End()
-                                .Rounded(2)
-                                .ChildLeft(6).ChildRight(6)
-                                .RowBetween(6)
+                                .Hovered.BackgroundColor(enabled ? hoverTint : rowBg).End()
+                                .Rounded(6)
+                                .ChildLeft(9).ChildRight(9)
+                                .RowBetween(9)
                                 .OnClick(e =>
                                 {
                                     if (!enabled) return;
@@ -420,18 +417,15 @@ internal static class DropdownInternal
                                     continue;
                                 }
 
-                                // Default row layout: [check]? [icon]? label [secondary]?
-                                if (p.ShowCheckboxes && font != null)
+                                // Default row layout: [check]? [icon]? label [right-check]? [secondary]?
+                                if (p.ShowCheckboxes)
                                 {
-                                    string box = selected
-                                        ? (string.IsNullOrEmpty(icons.CheckboxOn) ? icons.Check : icons.CheckboxOn)
-                                        : icons.CheckboxOff;
+                                    bool chk = selected;
+                                    var th = p.Theme;
                                     paper.Box($"{p.Id}_r_{realIdx}_chk")
-                                        .Width(16)
-                                        .Alignment(TextAlignment.MiddleCenter)
-                                        .Text(box ?? string.Empty, font)
-                                        .TextColor(selected ? ramp.C600 : ink.C300)
-                                        .FontSize(p.Theme.Metrics.FontSize);
+                                        .Width(16).Height(p.ItemHeight)
+                                        .IsNotInteractable()
+                                        .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) => DrawMenuCheckbox(canvas, rr, chk, th)));
                                 }
 
                                 if (p.Icon != null && font != null)
@@ -452,8 +446,18 @@ internal static class DropdownInternal
                                         .Width(UnitValue.Stretch())
                                         .Alignment(TextAlignment.MiddleLeft)
                                         .Text(p.Display(item) ?? string.Empty, font)
-                                        .TextColor(enabled ? (selected ? ink.C600 : ink.C500) : ink.C300)
+                                        .TextColor(enabled ? (selected ? p.Theme.Primary.C700 : ink.C400) : ink.C300)
                                         .FontSize(p.Theme.Metrics.FontSize);
+                                }
+
+                                // Single-select tick on the right when selected (no checkbox column).
+                                if (!p.ShowCheckboxes && selected)
+                                {
+                                    var th = p.Theme;
+                                    paper.Box($"{p.Id}_r_{realIdx}_ck")
+                                        .Width(16).Height(p.ItemHeight)
+                                        .IsNotInteractable()
+                                        .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) => DrawMenuCheck(canvas, rr, th.Primary.C500)));
                                 }
 
                                 if (p.Secondary != null && font != null)
@@ -520,6 +524,71 @@ internal static class DropdownInternal
                         });
                 }
             }
+        }
+    }
+
+    // A crisp vector chevron for the trigger (no icon font). Nicer than the "v"/"^" fallback glyph.
+    internal static void DrawChevron(Prowl.Quill.Canvas canvas, Prowl.Vector.Rect rect, bool up, Color color)
+    {
+        float cx = (float)(rect.Min.X + rect.Size.X / 2), cy = (float)(rect.Min.Y + rect.Size.Y / 2);
+        canvas.SaveState();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.5f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.SetStrokeJoint(JointStyle.Round);
+        canvas.BeginPath();
+        if (up) { canvas.MoveTo(cx - 3.6f, cy + 1.9f); canvas.LineTo(cx, cy - 2f); canvas.LineTo(cx + 3.6f, cy + 1.9f); }
+        else    { canvas.MoveTo(cx - 3.6f, cy - 1.9f); canvas.LineTo(cx, cy + 2f); canvas.LineTo(cx + 3.6f, cy - 1.9f); }
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    // Right-aligned tick for the selected single-select row (no icon font).
+    internal static void DrawMenuCheck(Prowl.Quill.Canvas canvas, Prowl.Vector.Rect rect, Color color)
+    {
+        float cx = (float)(rect.Min.X + rect.Size.X / 2), cy = (float)(rect.Min.Y + rect.Size.Y / 2);
+        canvas.SaveState();
+        canvas.SetStrokeColor(color);
+        canvas.SetStrokeWidth(1.6f);
+        canvas.SetStrokeCap(EndCapStyle.Round);
+        canvas.SetStrokeJoint(JointStyle.Round);
+        canvas.BeginPath();
+        canvas.MoveTo(cx - 3.6f, cy); canvas.LineTo(cx - 1f, cy + 2.7f); canvas.LineTo(cx + 3.9f, cy - 2.9f);
+        canvas.Stroke();
+        canvas.RestoreState();
+    }
+
+    // Rounded multi-select checkbox: accent fill + white tick when on, else a subtle rim.
+    internal static void DrawMenuCheckbox(Prowl.Quill.Canvas canvas, Prowl.Vector.Rect rect, bool isOn, OrigamiTheme theme)
+    {
+        const float sz = 15f;
+        float x = (float)(rect.Min.X + (rect.Size.X - sz) / 2);
+        float y = (float)(rect.Min.Y + (rect.Size.Y - sz) / 2);
+        const float rad = 5f;
+
+        if (isOn)
+        {
+            canvas.RoundedRectFilled(x, y, sz, sz, rad, theme.Primary.C500);
+            float cx = x + sz / 2, cy = y + sz / 2;
+            canvas.SaveState();
+            canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));
+            canvas.SetStrokeWidth(1.5f);
+            canvas.SetStrokeCap(EndCapStyle.Round);
+            canvas.SetStrokeJoint(JointStyle.Round);
+            canvas.BeginPath();
+            canvas.MoveTo(cx - 3f, cy); canvas.LineTo(cx - 0.8f, cy + 2.3f); canvas.LineTo(cx + 3.2f, cy - 2.6f);
+            canvas.Stroke();
+            canvas.RestoreState();
+        }
+        else
+        {
+            canvas.SaveState();
+            canvas.SetStrokeColor(Color.FromArgb(90, 190, 150, 255));
+            canvas.SetStrokeWidth(1f);
+            canvas.BeginPath();
+            canvas.RoundedRect(x + 0.5f, y + 0.5f, sz - 1f, sz - 1f, rad);
+            canvas.Stroke();
+            canvas.RestoreState();
         }
     }
 }

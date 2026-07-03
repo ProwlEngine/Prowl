@@ -8,6 +8,8 @@ using System.Linq;
 
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
@@ -39,775 +41,847 @@ public sealed class FileDialogConfig
 public static class FileDialog
 {
     // ── State ────────────────────────────────────────────────
+    // The floating overlay is just the shared browser rendered on the modal stack over its own
+    // EmbeddedState — the exact same code path as an inline DrawEmbedded.
     private static bool _isOpen;
-    private static FileDialogMode _mode;
     private static Action<string?>? _onComplete;
     private static FileDialogConfig? _config;
-    private static string[] _typeFilters = ["*.*"];
-    private static string[] _typeFilterLabels = ["All Files (*.*)"];
-
-    private static string _currentPath = "";
-    private static string _selectedPath = "";
-    private static string _fileName = "";
-    private static string _searchFilter = "";
-    private static int _activeFilterIndex;
-    private static int _sortColumn;
-    private static bool _sortAscending = true;
-    private static bool _creatingFolder;
-    private static string _newFolderName = "New Folder";
-    private static string _renamingPath = "";
-    private static string _renameBuf = "";
-
-    private static List<string> _history = [];
-    private static int _historyIndex = -1;
-    private static List<FileEntry> _entries = [];
+    private static FileDialogMode _overlayMode;
+    private static EmbeddedState _overlayState = new();
     private static IModal? _modalHandle;
-
-    // Drag state
-    private static string _dragPath = "";
-    private static string _dragName = "";
-    private static bool _isDragging;
-    private static string _dropTargetPath = "";
-    private static string _hoverDirPath = "";
-    private static float _hoverDirTime;
 
     public static bool IsOpen => _isOpen;
 
+    // ── Nebula palette literals ──────────────────────────────
+    // Frosted magenta-violet glass over a dark void. Ramps cover most of the surface;
+    // these carry the exact alpha the prototype (.w2fd*) uses for glass and accents.
+    private static readonly Color WindowBg   = Color.FromArgb(235, 14, 11, 22);    // window body (dark glass)
+    private static readonly Color Selection  = Color.FromArgb(230, 168, 85, 247);  // selected sidebar item
+    private static readonly Color SideBg     = Color.FromArgb(36, 0, 0, 0);        // sidebar background
+
     // ── API ──────────────────────────────────────────────────
 
+    /// <summary>Open the file dialog as a floating modal. Renders the same browser as
+    /// <see cref="DrawEmbedded"/>, centred on screen over the modal-stack backdrop.</summary>
     public static void Open(FileDialogMode mode, Action<string?> onComplete,
         string? startPath = null, string[]? filters = null, string[]? filterLabels = null,
         FileDialogConfig? config = null)
     {
         _isOpen = true;
-        _mode = mode;
         _onComplete = onComplete;
         _config = config;
-        _selectedPath = "";
-        _fileName = "";
-        _searchFilter = "";
-        _sortColumn = 0;
-        _sortAscending = true;
-        _creatingFolder = false;
-        _renamingPath = "";
-        _activeFilterIndex = 0;
+        _overlayMode = mode;
 
-        if (filters != null && filterLabels != null && filters.Length == filterLabels.Length)
-        {
-            _typeFilters = filters;
-            _typeFilterLabels = filterLabels;
-        }
-        else
-        {
-            _typeFilters = ["*.*"];
-            _typeFilterLabels = ["All Files (*.*)"];
-        }
-
+        _overlayState = new EmbeddedState();
         string path = startPath ?? Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         if (!Directory.Exists(path)) path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-        _history = [path];
-        _historyIndex = 0;
-        NavigateTo(path, addHistory: false);
+        EnsureInit(_overlayState, path);
 
-        // Push onto the modal stack so backdrops and layering are managed centrally
-        _modalHandle = new CustomDrawModal((paper, layer, stackIndex) => DrawInternal(paper, layer)) { CloseOnEscape = false };
+        _modalHandle = new CustomDrawModal((paper, layer, stackIndex) =>
+            RenderBrowser(paper, "__fd_overlay", 820f, 560f, _overlayState, _config, _overlayMode,
+                onChoose: p => Close(p),
+                onClose: () => Close(null),
+                floating: true, layer: layer))
+        { CloseOnEscape = true };
         Modal.Push(_modalHandle);
     }
 
     public static void Close(string? result = null)
     {
         _isOpen = false;
-        _isDragging = false; _dragPath = ""; _dragName = ""; _dropTargetPath = "";
-        _hoverDirPath = ""; _hoverDirTime = 0;
         if (_modalHandle != null) { Modal.Remove(_modalHandle); _modalHandle = null; }
         if (result != null) _config?.OnFileOpened?.Invoke(result);
-        _onComplete?.Invoke(result);
+        var cb = _onComplete;
         _onComplete = null;
+        cb?.Invoke(result);
     }
 
-    // ── Navigation ───────────────────────────────────────────
+    // ── Embedded (inline) browser ────────────────────────────
+    // A self-contained file browser rendered in normal layout flow. It keeps its own
+    // per-id state, entirely separate from the static overlay above, so an embedded
+    // browser and a modal FileDialog.Open() can be on screen at the same time.
 
-    private static void NavigateTo(string path, bool addHistory = true)
+    private sealed class EmbeddedState
     {
-        if (!Directory.Exists(path)) return;
-        _currentPath = Path.GetFullPath(path);
-        _selectedPath = "";
-        _renamingPath = "";
+        public string Path = "";
+        public string Selected = "";
+        public string FileName = "";
+        public string Search = "";
+        public List<FileEntry> Entries = [];
+        public int SortColumn;
+        public bool SortAscending = true;
+        public bool Initialized;
 
-        if (addHistory)
-        {
-            if (_historyIndex < _history.Count - 1)
-                _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
-            _history.Add(_currentPath);
-            _historyIndex = _history.Count - 1;
-        }
+        // Navigation history (back / forward)
+        public List<string> History = [];
+        public int HistoryIndex = -1;
 
-        RefreshEntries();
+        // Inline new-folder creation
+        public bool CreatingFolder;
+        public string NewFolderName = "New Folder";
+
+        // Inline rename (holds the entry's current full path while editing)
+        public string Renaming = "";
+        public string RenameName = "";
     }
 
-    private static void NavigateBack()
+    private static readonly Dictionary<string, EmbeddedState> _embedded = [];
+
+    /// <summary>
+    /// Draw a self-contained file browser inline at the current layout position (no modal
+    /// stack, no backdrop). Maintains its own state keyed by <paramref name="id"/>, so it
+    /// coexists with the overlay <see cref="Open"/> dialog.
+    /// </summary>
+    public static void DrawEmbedded(Paper paper, string id, float width, float height,
+        string? startPath = null, FileDialogConfig? config = null)
     {
-        if (_historyIndex > 0) { _historyIndex--; _currentPath = _history[_historyIndex]; RefreshEntries(); }
+        if (!_embedded.TryGetValue(id, out var st))
+            _embedded[id] = st = new EmbeddedState();
+        EnsureInit(st, startPath);
+        RenderBrowser(paper, id, width, height, st, config, FileDialogMode.Open,
+            onChoose: config?.OnFileOpened, onClose: null, floating: false, layer: 0);
     }
 
-    private static void NavigateForward()
+    private static void EnsureInit(EmbeddedState st, string? startPath)
     {
-        if (_historyIndex < _history.Count - 1) { _historyIndex++; _currentPath = _history[_historyIndex]; RefreshEntries(); }
+        if (st.Initialized) return;
+        string p = startPath ?? AppContext.BaseDirectory;
+        if (!Directory.Exists(p)) p = AppContext.BaseDirectory;
+        st.Path = Path.GetFullPath(p);
+        st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending);
+        st.History = new List<string> { st.Path };
+        st.HistoryIndex = 0;
+        st.Initialized = true;
     }
 
-    private static void NavigateUp()
+    /// <summary>
+    /// The single file-browser renderer, shared by the floating <see cref="Open"/> overlay and the
+    /// inline <see cref="DrawEmbedded"/>. When <paramref name="floating"/> the window is positioned
+    /// centre-screen on <paramref name="layer"/> (the modal stack draws the backdrop); otherwise it
+    /// renders in normal layout flow. Both paths are identical apart from that outer wrapper.
+    /// </summary>
+    private static void RenderBrowser(Paper paper, string id, float width, float height,
+        EmbeddedState st, FileDialogConfig? config, FileDialogMode mode,
+        Action<string>? onChoose, Action? onClose, bool floating, int layer)
     {
-        var parent = Directory.GetParent(_currentPath);
-        if (parent != null) NavigateTo(parent.FullName);
-    }
-
-    private static void RefreshEntries()
-    {
-        _entries.Clear();
-        try
-        {
-            var dirInfo = new DirectoryInfo(_currentPath);
-            foreach (var dir in dirInfo.EnumerateDirectories())
-            {
-                if ((dir.Attributes & FileAttributes.Hidden) != 0) continue;
-                _entries.Add(new FileEntry { Name = dir.Name, FullPath = dir.FullName, IsDirectory = true, LastModified = dir.LastWriteTime });
-            }
-
-            if (_mode != FileDialogMode.SelectFolder)
-            {
-                var patterns = _typeFilters[_activeFilterIndex].Split(';').Select(f => f.Trim()).ToArray();
-                foreach (var file in dirInfo.EnumerateFiles())
-                {
-                    if ((file.Attributes & FileAttributes.Hidden) != 0) continue;
-                    if (!patterns.Any(p => p == "*.*" || MatchesPattern(file.Name, p))) continue;
-                    _entries.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
-                }
-            }
-
-            ApplySort();
-        }
-        catch { }
-    }
-
-    private static void ApplySort()
-    {
-        var dirs = _entries.Where(e => e.IsDirectory);
-        var files = _entries.Where(e => !e.IsDirectory);
-        IEnumerable<FileEntry> Sort(IEnumerable<FileEntry> items) => _sortColumn switch
-        {
-            1 => _sortAscending ? items.OrderBy(e => e.Size) : items.OrderByDescending(e => e.Size),
-            2 => _sortAscending ? items.OrderBy(e => e.LastModified) : items.OrderByDescending(e => e.LastModified),
-            _ => _sortAscending ? items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase) : items.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase),
-        };
-        _entries = Sort(dirs).Concat(Sort(files)).ToList();
-    }
-
-    private static void ConfirmSelection()
-    {
-        string result;
-        if (_mode == FileDialogMode.SelectFolder)
-            result = !string.IsNullOrEmpty(_selectedPath) && Directory.Exists(_selectedPath) ? _selectedPath : _currentPath;
-        else if (_mode == FileDialogMode.Save)
-            result = !string.IsNullOrEmpty(_fileName) ? Path.Combine(_currentPath, _fileName) : "";
-        else
-        {
-            if (!string.IsNullOrEmpty(_selectedPath) && File.Exists(_selectedPath)) result = _selectedPath;
-            else if (!string.IsNullOrEmpty(_fileName)) result = Path.Combine(_currentPath, _fileName);
-            else return;
-        }
-        if (!string.IsNullOrEmpty(result)) Close(result);
-    }
-
-    // ── Draw ─────────────────────────────────────────────────
-
-    private const float DialogW = 800f, DialogH = 550f;
-    private const float SidebarW = 170f, ToolbarH = 34f, BottomH = 72f;
-
-    private static void DrawInternal(Paper paper, int layer)
-    {
-        if (!_isOpen) return;
         var theme = Origami.Current;
         var font = theme.Font;
-        var ink = theme.Ink;
-        var icons = theme.Icons;
         if (font == null) return;
-
+        var ink = theme.Ink;
         var m = theme.Metrics;
+        var titleFont = theme.SemiBold ?? font;
+        var labelFont = theme.Medium ?? font;
 
-        var displayEntries = string.IsNullOrEmpty(_searchFilter) ? _entries
-            : _entries.Where(e => e.Name.Contains(_searchFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+        // ── navigation / sort (local, per-id) ────────────────────
+        void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending);
 
-        // Drag tooltip (rendered OUTSIDE the dialog window so it's not clipped)
-        if (_isDragging && !string.IsNullOrEmpty(_dragName))
+        void NavigateTo(string path, bool addHistory)
         {
-            float mx = (float)paper.PointerPos.X + 14;
-            float my = (float)paper.PointerPos.Y + 4;
-            paper.Box("ofd_drag_tip")
-                .PositionType(PositionType.SelfDirected)
-                .Position(mx, my)
-                .Width(UnitValue.Auto).Height(m.CompactHeight)
-                .BackgroundColor(Color.FromArgb(200, 40, 40, 45))
-                .BorderColor(theme.Primary.C400).BorderWidth(1)
-                .Rounded(m.Rounding).ChildLeft(m.Padding).ChildRight(m.Padding)
-                .IsNotInteractable()
-                .Layer(layer + 1)
-                .Text($"{icons.File}  {_dragName}", font)
-                .TextColor(ink.C500)
-                .FontSize(m.FontSizeSmall)
-                .Alignment(TextAlignment.MiddleLeft);
+            if (!Directory.Exists(path)) return;
+            st.Path = Path.GetFullPath(path);
+            st.Selected = "";
+            st.CreatingFolder = false;
+            st.Renaming = "";
+            Reload();
+            if (addHistory)
+            {
+                if (st.HistoryIndex < st.History.Count - 1)
+                    st.History.RemoveRange(st.HistoryIndex + 1, st.History.Count - st.HistoryIndex - 1);
+                st.History.Add(st.Path);
+                st.HistoryIndex = st.History.Count - 1;
+            }
+        }
+        void NavBack() { if (st.HistoryIndex > 0) { st.HistoryIndex--; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
+        void NavFwd() { if (st.HistoryIndex < st.History.Count - 1) { st.HistoryIndex++; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
+        void NavUp() { var p = Directory.GetParent(st.Path); if (p != null) NavigateTo(p.FullName, true); }
+        void SetSort(int col)
+        {
+            if (st.SortColumn == col) st.SortAscending = !st.SortAscending;
+            else { st.SortColumn = col; st.SortAscending = true; }
+            Reload();
         }
 
-        // Window (backdrop is managed by the modal stack)
-        using (paper.Column("ofd_win")
-            .Size(DialogW, DialogH)
-            .Margin(UnitValue.StretchOne)
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(ink.C200).BorderWidth(1).Rounded(m.ContainerRounding)
-            .Layer(layer)
-            .StopEventPropagation()
-            .Enter())
+        // ── file operations (right-click menu) ───────────────────
+        void BeginRename(string fullPath, string name)
         {
-            DrawToolbar(paper, font, icons, ink, theme);
-            using (paper.Row("ofd_body").Enter())
-            {
-                DrawSidebar(paper, font, icons, ink, theme);
-                using (paper.Column("ofd_list_area").Enter())
-                {
-                    DrawColumnHeaders(paper, font, ink);
-                    DrawFileList(paper, font, icons, ink, theme, displayEntries);
-                }
-            }
-            DrawBottomBar(paper, font, ink, theme);
+            st.Renaming = fullPath; st.RenameName = name; st.CreatingFolder = false;
         }
-
-        if (paper.IsKeyPressed(PaperKey.Escape)) Close(null);
-    }
-
-    // ── Toolbar ──────────────────────────────────────────────
-
-    private static void DrawToolbar(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme)
-    {
-        var m = theme.Metrics;
-        using (paper.Row("ofd_toolbar").Height(ToolbarH)
-            .BackgroundColor(theme.Neutral.C200)
-            .ChildLeft(m.Padding).ChildRight(m.Padding).RowBetween(m.Spacing).Enter())
+        void CommitRename()
         {
-            TbBtn(paper, "ofd_back", icons.ArrowLeft, font, ink, _historyIndex > 0, NavigateBack);
-            TbBtn(paper, "ofd_fwd", icons.ArrowRight, font, ink, _historyIndex < _history.Count - 1, NavigateForward);
-            TbBtn(paper, "ofd_up", icons.ArrowUp, font, ink, true, NavigateUp);
-
-            Origami.TextField(paper, "ofd_path", _currentPath, v => { if (Directory.Exists(v)) NavigateTo(v); })
-                .Width(UnitValue.Stretch()).Show();
-
-            Origami.TextField(paper, "ofd_search", _searchFilter, v => _searchFilter = v)
-                .Placeholder("Search...").Width(140).Show();
-
-            TbBtn(paper, "ofd_newf", icons.FolderPlus, font, ink, true, () =>
+            if (!string.IsNullOrEmpty(st.Renaming) && !string.IsNullOrWhiteSpace(st.RenameName))
             {
-                _creatingFolder = !_creatingFolder;
-                _newFolderName = "New Folder";
-            });
+                try
+                {
+                    string dir = Path.GetDirectoryName(st.Renaming) ?? st.Path;
+                    string dst = Path.Combine(dir, st.RenameName);
+                    if (dst != st.Renaming)
+                    {
+                        if (Directory.Exists(st.Renaming)) Directory.Move(st.Renaming, dst);
+                        else if (File.Exists(st.Renaming)) File.Move(st.Renaming, dst);
+                    }
+                }
+                catch { }
+            }
+            st.Renaming = "";
+            Reload();
         }
-    }
-
-    private static void TbBtn(Paper paper, string id, string icon, Scribe.FontFile font, OrigamiRamp ink, bool enabled, Action onClick)
-    {
-        var m = Origami.Current.Metrics;
-        var box = paper.Box(id).Width(28).Height(28)
-            .Text(icon, font).TextColor(enabled ? ink.C500 : ink.C300).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter).Rounded(m.Rounding);
-        if (enabled)
-            box.Hovered.BackgroundColor(ink.C200).End().OnClick(0, (_, _) => onClick());
-    }
-
-    // ── Sidebar ──────────────────────────────────────────────
-
-    private static void DrawSidebar(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme)
-    {
-        var m = theme.Metrics;
-        using (paper.Column("ofd_side").Width(SidebarW)
-            .BackgroundColor(theme.Neutral.C200)
-            .Padding(m.Spacing, m.Spacing, m.SpacingLarge, 0).ColBetween(m.SpacingSmall).Enter())
+        void Duplicate(string fullPath)
         {
-            if (_config?.QuickAccess.Count > 0)
-            {
-                SLabel(paper, "qa", "Quick Access", font, ink);
-                foreach (var (label, icon, path) in _config.QuickAccess)
-                    if (Directory.Exists(path))
-                        SItem(paper, $"ofd_qa_{label}", $"{icon}  {label}", font, ink, theme, path, () => NavigateTo(path));
-                SSep(paper, "qa", ink);
-            }
-
-            if (_config != null && (_config.Favorites.Count > 0 || _config.OnAddFavorite != null))
-            {
-                using (paper.Row("ofd_fav_h").Height(m.CompactHeight).RowBetween(m.Spacing).Enter())
-                {
-                    paper.Box("ofd_fav_l").Height(m.CompactHeight).ChildLeft(m.SpacingLarge)
-                        .Text("Favorites", font).TextColor(ink.C400)
-                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
-                    if (_config.OnAddFavorite != null)
-                        paper.Box("ofd_fav_a").Width(m.IconBoxWidth).Height(m.CompactHeight).Rounded(m.SmallRounding)
-                            .Text(icons.Plus, font).TextColor(ink.C400).FontSize(m.FontSizeSmall)
-                            .Alignment(TextAlignment.MiddleCenter)
-                            .Hovered.BackgroundColor(ink.C200).End()
-                            .OnClick(0, (_, _) => _config.OnAddFavorite(_currentPath));
-                }
-                for (int i = 0; i < _config.Favorites.Count; i++)
-                {
-                    int idx = i;
-                    var (label, path) = _config.Favorites[i];
-                    SItem(paper, $"ofd_fav_{i}", $"{icons.Star}  {label}", font, ink, theme, path,
-                        () => NavigateTo(path), () => _config.OnRemoveFavorite?.Invoke(idx));
-                }
-                SSep(paper, "fav", ink);
-            }
-
-            if (_config?.RecentFiles.Count > 0)
-            {
-                SLabel(paper, "rec", "Recent", font, ink);
-                int shown = 0;
-                foreach (var recent in _config.RecentFiles)
-                {
-                    if (shown >= 8) break;
-                    string dir = Path.GetDirectoryName(recent) ?? "";
-                    if (!Directory.Exists(dir)) continue;
-                    SItem(paper, $"ofd_rec_{shown}", $"{icons.Clock}  {Path.GetFileName(recent)}", font, ink, theme, dir, () => NavigateTo(dir));
-                    shown++;
-                }
-                SSep(paper, "rec", ink);
-            }
-
-            SLabel(paper, "drv", "Drives", font, ink);
             try
             {
-                var drives = _config?.GetDrives?.Invoke();
-                if (drives != null)
-                    foreach (var (label, path) in drives)
-                        SItem(paper, $"ofd_drv_{label}", $"{icons.Drive}  {label}", font, ink, theme, path, () => NavigateTo(path));
-                else
-                    foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady))
-                        SItem(paper, $"ofd_drv_{d.Name}", $"{icons.Drive}  {d.Name}", font, ink, theme, d.Name, () => NavigateTo(d.Name));
+                if (File.Exists(fullPath))
+                {
+                    string dir = Path.GetDirectoryName(fullPath) ?? st.Path;
+                    string stem = Path.GetFileNameWithoutExtension(fullPath), ext = Path.GetExtension(fullPath);
+                    string dst = Path.Combine(dir, $"{stem} copy{ext}");
+                    int n = 2;
+                    while (File.Exists(dst) || Directory.Exists(dst)) dst = Path.Combine(dir, $"{stem} copy {n++}{ext}");
+                    File.Copy(fullPath, dst);
+                }
             }
             catch { }
+            Reload();
         }
-    }
-
-    private static void SLabel(Paper paper, string key, string text, Scribe.FontFile font, OrigamiRamp ink)
-    {
-        var m = Origami.Current.Metrics;
-        paper.Box($"ofd_sl_{key}").Height(m.CompactHeight).ChildLeft(m.SpacingLarge)
-            .Text(text, font).TextColor(ink.C400)
-            .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
-    }
-
-    private static void SSep(Paper paper, string key, OrigamiRamp ink)
-    {
-        var m = Origami.Current.Metrics;
-        paper.Box($"ofd_ss_{key}").Height(1).Margin(m.Spacing, m.SpacingLarge, m.Spacing, m.SpacingLarge).BackgroundColor(ink.C200);
-    }
-
-    private static void SItem(Paper paper, string id, string text, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme,
-        string targetPath, Action onClick, Action? onRightClick = null)
-    {
-        var m = theme.Metrics;
-        bool isCurrent = _currentPath.Equals(targetPath, StringComparison.OrdinalIgnoreCase);
-        var box = paper.Box(id).Height(m.RowHeight)
-            .BackgroundColor(isCurrent ? theme.Primary.C400 : Color.Transparent)
-            .Hovered.BackgroundColor(isCurrent ? theme.Primary.C400 : ink.C200).End()
-            .Rounded(m.Rounding).ChildLeft(m.SpacingLarge)
-            .Text(text, font).TextColor(ink.C500)
-            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
-            .OnClick(0, (_, _) => onClick());
-        if (onRightClick != null)
-            box.OnRightClick(0, (_, _) => onRightClick());
-    }
-
-    // ── Column Headers ───────────────────────────────────────
-
-    private static void DrawColumnHeaders(Paper paper, Scribe.FontFile font, OrigamiRamp ink)
-    {
-        var theme = Origami.Current;
-        var icons = theme.Icons;
-        var m = theme.Metrics;
-
-        using (paper.Row("ofd_colh").Height(m.HeaderHeight).BackgroundColor(theme.Neutral.C200).ChildLeft(m.SpacingLarge).RowBetween(0).Enter())
+        void DeleteEntry(string fullPath, bool isDir)
         {
-            // Icon placeholder to match file row icon width
-            paper.Box("ofd_ch_ico").Width(m.IconBoxWidth).Height(m.HeaderHeight);
-
-            void Col(string label, int col, float? w = null)
+            try
             {
-                string arrow = _sortColumn == col
-                    ? (_sortAscending ? $" {icons.ChevronUp}" : $" {icons.ChevronDown}")
-                    : "";
-
-                var el = paper.Box($"ofd_ch_{col}").Height(m.HeaderHeight);
-                if (w.HasValue) el.Width(w.Value);
-                else el.Width(UnitValue.Stretch());
-
-                el.ChildLeft(m.Spacing).Text(label + arrow, font).TextColor(ink.C400)
-                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
-                    .Hovered.BackgroundColor(ink.C200).End()
-                    .OnClick(col, (c, _) =>
-                    {
-                        if (_sortColumn == c) _sortAscending = !_sortAscending;
-                        else { _sortColumn = c; _sortAscending = true; }
-                        ApplySort();
-                    });
+                if (isDir && Directory.Exists(fullPath)) Directory.Delete(fullPath, true);
+                else if (File.Exists(fullPath)) File.Delete(fullPath);
             }
-            Col("Name", 0);
-            Col("Size", 1, 80f);
-            Col("Modified", 2, 140f);
-        }
-    }
-
-    // ── File List ────────────────────────────────────────────
-
-    private static float _scrollAreaTop, _scrollAreaBottom;
-
-    private static void DrawFileList(Paper paper, Scribe.FontFile font, OrigamiIcons icons, OrigamiRamp ink, OrigamiTheme theme, List<FileEntry> display)
-    {
-        var m = theme.Metrics;
-        float listW = DialogW - SidebarW;
-        float listH = DialogH - ToolbarH - m.HeaderHeight - BottomH;
-
-        // Reset drop target each frame - will be set by hovered dir rows below.
-        _dropTargetPath = "";
-        if (!_isDragging) { _hoverDirPath = ""; _hoverDirTime = 0; }
-
-        // Global drag end detection: if mouse released while dragging, complete/cancel
-        // the drag. This handles the case where hover-to-open destroyed the drag source
-        // element so OnDragEnd never fires.
-        if (_isDragging && !paper.IsPointerDown(PaperMouseBtn.Left))
-        {
-            // If no specific directory is hovered, drop into the current folder
-            string target = !string.IsNullOrEmpty(_dropTargetPath) ? _dropTargetPath : _currentPath;
-            if (!string.IsNullOrEmpty(_dragPath) && target != Path.GetDirectoryName(_dragPath))
-                TryMoveEntry(_dragPath, target);
-            _isDragging = false; _dragPath = ""; _dragName = ""; _dropTargetPath = "";
-            _hoverDirPath = ""; _hoverDirTime = 0;
+            catch { }
+            if (st.Selected == fullPath) st.Selected = "";
+            Reload();
         }
 
-        // Compute scroll area bounds from the dialog position for auto-scroll
-        float screenH = (float)paper.ScreenRect.Size.Y;
-        float dialogTop = (screenH - DialogH) / 2f; // centered dialog
-        _scrollAreaTop = dialogTop + ToolbarH + m.HeaderHeight;
-        _scrollAreaBottom = dialogTop + DialogH - BottomH;
+        Action<Canvas, Rect> Ico(IconPainter p, Color col) =>
+            (canvas, rect) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col);
 
-        Origami.ScrollView(paper, "ofd_scroll", listW, listH).Body(() =>
+        void RowContextMenu(int kind, string name, string path, bool isDir)
         {
-            // ".." parent directory entry
-            var parentDir = Directory.GetParent(_currentPath);
-            if (parentDir != null)
+            float px = (float)paper.PointerPos.X, py = (float)paper.PointerPos.Y;
+            ContextMenu.Show(px, py, b =>
             {
-                bool isParentDropTarget = _isDragging;
-                var dotdotBg = Color.Transparent;
-                var dotdotHover = isParentDropTarget ? theme.Green.C400 : ink.C200;
-
-                using (paper.Row("ofd_dotdot").Height(m.RowHeight)
-                    .BackgroundColor(dotdotBg)
-                    .Hovered.BackgroundColor(dotdotHover).End()
-                    .ChildLeft(m.SpacingLarge).RowBetween(0)
-                    .OnDoubleClick(0, (_, _) => NavigateUp())
-                    .Enter())
+                b.Header(name);
+                b.Item("Open", () => { if (isDir) NavigateTo(path, true); else onChoose?.Invoke(path); },
+                    iconDraw: Ico(isDir ? DrawFolder : DrawFile, ink.C400));
+                b.Item("Copy Path", () => paper.SetClipboard(path), iconDraw: Ico(DrawCopy, ink.C400));
+                if (kind == 0)
                 {
-                    // Track as drop target + hover-to-open during drag
-                    if (_isDragging && paper.IsParentHovered)
-                    {
-                        _dropTargetPath = parentDir.FullName;
+                    b.Item("Rename", () => BeginRename(path, name), shortcut: "F2", iconDraw: Ico(DrawPencil, ink.C400));
+                    if (!isDir) b.Item("Duplicate", () => Duplicate(path), shortcut: "Ctrl D", iconDraw: Ico(DrawCopy, ink.C400));
+                    b.Separator();
+                    b.Item("Delete", () => DeleteEntry(path, isDir), shortcut: "Del", danger: true, iconDraw: Ico(DrawTrash, theme.Red.C500));
+                }
+            });
+        }
 
-                        if (_hoverDirPath == parentDir.FullName)
-                        {
-                            if (paper.Time - _hoverDirTime > 2.0f)
-                            {
-                                NavigateUp();
-                                _hoverDirPath = "";
-                                _hoverDirTime = 0;
-                            }
-                        }
-                        else
-                        {
-                            _hoverDirPath = parentDir.FullName;
-                            _hoverDirTime = (float)paper.Time;
-                        }
-                    }
+        // ── layout metrics ───────────────────────────────────────
+        const float toolbarH = 34f, footH = 44f, sideW = 142f;
+        const float iconW = 26f, rowPadL = 12f;
+        float bodyH = height - toolbarH - footH - 2f;   // dividers below toolbar + above foot
+        float listAreaW = width - sideW - 1f;           // vertical divider
 
-                    paper.Box("ofd_dotdot_ico").Width(m.IconBoxWidth).Height(m.RowHeight)
-                        .Text(icons.Folder, font).TextColor(Color.FromArgb(255, 220, 180, 80))
+        var display = string.IsNullOrEmpty(st.Search)
+            ? st.Entries
+            : st.Entries.Where(e => e.Name.Contains(st.Search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // ── small reusable pieces ────────────────────────────────
+        void TbBtn(string bid, IconPainter painter, bool enabled, Action onClick)
+        {
+            var col = enabled ? ink.C400 : ink.C200;
+            var b = paper.Box(bid).Width(30).Height(26).Rounded(6)
+                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch());   // vertically center in the toolbar row
+            if (enabled) { b.Hovered.BackgroundColor(theme.Hover).End(); b.OnClick(0, (_, _) => onClick()); }
+            using (b.Enter())
+                paper.Draw((canvas, rect) => DrawIcon(canvas, rect, painter, 15f, col));
+        }
+
+        // Wrap a self-rendering control (TextField/Button) so it centers vertically in a taller row.
+        void VC(string wid, UnitValue w, float h, Action inner)
+        {
+            using (paper.Row(wid).Width(w).Height(h).ChildTop().ChildBottom().Enter())
+                inner();
+        }
+
+        void Breadcrumb()
+        {
+            var parts = st.Path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                StringSplitOptions.RemoveEmptyEntries);
+            var crumbs = new List<(string Label, string Path)>();
+            string accum = "";
+            for (int i = 0; i < parts.Length; i++)
+            {
+                accum = i == 0 ? parts[0] + Path.DirectorySeparatorChar : Path.Combine(accum, parts[i]);
+                crumbs.Add((parts[i], accum));
+            }
+
+            const int maxCrumbs = 4;
+            int start = Math.Max(0, crumbs.Count - maxCrumbs);
+
+            using (paper.Row($"{id}_crumbs").Width(UnitValue.Stretch()).Height(toolbarH)
+                .ChildLeft(4).RowBetween(1).Clip().Enter())
+            {
+                void Sep(string sid) => paper.Box(sid).Width(UnitValue.Auto).Height(toolbarH).ChildLeft(2).ChildRight(2)
+                    .Text(">", font).TextColor(ink.C200).FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleCenter);
+
+                if (start > 0)
+                {
+                    string tp = crumbs[start - 1].Path;
+                    var eb = paper.Box($"{id}_cr_ell").Width(UnitValue.Auto).Height(toolbarH).ChildLeft(5).ChildRight(5).Rounded(5)
+                        .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                        .Hovered.BackgroundColor(theme.Hover).End();
+                    eb.OnClick(0, (_, _) => NavigateTo(tp, true));
+                    Sep($"{id}_cr_ellsep");
+                }
+
+                for (int i = start; i < crumbs.Count; i++)
+                {
+                    var (label, cpath) = crumbs[i];
+                    bool last = i == crumbs.Count - 1;
+                    var cb = paper.Box($"{id}_cr_{i}").Width(UnitValue.Auto).Height(toolbarH).ChildLeft(5).ChildRight(5).Rounded(5)
+                        .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-                    paper.Box("ofd_dotdot_name").Width(UnitValue.Stretch()).Height(m.RowHeight).ChildLeft(m.Spacing)
-                        .Text("..", font).TextColor(ink.C500)
-                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                    if (!last)
+                    {
+                        cb.Hovered.BackgroundColor(theme.Hover).End();
+                        cb.OnClick(0, (_, _) => NavigateTo(cpath, true));
+                        Sep($"{id}_cr_s{i}");
+                    }
                 }
             }
-
-            if (_creatingFolder)
-            {
-                using (paper.Row("ofd_nf").Height(m.RowHeight).BackgroundColor(theme.Primary.C400).ChildLeft(m.SpacingLarge).RowBetween(m.SpacingLarge).Enter())
-                {
-                    paper.Box("ofd_nf_i").Width(m.IconBoxWidth).Height(m.RowHeight).Text(icons.Folder, font).TextColor(ink.C500)
-                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-                    Origami.TextField(paper, "ofd_nf_n", _newFolderName, v => _newFolderName = v)
-                        .Placeholder("Name").Width(UnitValue.Stretch()).Show();
-                    Origami.Button(paper, "ofd_nf_ok", "Create", () =>
-                    {
-                        try { Directory.CreateDirectory(Path.Combine(_currentPath, _newFolderName)); }
-                        catch { }
-                        _creatingFolder = false;
-                        RefreshEntries();
-                    }).Width(60).Show();
-                    Origami.Button(paper, "ofd_nf_x", "Cancel", () => _creatingFolder = false).Width(60).Show();
-                }
-            }
-
-            for (int i = 0; i < display.Count; i++)
-            {
-                var entry = display[i];
-                bool isSel = entry.FullPath == _selectedPath;
-                bool isRen = entry.FullPath == _renamingPath;
-                int idx = i;
-
-                // Highlight directory rows as drop targets during drag
-                bool isDropTarget = _isDragging && entry.IsDirectory && entry.FullPath != _dragPath;
-                var rowBg = isSel ? theme.Primary.C400 : (i % 2 == 0 ? Color.Transparent : Color.FromArgb(15, 255, 255, 255));
-                var rowHoverBg = isDropTarget ? theme.Green.C400 : (isSel ? theme.Primary.C400 : ink.C200);
-
-                var row = paper.Row($"ofd_r_{i}").Height(m.RowHeight)
-                    .BackgroundColor(rowBg)
-                    .Hovered.BackgroundColor(rowHoverBg).End()
-                    .ChildLeft(m.SpacingLarge).RowBetween(0);
-
-                row.OnClick(entry, (e, _) => { _selectedPath = e.FullPath; if (!e.IsDirectory) _fileName = e.Name; });
-                row.OnDoubleClick(entry, (e, _) => { if (e.IsDirectory) NavigateTo(e.FullPath); else ConfirmSelection(); });
-                row.OnDragStart(entry, (e, _) => { _isDragging = true; _dragPath = e.FullPath; _dragName = e.Name; _dropTargetPath = ""; });
-                row.OnDragEnd(entry, (e, _) =>
-                {
-                    if (_isDragging && !string.IsNullOrEmpty(_dropTargetPath) && _dropTargetPath != _dragPath)
-                        TryMoveEntry(_dragPath, _dropTargetPath);
-                    // No target = drop on background = cancel (file stays in place)
-                    _isDragging = false; _dragPath = ""; _dragName = ""; _dropTargetPath = "";
-                    _hoverDirPath = ""; _hoverDirTime = 0;
-                });
-
-                using (row.Enter())
-                {
-                    // Track hover for drag-drop targeting + hover-to-navigate
-                    if (_isDragging && entry.IsDirectory && paper.IsParentHovered)
-                    {
-                        _dropTargetPath = entry.FullPath;
-
-                        // Hover-to-open: if hovering the same directory for 2 seconds, navigate into it
-                        if (_hoverDirPath == entry.FullPath)
-                        {
-                            if (paper.Time - _hoverDirTime > 2.0f)
-                            {
-                                NavigateTo(entry.FullPath);
-                                _hoverDirPath = "";
-                                _hoverDirTime = 0;
-                            }
-                        }
-                        else
-                        {
-                            _hoverDirPath = entry.FullPath;
-                            _hoverDirTime = (float)paper.Time;
-                        }
-                    }
-
-                    // Right-click context menu
-                    var ctxEntry = entry;
-                    ContextMenu.RightClickMenu(paper, $"ofd_ctx_{i}", b =>
-                    {
-                        b.Item("Rename", () =>
-                        {
-                            _renamingPath = ctxEntry.FullPath;
-                            _renameBuf = ctxEntry.Name;
-                        }, icon: icons.Pencil);
-
-                        b.Item("Delete", () =>
-                        {
-                            string name = ctxEntry.Name;
-                            string path = ctxEntry.FullPath;
-                            bool isDir = ctxEntry.IsDirectory;
-                            Modal.Confirm("Delete", $"Are you sure you want to delete '{name}'?\nThis cannot be undone.", () =>
-                            {
-                                try { if (isDir) Directory.Delete(path, true); else File.Delete(path); }
-                                catch { }
-                                _renamingPath = "";
-                                RefreshEntries();
-                            });
-                        }, icon: icons.Trash);
-
-                        if (ctxEntry.IsDirectory && _config?.OnAddFavorite != null)
-                        {
-                            b.Separator();
-                            b.Item("Add to Favorites", () => _config.OnAddFavorite(ctxEntry.FullPath), icon: icons.Star);
-                        }
-                    });
-
-                    string icon = _config?.GetIcon != null ? _config.GetIcon(Path.GetExtension(entry.Name), entry.IsDirectory) : (entry.IsDirectory ? icons.Folder : icons.File);
-                    var iconCol = entry.IsDirectory ? Color.FromArgb(255, 220, 180, 80) : ink.C400;
-                    paper.Box($"ofd_i_{i}").Width(m.IconBoxWidth).Height(m.RowHeight).Text(icon, font).TextColor(iconCol)
-                        .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-
-                    if (isRen)
-                    {
-                        using (paper.Row($"ofd_ren_{i}").Width(UnitValue.Stretch()).Height(m.RowHeight).RowBetween(m.Spacing).Enter())
-                        {
-                            Origami.TextField(paper, $"ofd_ren_t_{i}", _renameBuf, v => _renameBuf = v)
-                                .Width(UnitValue.Stretch()).Show();
-                            Origami.Button(paper, $"ofd_ren_ok_{i}", icons.Check, () =>
-                            {
-                                try
-                                {
-                                    if (!string.IsNullOrWhiteSpace(_renameBuf) && _renameBuf != entry.Name)
-                                    {
-                                        string np = Path.Combine(Path.GetDirectoryName(entry.FullPath)!, _renameBuf);
-                                        if (entry.IsDirectory) Directory.Move(entry.FullPath, np);
-                                        else File.Move(entry.FullPath, np);
-                                    }
-                                }
-                                catch { }
-                                _renamingPath = "";
-                                RefreshEntries();
-                            }).Width(28).Show();
-                            Origami.Button(paper, $"ofd_ren_x_{i}", icons.Close, () => _renamingPath = "").Width(28).Show();
-                        }
-                    }
-                    else
-                    {
-                        paper.Box($"ofd_n_{i}").Width(UnitValue.Stretch()).Height(m.RowHeight).ChildLeft(m.Spacing)
-                            .Text(entry.Name, font).TextColor(ink.C500)
-                            .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                    }
-
-                    paper.Box($"ofd_s_{i}").Width(80).Height(m.RowHeight)
-                        .Text(entry.IsDirectory ? "" : FormatSize(entry.Size), font).TextColor(ink.C400)
-                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleRight).ChildRight(m.SpacingLarge);
-
-                    paper.Box($"ofd_d_{i}").Width(140).Height(m.RowHeight)
-                        .Text(entry.LastModified.ToString("yyyy-MM-dd  HH:mm"), font).TextColor(ink.C400)
-                        .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleRight).ChildRight(m.SpacingLarge);
-                }
-            }
-
-            if (display.Count == 0)
-                paper.Box("ofd_empty").Height(60).Text("This folder is empty", font).TextColor(ink.C300)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
-        });
-
-        // If no directory was hovered this frame, reset hover-to-open timer
-        if (_isDragging && string.IsNullOrEmpty(_dropTargetPath))
-        {
-            _hoverDirPath = "";
-            _hoverDirTime = 0;
         }
 
-        // Auto-scroll during drag when pointer is near the top/bottom edges
-        if (_isDragging && _scrollAreaTop > 0 && _scrollAreaBottom > _scrollAreaTop)
-        {
-            float my = (float)paper.PointerPos.Y;
-            float edgeZone = 40f;
-            float scrollSpeed = 300f * paper.DeltaTime;
+        void SideSection(string key, string label) =>
+            paper.Box($"{id}_sl_{key}").Height(m.CompactHeight).ChildLeft(6)
+                .Text(label.ToUpperInvariant(), labelFont).TextColor(ink.C200)
+                .FontSize(m.FontSizeSmall - 1).Alignment(TextAlignment.MiddleLeft);
 
-            if (my > _scrollAreaTop && my < _scrollAreaTop + edgeZone)
+        void SideSep(string key) =>
+            paper.Box($"{id}_ss_{key}").Height(1).Margin(4, 5, 4, 5).BackgroundColor(theme.BorderSoft);
+
+        void SideRow(string sid, IconPainter painter, Color iconCol, string label, string path)
+        {
+            bool sel = st.Path.Equals(path, StringComparison.OrdinalIgnoreCase);
+            var r = paper.Row(sid).Height(m.RowHeight)
+                .BackgroundColor(sel ? Selection : Color.Transparent)
+                .Hovered.BackgroundColor(sel ? Selection : theme.Hover).End()
+                .Rounded(6).ChildLeft(7).RowBetween(6);
+            r.OnClick(0, (_, _) => NavigateTo(path, true));
+            using (r.Enter())
             {
-                float factor = 1f - (my - _scrollAreaTop) / edgeZone;
-                ScrollViewBuilder.s_pendingScrollBy["ofd_scroll"] = new Vector.Float2(0, -scrollSpeed * factor);
-            }
-            else if (my < _scrollAreaBottom && my > _scrollAreaBottom - edgeZone)
-            {
-                float factor = 1f - (_scrollAreaBottom - my) / edgeZone;
-                ScrollViewBuilder.s_pendingScrollBy["ofd_scroll"] = new Vector.Float2(0, scrollSpeed * factor);
+                var ic = sel ? ink.C600 : iconCol;
+                using (paper.Box(sid + "_i").Width(18).Height(m.RowHeight).IsNotInteractable().Enter())
+                    paper.Draw((canvas, rect) => DrawIcon(canvas, rect, painter, 14f, ic));
+                paper.Box(sid + "_l").Width(UnitValue.Stretch()).Height(m.RowHeight)
+                    .Text(label, font).TextColor(sel ? ink.C600 : ink.C300)
+                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).IsNotInteractable();
             }
         }
-    }
 
-    // ── Bottom Bar ───────────────────────────────────────────
-
-    private static void DrawBottomBar(Paper paper, Scribe.FontFile font, OrigamiRamp ink, OrigamiTheme theme)
-    {
-        var m = theme.Metrics;
-        using (paper.Column("ofd_bot").Height(BottomH)
-            .BackgroundColor(theme.Neutral.C200)
-            .Padding(m.SpacingLarge, m.SpacingLarge, m.Padding, m.Padding).ColBetween(m.SpacingMedium).Enter())
+        // ── window ───────────────────────────────────────────────
+        var win = paper.Column($"{id}_win").Size(width, height)
+            .BackgroundColor(WindowBg)
+            .BorderColor(theme.BorderSoft).BorderWidth(1).Rounded(9).Clip();
+        if (floating)
         {
-            using (paper.Row("ofd_nr").Height(m.RowHeight).RowBetween(m.SpacingLarge).Enter())
-            {
-                paper.Box("ofd_nl").Width(70).Height(m.RowHeight)
-                    .Text(_mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font)
-                    .TextColor(ink.C400).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
-
-                Origami.TextField(paper, "ofd_fn", _fileName, v => _fileName = v)
-                    .Width(UnitValue.Stretch()).Show();
-
-                if (_mode != FileDialogMode.SelectFolder && _typeFilterLabels.Length > 1)
-                    Origami.Dropdown(paper, "ofd_filt", _activeFilterIndex,
-                        v => { _activeFilterIndex = v; RefreshEntries(); }, _typeFilterLabels).Show();
-            }
-
-            using (paper.Row("ofd_br").Height(m.RowHeight + 2).RowBetween(m.SpacingLarge).Enter())
-            {
-                paper.Box("ofd_bsp");
-                string label = _mode switch { FileDialogMode.Save => "Save", FileDialogMode.SelectFolder => "Select Folder", _ => "Open" };
-                Origami.Button(paper, "ofd_ok", label, ConfirmSelection).Primary().Width(101).Show();
-                Origami.Button(paper, "ofd_cancel", "Cancel", () => Close(null)).Width(60).Show();
-            }
+            float sw = (float)paper.ScreenRect.Size.X, sh = (float)paper.ScreenRect.Size.Y;
+            win.PositionType(PositionType.SelfDirected)
+               .Position((sw - width) * 0.5f, (sh - height) * 0.5f)
+               .BoxShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
+               .Layer(layer).StopEventPropagation();
         }
-    }
 
-    // ── Drag & Drop ─────────────────────────────────────────────
-
-    private static void TryMoveEntry(string sourcePath, string targetDirPath)
-    {
-        if (!Directory.Exists(targetDirPath)) return;
-        string name = Path.GetFileName(sourcePath);
-        string destPath = Path.Combine(targetDirPath, name);
-        if (sourcePath == destPath) return;
-
-        // Don't move a directory into itself
-        if (Directory.Exists(sourcePath) && destPath.StartsWith(sourcePath + Path.DirectorySeparatorChar))
-            return;
-
-        try
+        using (win.Enter())
         {
-            if (File.Exists(destPath) || Directory.Exists(destPath))
+            // Toolbar: back / fwd / up + breadcrumb + search + new folder (+ close X when floating).
+            // Use Padding (not ChildLeft/Right): the edge buttons set an explicit Margin for vertical
+            // centering, which would override container child-margins and touch the edges.
+            using (paper.Row($"{id}_tb").Height(toolbarH)
+                .BackgroundColor(theme.Glass).RoundedTop(9f)
+                .Padding(10, 10, 0, 0).RowBetween(4).Enter())
             {
-                Modal.Confirm("Overwrite?", $"'{name}' already exists in the destination. Overwrite?", () =>
+                TbBtn($"{id}_back", DrawBack, st.HistoryIndex > 0, NavBack);
+                TbBtn($"{id}_fwd", DrawForward, st.HistoryIndex < st.History.Count - 1, NavFwd);
+                TbBtn($"{id}_up", DrawUp, Directory.GetParent(st.Path) != null, NavUp);
+                Breadcrumb();
+                VC($"{id}_swrap", UnitValue.Pixels(132), toolbarH, () =>
+                    Origami.TextField(paper, $"{id}_search", st.Search, v => st.Search = v)
+                        .Search("Search").Width(UnitValue.Stretch()).Height(26).Show());
+                TbBtn($"{id}_newf", DrawPlus, true, () => { st.CreatingFolder = !st.CreatingFolder; st.NewFolderName = "New Folder"; });
+                if (onClose != null)
+                    TbBtn($"{id}_close", DrawClose, true, onClose);
+            }
+            paper.Box($"{id}_tbsep").Height(1).BackgroundColor(theme.BorderSoft);
+
+            // Body: sidebar + (column header + list)
+            using (paper.Row($"{id}_body").Height(bodyH).Enter())
+            {
+                using (paper.Column($"{id}_side").Width(sideW).Height(UnitValue.Stretch())
+                    .BackgroundColor(SideBg)
+                    .Padding(7, 7, 7, 7).ColBetween(1).Enter())
                 {
+                    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                    string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    string downloads = string.IsNullOrEmpty(home) ? "" : Path.Combine(home, "Downloads");
+
+                    SideSection("qa", "Quick Access");
+                    if (Directory.Exists(home)) SideRow($"{id}_qa_home", DrawHome, theme.Primary.C500, "Home", home);
+                    if (Directory.Exists(desktop)) SideRow($"{id}_qa_desk", DrawFolder, theme.Amber.C500, "Desktop", desktop);
+                    if (Directory.Exists(docs)) SideRow($"{id}_qa_docs", DrawDoc, theme.Blue.C500, "Documents", docs);
+                    if (Directory.Exists(downloads)) SideRow($"{id}_qa_dl", DrawFolder, theme.Amber.C500, "Downloads", downloads);
+
+                    SideSep("drv");
+                    SideSection("drv", "Drives");
                     try
                     {
-                        if (Directory.Exists(sourcePath))
+                        foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady))
                         {
-                            if (Directory.Exists(destPath)) Directory.Delete(destPath, true);
-                            Directory.Move(sourcePath, destPath);
+                            string dn = d.Name;
+                            string dlabel = string.IsNullOrWhiteSpace(d.VolumeLabel) ? dn : $"{d.VolumeLabel} ({dn.TrimEnd(Path.DirectorySeparatorChar)})";
+                            SideRow($"{id}_drv_{dn}", DrawDrive, ink.C400, dlabel, dn);
                         }
-                        else
-                        {
-                            File.Move(sourcePath, destPath, true);
-                        }
-                        RefreshEntries();
                     }
                     catch { }
-                });
-                return;
+                }
+                paper.Box($"{id}_vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
+
+                using (paper.Column($"{id}_list_area").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
+                {
+                    // Right-click on empty list space: new folder / refresh (row clicks open their own menu).
+                    ContextMenu.RightClickMenu(paper, $"{id}_bgctx", b => b
+                        .Item("New Folder", () => { st.CreatingFolder = true; st.NewFolderName = "New Folder"; st.Renaming = ""; }, iconDraw: Ico(DrawPlus, ink.C400))
+                        .Item("Refresh", () => Reload(), iconDraw: Ico(DrawRefresh, ink.C400))
+                        .Separator()
+                        .Item("Paste", () => { }, enabled: false, iconDraw: Ico(DrawCopy, ink.C200)));
+
+                    float tableH = bodyH;
+
+                    // inline rename (above the table; Table can't host an editor row)
+                    if (!string.IsNullOrEmpty(st.Renaming))
+                    {
+                        tableH -= m.RowHeight + 4f;
+                        using (paper.Row($"{id}_rn").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                            .ChildLeft(rowPadL).RowBetween(6).Margin(0, 0, 0, 4).Enter())
+                        {
+                            using (paper.Box($"{id}_rn_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                                paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawPencil, 15f, theme.Primary.C500));
+                            Origami.TextField(paper, $"{id}_rn_n", st.RenameName, v => st.RenameName = v)
+                                .Placeholder("New name").Width(UnitValue.Stretch()).Show();
+                            Origami.Button(paper, $"{id}_rn_ok", "Rename", CommitRename).Width(64).Show();
+                            Origami.Button(paper, $"{id}_rn_x", "Cancel", () => st.Renaming = "").Width(64).Show();
+                        }
+                    }
+
+                    // inline new-folder creation (above the table; Table can't host an editor row)
+                    if (st.CreatingFolder)
+                    {
+                        tableH -= m.RowHeight + 4f;
+                        using (paper.Row($"{id}_nf").Height(m.RowHeight).BackgroundColor(theme.Selected)
+                            .ChildLeft(rowPadL).RowBetween(6).Margin(0, 0, 0, 4).Enter())
+                        {
+                            using (paper.Box($"{id}_nf_i").Width(iconW).Height(m.RowHeight).IsNotInteractable().Enter())
+                                paper.Draw((canvas, rect) => DrawIcon(canvas, rect, DrawFolder, 15f, theme.Amber.C500));
+                            Origami.TextField(paper, $"{id}_nf_n", st.NewFolderName, v => st.NewFolderName = v)
+                                .Placeholder("Name").Width(UnitValue.Stretch()).Show();
+                            Origami.Button(paper, $"{id}_nf_ok", "Create", () =>
+                            {
+                                try { Directory.CreateDirectory(Path.Combine(st.Path, st.NewFolderName)); } catch { }
+                                st.CreatingFolder = false;
+                                Reload();
+                            }).Width(64).Show();
+                            Origami.Button(paper, $"{id}_nf_x", "Cancel", () => st.CreatingFolder = false).Width(64).Show();
+                        }
+                    }
+
+                    // Row model: optional ".." parent + entries, or an empty-message sentinel.
+                    // Kind: 0 = entry, 1 = parent (".."), 2 = message.
+                    var parent = Directory.GetParent(st.Path);
+                    var rows = new List<(int Kind, string Name, string Path, bool IsDir, long Size, DateTime Mod)>();
+                    if (parent != null) rows.Add((1, "..", parent.FullName, true, 0L, default));
+                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.Size, e.LastModified));
+                    if (display.Count == 0)
+                        rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, 0L, default));
+
+                    int selIndex = -1;
+                    for (int i = 0; i < rows.Count; i++)
+                        if (rows[i].Kind == 0 && rows[i].Path == st.Selected) { selIndex = i; break; }
+
+                    var table = Origami.Table(paper, $"{id}_tbl", selIndex, i =>
+                        {
+                            if (i < 0 || i >= rows.Count) return;
+                            var it = rows[i];
+                            if (it.Kind != 0) { st.Selected = ""; return; }
+                            st.Selected = it.Path;
+                            if (!it.IsDir) st.FileName = it.Name;
+                        })
+                        .Scroll(listAreaW, tableH)
+                        .Bordered(false)
+                        .Virtualize()
+                        .RowHeight(m.RowHeight)
+                        .Column("Name", 2f, true)
+                        .Column("Size", 0.8f, true, TextAlignment.MiddleRight)
+                        .Column("Modified", 1.1f, true)
+                        .Sort(st.SortColumn, st.SortAscending, col => SetSort(col))
+                        .OnRowActivate(i =>
+                        {
+                            if (i < 0 || i >= rows.Count) return;
+                            var it = rows[i];
+                            if (it.Kind == 2) return;
+                            if (it.IsDir) NavigateTo(it.Path, true);
+                            else onChoose?.Invoke(it.Path);
+                        })
+                        .OnRowContext(i =>
+                        {
+                            if (i < 0 || i >= rows.Count) return;
+                            var it = rows[i];
+                            if (it.Kind == 2) return;
+                            RowContextMenu(it.Kind, it.Name, it.Path, it.IsDir);
+                        });
+
+                    foreach (var it in rows)
+                    {
+                        if (it.Kind == 2) { table.Row().Cell(it.Name, ink.C200); continue; }
+
+                        string ext = it.IsDir ? "" : Path.GetExtension(it.Name);
+                        var painter = it.IsDir ? DrawFolder : FileGlyph(ext);
+                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, ext);
+                        table.Row()
+                            .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400,
+                                  (canvas, rect) => DrawIcon(canvas, rect, painter, (float)rect.Size.X, iconCol))
+                            .CellRight(it.IsDir ? "" : FormatSize(it.Size), ink.C200)
+                            .Cell(it.Kind == 1 ? "" : it.Mod.ToString("yyyy-MM-dd  HH:mm"), ink.C200);
+                    }
+
+                    table.Show();
+                }
             }
 
-            if (Directory.Exists(sourcePath))
-                Directory.Move(sourcePath, destPath);
-            else
-                File.Move(sourcePath, destPath);
-            RefreshEntries();
+            // Foot: filename field + Cancel + primary action (label follows the mode)
+            paper.Box($"{id}_fsep").Height(1).BackgroundColor(theme.BorderSoft);
+            string primaryLabel = mode switch
+            {
+                FileDialogMode.Save => "Save",
+                FileDialogMode.SelectFolder => "Select Folder",
+                _ => "Open",
+            };
+            using (paper.Row($"{id}_foot").Height(footH)
+                .BackgroundColor(theme.Glass).RoundedBottom(9f)
+                .ChildLeft(11).ChildRight(11).RowBetween(8).Enter())
+            {
+                paper.Box($"{id}_foot_l").Width(UnitValue.Auto).Height(footH)
+                    .Text(mode == FileDialogMode.SelectFolder ? "Folder:" : "File name:", font).TextColor(ink.C200)
+                    .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                VC($"{id}_fnwrap", UnitValue.Stretch(), footH, () =>
+                    Origami.TextField(paper, $"{id}_fn", st.FileName, v => st.FileName = v)
+                        .Width(UnitValue.Stretch()).Show());
+                VC($"{id}_cwrap", UnitValue.Auto, footH, () =>
+                    Origami.Button(paper, $"{id}_cancel", "Cancel", () =>
+                    {
+                        if (onClose != null) onClose();
+                        else { st.Selected = ""; st.FileName = ""; }
+                    }).Show());
+                VC($"{id}_owrap", UnitValue.Auto, footH, () =>
+                    Origami.Button(paper, $"{id}_open", primaryLabel, () =>
+                    {
+                        string target = mode == FileDialogMode.SelectFolder
+                            ? (!string.IsNullOrEmpty(st.Selected) && Directory.Exists(st.Selected) ? st.Selected : st.Path)
+                            : (!string.IsNullOrEmpty(st.Selected) ? st.Selected
+                                : (!string.IsNullOrEmpty(st.FileName) ? Path.Combine(st.Path, st.FileName) : ""));
+                        if (string.IsNullOrEmpty(target)) return;
+                        if (Directory.Exists(target) && mode != FileDialogMode.SelectFolder) NavigateTo(target, true);
+                        else onChoose?.Invoke(target);
+                    }).Primary().Show());
+            }
         }
-        catch { }
     }
 
-    // ── Helpers ───────────────────────────────────────────────
+    // ── Vector icons (Origami's icon font is empty, so these stroke onto the canvas) ──
 
-    private static bool MatchesPattern(string fileName, string pattern)
+    private delegate void IconPainter(Canvas canvas, float cx, float cy, float size, Color color);
+
+    private static readonly HashSet<string> _imgExts = new(StringComparer.OrdinalIgnoreCase)
+        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tga", ".tiff" };
+    private static readonly HashSet<string> _codeExts = new(StringComparer.OrdinalIgnoreCase)
+        { ".cs", ".js", ".ts", ".py", ".cpp", ".c", ".h", ".hpp", ".java", ".json", ".xml",
+          ".html", ".css", ".go", ".rs", ".rb", ".php", ".sh", ".lua", ".glsl", ".shader", ".yml", ".yaml", ".toml" };
+
+    private static IconPainter FileGlyph(string ext) =>
+        _imgExts.Contains(ext) ? DrawImage : _codeExts.Contains(ext) ? DrawCode : DrawFile;
+
+    private static Color FileTint(OrigamiTheme theme, OrigamiRamp ink, string ext) =>
+        _imgExts.Contains(ext) ? theme.Blue.C500 : _codeExts.Contains(ext) ? theme.Green.C500 : ink.C300;
+
+    private static void DrawIcon(Canvas canvas, Rect rect, IconPainter painter, float size, Color color)
     {
-        if (pattern == "*.*") return true;
-        string ext = pattern.StartsWith("*") ? pattern[1..] : pattern;
-        return fileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase);
+        float cx = (float)(rect.Min.X + rect.Size.X * 0.5);
+        float cy = (float)(rect.Min.Y + rect.Size.Y * 0.5);
+        painter(canvas, cx, cy, size, color);
+    }
+
+    private static void Pen(Canvas c, Color color, float w)
+    {
+        c.SetStrokeColor(Color32.FromArgb(color.A, color.R, color.G, color.B));
+        c.SetStrokeWidth(w);
+        c.SetStrokeCap(EndCapStyle.Round);
+        c.SetStrokeJoint(JointStyle.Round);
+    }
+
+    private static void DrawFolder(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.92f, h = s * 0.74f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        float tabW = w * 0.42f, lip = t + h * 0.24f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath();
+        c.MoveTo(l, b); c.LineTo(l, t); c.LineTo(l + tabW, t);
+        c.LineTo(l + tabW + w * 0.12f, lip); c.LineTo(r, lip); c.LineTo(r, b);
+        c.ClosePath(); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawFile(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.72f, h = s * 0.92f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        float f = s * 0.28f;
+        c.SaveState(); Pen(c, col, 1.4f);
+        c.BeginPath();
+        c.MoveTo(l, t); c.LineTo(r - f, t); c.LineTo(r, t + f); c.LineTo(r, b); c.LineTo(l, b); c.ClosePath();
+        c.MoveTo(r - f, t); c.LineTo(r - f, t + f); c.LineTo(r, t + f);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawDoc(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.72f, h = s * 0.92f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        float f = s * 0.26f;
+        c.SaveState(); Pen(c, col, 1.4f);
+        c.BeginPath();
+        c.MoveTo(l, t); c.LineTo(r - f, t); c.LineTo(r, t + f); c.LineTo(r, b); c.LineTo(l, b); c.ClosePath();
+        c.MoveTo(r - f, t); c.LineTo(r - f, t + f); c.LineTo(r, t + f);
+        float lx0 = l + w * 0.22f, lx1 = r - w * 0.18f;
+        c.MoveTo(lx0, cy); c.LineTo(lx1, cy);
+        c.MoveTo(lx0, cy + h * 0.2f); c.LineTo(lx1, cy + h * 0.2f);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawImage(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.9f, h = s * 0.78f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        c.SaveState(); Pen(c, col, 1.4f);
+        c.BeginPath();
+        c.MoveTo(l, t); c.LineTo(r, t); c.LineTo(r, b); c.LineTo(l, b); c.ClosePath();
+        c.Stroke();
+        c.BeginPath(); c.Arc(l + w * 0.28f, t + h * 0.3f, s * 0.08f, 0f, MathF.PI * 2f); c.Stroke();
+        c.BeginPath();
+        c.MoveTo(l, b); c.LineTo(l + w * 0.4f, cy); c.LineTo(l + w * 0.62f, b - h * 0.2f); c.LineTo(r, t + h * 0.5f);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawCode(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float ex = s * 0.44f, ey = s * 0.28f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath();
+        c.MoveTo(cx - ex * 0.28f, cy - ey); c.LineTo(cx - ex, cy); c.LineTo(cx - ex * 0.28f, cy + ey);
+        c.MoveTo(cx + ex * 0.28f, cy - ey); c.LineTo(cx + ex, cy); c.LineTo(cx + ex * 0.28f, cy + ey);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawDrive(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.92f, h = s * 0.6f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        c.SaveState(); Pen(c, col, 1.4f);
+        c.BeginPath();
+        c.MoveTo(l, t); c.LineTo(r, t); c.LineTo(r, b); c.LineTo(l, b); c.ClosePath();
+        c.Stroke();
+        c.BeginPath(); c.Arc(r - w * 0.16f, cy, s * 0.05f, 0f, MathF.PI * 2f); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawHome(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.9f, h = s * 0.85f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h / 2, b = cy + h / 2;
+        float eave = t + h * 0.42f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath();
+        c.MoveTo(l, eave); c.LineTo(cx, t); c.LineTo(r, eave);
+        c.MoveTo(l + w * 0.14f, eave); c.LineTo(l + w * 0.14f, b);
+        c.LineTo(r - w * 0.14f, b); c.LineTo(r - w * 0.14f, eave);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawBack(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float ex = s * 0.42f, ah = s * 0.24f;
+        c.SaveState(); Pen(c, col, 1.6f);
+        c.BeginPath();
+        c.MoveTo(cx + ex, cy); c.LineTo(cx - ex, cy);
+        c.MoveTo(cx - ex + ah, cy - ah); c.LineTo(cx - ex, cy); c.LineTo(cx - ex + ah, cy + ah);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawForward(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float ex = s * 0.42f, ah = s * 0.24f;
+        c.SaveState(); Pen(c, col, 1.6f);
+        c.BeginPath();
+        c.MoveTo(cx - ex, cy); c.LineTo(cx + ex, cy);
+        c.MoveTo(cx + ex - ah, cy - ah); c.LineTo(cx + ex, cy); c.LineTo(cx + ex - ah, cy + ah);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawUp(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float ey = s * 0.42f, ah = s * 0.24f;
+        c.SaveState(); Pen(c, col, 1.6f);
+        c.BeginPath();
+        c.MoveTo(cx, cy + ey); c.LineTo(cx, cy - ey);
+        c.MoveTo(cx - ah, cy - ey + ah); c.LineTo(cx, cy - ey); c.LineTo(cx + ah, cy - ey + ah);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawSearch(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float rr = s * 0.3f;
+        float ccx = cx - s * 0.1f, ccy = cy - s * 0.1f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath(); c.Arc(ccx, ccy, rr, 0f, MathF.PI * 2f); c.Stroke();
+        c.BeginPath(); c.MoveTo(ccx + rr * 0.72f, ccy + rr * 0.72f); c.LineTo(cx + s * 0.42f, cy + s * 0.42f); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawPlus(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float e = s * 0.34f;
+        c.SaveState(); Pen(c, col, 1.6f);
+        c.BeginPath();
+        c.MoveTo(cx - e, cy); c.LineTo(cx + e, cy);
+        c.MoveTo(cx, cy - e); c.LineTo(cx, cy + e);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawChevDown(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.36f, hh = s * 0.2f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath(); c.MoveTo(cx - w, cy - hh); c.LineTo(cx, cy + hh); c.LineTo(cx + w, cy - hh); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawChevUp(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.36f, hh = s * 0.2f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath(); c.MoveTo(cx - w, cy + hh); c.LineTo(cx, cy - hh); c.LineTo(cx + w, cy + hh); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawClose(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float r = s * 0.28f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        c.BeginPath(); c.MoveTo(cx - r, cy - r); c.LineTo(cx + r, cy + r);
+        c.MoveTo(cx + r, cy - r); c.LineTo(cx - r, cy + r); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawCopy(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.5f, h = s * 0.58f, o = s * 0.16f;
+        c.SaveState(); Pen(c, col, 1.4f);
+        // back sheet (up-left), front sheet (down-right)
+        c.BeginPath(); c.MoveTo(cx - w / 2 - o, cy - h / 2 - o); c.LineTo(cx + w / 2 - o, cy - h / 2 - o);
+        c.LineTo(cx + w / 2 - o, cy + h / 2 - o); c.LineTo(cx - w / 2 - o, cy + h / 2 - o); c.ClosePath(); c.Stroke();
+        c.BeginPath(); c.MoveTo(cx - w / 2 + o, cy - h / 2 + o); c.LineTo(cx + w / 2 + o, cy - h / 2 + o);
+        c.LineTo(cx + w / 2 + o, cy + h / 2 + o); c.LineTo(cx - w / 2 + o, cy + h / 2 + o); c.ClosePath(); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawPencil(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float e = s * 0.42f;
+        c.SaveState(); Pen(c, col, 1.5f);
+        // shaft
+        c.BeginPath(); c.MoveTo(cx - e, cy + e); c.LineTo(cx + e * 0.62f, cy - e * 0.78f); c.Stroke();
+        // tip
+        c.BeginPath(); c.MoveTo(cx + e * 0.62f, cy - e * 0.78f); c.LineTo(cx + e, cy - e * 0.42f);
+        c.LineTo(cx - e * 0.64f, cy + e); c.LineTo(cx - e, cy + e); c.LineTo(cx - e, cy + e * 0.64f); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawTrash(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float w = s * 0.5f, h = s * 0.56f;
+        float l = cx - w / 2, r = cx + w / 2, t = cy - h * 0.28f, b = cy + h / 2;
+        c.SaveState(); Pen(c, col, 1.4f);
+        // lid + handle
+        c.BeginPath(); c.MoveTo(l - w * 0.12f, t); c.LineTo(r + w * 0.12f, t); c.Stroke();
+        c.BeginPath(); c.MoveTo(cx - w * 0.18f, t); c.LineTo(cx - w * 0.14f, t - h * 0.16f);
+        c.LineTo(cx + w * 0.14f, t - h * 0.16f); c.LineTo(cx + w * 0.18f, t); c.Stroke();
+        // can
+        c.BeginPath(); c.MoveTo(l, t); c.LineTo(l + w * 0.1f, b); c.LineTo(r - w * 0.1f, b); c.LineTo(r, t); c.Stroke();
+        // ribs
+        c.BeginPath(); c.MoveTo(cx, t + h * 0.14f); c.LineTo(cx, b - h * 0.1f); c.Stroke();
+        c.RestoreState();
+    }
+
+    private static void DrawRefresh(Canvas c, float cx, float cy, float s, Color col)
+    {
+        float rr = s * 0.34f;
+        c.SaveState(); Pen(c, col, 1.4f);
+        c.BeginPath(); c.Arc(cx, cy, rr, -MathF.PI * 0.35f, MathF.PI * 1.15f); c.Stroke();
+        // arrow head at the arc start (top-right)
+        float ax = cx + rr * MathF.Cos(-MathF.PI * 0.35f), ay = cy + rr * MathF.Sin(-MathF.PI * 0.35f);
+        c.BeginPath();
+        c.MoveTo(ax - s * 0.16f, ay - s * 0.02f); c.LineTo(ax, ay); c.LineTo(ax + s * 0.02f, ay - s * 0.18f);
+        c.Stroke();
+        c.RestoreState();
+    }
+
+    private static List<FileEntry> LoadDir(string path, int sortColumn, bool ascending)
+    {
+        var list = new List<FileEntry>();
+        try
+        {
+            var di = new DirectoryInfo(path);
+            foreach (var dir in di.EnumerateDirectories())
+            {
+                if ((dir.Attributes & FileAttributes.Hidden) != 0) continue;
+                list.Add(new FileEntry { Name = dir.Name, FullPath = dir.FullName, IsDirectory = true, LastModified = dir.LastWriteTime });
+            }
+            foreach (var file in di.EnumerateFiles())
+            {
+                if ((file.Attributes & FileAttributes.Hidden) != 0) continue;
+                list.Add(new FileEntry { Name = file.Name, FullPath = file.FullName, IsDirectory = false, Size = file.Length, LastModified = file.LastWriteTime });
+            }
+        }
+        catch { }
+
+        var dirs = list.Where(e => e.IsDirectory);
+        var files = list.Where(e => !e.IsDirectory);
+        IEnumerable<FileEntry> Sort(IEnumerable<FileEntry> items) => sortColumn switch
+        {
+            1 => ascending ? items.OrderBy(e => e.Size) : items.OrderByDescending(e => e.Size),
+            2 => ascending ? items.OrderBy(e => e.LastModified) : items.OrderByDescending(e => e.LastModified),
+            _ => ascending ? items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase) : items.OrderByDescending(e => e.Name, StringComparer.OrdinalIgnoreCase),
+        };
+        return Sort(dirs).Concat(Sort(files)).ToList();
     }
 
     private static string FormatSize(long bytes)

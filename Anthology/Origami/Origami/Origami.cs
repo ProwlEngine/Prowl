@@ -315,6 +315,13 @@ public static class Origami
     public static DatePickerBuilder DatePicker(Paper paper, string id, DateTime value, Action<DateTime> setter)
         => new DatePickerBuilder(paper, id, value, setter, Current);
 
+    // ── Table factory ──────────────────────────────────────────
+
+    /// <summary>Begin building a data table. Declare columns with <c>.Column(...)</c>, add rows with
+    /// <c>.Row().Cell(...)</c>, then call <c>.Show()</c>. Controlled — caller owns the selected index.</summary>
+    public static TableBuilder Table(Paper paper, string id, int selectedIndex, Action<int> onSelect)
+        => new TableBuilder(paper, id, selectedIndex, onSelect, Current);
+
     // ── Image diff factory ─────────────────────────────────────
 
     /// <summary>Begin building an image diff slider. Two images overlaid with a draggable split bar.</summary>
@@ -339,6 +346,27 @@ public static class Origami
     /// <summary>Begin building an app bar (menubar or footer). Chain .Menu(), .Center(), .Right(), then .Show().</summary>
     public static AppBarBuilder AppBar(Paper paper, string id)
         => new AppBarBuilder(paper, id, Current);
+
+    // ── Menu bar factory ───────────────────────────────────────
+
+    /// <summary>Begin building a menu bar (File / Edit / … dropdowns). Chain <c>.Menu(label, build)</c>
+    /// per menu, then call <c>.Show()</c>. Click opens, hover switches, click-away closes.</summary>
+    public static MenuBarBuilder MenuBar(Paper paper, string id)
+        => new MenuBarBuilder(paper, id, Current);
+
+    // ── Accordion factory ──────────────────────────────────────
+
+    /// <summary>Begin building an accordion (single-open group of collapsible sections). Chain
+    /// <c>.Section(id, title, body)</c> per section, then call <c>.Show()</c>.</summary>
+    public static AccordionBuilder Accordion(Paper paper, string id)
+        => new AccordionBuilder(paper, id, Current);
+
+    // ── Tabs factory ───────────────────────────────────────────
+
+    /// <summary>Begin building a tab strip. Controlled — caller owns the selected index; chain
+    /// <c>.Underline()</c>/<c>.Pills()</c> and <c>.Tab(...)</c> per tab, then call <c>.Show()</c>.</summary>
+    public static TabsBuilder Tabs(Paper paper, string id, int selectedIndex, Action<int> onSelect)
+        => new TabsBuilder(paper, id, selectedIndex, onSelect, Current);
 
     // ── Modal helpers ────────────────────────────────────────
 

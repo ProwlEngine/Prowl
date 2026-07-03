@@ -49,11 +49,65 @@ public sealed class OrigamiTheme
     /// </summary>
     public OrigamiRamp Ink = null!;
 
+    // ── Semantic surface / state colours ────────────────────────────
+    // Surfaces and borders that aren't a single ramp stop. Explicit (not ramp-derived) so a host can
+    // retint them independently; the accent-tinted states are computed off Primary so they follow it.
+
+    /// <summary>Inset "glass" fill for toolbars, headers, tag pills and search fields within a panel
+    /// (translucent dark, distinct from the panel body).</summary>
+    public Color Glass;
+
+    /// <summary>Menu / dropdown / popover surface — more opaque than panels so it reads over anything.</summary>
+    public Color Popover;
+
+    /// <summary>Soft hairline border / divider (very low alpha).</summary>
+    public Color BorderSoft;
+
+    /// <summary>Stronger border for focused / emphasised edges (e.g. popover outlines).</summary>
+    public Color BorderStrong;
+
+    /// <summary>Drop-shadow colour for popovers, dropdowns and modals.</summary>
+    public Color Shadow;
+
+    /// <summary>Accent-tinted hover overlay. Tracks <see cref="Primary"/> so a retint carries through.</summary>
+    public Color Hover => WithAlpha(Primary.C500, 31);
+
+    /// <summary>Accent-tinted selected / active fill. Tracks <see cref="Primary"/>.</summary>
+    public Color Selected => WithAlpha(Primary.C500, 41);
+
+    /// <summary>Return <paramref name="c"/> with a new alpha (0-255). Handy for state overlays.</summary>
+    public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
+
     // ── Sizing / icons / font ───────────────────────────────────────
 
     public OrigamiMetrics Metrics = new();
     public OrigamiIcons Icons = new();
+
+    /// <summary>Regular (400) weight face. Widgets fall back to this when a heavier weight is unset.</summary>
     public Prowl.Scribe.FontFile? Font;
+
+    /// <summary>Medium (500) weight face. Optional — falls back to <see cref="Font"/>.</summary>
+    public Prowl.Scribe.FontFile? FontMedium;
+
+    /// <summary>Semi-bold (600) weight face. Optional — falls back to Medium then <see cref="Font"/>.</summary>
+    public Prowl.Scribe.FontFile? FontSemiBold;
+
+    /// <summary>Bold (700) weight face. Optional — falls back to SemiBold, Medium, then <see cref="Font"/>.</summary>
+    public Prowl.Scribe.FontFile? FontBold;
+
+    /// <summary>Monospace face for value/code fields (numeric, vector, color, hex). Falls back to <see cref="Font"/>.</summary>
+    public Prowl.Scribe.FontFile? FontMono;
+    /// <summary>Resolved monospace face, or the regular face if none supplied.</summary>
+    public Prowl.Scribe.FontFile? Mono => FontMono ?? Font;
+
+    /// <summary>Resolved medium (500) weight, or the regular face if none supplied.</summary>
+    public Prowl.Scribe.FontFile? Medium => FontMedium ?? Font;
+
+    /// <summary>Resolved semi-bold (600) weight, or the closest lighter face supplied.</summary>
+    public Prowl.Scribe.FontFile? SemiBold => FontSemiBold ?? FontMedium ?? Font;
+
+    /// <summary>Resolved bold (700) weight, or the closest lighter face supplied.</summary>
+    public Prowl.Scribe.FontFile? Bold => FontBold ?? FontSemiBold ?? FontMedium ?? Font;
 
     /// <summary>
     /// Map a variant to its surface ramp. <see cref="OrigamiVariant.Default"/> and
@@ -81,9 +135,18 @@ public sealed class OrigamiTheme
         Green   = Green.Clone(),
         Amber   = Amber.Clone(),
         Ink     = Ink.Clone(),
+        Glass        = Glass,
+        Popover      = Popover,
+        BorderSoft   = BorderSoft,
+        BorderStrong = BorderStrong,
+        Shadow       = Shadow,
         Metrics = Metrics.Clone(),
         Icons   = Icons.Clone(),
-        Font    = Font,
+        Font        = Font,
+        FontMedium  = FontMedium,
+        FontSemiBold = FontSemiBold,
+        FontBold    = FontBold,
+        FontMono    = FontMono,
     };
 
     /// <summary>
@@ -100,26 +163,53 @@ public sealed class OrigamiTheme
         Green   = OrigamiRamp.Lerp(a.Green,   b.Green,   t),
         Amber   = OrigamiRamp.Lerp(a.Amber,   b.Amber,   t),
         Ink     = OrigamiRamp.Lerp(a.Ink,     b.Ink,     t),
+        Glass        = OrigamiRamp.LerpColor(a.Glass,        b.Glass,        t),
+        Popover      = OrigamiRamp.LerpColor(a.Popover,      b.Popover,      t),
+        BorderSoft   = OrigamiRamp.LerpColor(a.BorderSoft,   b.BorderSoft,   t),
+        BorderStrong = OrigamiRamp.LerpColor(a.BorderStrong, b.BorderStrong, t),
+        Shadow       = OrigamiRamp.LerpColor(a.Shadow,       b.Shadow,       t),
         Metrics = OrigamiMetrics.Lerp(a.Metrics, b.Metrics, t),
+        FontMedium   = b.FontMedium,
+        FontSemiBold = b.FontSemiBold,
+        FontBold     = b.FontBold,
+        FontMono     = b.FontMono,
         Icons   = b.Icons,
         Font    = b.Font,
     };
 
     /// <summary>
-    /// Reasonable standalone defaults — a dark-theme palette with the standard branded ramps.
-    /// Used when no host has called <see cref="Origami.SetTheme"/>.
+    /// Standalone defaults — the "Nebula" palette: frosted magenta-violet glass over a dark void.
+    /// Surface stops carry alpha so panels read as translucent glass floating over whatever the
+    /// host draws behind them. Used when no host has called <see cref="Origami.SetTheme"/>.
     /// </summary>
     public static OrigamiTheme CreateDefaults() => new()
     {
-        // Stops chosen to match Prowl's editor palette so the look is consistent out of the box.
-        Neutral = Ramp("#101116", "#16151A", "#18191D", "#1D1E22", "#2E2D35", "#3E3D47", "#6C6A7A"),
-        Primary = Ramp("#1D1010", "#271D36", "#3D2660", "#563784", "#7252AA", "#8E6FCC", "#A78EE2"),
-        Blue    = Ramp("#0E1A2E", "#152343", "#1F365E", "#2D4F88", "#4070BC", "#5C8AE0", "#82A8F0"),
-        Red     = Ramp("#1F0E0E", "#3A1818", "#5A2424", "#7A2F2F", "#A04040", "#E05858", "#EC7878"),
-        Green   = Ramp("#0F1F15", "#162C20", "#1F4530", "#2D5C42", "#3D7A57", "#5DC07F", "#A6E5B7"),
-        Amber   = Ramp("#1F1808", "#3A2A10", "#5C4017", "#7A5520", "#9B7332", "#E0A954", "#F4D8A8"),
-        // Ink ramp: 5 editor-equivalent stops + 2 extra-bright headroom for emphasis text.
-        Ink     = Ramp("#2E2D35", "#3E3D47", "#6C6A7A", "#B0ADBE", "#F0EEF8", "#FFFFFF", "#FFFFFF"),
+        // Neutral surface ramp. C200 = subtle purple border; C300 = tab bar / glass-head;
+        // C400 = panel body glass; C500 = raised / hover surface.
+        Neutral = new OrigamiRamp
+        {
+            C100 = Color.FromArgb(235, 8, 6, 12),
+            C200 = Color.FromArgb(33, 178, 150, 255),
+            C300 = Color.FromArgb(220, 26, 22, 38),
+            C400 = Color.FromArgb(205, 17, 14, 24),
+            C500 = Color.FromArgb(235, 38, 32, 54),
+            C600 = Color.FromArgb(245, 48, 42, 68),
+            C700 = Color.FromArgb(255, 64, 58, 88),
+        },
+        Primary = Ramp("#1D1036", "#2A1A4A", "#3D2660", "#563784", "#A855F7", "#BD6BFF", "#D4A6FF"),
+        Blue    = Ramp("#0E1A2E", "#152343", "#1F365E", "#2D4F88", "#60A5FA", "#82B2F5", "#AAC8FA"),
+        Red     = Ramp("#1F0E10", "#3A181E", "#5A242C", "#8C3442", "#FB7185", "#FC8C9C", "#FAAFBA"),
+        Green   = Ramp("#0F1F15", "#162C20", "#1F4530", "#2D6446", "#4ADE80", "#78E6A0", "#AAF0C3"),
+        Amber   = Ramp("#1F1808", "#3A2A10", "#5C4017", "#825C28", "#FBBF24", "#FCD060", "#FAE0A0"),
+        // Ink ramp: C300 muted/inactive, C500 primary labels, C600+ bright emphasis.
+        Ink     = Ramp("#4D4961", "#6E6987", "#948FAB", "#C0BBD2", "#F0EEF7", "#FFFFFF", "#FFFFFF"),
+
+        // Semantic surfaces / borders (the frosted-glass "Nebula" defaults).
+        Glass        = Color.FromArgb(153, 8, 6, 14),
+        Popover      = Color.FromArgb(250, 24, 20, 36),
+        BorderSoft   = Color.FromArgb(18, 178, 150, 255),
+        BorderStrong = Color.FromArgb(66, 190, 150, 255),
+        Shadow       = Color.FromArgb(150, 0, 0, 0),
     };
 
     private static Color Hex(string s) => ColorTranslator.FromHtml(s);

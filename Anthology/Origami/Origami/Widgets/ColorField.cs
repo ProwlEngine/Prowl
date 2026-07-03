@@ -55,6 +55,7 @@ public sealed class ColorFieldBuilder
     private bool _hdr;
     private bool _readOnly;
     private UnitValue _width = UnitValue.Stretch();
+    private float _height = 32f;
     private ColorPalette? _palette;
 
     internal ColorFieldBuilder(Paper paper, string id, Color value, Action<Color> setter, OrigamiTheme theme)
@@ -81,6 +82,9 @@ public sealed class ColorFieldBuilder
     /// <summary>Override the swatch width.</summary>
     public ColorFieldBuilder Width(float w) { _width = w; return this; }
 
+    /// <summary>Override the field height (default 32).</summary>
+    public ColorFieldBuilder Height(float h) { _height = MathF.Max(20f, h); return this; }
+
     /// <summary>
     /// Attach a color palette to the picker popover. The caller owns the list and
     /// persistence. Left-click a swatch to select, right-click to remove, + to add.
@@ -99,16 +103,23 @@ public sealed class ColorFieldBuilder
         float rounding = metrics.Rounding;
 
         int ri = Clamp255(_value.R), gi = Clamp255(_value.G), bi = Clamp255(_value.B), ai = Clamp255(_value.A);
-        string hexText = _showAlpha ? $"#{ri:X2}{gi:X2}{bi:X2}{ai:X2}" : $"#{ri:X2}{gi:X2}{bi:X2}";
+        string hexText = $"#{ri:X2}{gi:X2}{bi:X2}";
+        string opacityText = $"{(int)MathF.Round(ai / 255f * 100f)}%";
+        var mono = _theme.Mono ?? font;
 
-        // Swatch trigger - single box, all visuals drawn via canvas
-        float fontSize = metrics.FontSize - 1;
-        var capturedFont = font;
-        var capturedInk = ink;
-        var capturedPrimary = _theme.Primary;
+        // Nebula .w2color: glass-in row, 24px swatch + mono hex + muted opacity.
+        SysColor glassIn = _theme.Glass;
+        SysColor bdSoft = _theme.BorderSoft;
+        SysColor swatchBorder = SysColor.FromArgb(38, 255, 255, 255);
 
-        var swatch = _paper.Box(_id)
-            .Width(_width).Height(metrics.HeaderHeight);
+        float sws = MathF.Min(24f, _height - 6f);
+        var row = _paper.Row(_id)
+            .Width(_width).Height(_height)
+            .BackgroundColor(glassIn)
+            .BorderColor(bdSoft).BorderWidth(1)
+            .Hovered.BorderColor(_theme.Primary.C500).End()
+            .Rounded(rounding)
+            .Padding(4, 10, 0, 0).RowBetween(8);
 
         if (!_readOnly)
         {
@@ -118,57 +129,37 @@ public sealed class ColorFieldBuilder
             var showAlpha = _showAlpha;
             var hdr = _hdr;
             var palette = _palette;
-            swatch.OnClick(e =>
+            row.OnClick(e =>
             {
                 float anchorX = (float)e.ElementRect.Min.X;
                 float anchorY = (float)e.ElementRect.Max.Y + 2;
-                var modal = new ColorPickerModal(id, value, setter, showAlpha, hdr, palette, anchorX, anchorY);
-                Modal.Push(modal);
+                Modal.Push(new ColorPickerModal(id, value, setter, showAlpha, hdr, palette, anchorX, anchorY));
             });
         }
 
-        using (swatch.Enter())
+        using (row.Enter())
         {
-            bool isHovered = _paper.IsParentHovered;
+            // Swatch (rounded, subtle white rim).
+            _paper.Box($"{_id}_sw")
+                .Width(sws).Height(sws).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                .Rounded(6)
+                .BackgroundColor(SysColor.FromArgb(ai, ri, gi, bi))
+                .BorderColor(swatchBorder).BorderWidth(1)
+                .IsNotInteractable();
 
-            // Draw swatch background, border, and hex text in one canvas pass
-            _paper.Draw((canvas, rect) =>
+            if (font != null)
             {
-                float x = (float)rect.Min.X, y = (float)rect.Min.Y;
-                float w = (float)rect.Size.X, h = (float)rect.Size.Y;
+                _paper.Box($"{_id}_hex")
+                    .Width(UnitValue.Stretch()).Height(_height).Margin(8, 0, 0, 0).IsNotInteractable()
+                    .Text(hexText, mono).TextColor(ink.C500)
+                    .FontSize(metrics.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
 
-                // Fill with the color
-                canvas.RoundedRectFilled(x, y, w, h, rounding, rounding, rounding, rounding,
-                    Color32.FromArgb(ai, ri, gi, bi));
-
-                // Border
-                var borderCol = isHovered
-                    ? Color32.FromArgb(255, capturedPrimary.C400.R, capturedPrimary.C400.G, capturedPrimary.C400.B)
-                    : Color32.FromArgb(255, capturedInk.C200.R, capturedInk.C200.G, capturedInk.C200.B);
-                canvas.SetStrokeColor(borderCol);
-                canvas.SetStrokeWidth(1);
-                canvas.BeginPath();
-                canvas.RoundedRect(x, y, w, h, rounding, rounding, rounding, rounding);
-                canvas.Stroke();
-
-                // Hex text with outline for readability on any background
-                if (capturedFont != null)
-                {
-                    var textSize = canvas.MeasureText(hexText, fontSize, capturedFont);
-                    float tx = x + metrics.Padding;
-                    float ty = y + (h - (float)textSize.Y) * 0.5f;
-
-                    // Dark outline behind text so it pops on white/bright backgrounds
-                    var shadow = Color32.FromArgb(180, 0, 0, 0);
-                    for (int ox = 0; ox <= 1; ox++)
-                        for (int oy = 0; oy <= 1; oy++)
-                            if (ox != 0 || oy != 0)
-                                canvas.DrawText(hexText, tx + ox, ty + oy, shadow, fontSize, capturedFont);
-
-                    // White text on top
-                    canvas.DrawText(hexText, tx, ty, Color32.FromArgb(255, 255, 255, 255), fontSize, capturedFont);
-                }
-            });
+                if (_showAlpha)
+                    _paper.Box($"{_id}_op")
+                        .Width(UnitValue.Auto).Height(_height).IsNotInteractable()
+                        .Text(opacityText, mono).TextColor(ink.C200)
+                        .FontSize(metrics.FontSize - 3).Alignment(TextAlignment.MiddleRight);
+            }
         }
     }
 
@@ -232,7 +223,7 @@ public sealed class ColorFieldBuilder
 
             int ni = Clamp255(currentColor.R), ng = Clamp255(currentColor.G), nb = Clamp255(currentColor.B), na = Clamp255(currentColor.A);
             _paper.Box($"{_id}_cf_new").Height(metrics.RowHeight).Rounded(metrics.SmallRounding)
-                .BorderColor(ink.C200).BorderWidth(1)
+                .BorderColor(_theme.BorderSoft).BorderWidth(1)
                 .BackgroundColor(SysColor.FromArgb(na, ni, ng, nb));
 
             if (mode == 0)
@@ -245,7 +236,7 @@ public sealed class ColorFieldBuilder
             // Palette
             if (_palette != null && _palette.Colors.Count > 0 || _palette?.OnAdd != null)
             {
-                _paper.Box($"{_id}_cf_psep").Height(1).BackgroundColor(ink.C200);
+                _paper.Box($"{_id}_cf_psep").Height(1).BackgroundColor(_theme.BorderSoft);
                 DrawPalette(popEl);
             }
 
@@ -373,13 +364,13 @@ public sealed class ColorFieldBuilder
 
     // ── HSV Inputs ───────────────────────────────────────────────
 
-    private static readonly SysColor HueCol = SysColor.FromArgb(255, 200, 80, 80);
-    private static readonly SysColor SatCol = SysColor.FromArgb(255, 80, 200, 80);
-    private static readonly SysColor ValCol = SysColor.FromArgb(255, 80, 80, 200);
-    private static readonly SysColor AlphaCol = SysColor.FromArgb(255, 180, 180, 180);
-    private static readonly SysColor RedCol = SysColor.FromArgb(255, 200, 80, 80);
-    private static readonly SysColor GreenCol = SysColor.FromArgb(255, 80, 200, 80);
-    private static readonly SysColor BlueCol = SysColor.FromArgb(255, 80, 80, 200);
+    private static readonly SysColor HueCol = SysColor.FromArgb(255, 251, 113, 133);
+    private static readonly SysColor SatCol = SysColor.FromArgb(255, 74, 222, 128);
+    private static readonly SysColor ValCol = SysColor.FromArgb(255, 96, 165, 250);
+    private static readonly SysColor AlphaCol = SysColor.FromArgb(255, 148, 143, 171);
+    private static readonly SysColor RedCol = SysColor.FromArgb(255, 251, 113, 133);
+    private static readonly SysColor GreenCol = SysColor.FromArgb(255, 74, 222, 128);
+    private static readonly SysColor BlueCol = SysColor.FromArgb(255, 96, 165, 250);
 
     private void DrawHSVInputs(ElementHandle popEl, float h, float s, float v, float a)
     {
@@ -651,10 +642,10 @@ internal sealed class ColorPickerModal : IModal
             .PositionType(PositionType.SelfDirected)
             .Position(_anchorX, _anchorY)
             .Width(300f).Height(UnitValue.Auto)
-            .BackgroundColor(theme.Neutral.C300)
-            .BorderColor(theme.Ink.C200).BorderWidth(1)
+            .BackgroundColor(theme.Popover)                 // solid Nebula popover
+            .BorderColor(theme.BorderStrong).BorderWidth(1)    // bd-strong
             .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 4, 24, 0, SysColor.FromArgb(100, 0, 0, 0))
+            .BoxShadow(0, 14, 40, 0, theme.Shadow)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()
