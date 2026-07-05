@@ -23,7 +23,7 @@ public sealed class OrigamiMetrics
     // ── Heights ────────────────────────────────────────────────
 
     /// <summary>Standard row/control height (text fields, dropdowns, sliders).</summary>
-    public float RowHeight = 28f;
+    public float RowHeight = 24f;
 
     /// <summary>Default header (clickable row) height.</summary>
     public float HeaderHeight = 26f;
@@ -84,7 +84,7 @@ public sealed class OrigamiMetrics
     // ── Label ──────────────────────────────────────────────────
 
     /// <summary>Default label width in property grids and forms.</summary>
-    public float LabelWidth = 120f;
+    public float LabelWidth = 100f;
 
     // ── Docking ───────────────────────────────────────────────
 

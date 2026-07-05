@@ -33,7 +33,7 @@ public sealed class TextFieldBuilder
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 32f;
+    private float _height = 24f;
     private bool _readOnly;
     private int _maxLength;
     private string _placeholder = "";

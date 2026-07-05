@@ -39,7 +39,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 32f;
+    private float _height = 24f;
     private bool _readOnly;
     private string _placeholder = "";
     private bool _selectAllOnFocus;
