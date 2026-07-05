@@ -105,6 +105,13 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
         }
     }
 
+    /// <summary>
+    /// Same as <see cref="ExecutorActiveFrame"/>, but returns <see langword="null"/> instead of throwing
+    /// when no frame is active. For bookkeeping that is meaningful with or without an open frame, such as
+    /// buffer in-flight tracking for immediate (non-CommandBuffer) writes.
+    /// </summary>
+    internal Frame? ExecutorActiveFrameOrNull => _executorActiveFrame;
+
     private readonly List<OpenGLBuffer> _transientFreePool = [];
     private readonly object _transientFreePoolLock = new();
 
@@ -686,7 +693,7 @@ internal unsafe partial class OpenGLGraphicsDevice : GraphicsDevice
 
             _executionThread.WaitForIdle();
         }
-        catch (RenderException)
+        catch (RenderException e) when (e.InnerException is SymbolLoadingException)
         {
             // The GL context may already be destroyed by SDL_DestroyWindow.
             // Silk.NET throws SymbolLoadingException for unresolved GL functions
