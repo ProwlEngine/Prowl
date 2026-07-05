@@ -2505,6 +2505,31 @@ namespace Prowl.Quill
         }
 
         /// <summary>
+        /// Draws a textured rectangle with rounded corners. Same brush setup as <see cref="DrawImage"/>
+        /// but filled with a rounded rect, so image thumbnails clip to the given corner radius.
+        /// </summary>
+        public void DrawImageRounded(object texture, float x, float y, float width, float height, float radius, Color32? tint = null)
+        {
+            if (width <= 0 || height <= 0 || texture == null)
+                return;
+
+            var color = tint ?? new Color32(255, 255, 255, 255);
+
+            var savedBrush = _state.brush;
+            _state.brush.Texture = texture;
+            _state.brush.TextureTransform = _state.transform * Transform2D.CreateTranslation(x, y) * Transform2D.CreateScale(width, height);
+            _state.brush.Type = BrushType.None;
+            _state.brush.Shader = null;
+            _state.brush.Uniforms = null;
+            InvalidateDrawState();
+
+            RoundedRectFilled(x, y, width, height, radius, color);
+
+            _state.brush = savedBrush;
+            InvalidateDrawState();
+        }
+
+        /// <summary>
         /// Draws a textured rectangle on the canvas, using the texture's native size.
         /// Respects the current transform, scissor, and global alpha.
         /// </summary>
