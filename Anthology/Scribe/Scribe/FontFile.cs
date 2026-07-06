@@ -71,14 +71,42 @@ namespace Prowl.Scribe
 
         public FontFile(Stream stream)
         {
-            byte[] data = null;
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            if (InitFont(ReadFully(stream), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        // Glyph rasterization needs random access to the whole font, so the stream is read into a
+        // single contiguous buffer. A seekable stream is read once into a right-sized array with no
+        // intermediate copy; only a length-unknown stream needs the grow-and-copy fallback.
+        private static byte[] ReadFully(Stream stream)
+        {
+            if (stream.CanSeek)
+            {
+                long remaining = stream.Length - stream.Position;
+                if (remaining < 0 || remaining > int.MaxValue)
+                    throw new InvalidDataException("Font stream length is out of range");
+
+                byte[] buffer = new byte[remaining];
+                int read = 0;
+                while (read < buffer.Length)
+                {
+                    int n = stream.Read(buffer, read, buffer.Length - read);
+                    if (n == 0) break; // stream ended early; trim to what we actually got
+                    read += n;
+                }
+                if (read != buffer.Length)
+                    Array.Resize(ref buffer, read);
+                return buffer;
+            }
+
             using (var ms = new MemoryStream())
             {
                 stream.CopyTo(ms);
-                data = ms.ToArray();
+                return ms.ToArray();
             }
-            if (InitFont(data, 0) == 0)
-                throw new InvalidDataException("Failed to initialize font");
         }
 
         public FontFile(byte[] data)
