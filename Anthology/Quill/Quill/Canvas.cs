@@ -1172,6 +1172,25 @@ namespace Prowl.Quill
             return vertex;
         }
 
+        // Premultiplies one colour (folding in global alpha) so a uniform-colour mesh can be
+        // premultiplied once up front instead of per vertex.
+        private Color32 PremultiplyColor(Color32 c)
+        {
+            int a = _globalAlpha != 1.0f ? (int)(c.A * _globalAlpha) : c.A;
+            if (a >= 255)
+                return new Color32(c.R, c.G, c.B, (byte)a);
+            float alpha = a / 255f;
+            return new Color32((byte)(c.R * alpha), (byte)(c.G * alpha), (byte)(c.B * alpha), (byte)a);
+        }
+
+        // Appends already-premultiplied vertices (a uniform-colour stroke mesh) in bulk, skipping the
+        // per-vertex premultiply that AddVertices performs.
+        private void AddVerticesRaw(List<Vertex> verts)
+        {
+            Reserve(_vertices, verts.Count);
+            _vertices.AddRange(verts);
+        }
+
         // netstandard2.1 has no List.EnsureCapacity, so grow via the Capacity setter instead.
         private static void Reserve<T>(List<T> list, int additional)
         {
@@ -1942,7 +1961,10 @@ namespace Prowl.Quill
 
             // Geometry is in physical pixels, so the fringe is one physical pixel wide.
             float pixelStrokeWidth = (_state.strokeWidth * _state.strokeScale) * _framebufferScale;
-            PolylineMesher.Create(_strokePoints, pixelStrokeWidth, 1.0f, _state.strokeColor,
+            // The whole stroke mesh is one colour, so premultiply it once and append the vertices raw
+            // (skips the per-vertex premultiply). Also skips meshing entirely when fully transparent.
+            Color32 pmColor = PremultiplyColor(_state.strokeColor);
+            PolylineMesher.Create(_strokePoints, pixelStrokeWidth, 1.0f, pmColor,
                 _state.strokeJoint, _state.miterLimit, _state.strokeStartCap, _state.strokeEndCap,
                 _state.roundingMinDistance * _framebufferScale, out var verts, out var idxs);
 
@@ -1950,7 +1972,7 @@ namespace Prowl.Quill
                 return;
 
             uint startVertexIndex = (uint)_vertices.Count;
-            AddVertices(verts);
+            AddVerticesRaw(verts);
             Reserve(_indices, idxs.Count);
             for (int i = 0; i < idxs.Count; i++)
                 _indices.Add(startVertexIndex + idxs[i]);
