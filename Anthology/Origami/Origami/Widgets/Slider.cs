@@ -97,9 +97,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 24f;
-    private float _thumbDiameter = 15f;
-    private float _trackThickness = 6f;
+    private float _height = 20f;
+    private float _thumbDiameter = 12f;
+    private float _trackThickness = 4f;
     private bool _vertical;
 
     private T _min;
@@ -147,6 +147,11 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         _min = min;
         _max = max;
         _bipolarCenter = T.Zero;
+
+        // Floating-point sliders read best with 2 decimals (the near-universal call-site choice);
+        // integer sliders keep the general format so they don't show "5.00".
+        if (typeof(T) == typeof(float) || typeof(T) == typeof(double) || typeof(T) == typeof(decimal))
+            _format = "F2";
     }
 
     // ── Variant ────────────────────────────────────────────────────────
@@ -170,9 +175,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     /// <summary>Track thickness in pixels (default 6, set by Small/Medium/Large).</summary>
     public SliderBuilder<T> TrackThickness(float px) { _trackThickness = MathF.Max(2, px); return this; }
 
-    public SliderBuilder<T> Small()  { _height = 20; _thumbDiameter = 11; _trackThickness = 4; return this; }
-    public SliderBuilder<T> Medium() { _height = 24; _thumbDiameter = 15; _trackThickness = 6; return this; }
-    public SliderBuilder<T> Large()  { _height = 32; _thumbDiameter = 22; _trackThickness = 8; return this; }
+    public SliderBuilder<T> Small()  { _height = 16; _thumbDiameter = 10; _trackThickness = 3; return this; }
+    public SliderBuilder<T> Medium() { _height = 20; _thumbDiameter = 12; _trackThickness = 4; return this; }
+    public SliderBuilder<T> Large()  { _height = 28; _thumbDiameter = 18; _trackThickness = 6; return this; }
 
     /// <summary>Vertical track instead of horizontal. Min sits at the bottom, max at the top.</summary>
     public SliderBuilder<T> Vertical(bool vertical = true) { _vertical = vertical; return this; }
