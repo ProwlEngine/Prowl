@@ -58,24 +58,8 @@ namespace Prowl.PaperUI
         /// <summary>Clears the background image from the element.</summary>
         public T ClearBackgroundImage() => SetStyleProperty(GuiProp.BackgroundImage, (object?)null);
 
-        /// <summary>Sets the border color of the element (all four sides, fast single-stroke path).</summary>
+        /// <summary>Sets the border color of the element.</summary>
         public T BorderColor(Color color) => SetStyleProperty(GuiProp.BorderColor, color);
-
-        /// <summary>Per-side border colour. Setting any side opts into the multi-stroke path; sides left
-        /// unset (transparent) fall back to <see cref="BorderColor"/>. Corners split 45° between neighbours.</summary>
-        public T BorderTopColor(Color color) => SetStyleProperty(GuiProp.BorderTopColor, color);
-        public T BorderRightColor(Color color) => SetStyleProperty(GuiProp.BorderRightColor, color);
-        public T BorderBottomColor(Color color) => SetStyleProperty(GuiProp.BorderBottomColor, color);
-        public T BorderLeftColor(Color color) => SetStyleProperty(GuiProp.BorderLeftColor, color);
-
-        /// <summary>Sets all four border colours at once (top, right, bottom, left).</summary>
-        public T BorderColors(Color top, Color right, Color bottom, Color left)
-        {
-            SetStyleProperty(GuiProp.BorderTopColor, top);
-            SetStyleProperty(GuiProp.BorderRightColor, right);
-            SetStyleProperty(GuiProp.BorderBottomColor, bottom);
-            return SetStyleProperty(GuiProp.BorderLeftColor, left);
-        }
 
         /// <summary>Sets the border width of the element.</summary>
         public T BorderWidth(float width) => SetStyleProperty(GuiProp.BorderWidth, width);

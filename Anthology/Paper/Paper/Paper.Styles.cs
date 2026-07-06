@@ -19,10 +19,6 @@ namespace Prowl.PaperUI
         BackgroundColor,
         BackgroundGradient,
         BorderColor,
-        BorderTopColor,
-        BorderRightColor,
-        BorderBottomColor,
-        BorderLeftColor,
         BorderWidth,
         Rounded,
         BoxShadow,
@@ -684,10 +680,6 @@ namespace Prowl.PaperUI
             _defaultValues[(int)GuiProp.BackgroundColor] = Color.Transparent;
             _defaultValues[(int)GuiProp.BackgroundGradient] = Gradient.None;
             _defaultValues[(int)GuiProp.BorderColor] = Color.Transparent;
-            _defaultValues[(int)GuiProp.BorderTopColor] = Color.Transparent;
-            _defaultValues[(int)GuiProp.BorderRightColor] = Color.Transparent;
-            _defaultValues[(int)GuiProp.BorderBottomColor] = Color.Transparent;
-            _defaultValues[(int)GuiProp.BorderLeftColor] = Color.Transparent;
             _defaultValues[(int)GuiProp.BorderWidth] = 0.0f;
             _defaultValues[(int)GuiProp.Rounded] = new Float4(0, 0, 0, 0);
             _defaultValues[(int)GuiProp.BoxShadow] = BoxShadow.None;

@@ -789,7 +789,7 @@ public static class PropertyGridRenderer
         {
             const float rowH = 28f;
             var cardB = paper.Column($"{id}_nel_{sk}").Width(ST).Height(UnitValue.Auto)
-                .Rounded(8).BorderColor(bd).BorderLeftColor(DepthColor(depth)).BorderWidth(1)
+                .Rounded(8).BorderColor(bd).BorderWidth(1)
                 .BackgroundColor(BeingDragged(sk) ? theme.Selected : System.Drawing.Color.FromArgb(6, 255, 255, 255)).Clip();
             CaptureRow(i, cardB);
             using (cardB.Enter())
