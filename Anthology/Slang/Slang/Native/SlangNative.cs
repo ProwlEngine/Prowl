@@ -3,6 +3,8 @@
 
 using System.Runtime.InteropServices;
 
+using SlangInt = nint;
+
 namespace Prowl.Slang.Native;
 
 
@@ -11,13 +13,13 @@ internal static unsafe partial class SlangNative
     const string LibName = "slang-compiler";
 
     [LibraryImport(LibName)]
-    public static partial SlangResult slang_createGlobalSession(int apiVersion, out IGlobalSession* outGlobalSession);
+    public static partial SlangResult slang_createGlobalSession(SlangInt apiVersion, out IGlobalSession* outGlobalSession);
 
     [LibraryImport(LibName)]
     public static partial SlangResult slang_createGlobalSession2(GlobalSessionDescription* desc, out IGlobalSession* outGlobalSession);
 
     [LibraryImport(LibName)]
-    public static partial SlangResult slang_createGlobalSessionWithoutCoreModule(int apiVersion, out IGlobalSession* outGlobalSession);
+    public static partial SlangResult slang_createGlobalSessionWithoutCoreModule(SlangInt apiVersion, out IGlobalSession* outGlobalSession);
 
     [LibraryImport(LibName)]
     public static partial void slang_shutdown();

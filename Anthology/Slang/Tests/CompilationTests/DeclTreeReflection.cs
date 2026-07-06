@@ -83,7 +83,7 @@ T foo<T, U>(T t, U u) { return t; }
         DeclReflection moduleDeclReflection = module.GetModuleReflection();
 
         Assert.Equal(DeclKind.Module, moduleDeclReflection.Kind);
-        Assert.Equal(9U, moduleDeclReflection.ChildrenCount);
+        Assert.Equal(15U, moduleDeclReflection.ChildrenCount);
 
         // First declaration should be a struct with 1 variable and a synthesized constructor
         DeclReflection firstDecl = moduleDeclReflection.GetChild(0);
@@ -366,7 +366,7 @@ T foo<T, U>(T t, U u) { return t; }
         // Check iterators
         {
             int count = moduleDeclReflection.Children.Count();
-            Assert.Equal(9, count);
+            Assert.Equal(15, count);
 
             count = moduleDeclReflection.GetChildrenOfKind(DeclKind.Func).Count();
             Assert.Equal(3, count);

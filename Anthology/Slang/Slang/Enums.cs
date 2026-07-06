@@ -223,6 +223,36 @@ public enum CompileTarget : int
     /// SPIR-V via WebGPU shading language
     /// </summary>
     WgslSpirv,
+
+    /// <summary>
+    /// Bytecode that can be interpreted by the Slang VM
+    /// </summary>
+    HostVM,
+
+    /// <summary>
+    /// C++ header for shader kernels.
+    /// </summary>
+    CppHeader,
+
+    /// <summary>
+    /// Cuda header
+    /// </summary>
+    CudaHeader,
+
+    /// <summary>
+    /// Host object code
+    /// </summary>
+    HostObjectCode,
+
+    /// <summary>
+    /// Host LLVM IR assembly
+    /// </summary>
+    HostLlvmIr,
+
+    /// <summary>
+    /// Host LLVM IR assembly (kernel/shader)
+    /// </summary>
+    ShaderLlvmIr,
 #pragma warning restore CS1591
 }
 
@@ -940,7 +970,17 @@ public enum CompilerOptionName : int
     /// <summary>
     /// int
     /// </summary>
-    BindlessSpaceIndex,
+    BindlessSpaceIndex = 93,
+
+    /// <summary>
+    /// int: byte stride for SPIRV resource descriptor heap.
+    /// </summary>
+    SPIRVResourceHeapStride,
+
+    /// <summary>
+    /// int: byte stride for SPIRV sampler descriptor heap.
+    /// </summary>
+    SPIRVSamplerHeapStride,
 
     ArchiveType,
     CompileCoreModule,
@@ -961,6 +1001,26 @@ public enum CompilerOptionName : int
     /// Deprecated.
     /// </summary>
     ParameterBlocksUseRegisterSpaces,
+
+    /// <summary>
+    /// IntValue0: SlangLanguageVersion
+    /// </summary>
+    LanguageVersion,
+
+    /// <summary>
+    /// StringValue0: type conformance to link; format: "&lt;TypeName&gt;:&lt;IInterfaceName&gt;[=&lt;sequentialId&gt;]", e.g. "Impl:IFoo=3" or "Impl:IFoo".
+    /// </summary>
+    TypeConformance,
+
+    /// <summary>
+    /// bool, experimental.
+    /// </summary>
+    EnableExperimentalDynamicDispatch,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitReflectionJSON,
 
     CountOfParsableOptions,
 
@@ -998,15 +1058,9 @@ public enum CompilerOptionName : int
     ForceDXLayout,
 
     /// <summary>
-    /// Add this new option to the end of the list to avoid breaking ABI as much as possible.
     /// Setting of EmitSpirvDirectly or EmitSpirvViaGLSL will turn into this option internally.
     /// </summary>
     EmitSpirvMethod,
-
-    /// <summary>
-    /// bool
-    /// </summary>
-    EmitReflectionJSON,
 
     SaveGLSLModuleBinSource,
 
@@ -1016,6 +1070,138 @@ public enum CompilerOptionName : int
     SkipDownstreamLinking,
 
     DumpModule,
+
+    /// <summary>
+    /// Print serialized module version and name.
+    /// </summary>
+    GetModuleInfo,
+
+    /// <summary>
+    /// Print the min and max module versions this compiler supports.
+    /// </summary>
+    GetSupportedModuleVersions,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitSeparateDebug,
+
+    DenormalModeFp16,
+    DenormalModeFp32,
+    DenormalModeFp64,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    UseMSVCStyleBitfieldPacking,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ForceCLayout,
+
+    /// <summary>
+    /// bool, enable experimental features.
+    /// </summary>
+    ExperimentalFeature,
+
+    /// <summary>
+    /// bool, reports detailed compiler performance benchmark results.
+    /// </summary>
+    ReportDetailedPerfBenchmark,
+
+    /// <summary>
+    /// bool, enable detailed IR validation.
+    /// </summary>
+    ValidateIRDetailed,
+
+    /// <summary>
+    /// string, pass name to dump IR before.
+    /// </summary>
+    DumpIRBefore,
+
+    /// <summary>
+    /// string, pass name to dump IR after.
+    /// </summary>
+    DumpIRAfter,
+
+    EmitCPUMethod,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitCPUViaCPP,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    EmitCPUViaLLVM,
+
+    LLVMTargetTriple,
+    LLVMCPU,
+    LLVMFeatures,
+
+    /// <summary>
+    /// bool, enable the experimental rich diagnostics.
+    /// </summary>
+    EnableRichDiagnostics,
+
+    /// <summary>
+    /// bool
+    /// </summary>
+    ReportDynamicDispatchSites,
+
+    /// <summary>
+    /// bool, enable machine-readable diagnostic output (implies EnableRichDiagnostics).
+    /// </summary>
+    EnableMachineReadableDiagnostics,
+
+    /// <summary>
+    /// IntValue0: SlangDiagnosticColor (always, never, auto)
+    /// </summary>
+    DiagnosticColor,
+
+    /// <summary>
+    /// bool: insert per-statement line coverage counters.
+    /// </summary>
+    TraceCoverage,
+
+    /// <summary>
+    /// IntValue0: register index; IntValue1: register space.
+    /// </summary>
+    TraceCoverageBinding,
+
+    /// <summary>
+    /// IntValue0: descriptor/register space reserved by the host when auto-allocating the synthesized coverage buffer.
+    /// </summary>
+    TraceCoverageReservedSpace,
+
+    /// <summary>
+    /// bool: insert per-function-entry coverage counters.
+    /// </summary>
+    TraceFunctionCoverage,
+
+    /// <summary>
+    /// bool: insert per-branch-arm coverage counters.
+    /// </summary>
+    TraceBranchCoverage,
+
+    /// <summary>
+    /// StringValue0: explicit path for the slangc coverage manifest sidecar.
+    /// </summary>
+    CoverageManifestOutput,
+
+    /// <summary>
+    /// IntValue0: per-slot byte width of the synthesized coverage buffer. Accepts 4 or 8.
+    /// </summary>
+    TraceCoverageCounterByteWidth,
+
+    /// <summary>
+    /// bool: record boolean coverage instead of exact execution counts.
+    /// </summary>
+    TraceCoverageBoolean,
+
+    CountOf,
 
 #pragma warning restore CS1591
 }
@@ -1624,9 +1810,34 @@ public enum ContainerType : int
 public enum LanguageVersion : uint
 {
     /// <summary>
+    /// Unknown language version.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>
+    /// The legacy language version.
+    /// </summary>
+    Legacy = 2018,
+
+    /// <summary>
     /// Language version 2025
     /// </summary>
-    _2025 = 2025
+    _2025 = 2025,
+
+    /// <summary>
+    /// Language version 2026
+    /// </summary>
+    _2026 = 2026,
+
+    /// <summary>
+    /// The default language version, currently equal to <see cref="Legacy"/>.
+    /// </summary>
+    Default = Legacy,
+
+    /// <summary>
+    /// The latest language version, currently equal to <see cref="_2026"/>.
+    /// </summary>
+    Latest = _2026,
 }
 
 /// <summary>

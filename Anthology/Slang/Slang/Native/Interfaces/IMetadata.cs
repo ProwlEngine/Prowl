@@ -14,4 +14,6 @@ internal interface IMetadata : ISlangCastable
         SlangUInt spaceIndex,
         SlangUInt registerIndex,
         out CBool outUsed);
+
+    ConstU8Str GetDebugBuildIdentifier();
 }

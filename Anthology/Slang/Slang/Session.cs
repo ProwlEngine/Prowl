@@ -243,10 +243,10 @@ public unsafe class Session : IEquatable<Session>
     /// </summary>
     public uint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
     {
-        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId)
+        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out uint outId)
             .Throw("Failed to get type conformance witness sequential ID");
 
-        return (uint)outId;
+        return outId;
     }
 
 
