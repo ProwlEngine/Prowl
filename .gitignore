@@ -348,3 +348,6 @@ FodyWeavers.xsd
 
 # Rider IDE
 .idea/
+
+nuget.config
+*.mdx
