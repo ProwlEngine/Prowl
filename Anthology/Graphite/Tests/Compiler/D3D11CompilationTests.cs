@@ -1,3 +1,6 @@
+using System;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 using Xunit;
@@ -72,16 +75,35 @@ public class D3D11CompilationTests
     }
 
 
-    // A combined Sampler2D<> currently crashes native Slang HLSL codegen (process exit 139), so the HLSL
-    // target cannot compile the CombinedSampler shader the way Vulkan can. Skipped until the upstream
-    // Slang crash is resolved; the body documents the intended assertion so it runs once unblocked.
-    [SkippableFact]
-    public void CombinedSampler_CompilesToHlsl()
+    // A combined Sampler2D<> is suspected to crash native Slang HLSL codegen (process exit 139). Since a
+    // native segfault would take down the whole test host, the compile runs out-of-process via
+    // SlangHlslProbe and this test asserts on the child process's exit code instead of calling Compile()
+    // directly in-process. A clean exit (0) means the crash is gone (or never applied to this profile);
+    // any other exit code (segfault, ordinary compile error, etc.) fails the test with the probe's output.
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void CombinedSampler_HlslCodegenDoesNotCrash(string profile)
     {
-        Skip.If(true, "Slang HLSL codegen segfaults on combined Sampler2D<>; D3D11 support deferred upstream.");
+        string shaderPath = Path.Combine(AppContext.BaseDirectory, "Shaders", "CombinedSampler.slang");
+        string probePath = Path.Combine(AppContext.BaseDirectory, "SlangHlslProbe.dll");
 
-        ShaderDescription d = Compile("CombinedSampler");
-        Assert.NotEmpty(d.Stages);
+        using Process process = new();
+        process.StartInfo = new ProcessStartInfo("dotnet")
+        {
+            ArgumentList = { probePath, shaderPath, "CombinedSampler", profile },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        process.Start();
+        string stdout = process.StandardOutput.ReadToEnd();
+        string stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        Assert.True(process.ExitCode == 0,
+            $"SlangHlslProbe exited {process.ExitCode} compiling CombinedSampler at {profile}.\n" +
+            $"stdout:\n{stdout}\nstderr:\n{stderr}");
     }
 
 
