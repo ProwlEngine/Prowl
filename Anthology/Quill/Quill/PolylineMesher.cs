@@ -102,6 +102,12 @@ namespace Prowl.Quill
         private static List<Vertex> Vtx => _vtx ??= new List<Vertex>();
         private static List<uint> Idx => _idx ??= new List<uint>();
 
+        // netstandard2.1 has no List.EnsureCapacity, so grow via the Capacity setter.
+        private static void Reserve<T>(List<T> list, int capacity)
+        {
+            if (list.Capacity < capacity) list.Capacity = capacity;
+        }
+
         /// <summary>
         /// Meshes a stroked polyline into anti-aliased, indexed geometry.
         /// </summary>
@@ -148,6 +154,11 @@ namespace Prowl.Quill
             }
             if (pts.Count < 2)
                 return;
+
+            // Reserve so the buffers don't repeatedly grow mid-build. Round joins/caps add the most,
+            // so estimate generously; the buffers are reused across calls, so this only grows once.
+            Reserve(Vtx, pts.Count * 10);
+            Reserve(Idx, pts.Count * 15);
 
             ComputeNormalsAndLengths(closed);
 
@@ -196,20 +207,20 @@ namespace Prowl.Quill
 
             for (int i = 0; i < count - 1; i++)
             {
-                double dx = pts[i + 1].X - pts[i].X;
-                double dy = pts[i + 1].Y - pts[i].Y;
-                double d2 = dx * dx + dy * dy;
-                double invLen = d2 > 0 ? 1.0 / Math.Sqrt(d2) : 0.0;
+                float dx = pts[i + 1].X - pts[i].X;
+                float dy = pts[i + 1].Y - pts[i].Y;
+                float d2 = dx * dx + dy * dy;
+                float invLen = d2 > 0 ? 1.0f / MathF.Sqrt(d2) : 0.0f;
                 normals[i] = F(-dy * invLen, dx * invLen);
                 segLen[i + 1] = (float)d2;
             }
 
             if (closed)
             {
-                double dx = pts[0].X - pts[count - 1].X;
-                double dy = pts[0].Y - pts[count - 1].Y;
-                double d2 = dx * dx + dy * dy;
-                double invLen = d2 > 0 ? 1.0 / Math.Sqrt(d2) : 0.0;
+                float dx = pts[0].X - pts[count - 1].X;
+                float dy = pts[0].Y - pts[count - 1].Y;
+                float d2 = dx * dx + dy * dy;
+                float invLen = d2 > 0 ? 1.0f / MathF.Sqrt(d2) : 0.0f;
                 normals[count - 1] = F(-dy * invLen, dx * invLen);
                 segLen[0] = (float)d2;
             }
@@ -223,7 +234,7 @@ namespace Prowl.Quill
 
         #region Sliding-window emit helpers
 
-        private static void SetSlot(int slot, double x, double y, float coverage)
+        private static void SetSlot(int slot, float x, float y, float coverage)
         {
             int a = _base + slot;
             var v = new Vertex(F(x, y), F(coverage, 0f), _color);
@@ -236,8 +247,8 @@ namespace Prowl.Quill
             }
         }
 
-        private static void Vc(int slot, double x, double y) => SetSlot(slot, x, y, _covCore); // core vertex
-        private static void Vf(int slot, double x, double y) => SetSlot(slot, x, y, 0f);        // fringe vertex
+        private static void Vc(int slot, float x, float y) => SetSlot(slot, x, y, _covCore); // core vertex
+        private static void Vf(int slot, float x, float y) => SetSlot(slot, x, y, 0f);        // fringe vertex
 
         private static void Tri(int a, int b, int c)
         {
@@ -254,7 +265,7 @@ namespace Prowl.Quill
             return F(v.x, v.y);
         }
 
-        private static void OffsetSlot(int slot, double dx, double dy)
+        private static void OffsetSlot(int slot, float dx, float dy)
         {
             int a = _base + slot;
             var v = Vtx[a];
@@ -267,18 +278,15 @@ namespace Prowl.Quill
 
         #region Geometry helpers
 
-        // Builds a Float2 from double components (Float2 itself is float-backed).
-        private static Float2 F(double x, double y) => new Float2((float)x, (float)y);
-
-        private static float Cross(Float2 a, Float2 b) => (float)(a.X * b.Y - a.Y * b.X);
-        private static float Dot(Float2 a, Float2 b) => (float)(a.X * b.X + a.Y * b.Y);
+        // Builds a Float2 from float components (Float2 itself is float-backed).
+        private static Float2 F(float x, float y) => new Float2((float)x, (float)y);
 
         // Normalize (over zero): unit vector, or zero for a zero-length input.
         private static Float2 Norm(Float2 v)
         {
-            double d2 = v.X * v.X + v.Y * v.Y;
+            float d2 = v.X * v.X + v.Y * v.Y;
             if (d2 <= 0) return Float2.Zero;
-            double inv = 1.0 / Math.Sqrt(d2);
+            float inv = 1.0f / MathF.Sqrt(d2);
             return F(v.X * inv, v.Y * inv);
         }
 
@@ -286,11 +294,11 @@ namespace Prowl.Quill
         // vector by 1/len^2, clamped, turning an averaged direction into a miter-length offset.
         private static Float2 FixNormal(Float2 v)
         {
-            double d2 = v.X * v.X + v.Y * v.Y;
-            if (d2 > 1e-6)
+            float d2 = v.X * v.X + v.Y * v.Y;
+            if (d2 > 1e-6f)
             {
-                double inv = 1.0 / d2;
-                if (inv > 100.0) inv = 100.0;
+                float inv = 1.0f / d2;
+                if (inv > 100.0f) inv = 100.0f;
                 return F(v.X * inv, v.Y * inv);
             }
             return v;
@@ -300,61 +308,63 @@ namespace Prowl.Quill
 
         #region Arc emission (round joins and caps)
 
-        private static int FullCircleSegments(double radius)
+        private static int FullCircleSegments(float radius)
         {
             if (radius <= 0) return 12;
-            const double maxError = 0.30;
-            double a = Math.Acos(Math.Max(0.0, 1.0 - Math.Min(maxError, radius) / radius));
-            int n = a > 1e-6 ? (int)Math.Ceiling(Math.PI / a) : 12;
-            return Math.Clamp(n, 12, 512);
+            // Tessellate by on-screen size: roughly one segment per PixelsPerSegment pixels of
+            // circumference. Tiny arcs (icons) get just a couple of segments, which is imperceptible
+            // at that size; larger arcs scale up smoothly. Cheaper than the old fixed-12 floor.
+            const float PixelsPerSegment = 2.0f;
+            int n = (int)MathF.Ceiling(2.0f * MathF.PI * radius / PixelsPerSegment);
+            return Math.Clamp(n, 2, 512);
         }
 
-        private static void EmitArcsIfAny(double coreThickness, double fringeThickness, double fringeWidth, bool closed)
+        private static void EmitArcsIfAny(float coreThickness, float fringeThickness, float fringeWidth, bool closed)
         {
             if (Arcs.Count == 0)
                 return;
 
             // Thin lines have no core, so the round cap/join is a single fan to the fringe radius.
             if (coreThickness <= 0.0f)
-                EmitArcs(0.0, fringeThickness * 0.5);
+                EmitArcs(0.0f, fringeThickness * 0.5f);
             else
-                EmitArcs(coreThickness * 0.5, fringeThickness * 0.5);
+                EmitArcs(coreThickness * 0.5f, fringeThickness * 0.5f);
         }
 
-        private static void EmitArcs(double coreRadius, double fringeRadius)
+        private static void EmitArcs(float coreRadius, float fringeRadius)
         {
-            double maxRadius = Math.Max(coreRadius, fringeRadius);
+            float maxRadius = Math.Max(coreRadius, fringeRadius);
             int maxArcSeg = Math.Max((FullCircleSegments(maxRadius) + 1) / 2, 2);
-            int arms = (coreRadius > 0.0 ? 1 : 0) + (fringeRadius > 0.0 ? 1 : 0);
+            int arms = (coreRadius > 0.0f ? 1 : 0) + (fringeRadius > 0.0f ? 1 : 0);
             if (arms == 0)
                 return;
 
-            float covInner = coreRadius > 0.0 ? _covCore : 0f;
-            float covOuter = fringeRadius > 0.0 ? 0f : _covCore;
+            float covInner = coreRadius > 0.0f ? _covCore : 0f;
+            float covOuter = fringeRadius > 0.0f ? 0f : _covCore;
 
             foreach (var arc in Arcs)
             {
-                double cosTheta = arc.From.X * arc.To.X + arc.From.Y * arc.To.Y;
-                double arcLength = Math.Acos(Math.Clamp((float)cosTheta, -1f, 1f));
-                int seg = Math.Max((int)Math.Ceiling(maxArcSeg * arcLength / Math.PI), cosTheta > 0.707 ? 1 : 2);
-                double step = arcLength / seg;
-                double stepCos = Math.Cos((float)step);
-                double stepSin = Math.Sin((float)step);
+                float cosTheta = arc.From.X * arc.To.X + arc.From.Y * arc.To.Y;
+                float arcLength = MathF.Acos(Math.Clamp((float)cosTheta, -1f, 1f));
+                int seg = Math.Max((int)MathF.Ceiling(maxArcSeg * arcLength / MathF.PI), cosTheta > 0.707f ? 1 : 2);
+                float step = arcLength / seg;
+                float stepCos = MathF.Cos((float)step);
+                float stepSin = MathF.Sin((float)step);
 
                 uint b = (uint)Vtx.Count;
 
                 if (arms == 1)
                 {
-                    double dx = arc.From.X * maxRadius;
-                    double dy = arc.From.Y * maxRadius;
+                    float dx = arc.From.X * maxRadius;
+                    float dy = arc.From.Y * maxRadius;
 
                     // Center (full coverage) + ring (fringe coverage).
                     Vtx.Add(new Vertex(arc.Center, F(_covCore, 0f), _color));
                     for (int j = 0; j <= seg; j++)
                     {
                         Vtx.Add(new Vertex(F(arc.Center.X + dx, arc.Center.Y + dy), F(covInner, 0f), _color));
-                        double nx = dx * stepCos - dy * stepSin;
-                        double ny = dx * stepSin + dy * stepCos;
+                        float nx = dx * stepCos - dy * stepSin;
+                        float ny = dx * stepSin + dy * stepCos;
                         dx = nx; dy = ny;
                     }
                     for (int j = 0; j < seg; j++)
@@ -366,16 +376,16 @@ namespace Prowl.Quill
                 }
                 else
                 {
-                    double dx = arc.From.X;
-                    double dy = arc.From.Y;
+                    float dx = arc.From.X;
+                    float dy = arc.From.Y;
 
                     Vtx.Add(new Vertex(arc.Center, F(_covCore, 0f), _color)); // 0 = center
                     for (int j = 0; j <= seg; j++)
                     {
                         Vtx.Add(new Vertex(F(arc.Center.X + dx * coreRadius, arc.Center.Y + dy * coreRadius), F(covInner, 0f), _color));
                         Vtx.Add(new Vertex(F(arc.Center.X + dx * fringeRadius, arc.Center.Y + dy * fringeRadius), F(covOuter, 0f), _color));
-                        double nx = dx * stepCos - dy * stepSin;
-                        double ny = dx * stepSin + dy * stepCos;
+                        float nx = dx * stepCos - dy * stepSin;
+                        float ny = dx * stepSin + dy * stepCos;
                         dx = nx; dy = ny;
                     }
                     for (int j = 0; j < seg; j++)
@@ -424,9 +434,9 @@ namespace Prowl.Quill
             JointStyle defaultJoin = joint == JointStyle.Bevel ? JointStyle.Bevel : (joint == JointStyle.Round ? JointStyle.Round : JointStyle.Miter);
             JointStyle defaultJoinLimit = joint == JointStyle.Round ? JointStyle.Round : JointStyle.Bevel;
 
-            double halfThickness = fringeThickness * 0.5;
-            double miterDistLimit = halfThickness * miterLimit;
-            double miterDistLimitSqr = miterDistLimit * miterDistLimit;
+            float halfThickness = fringeThickness * 0.5f;
+            float miterDistLimit = halfThickness * miterLimit;
+            float miterDistLimitSqr = miterDistLimit * miterDistLimit;
 
             CapType startCap = MapCap(startCapStyle);
             CapType endCap = MapCap(endCapStyle);
@@ -450,11 +460,12 @@ namespace Prowl.Quill
                 p1 = pts[i];
                 n1 = normals[i];
 
-                float cosTheta = n0.X * n1.X + n0.Y * n1.Y > 1f ? 1f : (float)(n0.X * n1.X + n0.Y * n1.Y);
-                double miterScale = cosTheta > MiterAngleLimitCos ? halfThickness / (1.0 + cosTheta) : float.MaxValue;
-                double miterOffX = (n0.X + n1.X) * miterScale;
-                double miterOffY = (n0.Y + n1.Y) * miterScale;
-                double miterDistSqr = miterOffX * miterOffX + miterOffY * miterOffY;
+                float cosTheta = (float)(n0.X * n1.X + n0.Y * n1.Y);
+                if (cosTheta > 1f) cosTheta = 1f;
+                float miterScale = cosTheta > MiterAngleLimitCos ? halfThickness / (1.0f + cosTheta) : float.MaxValue;
+                float miterOffX = (n0.X + n1.X) * miterScale;
+                float miterOffY = (n0.Y + n1.Y) * miterScale;
+                float miterDistSqr = miterOffX * miterOffX + miterOffY * miterOffY;
 
                 bool overlap = segLen[i] < miterDistSqr || segLen[i + 1] < miterDistSqr || cosTheta <= MiterAngleLimitCos;
                 bool continuous = closed || i != count - 1;
@@ -482,8 +493,8 @@ namespace Prowl.Quill
                 {
                     float sinTheta = n0.Y * n1.X - n0.X * n1.Y;
                     Float2 bevelN = Norm(F(n0.X + n1.X, n0.Y + n1.Y));
-                    Float2 d0 = FixNormal(F((n0.X + bevelN.X) * 0.5, (n0.Y + bevelN.Y) * 0.5)); d0 *= (float)halfThickness;
-                    Float2 d1 = FixNormal(F((n1.X + bevelN.X) * 0.5, (n1.Y + bevelN.Y) * 0.5)); d1 *= (float)halfThickness;
+                    Float2 d0 = FixNormal(F((n0.X + bevelN.X) * 0.5f, (n0.Y + bevelN.Y) * 0.5f)); d0 *= (float)halfThickness;
+                    Float2 d1 = FixNormal(F((n1.X + bevelN.X) * 0.5f, (n1.Y + bevelN.Y) * 0.5f)); d1 *= (float)halfThickness;
 
                     if (sinTheta < 0.0f)
                     {
@@ -560,8 +571,8 @@ namespace Prowl.Quill
                         if (cosTheta > MiterAngleLimitCos)
                         {
                             Float2 bevelN = Norm(F(n0.X + n1.X, n0.Y + n1.Y));
-                            Float2 d0 = FixNormal(F((n0.X + bevelN.X) * 0.5, (n0.Y + bevelN.Y) * 0.5)); d0 *= (float)halfThickness;
-                            Float2 d1 = FixNormal(F((n1.X + bevelN.X) * 0.5, (n1.Y + bevelN.Y) * 0.5)); d1 *= (float)halfThickness;
+                            Float2 d0 = FixNormal(F((n0.X + bevelN.X) * 0.5f, (n0.Y + bevelN.Y) * 0.5f)); d0 *= (float)halfThickness;
+                            Float2 d1 = FixNormal(F((n1.X + bevelN.X) * 0.5f, (n1.Y + bevelN.Y) * 0.5f)); d1 *= (float)halfThickness;
                             if (sinTheta < 0.0f)
                             {
                                 Vf(3, p1.X - d0.X, p1.Y - d0.Y);
@@ -610,7 +621,7 @@ namespace Prowl.Quill
             Tri(0, 1, 4); Tri(0, 4, 3); Tri(1, 2, 4); Tri(2, 5, 4);
         }
 
-        private static void ThinCap(Float2 p, Float2 n, float segLenSqr, double halfThickness, double fringeWidth, float sign, CapType cap)
+        private static void ThinCap(Float2 p, Float2 n, float segLenSqr, float halfThickness, float fringeWidth, float sign, CapType cap)
         {
             if (cap == CapType.Round)
             {
@@ -618,20 +629,20 @@ namespace Prowl.Quill
                 return;
             }
 
-            double scale = (cap == CapType.Butt ? 0.5 : 1.0) * sign;
+            float scale = (cap == CapType.Butt ? 0.5f : 1.0f) * sign;
             if (cap == CapType.Butt)
             {
-                double hs2 = halfThickness * halfThickness;
-                double s = segLenSqr;
-                double t = (s < hs2 ? Math.Sqrt((float)s) : halfThickness) * scale;
-                double dx = n.X * t, dy = n.Y * t;
+                float hs2 = halfThickness * halfThickness;
+                float s = segLenSqr;
+                float t = (s < hs2 ? MathF.Sqrt((float)s) : halfThickness) * scale;
+                float dx = n.X * t, dy = n.Y * t;
                 OffsetSlot(0, -dy, dx);
                 OffsetSlot(1, dy, -dx);
                 OffsetSlot(2, -dy, dx);
             }
             else // Square
             {
-                double dx = n.X * halfThickness * scale, dy = n.Y * halfThickness * scale;
+                float dx = n.X * halfThickness * scale, dy = n.Y * halfThickness * scale;
                 OffsetSlot(0, -dy, dx);
                 OffsetSlot(2, -dy, dx);
             }
@@ -657,14 +668,14 @@ namespace Prowl.Quill
             JointStyle defaultJoinLimit = joint == JointStyle.Round ? JointStyle.Round
                 : (joint == JointStyle.MiterClip ? JointStyle.MiterClip : JointStyle.Bevel);
 
-            double halfThickness = coreThickness * 0.5;
-            double halfThicknessSqr = halfThickness * halfThickness;
-            double miterDistLimit = halfThickness * miterLimit;
-            double miterDistLimitSqr = miterDistLimit * miterDistLimit;
+            float halfThickness = coreThickness * 0.5f;
+            float halfThicknessSqr = halfThickness * halfThickness;
+            float miterDistLimit = halfThickness * miterLimit;
+            float miterDistLimitSqr = miterDistLimit * miterDistLimit;
 
-            double halfFringe = fringeThickness * 0.5;
-            double fringeMiterDistLimit = halfFringe * miterLimit;
-            double fringeMiterDistLimitSqr = fringeMiterDistLimit * fringeMiterDistLimit;
+            float halfFringe = fringeThickness * 0.5f;
+            float fringeMiterDistLimit = halfFringe * miterLimit;
+            float fringeMiterDistLimitSqr = fringeMiterDistLimit * fringeMiterDistLimit;
 
             CapType startCap = MapCap(startCapStyle);
             CapType endCap = MapCap(endCapStyle);
@@ -691,14 +702,14 @@ namespace Prowl.Quill
 
                 float cosTheta = (float)(n0.X * n1.X + n0.Y * n1.Y);
                 if (cosTheta > 1f) cosTheta = 1f;
-                double miterScale = cosTheta > MiterAngleLimitCos ? 1.0 / (1.0 + cosTheta) : float.MaxValue;
-                double miterOffX = (n0.X + n1.X) * halfThickness * miterScale;
-                double miterOffY = (n0.Y + n1.Y) * halfThickness * miterScale;
-                double miterDistSqr = miterOffX * miterOffX + miterOffY * miterOffY;
+                float miterScale = cosTheta > MiterAngleLimitCos ? 1.0f / (1.0f + cosTheta) : float.MaxValue;
+                float miterOffX = (n0.X + n1.X) * halfThickness * miterScale;
+                float miterOffY = (n0.Y + n1.Y) * halfThickness * miterScale;
+                float miterDistSqr = miterOffX * miterOffX + miterOffY * miterOffY;
 
-                double fringeMiterOffX = (n0.X + n1.X) * halfFringe * miterScale;
-                double fringeMiterOffY = (n0.Y + n1.Y) * halfFringe * miterScale;
-                double fringeMiterDistSqr = fringeMiterOffX * fringeMiterOffX + fringeMiterOffY * fringeMiterOffY;
+                float fringeMiterOffX = (n0.X + n1.X) * halfFringe * miterScale;
+                float fringeMiterOffY = (n0.Y + n1.Y) * halfFringe * miterScale;
+                float fringeMiterDistSqr = fringeMiterOffX * fringeMiterOffX + fringeMiterOffY * fringeMiterOffY;
 
                 bool overlap = segLen[i] < fringeMiterDistSqr || segLen[i + 1] < fringeMiterDistSqr || cosTheta <= MiterAngleLimitCos;
                 bool continuous = closed || i != count - 1;
@@ -709,7 +720,7 @@ namespace Prowl.Quill
                     preferred = miterDistSqr > miterDistLimitSqr ? defaultJoinLimit : defaultJoin;
                     if (preferred == JointStyle.MiterClip)
                     {
-                        double miterClipMinDistSqr = 0.5 * halfThicknessSqr * (cosTheta + 1);
+                        float miterClipMinDistSqr = 0.5f * halfThicknessSqr * (cosTheta + 1);
                         if (miterDistLimitSqr < miterClipMinDistSqr)
                             preferred = JointStyle.Bevel;
                         else if (miterDistSqr > 0 && miterDistSqr < miterDistLimitSqr)
@@ -743,8 +754,8 @@ namespace Prowl.Quill
                 {
                     float sinTheta = n0.Y * n1.X - n0.X * n1.Y;
                     Float2 bevelN = Norm(F(n0.X + n1.X, n0.Y + n1.Y));
-                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5, (n0.Y + bevelN.Y) * 0.5)); dir0 *= (float)fringeWidth;
-                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5, (n1.Y + bevelN.Y) * 0.5)); dir1 *= (float)fringeWidth;
+                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5f, (n0.Y + bevelN.Y) * 0.5f)); dir0 *= (float)fringeWidth;
+                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5f, (n1.Y + bevelN.Y) * 0.5f)); dir1 *= (float)fringeWidth;
 
                     Float2 pt; Float2 d0; Float2 d1;
                     if (joinKind == 2) // Bevel
@@ -833,8 +844,8 @@ namespace Prowl.Quill
         private static float sinThetaOf(Float2 n0, Float2 n1) => n0.Y * n1.X - n0.X * n1.Y;
 
         private static void ThickButt(Float2 p1, Float2 n0, Float2 n1, float cosTheta, float sinTheta,
-            JointStyle preferred, double miterOffX, double miterOffY, double fringeMiterOffX, double fringeMiterOffY,
-            double halfThickness, double halfFringe, double fringeWidth, double miterDistLimit)
+            JointStyle preferred, float miterOffX, float miterOffY, float fringeMiterOffX, float fringeMiterOffY,
+            float halfThickness, float halfFringe, float fringeWidth, float miterDistLimit)
         {
             // Base: end one segment and begin the next, both with butt caps (overlapping cores).
             Vf(4, p1.X - n0.X * halfFringe, p1.Y - n0.Y * halfFringe);
@@ -882,8 +893,8 @@ namespace Prowl.Quill
                     else
                     {
                         // Clipped square cap.
-                        double inner = miterDistLimit;
-                        double outer = inner + fringeWidth;
+                        float inner = miterDistLimit;
+                        float outer = inner + fringeWidth;
                         Vf(8, p1.X - n1.X * halfFringe - n1.Y * outer, p1.Y - n1.Y * halfFringe + n1.X * outer);
                         Vc(9, p1.X - n1.X * halfThickness - n1.Y * inner, p1.Y - n1.Y * halfThickness + n1.X * inner);
                         Vc(10, p1.X + n1.X * halfThickness - n1.Y * inner, p1.Y + n1.Y * halfThickness + n1.X * inner);
@@ -895,8 +906,8 @@ namespace Prowl.Quill
                 else if (preferred == JointStyle.Bevel)
                 {
                     Float2 bevelN = Norm(F(n0.X + n1.X, n0.Y + n1.Y));
-                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5, (n0.Y + bevelN.Y) * 0.5)); dir0 *= (float)fringeWidth;
-                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5, (n1.Y + bevelN.Y) * 0.5)); dir1 *= (float)fringeWidth;
+                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5f, (n0.Y + bevelN.Y) * 0.5f)); dir0 *= (float)fringeWidth;
+                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5f, (n1.Y + bevelN.Y) * 0.5f)); dir1 *= (float)fringeWidth;
                     Float2 pt = p1;
                     Float2 d0 = F(n0.X * halfThickness, n0.Y * halfThickness);
                     Float2 d1 = F(n1.X * halfThickness, n1.Y * halfThickness);
@@ -917,8 +928,8 @@ namespace Prowl.Quill
                 else // MiterClip
                 {
                     Float2 bevelN = Norm(F(n0.X + n1.X, n0.Y + n1.Y));
-                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5, (n0.Y + bevelN.Y) * 0.5)); dir0 *= (float)fringeWidth;
-                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5, (n1.Y + bevelN.Y) * 0.5)); dir1 *= (float)fringeWidth;
+                    Float2 dir0 = FixNormal(F((n0.X + bevelN.X) * 0.5f, (n0.Y + bevelN.Y) * 0.5f)); dir0 *= (float)fringeWidth;
+                    Float2 dir1 = FixNormal(F((n1.X + bevelN.X) * 0.5f, (n1.Y + bevelN.Y) * 0.5f)); dir1 *= (float)fringeWidth;
                     ClippedBevelGeometry(p1, n0, bevelN, sinTheta, halfThickness, miterDistLimit, out Float2 pt, out Float2 d0, out Float2 d1);
 
                     if (sinTheta < 0.0f)
@@ -953,20 +964,20 @@ namespace Prowl.Quill
         }
 
         private static void ClippedBevelGeometry(Float2 p1, Float2 n0, Float2 bevelN, float sinTheta,
-            double thickness, double limit, out Float2 pt, out Float2 d0, out Float2 d1)
+            float thickness, float limit, out Float2 pt, out Float2 d0, out Float2 d1)
         {
-            double signedLimit = sinTheta < 0.0f ? limit : -limit;
-            double denom = n0.Y * bevelN.X - n0.X * bevelN.Y;
-            double offset = denom != 0.0
+            float signedLimit = sinTheta < 0.0f ? limit : -limit;
+            float denom = n0.Y * bevelN.X - n0.X * bevelN.Y;
+            float offset = denom != 0.0f
                 ? (n0.X * (bevelN.X * limit - n0.X * thickness) + n0.Y * (bevelN.Y * limit - n0.Y * thickness)) / denom
-                : 0.0;
+                : 0.0f;
 
             pt = F(p1.X - bevelN.X * signedLimit, p1.Y - bevelN.Y * signedLimit);
             d0 = F(offset * bevelN.Y, -offset * bevelN.X);
             d1 = F(-offset * bevelN.Y, offset * bevelN.X);
         }
 
-        private static void ThickCap(Float2 p, Float2 n, float segLenSqr, double halfThickness, double halfFringe, double fringeWidth, float sign, CapType cap)
+        private static void ThickCap(Float2 p, Float2 n, float segLenSqr, float halfThickness, float halfFringe, float fringeWidth, float sign, CapType cap)
         {
             if (cap == CapType.Round)
             {
@@ -974,13 +985,13 @@ namespace Prowl.Quill
                 return;
             }
 
-            double scale = (cap == CapType.Butt ? 0.5 : 1.0) * sign;
+            float scale = (cap == CapType.Butt ? 0.5f : 1.0f) * sign;
             if (cap == CapType.Butt)
             {
-                double fw2 = fringeWidth * fringeWidth;
-                double s = segLenSqr;
-                double t = (s < fw2 ? Math.Sqrt((float)s) : fringeWidth) * scale;
-                double dx = n.X * t, dy = n.Y * t;
+                float fw2 = fringeWidth * fringeWidth;
+                float s = segLenSqr;
+                float t = (s < fw2 ? MathF.Sqrt((float)s) : fringeWidth) * scale;
+                float dx = n.X * t, dy = n.Y * t;
                 OffsetSlot(0, -dy, dx);
                 OffsetSlot(1, dy, -dx);
                 OffsetSlot(2, dy, -dx);
@@ -988,8 +999,8 @@ namespace Prowl.Quill
             }
             else // Square
             {
-                double dix = n.X * halfThickness * scale, diy = n.Y * halfThickness * scale;
-                double dox = n.X * halfFringe * scale, doy = n.Y * halfFringe * scale;
+                float dix = n.X * halfThickness * scale, diy = n.Y * halfThickness * scale;
+                float dox = n.X * halfFringe * scale, doy = n.Y * halfFringe * scale;
                 OffsetSlot(0, -doy, dox);
                 OffsetSlot(1, -diy, dix);
                 OffsetSlot(2, -diy, dix);
