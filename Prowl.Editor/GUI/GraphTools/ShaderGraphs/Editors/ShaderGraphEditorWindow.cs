@@ -188,7 +188,7 @@ public class ShaderGraphEditorWindow : DockPanel
     {
         using (paper.Row("sg_tb_row1").Height(26).RowBetween(4).Enter())
         {
-            Origami.Button(paper, "sg_tb_compile", $"{EditorIcons.WandMagicSparkles} Compile", () => _editor.Save()).Width(90).Show();
+            Origami.Button(paper, "sg_tb_compile", $"{EditorIcons.WandSparkles} Compile", () => _editor.Save()).Width(90).Show();
             Origami.Switch(paper, "sg_tb_auto", _autoRecompile, v => _autoRecompile = v)
                 .Primary().LabelRight("Auto").Show();
             // Recenter lives on F / Space no need for a button. Frees toolbar room

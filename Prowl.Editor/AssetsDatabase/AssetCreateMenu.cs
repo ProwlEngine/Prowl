@@ -40,7 +40,7 @@ public static class AssetCreateMenu
         // Registry-discovered asset types (Scene, Material, InputActions, user-defined, etc.)
         CreateAssetMenuRegistry.BuildMenu(builder, currentFolder, onCreated);
 
-        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
+        builder.Item($"{EditorIcons.WandSparkles}  Shader", () => {
 
             var task = new Core.Tasks.CreateAssetTask();
 

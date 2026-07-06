@@ -119,7 +119,7 @@ public static class FileIconRegistry
     private static void RegisterBuiltIns()
     {
         Register(EditorIcons.FileCode, ".cs", ".js", ".ts", ".py", ".lua");
-        Register(EditorIcons.WandMagicSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
+        Register(EditorIcons.WandSparkles, ".shader", ".glsl", ".hlsl", ".shadergraph");
         Register(EditorIcons.FileImage, ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tga", ".psd", ".hdr");
         Register(EditorIcons.FileAudio, ".mp3", ".wav", ".ogg", ".flac");
         Register(EditorIcons.FileVideo, ".mp4", ".avi", ".mkv", ".mov");
