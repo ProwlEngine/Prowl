@@ -71,6 +71,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant + sizing (delegated to TextField behind the scenes) ─

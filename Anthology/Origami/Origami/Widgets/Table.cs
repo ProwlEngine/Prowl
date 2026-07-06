@@ -102,6 +102,7 @@ public sealed class TableBuilder
         _selected = selected;
         _onSelect = onSelect;
         _theme = theme;
+        _rowHeight = _theme.Metrics.RowHeight;
     }
 
     /// <summary>Override table width (default Stretch).</summary>

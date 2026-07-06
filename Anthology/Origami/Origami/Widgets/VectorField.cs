@@ -88,7 +88,7 @@ public sealed class VectorField2Builder<T> where T : struct, INumber<T>
     internal VectorField2Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, Action<T> setX, Action<T> setY)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _setX = setX; _setY = setY;
     }
 
@@ -117,7 +117,7 @@ public sealed class VectorField3Builder<T> where T : struct, INumber<T>
     internal VectorField3Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, T z, Action<T> setX, Action<T> setY, Action<T> setZ)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _z = z; _setX = setX; _setY = setY; _setZ = setZ;
     }
 
@@ -147,7 +147,7 @@ public sealed class VectorField4Builder<T> where T : struct, INumber<T>
     internal VectorField4Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, T z, T w, Action<T> setX, Action<T> setY, Action<T> setZ, Action<T> setW)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _z = z; _w = w;
         _setX = setX; _setY = setY; _setZ = setZ; _setW = setW;
     }

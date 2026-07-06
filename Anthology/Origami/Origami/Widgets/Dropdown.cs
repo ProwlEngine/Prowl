@@ -65,6 +65,7 @@ public sealed class DropdownBuilder<T>
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant ────────────────────────────────────────────────────────

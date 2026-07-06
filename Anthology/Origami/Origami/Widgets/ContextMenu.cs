@@ -89,9 +89,10 @@ public sealed class ContextBuilder
 
     // ── Shared row geometry / palette (Nebula .w2menu spec) ───
 
-    internal const float RowHeight = 30f;
-    internal const float RowFont = 16f;   // .w2mrow font-size (Origami metric scale ~= 12px browser)
-    internal const float SubFont = 13f;   // .k shortcut / header
+    // Row height / fonts track the theme metrics so the menu follows RowHeight / FontSize changes.
+    internal static float RowHeight => Origami.Current.Metrics.RowHeight + 6f;
+    internal static float RowFont => Origami.Current.Metrics.FontSize;
+    internal static float SubFont => Origami.Current.Metrics.FontSize - 3f;
     internal const float IconSize = 15f;  // leading vector icon
     internal const float RowPadX = 9f;    // .w2mrow padding-x
     internal const float RowGap = 9f;     // .w2mrow flex gap

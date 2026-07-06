@@ -89,6 +89,7 @@ public sealed class TextFieldBuilder
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value ?? string.Empty;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant ────────────────────────────────────────────────────────

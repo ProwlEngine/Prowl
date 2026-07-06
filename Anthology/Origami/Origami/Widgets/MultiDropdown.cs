@@ -65,6 +65,7 @@ public sealed class MultiDropdownBuilder<T>
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        _height = _theme.Metrics.RowHeight;
         _selected = selected != null
             ? new HashSet<T>(selected, comparer ?? EqualityComparer<T>.Default)
             : new HashSet<T>(comparer ?? EqualityComparer<T>.Default);

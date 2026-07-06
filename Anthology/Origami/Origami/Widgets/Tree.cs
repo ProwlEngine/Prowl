@@ -324,9 +324,9 @@ public sealed class TreeBuilder
         var metrics = _theme.Metrics;
         float rounding = metrics.Rounding;
 
-        // Resolve row height. Nebula rows are 24px tall (prototype .w2trow height).
+        // Resolve row height from the theme so it follows RowHeight changes (caller can still override).
         if (_rowHeight <= 0)
-            _rowHeight = 24f;
+            _rowHeight = metrics.RowHeight;
 
         // Expand state storage key prefix
         string expandPrefix = $"{_id}_exp_";
