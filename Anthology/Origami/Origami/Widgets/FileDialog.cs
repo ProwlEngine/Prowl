@@ -380,9 +380,16 @@ public static class FileDialog
         }
 
         // ── window ───────────────────────────────────────────────
+        // Frosted glass to match the dock windows: blur the content behind the dialog and thin the
+        // fill slightly so the frost reads through (kept dark, a deep glass rather than a light wash).
+        float winBlur = m.WindowBackdropBlur;
+        Color winBg = winBlur > 0f ? Color.FromArgb(205, WindowBg.R, WindowBg.G, WindowBg.B) : WindowBg;
+
         var win = paper.Column($"{id}_win").Size(width, height)
-            .BackgroundColor(WindowBg)
+            .BackgroundColor(winBg)
             .BorderColor(theme.BorderSoft).BorderWidth(1).Rounded(9).Clip();
+        if (winBlur > 0f)
+            win.BackdropBlur(winBlur);
         if (floating)
         {
             float sw = (float)paper.ScreenRect.Size.X, sh = (float)paper.ScreenRect.Size.Y;
