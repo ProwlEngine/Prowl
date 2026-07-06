@@ -21,7 +21,7 @@ namespace SlangQuickCompile;
 internal static class Program
 {
     // Every shared shader the suite locks down. Variant permutations are discovered from each shader's
-    // own [variant] attributes, so they are not listed here.
+    // own [VariantAxis] attributes, so they are not listed here.
     static readonly string[] s_manifest =
     [
         "Graphics",

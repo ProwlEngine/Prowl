@@ -4,7 +4,7 @@ import VariantAttributes;
 
 module Variants;
 
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool DoubleColor;
 
 struct VertexInput
