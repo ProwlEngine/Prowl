@@ -43,6 +43,7 @@ public sealed class MenuBarBuilder
     private readonly OrigamiTheme _theme;
     private readonly List<(string Label, Action<ContextBuilder> Build)> _menus = new();
     private float _height = 32f;
+    private bool _background = true;
 
     internal MenuBarBuilder(Paper paper, string id, OrigamiTheme theme)
     {
@@ -62,6 +63,9 @@ public sealed class MenuBarBuilder
     /// <summary>Bar height in pixels (default 32).</summary>
     public MenuBarBuilder Height(float height) { _height = MathF.Max(20f, height); return this; }
 
+    /// <summary>Draw the bar as floating text with no glass fill or border (default keeps the fill).</summary>
+    public MenuBarBuilder Transparent(bool transparent = true) { _background = !transparent; return this; }
+
     /// <summary>Render the menu bar.</summary>
     public void Show()
     {
@@ -78,9 +82,11 @@ public sealed class MenuBarBuilder
 
         // When open, the bar rides above a transparent click-catcher so the bar stays hoverable
         // (to switch menus) while a click anywhere else drops focus.
+        Color barFill = _background ? _theme.Glass : Color.FromArgb(0, 0, 0, 0);
+        Color barBorder = _background ? _theme.BorderSoft : Color.FromArgb(0, 0, 0, 0);
         using (_paper.Row(_id).Width(UnitValue.Auto).Height(_height).Rounded(8).Padding(5, 5, 0, 0)
             .Layer(open ? Layer.Topmost + 2 : Layer.Base)
-            .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
+            .BackgroundColor(barFill).BorderColor(barBorder).BorderWidth(_background ? 1 : 0)
             .Enter())
         {
             for (int i = 0; i < _menus.Count; i++)
