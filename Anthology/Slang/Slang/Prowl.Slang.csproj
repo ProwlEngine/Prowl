@@ -77,4 +77,9 @@
     <ItemGroup Condition="$([MSBuild]::IsOsPlatform('OSX')) AND '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64' ">
         <None Include="$(MacosArm64LibPath)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\COMApi\Prowl.Slang.COMApi.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <None Include="..\COMApi\bin\$(Configuration)\netstandard2.0\Prowl.Slang.COMApi.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" Condition="Exists('..\COMApi\bin\$(Configuration)\netstandard2.0\Prowl.Slang.COMApi.dll')" />
+    </ItemGroup>
 </Project>

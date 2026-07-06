@@ -198,7 +198,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.GetEntryPointCode(entryPointIndex, targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return NativeComProxy.Create(codePtr).ReadBytes();
+        return new NativeSlangBlob(codePtr).ReadBytes();
     }
 
 
@@ -231,7 +231,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
     {
         _componentType.GetEntryPointHash(entryPointIndex, targetIndex, out ISlangBlob* outHash);
 
-        return NativeComProxy.Create(outHash).ReadBytes();
+        return new NativeSlangBlob(outHash).ReadBytes();
     }
 
 
@@ -253,7 +253,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.Specialize(specializationArgsPtr, specializationArgs.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new ComponentType(NativeComProxy.Create(componentPtr), _session);
+        return new ComponentType(new NativeComponentType(componentPtr), _session);
     }
 
 
@@ -286,7 +286,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.Link(out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new ComponentType(NativeComProxy.Create(componentPtr), _session);
+        return new ComponentType(new NativeComponentType(componentPtr), _session);
     }
 
 
@@ -306,7 +306,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.GetEntryPointHostCallable(entryPointIndex, targetIndex, out ISlangSharedLibrary* sharedLibPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new SharedLibrary(NativeComProxy.Create(sharedLibPtr));
+        return new SharedLibrary(new NativeSlangSharedLibrary(sharedLibPtr));
     }
 
     /// <summary>
@@ -325,7 +325,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.RenameEntryPoint(str, out IComponentType* entryPointPtr)
             .Throw($"Failed to rename entrypoint to '{newName}'");
 
-        return new ComponentType(NativeComProxy.Create(entryPointPtr), _session);
+        return new ComponentType(new NativeComponentType(entryPointPtr), _session);
     }
 
 
@@ -346,7 +346,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         for (int i = 0; i < compilerOptionEntries.Length; i++)
             compilerOptionEntriesPtr[i].Free();
 
-        return new ComponentType(NativeComProxy.Create(linkedComponentPtr), _session);
+        return new ComponentType(new NativeComponentType(linkedComponentPtr), _session);
     }
 
 
@@ -358,7 +358,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.GetTargetCode(targetIndex, out ISlangBlob* codePtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return NativeComProxy.Create(codePtr).ReadBytes();
+        return new NativeSlangBlob(codePtr).ReadBytes();
     }
 
 
@@ -370,7 +370,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.GetTargetMetadata(targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new Metadata(NativeComProxy.Create(metadataPtr));
+        return new Metadata(new NativeMetadata(metadataPtr));
     }
 
 
@@ -382,7 +382,7 @@ public unsafe class ComponentType : IEquatable<ComponentType>
         _componentType.GetEntryPointMetadata(entryPointIndex, targetIndex, out IMetadata* metadataPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new Metadata(NativeComProxy.Create(metadataPtr));
+        return new Metadata(new NativeMetadata(metadataPtr));
     }
 
 

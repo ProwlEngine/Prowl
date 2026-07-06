@@ -254,7 +254,7 @@ public unsafe struct ShaderReflection : IEquatable<ShaderReflection>
         spReflection_ToJson(_ptr, null, out ISlangBlob* outJsonPtr)
             .Throw("Failure converting shader reflection to JSON");
 
-        return NativeComProxy.Create(outJsonPtr).GetString();
+        return new NativeSlangBlob(outJsonPtr).GetString();
     }
 
 

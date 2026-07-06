@@ -165,7 +165,7 @@ public unsafe struct TypeReflection : IEquatable<TypeReflection>
             spReflectionType_GetFullName(_ptr, out ISlangBlob* namePtr)
                 .Throw("Failed to get full name of type");
 
-            return NativeComProxy.Create(namePtr).GetString();
+            return new NativeSlangBlob(namePtr).GetString();
         }
     }
 

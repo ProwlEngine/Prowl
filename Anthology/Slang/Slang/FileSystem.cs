@@ -23,7 +23,7 @@ public interface IFileProvider
 }
 
 
-internal sealed unsafe class FileSystem(IFileProvider provider) : ManagedComProxy<ISlangFileSystem>, ISlangFileSystem
+internal sealed unsafe class FileSystem(IFileProvider provider) : ManagedComProxy<ISlangFileSystem, SlangFileSystemThunks>, ISlangFileSystem
 {
     public IFileProvider Provider = provider;
 
