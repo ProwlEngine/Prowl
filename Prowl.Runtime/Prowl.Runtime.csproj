@@ -31,6 +31,7 @@
     <PackageReference Include="Prowl.Clay" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Quill" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Graphite" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Graphite.Variants" Version="$(ProwlVersion)" />
