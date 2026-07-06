@@ -32,6 +32,7 @@ public class ConsolePanel : DockPanel
     private const float FontSize = 13f;
 
     private static readonly List<LogEntry> _messages = new();
+    private static readonly object _messagesLock = new();
     private static bool _subscribed;
 
     // Settings
@@ -82,41 +83,47 @@ public class ConsolePanel : DockPanel
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
     {
-        // Collapse duplicates
-        if (_messages.Count > 0)
+        // Debug.OnLog can fire from the render thread (e.g. Graphite's OnMissingProperty
+        // callback), while the UI thread reads/enumerates _messages every frame to draw the
+        // console, so all access to _messages must go through _messagesLock.
+        lock (_messagesLock)
         {
-            var last = _messages[^1];
-            if (last.Message == message && last.Severity == severity)
+            // Collapse duplicates
+            if (_messages.Count > 0)
             {
-                _messages[^1] = new LogEntry
+                var last = _messages[^1];
+                if (last.Message == message && last.Severity == severity)
                 {
-                    Message = last.Message.Contains('\n') ? last.Message.Split('\n')[0] : last.Message,
-                    FullMessage = last.Message,
-                    Severity = last.Severity,
-                    TimeString = DateTime.Now.ToString("HH:mm:ss"),
-                    Count = last.Count + 1,
-                    StackTrace = stackTrace ?? last.StackTrace
-                };
-                // Invalidate count layout since count changed
-                var updated = _messages[^1];
-                updated.CountLayout = null;
-                _messages[^1] = updated;
-                return;
+                    _messages[^1] = new LogEntry
+                    {
+                        Message = last.Message.Contains('\n') ? last.Message.Split('\n')[0] : last.Message,
+                        FullMessage = last.Message,
+                        Severity = last.Severity,
+                        TimeString = DateTime.Now.ToString("HH:mm:ss"),
+                        Count = last.Count + 1,
+                        StackTrace = stackTrace ?? last.StackTrace
+                    };
+                    // Invalidate count layout since count changed
+                    var updated = _messages[^1];
+                    updated.CountLayout = null;
+                    _messages[^1] = updated;
+                    return;
+                }
             }
+
+            _messages.Add(new LogEntry
+            {
+                Message = message.Contains('\n') ? message.Split('\n')[0] : message,
+                FullMessage = message,
+                Severity = severity,
+                TimeString = DateTime.Now.ToString("HH:mm:ss"),
+                Count = 1,
+                StackTrace = stackTrace
+            });
+
+            while (_messages.Count > MaxMessages)
+                _messages.RemoveAt(0);
         }
-
-        _messages.Add(new LogEntry
-        {
-            Message = message.Contains('\n') ? message.Split('\n')[0] : message,
-            FullMessage = message,
-            Severity = severity,
-            TimeString = DateTime.Now.ToString("HH:mm:ss"),
-            Count = 1,
-            StackTrace = stackTrace
-        });
-
-        while (_messages.Count > MaxMessages)
-            _messages.RemoveAt(0);
     }
 
     public override void OnGUI(Paper paper, float width, float height)
@@ -142,16 +149,23 @@ public class ConsolePanel : DockPanel
             .Margin(8)
             .Enter())
         {
-            Origami.Button(paper, "con_clear", Loc.Get("console.clear"), () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
+            Origami.Button(paper, "con_clear", Loc.Get("console.clear"), () =>
+            {
+                lock (_messagesLock) { _messages.Clear(); }
+                _filteredIndices.Clear();
+            }).Width(50).Show();
 
             paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
 
             int infoCount = 0, warnCount = 0, errCount = 0;
-            foreach (var m in _messages)
+            lock (_messagesLock)
             {
-                if (m.Severity == LogSeverity.Normal || m.Severity == LogSeverity.Success) infoCount += m.Count;
-                else if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
-                else errCount += m.Count;
+                foreach (var m in _messages)
+                {
+                    if (m.Severity == LogSeverity.Normal || m.Severity == LogSeverity.Success) infoCount += m.Count;
+                    else if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
+                    else errCount += m.Count;
+                }
             }
 
             Origami.Switch(paper, "con_collapse", _collapse, v => _collapse = v)
@@ -194,12 +208,15 @@ public class ConsolePanel : DockPanel
     {
         // Rebuild filtered list when needed
         int filterHash = HashCode.Combine(_showInfo, _showWarnings, _showErrors, _searchText);
-        if (_lastMessageCount != _messages.Count || _lastFilterHash != filterHash || _lastCollapseState != _collapse)
+        lock (_messagesLock)
         {
-            _lastMessageCount = _messages.Count;
-            _lastFilterHash = filterHash;
-            _lastCollapseState = _collapse;
-            RebuildFilteredList();
+            if (_lastMessageCount != _messages.Count || _lastFilterHash != filterHash || _lastCollapseState != _collapse)
+            {
+                _lastMessageCount = _messages.Count;
+                _lastFilterHash = filterHash;
+                _lastCollapseState = _collapse;
+                RebuildFilteredList();
+            }
         }
 
         int visibleCount = _filteredIndices.Count;
@@ -227,8 +244,11 @@ public class ConsolePanel : DockPanel
                         if (_selectedFilteredIndex >= 0)
                         {
                             int msgIdx = _filteredIndices[_selectedFilteredIndex];
-                            if (msgIdx < _messages.Count)
-                                Selection.Select(new ConsoleLogSelection(_messages[msgIdx]));
+                            lock (_messagesLock)
+                            {
+                                if (msgIdx < _messages.Count)
+                                    Selection.Select(new ConsoleLogSelection(_messages[msgIdx]));
+                            }
                         }
                         else
                         {
@@ -258,6 +278,8 @@ public class ConsolePanel : DockPanel
                         float startY = (float)r.Min.Y;
                         float size = FontSize * 1.5f;
 
+                        lock (_messagesLock)
+                        {
                         for (int vi = firstVisible; vi <= lastVisible; vi++)
                         {
                             if (vi < 0 || vi >= _filteredIndices.Count) continue;
@@ -323,6 +345,7 @@ public class ConsolePanel : DockPanel
 
                             // Write back the cached layouts (struct copy)
                             _messages[msgIdx] = msg;
+                        }
                         }
                     });
                 });
