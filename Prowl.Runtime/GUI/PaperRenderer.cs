@@ -178,9 +178,11 @@ public class PaperRenderer : ICanvasRenderer
             }
             cmd.SetFloat("backdropBlurAmount", blurAmount);
 
-            // Texture
+            // Texture. The brush/shape texture goes on texture0; the font atlas is bound separately
+            // as a persistent sampler so text batches into the same draw call as surrounding shapes.
             Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
             cmd.SetTexture("texture0", texture);
+            cmd.SetTexture("fontTexture", (drawCall.FontAtlas as Texture2D) ?? _defaultTexture);
 
             // Scissor
             drawCall.GetScissor(out Float4x4 scissor, out Float2 extent);

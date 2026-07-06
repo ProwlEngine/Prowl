@@ -49,6 +49,7 @@ Pass "UI"
         out vec4 finalColor;
 
         uniform sampler2D texture0;
+        uniform sampler2D fontTexture;     // dedicated font-atlas sampler, so text batches with shapes
         uniform mat4 scissorMat;
         uniform vec2 scissorExt;
 
@@ -71,7 +72,6 @@ Pass "UI"
         // ============== Canvas functions ==============
 
         float calculateBrushFactor() {
-            if (brushType == 0) return 0.0;
             vec2 logicalPos = fragPos / max(dpiScale, 0.001);
             vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
 
@@ -91,7 +91,7 @@ Pass "UI"
                 if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
                 vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
                 float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-                return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+                return smoothstep(-feather * 0.5, feather * 0.5, dist);
             }
             return 0.0;
         }
@@ -112,7 +112,7 @@ Pass "UI"
         // FontSystem.DistanceRange), and the screen-space span of one unit at this fragment.
         const float sdfPxRange = 4.0;
         float sdfScreenPxRange(vec2 uv) {
-            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
             vec2 screenTexSize = vec2(1.0) / fwidth(uv);
             return max(0.5 * dot(unitRange, screenTexSize), 1.0);
         }
@@ -131,18 +131,16 @@ Pass "UI"
             // (replicated across RGB); reconstruct sharp coverage from it.
             if (fragTexCoord.x >= 2.0) {
                 vec2 uv = fragTexCoord - vec2(2.0);
-                float sd = texture(texture0, uv).r;
+                float sd = texture(fontTexture, uv).r;
                 float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
                 float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
                 finalColor = color * coverage * mask;
                 return;
             }
 
-            // Standard canvas rendering with edge AA
-            vec2 pixelSize = fwidth(fragTexCoord);
-            vec2 edgeDistance = min(fragTexCoord, 1.0 - fragTexCoord);
-            float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-            edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+            // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried
+            // in fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
+            float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
 
             float dpi = max(dpiScale, 0.001);
             vec2 logicalPos = fragPos / dpi;
