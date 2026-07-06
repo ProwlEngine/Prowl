@@ -150,6 +150,10 @@ public sealed class PropertyGridConfig
     /// <summary>Max recursion depth. Default 10.</summary>
     public int MaxDepth = 10;
 
+    /// <summary>When true, nested objects, lists and their entries start expanded. Default false
+    /// (everything collapsed until the user opens it).</summary>
+    public bool ExpandByDefault = false;
+
     /// <summary>Called at depth 0 before any field is drawn (e.g., for undo snapshots).</summary>
     public Action<object>? OnBeginRoot;
 
@@ -228,6 +232,9 @@ public sealed class PropertyGridBuilder
 
     /// <summary>Starting nesting depth (default 0).</summary>
     public PropertyGridBuilder Depth(int depth) { _depth = depth; return this; }
+
+    /// <summary>Start nested objects, lists and their entries expanded (default is collapsed).</summary>
+    public PropertyGridBuilder ExpandByDefault(bool expand = true) { _config.ExpandByDefault = expand; return this; }
 
     /// <summary>Render the property grid.</summary>
     public void Show()
@@ -728,12 +735,12 @@ public static class PropertyGridRenderer
                 .Rounded(8).BorderColor(bd).BorderWidth(1).Clip().Enter())
             {
                 var listEl = paper.CurrentParent;
-                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", true);
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
 
                 using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
-                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", true)))
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Enter())
                 {
                     paper.Box($"{id}_ci").Width(14).Height(26).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
@@ -795,11 +802,11 @@ public static class PropertyGridRenderer
             using (cardB.Enter())
             {
                 var nelEl = paper.CurrentParent;
-                bool exp = paper.GetElementStorage<bool>(nelEl, "exp", depth == 0);
+                bool exp = paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault);
 
                 var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium)
                     .Hovered.BackgroundColor(theme.Hover).End()
-                    .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", depth == 0)));
+                    .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)));
                 if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
                 using (nh.Enter())
                 {
@@ -851,12 +858,12 @@ public static class PropertyGridRenderer
                 .Rounded(9).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
             {
                 var listEl = paper.CurrentParent;
-                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", true);
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
 
                 using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingLarge).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
-                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", true)))
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
                     .Enter())
                 {
                     paper.Box($"{id}_nli").Width(14).Height(30).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
@@ -1006,7 +1013,7 @@ public static class PropertyGridRenderer
         if (depth + 1 > config.MaxDepth) return;
         var actualType = value.GetType();
 
-        Origami.Foldout(paper, $"{id}_fold", actualType.Name).Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", actualType.Name).DefaultExpanded(config.ExpandByDefault).Body(() =>
         {
             if (declaredType.IsAbstract || declaredType.IsInterface)
                 config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
@@ -1023,7 +1030,7 @@ public static class PropertyGridRenderer
     {
         if (depth + 1 > config.MaxDepth) return;
 
-        Origami.Foldout(paper, $"{id}_fold", value.GetType().Name).Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", value.GetType().Name).DefaultExpanded(config.ExpandByDefault).Body(() =>
         {
             if (declaredType.IsAbstract || declaredType.IsInterface)
                 config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
