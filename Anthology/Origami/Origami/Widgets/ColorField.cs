@@ -434,7 +434,7 @@ public sealed class ColorFieldBuilder
     {
         Origami.NumericField<int>(_paper, id, value, v => onChange(Math.Clamp(v, min, max)))
             .Min(min).Max(max)
-            .Prefix(label, color ?? SysColor.FromArgb(255, 180, 180, 180))
+            .Prefix(label, color ?? _theme.Ink.C300)
             .Width(UnitValue.Stretch())
             .Show();
     }

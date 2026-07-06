@@ -297,7 +297,7 @@ public class DockSpace
                     .Position(tx, 0).Size(tw, tabH)
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
                     .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
-                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(70, 168, 85, 247)).End()
+                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -397,7 +397,7 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
                         .BackgroundColor(theme.Primary.C500)
-                        .BoxShadow(0, 0, 8, 0, Color.FromArgb(140, 168, 85, 247));
+                        .BoxShadow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
             }
 
             // Trailing separator on the right edge of the last tab, so the final tab (and a lone tab)
@@ -699,7 +699,8 @@ public class DockSpace
 
     private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
     {
-        var iconCol = Color.FromArgb(230, 235, 240, 255);
+        var inkNearWhite = Origami.Current.Ink.C500;
+        var iconCol = Color.FromArgb(230, inkNearWhite.R, inkNearWhite.G, inkNearWhite.B);
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
             .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>

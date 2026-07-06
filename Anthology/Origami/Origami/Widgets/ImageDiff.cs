@@ -129,9 +129,9 @@ public sealed class ImageDiffBuilder
 
                     // .w2diff-handle glow — box-shadow 0 0 10px acc-glow behind the white line.
                     canvas.SaveState();
-                    Color accGlow = Color.FromArgb(128, 168, 85, 247);
+                    Color accGlow = Color.FromArgb(128, primary.C500.R, primary.C500.G, primary.C500.B);
                     canvas.SetBoxBrush(splitX, cy, capturedBarW, h - 4f, 1f, 10f,
-                        accGlow, Color.FromArgb(0, 168, 85, 247));
+                        accGlow, Color.FromArgb(0, primary.C500.R, primary.C500.G, primary.C500.B));
                     canvas.BeginPath();
                     canvas.Rect(splitX - 16f, y, 32f, h);
                     canvas.Fill();

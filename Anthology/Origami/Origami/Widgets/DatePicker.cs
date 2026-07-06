@@ -446,7 +446,7 @@ internal static class OrigamiCalendar
                                 : f.InRange ? Color.FromArgb(40, accent.R, accent.G, accent.B)
                                 : Color.Transparent;
                             Color fg = f.Disabled ? ink.C100
-                                : onAccent ? Color.White
+                                : onAccent ? ink.C700
                                 : ink.C400;
 
                             var day = paper.Box(cid).Width(cell).Height(cell)
@@ -809,7 +809,7 @@ internal sealed class DatePickerModal : IModal
                     bool isThisYear = yr == System.DateTime.Now.Year;
 
                     Color bg = isCurrent ? accent : Color.Transparent;
-                    Color fg = isCurrent ? Color.White : isThisYear ? accent : ink.C400;
+                    Color fg = isCurrent ? ink.C700 : isThisYear ? accent : ink.C400;
 
                     int capturedYr = yr;
                     paper.Box($"{_id}_y_{yr}")

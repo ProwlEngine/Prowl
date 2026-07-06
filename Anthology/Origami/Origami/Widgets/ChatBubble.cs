@@ -122,7 +122,7 @@ public sealed class ChatBubbleBuilder
         Color border = _theme.Neutral.C200;
         bool drawBorder = !me && _bgColor == null;
         Color headerCol = _headerColor ?? (me ? ramp.C700 : ink.C400);
-        Color footerCol = me ? Color.FromArgb(180, 255, 255, 255) : ink.C300;
+        Color footerCol = me ? Color.FromArgb(180, ink.C600.R, ink.C600.G, ink.C600.B) : ink.C300;
 
         bool hasAvatar = _avatarTexture != null || _avatarInitials != null;
         bool avatarOnLeft = hasAvatar && _tail == BubbleTailDirection.Left;

@@ -188,7 +188,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
         if (!string.IsNullOrEmpty(_prefixText))
         {
-            tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200));
+            tb.Prefix(_prefixText!, _prefixColor ?? _theme.Ink.C400);
             if (_dragLabel) tb.PrefixDrag(AddDelta);
             if (_prefixCompact) tb.PrefixPad(5, 2);
         }

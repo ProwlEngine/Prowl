@@ -281,7 +281,7 @@ public sealed class ContextBuilder
             // .c2sep — 1px bd line, ~5px vertical margin, ~4px horizontal inset.
             paper.Box($"{id}_sep_{index}")
                 .Height(1).Margin(4, 4, 5, 5)
-                .BackgroundColor(Color.FromArgb(33, 178, 150, 255));   // bd
+                .BackgroundColor(theme.Neutral.C200);   // bd
         }
     }
 

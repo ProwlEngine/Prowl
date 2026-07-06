@@ -452,7 +452,7 @@ public sealed class TreeBuilder
 
         // Selection is a 90deg accent gradient painted via canvas (see below); hover is a soft
         // purple wash. Drop-into gets a translucent accent tint.
-        Color selLeft = Color.FromArgb(230, 168, 85, 247);  // rgba(168,85,247,0.9)
+        Color selLeft = Color.FromArgb(230, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);  // rgba(168,85,247,0.9)
         Color selRight = Color.FromArgb(179, 150, 80, 240); // rgba(150,80,240,0.7)
         Color hoverBg = _theme.Hover;   // rgba(168,85,247,0.12)
 

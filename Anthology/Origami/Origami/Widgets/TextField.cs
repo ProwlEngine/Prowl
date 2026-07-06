@@ -287,7 +287,7 @@ public sealed class TextFieldBuilder
 
             // ── Field row (border, slots, text element) ────────────────
             // Soft accent glow on focus (not a hard ring).
-            Color glowColor = hasError ? Color.FromArgb(130, 251, 113, 133) : Color.FromArgb(130, 168, 85, 247);
+            Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500.R, _theme.Red.C500.G, _theme.Red.C500.B) : Color.FromArgb(130, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);
             var rowBuilder = _paper.Row($"{_id}_row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
