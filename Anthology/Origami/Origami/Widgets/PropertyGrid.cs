@@ -286,7 +286,7 @@ public static class PropertyGridRenderer
                 if (targets[t] != null) config.OnBeginRoot?.Invoke(targets[t]);
         }
 
-        using (paper.Column($"{id}_root").ColBetween(0).Height(UnitValue.Auto).Enter())
+        using (paper.Column($"{id}_root").ColBetween(m.SpacingLarge).Height(UnitValue.Auto).Enter())
         {
             var type = representative.GetType();
             var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
@@ -411,19 +411,22 @@ public static class PropertyGridRenderer
                     isLeafCollection = true;
                 else
                 {
-                    DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth, label);
+                    // Full-width card, but keep the standard field gutter so it doesn't touch the edges.
+                    using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
+                        DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth, label);
                     return;
                 }
             }
             else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
             {
-                DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth, label);
+                using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
+                    DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth, label);
                 return;
             }
         }
 
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .Padding(11, 11, 3, 3).RowBetween(6).Enter())
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
         {
             // Override (prefab) / mixed (multi-select) marker: a small accent / amber dot before the label.
             if (isOverridden || isMixed)
@@ -612,7 +615,7 @@ public static class PropertyGridRenderer
         // Null collection: a full-width Create button.
         if (list == null)
         {
-            using (paper.Row($"{id}_null").Width(ST).Height(UnitValue.Auto).Padding(11, 11, 3, 3).Enter())
+            using (paper.Row($"{id}_null").Width(ST).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
                 Origami.Button(paper, $"{id}_create", "Create", () =>
                     onChange(collectionType.IsArray ? Array.CreateInstance(elementType, 0) : Activator.CreateInstance(collectionType))).Show();
             return;
@@ -670,12 +673,6 @@ public static class PropertyGridRenderer
             }
         }
 
-        void ClearAll()
-        {
-            stableIds.Clear(); Commit();
-            onChange(collectionType.IsArray ? Array.CreateInstance(elementType, 0) : Activator.CreateInstance(list.GetType()));
-        }
-
         void MoveTo(int from, int to)
         {
             if (from == to || from < 0 || from >= list.Count || to < 0 || to >= list.Count) return;
@@ -730,45 +727,60 @@ public static class PropertyGridRenderer
             using (paper.Column($"{id}_coll").Width(ST).Height(UnitValue.Auto)
                 .Rounded(8).BorderColor(bd).BorderWidth(1).Clip().Enter())
             {
-                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(8, 8, 0, 0).RowBetween(6).BackgroundColor(glass).Enter())
+                var listEl = paper.CurrentParent;
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", true);
+                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
+
+                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium).BackgroundColor(glass)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", true)))
+                    .Enter())
                 {
                     paper.Box($"{id}_ci").Width(14).Height(26).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
                     paper.Box($"{id}_cc").Width(ST).Height(26).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? $"{list.Count} elements" : $"{label}  ({list.Count})", font)
                         .TextColor(tMid).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    paper.Box($"{id}_cv").Width(12).Height(26).Margin(0, 0, ST, ST).IsNotInteractable()
+                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
                 }
-                paper.Box($"{id}_chd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
-                for (int i = 0; i < list.Count; i++)
+                if (!expanded && anim <= 0.001f) return;
+
+                using (paper.Column($"{id}_body").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
                 {
-                    int idx = i; string sk = stableIds[i];
-                    var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(4, 6, 4, 4).RowBetween(7);
-                    if (BeingDragged(sk)) rowB.BackgroundColor(theme.Selected);
-                    CaptureRow(idx, rowB);
-                    using (rowB.Enter())
+                    paper.Box($"{id}_chd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+
+                    for (int i = 0; i < list.Count; i++)
                     {
-                        var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, OrigamiIconSet.Grip, tDim, size: 13f);
-                        GripDrag(sk, grip);
+                        int idx = i; string sk = stableIds[i];
+                        var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).RowBetween(m.SpacingLarge);
+                        if (BeingDragged(sk)) rowB.BackgroundColor(theme.Selected);
+                        CaptureRow(idx, rowB);
+                        using (rowB.Enter())
+                        {
+                            var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, OrigamiIconSet.Grip, tDim, size: 13f);
+                            GripDrag(sk, grip);
 
-                        paper.Box($"{id}_i_{sk}").Width(14).Height(rowH).IsNotInteractable()
-                            .Text(idx.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
+                            paper.Box($"{id}_i_{sk}").Width(14).Height(rowH).IsNotInteractable()
+                                .Text(idx.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
 
-                        using (paper.Box($"{id}_v_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
-                            DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[idx], config, v => { list[idx] = v; onChange(list); }, depth + 1);
+                            using (paper.Box($"{id}_v_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
+                                DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[idx], config, v => { list[idx] = v; onChange(list); }, depth + 1);
 
-                        paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
-                            .Hovered.BackgroundColor(redBg).End()
-                            .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
-                            .OnClick(idx, (j, _) => RemoveAt(j));
+                            paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
+                                .Hovered.BackgroundColor(redBg).End()
+                                .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
+                                .OnClick(idx, (j, _) => RemoveAt(j));
+                        }
+                        if (i < list.Count - 1)
+                            paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
                     }
-                    if (i < list.Count - 1)
-                        paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
-                }
 
-                paper.Box($"{id}_add").Width(ST).Height(26)
-                    .Hovered.BackgroundColor(theme.Hover).End()
-                    .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => AddNew());
+                    paper.Box($"{id}_add").Width(ST).Height(26)
+                        .Hovered.BackgroundColor(theme.Hover).End()
+                        .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
+                        .OnClick(0, (_, _) => AddNew());
+                }
             }
         }
 
@@ -785,7 +797,7 @@ public static class PropertyGridRenderer
                 var nelEl = paper.CurrentParent;
                 bool exp = paper.GetElementStorage<bool>(nelEl, "exp", depth == 0);
 
-                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(7, 7, 0, 0).RowBetween(6)
+                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", depth == 0)));
                 if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
@@ -800,8 +812,9 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_ni_{sk}").Width(UnitValue.Auto).Height(rowH).IsNotInteractable()
                         .Text(i.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
 
+                    // Show the element's actual concrete type, not the list's (base) element type.
                     paper.Box($"{id}_nt_{sk}").Width(ST).Height(rowH).IsNotInteractable()
-                        .Text(elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                        .Text(list[i]?.GetType().Name ?? elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
                     paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST).StopEventPropagation()
                         .Hovered.BackgroundColor(redBg).End()
@@ -812,7 +825,7 @@ public static class PropertyGridRenderer
                 if (exp)
                 {
                     paper.Box($"{id}_nd_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
-                    using (paper.Column($"{id}_nbody_{sk}").Width(ST).Height(UnitValue.Auto).Padding(0, 0, 2, 3).Enter())
+                    using (paper.Column($"{id}_nbody_{sk}").Width(ST).Height(UnitValue.Auto).Padding(0, 0, m.SpacingSmall, m.PaddingSmall).Enter())
                     {
                         var elem = list[i];
                         int capIdx = i;
@@ -823,7 +836,7 @@ public static class PropertyGridRenderer
                             Draw(paper, $"{id}_nbf_{sk}", elem, config, changed => { list[capIdx] = changed; onChange(list); }, null, depth + 1);
                         else
                             // Null element: a type picker to assign / instantiate a value.
-                            using (paper.Row($"{id}_npw_{sk}").Width(ST).Height(UnitValue.Auto).Padding(9, 9, 4, 4).Enter())
+                            using (paper.Row($"{id}_npw_{sk}").Width(ST).Height(UnitValue.Auto).Padding(m.SpacingLarge, m.SpacingLarge, m.PaddingSmall, m.PaddingSmall).Enter())
                                 config.DrawTypePicker?.Invoke(paper, $"{id}_np_{sk}", elementType, null, v => { list[capIdx] = v; onChange(list); });
                     }
                 }
@@ -834,39 +847,46 @@ public static class PropertyGridRenderer
         void DrawNested()
         {
             var color = DepthColor(depth);
-            void NlAct(string aid, IOrigamiIcon icon, Action onClick)
-                => paper.Box(aid).Width(20).Height(20).Rounded(5).Margin(0, 0, ST, ST)
-                    .Hovered.BackgroundColor(theme.Hover).End()
-                    .Icon(paper, icon, tLo, size: 12f)
-                    .OnClick(0, (_, _) => onClick());
-
             using (paper.Column($"{id}_nl").Width(ST).Height(UnitValue.Auto)
                 .Rounded(9).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
             {
-                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(8, 8, 0, 0).RowBetween(7).BackgroundColor(glass).Enter())
+                var listEl = paper.CurrentParent;
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", true);
+                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
+
+                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingLarge).BackgroundColor(glass)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", true)))
+                    .Enter())
                 {
                     paper.Box($"{id}_nli").Width(14).Height(30).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
                     paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(30).IsNotInteractable()
                         .Text(string.IsNullOrEmpty(label) ? elementType.Name : label, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
                     paper.Box($"{id}_nlc").Width(ST).Height(30).Margin(4, 0, 0, 0).IsNotInteractable()
                         .Text($"[{list.Count}]", mono).TextColor(tLo).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
-                    NlAct($"{id}_nlcl", OrigamiIconSet.Trash, ClearAll);
-                    NlAct($"{id}_nla", OrigamiIconSet.Plus, AddNew);
+                    paper.Box($"{id}_nlv").Width(12).Height(30).Margin(0, 0, ST, ST).IsNotInteractable()
+                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
                 }
-                paper.Box($"{id}_nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
-                using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(5, 5, 5, 5).ColBetween(5).Enter())
+                if (!expanded && anim <= 0.001f) return;
+
+                using (paper.Column($"{id}_nlwrap").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
                 {
-                    if (list.Count == 0)
-                        paper.Box($"{id}_nle").Width(ST).Height(24).IsNotInteractable()
-                            .Text("Empty list", font).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
-                    for (int i = 0; i < list.Count; i++)
-                        DrawElement(i, stableIds[i]);
+                    paper.Box($"{id}_nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
 
-                    paper.Box($"{id}_nladd").Width(ST).Height(26).Rounded(6)
-                        .Hovered.BackgroundColor(theme.Hover).End()
-                        .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(0, (_, _) => AddNew());
+                    using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).ColBetween(m.SpacingMedium).Enter())
+                    {
+                        if (list.Count == 0)
+                            paper.Box($"{id}_nle").Width(ST).Height(24).IsNotInteractable()
+                                .Text("Empty list", font).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
+                        for (int i = 0; i < list.Count; i++)
+                            DrawElement(i, stableIds[i]);
+
+                        paper.Box($"{id}_nladd").Width(ST).Height(26).Rounded(6)
+                            .Hovered.BackgroundColor(theme.Hover).End()
+                            .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
+                            .OnClick(0, (_, _) => AddNew());
+                    }
                 }
             }
         }
