@@ -130,7 +130,17 @@ namespace Prowl.PaperUI.LayoutEngine
         // frame during stretch resolution, so DevTools sums these per element.
         private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
         {
+            var dev = elementHandle.Owner.DevTools;
+            if (!dev.DeepProfiling)
                 return DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+
+            int id = elementHandle.Data.ID;
+            int pi = elementHandle.Data.ParentIndex;
+            int pid = pi >= 0 ? elementHandle.Owner.GetElementData(pi).ID : 0;
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            var size = DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+            dev.RecordLayout(id, pid, System.Diagnostics.Stopwatch.GetTimestamp() - start);
+            return size;
         }
 
         private static UISize DoLayoutInner(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)

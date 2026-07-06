@@ -33,6 +33,15 @@ namespace Prowl.PaperUI
         private float _height;
         private Stopwatch _timer = new Stopwatch();
 
+        // Built-in developer tools. Off unless DevTools.Enabled is set; then F12 toggles the panel.
+        private readonly PaperDevTools _devTools;
+        /// <summary>Built-in DevTools (console / element inspector / profiler). Set
+        /// <c>DevTools.Enabled = true</c> and press F12 to open.</summary>
+        public PaperDevTools DevTools => _devTools;
+
+        /// <summary>Append a message to the DevTools console.</summary>
+        public void Log(string message, PaperDevTools.LogLevel level = PaperDevTools.LogLevel.Info) => _devTools.Log(message, level);
+
         // Events
         public Action? OnEndOfFramePreLayout = null;
         public Action? OnEndOfFramePostLayout = null;
@@ -133,6 +142,8 @@ namespace Prowl.PaperUI
             _canvas = new Canvas(renderer, fontAtlas);
 
             InitializeInput();
+
+            _devTools = new PaperDevTools(this);
         }
 
         /// <summary>
@@ -188,6 +199,9 @@ namespace Prowl.PaperUI
             _createdElements.Clear();
 
             StartInputFrame();
+
+            // Toggle / reserve space for the DevTools panel (no-op unless DevTools.Enabled).
+            _devTools.OnBeginFrame();
         }
 
         /// <summary>
@@ -195,30 +209,40 @@ namespace Prowl.PaperUI
         /// </summary>
         public void EndFrame()
         {
+            // Build the DevTools UI (if open) so it is part of this frame's tree, then time each phase.
+            _devTools.OnEndFrameStart();
+            long __t = _devTools.Timing ? Stopwatch.GetTimestamp() : 0;
+
             // Update element styles
             UpdateStyles(DeltaTime, RootElement);
+            __t = _devTools.Phase("Styles", __t);
 
             // Layout phase
             OnEndOfFramePreLayout?.Invoke();
             ElementLayout.Layout(_rootElementHandle, this);
             OnEndOfFramePostLayout?.Invoke();
+            __t = _devTools.Phase("Layout", __t);
 
             // Post-layout callbacks
             CallPostLayoutRecursive(RootElement);
+            __t = _devTools.Phase("PostLayout", __t);
 
             // Compute per-element subtree culling bounds now that positions are final, so
             // RenderElement can skip subtrees that fall entirely outside the clip.
             ComputeCullingBounds(_rootElementHandle);
+            __t = _devTools.Phase("Culling", __t);
 
             // Collect layered elements for independent hit testing
             _layeredElements.Clear();
             CollectLayeredElements(_rootElementHandle, Transform2D.Identity);
+            __t = _devTools.Phase("Layered", __t);
 
             // Reset rendering state
             _canvas.ResetState();
 
             // Input and interaction handling
             HandleInteractions();
+            __t = _devTools.Phase("Interaction", __t);
 
             // Render all elements.
             //
@@ -243,12 +267,15 @@ namespace Prowl.PaperUI
                     _canvas.RestoreState();
                 }
             }
+            __t = _devTools.Phase("Render", __t);
 
             // Update stats
             CountOfAllElements = (uint)_createdElements.Count;
 
             // Finalize rendering
             _canvas.Render();
+            __t = _devTools.Phase("Upload", __t);
+
             EndInputFrame();
 
             // Cleanup
@@ -258,6 +285,9 @@ namespace Prowl.PaperUI
             // Performance measurement
             _timer.Stop();
             MillisecondsSpent = (float)_timer.Elapsed.TotalMilliseconds;
+
+            // Capture snapshot + stats for next frame's DevTools panels.
+            _devTools.OnEndFrameEnd();
         }
 
         /// <summary>
@@ -294,6 +324,25 @@ namespace Prowl.PaperUI
         /// drains the dictionary in ascending key order so higher layers always render on top.
         /// </summary>
         private void RenderElement(in ElementHandle handle, int currentLayer, SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>? deferred)
+        {
+            // Fast path when DevTools deep-profiling is off (the common case).
+            if (!_devTools.DeepProfiling)
+            {
+                RenderElementInner(handle, currentLayer, deferred);
+                return;
+            }
+
+            // Deep profile: the wall time of this call is the element's inclusive subtree render time
+            // (children recurse through this same wrapper before it returns).
+            int id = handle.Data.ID;
+            int parentIndex = handle.Data.ParentIndex;
+            int parentId = parentIndex >= 0 ? GetElementData(parentIndex).ID : 0;
+            long start = Stopwatch.GetTimestamp();
+            RenderElementInner(handle, currentLayer, deferred);
+            _devTools.RecordRender(id, parentId, Stopwatch.GetTimestamp() - start);
+        }
+
+        private void RenderElementInner(in ElementHandle handle, int currentLayer, SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>? deferred)
         {
             ref var data = ref handle.Data;
 
@@ -922,6 +971,9 @@ namespace Prowl.PaperUI
                 storage.Remove(key);
         }
 
+        /// <summary>DevTools helper: the raw per-element storage table for an ID (null if none).</summary>
+        internal Hashtable DebugGetStorage(int id) => _storage.TryGetValue(id, out var storage) ? storage : null;
+
         /// <summary>
         /// Resets animation start time on a rich-text element — replays typewriter / shake / etc.
         /// from the next frame's draw. No-op if the element has no rich-text layout cached yet.
@@ -937,6 +989,14 @@ namespace Prowl.PaperUI
         internal const string RichTextLayoutKey = "_pp_rt_layout";
         internal const string RichTextSourceKey = "_pp_rt_source";
         internal const string RichTextWidthKey = "_pp_rt_width";
+
+        // Storage keys for the per-element plain-text layout cache (width-independent text only).
+        internal const string PlainTextLayoutKey = "_pp_pt_layout";
+        internal const string PlainTextKeyKey = "_pp_pt_key";
+
+        // Storage keys for the per-element truncated-text layout cache (keyed on source text + width).
+        internal const string TruncTextLayoutKey = "_pp_tr_layout";
+        internal const string TruncTextKeyKey = "_pp_tr_key";
 
         private void EndOfFrameCleanupStorage()
         {
