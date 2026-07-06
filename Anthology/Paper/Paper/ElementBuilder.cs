@@ -1156,6 +1156,16 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Truncate single-line text with a trailing ellipsis ("...") when it's wider than the element.
+        /// The ellipsis is guaranteed to fit; has no effect on wrapped (multi-line) text.
+        /// </summary>
+        public ElementBuilder TextTruncate(bool truncate = true)
+        {
+            _handle.Data.Truncate = truncate;
+            return this;
+        }
+
+        /// <summary>
         /// Flex-wrap the parent-directed children: when they overrun this element's main axis they
         /// flow onto a new line, and the element auto-grows on the cross axis to fit every line.
         /// Use the container's <c>RowBetween</c>/<c>ColBetween</c> as the gap between items and lines.
