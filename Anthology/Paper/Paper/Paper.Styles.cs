@@ -333,6 +333,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public bool HasValue(GuiProp property) => _currentValues.ContainsKey(property);
 
+        /// <summary>True if the property is currently mid-transition (used by DevTools).</summary>
+        internal bool IsAnimating(GuiProp property) => _interpolations.ContainsKey(property);
+
         /// <summary>
         /// Gets the current value of a property, falling back to parent or default.
         /// </summary>
