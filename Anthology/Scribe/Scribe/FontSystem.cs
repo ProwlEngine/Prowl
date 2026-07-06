@@ -559,7 +559,8 @@ namespace Prowl.Scribe
 
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
             => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
-                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode());
+                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode(),
+                   s.Quality, s.FontSelector != null);
 
         #endregion
 
@@ -607,13 +608,63 @@ namespace Prowl.Scribe
 
             // Atlas may have grown/rebuilt since the layout was created - UVs and glyph refs
             // would be stale. Re-layout in place so glyphs repopulate against the current atlas.
+            // (This clears the quad cache below whenever it re-lays-out.)
             layout.EnsureUpToDate(this);
+
+            // The per-glyph quad geometry (relative to the draw origin) and UVs depend only on the
+            // layout + atlas, not on this call's position or colour. Build it once and reuse it every
+            // frame; only the origin offset and colour are applied per draw.
+            if (!layout._drawQuadsBuilt)
+                BuildDrawQuads(layout);
+
+            var quads = layout._drawQuads;
+            if (quads.Count == 0) return;
 
             var vertices = drawVertices;
             var indices = drawIndices;
             vertices.Clear();
             indices.Clear();
             int vertexCount = 0;
+
+            for (int i = 0; i < quads.Count; i++)
+            {
+                var q = quads[i];
+                float x0 = position.X + q.X0, y0 = position.Y + q.Y0;
+                float x1 = position.X + q.X1, y1 = position.Y + q.Y1;
+
+                vertices.Add(new IFontRenderer.Vertex(new Float3(x0, y0, 0), color, new Float2(q.U0, q.V0)));
+                vertices.Add(new IFontRenderer.Vertex(new Float3(x1, y0, 0), color, new Float2(q.U1, q.V0)));
+                vertices.Add(new IFontRenderer.Vertex(new Float3(x0, y1, 0), color, new Float2(q.U0, q.V1)));
+                vertices.Add(new IFontRenderer.Vertex(new Float3(x1, y1, 0), color, new Float2(q.U1, q.V1)));
+
+                // Six Add calls - no per-quad array allocation.
+                indices.Add(vertexCount);
+                indices.Add(vertexCount + 1);
+                indices.Add(vertexCount + 2);
+                indices.Add(vertexCount + 1);
+                indices.Add(vertexCount + 3);
+                indices.Add(vertexCount + 2);
+                vertexCount += 4;
+            }
+
+            if (vertices.Count > 0)
+            {
+#if NET5_0_OR_GREATER
+                renderer.DrawQuads(atlasTexture,
+                    CollectionsMarshal.AsSpan(vertices),
+                    CollectionsMarshal.AsSpan(indices));
+#else
+                renderer.DrawQuads(atlasTexture, vertices.ToArray(), indices.ToArray());
+#endif
+            }
+        }
+
+        // Builds the position-independent glyph quads for a layout (see TextLayout._drawQuads). The
+        // corner offsets are relative to the draw origin so the same list serves any draw position.
+        private void BuildDrawQuads(TextLayout layout)
+        {
+            var quads = layout._drawQuads;
+            quads.Clear();
 
             foreach (var line in layout.Lines)
             {
@@ -628,46 +679,26 @@ namespace Prowl.Scribe
                     // Recover the pen origin (x) and baseline (y) from the glyph instance, then place
                     // the padded distance-field quad relative to them. The quad includes the
                     // distance-field margin, so it is larger than the glyph's ink bounds. The region
-                    // is in font units; scale it to this instance's pixel size at draw time.
+                    // is in font units; scale it to this instance's pixel size.
                     float ps = glyphInstance.PixelSize;
                     var gm = GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, ps) ?? default;
                     float sc = glyph.Font.ScaleForPixelHeight(ps);
 
-                    float penX = position.X + line.Position.X + glyphInstance.Position.X - gm.OffsetX;
-                    float baselineY = position.Y + line.Position.Y + glyphInstance.Position.Y - gm.OffsetY;
+                    float penX = line.Position.X + glyphInstance.Position.X - gm.OffsetX;
+                    float baselineY = line.Position.Y + glyphInstance.Position.Y - gm.OffsetY;
 
-                    float glyphX = penX + (float)(glyph.RegionX0 * sc);
-                    float glyphY = baselineY + (float)(-glyph.RegionY1 * sc);
-                    float glyphX1 = penX + (float)(glyph.RegionX1 * sc);
-                    float glyphY1 = baselineY + (float)(-glyph.RegionY0 * sc);
-
-                    // Create quad vertices
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY, 0), color, new Float2(glyph.U0, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX1, glyphY, 0), color, new Float2(glyph.U1, glyph.V0)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX, glyphY1, 0), color, new Float2(glyph.U0, glyph.V1)));
-                    vertices.Add(new IFontRenderer.Vertex(new Float3(glyphX1, glyphY1, 0), color, new Float2(glyph.U1, glyph.V1)));
-
-                    // Create quad indices (six Add calls - no per-quad array allocation)
-                    indices.Add(vertexCount);
-                    indices.Add(vertexCount + 1);
-                    indices.Add(vertexCount + 2);
-                    indices.Add(vertexCount + 1);
-                    indices.Add(vertexCount + 3);
-                    indices.Add(vertexCount + 2);
-                    vertexCount += 4;
+                    quads.Add(new TextLayout.DrawQuad
+                    {
+                        X0 = penX + (float)(glyph.RegionX0 * sc),
+                        Y0 = baselineY + (float)(-glyph.RegionY1 * sc),
+                        X1 = penX + (float)(glyph.RegionX1 * sc),
+                        Y1 = baselineY + (float)(-glyph.RegionY0 * sc),
+                        U0 = glyph.U0, V0 = glyph.V0, U1 = glyph.U1, V1 = glyph.V1,
+                    });
                 }
             }
 
-            if (vertices.Count > 0)
-            {
-#if NET5_0_OR_GREATER
-                renderer.DrawQuads(atlasTexture,
-                    CollectionsMarshal.AsSpan(vertices),
-                    CollectionsMarshal.AsSpan(indices));
-#else
-                renderer.DrawQuads(atlasTexture, vertices.ToArray(), indices.ToArray());
-#endif
-            }
+            layout._drawQuadsBuilt = true;
         }
 
         #endregion
