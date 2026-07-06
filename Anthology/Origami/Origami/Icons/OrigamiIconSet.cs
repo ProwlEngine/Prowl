@@ -50,6 +50,13 @@ public static class OrigamiIconSet
     public static readonly SvgIcon Grip    = new("M6 4v.1M10 4v.1M6 8v.1M10 8v.1M6 12v.1M10 12v.1");
     // Sort: descending-width lines.
     public static readonly SvgIcon Sort    = new("M3 4.5h10M4.5 8h7M6 11.5h4");
+
+    // ── Terrain / brush tools ────────────────────────────────
+    public static readonly SvgIcon Mountain = new("M2 12.5l4.2-7 2.6 4.2 2-3.2L14 12.5z");
+    public static readonly SvgIcon Leaf     = new("M13 3C7.5 3 4 6.5 4 12c5.5 0 9-3.5 9-9zM6.5 9.5L11 5");
+    public static readonly SvgIcon Seedling = new("M8 13.5V7M8 7C5.8 7 4.2 5.6 4 3.5 6.2 3.5 7.8 5 8 7M8 7c.2-2 1.8-3.5 4-3.5-.2 2.1-1.8 3.5-4 3.5z");
+    public static readonly SvgIcon Flatten  = new("M2.5 8h11M5 5h6M5 11h6");
+    public static readonly SvgIcon Wave     = new("M1.8 8c1.2-2.6 2.4-2.6 3.6 0s2.4 2.6 3.6 0 2.4-2.6 3.6 0");
     public static readonly SvgIcon Grid    = new("M2 2h3.5v3.5H2zM6.5 2H10v3.5H6.5zM11 2h3v3.5h-3zM2 6.5h3.5V10H2zM6.5 6.5H10V10H6.5zM11 6.5h3V10h-3zM2 11h3.5v3H2zM6.5 11H10v3H6.5zM11 11h3v3h-3z");
 
     // ── Files / storage ──────────────────────────────────────
