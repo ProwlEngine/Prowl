@@ -88,6 +88,15 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         set => SetShader(value);
     }
 
+    /// <summary>The raw asset reference backing <see cref="Shader"/>. Used by the editor
+    /// inspector so the shader field is drawn/dropped-into as a proper asset reference
+    /// instead of an unwrapped instance.</summary>
+    public AssetRef<Shader> ShaderRef
+    {
+        get => _shader;
+        set { _shader = value; _isDirty = true; }
+    }
+
     /// <summary>
     /// Names of properties the user has explicitly set (vs auto-filled
     /// shader defaults). When the shader's defaults change, only NON-overridden

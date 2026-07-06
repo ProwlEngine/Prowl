@@ -9,7 +9,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
-using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
 namespace Prowl.Editor.Inspector;
@@ -44,15 +43,15 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         if (material == null) return;
 
-        // Shader reference
+        // Shader reference drawn as an AssetRef<Shader> so it's a proper reference
+        // (drag-drop, save/serialize by GUID) instead of an unwrapped instance.
         Origami.Separator(paper, $"{id}_sep_shader").Show();
-        EngineObjectPropertyEditor.SetFieldType(typeof(Shader));
-        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(Shader), material.Shader,
+        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(AssetRef<Shader>), material.ShaderRef,
             newVal =>
             {
-                if (newVal is Shader s)
+                if (newVal is AssetRef<Shader> shaderRef)
                 {
-                    material.Shader = s;
+                    material.ShaderRef = shaderRef;
                     _dirty = true;
                     _lastPreviewAsset = null; // force preview refresh
                 }
