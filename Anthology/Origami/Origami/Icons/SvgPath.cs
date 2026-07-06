@@ -33,7 +33,7 @@ internal static class SvgPath
         vg.SetStrokeJoint(JointStyle.Round);
         vg.SetStrokeCap(EndCapStyle.Round);
 
-        foreach (var sub in Parse(path))
+        foreach (var sub in ParseCached(path))
         {
             if (sub.Points.Count == 0) continue;
             vg.BeginPath();
@@ -50,6 +50,17 @@ internal static class SvgPath
     }
 
     private struct Sub { public List<(double x, double y)> Points; public bool Closed; }
+
+    // A path string always flattens to the same points, so parse each unique path once and reuse it
+    // (the result is only read during Stroke, never mutated). Bounded by the number of distinct icons.
+    private static readonly Dictionary<string, List<Sub>> _parseCache = new();
+
+    private static List<Sub> ParseCached(string d)
+    {
+        if (!_parseCache.TryGetValue(d, out var subs))
+            _parseCache[d] = subs = Parse(d);
+        return subs;
+    }
 
     private static List<Sub> Parse(string d)
     {
