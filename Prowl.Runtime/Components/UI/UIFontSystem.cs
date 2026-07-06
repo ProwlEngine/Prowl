@@ -62,6 +62,8 @@ internal sealed class UIFontSystem : IFontRenderer
     public object CreateTexture(int width, int height)
     {
         var tex = new Texture2D((uint)width, (uint)height, false, PixelFormat.R8_G8_B8_A8_UNorm);
+        tex.Name = "Font Atlas";
+        tex.Handle.Name = tex.Name;
 
         // Bilinear filtering hides single-pixel jaggies on diagonal glyph strokes; clamp
         // wrapping prevents UV bleed between adjacent atlas cells when the GPU samples at

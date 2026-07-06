@@ -83,6 +83,8 @@ public static class DeviceCreateUtilities
         }
 
         device.SyncToVerticalBlank = options.SyncToVerticalBlank;
+        if (device.MainSwapchain != null)
+            device.MainSwapchain.Name = "Main Swapchain";
         window.FramebufferResize += (x) => device.ResizeMainWindow((uint)x.X, (uint)x.Y);
 
         return device;

@@ -91,8 +91,13 @@ public static class Graphics
             s_cbPool.RemoveAt(s_cbPool.Count - 1);
         }
         else
+        {
             cb = Device.ResourceFactory.CreateCommandBuffer();
+            cb.Name = "Pooled CommandBuffer";
+        }
         cb.Begin();
+        if (!string.IsNullOrEmpty(name))
+            cb.Name = name;
         return cb;
     }
 
@@ -182,7 +187,11 @@ public static class Graphics
             if (s_pendingMipmaps.Count == 0)
                 return;
 
-            s_mipmapCommands ??= Device.ResourceFactory.CreateCommandBuffer();
+            if (s_mipmapCommands == null)
+            {
+                s_mipmapCommands = Device.ResourceFactory.CreateCommandBuffer();
+                s_mipmapCommands.Name = "Mipmap Generation";
+            }
             s_mipmapCommands.Begin();
             for (int i = 0; i < s_pendingMipmaps.Count; i++)
             {

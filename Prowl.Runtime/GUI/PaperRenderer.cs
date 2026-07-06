@@ -96,6 +96,7 @@ public class PaperRenderer : ICanvasRenderer
         CreateShaderPrograms();
 
         _buffer = _device.ResourceFactory.CreateCommandBuffer();
+        _buffer.Name = "PaperRenderer";
         _sampler = _device.ResourceFactory.CreateSampler(new SamplerDescription
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -103,6 +104,7 @@ public class PaperRenderer : ICanvasRenderer
             AddressModeW = SamplerAddressMode.Clamp,
             Filter = SamplerFilter.MinLinear_MagLinear_MipLinear,
         });
+        _sampler.Name = "PaperRenderer Sampler";
 
         _defaultTexture = new Texture2D(1, 1);
         _defaultTexture.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipLinear);
@@ -148,6 +150,7 @@ public class PaperRenderer : ICanvasRenderer
                 new VertexElementDescription("COLOR0", VertexElementFormat.Byte4_Norm, 16))
         ];
         _shader = _device.ResourceFactory.CreateGraphicsProgram(uiDesc);
+        _shader.Name = "PaperRenderer UI Shader";
 
         _blurPrograms = new GraphicsProgram[blur.Variants.Length];
         var keywords = new Keyword[blur.Variants.Length][];
@@ -160,6 +163,7 @@ public class PaperRenderer : ICanvasRenderer
             blurDesc.RasterizerState = new RasterizerStateDescription(FaceCullMode.None, FrontFace.Clockwise, true, false);
 
             _blurPrograms[i] = _device.ResourceFactory.CreateGraphicsProgram(blurDesc);
+            _blurPrograms[i].Name = $"PaperRenderer Blur Shader {i}";
             keywords[i] = blur.Variants[i].Keywords;
         }
 
@@ -268,6 +272,7 @@ public class PaperRenderer : ICanvasRenderer
         buffer?.Dispose();
         uint newCapacity = (uint)(sizeInBytes * 1.5f) + 256;
         buffer = _device.ResourceFactory.CreateStreamingBuffer(new BufferDescription(newCapacity, usage));
+        buffer.Name = $"Paper {usage}";
         capacity = newCapacity;
     }
 
@@ -286,6 +291,9 @@ public class PaperRenderer : ICanvasRenderer
         Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
         // Font atlas on its own sampler so text batches with shapes (text samples fontTexture).
         Texture2D fontTex = (drawCall.FontAtlas as Texture2D) ?? _defaultTexture;
+
+        if (drawCall.Texture != null && texture == _defaultTexture)
+            Debug.LogWarning($"PaperRenderer: drawCall.Texture was a {drawCall.Texture.GetType()}, not a Texture2D - falling back to the 1x1 default texture.");
 
         _properties.SetMatrix("projection", _projection);
         _properties.SetTexture("texture0", texture.Handle, texture.Sampler);
@@ -400,7 +408,9 @@ public class PaperRenderer : ICanvasRenderer
 
         TextureDescription sceneDesc = TextureDescription.Texture2D((uint)width, (uint)height, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget);
         _sceneTex = _device.ResourceFactory.CreateTexture(sceneDesc);
+        _sceneTex.Name = "PaperRenderer Scene Texture";
         _sceneFB = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _sceneTex));
+        _sceneFB.Name = "PaperRenderer Scene Framebuffer";
 
         for (int i = 0; i < MaxBlurLevels; i++)
         {
@@ -410,7 +420,9 @@ public class PaperRenderer : ICanvasRenderer
 
             TextureDescription blurDesc = TextureDescription.Texture2D((uint)w, (uint)h, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget);
             _blurTex[i] = _device.ResourceFactory.CreateTexture(blurDesc);
+            _blurTex[i].Name = $"PaperRenderer Blur Texture {i}";
             _blurFB[i] = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _blurTex[i]));
+            _blurFB[i].Name = $"PaperRenderer Blur Framebuffer {i}";
         }
 
         _targetW = width;
