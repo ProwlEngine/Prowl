@@ -147,7 +147,7 @@ public class ShaderImporter : AssetImporter
 
     private static ShaderProperty ConvertProperty(ParsedProperty parsed)
     {
-        return parsed.PropertyType switch
+        ShaderProperty prop = parsed.PropertyType switch
         {
             ShaderPropertyType.Float => (float)parsed.Value.R,
             ShaderPropertyType.Integer => (int)parsed.Value.R,
@@ -161,6 +161,13 @@ public class ShaderImporter : AssetImporter
             ShaderPropertyType.TextureCubemapArray => throw new ParseException("TextureCubemapArray does not currently have any loadable defaults", 0, 0),
             _ => throw new NotSupportedException($"Format: {parsed.PropertyType} not supported")
         };
+
+        prop.Name = parsed.Name;
+        prop.DisplayName = parsed.DisplayName;
+        prop.HasRange = false;//parsed.HasRange;
+        prop.Range = Float2.One;//parsed.Range;
+
+        return prop;
     }
 
 
