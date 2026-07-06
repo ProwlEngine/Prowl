@@ -16,16 +16,18 @@ public class ProjectSettingsTests : EditorTestHarness
         ProjectSettingsRegistry.OnProjectOpened();
     }
 
-    // When only a JSON settings file exists (no YAML), loading must fall back to it.
+    // Settings persist as Echo YAML: a saved value must survive a save/load round-trip.
     [Fact]
-    public void SettingsLoad_FallsBackToJson_WhenYamlMissing()
+    public void SettingsSaveLoad_RoundTripsYaml()
     {
-        File.WriteAllText(Path.Combine(Project.ProjectSettingsPath, "General.json"), "{\"ProductName\":\"FromJson\"}");
-        File.Delete(Path.Combine(Project.ProjectSettingsPath, "General.yaml")); // ensure absent
+        ProjectSettingsRegistry.Get<GeneralSettings>().ProductName = "RoundTripped";
+        ProjectSettingsRegistry.SaveAll();
+
+        Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "General.yaml")));
 
         ProjectSettingsRegistry.Get<GeneralSettings>().ProductName = "overwritten";
         ProjectSettingsRegistry.LoadAll();
 
-        Assert.Equal("FromJson", ProjectSettingsRegistry.Get<GeneralSettings>().ProductName);
+        Assert.Equal("RoundTripped", ProjectSettingsRegistry.Get<GeneralSettings>().ProductName);
     }
 }

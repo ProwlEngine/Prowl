@@ -5,7 +5,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,6 +22,10 @@ namespace Prowl.Editor.Build;
 public abstract class BuildPipeline
 {
     public abstract string DisplayName { get; }
+
+    /// <summary>Glyph shown on the platform card in the Build window.</summary>
+    public virtual string Icon => Prowl.Editor.Theming.EditorIcons.Desktop;
+
     public abstract string[] SupportedRuntimeIdentifiers { get; }
 
     /// <summary>Execute the full build. Override for platform-specific steps.</summary>
@@ -178,24 +181,23 @@ public abstract class BuildPipeline
         root.WriteToBinary(new FileInfo(outputPath));
     }
 
-    /// <summary>Export only build-relevant project settings as JSON files.</summary>
+    /// <summary>Export only build-relevant project settings as Echo YAML files.</summary>
     protected void ExportSettings(string outputSettingsDir, BuildProgress? progress)
     {
         progress?.Log("Exporting settings...", 0.6f);
         Directory.CreateDirectory(outputSettingsDir);
 
-        // Serialize the live (in-memory) settings instances to JSON. The editor persists
-        // settings as YAML, so the in-memory registry is the source of truth at build time;
-        // the player (PlayerSettingsLoader) reads these JSON files by field name.
-        var opts = new JsonSerializerOptions { IncludeFields = true, WriteIndented = true };
+        // Serialize the live (in-memory) settings instances. The in-memory registry is the source
+        // of truth at build time. TypeMode.None keeps the output a flat compound keyed by field name
+        // so the player (PlayerSettingsLoader) can read it without referencing the settings types.
         foreach (var entry in ProjectSettingsRegistry.Entries)
         {
             if (!entry.ExportToBuild) continue;
 
             try
             {
-                string json = JsonSerializer.Serialize(entry.Instance, entry.Type, opts);
-                File.WriteAllText(Path.Combine(outputSettingsDir, $"{entry.Name}.json"), json);
+                EchoObject echo = Serializer.Serialize(entry.Type, entry.Instance, TypeMode.None);
+                File.WriteAllText(Path.Combine(outputSettingsDir, $"{entry.Name}.yaml"), echo.WriteToYaml());
             }
             catch (Exception ex)
             {
