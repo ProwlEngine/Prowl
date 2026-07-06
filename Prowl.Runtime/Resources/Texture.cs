@@ -86,6 +86,7 @@ public abstract class Texture : EngineObject
             MinimumLod = 0,
             MaximumLod = uint.MaxValue,
         });
+        Sampler.Name = $"{Name} Sampler";
     }
 
     /// <summary>Sets this <see cref="Texture"/>'s sampling filter.</summary>

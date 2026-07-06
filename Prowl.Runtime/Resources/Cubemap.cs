@@ -66,6 +66,7 @@ public sealed class Cubemap : Texture, ISerializable
 
         Handle = Graphics.Device.ResourceFactory.CreateTexture(
             TextureDescription.Texture2D(size, size, (uint)MipLevels, 6, ImageFormat, usage));
+        Handle.Name = Name;
 
         IsMipmapped = mipChain;
 
@@ -126,7 +127,12 @@ public sealed class Cubemap : Texture, ISerializable
         FramebufferDescription desc;
         if (withDepth)
         {
-            _captureDepth ??= new Texture2D(Size, Size, PixelFormat.D24_UNorm_S8_UInt, TextureUsage.DepthStencil);
+            if (_captureDepth == null)
+            {
+                _captureDepth = new Texture2D(Size, Size, PixelFormat.D24_UNorm_S8_UInt, TextureUsage.DepthStencil);
+                _captureDepth.Name = $"{Name} Capture Depth";
+                _captureDepth.Handle.Name = _captureDepth.Name;
+            }
             var depth = new FramebufferAttachmentDescription(_captureDepth.Handle, 0, 0);
             desc = new FramebufferDescription(depth, new[] { color });
         }
@@ -136,6 +142,7 @@ public sealed class Cubemap : Texture, ISerializable
         }
 
         fb = Graphics.Device.ResourceFactory.CreateFramebuffer(desc);
+        fb.Name = $"{Name} Face {face} Mip {mip}{(withDepth ? " (Depth)" : "")}";
         _faceTargets[key] = fb;
         return fb;
     }

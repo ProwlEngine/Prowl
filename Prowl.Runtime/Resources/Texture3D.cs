@@ -125,6 +125,7 @@ public sealed class Texture3D : Texture, ISerializable
 
         Handle = Graphics.Device.ResourceFactory.CreateTexture(
             TextureDescription.Texture3D(width, height, depth, mipLevels, ImageFormat, usage));
+        Handle.Name = Name;
     }
 
     private void ValidateTextureSize(uint width, uint height, uint depth)

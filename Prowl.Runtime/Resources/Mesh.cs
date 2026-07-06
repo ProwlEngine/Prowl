@@ -599,7 +599,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     // Reuses an existing buffer when the requested size fits within its capacity and isn't wastefully
     // small; otherwise (re)allocates with 50% headroom to amortise future growth.
-    private static void EnsureBuffer(ref DeviceBuffer? buffer, int elementCount, int elementStride, BufferUsage usage)
+    private void EnsureBuffer(ref DeviceBuffer? buffer, int elementCount, int elementStride, BufferUsage usage)
     {
         uint requested = (uint)(elementCount * elementStride);
         uint capacity = buffer?.SizeInBytes ?? 0;
@@ -613,6 +613,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             Usage = usage,
             SizeInBytes = (uint)(requested * 1.5f),
         });
+        buffer.Name = $"{Name} {usage}";
     }
 
     private static void PinUpload(DeviceBuffer buffer, Array data, int elementSize)
@@ -651,6 +652,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             Usage = BufferUsage.VertexBuffer | BufferUsage.Dynamic,
             SizeInBytes = sizeBytes,
         });
+        _instanceBuffer.Name = $"{Name} Instance Buffer";
         return _instanceBuffer;
     }
 
@@ -1506,6 +1508,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = capacity,
         });
+        _zeroStream.Name = $"{Name} Zero Stream";
         _zeroStreamCapacity = capacity;
 
         byte[] zeros = new byte[capacity];

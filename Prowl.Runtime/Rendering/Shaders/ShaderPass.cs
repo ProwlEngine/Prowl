@@ -82,6 +82,7 @@ public sealed class ShaderPass
             ShaderDescription description = PickBackend(_variants[i], backend);
 
             programs[i] = Graphics.Device.ResourceFactory.CreateGraphicsProgram(description);
+            programs[i].Name = $"{_name} Variant {i}";
             keywords[i] = _variants[i].Keywords;
         }
 

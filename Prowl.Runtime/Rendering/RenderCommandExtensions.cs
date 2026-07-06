@@ -118,6 +118,7 @@ public static class RenderCommandExtensions
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = 3 * 3 * sizeof(float),
         });
+        s_fullscreenPositionBuffer.Name = "Fullscreen Position Buffer";
         float[] verts = [-1f, -1f, 0f, 3f, -1f, 0f, -1f, 3f, 0f];
         Graphics.Device.UpdateBuffer(s_fullscreenPositionBuffer, 0u, verts);
         return s_fullscreenPositionBuffer;
@@ -132,6 +133,7 @@ public static class RenderCommandExtensions
             Usage = BufferUsage.VertexBuffer,
             SizeInBytes = 3 * 2 * sizeof(float),
         });
+        s_fullscreenUVBuffer.Name = "Fullscreen UV Buffer";
         float[] uvs = [0f, 0f, 2f, 0f, 0f, 2f];
         Graphics.Device.UpdateBuffer(s_fullscreenUVBuffer, 0u, uvs);
         return s_fullscreenUVBuffer;

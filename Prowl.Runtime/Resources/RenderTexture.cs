@@ -50,6 +50,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         for (int i = 0; i < numTextures; i++)
         {
             InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget | TextureUsage.Sampled);
+            InternalTextures[i].Name = $"{Name} Color {i}";
+            InternalTextures[i].Handle.Name = InternalTextures[i].Name;
             InternalTextures[i].SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
             InternalTextures[i].SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             colorTargets[i] = InternalTextures[i].Handle;
@@ -59,11 +61,14 @@ public sealed class RenderTexture : EngineObject, ISerializable
         if (hasDepthAttachment)
         {
             InternalDepth = new Texture2D((uint)Width, (uint)Height, DepthFormat, TextureUsage.DepthStencil);
+            InternalDepth.Name = $"{Name} Depth";
+            InternalDepth.Handle.Name = InternalDepth.Name;
             depthTarget = InternalDepth.Handle;
         }
 
         frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(
             new FramebufferDescription(depthTarget, colorTargets));
+        frameBuffer.Name = $"{Name} Framebuffer";
     }
 
     public RenderTexture(int Width, int Height, Texture2D sharedDepth, PixelFormat[] formats) : base("RenderTexture")
@@ -80,6 +85,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         for (int i = 0; i < numTextures; i++)
         {
             InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, textureFormats[i], TextureUsage.RenderTarget | TextureUsage.Sampled);
+            InternalTextures[i].Name = $"{Name} Color {i}";
+            InternalTextures[i].Handle.Name = InternalTextures[i].Name;
             InternalTextures[i].SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
             InternalTextures[i].SetWrapModes(SamplerAddressMode.Clamp, SamplerAddressMode.Clamp);
             colorTargets[i] = InternalTextures[i].Handle;
@@ -88,6 +95,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         InternalDepth = sharedDepth;
         frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(
             new FramebufferDescription(sharedDepth?.Handle, colorTargets));
+        frameBuffer.Name = $"{Name} Framebuffer";
     }
 
     public override void OnDispose()

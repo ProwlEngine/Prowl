@@ -133,6 +133,7 @@ public sealed class Texture2D : Texture, ISerializable
 
         Handle = Graphics.Device.ResourceFactory.CreateTexture(
             TextureDescription.Texture2D(width, height, mipLevels, 1, ImageFormat, usage));
+        Handle.Name = Name;
     }
 
     private void ValidateTextureSize(uint width, uint height)
@@ -307,7 +308,10 @@ public sealed class Texture2D : Texture, ISerializable
 
         string resourcePath = $"Assets/Defaults/{fileName}";
         using Stream stream = EmbeddedResources.GetStream(resourcePath);
-        return FromStream(stream, true);
+        Texture2D result = FromStream(stream, true);
+        result.Name = fileName;
+        result.Handle.Name = fileName;
+        return result;
     }
 
     internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";
