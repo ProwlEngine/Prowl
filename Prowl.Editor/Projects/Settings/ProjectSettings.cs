@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text.Json;
 
 using Prowl.Echo;
 using Prowl.Runtime;
@@ -11,7 +10,7 @@ namespace Prowl.Editor.Projects.Settings;
 
 /// <summary>
 /// Attribute to register a project settings class. Each settings class is a singleton
-/// saved to ProjectSettings/{Name}.json.
+/// saved to ProjectSettings/{Name}.yaml.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class ProjectSettingsAttribute : Attribute
@@ -163,7 +162,6 @@ public static class ProjectSettingsRegistry
         foreach (var entry in _entries)
         {
             string yamlPath = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.yaml");
-            string jsonPath = Path.Combine(project.ProjectSettingsPath, $"{entry.Name}.json");
             bool loaded = false;
 
             if (File.Exists(yamlPath))
@@ -182,26 +180,6 @@ public static class ProjectSettingsRegistry
                 catch (Exception ex)
                 {
                     Debug.LogError($"Failed to load settings '{entry.Name}' from YAML: {ex.Message}");
-                }
-            }
-
-            // Fall back to JSON if YAML is absent OR failed to parse.
-            if (!loaded && File.Exists(jsonPath))
-            {
-                try
-                {
-                    var data = (ProjectSettingsBase?)JsonSerializer.Deserialize(File.ReadAllText(jsonPath), entry.Type,
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true, IncludeFields = true });
-                    if (data != null)
-                    {
-                        CopyFields(data, entry.Instance);
-                        Debug.Log($"Loaded settings: {entry.Name}");
-                        loaded = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Failed to load settings '{entry.Name}' from JSON: {ex.Message}");
                 }
             }
 

@@ -54,9 +54,36 @@ Shader "Paper/UI"
             float2 logicalPos = fragPos / max(Mat.dpiScale, 0.001);
             float2 transformedPoint = mul(Mat.brushMat, float4(logicalPos, 0.0, 1.0)).xy;
 
-            if (Mat.brushType == 1) {
-                float2 startPoint = Mat.brushParams.xy; float2 endPoint = Mat.brushParams.zw;
-                float2 line = endPoint - startPoint; float lineLength = length(line);
+        uniform sampler2D texture0;
+        uniform sampler2D fontTexture;     // dedicated font-atlas sampler, so text batches with shapes
+        uniform mat4 scissorMat;
+        uniform vec2 scissorExt;
+
+        uniform mat4 brushMat;
+        uniform int brushType;
+        uniform vec4 brushColor1;
+        uniform vec4 brushColor2;
+        uniform vec4 brushParams;
+        uniform vec2 brushParams2;
+
+        uniform mat4 brushTextureMat;
+        uniform float dpiScale;
+
+        // Backdrop blur
+        uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
+        uniform vec2 viewportSize;         // framebuffer size in pixels
+        uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
+        uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
+
+        // ============== Canvas functions ==============
+
+        float calculateBrushFactor() {
+            vec2 logicalPos = fragPos / max(dpiScale, 0.001);
+            vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
+
+            if (brushType == 1) {
+                vec2 startPoint = brushParams.xy; vec2 endPoint = brushParams.zw;
+                vec2 line = endPoint - startPoint; float lineLength = length(line);
                 if (lineLength < 0.001) return 0.0;
                 return clamp(dot(transformedPoint - startPoint, line) / (lineLength * lineLength), 0.0, 1.0);
             }
@@ -68,9 +95,9 @@ Shader "Paper/UI"
                 float2 center = Mat.brushParams.xy; float2 halfSize = Mat.brushParams.zw;
                 float radius = Mat.brushParams2.x; float feather = Mat.brushParams2.y;
                 if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-                float2 q = abs(transformedPoint - center) - (halfSize - float2(radius));
-                float dist = min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
-                return clamp((dist + feather * 0.5) / feather, 0.0, 1.0);
+                vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
+                float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
+                return smoothstep(-feather * 0.5, feather * 0.5, dist);
             }
             return 0.0;
         }
@@ -92,7 +119,7 @@ Shader "Paper/UI"
         // FontSystem.DistanceRange), and the screen-space span of one unit at this fragment.
         const float sdfPxRange = 4.0;
         float sdfScreenPxRange(vec2 uv) {
-            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(texture0, 0));
+            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
             vec2 screenTexSize = vec2(1.0) / fwidth(uv);
             return max(0.5 * dot(unitRange, screenTexSize), 1.0);
         }
@@ -121,18 +148,17 @@ Shader "Paper/UI"
 
             // SDF text mode: UV.x >= 2.0. The atlas holds a single-channel signed distance field
             // (replicated across RGB); reconstruct sharp coverage from it.
-            if (input.fragTexCoord.x >= 2.0) {
-                float2 uv = input.fragTexCoord - float2(2.0);
-                float sd = Mat.texture0.Sample(uv).r;
+            if (fragTexCoord.x >= 2.0) {
+                vec2 uv = fragTexCoord - vec2(2.0);
+                float sd = texture(fontTexture, uv).r;
                 float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
                 float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
                 return color * coverage * mask;
             }
 
-            float2 pixelSize = fwidth(input.fragTexCoord);
-            float2 edgeDistance = min(input.fragTexCoord, 1.0 - input.fragTexCoord);
-            float edgeAlpha = smoothstep(0.0, pixelSize.x, edgeDistance.x) * smoothstep(0.0, pixelSize.y, edgeDistance.y);
-            edgeAlpha = clamp(edgeAlpha, 0.0, 1.0);
+            // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried
+            // in fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
+            float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
 
             float dpi = max(Mat.dpiScale, 0.001);
             float2 logicalPos = input.fragPos / dpi;

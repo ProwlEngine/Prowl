@@ -1,13 +1,13 @@
 using System;
 using System.IO;
-using System.Text.Json;
 
+using Prowl.Echo;
 using Prowl.Runtime.Audio;
 
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Loads and applies project settings from JSON files in the built player.
+/// Loads and applies project settings from Echo YAML files in the built player.
 /// Reads from Content/Settings/ folder and applies physics, audio, time, and tags/layers.
 /// </summary>
 public static class PlayerSettingsLoader
@@ -49,14 +49,13 @@ public static class PlayerSettingsLoader
     /// </summary>
     public static void ApplyAssetConfig(string dir)
     {
-        var jsonN = ReadJson(dir, "Assets.json");
-        if (jsonN == null) return;
-        var json = jsonN.Value;
+        var settings = Read(dir, "Assets");
+        if (settings == null) return;
 
         try
         {
             // Default ON if the key is absent.
-            bool async = !json.TryGetProperty("AsyncAssetLoading", out var a) || a.GetBoolean();
+            bool async = !settings.TryGet("AsyncAssetLoading", out var a) || a!.BoolValue;
             AssetLoadingConfig.AsyncEnabled = async;
             Debug.Log($"[PlayerSettings] Async asset loading: {async}.");
         }
@@ -65,35 +64,28 @@ public static class PlayerSettingsLoader
 
     private static void ApplyPhysics(string dir)
     {
-        var jsonN = ReadJson(dir, "Physics.json");
-        if (jsonN == null) return;
-        var json = jsonN.Value;
+        var settings = Read(dir, "Physics");
+        if (settings == null) return;
 
         try
         {
-            float gx = json.TryGetProperty("GravityX", out var gxp) ? gxp.GetSingle() : 0;
-            float gy = json.TryGetProperty("GravityY", out var gyp) ? gyp.GetSingle() : -9.81f;
-            float gz = json.TryGetProperty("GravityZ", out var gzp) ? gzp.GetSingle() : 0;
-            int solverIter = json.TryGetProperty("SolverIterations", out var si) ? si.GetInt32() : 8;
-            int relaxIter = json.TryGetProperty("RelaxIterations", out var ri) ? ri.GetInt32() : 4;
-            int subSteps = json.TryGetProperty("SubSteps", out var ss) ? ss.GetInt32() : 2;
-            bool sleep = !json.TryGetProperty("AllowSleep", out var sl) || sl.GetBoolean();
-            bool mt = !json.TryGetProperty("UseMultithreading", out var mtp) || mtp.GetBoolean();
-            bool sync = !json.TryGetProperty("AutoSyncTransforms", out var st) || st.GetBoolean();
+            float gx = settings.TryGet("GravityX", out var gxp) ? gxp!.FloatValue : 0;
+            float gy = settings.TryGet("GravityY", out var gyp) ? gyp!.FloatValue : -9.81f;
+            float gz = settings.TryGet("GravityZ", out var gzp) ? gzp!.FloatValue : 0;
+            int solverIter = settings.TryGet("SolverIterations", out var si) ? si!.IntValue : 8;
+            int relaxIter = settings.TryGet("RelaxIterations", out var ri) ? ri!.IntValue : 4;
+            int subSteps = settings.TryGet("SubSteps", out var ss) ? ss!.IntValue : 2;
+            bool sleep = !settings.TryGet("AllowSleep", out var sl) || sl!.BoolValue;
+            bool mt = !settings.TryGet("UseMultithreading", out var mtp) || mtp!.BoolValue;
+            bool sync = !settings.TryGet("AutoSyncTransforms", out var st) || st!.BoolValue;
 
             // Advanced settings
-            bool determ = json.TryGetProperty("EnhancedDeterminism", out var dt) && dt.GetBoolean();
-            bool persistThreads = false;
-            if (json.TryGetProperty("ThreadModel", out var tmp))
-            {
-                if (tmp.ValueKind == JsonValueKind.Number)
-                    persistThreads = tmp.GetInt32() == (int)PhysicsThreadModel.Persistent;
-                else if (tmp.ValueKind == JsonValueKind.String)
-                    persistThreads = string.Equals(tmp.GetString(), "Persistent", StringComparison.OrdinalIgnoreCase);
-            }
-            bool auxcp = !json.TryGetProperty("EnableAuxiliaryContactPoints", out var ax) || ax.GetBoolean();
-            bool persistManifold = !json.TryGetProperty("PersistentContactManifold", out var pm) || pm.GetBoolean();
-            float specRelax = json.TryGetProperty("SpeculativeRelaxationFactor", out var sr) ? sr.GetSingle() : 0.9f;
+            bool determ = settings.TryGet("EnhancedDeterminism", out var dt) && dt!.BoolValue;
+            bool persistThreads = settings.TryGet("ThreadModel", out var tmp)
+                && tmp!.IntValue == (int)PhysicsThreadModel.Persistent;
+            bool auxcp = !settings.TryGet("EnableAuxiliaryContactPoints", out var ax) || ax!.BoolValue;
+            bool persistManifold = !settings.TryGet("PersistentContactManifold", out var pm) || pm!.BoolValue;
+            float specRelax = settings.TryGet("SpeculativeRelaxationFactor", out var sr) ? sr!.FloatValue : 0.9f;
 
             var scene = Resources.Scene.Current;
             if (scene != null)
@@ -112,14 +104,15 @@ public static class PlayerSettingsLoader
                 scene.Physics.SpeculativeRelaxationFactor = specRelax;
             }
 
-            // Collision matrix
-            if (json.TryGetProperty("CollisionMatrixRows", out var cmProp) && cmProp.ValueKind == JsonValueKind.Array)
+            // Collision matrix (uint[] serializes as a compound holding an "array" list)
+            if (settings.TryGet("CollisionMatrixRows", out var cmProp) && cmProp!.TryGet("array", out var rows)
+                && rows!.TagType == EchoType.List)
             {
                 int i = 0;
-                foreach (var row in cmProp.EnumerateArray())
+                foreach (var row in rows.List)
                 {
                     if (i >= 32) break;
-                    uint val = row.GetUInt32();
+                    uint val = row.UIntValue;
                     for (int j = 0; j < 32; j++)
                         CollisionMatrix.SetLayerCollision(i, j, (val & (1u << j)) != 0);
                     i++;
@@ -133,13 +126,12 @@ public static class PlayerSettingsLoader
 
     private static void ApplyAudio(string dir)
     {
-        var jsonN = ReadJson(dir, "Audio.json");
-        if (jsonN == null) return;
-        var json = jsonN.Value;
+        var settings = Read(dir, "Audio");
+        if (settings == null) return;
 
         try
         {
-            float vol = json.TryGetProperty("GlobalVolume", out var v) ? v.GetSingle() : 1f;
+            float vol = settings.TryGet("GlobalVolume", out var v) ? v!.FloatValue : 1f;
             AudioContext.MasterVolume = vol;
             Debug.Log("[PlayerSettings] Audio applied.");
         }
@@ -148,15 +140,14 @@ public static class PlayerSettingsLoader
 
     private static void ApplyTime(string dir)
     {
-        var jsonN = ReadJson(dir, "Time.json");
-        if (jsonN == null) return;
-        var json = jsonN.Value;
+        var settings = Read(dir, "Time");
+        if (settings == null) return;
 
         try
         {
-            float fixedDt = json.TryGetProperty("FixedTimestep", out var ft) ? ft.GetSingle() : 1f / 60f;
-            float timeScale = json.TryGetProperty("DefaultTimeScale", out var ts) ? ts.GetSingle() : 1f;
-            int maxIter = json.TryGetProperty("MaxFixedIterations", out var mi) ? mi.GetInt32() : 3;
+            float fixedDt = settings.TryGet("FixedTimestep", out var ft) ? ft!.FloatValue : 1f / 60f;
+            float timeScale = settings.TryGet("DefaultTimeScale", out var ts) ? ts!.FloatValue : 1f;
+            int maxIter = settings.TryGet("MaxFixedIterations", out var mi) ? mi!.IntValue : 3;
 
             Time.FixedDeltaTime = fixedDt;
             Time.TimeScale = timeScale;
@@ -168,26 +159,28 @@ public static class PlayerSettingsLoader
 
     private static void ApplyTagsAndLayers(string dir)
     {
-        var jsonN = ReadJson(dir, "Tags & Layers.json");
-        if (jsonN == null) return;
-        var json = jsonN.Value;
+        var settings = Read(dir, "Tags & Layers");
+        if (settings == null) return;
 
         try
         {
-            if (json.TryGetProperty("Tags", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
+            // Tags is a List<string> (serializes as a list directly).
+            if (settings.TryGet("Tags", out var tagsProp) && tagsProp!.TagType == EchoType.List)
             {
                 TagLayerManager.tags.Clear();
-                foreach (var tag in tagsProp.EnumerateArray())
-                    TagLayerManager.tags.Add(tag.GetString() ?? "");
+                foreach (var tag in tagsProp.List)
+                    TagLayerManager.tags.Add(tag.StringValue);
             }
 
-            if (json.TryGetProperty("Layers", out var layersProp) && layersProp.ValueKind == JsonValueKind.Array)
+            // Layers is a string[] (serializes as a compound holding an "array" list).
+            if (settings.TryGet("Layers", out var layersProp) && layersProp!.TryGet("array", out var layers)
+                && layers!.TagType == EchoType.List)
             {
                 int i = 0;
-                foreach (var layer in layersProp.EnumerateArray())
+                foreach (var layer in layers.List)
                 {
                     if (i >= TagLayerManager.layers.Length) break;
-                    TagLayerManager.layers[i++] = layer.GetString() ?? "";
+                    TagLayerManager.layers[i++] = layer.StringValue;
                 }
             }
 
@@ -201,18 +194,14 @@ public static class PlayerSettingsLoader
         // Informational only for now
     }
 
-    private static JsonElement? ReadJson(string dir, string fileName)
+    private static EchoObject? Read(string dir, string name)
     {
-        string path = Path.Combine(dir, fileName);
+        string path = Path.Combine(dir, $"{name}.yaml");
         if (!File.Exists(path)) return null;
 
         try
         {
-            string text = File.ReadAllText(path);
-            // Clone() detaches the element from the document so we can dispose the document (which
-            // returns its pooled buffer) instead of leaking it for the element's lifetime.
-            using var doc = JsonDocument.Parse(text);
-            return doc.RootElement.Clone();
+            return EchoObject.ReadFromYaml(File.ReadAllText(path));
         }
         catch
         {
