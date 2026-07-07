@@ -1,15 +1,37 @@
-﻿using Prowl.Vector;
+using Prowl.Vector;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Xml;
 using Color = Prowl.Vector.Color;
 
 namespace Prowl.Quill
 {
+    /// <summary>
+    /// The resolved paint state inherited from a parent element (fill, stroke, stroke-width and
+    /// accumulated opacity). Passed down the element tree so groups propagate their style to children.
+    /// </summary>
+    public struct SvgPaintContext
+    {
+        public SvgElement.ColorType fillType;
+        public Color32 fill;
+        public SvgElement.ColorType strokeType;
+        public Color32 stroke;
+        public float strokeWidth;
+        public float opacity;
+
+        /// <summary>The default paint at the root of a document: no fill, no stroke, unit stroke width.</summary>
+        public static SvgPaintContext Root => new SvgPaintContext
+        {
+            fillType = SvgElement.ColorType.none,
+            strokeType = SvgElement.ColorType.none,
+            strokeWidth = 1f,
+            opacity = 1f
+        };
+    }
+
     /// <summary>
     /// Represents an SVG element parsed from an SVG document.
     /// </summary>
@@ -41,12 +63,12 @@ namespace Prowl.Quill
         public DrawCommand[] drawCommands;
 
         /// <summary>
-        /// The stroke color of this element.
+        /// The stroke color of this element, with opacity already applied.
         /// </summary>
         public Color32 stroke;
 
         /// <summary>
-        /// The fill color of this element.
+        /// The fill color of this element, with opacity already applied.
         /// </summary>
         public Color32 fill;
 
@@ -64,6 +86,18 @@ namespace Prowl.Quill
         /// The stroke width of this element.
         /// </summary>
         public float strokeWidth;
+
+        /// <summary>
+        /// The accumulated opacity of this element (its own opacity times all ancestor opacities).
+        /// </summary>
+        public float opacity = 1f;
+
+        // Parsed inline "style" declarations, which take precedence over presentation attributes.
+        private Dictionary<string, string> _style;
+
+        // Fill/stroke before opacity is applied, propagated to children so opacity isn't compounded twice.
+        private Color32 _rawFill;
+        private Color32 _rawStroke;
 
         /// <summary>
         /// Creates a new SVG element.
@@ -101,63 +135,144 @@ namespace Prowl.Quill
         }
 
         /// <summary>
-        /// Parses the element's attributes and initializes stroke and fill properties.
+        /// Resolves this element's paint (fill, stroke, stroke-width, opacity), inheriting any value
+        /// not specified on the element itself from the supplied parent context.
         /// </summary>
-        public virtual void Parse()
+        public virtual void Parse(SvgPaintContext inherited)
         {
-            var strokeText = ParseString("stroke");
-            strokeType = ParseColorType("stroke");
-            fillType = ParseColorType("fill");
+            if (Attributes.TryGetValue("style", out var styleText))
+                _style = ParseStyle(styleText);
 
-            if (strokeType == ColorType.specific)
-                stroke = ParseColor("stroke");
-            if (fillType == ColorType.specific)
-                fill = ParseColor("fill");
+            string fillProp = GetProperty("fill");
+            if (fillProp == null)
+            {
+                fillType = inherited.fillType;
+                _rawFill = inherited.fill;
+            }
+            else
+            {
+                fillType = ResolveColorType(fillProp);
+                _rawFill = fillType == ColorType.specific ? ColorParser.Parse(fillProp.Trim()) : default;
+            }
 
-            strokeWidth = Attributes.ContainsKey("stroke-width") ? ParseFloat("stroke-width") : 1.0f;
+            string strokeProp = GetProperty("stroke");
+            if (strokeProp == null)
+            {
+                strokeType = inherited.strokeType;
+                _rawStroke = inherited.stroke;
+            }
+            else
+            {
+                strokeType = ResolveColorType(strokeProp);
+                _rawStroke = strokeType == ColorType.specific ? ColorParser.Parse(strokeProp.Trim()) : default;
+            }
+
+            string widthProp = GetProperty("stroke-width");
+            strokeWidth = widthProp != null && TryParseLeadingNumber(widthProp, out var sw) ? sw : inherited.strokeWidth;
+
+            // Element opacity accumulates down the tree; fill/stroke-opacity modulate only their own channel.
+            opacity = inherited.opacity * ReadNormalized("opacity", 1f);
+            float fillAlpha = opacity * ReadNormalized("fill-opacity", 1f);
+            float strokeAlpha = opacity * ReadNormalized("stroke-opacity", 1f);
+
+            fill = fillType == ColorType.specific ? WithAlpha(_rawFill, fillAlpha) : _rawFill;
+            stroke = strokeType == ColorType.specific ? WithAlpha(_rawStroke, strokeAlpha) : _rawStroke;
         }
 
-        string? ParseString(string key)
+        /// <summary>
+        /// The paint context handed to this element's children (raw colors plus accumulated opacity).
+        /// </summary>
+        public SvgPaintContext GetPaintContext() => new SvgPaintContext
         {
-            if (Attributes.ContainsKey(key))
-                return Attributes[key];
+            fillType = fillType,
+            fill = _rawFill,
+            strokeType = strokeType,
+            stroke = _rawStroke,
+            strokeWidth = strokeWidth,
+            opacity = opacity
+        };
+
+        /// <summary>Gets a presentation property, preferring an inline style declaration over an attribute.</summary>
+        protected string GetProperty(string key)
+        {
+            if (_style != null && _style.TryGetValue(key, out var v))
+                return v;
+            if (Attributes.TryGetValue(key, out var a))
+                return a;
             return null;
         }
 
-        ColorType ParseColorType(string key)
-        {
-            if (Attributes.ContainsKey(key))
-            {
-                var value = Attributes[key];
-                if (Enum.TryParse<ColorType>(value, true, out var result))
-                    return result;
-                return ColorType.specific;
-            }
-            return ColorType.none;
-        }
+        /// <summary>Whether a presentation property is present as either an inline style or an attribute.</summary>
+        protected bool HasProperty(string key)
+            => (_style != null && _style.ContainsKey(key)) || Attributes.ContainsKey(key);
 
+        /// <summary>Reads a numeric property, tolerating unit suffixes (e.g. "2px"), returning 0 if absent.</summary>
         protected float ParseFloat(string key)
         {
-            if (Attributes.TryGetValue(key, out var value) && float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+            var v = GetProperty(key);
+            if (v != null && TryParseLeadingNumber(v, out var result))
                 return result;
             return 0;
         }
 
-        Color32 ParseColor(string key)
+        // Reads an opacity-like property in the 0..1 range, accepting a raw number or a percentage.
+        private float ReadNormalized(string key, float fallback)
         {
-            var color = (Color32)Color.Transparent;
-            var attribute = "white";
-            if (Attributes.ContainsKey(key))
-                attribute = Attributes[key];
+            var v = GetProperty(key);
+            if (v == null)
+                return fallback;
+            v = v.Trim();
+            bool percent = v.EndsWith("%", StringComparison.Ordinal);
+            if (!TryParseLeadingNumber(v, out var num))
+                return fallback;
+            if (percent)
+                num /= 100f;
+            return num < 0f ? 0f : (num > 1f ? 1f : num);
+        }
 
-            if (attribute.Equals("none", StringComparison.OrdinalIgnoreCase))
-                color = (Color32)Color.Transparent;
-            else if (attribute.Equals("currentColor", StringComparison.OrdinalIgnoreCase))
-                color = (Color32)Color.Transparent; // Placeholder: currentColor requires context (e.g., inherited color)
-            else
-                color = ColorParser.Parse(attribute);
+        private static Dictionary<string, string> ParseStyle(string style)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var declaration in style.Split(';'))
+            {
+                int colon = declaration.IndexOf(':');
+                if (colon <= 0)
+                    continue;
+                var key = declaration.Substring(0, colon).Trim();
+                var value = declaration.Substring(colon + 1).Trim();
+                if (key.Length > 0 && value.Length > 0)
+                    dict[key] = value;
+            }
+            return dict;
+        }
 
+        private static ColorType ResolveColorType(string value)
+        {
+            value = value.Trim();
+            if (value.Length == 0 || value.Equals("none", StringComparison.OrdinalIgnoreCase) || value.Equals("transparent", StringComparison.OrdinalIgnoreCase))
+                return ColorType.none;
+            if (value.Equals("currentColor", StringComparison.OrdinalIgnoreCase))
+                return ColorType.currentColor;
+            if (value.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+                return ColorType.none; // gradients and patterns are not supported
+            return ColorType.specific;
+        }
+
+        private static Color32 WithAlpha(Color32 color, float multiplier)
+        {
+            if (multiplier >= 1f)
+                return color;
+            if (multiplier < 0f)
+                multiplier = 0f;
+            int a = (int)(color.A * multiplier + 0.5f);
+            color.A = (byte)(a > 255 ? 255 : a);
             return color;
+        }
+
+        private static bool TryParseLeadingNumber(string s, out float value)
+        {
+            var scanner = new PathScanner(s.AsSpan());
+            return scanner.TryReadNumber(out value);
         }
 
         /// <summary>
@@ -214,15 +329,27 @@ namespace Prowl.Quill
         public Float2 radius;
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
+            base.Parse(inherited);
             pos.X = ParseFloat("x");
             pos.Y = ParseFloat("y");
             size.X = ParseFloat("width");
             size.Y = ParseFloat("height");
-            radius.X = ParseFloat("rx");
-            radius.Y = ParseFloat("ry");
+
+            // Per SVG, a missing rx/ry defaults to the other axis; both missing means square corners.
+            bool hasRx = HasProperty("rx");
+            bool hasRy = HasProperty("ry");
+            if (!hasRx && !hasRy)
+            {
+                radius = Float2.Zero;
+            }
+            else
+            {
+                float rx = hasRx ? ParseFloat("rx") : ParseFloat("ry");
+                float ry = hasRy ? ParseFloat("ry") : ParseFloat("rx");
+                radius = new Float2(rx, ry);
+            }
         }
     }
 
@@ -241,9 +368,9 @@ namespace Prowl.Quill
         public float r;
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
+            base.Parse(inherited);
             cx = ParseFloat("cx");
             cy = ParseFloat("cy");
             r = ParseFloat("r");
@@ -268,9 +395,9 @@ namespace Prowl.Quill
         public float ry;
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
+            base.Parse(inherited);
             cx = ParseFloat("cx");
             cy = ParseFloat("cy");
             rx = ParseFloat("rx");
@@ -296,9 +423,9 @@ namespace Prowl.Quill
         public float y2;
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
+            base.Parse(inherited);
             x1 = ParseFloat("x1");
             y1 = ParseFloat("y1");
             x2 = ParseFloat("x2");
@@ -315,23 +442,20 @@ namespace Prowl.Quill
         public Float2[] points = Array.Empty<Float2>();
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
-            if (Attributes.TryGetValue("points", out var pts))
+            base.Parse(inherited);
+            var pts = GetProperty("points");
+            if (pts != null)
                 points = ParsePoints(pts);
         }
 
         internal static Float2[] ParsePoints(string pts)
         {
-            var matches = Regex.Matches(pts, @"-?\d*\.?\d+");
+            var scanner = new PathScanner(pts.AsSpan());
             var list = new List<Float2>();
-            for (int i = 0; i + 1 < matches.Count; i += 2)
-            {
-                var x = float.Parse(matches[i].Value, CultureInfo.InvariantCulture);
-                var y = float.Parse(matches[i + 1].Value, CultureInfo.InvariantCulture);
+            while (scanner.TryReadNumber(out var x) && scanner.TryReadNumber(out var y))
                 list.Add(new Float2(x, y));
-            }
             return list.ToArray();
         }
     }
@@ -345,10 +469,11 @@ namespace Prowl.Quill
         public Float2[] points = Array.Empty<Float2>();
 
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
-            if (Attributes.TryGetValue("points", out var pts))
+            base.Parse(inherited);
+            var pts = GetProperty("points");
+            if (pts != null)
                 points = SvgPolylineElement.ParsePoints(pts);
         }
     }
@@ -359,83 +484,95 @@ namespace Prowl.Quill
     public class SvgPathElement : SvgElement
     {
         /// <inheritdoc/>
-        public override void Parse()
+        public override void Parse(SvgPaintContext inherited)
         {
-            base.Parse();
+            base.Parse(inherited);
 
-            //if (!Attributes.ContainsKey("d"))
-            //    return;
-
-            var pathData = Attributes["d"];
-            if (string.IsNullOrEmpty(pathData))
-                throw new InvalidDataException();
-
-            var matches = Regex.Matches(pathData, @"([A-Za-z])([-0-9.,\s]*)");
-            drawCommands = new DrawCommand[matches.Count];
-            for (int i = 0; i < matches.Count; i++)
+            if (!Attributes.TryGetValue("d", out var pathData) || string.IsNullOrEmpty(pathData))
             {
-                var match = matches[i];
-                var drawCommand = new DrawCommand();
-                var commandSegment = match.Groups[1].Value + match.Groups[2].Value.Trim();
-                var parametersString = commandSegment.Length > 1 ? commandSegment.Substring(1).Trim() : "";
-                var command = commandSegment[0];
-
-                drawCommand.relative = char.IsLower(command);
-
-                switch (char.ToLower(command))
-                {
-                    case 'm': drawCommand.type = DrawType.MoveTo; break;
-                    case 'l': drawCommand.type = DrawType.LineTo; break;
-                    case 'h': drawCommand.type = DrawType.HorizontalLineTo; break;
-                    case 'v': drawCommand.type = DrawType.VerticalLineTo; break;
-                    case 'q': drawCommand.type = DrawType.QuadraticCurveTo; break;
-                    case 't': drawCommand.type = DrawType.SmoothQuadraticCurveTo; break;
-                    case 'c': drawCommand.type = DrawType.CubicCurveTo; break;
-                    case 's': drawCommand.type = DrawType.SmoothCubicCurveTo; break;
-                    case 'a': drawCommand.type = DrawType.ArcTo; break;
-                    case 'z': drawCommand.type = DrawType.ClosePath; break;
-                }
-
-                //Console.WriteLine($"{command} {parametersString}");
-
-                if (!string.IsNullOrEmpty(parametersString))
-                {
-                    var param = new List<float>();
-                    var matches2 = Regex.Matches(parametersString, @"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?");
-                    for (int j = 0; j < matches2.Count; j++)
-                        for (int k = 0; k < matches2[j].Groups.Count; k++)
-                            param.Add(float.Parse(matches2[j].Groups[k].ToString(), CultureInfo.InvariantCulture));
-
-                    drawCommand.param = param.ToArray();
-                }
-                //Console.WriteLine(drawCommand.ToString());
-                drawCommands[i] = drawCommand;
-                //if (!ValidateParameterCount(drawCommand))
-                //{
-                //    Console.WriteLine(pathData);
-                //    Console.WriteLine($"{match.Groups[0].Value}=>{drawCommand}");
-                //}
+                drawCommands = Array.Empty<DrawCommand>();
+                return;
             }
+
+            drawCommands = ParsePathData(pathData);
         }
 
-        bool ValidateParameterCount(DrawCommand command)
+        /// <summary>
+        /// Parses an SVG path "d" string into draw commands in a single pass. Handles scientific
+        /// notation, sign-delimited and comma/space-delimited numbers, packed arc flags, and implicit
+        /// command repetition (e.g. "M0 0 1 1 2 2" becomes a move followed by two line-tos).
+        /// </summary>
+        private static DrawCommand[] ParsePathData(string d)
         {
-            //Console.WriteLine(command.param?.Length);
-            switch (command.type)
+            var commands = new List<DrawCommand>();
+            var scanner = new PathScanner(d.AsSpan());
+            char command = '\0';
+
+            while (true)
             {
-                case DrawType.MoveTo: return command.param.Length == 2;
-                case DrawType.LineTo: return command.param.Length == 2;
-                case DrawType.HorizontalLineTo: return command.param.Length == 1;
-                case DrawType.VerticalLineTo: return command.param.Length == 1;
-                case DrawType.QuadraticCurveTo: return command.param.Length == 4;
-                case DrawType.SmoothQuadraticCurveTo: return command.param.Length == 2;
-                case DrawType.CubicCurveTo: return command.param.Length == 6;
-                case DrawType.SmoothCubicCurveTo: return command.param.Length == 4;
-                case DrawType.ArcTo: return command.param.Length == 7;
-                case DrawType.ClosePath: return command.param == null;
-                default: return true;
+                scanner.SkipSeparators();
+                if (scanner.AtEnd)
+                    break;
+
+                if (scanner.TryReadCommand(out var c))
+                    command = c;
+                else if (command == '\0')
+                    break; // a number before any command; malformed, stop
+
+                bool relative = char.IsLower(command);
+                switch (char.ToLowerInvariant(command))
+                {
+                    case 'm':
+                        if (!scanner.TryReadPoint(out var mx, out var my)) return commands.ToArray();
+                        commands.Add(Command(DrawType.MoveTo, relative, mx, my));
+                        command = relative ? 'l' : 'L'; // implicit pairs after a move are line-tos
+                        break;
+                    case 'l':
+                        if (!scanner.TryReadPoint(out var lx, out var ly)) return commands.ToArray();
+                        commands.Add(Command(DrawType.LineTo, relative, lx, ly));
+                        break;
+                    case 'h':
+                        if (!scanner.TryReadNumber(out var hx)) return commands.ToArray();
+                        commands.Add(Command(DrawType.HorizontalLineTo, relative, hx));
+                        break;
+                    case 'v':
+                        if (!scanner.TryReadNumber(out var vy)) return commands.ToArray();
+                        commands.Add(Command(DrawType.VerticalLineTo, relative, vy));
+                        break;
+                    case 'c':
+                        if (!scanner.TryReadNumbers(6, out var cp)) return commands.ToArray();
+                        commands.Add(Command(DrawType.CubicCurveTo, relative, cp));
+                        break;
+                    case 's':
+                        if (!scanner.TryReadNumbers(4, out var sp)) return commands.ToArray();
+                        commands.Add(Command(DrawType.SmoothCubicCurveTo, relative, sp));
+                        break;
+                    case 'q':
+                        if (!scanner.TryReadNumbers(4, out var qp)) return commands.ToArray();
+                        commands.Add(Command(DrawType.QuadraticCurveTo, relative, qp));
+                        break;
+                    case 't':
+                        if (!scanner.TryReadPoint(out var tx, out var ty)) return commands.ToArray();
+                        commands.Add(Command(DrawType.SmoothQuadraticCurveTo, relative, tx, ty));
+                        break;
+                    case 'a':
+                        if (!scanner.TryReadArc(out var ap)) return commands.ToArray();
+                        commands.Add(Command(DrawType.ArcTo, relative, ap));
+                        break;
+                    case 'z':
+                        commands.Add(new DrawCommand { type = DrawType.ClosePath, relative = relative });
+                        command = '\0'; // nothing may implicitly follow a close
+                        break;
+                    default:
+                        return commands.ToArray();
+                }
             }
+
+            return commands.ToArray();
         }
+
+        private static DrawCommand Command(DrawType type, bool relative, params float[] param)
+            => new DrawCommand { type = type, relative = relative, param = param };
 
         public override string ToString()
         {
@@ -505,6 +642,155 @@ namespace Prowl.Quill
     }
 
     /// <summary>
+    /// A forward-only scanner over SVG numeric data (path "d" strings and point lists). Reads numbers
+    /// per the SVG grammar without allocating, so it correctly handles exponents, sign-delimited values
+    /// and packed arc flags.
+    /// </summary>
+    internal ref struct PathScanner
+    {
+        private readonly ReadOnlySpan<char> _s;
+        private int _pos;
+
+        public PathScanner(ReadOnlySpan<char> s)
+        {
+            _s = s;
+            _pos = 0;
+        }
+
+        public bool AtEnd => _pos >= _s.Length;
+
+        public void SkipSeparators()
+        {
+            while (_pos < _s.Length)
+            {
+                char c = _s[_pos];
+                if (c == ' ' || c == ',' || c == '\t' || c == '\n' || c == '\r' || c == '\f')
+                    _pos++;
+                else
+                    break;
+            }
+        }
+
+        public bool TryReadCommand(out char command)
+        {
+            if (_pos < _s.Length && IsCommand(_s[_pos]))
+            {
+                command = _s[_pos];
+                _pos++;
+                return true;
+            }
+            command = '\0';
+            return false;
+        }
+
+        public bool TryReadNumber(out float value)
+        {
+            SkipSeparators();
+            int start = _pos;
+
+            if (_pos < _s.Length && (_s[_pos] == '+' || _s[_pos] == '-'))
+                _pos++;
+
+            bool hasDigits = false;
+            while (_pos < _s.Length && IsDigit(_s[_pos])) { _pos++; hasDigits = true; }
+            if (_pos < _s.Length && _s[_pos] == '.')
+            {
+                _pos++;
+                while (_pos < _s.Length && IsDigit(_s[_pos])) { _pos++; hasDigits = true; }
+            }
+
+            if (!hasDigits)
+            {
+                _pos = start;
+                value = 0;
+                return false;
+            }
+
+            if (_pos < _s.Length && (_s[_pos] == 'e' || _s[_pos] == 'E'))
+            {
+                int mark = _pos;
+                _pos++;
+                if (_pos < _s.Length && (_s[_pos] == '+' || _s[_pos] == '-'))
+                    _pos++;
+                if (_pos < _s.Length && IsDigit(_s[_pos]))
+                    while (_pos < _s.Length && IsDigit(_s[_pos])) _pos++;
+                else
+                    _pos = mark; // not a valid exponent, leave it for the next token
+            }
+
+            value = float.Parse(_s.Slice(start, _pos - start), NumberStyles.Float, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        // Arc flags are single '0'/'1' characters and may be packed together with no separator.
+        public bool TryReadFlag(out float value)
+        {
+            SkipSeparators();
+            if (_pos < _s.Length && (_s[_pos] == '0' || _s[_pos] == '1'))
+            {
+                value = _s[_pos] - '0';
+                _pos++;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+
+        public bool TryReadPoint(out float x, out float y)
+        {
+            x = 0;
+            y = 0;
+            return TryReadNumber(out x) && TryReadNumber(out y);
+        }
+
+        public bool TryReadNumbers(int count, out float[] values)
+        {
+            var arr = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                if (!TryReadNumber(out arr[i]))
+                {
+                    values = null;
+                    return false;
+                }
+            }
+            values = arr;
+            return true;
+        }
+
+        public bool TryReadArc(out float[] values)
+        {
+            var arr = new float[7];
+            if (TryReadNumber(out arr[0]) && TryReadNumber(out arr[1]) && TryReadNumber(out arr[2])
+                && TryReadFlag(out arr[3]) && TryReadFlag(out arr[4])
+                && TryReadNumber(out arr[5]) && TryReadNumber(out arr[6]))
+            {
+                values = arr;
+                return true;
+            }
+            values = null;
+            return false;
+        }
+
+        private static bool IsDigit(char c) => c >= '0' && c <= '9';
+
+        private static bool IsCommand(char c)
+        {
+            switch (c)
+            {
+                case 'M': case 'm': case 'L': case 'l':
+                case 'H': case 'h': case 'V': case 'v':
+                case 'C': case 'c': case 'S': case 's':
+                case 'Q': case 'q': case 'T': case 't':
+                case 'A': case 'a': case 'Z': case 'z':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Provides methods for parsing SVG documents into SvgElement trees.
     /// </summary>
     public static class SVGParser
@@ -525,62 +811,43 @@ namespace Prowl.Quill
             xmlDoc.Load(filePath);
 
             if (xmlDoc.DocumentElement != null && xmlDoc.DocumentElement.Name.Equals("svg", StringComparison.OrdinalIgnoreCase))
-                return ParseXmlElement(xmlDoc.DocumentElement, 0);
+                return ParseXmlElement(xmlDoc.DocumentElement, 0, SvgPaintContext.Root);
             else
                 throw new InvalidOperationException("Invalid SVG document: Missing root <svg> element.");
         }
 
-        private static SvgElement ParseXmlElement(XmlElement xmlElement, int depth)
+        private static SvgElement ParseXmlElement(XmlElement xmlElement, int depth, SvgPaintContext inherited)
         {
-            SvgElement svgElement;
-
-            var supported = Enum.TryParse<SvgElement.TagType>(xmlElement.Name, out var result);
-            if (!supported)
+            if (!Enum.TryParse<SvgElement.TagType>(xmlElement.Name, true, out var tag))
                 return null;
 
-            var tag = Enum.Parse<SvgElement.TagType>(xmlElement.Name, true);
-            switch (tag)
+            SvgElement svgElement = tag switch
             {
-                case SvgElement.TagType.path:
-                    svgElement = new SvgPathElement();
-                    break;
-                case SvgElement.TagType.circle:
-                    svgElement = new SvgCircleElement();
-                    break;
-                case SvgElement.TagType.rect:
-                    svgElement = new SvgRectElement();
-                    break;
-                case SvgElement.TagType.line:
-                    svgElement = new SvgLineElement();
-                    break;
-                case SvgElement.TagType.polyline:
-                    svgElement = new SvgPolylineElement();
-                    break;
-                case SvgElement.TagType.polygon:
-                    svgElement = new SvgPolygonElement();
-                    break;
-                case SvgElement.TagType.ellipse:
-                    svgElement = new SvgEllipseElement();
-                    break;
-                default:
-                    svgElement = new SvgElement();
-                    break;
-            }
+                SvgElement.TagType.path => new SvgPathElement(),
+                SvgElement.TagType.circle => new SvgCircleElement(),
+                SvgElement.TagType.rect => new SvgRectElement(),
+                SvgElement.TagType.line => new SvgLineElement(),
+                SvgElement.TagType.polyline => new SvgPolylineElement(),
+                SvgElement.TagType.polygon => new SvgPolygonElement(),
+                SvgElement.TagType.ellipse => new SvgEllipseElement(),
+                _ => new SvgElement(),
+            };
             svgElement.depth = depth;
             svgElement.tag = tag;
 
             foreach (XmlAttribute attribute in xmlElement.Attributes)
                 svgElement.Attributes[attribute.Name] = attribute.Value;
 
+            svgElement.Parse(inherited);
+
+            var childContext = svgElement.GetPaintContext();
             foreach (XmlNode childNode in xmlElement.ChildNodes)
                 if (childNode.NodeType == XmlNodeType.Element)
                 {
-                    var child = ParseXmlElement((XmlElement)childNode, depth + 1);
+                    var child = ParseXmlElement((XmlElement)childNode, depth + 1, childContext);
                     if (child != null)
                         svgElement.Children.Add(child);
                 }
-
-            svgElement.Parse();
 
             return svgElement;
         }

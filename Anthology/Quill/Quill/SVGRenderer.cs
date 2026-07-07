@@ -173,34 +173,26 @@ namespace Prowl.Quill
 
         static void DrawRect(Canvas canvas, Float2 position, SvgRectElement element)
         {
-            var pos = element.pos;
+            var pos = position + element.pos;
             var size = element.size;
+            bool rounded = element.radius.X != 0;
 
-            if (element.radius.X == 0)
+            if (element.fillType != SvgElement.ColorType.none)
             {
-                if (element.fillType != SvgElement.ColorType.none)
-                {
-                    canvas.Rect(pos.X, pos.Y, size.X, size.Y);
-                    canvas.FillComplexAA();
-                }
-                else
-                {
-                    canvas.RectFilled(pos.X, pos.Y, size.X, size.Y, element.fill);
-                    canvas.Stroke();
-                }
-            }
-            else
-            {
-                if (element.fillType != SvgElement.ColorType.none)
-                {
+                if (rounded)
                     canvas.RoundedRect(pos.X, pos.Y, size.X, size.Y, element.radius.X);
-                    canvas.FillComplexAA();
-                }
                 else
-                {
-                    canvas.RoundedRectFilled(pos.X, pos.Y, size.X, size.Y, element.radius.X, element.fill);
-                    canvas.Stroke();
-                }
+                    canvas.Rect(pos.X, pos.Y, size.X, size.Y);
+                canvas.FillComplexAA();
+            }
+
+            if (element.strokeType != SvgElement.ColorType.none)
+            {
+                if (rounded)
+                    canvas.RoundedRect(pos.X, pos.Y, size.X, size.Y, element.radius.X);
+                else
+                    canvas.Rect(pos.X, pos.Y, size.X, size.Y);
+                canvas.Stroke();
             }
         }
 
