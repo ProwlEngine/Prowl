@@ -560,7 +560,10 @@ internal static class DropdownInternal
 
         if (isOn)
         {
-            canvas.RoundedRectFilled(x, y, sz, sz, rad, theme.Primary.C500);
+            // Checked fill runs Primary -> Secondary(Blue), matching the accent gradient sweep.
+            canvas.SetLinearBrush(x, y, x + sz, y, theme.Primary.C500, theme.Blue.C500);
+            canvas.RoundedRectFilled(x, y, sz, sz, rad, Color.White);
+            canvas.ClearBrush();
             float cx = x + sz / 2, cy = y + sz / 2;
             canvas.SaveState();
             canvas.SetStrokeColor(Color.FromArgb(255, 255, 255, 255));

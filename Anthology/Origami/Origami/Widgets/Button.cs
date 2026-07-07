@@ -553,11 +553,18 @@ public sealed class ButtonBuilder
             case ButtonStyle.Filled:
                 if (saturated)
                 {
-                    // 135deg gradient (C500 -> C600) + coloured glow, brightening on hover, dipping on press.
-                    Color top = OrigamiRamp.LerpColor(ramp.C500, ramp.C700, 0.22f * s.HoverT);
-                    Color bot = OrigamiRamp.LerpColor(ramp.C600, ramp.C700, 0.22f * s.HoverT);
-                    top = OrigamiRamp.LerpColor(top, ramp.C400, 0.5f * s.PressT);
-                    bot = OrigamiRamp.LerpColor(bot, ramp.C400, 0.5f * s.PressT);
+                    // Primary accent runs a two-tone Primary -> Secondary(Blue) gradient; semantic
+                    // variants (Success/Warning/Danger/Info) keep their single-ramp C500 -> C600 look.
+                    bool isPrimaryAccent = ReferenceEquals(ramp, primary) || s.Variant == OrigamiVariant.Primary;
+                    OrigamiRamp topRamp = ramp;
+                    OrigamiRamp botRamp = isPrimaryAccent ? s.Theme.Blue : ramp;
+                    Color topBase = topRamp.C500;
+                    Color botBase = isPrimaryAccent ? botRamp.C500 : ramp.C600;
+                    // 135deg gradient + coloured glow, brightening on hover, dipping on press.
+                    Color top = OrigamiRamp.LerpColor(topBase, topRamp.C700, 0.22f * s.HoverT);
+                    Color bot = OrigamiRamp.LerpColor(botBase, botRamp.C700, 0.22f * s.HoverT);
+                    top = OrigamiRamp.LerpColor(top, topRamp.C400, 0.5f * s.PressT);
+                    bot = OrigamiRamp.LerpColor(bot, botRamp.C400, 0.5f * s.PressT);
                     r.BgTop = top; r.BgBottom = bot; r.Gradient = true;
                     r.Label = ink.C700;
                     r.Glow = Alpha(ramp.C500, 0.45f + 0.2f * s.HoverT); r.DrawGlow = true;

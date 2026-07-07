@@ -269,10 +269,32 @@ public sealed class ButtonGroupBuilder
             // Selected pill lifts with a tight downward glow (segmented only, like the prototype).
             if (s.Segmented && !s.IsDisabled)
                 PillGlow(canvas, x, y, w, h, rr, selBg);
-            Color bg = OrigamiRamp.LerpColor(selBg, accent.C600, s.HoverT);
-            bg = OrigamiRamp.LerpColor(bg, accent.C400, s.PressT * 0.5f);
-            if (s.IsDisabled) bg = OrigamiRamp.LerpColor(bg, neutral.C400, 0.5f);
-            canvas.RoundedRectFilled(x, y, w, h, tl, tr, br, bl, bg);
+            // Default/Subtle groups select with Primary — paint that as a Primary -> Secondary(Blue)
+            // gradient; semantic groups keep their single-ramp selected fill.
+            bool isPrimaryAccent = ReferenceEquals(accent, s.Theme.Primary);
+            if (isPrimaryAccent)
+            {
+                var blue = s.Theme.Blue;
+                Color left  = OrigamiRamp.LerpColor(accent.C500, accent.C600, s.HoverT);
+                left  = OrigamiRamp.LerpColor(left, accent.C400, s.PressT * 0.5f);
+                Color right = OrigamiRamp.LerpColor(blue.C500, blue.C600, s.HoverT);
+                right = OrigamiRamp.LerpColor(right, blue.C400, s.PressT * 0.5f);
+                if (s.IsDisabled)
+                {
+                    left  = OrigamiRamp.LerpColor(left,  neutral.C400, 0.5f);
+                    right = OrigamiRamp.LerpColor(right, neutral.C400, 0.5f);
+                }
+                canvas.SetLinearBrush(x, y, x + w, y, left, right);
+                canvas.RoundedRectFilled(x, y, w, h, tl, tr, br, bl, Color.White);
+                canvas.ClearBrush();
+            }
+            else
+            {
+                Color bg = OrigamiRamp.LerpColor(selBg, accent.C600, s.HoverT);
+                bg = OrigamiRamp.LerpColor(bg, accent.C400, s.PressT * 0.5f);
+                if (s.IsDisabled) bg = OrigamiRamp.LerpColor(bg, neutral.C400, 0.5f);
+                canvas.RoundedRectFilled(x, y, w, h, tl, tr, br, bl, bg);
+            }
             labelCol = s.Ink.C700;
         }
         else
