@@ -178,7 +178,7 @@ public sealed class Toasts
             {
                 using (paper.Box($"toast_ico_{i}")
                     .Width(BadgeSize).Height(BadgeSize)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Margin(UnitValue.Auto, UnitValue.Stretch())
                     .Rounded(BadgeRadius)
                     .BackgroundColor(badgeBg)
                     .IsNotInteractable()
@@ -189,7 +189,7 @@ public sealed class Toasts
 
                 using (paper.Column($"toast_txt_{i}")
                     .Width(UnitValue.Stretch()).Height(UnitValue.Auto)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Margin(UnitValue.Auto, UnitValue.Stretch())
                     .ColBetween(2)
                     .Enter())
                 {
@@ -211,7 +211,7 @@ public sealed class Toasts
 
                 using (paper.Box($"toast_x_{i}")
                     .Width(CloseSize).Height(CloseSize)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Margin(UnitValue.Auto, UnitValue.Stretch())
                     .IsNotInteractable()
                     .Enter())
                 {
