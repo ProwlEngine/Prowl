@@ -7,84 +7,68 @@ namespace Prowl.Slang.Native;
 
 
 // Marshals invocations on a managed object to a native COM Vtable
-internal abstract class NativeComProxy : IUnknown
+internal abstract unsafe class NativeComProxy(void* ptr, bool trackReferences = true)
 {
-    public IntPtr ComPtr => _comPtr;
+    public IntPtr ComPtr => (nint)_ptr;
 
-    protected IntPtr _comPtr;
-    protected bool _trackReferences = true;
+    protected readonly void* _ptr = ptr;
+    private readonly bool _trackReferences = trackReferences;
 
 
-    public void Initialize(IntPtr nativePtr, bool trackReferences = true)
+    protected void** VTable => *(void***)_ptr;
+
+
+    public SlangResult QueryInterface(ref Guid uuid, out nint obj)
     {
-        _comPtr = nativePtr;
-        _trackReferences = trackReferences;
+        var fn = (delegate* unmanaged[Cdecl]<void*, ref Guid, out nint, SlangResult>)VTable[0];
+        return fn(_ptr, ref uuid, out obj);
     }
 
 
-    public static unsafe T Create<T>(T* ptr, bool trackReferences = true) where T : IUnknown
+    public uint AddRef()
     {
-        return ProxyEmitter.CreateNativeProxy(ptr, trackReferences);
+        var fn = (delegate* unmanaged[Cdecl]<void*, uint>)VTable[1];
+        return fn(_ptr);
     }
 
 
-    public unsafe T As<T>() where T : IUnknown
+    public uint Release()
     {
-        Guid guid = UUIDAttribute.GetGuid<T>();
-
-        QueryInterface(ref guid, out nint objPtr).Throw();
-
-        return ProxyEmitter.CreateNativeProxy((T*)objPtr);
-    }
-
-
-    public unsafe bool TryAs<T>(out T? value) where T : IUnknown
-    {
-        Guid guid = UUIDAttribute.GetGuid<T>();
-
-        bool isOK = QueryInterface(ref guid, out nint objPtr).IsOk();
-
-        value = isOK ? ProxyEmitter.CreateNativeProxy((T*)objPtr) : default;
-
-        return isOK;
+        var fn = (delegate* unmanaged[Cdecl]<void*, uint>)VTable[2];
+        return fn(_ptr);
     }
 
 
     public static bool operator ==(NativeComProxy a, NativeComProxy b)
     {
-        return a._comPtr == b._comPtr;
+        return a._ptr == b._ptr;
     }
 
 
     public static bool operator !=(NativeComProxy a, NativeComProxy b)
     {
-        return a._comPtr != b._comPtr;
+        return a._ptr != b._ptr;
     }
 
 
     public override bool Equals(object? obj)
     {
         if (obj is NativeComProxy proxy)
-            return proxy._comPtr == _comPtr;
+            return proxy._ptr == _ptr;
 
         if (obj is IntPtr ptr)
-            return ptr == _comPtr;
+            return ptr == ComPtr;
 
         return false;
     }
 
 
-    public override int GetHashCode() => _comPtr.ToInt32();
-
-
-    public abstract uint AddRef();
-    public abstract SlangResult QueryInterface(ref Guid uuid, out nint obj);
-    public abstract uint Release();
+    public override int GetHashCode() => ComPtr.GetHashCode();
 
 
     ~NativeComProxy()
     {
-        if (_trackReferences)
+        if (_trackReferences && _ptr != null)
             Release();
     }
 }

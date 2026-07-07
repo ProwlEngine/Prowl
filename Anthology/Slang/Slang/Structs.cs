@@ -161,4 +161,9 @@ public struct SessionDescription()
     /// Top-level compiler options applied to all code generation targets.
     /// </summary>
     public CompilerOptionEntry[]? CompilerOptionEntries;
+
+    /// <summary>
+    /// Whether to skip SPIRV validation.
+    /// </summary>
+    public bool SkipSPIRVValidation;
 }

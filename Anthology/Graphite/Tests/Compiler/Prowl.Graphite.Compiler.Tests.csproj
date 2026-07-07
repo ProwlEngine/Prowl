@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
+        <ProjectReference Include="..\..\Tools\SlangHlslProbe\SlangHlslProbe.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text;
 
 using Prowl.Graphite.Variants;
 using Prowl.Slang;
@@ -46,10 +45,7 @@ public class CompilationSession
     module VariantAttributes;
 
     [__AttributeUsage(_AttributeTargets.Var)]
-    public struct variantAttribute
-    {
-        string values;
-    };
+    public struct VariantAxisAttribute { }
     """u8.ToArray();
 
 
@@ -184,6 +180,8 @@ public class CompilationSession
         LoadUVOriginDeclModule();
 
         Module module = _session.LoadModule(moduleName, out diagnostics);
+        _handler.Invoke(diagnostics);
+
         return CompileShader(module, type);
     }
 
@@ -210,6 +208,8 @@ public class CompilationSession
         LoadUVOriginDeclModule();
 
         Module module = _session.LoadModuleFromSource(moduleName, path, sourceUtf8, out diagnostics);
+        _handler.Invoke(diagnostics);
+
         return CompileShader(module, type);
     }
 
@@ -219,7 +219,7 @@ public class CompilationSession
         EntryPoint[] entryPoints = FindEntryPoints(module, type);
 
         // Get all variants and split into declarations and variant spaces
-        VariantSpace[] variantFields = [.. GetAllModuleVariants(module, out List<Module> affectedModules)];
+        VariantSpace[] variantFields = [.. VariantReflection.CollectVariantSpaces(_session!, module, out List<Module> affectedModules)];
 
         Keyword[][] variants = VariantGenerator.Generate(variantFields, _variantCap);
 
@@ -287,119 +287,18 @@ public class CompilationSession
     }
 
 
-    private List<VariantSpace> GetAllModuleVariants(Module requiredModule, out List<Module> linkedModules)
-    {
-        linkedModules = [requiredModule];
-
-        List<(Module, string[])> moduleExterns = [];
-        List<VariantSpace> moduleVariants = [];
-
-        int loadedCount = _session!.GetLoadedModuleCount();
-
-        // Collect all variant spaces and extern declarations
-        for (int i = 0; i < loadedCount; i++)
-        {
-            Module loaded = _session.GetLoadedModule(i);
-
-            DeclReflection[] decls = [.. GetExternFields(loaded)];
-            string[] declNames = new string[decls.Length];
-
-            for (int j = 0; j < decls.Length; j++)
-            {
-                DeclReflection decl = decls[j];
-                declNames[j] = decl.Name;
-
-                List<string> variants = GetVariantAttributes(decl.Type);
-
-                if (variants.Count > 0)
-                    moduleVariants.Add(new VariantSpace(declNames[j], decl.AsVariable().Type.FullName, variants));
-            }
-
-            moduleExterns.Add((loaded, declNames));
-        }
-
-        // Scan for modules that require a linked extern declaration
-        foreach ((Module module, string[] externDecls) in moduleExterns)
-        {
-            for (int decl = 0; decl < externDecls.Length; decl++)
-            {
-                string declName = externDecls[decl];
-                for (int variant = 0; variant < moduleVariants.Count; variant++)
-                {
-                    if (declName == moduleVariants[variant].Name)
-                    {
-                        if (!module.Equals(requiredModule))
-                            linkedModules.Add(module);
-                        goto ContinueOuter;
-                    }
-                }
-            }
-
-        ContinueOuter:
-            continue;
-        }
-
-        return moduleVariants;
-    }
-
-
-    private static IEnumerable<DeclReflection> GetExternFields(Module module)
-    {
-        DeclReflection moduleReflection = module.GetModuleReflection();
-        foreach (DeclReflection child in moduleReflection.GetChildrenOfKind(DeclKind.Variable))
-        {
-            if (!child.AsVariable().HasModifier(ModifierID.Extern))
-                continue;
-
-            yield return child;
-        }
-    }
-
-
     private Module CreateVariantModule(VariantSpace[] spaces, Keyword[] variants)
     {
-        StringBuilder sb = new();
-
         // The session caches loaded modules by name, so each permutation needs a distinct module
         // name; otherwise every variant after the first reuses the first variant's constants.
         string name = "__Variant_" + string.Join("_", variants.Select(v => v.ValueId));
 
-        sb.AppendLine($"module {name};");
-
-        for (int i = 0; i < spaces.Length; i++)
-        {
-            VariantSpace target = spaces[i];
-            Keyword variant = variants[i];
-            sb.AppendLine($"export public static const {target.DeclType} {target.Name} = {variant.Value};");
-        }
-
-        string variantModule = sb.ToString();
+        string variantModule = VariantGenerator.BuildSpecializationModule(name, spaces, variants);
 
         Module loaded = _session!.LoadModuleFromSourceString(name, $"{name}.slang", variantModule, out DiagnosticInfo diagnostics);
         _handler.Invoke(diagnostics);
 
         return loaded;
-    }
-
-
-    private static List<string> GetVariantAttributes(TypeReflection reflection)
-    {
-        List<string> variants = [];
-
-        foreach (Slang.Attribute userAttribute in reflection.UserAttributes)
-        {
-            if (userAttribute.Name == "variant")
-            {
-                string? value = userAttribute.GetArgumentValueString(0);
-
-                if (value == null)
-                    continue;
-
-                variants.Add(value);
-            }
-        }
-
-        return variants;
     }
 
 

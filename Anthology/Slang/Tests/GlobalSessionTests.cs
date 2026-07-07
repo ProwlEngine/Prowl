@@ -107,7 +107,7 @@ public class GlobalSessionTests
 
         Memory<byte> bytes = GlobalSession.GetSessionDescDigest(sessionDesc);
 
-        byte[] expectedChecksum = [3, 229, 123, 212, 44, 33, 209, 222, 69, 99, 219, 13, 221, 62, 154, 70, 74, 167, 197, 122];
+        byte[] expectedChecksum = [60, 140, 117, 253, 247, 221, 196, 234, 163, 160, 196, 59, 97, 151, 154, 44, 48, 95, 71, 89];
         Assert.True(expectedChecksum.SequenceEqual(bytes.ToArray()));
     }
 }

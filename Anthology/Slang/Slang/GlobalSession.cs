@@ -42,7 +42,7 @@ public static unsafe class GlobalSession
         if (!result.IsOk())
             throw new InitializationException("Failed to initialize Global Session", result.GetException()!);
 
-        return NativeComProxy.Create(globalSessionPtr);
+        return new NativeGlobalSession(globalSessionPtr);
     }
 
 
@@ -59,7 +59,7 @@ public static unsafe class GlobalSession
 
         nativeDesc.Free(fsAllocation);
 
-        return new Session(NativeComProxy.Create(sessionPtr));
+        return new Session(new NativeSession(sessionPtr));
     }
 
 
@@ -158,7 +158,7 @@ public static unsafe class GlobalSession
     public static string GetLanguagePrelude(SourceLanguage sourceLanguage)
     {
         s_session.GetLanguagePrelude(sourceLanguage, out ISlangBlob* blobPtr);
-        ISlangBlob blob = NativeComProxy.Create(blobPtr);
+        ISlangBlob blob = new NativeSlangBlob(blobPtr);
 
         return blob.GetString();
     }
@@ -195,7 +195,7 @@ public static unsafe class GlobalSession
         ISlangSharedLibraryLoader* loaderPtr = s_session.GetSharedLibraryLoader();
 
         if (loaderPtr != null)
-            return NativeComProxy.Create(loaderPtr);
+            return new NativeSlangSharedLibraryLoader(loaderPtr);
 
         return null;
     }
@@ -349,6 +349,6 @@ public static unsafe class GlobalSession
 
         nativeDesc.Free(fsAllocation);
 
-        return NativeComProxy.Create(outBlobPtr).ReadBytes();
+        return new NativeSlangBlob(outBlobPtr).ReadBytes();
     }
 }

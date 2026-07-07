@@ -2,37 +2,51 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Slang.Native;
 
 
-// Marshals a managed class to a compatible native COM pointer
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
+internal unsafe struct ProxyVTable
 {
-    private static HashSet<Guid> s_interfaceGuids = GetInterfaces();
-
-    private static HashSet<Guid> GetInterfaces()
-    {
-        HashSet<Guid> guids = new();
-
-        Type? type = typeof(T);
-
-        while (type != null)
-        {
-            guids.Add(UUIDAttribute.GetGuid(type));
-            type = type.GetInterfaces().FirstOrDefault();
-        }
-
-        return guids;
-    }
+    public nint* VTable;
+    public void* ManagedHandle;
+}
 
 
+internal unsafe interface IManagedProxyThunks<T> where T : IUnknown
+{
+    static abstract int SlotCount { get; }
+    static abstract void FillVTable(void** vtable);
+}
+
+
+internal static unsafe class ManagedProxyHelpers
+{
+    public static object GetTarget(ProxyVTable* vtable) => GCHandle.FromIntPtr((nint)vtable->ManagedHandle).Target!;
+
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static uint AddRef(ProxyVTable* self) => ((ManagedComProxyBase)GetTarget(self)).AddRef();
+
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    public static uint Release(ProxyVTable* self) => ((ManagedComProxyBase)GetTarget(self)).Release();
+}
+
+
+// Marshals a managed class to a compatible native COM pointer
+internal abstract unsafe class ManagedComProxyBase
+{
     private GCHandle _handle;
     private uint _refCount;
+    private ProxyVTable* _proxyVTable;
+
+
+    protected abstract int SlotCount { get; }
+    protected abstract void FillVTable(void** vtable);
 
 
     public uint AddRef()
@@ -41,19 +55,6 @@ internal unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
             _handle = GCHandle.Alloc(this);
 
         return _refCount;
-    }
-
-
-    public SlangResult QueryInterface(ref Guid uuid, out nint obj)
-    {
-        if (s_interfaceGuids.Contains(uuid))
-        {
-            obj = (nint)ProxyVTable;
-            return SlangResult.Ok;
-        }
-
-        obj = 0;
-        return SlangResult.NoInterface;
     }
 
 
@@ -74,14 +75,13 @@ internal unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
         if (_proxyVTable == null)
             return;
 
-        ProxyEmitter.FreeManagedProxyVTable(_proxyVTable);
+        NativeMemory.Free(_proxyVTable->VTable);
+        NativeMemory.Free(_proxyVTable);
         _proxyVTable = null;
     }
 
 
-    private ProxyVTable* _proxyVTable = null;
-
-    public ProxyVTable* ProxyVTable
+    protected ProxyVTable* ProxyVTablePtr
     {
         get
         {
@@ -90,19 +90,43 @@ internal unsafe class ManagedComProxy<T> : IUnknown where T : IUnknown
                 if (!_handle.IsAllocated)
                     AddRef();
 
-                _proxyVTable = ProxyEmitter.CreateManagedProxyVTable<T>(_handle);
+                ProxyVTable* proxy = (ProxyVTable*)NativeMemory.Alloc((nuint)sizeof(ProxyVTable));
+
+                proxy->VTable = (nint*)NativeMemory.Alloc((nuint)(sizeof(nint) * SlotCount));
+                proxy->ManagedHandle = (void*)GCHandle.ToIntPtr(_handle);
+
+                FillVTable((void**)proxy->VTable);
+
+                _proxyVTable = proxy;
             }
 
             return _proxyVTable;
         }
     }
+}
 
 
-    public T* NativeRef => (T*)ProxyVTable;
+internal abstract unsafe class ManagedComProxy<T, TThunks> : ManagedComProxyBase, IUnknown
+    where T : IUnknown
+    where TThunks : IManagedProxyThunks<T>
+{
+    protected override int SlotCount => TThunks.SlotCount;
+    protected override void FillVTable(void** vtable) => TThunks.FillVTable(vtable);
 
 
-    public static implicit operator T*(ManagedComProxy<T> src)
+    public T* NativeRef => (T*)ProxyVTablePtr;
+
+
+    public static implicit operator T*(ManagedComProxy<T, TThunks> src) => src.NativeRef;
+
+
+    SlangResult IUnknown.QueryInterface(ref Guid uuid, out nint obj)
     {
-        return src.NativeRef;
+        var fn = (delegate* unmanaged[Cdecl]<ProxyVTable*, ref Guid, out nint, SlangResult>)ProxyVTablePtr->VTable[0];
+        return fn(ProxyVTablePtr, ref uuid, out obj);
     }
+
+
+    uint IUnknown.AddRef() => AddRef();
+    uint IUnknown.Release() => Release();
 }

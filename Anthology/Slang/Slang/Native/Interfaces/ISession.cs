@@ -81,7 +81,7 @@ internal unsafe interface ISession : IUnknown
     SlangResult GetTypeConformanceWitnessSequentialID(
         TypeReflection* type,
         TypeReflection* interfaceType,
-        out nuint outId);
+        out uint outId);
 
     [Obsolete("Method is deprecated")]
     SlangResult CreateCompileRequest(out /* ICompileRequest */ void* outCompileRequest);
@@ -110,4 +110,18 @@ internal unsafe interface ISession : IUnknown
         ConstU8Str path,
         ConstU8Str srcString,
         out ISlangBlob* outDiagnostics);
+
+    SlangResult GetDynamicObjectRTTIBytes(
+        TypeReflection* type,
+        TypeReflection* interfaceType,
+        uint* outRTTIDataBuffer,
+        uint bufferSizeInBytes);
+
+    SlangResult LoadModuleInfoFromIRBlob(
+        ISlangBlob* source,
+        out SlangInt outModuleVersion,
+        out ConstU8Str outModuleCompilerVersion,
+        out ConstU8Str outModuleName);
+
+    SlangResult GetDeclSourceLocation(DeclReflection* decl, out SourceLocation outLocation);
 }

@@ -406,6 +406,7 @@ public class ParsedPassState
                 BlendFactor dst = ParserUtility.Keywords<BlendFactor>(ref t);
                 state = new()
                 {
+                    EnableBlend = true,
                     BlendSrcRgb = src,
                     BlendSrcAlpha = src,
                     BlendDstRgb = dst,
@@ -417,14 +418,14 @@ public class ParsedPassState
                 t.Next();
                 BlendFactor srcRgb = ParserUtility.Keywords<BlendFactor>(ref t);
                 BlendFactor dstRgb = ParserUtility.Keywords<BlendFactor>(ref t);
-                state = new() { BlendSrcRgb = srcRgb, BlendDstRgb = dstRgb };
+                state = new() { EnableBlend = true, BlendSrcRgb = srcRgb, BlendDstRgb = dstRgb };
                 return true;
 
             case "BlendAlpha":
                 t.Next();
                 BlendFactor srcA = ParserUtility.Keywords<BlendFactor>(ref t);
                 BlendFactor dstA = ParserUtility.Keywords<BlendFactor>(ref t);
-                state = new() { BlendSrcAlpha = srcA, BlendDstAlpha = dstA };
+                state = new() { EnableBlend = true, BlendSrcAlpha = srcA, BlendDstAlpha = dstA };
                 return true;
 
             case "Stencil":

@@ -53,7 +53,7 @@ public unsafe class Module : ComponentType, IEquatable<Module>
         _module.FindEntryPointByName(str, out IEntryPoint* entryPointPtr)
             .Throw($"Failed to find matching entrypoint `{name}`");
 
-        return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
+        return new EntryPoint(new NativeEntryPoint(entryPointPtr), _session);
     }
 
 
@@ -80,7 +80,7 @@ public unsafe class Module : ComponentType, IEquatable<Module>
         _module.GetDefinedEntryPoint(index, out IEntryPoint* entryPointPtr)
             .Throw($"Failed to get entry point at index '{index}'");
 
-        return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
+        return new EntryPoint(new NativeEntryPoint(entryPointPtr), _session);
     }
 
 
@@ -92,7 +92,7 @@ public unsafe class Module : ComponentType, IEquatable<Module>
         _module.Serialize(out ISlangBlob* serializedPtr)
             .Throw("Failed to serialize module");
 
-        return NativeComProxy.Create(serializedPtr).ReadBytes();
+        return new NativeSlangBlob(serializedPtr).ReadBytes();
     }
 
 
@@ -146,7 +146,7 @@ public unsafe class Module : ComponentType, IEquatable<Module>
         _module.FindAndCheckEntryPoint(str, stage, out IEntryPoint* entryPointPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new EntryPoint(NativeComProxy.Create(entryPointPtr), _session);
+        return new EntryPoint(new NativeEntryPoint(entryPointPtr), _session);
     }
 
 
@@ -188,7 +188,7 @@ public unsafe class Module : ComponentType, IEquatable<Module>
         _module.Disassemble(out ISlangBlob* blobPtr)
             .Throw("Failed to disassemble module");
 
-        return NativeComProxy.Create(blobPtr).ReadBytes();
+        return new NativeSlangBlob(blobPtr).ReadBytes();
     }
 
 

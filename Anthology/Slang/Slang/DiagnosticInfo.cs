@@ -109,7 +109,7 @@ public struct DiagnosticInfo
             return;
         }
 
-        Message = NativeComProxy.Create(blobPtr).GetString();
+        Message = new NativeSlangBlob(blobPtr).GetString();
     }
 
 

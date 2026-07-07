@@ -17,8 +17,8 @@ using System.IO.Compression;
 
 const string RepoOwner = "shader-slang";
 const string Repo = "slang";
-const string Release = "2026.5";
-const string ReleaseTag = "v2026.5";
+const string Release = "2026.12";
+const string ReleaseTag = "v2026.12";
 
 (string, string)?[] s_targets =
 [

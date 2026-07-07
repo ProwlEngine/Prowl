@@ -46,6 +46,18 @@ internal static class OpenGLCachedPipeline
     {
         int resourceLayoutCount = resourceLayouts.Count;
         SetBindingsInfo[] setInfos = new SetBindingsInfo[resourceLayoutCount];
+
+        // Texture units have no equivalent reflection index that's guaranteed compact, so they
+        // need a manually assigned, globally-incrementing slot.
+        //
+        // GLES's compiled SSBO/UBO blocks carry no explicit `layout(binding=N)` at all (confirmed
+        // by dumping the glsl_es_310 codegen output), so there is nothing to remap and no runtime
+        // API (glShaderStorageBlockBinding does not exist on GLES) to redirect them - the
+        // manually-assigned counter here is the only handle we have, and whether it actually lines
+        // up with the binding GLES gives these blocks by default is unconfirmed.
+        uint nextTextureUnit = 0;
+        uint nextStorageBindingPoint = 0;
+
         for (uint setSlot = 0; setSlot < resourceLayoutCount; setSlot++)
         {
             ResourceLayoutDescription layoutDesc = resourceLayouts[(int)setSlot];
@@ -58,7 +70,6 @@ internal static class OpenGLCachedPipeline
             for (uint i = 0; i < resources.Length; i++)
             {
                 ResourceLayoutElementDescription resource = resources[i];
-                int bindingIndex = resource.BindingIndex;
 
                 string resourceName = resource.GLUniformName
                     ?? throw new RenderException("Resource layout element name was not specified.");
@@ -71,7 +82,7 @@ internal static class OpenGLCachedPipeline
                     {
                         gl.GetActiveUniformBlock(program, blockIndex, UniformBlockPName.DataSize, out int blockSize);
                         CheckLastError();
-                        uniformBindings[i] = new OpenGLUniformBinding(program, blockIndex, (uint)blockSize, (uint)bindingIndex);
+                        uniformBindings[i] = new OpenGLUniformBinding(program, blockIndex, (uint)blockSize, blockIndex);
                     }
                 }
                 else if (resource.Kind == ResourceKind.TextureReadOnly
@@ -81,7 +92,7 @@ internal static class OpenGLCachedPipeline
                     CheckLastError();
                     textureBindings[i] = new OpenGLTextureBindingSlotInfo()
                     {
-                        RelativeIndex = bindingIndex,
+                        RelativeIndex = (int)nextTextureUnit++,
                         UniformLocation = location
                     };
                 }
@@ -93,11 +104,12 @@ internal static class OpenGLCachedPipeline
                         uint storageBlockBinding = gl.GetProgramResourceIndex(program, ProgramInterface.ShaderStorageBlock, resourceName);
                         CheckLastError();
                         if (storageBlockBinding != GL_INVALID_INDEX)
-                            storageBufferBindings[i] = new OpenGLShaderStorageBinding(storageBlockBinding, (uint)bindingIndex);
+                            storageBufferBindings[i] = new OpenGLShaderStorageBinding(storageBlockBinding, nextStorageBindingPoint++);
                     }
                     else
                     {
-                        storageBufferBindings[i] = new OpenGLShaderStorageBinding((uint)bindingIndex, (uint)bindingIndex);
+                        storageBufferBindings[i] = new OpenGLShaderStorageBinding(nextStorageBindingPoint, nextStorageBindingPoint);
+                        nextStorageBindingPoint++;
                     }
                 }
             }

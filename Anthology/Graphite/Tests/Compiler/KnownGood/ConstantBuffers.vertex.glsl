@@ -20,7 +20,7 @@ layout(std140) uniform block_Camera_0
     float time_0;
 }camera_0;
 
-#line 13369 1
+#line 93 1
 layout(location = 0)
 in vec3 position_0;
 

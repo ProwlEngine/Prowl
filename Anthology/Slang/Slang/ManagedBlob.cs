@@ -10,7 +10,7 @@ using Prowl.Slang.Native;
 namespace Prowl.Slang;
 
 
-internal unsafe class ManagedBlob : ManagedComProxy<ISlangBlob>, ISlangBlob
+internal unsafe class ManagedBlob : ManagedComProxy<ISlangBlob, SlangBlobThunks>, ISlangBlob
 {
     public static ManagedBlob FromMemory(Memory<byte> source)
     {

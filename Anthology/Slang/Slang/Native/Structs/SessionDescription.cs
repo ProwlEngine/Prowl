@@ -31,6 +31,8 @@ internal unsafe struct SessionDescription()
 
     public NativeUIntArray<CompilerOptionEntry> CompilerOptionEntries;
 
+    public CBool SkipSPIRVValidation;
+
 
     public SessionDescription Allocate(Slang.SessionDescription src, out FileSystem? fsAllocation)
     {
@@ -38,6 +40,7 @@ internal unsafe struct SessionDescription()
         DefaultMatrixLayoutMode = src.DefaultMatrixLayoutMode;
         EnableEffectAnnotations = src.EnableEffectAnnotations;
         AllowGLSLSyntax = src.AllowGLSLSyntax;
+        SkipSPIRVValidation = src.SkipSPIRVValidation;
 
         fsAllocation = null;
         if (src.FileProvider != null)
@@ -85,6 +88,7 @@ internal unsafe struct SessionDescription()
             DefaultMatrixLayoutMode = DefaultMatrixLayoutMode,
             EnableEffectAnnotations = EnableEffectAnnotations,
             AllowGLSLSyntax = AllowGLSLSyntax,
+            SkipSPIRVValidation = SkipSPIRVValidation,
             Targets = [.. Targets.Select(x => x.Read())],
             SearchPaths = [.. SearchPaths.Select(x => x.String)],
             PreprocessorMacros = [.. PreprocessorMacros.Select(x => x.Read())],

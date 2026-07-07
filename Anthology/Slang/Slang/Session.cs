@@ -73,7 +73,7 @@ public unsafe class Session : IEquatable<Session>
         if (modulePtr == null)
             throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'");
 
-        return new Module(NativeComProxy.Create(modulePtr, false), this);
+        return new Module(new NativeModule(modulePtr, false), this);
     }
 
 
@@ -95,7 +95,7 @@ public unsafe class Session : IEquatable<Session>
         if (modulePtr == null)
             throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
 
-        return new Module(NativeComProxy.Create(modulePtr, false), this);
+        return new Module(new NativeModule(modulePtr, false), this);
     }
 
 
@@ -143,7 +143,7 @@ public unsafe class Session : IEquatable<Session>
         _session.CreateCompositeComponentType(componentsPtr, componentTypes.Length, out IComponentType* componentPtr, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new ComponentType(NativeComProxy.Create(componentPtr), this);
+        return new ComponentType(new NativeComponentType(componentPtr), this);
     }
 
 
@@ -223,7 +223,7 @@ public unsafe class Session : IEquatable<Session>
         _session.GetTypeRTTIMangledName(type._ptr, out ISlangBlob* nameBlob)
             .Throw("Failed to get runtime type information mangled name");
 
-        return NativeComProxy.Create(nameBlob).GetString();
+        return new NativeSlangBlob(nameBlob).GetString();
     }
 
     /// <summary>
@@ -234,7 +234,7 @@ public unsafe class Session : IEquatable<Session>
         _session.GetTypeConformanceWitnessMangledName(type._ptr, interfaceType._ptr, out ISlangBlob* nameBlob)
             .Throw("Failed to get type confrmance witness mangled name");
 
-        return NativeComProxy.Create(nameBlob).GetString();
+        return new NativeSlangBlob(nameBlob).GetString();
     }
 
 
@@ -243,10 +243,10 @@ public unsafe class Session : IEquatable<Session>
     /// </summary>
     public uint GetTypeConformanceWitnessSequentialID(TypeReflection type, TypeReflection interfaceType)
     {
-        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out nuint outId)
+        _session.GetTypeConformanceWitnessSequentialID(type._ptr, interfaceType._ptr, out uint outId)
             .Throw("Failed to get type conformance witness sequential ID");
 
-        return (uint)outId;
+        return outId;
     }
 
 
@@ -286,7 +286,7 @@ public unsafe class Session : IEquatable<Session>
         _session.CreateTypeConformanceComponentType(type._ptr, interfaceType._ptr, out ITypeConformance* outConformance, conformanceIdOverride, out ISlangBlob* diagnosticsPtr)
             .Throw(diagnosticsPtr, out diagnostics);
 
-        return new ComponentType(NativeComProxy.Create(outConformance), this);
+        return new ComponentType(new NativeTypeConformance(outConformance), this);
     }
 
 
@@ -308,7 +308,7 @@ public unsafe class Session : IEquatable<Session>
         if (modulePtr == null)
             throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
 
-        return new Module(NativeComProxy.Create(modulePtr, false), this);
+        return new Module(new NativeModule(modulePtr, false), this);
     }
 
 
@@ -337,7 +337,7 @@ public unsafe class Session : IEquatable<Session>
 
         IModule* modulePtr = _session.GetLoadedModule(index);
 
-        return new Module(NativeComProxy.Create(modulePtr, false), this);
+        return new Module(new NativeModule(modulePtr, false), this);
     }
 
 
@@ -371,7 +371,7 @@ public unsafe class Session : IEquatable<Session>
         if (modulePtr == null)
             throw diagnostics.GetException() ?? new InvalidOperationException($"Failed to load module '{moduleName}'"); ;
 
-        return new Module(NativeComProxy.Create(modulePtr, false), this);
+        return new Module(new NativeModule(modulePtr, false), this);
     }
 
 

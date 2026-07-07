@@ -21,6 +21,7 @@
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
+    <Project Path="Slang/COMApi/Prowl.Slang.COMApi.csproj" />
   </Folder>
   <Folder Name="/Samples/">
     <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
