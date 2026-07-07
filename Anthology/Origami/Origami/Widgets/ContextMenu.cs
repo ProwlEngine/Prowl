@@ -323,10 +323,14 @@ public sealed class ContextBuilder
                     paper.Draw((canvas, rect) => ContextMenu.DrawChevron(canvas, rect, arrow));
 
                 if (paper.IsParentHovered && Sub != null)
-                    // Overlap the parent panel by ~2px so the submenu reads as attached, not detached.
-                    // Row-relative: 200 menu width - 5 col pad - ~2 overlap (row padding is not added to
-                    // self-directed children) = 193.
-                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 193f, 0, close);
+                    // The submenu stays open only while this ROW (or the submenu, which is its child)
+                    // is hovered - the panel's padding strip does not count. So the submenu's left
+                    // edge must overlap the row's RIGHT edge, else the mouse crosses a dead strip
+                    // between the row and the submenu and it closes. A self-directed child's X is
+                    // measured from the row's border box then offset by the row's own left padding,
+                    // so relative to the row's right edge: RowPadX + X - rowWidth. With rowWidth =
+                    // MenuWidth - 2*MenuPad = 190, a 1px overlap is X = 190 - 9 (RowPadX) - 1 = 180.
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 180f, 0, close);
             }
         }
     }
