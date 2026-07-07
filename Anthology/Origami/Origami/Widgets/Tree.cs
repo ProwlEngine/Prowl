@@ -571,19 +571,14 @@ public sealed class TreeBuilder
 
         using (row.Enter())
         {
-            // ---- Selection gradient (90deg accent, painted behind the row content) ----
+            // ---- Selection fill (solid accent, painted behind the row content) ----
             if (isSelected)
             {
                 _paper.Draw((canvas, r) =>
                 {
                     float x = (float)r.Min.X, y = (float)r.Min.Y;
                     float w = (float)r.Size.X, h = (float)r.Size.Y;
-                    canvas.SaveState();
-                    canvas.SetLinearBrush(x, y, x + w, y, selLeft, selRight);
-                    canvas.BeginPath();
-                    canvas.RoundedRect(x, y, w, h, rowRounding);
-                    canvas.Fill();
-                    canvas.RestoreState();
+                    canvas.RoundedRectFilled(x, y, w, h, rowRounding, selFill);
                 });
             }
 
