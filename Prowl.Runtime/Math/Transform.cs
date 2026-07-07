@@ -198,12 +198,38 @@ public class Transform
 
     public virtual Float4x4 WorldToLocalMatrix => LocalToWorldMatrix.Invert();
 
+    /// <summary>
+    /// World matrix of this transform. Lazily cached: it only rebuilds when this transform's
+    /// <see cref="Version"/> changes or an ancestor's world matrix changes, so an unmoving object
+    /// walks its ancestor chain doing cheap version comparisons instead of rebuilding matrices.
+    /// Every rebuild bumps <see cref="_worldVersion"/> so descendants know to invalidate.
+    /// Not thread-safe: transforms are expected to be read on a single thread per frame.
+    /// </summary>
     public virtual Float4x4 LocalToWorldMatrix
     {
         get
         {
-            Float4x4 t = Float4x4.CreateTRS(_localPosition, _localRotation, _localScale);
-            return Parent != null ? (Parent.LocalToWorldMatrix * t) : t;
+            Transform parent = Parent;
+            if (parent == null)
+            {
+                if (_cachedLocalVersion != _version)
+                {
+                    _worldCache = Float4x4.CreateTRS(_localPosition, _localRotation, _localScale);
+                    _cachedLocalVersion = _version;
+                    _worldVersion++;
+                }
+                return _worldCache;
+            }
+
+            Float4x4 parentWorld = parent.LocalToWorldMatrix;
+            if (_cachedLocalVersion != _version || _cachedParentWorldVersion != parent._worldVersion)
+            {
+                _worldCache = parentWorld * Float4x4.CreateTRS(_localPosition, _localRotation, _localScale);
+                _cachedLocalVersion = _version;
+                _cachedParentWorldVersion = parent._worldVersion;
+                _worldVersion++;
+            }
+            return _worldCache;
         }
     }
 
@@ -234,6 +260,14 @@ public class Transform
 
     [SerializeIgnore]
     uint _version = 1;
+
+    // Lazy world-matrix cache. _cachedLocalVersion starts at 0 (Version starts at 1) so the first
+    // access always rebuilds. _worldVersion increments on every rebuild so children can detect an
+    // ancestor move without walking further than their direct parent.
+    [SerializeIgnore] Float4x4 _worldCache;
+    [SerializeIgnore] uint _cachedLocalVersion;
+    [SerializeIgnore] uint _cachedParentWorldVersion;
+    [SerializeIgnore] uint _worldVersion;
 
     public GameObject GameObject { get; internal set; }
     #endregion
