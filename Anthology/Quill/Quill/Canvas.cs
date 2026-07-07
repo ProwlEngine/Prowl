@@ -462,6 +462,7 @@ namespace Prowl.Quill
         private readonly Stack<ProwlCanvasState> _savedStates = new Stack<ProwlCanvasState>();
         private ProwlCanvasState _state;
         private float _globalAlpha;
+        private bool _antiAlias = true;
 
         private TextRenderer _scribeRenderer;
 
@@ -583,6 +584,9 @@ namespace Prowl.Quill
         /// </summary>
         private float FringeHalfLogical()
         {
+            if (!_antiAlias)
+                return 0f;
+
             var t = _state.transform;
             double det = t.A * t.D - t.B * t.C;
             double scale = Math.Sqrt(Math.Abs(det));
@@ -1083,6 +1087,17 @@ namespace Prowl.Quill
         /// </summary>
         /// <param name="alpha">The alpha value from 0 (fully transparent) to 1 (fully opaque).</param>
         public void SetGlobalAlpha(float alpha) => _globalAlpha = alpha;
+
+        /// <summary>
+        /// Enables or disables anti-aliasing for all vector geometry (fills, strokes, rounded rects,
+        /// circles and arcs). When disabled the one-pixel AA fringe is collapsed, giving hard,
+        /// pixel-crisp edges. Persists until changed; it is not reset per frame. Text uses an SDF
+        /// atlas and is unaffected by this setting.
+        /// </summary>
+        public void SetAntiAlias(bool enabled) => _antiAlias = enabled;
+
+        /// <summary>Whether vector anti-aliasing is currently enabled (default true).</summary>
+        public bool AntiAlias => _antiAlias;
 
         #endregion
 
@@ -1743,6 +1758,9 @@ namespace Prowl.Quill
         {
             FillComplex();
 
+            if (!_antiAlias)
+                return;
+
             // Stroke with same color as Fill
             SaveState();
             SetStrokeColor(_state.fillColor);
@@ -1839,7 +1857,7 @@ namespace Prowl.Quill
             if (n < 3)
                 return;
 
-            const float halfPixel = 0.5f; // inset/outset -> 1px fringe centred on the nominal edge
+            float halfPixel = _antiAlias ? 0.5f : 0f; // inset/outset -> 1px fringe centred on the nominal edge
 
             Float2 centroid = Float2.Zero;
             for (int i = 0; i < n; i++)
@@ -1964,7 +1982,7 @@ namespace Prowl.Quill
             // The whole stroke mesh is one colour, so premultiply it once and append the vertices raw
             // (skips the per-vertex premultiply). Also skips meshing entirely when fully transparent.
             Color32 pmColor = PremultiplyColor(_state.strokeColor);
-            PolylineMesher.Create(_strokePoints, pixelStrokeWidth, 1.0f, pmColor,
+            PolylineMesher.Create(_strokePoints, pixelStrokeWidth, _antiAlias ? 1.0f : 0.0f, pmColor,
                 _state.strokeJoint, _state.miterLimit, _state.strokeStartCap, _state.strokeEndCap,
                 _state.roundingMinDistance * _framebufferScale, out var verts, out var idxs);
 
