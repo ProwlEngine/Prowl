@@ -68,6 +68,8 @@ public sealed class ScrollViewBuilder
     private float _wheelStep = 30f;
     private bool _trapScroll = true;
     private bool _smoothScroll = true;
+    private bool _overlayScrollbars = true;
+    private bool _autoHideScrollbars = true;
 
     internal ScrollViewBuilder(Paper paper, string id, float width, float height, OrigamiTheme theme)
     {
@@ -141,6 +143,19 @@ public sealed class ScrollViewBuilder
     /// would leave the rows mismatched (blank gaps) mid-animation. Virtualized lists snap instead.
     /// </summary>
     public ScrollViewBuilder SmoothScroll(bool smooth = true) { _smoothScroll = smooth; return this; }
+
+    /// <summary>
+    /// When true (default) the scrollbars float over the content and reserve no layout space, so the
+    /// content keeps its full width/height whether or not it overflows. Turn OFF to carve an inline
+    /// gutter that the bar sits in (content shrinks to make room).
+    /// </summary>
+    public ScrollViewBuilder OverlayScrollbars(bool overlay = true) { _overlayScrollbars = overlay; return this; }
+
+    /// <summary>
+    /// When true (default) the scrollbars are only shown while the pointer is over the scroll view (or a
+    /// thumb is being dragged), easing in and out. Turn OFF to always show them.
+    /// </summary>
+    public ScrollViewBuilder AutoHideScrollbars(bool autoHide = true) { _autoHideScrollbars = autoHide; return this; }
 
     // ── Terminator ─────────────────────────────────────────────────────
 
@@ -231,6 +246,9 @@ public sealed class ScrollViewBuilder
             bool needsH = _horizontal && (contentW > _width || _forceScrollbar);
             float vBarW = needsV ? _scrollbarSize : 0f;
             float hBarH = needsH ? _scrollbarSize : 0f;
+            // Overlay bars float over the content and reserve no layout space; inline bars carve a gutter.
+            float reserveV = _overlayScrollbars ? 0f : vBarW;
+            float reserveH = _overlayScrollbars ? 0f : hBarH;
 
             // Re-clamp scroll in case content shrank since last frame.
             float maxScrollY = MathF.Max(0f, contentH - _height);
@@ -243,7 +261,7 @@ public sealed class ScrollViewBuilder
             // Content area: SelfDirected so we can offset it by (-scrollX, -scrollY).
             // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
             // shrunk to viewport width minus the vertical scrollbar.
-            float viewportW = _width - _padLeft - _padRight - vBarW;
+            float viewportW = _width - _padLeft - _padRight - reserveV;
             var content = _paper.Column($"{_id}_content")
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - scrollX, _padTop - scrollY)
@@ -265,16 +283,27 @@ public sealed class ScrollViewBuilder
 
             using (content.Enter())
             {
-                float viewportH = _height - _padTop - _padBottom - hBarH;
+                float viewportH = _height - _padTop - _padBottom - reserveH;
                 drawContents(new ScrollViewport(scrollX, scrollY, viewportW, viewportH));
             }
 
-            // ── Scrollbar tracks + thumbs ────────────────────────────
-            if (needsV) DrawVerticalScrollbar(outerHandle, ramp, scrollY, contentH, hBarH);
-            if (needsH) DrawHorizontalScrollbar(outerHandle, ramp, scrollX, contentW, vBarW);
+            // ── Scrollbar thumbs ─────────────────────────────────────
+            // Auto-hide: bars are only visible while the pointer is over the scroll view (or a thumb is
+            // mid-drag), easing in/out through a stored visibility factor.
+            bool barDragging = _paper.GetElementStorage(outerHandle, "barDrag", 0f) > 0.5f;
+            bool wantBars = !_autoHideScrollbars || barDragging || _paper.IsElementHovered(outerHandle.Data.ID);
+            float visTarget = wantBars ? 1f : 0f;
+            float vis = _paper.GetElementStorage(outerHandle, "barVis", visTarget);
+            vis += (visTarget - vis) * MathF.Min(1f, (float)_paper.DeltaTime * 14f);
+            if (MathF.Abs(visTarget - vis) < 0.004f) vis = visTarget;
+            _paper.SetElementStorage(outerHandle, "barVis", vis);
 
-            // Corner spacer when both scrollbars are visible (so the thumbs don't overlap).
-            if (needsV && needsH)
+            if (needsV) DrawVerticalScrollbar(outerHandle, ramp, scrollY, contentH, hBarH, vis);
+            if (needsH) DrawHorizontalScrollbar(outerHandle, ramp, scrollX, contentW, vBarW, vis);
+
+            // Corner spacer so inline (gutter) bars don't overlap where they meet. Overlay bars float and
+            // need no spacer.
+            if (needsV && needsH && !_overlayScrollbars)
             {
                 _paper.Box($"{_id}_corner")
                     .PositionType(PositionType.SelfDirected)
@@ -318,8 +347,10 @@ public sealed class ScrollViewBuilder
         }
     }
 
-    private void DrawVerticalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollY, float contentH, float hBarH)
+    private void DrawVerticalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollY, float contentH, float hBarH, float vis)
     {
+        if (vis <= 0.001f) return;
+
         float trackH = _height - hBarH;
         float effContentH = MathF.Max(_height, contentH);
         float maxScroll = MathF.Max(0f, contentH - _height);
@@ -327,22 +358,13 @@ public sealed class ScrollViewBuilder
         float thumbH = MathF.Max(20f, trackH * ratio);
         float thumbY = maxScroll > 0f ? (scrollY / maxScroll) * (trackH - thumbH) : 0f;
 
-        // Track stays transparent (the thumb floats over the content, like the prototype's overlay bars).
-        _paper.Box($"{_id}_vtrack")
-            .PositionType(PositionType.SelfDirected)
-            .Position(_width - _scrollbarSize, 0)
-            .Width(_scrollbarSize).Height(trackH)
-            .BackgroundColor(ScrollTrackColor())
-            .IsNotInteractable();
-
         var thumb = _paper.Box($"{_id}_vthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(_width - _scrollbarSize, thumbY)
             .Transition(GuiProp.Top, 0.1f, Easing.EaseOut)
             .Width(_scrollbarSize).Height(thumbH)
-            .BackgroundColor(ScrollThumbColor())
-            .Hovered.BackgroundColor(ScrollThumbHoverColor()).End()
-            .Rounded(_scrollbarSize / 2f);
+            .BackgroundColor(WithScaledAlpha(ScrollThumbColor(), vis))
+            .Hovered.BackgroundColor(WithScaledAlpha(ScrollThumbHoverColor(), vis)).End();
 
         // Drag the thumb to scroll. Snapshot both scrollY *and* the pointer Y at drag start;
         // during the drag we recompute scrollY from absolute pointer position rather than
@@ -353,6 +375,7 @@ public sealed class ScrollViewBuilder
         {
             _paper.SetElementStorage(capturedHandle, "vDragStartScroll", scrollY);
             _paper.SetElementStorage(capturedHandle, "vDragStartY", (float)e.PointerPosition.Y);
+            _paper.SetElementStorage(capturedHandle, "barDrag", 1f);
         });
         thumb.OnDragging(e =>
         {
@@ -364,10 +387,13 @@ public sealed class ScrollViewBuilder
             float ns = Clamp(startScroll + deltaY * (maxScroll / dragRange), 0f, maxScroll);
             _paper.SetElementStorage(capturedHandle, "scrollY", ns);
         });
+        thumb.OnDragEnd(e => _paper.SetElementStorage(capturedHandle, "barDrag", 0f));
     }
 
-    private void DrawHorizontalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollX, float contentW, float vBarW)
+    private void DrawHorizontalScrollbar(ElementHandle outerHandle, OrigamiRamp ramp, float scrollX, float contentW, float vBarW, float vis)
     {
+        if (vis <= 0.001f) return;
+
         float trackW = _width - vBarW;
         float effContentW = MathF.Max(_width, contentW);
         float maxScroll = MathF.Max(0f, contentW - _width);
@@ -375,27 +401,20 @@ public sealed class ScrollViewBuilder
         float thumbW = MathF.Max(20f, trackW * ratio);
         float thumbX = maxScroll > 0f ? (scrollX / maxScroll) * (trackW - thumbW) : 0f;
 
-        _paper.Box($"{_id}_htrack")
-            .PositionType(PositionType.SelfDirected)
-            .Position(0, _height - _scrollbarSize)
-            .Width(trackW).Height(_scrollbarSize)
-            .BackgroundColor(ScrollTrackColor())
-            .IsNotInteractable();
-
         var thumb = _paper.Box($"{_id}_hthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(thumbX, _height - _scrollbarSize)
             .Transition(GuiProp.Left, 0.1f, Easing.EaseOut)
             .Width(thumbW).Height(_scrollbarSize)
-            .BackgroundColor(ScrollThumbColor())
-            .Hovered.BackgroundColor(ScrollThumbHoverColor()).End()
-            .Rounded(_scrollbarSize / 2f);
+            .BackgroundColor(WithScaledAlpha(ScrollThumbColor(), vis))
+            .Hovered.BackgroundColor(WithScaledAlpha(ScrollThumbHoverColor(), vis)).End();
 
         var capturedHandle = outerHandle;
         thumb.OnDragStart(e =>
         {
             _paper.SetElementStorage(capturedHandle, "hDragStartScroll", scrollX);
             _paper.SetElementStorage(capturedHandle, "hDragStartX", (float)e.PointerPosition.X);
+            _paper.SetElementStorage(capturedHandle, "barDrag", 1f);
         });
         thumb.OnDragging(e =>
         {
@@ -407,13 +426,18 @@ public sealed class ScrollViewBuilder
             float ns = Clamp(startScroll + deltaX * (maxScroll / dragRange), 0f, maxScroll);
             _paper.SetElementStorage(capturedHandle, "scrollX", ns);
         });
+        thumb.OnDragEnd(e => _paper.SetElementStorage(capturedHandle, "barDrag", 0f));
     }
 
     private static float Clamp(float v, float lo, float hi) => MathF.Max(lo, MathF.Min(hi, v));
 
-    // Overlay scrollbar styling: a translucent lavender thumb over a transparent track, so bars
-    // float above content instead of sitting in a filled gutter.
+    // Scrollbar styling: square (unrounded) thumbs in a translucent light ink, so they stay legible
+    // floating over the dark panel surfaces, lifting brighter/more opaque on hover. The corner spacer's
+    // track colour is fully transparent so overlay bars float over the content.
     private SDColor ScrollTrackColor() => SDColor.FromArgb(0, 0, 0, 0);
-    private SDColor ScrollThumbColor() => SDColor.FromArgb(44, _theme.Ink.C400);
-    private SDColor ScrollThumbHoverColor() => SDColor.FromArgb(96, _theme.Ink.C400);
+    private SDColor ScrollThumbColor() => SDColor.FromArgb(112, _theme.Ink.C200);
+    private SDColor ScrollThumbHoverColor() => SDColor.FromArgb(153, _theme.Ink.C300);
+
+    private static SDColor WithScaledAlpha(SDColor c, float f) =>
+        SDColor.FromArgb((int)Math.Clamp(c.A * f, 0f, 255f), c.R, c.G, c.B);
 }
