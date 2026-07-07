@@ -117,7 +117,7 @@ public static class TooltipSystem
         if (tooltipX + tooltipW > screenW - 4) tooltipX = screenW - tooltipW - 4;
         if (tooltipX < 4) tooltipX = 4;
 
-        Color bgColor = Color.FromArgb(255, 42, 36, 64);   // #2a2440
+        Color bgColor = theme.Popover;
 
         float arrowPx = (float)pos.X;
         float arrowPy = (float)pos.Y;

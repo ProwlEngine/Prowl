@@ -88,6 +88,9 @@ namespace Prowl.PaperUI.LayoutEngine
         public FontFile FontMono;
         public FontStyle FontStyle;
         public TextWrapMode WrapMode;
+        /// <summary>When true (single-line only), text wider than the element is cut and suffixed with
+        /// an ellipsis that is guaranteed to fit.</summary>
+        public bool Truncate;
         public TextAlignment TextAlignment;
 
         /// <summary>Flex-wrap: parent-directed children flow onto new lines when they overrun the main axis.</summary>
@@ -158,6 +161,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 Font = null,
                 FontStyle = FontStyle.Regular,
                 WrapMode = TextWrapMode.NoWrap,
+                Truncate = false,
                 TextAlignment = TextAlignment.Left,
                 ContentWrap = false,
                 WrapJustify = WrapJustify.Start,

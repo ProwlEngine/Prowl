@@ -12,6 +12,9 @@ namespace Prowl.Scribe.Internal
 
 		public bool IsNull => _array == null;
 
+		/// <summary>Elements available from the current offset to the end of the backing array.</summary>
+		public int Length => _array == null ? 0 : _array.Length - Offset;
+
 		public T this[int index]
 		{
 			get => _array[Offset + index];

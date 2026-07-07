@@ -81,6 +81,18 @@ public sealed class TableBuilder
     private Action<int>? _onActivate;
     private Action<int>? _onContext;
 
+    // Rich-row extensions (multi-select / drag / ping / fully custom cell content). Opt-in; when unset
+    // the table behaves as the simple single-select data grid.
+    private bool _multiSelect;
+    private Func<int, bool>? _isSelected;
+    private Action<int, bool, bool>? _onSelectModified;  // (row, ctrl, shift)
+    private Action<int>? _onRowDragStart;
+    private Action<int, float>? _onRowHover;              // (row, normalizedY)
+    private Func<int, bool>? _isPinged;
+    private Func<float>? _pingAlpha;
+    private int? _rowCount;                               // used with CellContent instead of _rows
+    private Action<int, int>? _cellContent;              // (row, col) — host draws into the current cell
+
     private float _rowHeight = 30f;
 
     internal TableBuilder(Paper paper, string id, int selected, Action<int> onSelect, OrigamiTheme theme)
@@ -90,6 +102,7 @@ public sealed class TableBuilder
         _selected = selected;
         _onSelect = onSelect;
         _theme = theme;
+        _rowHeight = _theme.Metrics.RowHeight;
     }
 
     /// <summary>Override table width (default Stretch).</summary>
@@ -145,6 +158,40 @@ public sealed class TableBuilder
 
     /// <summary>Fire when a row is right-clicked.</summary>
     public TableBuilder OnRowContext(Action<int> onContext) { _onContext = onContext; return this; }
+
+    // ── Rich-row extensions ─────────────────────────────────────────────
+
+    /// <summary>Enable multi-select: rows use <see cref="IsSelected"/> and clicks fire <see cref="OnSelectModified"/>.</summary>
+    public TableBuilder MultiSelect(bool on = true) { _multiSelect = on; return this; }
+
+    /// <summary>Predicate deciding whether a row renders selected (overrides the constructor's selected index).</summary>
+    public TableBuilder IsSelected(Func<int, bool> predicate) { _isSelected = predicate; return this; }
+
+    /// <summary>Click handler carrying the ctrl/shift modifiers, for range/toggle selection.</summary>
+    public TableBuilder OnSelectModified(Action<int, bool, bool> handler) { _onSelectModified = handler; return this; }
+
+    /// <summary>Start a drag from a row.</summary>
+    public TableBuilder OnRowDragStart(Action<int> handler) { _onRowDragStart = handler; return this; }
+
+    /// <summary>Hover callback (row index + normalized Y), e.g. for drop-target tracking.</summary>
+    public TableBuilder OnRowHover(Action<int, float> handler) { _onRowHover = handler; return this; }
+
+    /// <summary>Rows matching this predicate get a fading "ping" highlight (alpha from <see cref="PingAlpha"/>).</summary>
+    public TableBuilder IsPinged(Func<int, bool> predicate) { _isPinged = predicate; return this; }
+
+    /// <summary>Current ping alpha 0..1 (usually a shared animated value).</summary>
+    public TableBuilder PingAlpha(Func<float> alpha) { _pingAlpha = alpha; return this; }
+
+    /// <summary>
+    /// Draw fully custom content per cell instead of using <c>.Row().Cell()</c> data. Set the number of
+    /// rows with <see cref="RowCount"/>; for each row/column the callback is invoked inside the (already
+    /// laid-out, column-flex-sized, clipped) cell so the host can draw carets, tags, badges, rename
+    /// fields, etc. while the table owns the column widths, header, selection background and scrolling.
+    /// </summary>
+    public TableBuilder CellContent(Action<int, int> draw) { _cellContent = draw; return this; }
+
+    /// <summary>Row count when using <see cref="CellContent"/>.</summary>
+    public TableBuilder RowCount(int count) { _rowCount = Math.Max(0, count); return this; }
 
     /// <summary>Begin a new row. Chain <c>.Cell(...)</c> on the returned row.</summary>
     public TableRow Row()
@@ -265,9 +312,12 @@ public sealed class TableBuilder
                 DrawRows();
             }
 
+            int RowN() => _cellContent != null ? (_rowCount ?? 0) : _rows.Count;
+
             void DrawRows()
             {
-                for (int i = 0; i < _rows.Count; i++)
+                int n = RowN();
+                for (int i = 0; i < n; i++)
                     DrawRow(i);
             }
 
@@ -278,7 +328,7 @@ public sealed class TableBuilder
             // spacer drops that 1px to keep the total exact.
             void DrawRowsVirtual(ScrollViewport vp)
             {
-                int n = _rows.Count;
+                int n = RowN();
                 if (n == 0) return;
 
                 float stride = hRow + 1f;
@@ -300,26 +350,47 @@ public sealed class TableBuilder
 
             void DrawRow(int i)
             {
-                var row = _rows[i];
+                TableRow? row = _cellContent == null && i < _rows.Count ? _rows[i] : null;
                 int idx = i;
-                bool selected = i == _selected;
-                bool isLast = i == _rows.Count - 1;
+                bool selected = _isSelected != null ? _isSelected(i) : i == _selected;
+                bool isLast = i == RowN() - 1;
 
                 var rowBuilder = _paper.Row($"{_id}_r{i}")
                     .Width(UnitValue.Stretch()).Height(hRow)
                     .BackgroundColor(selected ? accDim : Color.Transparent)
-                    .Hovered.BackgroundColor(selected ? accDim : hover).End()
-                    .OnClick(idx, (ci, _) => _onSelect(ci));
+                    .Hovered.BackgroundColor(selected ? accDim : hover).End();
+
+                if (_multiSelect && _onSelectModified != null)
+                    rowBuilder.OnClick(idx, (ci, e) =>
+                    {
+                        e.StopPropagation();  // don't let the click bubble to a container that clears selection
+                        bool ctrl = _paper.IsKeyDown(PaperKey.LeftControl) || _paper.IsKeyDown(PaperKey.RightControl);
+                        bool shift = _paper.IsKeyDown(PaperKey.LeftShift) || _paper.IsKeyDown(PaperKey.RightShift);
+                        _onSelectModified!(ci, ctrl, shift);
+                    });
+                else
+                    rowBuilder.OnClick(idx, (ci, e) => { e.StopPropagation(); _onSelect(ci); });
 
                 if (_onActivate != null) rowBuilder.OnDoubleClick(idx, (ci, _) => _onActivate!(ci));
                 if (_onContext != null) rowBuilder.OnRightClick(idx, (ci, _) => _onContext!(ci));
+                if (_onRowDragStart != null) rowBuilder.OnDragStart(idx, (ci, _) => _onRowDragStart!(ci));
+                if (_onRowHover != null) rowBuilder.OnHover(idx, (ci, e) => _onRowHover!(ci, (float)e.NormalizedPosition.Y));
 
-                if (selected)
+                bool pinged = _isPinged != null && _isPinged(i);
+                if (selected || pinged)
                 {
                     rowBuilder.OnPostLayout((h2, r2) => _paper.Draw(ref h2, (canvas, rr) =>
                     {
-                        canvas.RectFilled((float)rr.Min.X, (float)rr.Min.Y, 2f, (float)rr.Size.Y,
-                            Color32.FromArgb(255, (byte)acc.R, (byte)acc.G, (byte)acc.B));
+                        if (selected)
+                            canvas.RectFilled((float)rr.Min.X, (float)rr.Min.Y, 2f, (float)rr.Size.Y,
+                                Color32.FromArgb(255, (byte)acc.R, (byte)acc.G, (byte)acc.B));
+                        if (pinged)
+                        {
+                            float pa = _pingAlpha?.Invoke() ?? 0f;
+                            if (pa > 0f)
+                                canvas.RectFilled((float)rr.Min.X, (float)rr.Min.Y, (float)rr.Size.X, (float)rr.Size.Y,
+                                    Color32.FromArgb((int)(pa * 60), 255, 220, 50));
+                        }
                     }));
                 }
 
@@ -328,7 +399,6 @@ public sealed class TableBuilder
                     for (int c = 0; c < _columns.Count; c++)
                     {
                         var col = _columns[c];
-                        TableCell? cell = c < row.Cells.Count ? row.Cells[c] : null;
 
                         using (_paper.Row($"{_id}_r{i}c{c}")
                             .Width(UnitValue.Stretch(col.Flex)).Height(hRow)
@@ -336,6 +406,9 @@ public sealed class TableBuilder
                             .Clip()
                             .Enter())
                         {
+                            if (_cellContent != null) { _cellContent(i, c); continue; }
+
+                            TableCell? cell = row != null && c < row.Cells.Count ? row.Cells[c] : null;
                             if (cell == null) continue;
 
                             if (cell.Icon != null)

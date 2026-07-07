@@ -265,7 +265,9 @@ public sealed class ToggleBuilder
                 }
                 else
                 {
-                    DrawVisual(t, ramp, ink, leftPad: 4, rightPad: 4);
+                    // Bare (NoLabel) switch: sit flush-left so it lines up with bordered
+                    // fields (dropdown/color) when a caller places it in a control cell.
+                    DrawVisual(t, ramp, ink, leftPad: 0, rightPad: 0);
                 }
             }
 

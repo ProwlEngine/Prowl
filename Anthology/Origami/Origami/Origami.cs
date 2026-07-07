@@ -548,6 +548,13 @@ public static class Origami
     public static ButtonGroupBuilder ButtonGroup(Paper paper, string id, int selectedIndex, Action<int> setter)
         => new ButtonGroupBuilder(paper, id, selectedIndex, setter, Current);
 
+    /// <summary>
+    /// A compact toolbar of square icon buttons (active = accent + glow). Horizontal or vertical,
+    /// with optional glass container and tooltips. Chain <see cref="IconToolbarBuilder.Item"/> per button.
+    /// </summary>
+    public static IconToolbarBuilder IconToolbar(Paper paper, string id, int selected, Action<int> setter)
+        => new IconToolbarBuilder(paper, id, selected, setter, Current);
+
     // ── Tree factories ─────────────────────────────────────────
 
     /// <summary>

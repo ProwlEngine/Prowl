@@ -223,13 +223,14 @@ public class DockSpace
         var borderColor = theme.Neutral.C200;
         int id = node.GetHashCode();
 
-        // Frosted glass: with backdrop blur on, thin the fill so the blurred content behind shows
-        // through as frost. Without blur the surfaces stay their normal (near-opaque) tint.
+        // Frosted glass: with backdrop blur on, thin the fill slightly so the blurred content behind
+        // reads through as frost — but keep the panels dark and solid (they should be a deep glass,
+        // not a light purple wash). Without blur the surfaces stay their normal tint.
         float winBlur = m.WindowBackdropBlur;
         if (winBlur > 0f)
         {
-            bodyColor = Color.FromArgb(158, bodyColor.R, bodyColor.G, bodyColor.B);
-            tabBarColor = Color.FromArgb(178, tabBarColor.R, tabBarColor.G, tabBarColor.B);
+            bodyColor = Color.FromArgb(199, bodyColor.R, bodyColor.G, bodyColor.B);
+            tabBarColor = Color.FromArgb(217, tabBarColor.R, tabBarColor.G, tabBarColor.B);
         }
 
         using (paper.Box($"leaf_{id}")
@@ -257,7 +258,9 @@ public class DockSpace
                 tabbar.IsNotInteractable();
 
             // Tab widths from measured label text (+ optional icon + close affordance).
-            float iconW = 16f;
+            float iconW = 15f;              // icon slot
+            float iconGap = 6f;             // gap between the icon and the label
+            float tabIconSize = m.FontSize * 0.85f;   // glyph a touch smaller than the label text
             float[] tabWidths = new float[node.Tabs.Count];
             for (int i = 0; i < node.Tabs.Count; i++)
             {
@@ -266,7 +269,7 @@ public class DockSpace
                     textW = (float)paper.MeasureText(node.Tabs[i].Title, m.FontSize, font, 0).X;
                 bool hasIco = !string.IsNullOrEmpty(node.Tabs[i].Icon);
                 bool showsClose = i == node.ActiveTabIndex;  // active tab expands to fit its close button
-                tabWidths[i] = m.TabPadding * 2 + (hasIco ? iconW : 0) + textW + (showsClose ? m.TabCloseSize + 4 : 0);
+                tabWidths[i] = m.TabPadding * 2 + (hasIco ? iconW + iconGap : 0) + textW + (showsClose ? m.TabCloseSize + 4 : 0);
             }
             float[] tabPositions = new float[node.Tabs.Count];
             float acc = 0;
@@ -294,7 +297,7 @@ public class DockSpace
                     .Position(tx, 0).Size(tw, tabH)
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
                     .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
-                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(70, 168, 85, 247)).End()
+                    .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
                     .StopEventPropagation()
                     .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
                     .OnDragStart((node, ci, fw), (cap, e) =>
@@ -340,9 +343,9 @@ public class DockSpace
                         .IsNotInteractable()
                         .Text(tab.Icon, font)
                         .TextColor(isActive ? theme.Primary.C700 : theme.Ink.C300)
-                        .FontSize(m.FontSize)
+                        .FontSize(tabIconSize)
                         .Alignment(TextAlignment.MiddleCenter);
-                    contentX += iconW;
+                    contentX += iconW + iconGap;
                 }
 
                 bool showClose = isActive;
@@ -394,7 +397,28 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
                         .BackgroundColor(theme.Primary.C500)
-                        .BoxShadow(0, 0, 8, 0, Color.FromArgb(140, 168, 85, 247));
+                        .BoxShadow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+            }
+
+            // Trailing separator on the right edge of the last tab, so the final tab (and a lone tab)
+            // is delimited from the empty bar / header controls to its right.
+            {
+                int last = node.Tabs.Count - 1;
+                float rx = tabPositions[last] + tabWidths[last];
+                paper.Box($"t_div_{id}_end")
+                    .PositionType(PositionType.SelfDirected).Position(rx, 0).Size(1, tabH)
+                    .IsNotInteractable().BackgroundColor(borderColor);
+            }
+
+            // Panel-supplied header controls, right-aligned in the tab bar (e.g. a refresh button).
+            var activePanel = node.ActiveTabIndex < node.Tabs.Count ? node.Tabs[node.ActiveTabIndex] : null;
+            float hdrW = activePanel?.HeaderWidth ?? 0f;
+            if (activePanel != null && hdrW > 0f)
+            {
+                using (paper.Row($"leaf_hdr_{id}")
+                    .PositionType(PositionType.SelfDirected).Position(w - hdrW - 4, 0).Size(hdrW, tabH)
+                    .Enter())
+                    activePanel.OnHeaderContent(paper, hdrW, tabH);
             }
 
             // Hairline under the tab bar.
@@ -675,7 +699,8 @@ public class DockSpace
 
     private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
     {
-        var iconCol = Color.FromArgb(230, 235, 240, 255);
+        var inkNearWhite = Origami.Current.Ink.C500;
+        var iconCol = Color.FromArgb(230, inkNearWhite.R, inkNearWhite.G, inkNearWhite.B);
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
             .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>

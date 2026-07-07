@@ -39,7 +39,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 32f;
+    private float _height = 24f;
     private bool _readOnly;
     private string _placeholder = "";
     private bool _selectAllOnFocus;
@@ -71,6 +71,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant + sizing (delegated to TextField behind the scenes) ─
@@ -187,7 +188,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             tb.TrailingIcon(_trailingIconGlyph!, _trailingIconClick);
         if (!string.IsNullOrEmpty(_prefixText))
         {
-            tb.Prefix(_prefixText!, _prefixColor ?? Color.FromArgb(255, 200, 200, 200));
+            tb.Prefix(_prefixText!, _prefixColor ?? _theme.Ink.C400);
             if (_dragLabel) tb.PrefixDrag(AddDelta);
             if (_prefixCompact) tb.PrefixPad(5, 2);
         }

@@ -46,6 +46,17 @@ public static class OrigamiIconSet
     public static readonly SvgIcon Eye      = new("M1.6 8C3 5.4 5.3 3.8 8 3.8s5 1.6 6.4 4.2C13 10.6 10.7 12.2 8 12.2S3 10.6 1.6 8zM8 10.1a2.1 2.1 0 1 0 0-4.2 2.1 2.1 0 0 0 0 4.2z");
     public static readonly SvgIcon EyeOff   = new("M1.6 8C3 5.4 5.3 3.8 8 3.8s5 1.6 6.4 4.2C13 10.6 10.7 12.2 8 12.2S3 10.6 1.6 8zM8 10.1a2.1 2.1 0 1 0 0-4.2 2.1 2.1 0 0 0 0 4.2zM3 3l10 10");
     public static readonly SvgIcon List    = new("M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4v.1M2.5 8v.1M2.5 12v.1");
+    // Drag-handle grip: two columns of three dots (tiny strokes render as dots with round caps).
+    public static readonly SvgIcon Grip    = new("M6 4v.1M10 4v.1M6 8v.1M10 8v.1M6 12v.1M10 12v.1");
+    // Sort: descending-width lines.
+    public static readonly SvgIcon Sort    = new("M3 4.5h10M4.5 8h7M6 11.5h4");
+
+    // ── Terrain / brush tools ────────────────────────────────
+    public static readonly SvgIcon Mountain = new("M2 12.5l4.2-7 2.6 4.2 2-3.2L14 12.5z");
+    public static readonly SvgIcon Leaf     = new("M13 3C7.5 3 4 6.5 4 12c5.5 0 9-3.5 9-9zM6.5 9.5L11 5");
+    public static readonly SvgIcon Seedling = new("M8 13.5V7M8 7C5.8 7 4.2 5.6 4 3.5 6.2 3.5 7.8 5 8 7M8 7c.2-2 1.8-3.5 4-3.5-.2 2.1-1.8 3.5-4 3.5z");
+    public static readonly SvgIcon Flatten  = new("M2.5 8h11M5 5h6M5 11h6");
+    public static readonly SvgIcon Wave     = new("M1.8 8c1.2-2.6 2.4-2.6 3.6 0s2.4 2.6 3.6 0 2.4-2.6 3.6 0");
     public static readonly SvgIcon Grid    = new("M2 2h3.5v3.5H2zM6.5 2H10v3.5H6.5zM11 2h3v3.5h-3zM2 6.5h3.5V10H2zM6.5 6.5H10V10H6.5zM11 6.5h3V10h-3zM2 11h3.5v3H2zM6.5 11H10v3H6.5zM11 11h3v3h-3z");
 
     // ── Files / storage ──────────────────────────────────────
@@ -61,6 +72,23 @@ public static class OrigamiIconSet
     public static readonly SvgIcon Download = new("M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10");
     public static readonly SvgIcon Desktop  = new("M2 3.5h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1zM6 14h4M8 11.5v2.5");
     public static readonly SvgIcon User     = new("M8 8a2.8 2.8 0 1 0 0-5.6 2.8 2.8 0 0 0 0 5.6zM2.6 14a5.4 5.4 0 0 1 10.8 0");
+
+    // ── Asset / file types (match the Nebula reference icon set) ──
+    public static readonly SvgIcon Image    = new("M2 3h12v10H2zM2 10.5l3.5-3 3 2.5 2.5-2L14 10M5.5 6.5a1 1 0 1 0 0-.1");
+    public static readonly SvgIcon Audio    = new("M3 6.2v3.6h2L8.5 13V3L5 6.2zM10.5 6a2.5 2.5 0 0 1 0 4M12 4.5a4.5 4.5 0 0 1 0 7");
+    public static readonly SvgIcon Font     = new("M3.5 12.5L7 4h2l3.5 8.5M5 9.5h6");
+    public static readonly SvgIcon Code     = new("M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9 3l-2 10");
+    public static readonly SvgIcon Terrain  = new("M2 12.5l3.5-4 2.5 2.5 3-3.5 3 5M12 5.5a1 1 0 1 0 .01 0");
+    public static readonly SvgIcon Scene    = new("M8 2.5a1.5 1.5 0 1 0 .01 0M4.5 11a1.5 1.5 0 1 0 .01 0M11.5 11a1.5 1.5 0 1 0 .01 0M8 5.5L5 11M8 5.5l3 5.5");
+    public static readonly SvgIcon Mesh     = new("M8 1.7L14 5v6L8 14.3 2 11V5zM8 1.7V8L2 5M8 8l6-3M8 8v6.3M5 3.3l6 3.4M11 3.3l-6 3.4");
+
+    // ── Scene objects / components ────────────────────────────
+    public static readonly SvgIcon Light    = new("M8 1.5v1.5M3 8H1.5M14.5 8H13M4 4l-1-1M12 4l1-1M5.5 11.5a3.5 3.5 0 1 1 5 0c-.6.6-.7 1-.7 1.7H6.2c0-.7-.1-1.1-.7-1.7zM6.3 14.5h3.4");
+    public static readonly SvgIcon Camera   = new("M2.5 5.2h7.5v5.6H2.5zM10 7l3.5-1.8v5.6L10 9M5 5.2l1-1.4h2l1 1.4");
+    public static readonly SvgIcon Group    = new("M2 4.5h5v3H2zM9 8.5h5v3H9zM4.5 7.5v1.5h4.5");
+    public static readonly SvgIcon Particle = new("M8 8m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0M3 3.5v.05M13 4v.05M12.5 12v.05M3.5 12v.05M13.5 8v.05M2.5 8v.05");
+    public static readonly SvgIcon Hierarchy = new("M3 3h4v3H3zM9 6.5h4v3H9zM9 10.5h4v3H9zM5 6v6.5M5 8h4M5 12h4");
+    public static readonly SvgIcon Console  = new("M2 3.5h12v9H2zM4.5 6.5L7 8.5 4.5 10.5M8 10.5h3.5");
 
     // ── Content / scene ──────────────────────────────────────
     public static readonly SvgIcon Cube     = new("M8 1.7L14 5v6L8 14.3 2 11V5zM8 1.7V8M8 8l6-3M8 8l-6-3");

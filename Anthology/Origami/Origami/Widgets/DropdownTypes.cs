@@ -575,7 +575,7 @@ internal static class DropdownInternal
         else
         {
             canvas.SaveState();
-            canvas.SetStrokeColor(Color.FromArgb(90, 190, 150, 255));
+            canvas.SetStrokeColor(Color.FromArgb(90, theme.BorderStrong.R, theme.BorderStrong.G, theme.BorderStrong.B));
             canvas.SetStrokeWidth(1f);
             canvas.BeginPath();
             canvas.RoundedRect(x + 0.5f, y + 0.5f, sz - 1f, sz - 1f, rad);

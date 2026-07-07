@@ -114,7 +114,7 @@ public sealed class AppBarBuilder
                         var brandIcon = it.Icon;
                         using (_paper.Box($"{_id}_logo").Size(28).Rounded(8).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(acc).Enter())
-                            _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), Color.White));
+                            _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), ink.C700));
                         _paper.Box($"{_id}_title").Width(UnitValue.Auto).Height(UnitValue.Auto)
                             .Margin(gap, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSize)
@@ -152,7 +152,7 @@ public sealed class AppBarBuilder
                             _paper.Box($"{_id}_av_{it.Id}_t").Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
                                 .IsNotInteractable()
                                 .Text(it.Text, titleFont!).FontSize(_theme.Metrics.FontSizeSmall - 2f)
-                                .TextColor(Color.White).Alignment(TextAlignment.MiddleCenter);
+                                .TextColor(ink.C700).Alignment(TextAlignment.MiddleCenter);
                         break;
                 }
 

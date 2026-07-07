@@ -65,6 +65,7 @@ public sealed class DropdownBuilder<T>
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant ────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ public sealed class DropdownBuilder<T>
 
         bool subtle = _variant == OrigamiVariant.Subtle;
         Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
-        Color trigBorder = subtle ? Color.Transparent : Color.FromArgb(30, 178, 150, 255);
+        Color trigBorder = subtle ? Color.Transparent : _theme.BorderSoft;
         Color trigBorderHover = _theme.BorderStrong;
         Color chevColor  = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
                                   ? ink.C300 : ramp.C600;

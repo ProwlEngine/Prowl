@@ -65,6 +65,7 @@ public sealed class MultiDropdownBuilder<T>
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        _height = _theme.Metrics.RowHeight;
         _selected = selected != null
             ? new HashSet<T>(selected, comparer ?? EqualityComparer<T>.Default)
             : new HashSet<T>(comparer ?? EqualityComparer<T>.Default);
@@ -139,7 +140,7 @@ public sealed class MultiDropdownBuilder<T>
 
         bool subtle = _variant == OrigamiVariant.Subtle;
         Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
-        Color trigBorder = subtle ? Color.Transparent : Color.FromArgb(30, 178, 150, 255);
+        Color trigBorder = subtle ? Color.Transparent : _theme.BorderSoft;
         Color trigBorderHover = _theme.BorderStrong;
         // Flex-wrap field (prototype .w2field: height auto, minHeight 32, padding 4, gap 4).
         var trigger = _paper.Row(_id)
@@ -242,7 +243,7 @@ public sealed class MultiDropdownBuilder<T>
     {
         var font = _theme.Font;
         Color bg = _theme.Selected;   // acc-dim (0.16)
-        Color bd = Color.FromArgb(115, 168, 85, 247);  // ~0.45 — reads brighter, matches prototype
+        Color bd = Color.FromArgb(115, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);  // ~0.45 — reads brighter, matches prototype
         Color tx = _theme.Primary.C700;                 // acc-300
 
         using (_paper.Row(id).Width(UnitValue.Auto).Height(22)
@@ -258,7 +259,7 @@ public sealed class MultiDropdownBuilder<T>
             var rm = onRemove;
             var xcol = tx;
             using (_paper.Box($"{id}_x").Size(15).Rounded(4).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                .Hovered.BackgroundColor(Color.FromArgb(64, 168, 85, 247)).End()
+                .Hovered.BackgroundColor(Color.FromArgb(64, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
                 .StopEventPropagation().OnClick(_ => rm())
                 .Enter())
             {

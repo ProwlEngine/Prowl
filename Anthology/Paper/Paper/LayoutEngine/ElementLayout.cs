@@ -125,7 +125,25 @@ namespace Prowl.PaperUI.LayoutEngine
             return contentSize;
         }
 
+        // Timing wrapper: when DevTools deep-profiling is on, record this call's inclusive layout time
+        // (which includes text measurement via ProcessText). An element is laid out several times per
+        // frame during stretch resolution, so DevTools sums these per element.
         private static UISize DoLayout(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
+        {
+            var dev = elementHandle.Owner.DevTools;
+            if (!dev.DeepProfiling)
+                return DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+
+            int id = elementHandle.Data.ID;
+            int pi = elementHandle.Data.ParentIndex;
+            int pid = pi >= 0 ? elementHandle.Owner.GetElementData(pi).ID : 0;
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            var size = DoLayoutInner(elementHandle, parentLayoutType, parentMain, parentCross);
+            dev.RecordLayout(id, pid, System.Diagnostics.Stopwatch.GetTimestamp() - start);
+            return size;
+        }
+
+        private static UISize DoLayoutInner(ElementHandle elementHandle, LayoutType parentLayoutType, float parentMain, float parentCross)
         {
             ref var element = ref elementHandle.Data;
             LayoutType layoutType = element.LayoutType;
@@ -1566,7 +1584,76 @@ namespace Prowl.PaperUI.LayoutEngine
                 settings.WrapMode = element.WrapMode;
                 settings.MaxWidth = availableWidth;
 
-                element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
+                // Per-element cache for width-independent text: left-aligned, no-wrap, non-truncated
+                // text lays out identically regardless of the element width (MaxWidth only affects
+                // wrapping and center/right alignment). Keying purely on content + font/metrics lets
+                // us reuse the same TextLayout across frames and across the measure/draw passes,
+                // surviving Scribe's global LRU cap (a long scrolling list of distinct labels would
+                // otherwise thrash it). Width-dependent text (wrap / truncate / center / right) keeps
+                // going straight through CreateLayout so its width changes are always honoured.
+                if (settings.Alignment == Scribe.TextAlignment.Left
+                    && element.WrapMode == TextWrapMode.NoWrap && !element.Truncate)
+                {
+                    var ptKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale);
+                    var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, null);
+                    var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, default);
+
+                    if (cachedLayout != null && cachedKey.Equals(ptKey))
+                    {
+                        element._textLayout = cachedLayout;
+                        return (Float2)cachedLayout.Size * invScale;
+                    }
+
+                    element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
+                    gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
+                    gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
+                    return (Float2)element._textLayout.Size * invScale;
+                }
+
+                string text = element.Paragraph;
+
+                // Single-line truncation: if the text overflows the element, drop trailing characters
+                // and append an ellipsis that is guaranteed to fit. The result depends on the element
+                // width, so it uses a width-keyed cache (the width-independent cache above skips
+                // truncated text) to avoid re-running the binary search + layout every frame.
+                if (element.Truncate && element.WrapMode != TextWrapMode.Wrap && availableWidth > 0f)
+                {
+                    var trKey = new PlainTextKey(element.Paragraph, settings, canvas.FramebufferScale, availableWidth);
+                    var cachedLayout = gui.GetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, null);
+                    var cachedKey = gui.GetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, default);
+                    if (cachedLayout != null && cachedKey.Equals(trKey))
+                    {
+                        element._textLayout = cachedLayout;
+                        return (Float2)cachedLayout.Size * invScale;
+                    }
+
+                    var measure = settings;
+                    measure.WrapMode = TextWrapMode.NoWrap;
+                    measure.MaxWidth = 0f;
+                    float LogicalW(string s) => canvas.MeasureText(s, measure).X * invScale;
+
+                    if (LogicalW(text) > availableWidth)
+                    {
+                        const string ell = "...";
+                        float ellW = LogicalW(ell);
+                        // Binary-search the longest prefix whose width + ellipsis still fits.
+                        int lo = 0, hi = text.Length;
+                        while (lo < hi)
+                        {
+                            int mid = (lo + hi + 1) / 2;
+                            if (LogicalW(text[..mid]) + ellW <= availableWidth) lo = mid;
+                            else hi = mid - 1;
+                        }
+                        text = lo > 0 ? text[..lo] + ell : ell;
+                    }
+
+                    element._textLayout = canvas.CreateLayout(text, settings);
+                    gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
+                    gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
+                    return (Float2)element._textLayout.Size * invScale;
+                }
+
+                element._textLayout = canvas.CreateLayout(text, settings);
 
                 return (Float2)element._textLayout.Size * invScale;
             }
@@ -1637,5 +1724,46 @@ namespace Prowl.PaperUI.LayoutEngine
             block(self);
             return self;
         }
+    }
+
+    /// <summary>
+    /// Fingerprint of the inputs that determine a width-independent plain-text layout. Stored
+    /// alongside the cached <see cref="TextLayout"/> in element storage; a mismatch rebuilds it.
+    /// Width, wrap, truncation and alignment are intentionally absent: this key is only used for
+    /// left-aligned, non-wrapping, non-truncating text, whose layout does not depend on them.
+    /// </summary>
+    internal readonly struct PlainTextKey : IEquatable<PlainTextKey>
+    {
+        readonly string Text;
+        readonly float PixelSize, LetterSpacing, WordSpacing, LineHeight, FbScale, Width;
+        readonly int TabSize;
+        readonly FontQuality Quality;
+        readonly FontFile Font;
+
+        // Width is only used by the width-dependent (truncation) cache; the width-independent cache
+        // leaves it at 0.
+        public PlainTextKey(string text, in TextLayoutSettings s, float fbScale, float width = 0f)
+        {
+            Text = text;
+            PixelSize = s.PixelSize;
+            LetterSpacing = s.LetterSpacing;
+            WordSpacing = s.WordSpacing;
+            LineHeight = s.LineHeight;
+            TabSize = s.TabSize;
+            Quality = s.Quality;
+            Font = s.Font;
+            FbScale = fbScale;
+            Width = width;
+        }
+
+        public bool Equals(PlainTextKey o) =>
+            ReferenceEquals(Font, o.Font) && TabSize == o.TabSize && Quality == o.Quality
+            && PixelSize == o.PixelSize && LetterSpacing == o.LetterSpacing && WordSpacing == o.WordSpacing
+            && LineHeight == o.LineHeight && FbScale == o.FbScale && Width == o.Width
+            && (ReferenceEquals(Text, o.Text) || string.Equals(Text, o.Text));
+
+        public override bool Equals(object obj) => obj is PlainTextKey o && Equals(o);
+
+        public override int GetHashCode() => HashCode.Combine(Text, PixelSize, TabSize, (int)Quality, Font, FbScale, Width);
     }
 }

@@ -30,7 +30,7 @@ internal static class VectorFieldInternal
 
     internal static void Draw2<T>(Paper paper, string id, OrigamiTheme theme,
         string l0, T v0, SysColor c0, Action<T> s0,
-        string l1, T v1, SysColor c1, Action<T> s1, float h = 30f)
+        string l1, T v1, SysColor c1, Action<T> s1, float h = 24f)
         where T : struct, INumber<T>
     {
         using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
@@ -43,7 +43,7 @@ internal static class VectorFieldInternal
     internal static void Draw3<T>(Paper paper, string id, OrigamiTheme theme,
         string l0, T v0, SysColor c0, Action<T> s0,
         string l1, T v1, SysColor c1, Action<T> s1,
-        string l2, T v2, SysColor c2, Action<T> s2, float h = 30f)
+        string l2, T v2, SysColor c2, Action<T> s2, float h = 24f)
         where T : struct, INumber<T>
     {
         using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
@@ -58,7 +58,7 @@ internal static class VectorFieldInternal
         string l0, T v0, SysColor c0, Action<T> s0,
         string l1, T v1, SysColor c1, Action<T> s1,
         string l2, T v2, SysColor c2, Action<T> s2,
-        string l3, T v3, SysColor c3, Action<T> s3, float h = 30f)
+        string l3, T v3, SysColor c3, Action<T> s3, float h = 24f)
         where T : struct, INumber<T>
     {
         using (paper.Row(id).Height(UnitValue.Auto).RowBetween(6).Enter())
@@ -83,12 +83,12 @@ public sealed class VectorField2Builder<T> where T : struct, INumber<T>
     private readonly T _x, _y;
     private readonly Action<T> _setX, _setY;
 
-    private float _h = 30f;
+    private float _h = 24f;
 
     internal VectorField2Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, Action<T> setX, Action<T> setY)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _setX = setX; _setY = setY;
     }
 
@@ -112,12 +112,12 @@ public sealed class VectorField3Builder<T> where T : struct, INumber<T>
     private readonly T _x, _y, _z;
     private readonly Action<T> _setX, _setY, _setZ;
 
-    private float _h = 30f;
+    private float _h = 24f;
 
     internal VectorField3Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, T z, Action<T> setX, Action<T> setY, Action<T> setZ)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _z = z; _setX = setX; _setY = setY; _setZ = setZ;
     }
 
@@ -142,12 +142,12 @@ public sealed class VectorField4Builder<T> where T : struct, INumber<T>
     private readonly T _x, _y, _z, _w;
     private readonly Action<T> _setX, _setY, _setZ, _setW;
 
-    private float _h = 30f;
+    private float _h = 24f;
 
     internal VectorField4Builder(Paper paper, string id, OrigamiTheme theme,
         T x, T y, T z, T w, Action<T> setX, Action<T> setY, Action<T> setZ, Action<T> setW)
     {
-        _paper = paper; _id = id; _theme = theme;
+        _paper = paper; _id = id; _theme = theme; _h = _theme.Metrics.RowHeight;
         _x = x; _y = y; _z = z; _w = w;
         _setX = setX; _setY = setY; _setZ = setZ; _setW = setW;
     }

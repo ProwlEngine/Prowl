@@ -33,7 +33,7 @@ internal static class SvgPath
         vg.SetStrokeJoint(JointStyle.Round);
         vg.SetStrokeCap(EndCapStyle.Round);
 
-        foreach (var sub in Parse(path))
+        foreach (var sub in ParseCached(path))
         {
             if (sub.Points.Count == 0) continue;
             vg.BeginPath();
@@ -51,12 +51,25 @@ internal static class SvgPath
 
     private struct Sub { public List<(double x, double y)> Points; public bool Closed; }
 
+    // A path string always flattens to the same points, so parse each unique path once and reuse it
+    // (the result is only read during Stroke, never mutated). Bounded by the number of distinct icons.
+    private static readonly Dictionary<string, List<Sub>> _parseCache = new();
+
+    private static List<Sub> ParseCached(string d)
+    {
+        if (!_parseCache.TryGetValue(d, out var subs))
+            _parseCache[d] = subs = Parse(d);
+        return subs;
+    }
+
     private static List<Sub> Parse(string d)
     {
         var subs = new List<Sub>();
         var cur = new List<(double, double)>();
         bool closed = false;
         double cx = 0, cy = 0, startX = 0, startY = 0;
+        double lastCtrlX = 0, lastCtrlY = 0; // last curve control point, for S/T smooth reflection
+        char lastCurve = '\0';               // 'C' after a cubic (C/S), 'Q' after a quadratic (Q/T)
         int i = 0;
         char cmd = '\0';
 
@@ -71,6 +84,7 @@ internal static class SvgPath
 
         while (i < d.Length)
         {
+            int startI = i; // guarantee forward progress no matter what the input is
             char c = d[i];
             if (char.IsWhiteSpace(c) || c == ',') { i++; continue; }
             if (char.IsLetter(c)) { cmd = c; i++; }
@@ -116,6 +130,40 @@ internal static class SvgPath
                         double ex = ReadNum(d, ref i), ey = ReadNum(d, ref i);
                         if (rel) { x1 += cx; y1 += cy; x2 += cx; y2 += cy; ex += cx; ey += cy; }
                         FlattenCubic(cur, cx, cy, x1, y1, x2, y2, ex, ey);
+                        lastCtrlX = x2; lastCtrlY = y2; lastCurve = 'C';
+                        cx = ex; cy = ey;
+                        break;
+                    }
+                case 'S': // smooth cubic: first control reflects the previous cubic's second control
+                    {
+                        double x2 = ReadNum(d, ref i), y2 = ReadNum(d, ref i);
+                        double ex = ReadNum(d, ref i), ey = ReadNum(d, ref i);
+                        if (rel) { x2 += cx; y2 += cy; ex += cx; ey += cy; }
+                        double x1 = lastCurve == 'C' ? 2 * cx - lastCtrlX : cx;
+                        double y1 = lastCurve == 'C' ? 2 * cy - lastCtrlY : cy;
+                        FlattenCubic(cur, cx, cy, x1, y1, x2, y2, ex, ey);
+                        lastCtrlX = x2; lastCtrlY = y2; lastCurve = 'C';
+                        cx = ex; cy = ey;
+                        break;
+                    }
+                case 'Q': // quadratic bezier
+                    {
+                        double x1 = ReadNum(d, ref i), y1 = ReadNum(d, ref i);
+                        double ex = ReadNum(d, ref i), ey = ReadNum(d, ref i);
+                        if (rel) { x1 += cx; y1 += cy; ex += cx; ey += cy; }
+                        FlattenQuad(cur, cx, cy, x1, y1, ex, ey);
+                        lastCtrlX = x1; lastCtrlY = y1; lastCurve = 'Q';
+                        cx = ex; cy = ey;
+                        break;
+                    }
+                case 'T': // smooth quadratic: control reflects the previous quadratic's control
+                    {
+                        double ex = ReadNum(d, ref i), ey = ReadNum(d, ref i);
+                        if (rel) { ex += cx; ey += cy; }
+                        double x1 = lastCurve == 'Q' ? 2 * cx - lastCtrlX : cx;
+                        double y1 = lastCurve == 'Q' ? 2 * cy - lastCtrlY : cy;
+                        FlattenQuad(cur, cx, cy, x1, y1, ex, ey);
+                        lastCtrlX = x1; lastCtrlY = y1; lastCurve = 'Q';
                         cx = ex; cy = ey;
                         break;
                     }
@@ -136,6 +184,16 @@ internal static class SvgPath
                     Flush();
                     break;
             }
+
+            // Smooth curves (S/T) reflect only the immediately preceding curve; any other command
+            // clears the reflection state so the next S/T falls back to the current point.
+            char uc = char.ToUpper(cmd);
+            if (uc != 'C' && uc != 'S' && uc != 'Q' && uc != 'T')
+                lastCurve = '\0';
+
+            // If nothing above consumed a character (unsupported command, or a stray char while no
+            // command is active), skip one so the loop can never spin forever on malformed input.
+            if (i == startI) i++;
         }
         Flush();
         return subs;
@@ -155,17 +213,34 @@ internal static class SvgPath
             else if (c == 'e' || c == 'E') { i++; if (i < d.Length && (d[i] == '+' || d[i] == '-')) i++; }
             else break;
         }
-        return double.Parse(d.Substring(start, i - start), System.Globalization.CultureInfo.InvariantCulture);
+        int len = i - start;
+        if (len <= 0 || !double.TryParse(d.Substring(start, len), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double val))
+            return 0.0; // malformed / no number here - don't throw
+        return val;
     }
 
     private static void FlattenCubic(List<(double, double)> pts, double x0, double y0, double x1, double y1, double x2, double y2, double x3, double y3)
     {
-        const int steps = 16;
+        // Icons are tiny (16px viewBox), so a few segments per curve is plenty and keeps the point
+        // count (and therefore the polyline mesh) small.
+        const int steps = 6;
         for (int k = 1; k <= steps; k++)
         {
             double t = k / (double)steps, u = 1 - t;
             double a = u * u * u, b = 3 * u * u * t, cc = 3 * u * t * t, dd = t * t * t;
             pts.Add((a * x0 + b * x1 + cc * x2 + dd * x3, a * y0 + b * y1 + cc * y2 + dd * y3));
+        }
+    }
+
+    private static void FlattenQuad(List<(double, double)> pts, double x0, double y0, double x1, double y1, double x2, double y2)
+    {
+        const int steps = 6;
+        for (int k = 1; k <= steps; k++)
+        {
+            double t = k / (double)steps, u = 1 - t;
+            double a = u * u, b = 2 * u * t, cc = t * t;
+            pts.Add((a * x0 + b * x1 + cc * x2, a * y0 + b * y1 + cc * y2));
         }
     }
 
@@ -207,7 +282,7 @@ internal static class SvgPath
         if (!sweep && dTheta > 0) dTheta -= 2 * Math.PI;
         if (sweep && dTheta < 0) dTheta += 2 * Math.PI;
 
-        int steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(dTheta) / (Math.PI / 16)));
+        int steps = Math.Max(2, (int)Math.Ceiling(Math.Abs(dTheta) / (Math.PI / 6)));
         for (int k = 1; k <= steps; k++)
         {
             double t = theta1 + dTheta * (k / (double)steps);

@@ -71,14 +71,42 @@ namespace Prowl.Scribe
 
         public FontFile(Stream stream)
         {
-            byte[] data = null;
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            if (InitFont(ReadFully(stream), 0) == 0)
+                throw new InvalidDataException("Failed to initialize font");
+        }
+
+        // Glyph rasterization needs random access to the whole font, so the stream is read into a
+        // single contiguous buffer. A seekable stream is read once into a right-sized array with no
+        // intermediate copy; only a length-unknown stream needs the grow-and-copy fallback.
+        private static byte[] ReadFully(Stream stream)
+        {
+            if (stream.CanSeek)
+            {
+                long remaining = stream.Length - stream.Position;
+                if (remaining < 0 || remaining > int.MaxValue)
+                    throw new InvalidDataException("Font stream length is out of range");
+
+                byte[] buffer = new byte[remaining];
+                int read = 0;
+                while (read < buffer.Length)
+                {
+                    int n = stream.Read(buffer, read, buffer.Length - read);
+                    if (n == 0) break; // stream ended early; trim to what we actually got
+                    read += n;
+                }
+                if (read != buffer.Length)
+                    Array.Resize(ref buffer, read);
+                return buffer;
+            }
+
             using (var ms = new MemoryStream())
             {
                 stream.CopyTo(ms);
-                data = ms.ToArray();
+                return ms.ToArray();
             }
-            if (InitFont(data, 0) == 0)
-                throw new InvalidDataException("Failed to initialize font");
         }
 
         public FontFile(byte[] data)
@@ -510,12 +538,20 @@ namespace Prowl.Scribe
 
         private uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
         {
+            int available = data.Length;
+            // The offset table is 12 bytes (table count is the u16 at +4). Bail on truncated data
+            // rather than reading past the end (some system fonts are malformed or unsupported).
+            if (fontstart + 12 > available)
+                return 0;
+
             int num_tables = ttUSHORT(data + fontstart + 4);
             var tabledir = fontstart + 12;
-            int i;
-            for (i = 0; i < num_tables; ++i)
+            for (int i = 0; i < num_tables; ++i)
             {
                 var loc = (uint)(tabledir + 16 * i);
+                // Each table directory entry is 16 bytes (tag, checksum, offset, length).
+                if (loc + 16 > available)
+                    break;
                 if ((data + loc + 0)[0] == tag[0] && (data + loc + 0)[1] == tag[1] &&
                     (data + loc + 0)[2] == tag[2] && (data + loc + 0)[3] == tag[3])
                     return ttULONG(data + loc + 8);

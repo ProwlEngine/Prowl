@@ -324,9 +324,9 @@ public sealed class TreeBuilder
         var metrics = _theme.Metrics;
         float rounding = metrics.Rounding;
 
-        // Resolve row height. Nebula rows are 24px tall (prototype .w2trow height).
+        // Resolve row height from the theme so it follows RowHeight changes (caller can still override).
         if (_rowHeight <= 0)
-            _rowHeight = 24f;
+            _rowHeight = metrics.RowHeight;
 
         // Expand state storage key prefix
         string expandPrefix = $"{_id}_exp_";
@@ -336,8 +336,10 @@ public sealed class TreeBuilder
         var stateBox = _paper.Box($"{_id}_state").Height(0).Width(0);
         var stateHandle = stateBox._handle;
 
+        // Full-width rows (no side inset) with a small top gap so the first row's selection doesn't
+        // butt up against the tab bar / container edge above it.
         Origami.ScrollView(_paper, $"{_id}_scroll", _width, _height)
-            .Padding(_padding, _padding, _padding, _padding)
+            .Padding(0f, 0f, MathF.Max(6f, _padding), _padding)
             .Body(() =>
             {
                 if (nodes.Count == 0 && !string.IsNullOrEmpty(_emptyMessage) && font != null)
@@ -445,11 +447,12 @@ public sealed class TreeBuilder
 
         // Accent (#A855F7) for drop tints / indicators.
         var accentColor = _theme.Primary.C500;
-        const float rowRounding = 6f;
+        // Full-width, square rows (matches the Nebula tree: solid selection edge-to-edge, no inset).
+        const float rowRounding = 0f;
 
         // Selection is a 90deg accent gradient painted via canvas (see below); hover is a soft
         // purple wash. Drop-into gets a translucent accent tint.
-        Color selLeft = Color.FromArgb(230, 168, 85, 247);  // rgba(168,85,247,0.9)
+        Color selLeft = Color.FromArgb(230, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);  // rgba(168,85,247,0.9)
         Color selRight = Color.FromArgb(179, 150, 80, 240); // rgba(150,80,240,0.7)
         Color hoverBg = _theme.Hover;   // rgba(168,85,247,0.12)
 
@@ -464,6 +467,7 @@ public sealed class TreeBuilder
             .BackgroundColor(rowBg)
             .Hovered.BackgroundColor(hoverBg).End()
             .Rounded(rowRounding)
+            .Clip()   // keep long labels from spilling under the overlay scrollbar
             .ChildLeft(indent)
             .ChildRight(6);
 

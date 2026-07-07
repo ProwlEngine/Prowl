@@ -150,6 +150,10 @@ public sealed class PropertyGridConfig
     /// <summary>Max recursion depth. Default 10.</summary>
     public int MaxDepth = 10;
 
+    /// <summary>When true, nested objects, lists and their entries start expanded. Default false
+    /// (everything collapsed until the user opens it).</summary>
+    public bool ExpandByDefault = false;
+
     /// <summary>Called at depth 0 before any field is drawn (e.g., for undo snapshots).</summary>
     public Action<object>? OnBeginRoot;
 
@@ -175,6 +179,13 @@ public sealed class PropertyGridConfig
     /// Return true if handled.
     /// </summary>
     public Func<Paper, string, string, Type, object?, Action<object?>, int, bool>? FallbackFieldDrawer;
+
+    /// <summary>
+    /// True when the host has a single-control editor for this type (e.g. AssetRef, EngineObject,
+    /// Color). Such types render as a simple one-line collection row instead of the nested (foldout
+    /// per element) list, even though they have serializable fields.
+    /// </summary>
+    public Func<Type, bool>? IsSimpleFieldType;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -221,6 +232,9 @@ public sealed class PropertyGridBuilder
 
     /// <summary>Starting nesting depth (default 0).</summary>
     public PropertyGridBuilder Depth(int depth) { _depth = depth; return this; }
+
+    /// <summary>Start nested objects, lists and their entries expanded (default is collapsed).</summary>
+    public PropertyGridBuilder ExpandByDefault(bool expand = true) { _config.ExpandByDefault = expand; return this; }
 
     /// <summary>Render the property grid.</summary>
     public void Show()
@@ -279,7 +293,7 @@ public static class PropertyGridRenderer
                 if (targets[t] != null) config.OnBeginRoot?.Invoke(targets[t]);
         }
 
-        using (paper.Column($"{id}_root").ColBetween(m.SpacingMedium).Height(UnitValue.Auto).Enter())
+        using (paper.Column($"{id}_root").ColBetween(m.SpacingLarge).Height(UnitValue.Auto).Enter())
         {
             var type = representative.GetType();
             var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
@@ -390,8 +404,36 @@ public static class PropertyGridRenderer
         var font = theme.Font;
         var ink = theme.Ink;
 
+        // Complex collections (element type has its own fields) and dictionaries span the full section
+        // width with a self-labelled header. Simple collections (leaf element types like Material refs,
+        // colors, primitives) keep the normal label gutter and draw their compact card in the control
+        // column - matching Nebula's `.i2field > .i2label + .coll` vs full-width `.i2field.full > .nl`.
+        bool isLeafCollection = false;
+        if (drawer == null && fieldType != typeof(string))
+        {
+            if (typeof(IList).IsAssignableFrom(fieldType))
+            {
+                Type et = fieldType.IsArray ? fieldType.GetElementType()! : fieldType.GetGenericArguments()[0];
+                if (IsLeafElementType(et, config))
+                    isLeafCollection = true;
+                else
+                {
+                    // Full-width card, but keep the standard field gutter so it doesn't touch the edges.
+                    using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
+                        DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth, label);
+                    return;
+                }
+            }
+            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+            {
+                using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
+                    DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth, label);
+                return;
+            }
+        }
+
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .Padding(12, 12, 4, 4).RowBetween(8).Enter())
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
         {
             // Override (prefab) / mixed (multi-select) marker: a small accent / amber dot before the label.
             if (isOverridden || isMixed)
@@ -406,12 +448,13 @@ public static class PropertyGridRenderer
             if (font != null && !string.IsNullOrEmpty(label))
             {
                 bool isNumeric = IsNumericType(fieldType);
+                // A tall card (simple collection) top-aligns its label; scalar fields centre it.
                 var lbl = paper.Box($"{id}_lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Margin(0, 0, isLeafCollection ? UnitValue.Pixels(4) : UnitValue.Stretch(), UnitValue.Stretch())
                     .Text(label, font)
                     .TextColor(isMixed ? theme.Amber.C400 : isOverridden ? theme.Primary.C700 : ink.C300)
-                    .FontSize(m.FontSize - 1f).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
                 if (isNumeric && !Origami.IsReadOnly)
                 {
@@ -544,137 +587,327 @@ public static class PropertyGridRenderer
 
     // ── Collection ───────────────────────────────────────────
 
+    // Leaf element = drawn by a single control (primitive/enum/string, a registered drawer, or a host
+    // single-control editor like AssetRef/Color) -> simple one-line list. Otherwise a nested type with
+    // its own fields -> the per-element foldout list.
+    private static bool IsLeafElementType(Type t, PropertyGridConfig config)
+    {
+        if (t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal)) return true;
+        if (config.Drawers.GetDrawer(t) != null) return true;
+        if (config.IsSimpleFieldType?.Invoke(t) == true) return true;
+        return GetSerializableFields(t).Length == 0;
+    }
+
     private static void DrawCollection(Paper paper, string id, Type collectionType,
-        IList? list, PropertyGridConfig config, Action<object?> onChange, int depth)
+        IList? list, PropertyGridConfig config, Action<object?> onChange, int depth, string label = "")
     {
         Type elementType = collectionType.IsArray
             ? collectionType.GetElementType()!
             : collectionType.GetGenericArguments()[0];
 
-        int count = list?.Count ?? 0;
         var theme = Origami.Current;
         var m = theme.Metrics;
+        var font = theme.Font;
+        if (font == null) return;
+        var semi = theme.SemiBold ?? font;
+        var mono = theme.Mono ?? font;
 
-        Origami.Foldout(paper, $"{id}_fold", $"({count})").Body(() =>
+        UnitValue ST = UnitValue.Stretch();
+        var bd = theme.BorderSoft;
+        var glass = theme.Glass;
+        var tHi = theme.Ink.C500; var tMid = theme.Ink.C300; var tLo = theme.Ink.C200; var tDim = theme.Ink.C100;
+        var acc = theme.Primary.C700;
+        var redBg = System.Drawing.Color.FromArgb(40, theme.Red.C500);
+
+        // Null collection: a full-width Create button.
+        if (list == null)
         {
-            if (list == null)
-            {
+            using (paper.Row($"{id}_null").Width(ST).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
                 Origami.Button(paper, $"{id}_create", "Create", () =>
-                {
-                    onChange(collectionType.IsArray
-                        ? Array.CreateInstance(elementType, 0)
-                        : Activator.CreateInstance(collectionType));
-                }).Show();
-                return;
-            }
+                    onChange(collectionType.IsArray ? Array.CreateInstance(elementType, 0) : Activator.CreateInstance(collectionType))).Show();
+            return;
+        }
 
-            // Stable IDs so reorder doesn't break Paper element identity
-            var colEl = paper.CurrentParent;
-            var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!) ?? new List<string>();
-            while (stableIds.Count < list.Count) stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
-            while (stableIds.Count > list.Count) stableIds.RemoveAt(stableIds.Count - 1);
-            paper.SetElementStorage(colEl, "stableIds", stableIds);
+        // Stable ids keep Paper element identity across reorders/removals.
+        var colEl = paper.CurrentParent;
+        var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!) ?? new List<string>();
+        while (stableIds.Count < list.Count) stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
+        while (stableIds.Count > list.Count) stableIds.RemoveAt(stableIds.Count - 1);
+        paper.SetElementStorage(colEl, "stableIds", stableIds);
 
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
+        void Commit() => paper.SetElementStorage(colEl, "stableIds", stableIds);
+
+        void RemoveAt(int i)
+        {
+            if (i < 0 || i >= list.Count) return;
+            stableIds.RemoveAt(i); Commit();
+            if (collectionType.IsArray)
             {
-                for (int i = 0; i < list.Count; i++)
+                var a = Array.CreateInstance(elementType, list.Count - 1);
+                for (int j = 0, k = 0; j < list.Count; j++) if (j != i) a.SetValue(list[j], k++);
+                onChange(a);
+            }
+            else
+            {
+                var l = (IList)Activator.CreateInstance(list.GetType())!;
+                for (int j = 0; j < list.Count; j++) if (j != i) l.Add(list[j]);
+                onChange(l);
+            }
+        }
+
+        void AddNew()
+        {
+            // Concrete reference types with a default ctor are instantiated; abstract/interface (or
+            // ctor-less) element types are added as null and get a type picker to assign an instance.
+            object? ne;
+            if (elementType.IsValueType) ne = Activator.CreateInstance(elementType);
+            else if (elementType == typeof(string)) ne = "";
+            else if (!elementType.IsAbstract && !elementType.IsInterface && elementType.GetConstructor(Type.EmptyTypes) != null)
+                ne = Activator.CreateInstance(elementType);
+            else ne = null;
+            stableIds.Add(Guid.NewGuid().ToString("N")[..8]); Commit();
+            if (collectionType.IsArray)
+            {
+                var a = Array.CreateInstance(elementType, list.Count + 1);
+                for (int j = 0; j < list.Count; j++) a.SetValue(list[j], j);
+                a.SetValue(ne, list.Count); onChange(a);
+            }
+            else
+            {
+                var l = (IList)Activator.CreateInstance(list.GetType())!;
+                for (int j = 0; j < list.Count; j++) l.Add(list[j]);
+                l.Add(ne); onChange(l);
+            }
+        }
+
+        void MoveTo(int from, int to)
+        {
+            if (from == to || from < 0 || from >= list.Count || to < 0 || to >= list.Count) return;
+            var v = list[from]; var s = stableIds[from];
+            if (from < to) for (int j = from; j < to; j++) { list[j] = list[j + 1]; stableIds[j] = stableIds[j + 1]; }
+            else for (int j = from; j > to; j--) { list[j] = list[j - 1]; stableIds[j] = stableIds[j - 1]; }
+            list[to] = v; stableIds[to] = s; Commit(); onChange(list);
+        }
+
+        // Drag reorder from the grip. Each visible row records its centre-Y via OnPostLayout; while
+        // dragging, the row whose centre is nearest the pointer becomes the drop target. This is
+        // accurate regardless of individual row heights (nested cards expand to different sizes).
+        void CaptureRow(int i, ElementBuilder el) => el.OnPostLayout((h, r) =>
+        {
+            var cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
+            if (cys == null) { cys = new List<float>(); paper.SetElementStorage(colEl, "rowCys", cys); }
+            while (cys.Count <= i) cys.Add(0f);
+            cys[i] = (float)(r.Min.Y + r.Size.Y * 0.5f);
+        });
+        bool BeingDragged(string sk) => paper.GetElementStorage<string>(colEl, "dragSk", null!) == sk;
+        void GripDrag(string sk, ElementBuilder grip)
+        {
+            grip.OnDragStart(sk, (k, _) => paper.SetElementStorage(colEl, "dragSk", k))
+                .OnDragging(sk, (k, _) =>
                 {
-                    int idx = i;
-                    string sk = stableIds[i];
-
-                    using (paper.Row($"{id}_item_{sk}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
+                    int cur = stableIds.IndexOf(k);
+                    var cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
+                    if (cur < 0 || cys == null) return;
+                    float py = (float)paper.PointerPos.Y;
+                    int target = cur; float best = float.MaxValue;
+                    for (int t = 0; t < cys.Count && t < list.Count; t++)
                     {
-                        // Compact index label (sized to content, not full LabelWidth)
-                        string indexLabel = $"[{idx}]";
-                        float indexW = indexLabel.Length * m.FontSize * 0.55f + m.PaddingSmall * 2;
-                        var font = theme.Font;
-                        if (font != null)
-                        {
-                            paper.Box($"{id}_idx_{sk}")
-                                .Width(indexW).Height(m.RowHeight)
-                                .IsNotInteractable()
-                                .Text(indexLabel, font).TextColor(theme.Ink.C400)
-                                .FontSize(m.FontSize).Alignment(TextAlignment.MiddleRight);
-                        }
-
-                        // Element value (full width)
-                        using (paper.Box($"{id}_val_{sk}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
-                        {
-                            DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[i], config,
-                                v => { list[idx] = v; onChange(list); }, depth + 1);
-                        }
-
-                        // Reorder + remove buttons (right side)
-                        Origami.IconButton(paper, $"{id}_up_{sk}", theme.Icons.ChevronUp, () =>
-                        {
-                            if (idx <= 0) return;
-                            (list[idx], list[idx - 1]) = (list[idx - 1], list[idx]);
-                            (stableIds[idx], stableIds[idx - 1]) = (stableIds[idx - 1], stableIds[idx]);
-                            paper.SetElementStorage(colEl, "stableIds", stableIds);
-                            onChange(list);
-                        }).Disabled(idx == 0).Height(m.CompactHeight).Show();
-
-                        Origami.IconButton(paper, $"{id}_dn_{sk}", theme.Icons.ChevronDown, () =>
-                        {
-                            if (idx >= list.Count - 1) return;
-                            (list[idx], list[idx + 1]) = (list[idx + 1], list[idx]);
-                            (stableIds[idx], stableIds[idx + 1]) = (stableIds[idx + 1], stableIds[idx]);
-                            paper.SetElementStorage(colEl, "stableIds", stableIds);
-                            onChange(list);
-                        }).Disabled(idx >= list.Count - 1).Height(m.CompactHeight).Show();
-
-                        Origami.IconButton(paper, $"{id}_rm_{sk}", theme.Icons.Close, () =>
-                        {
-                            stableIds.RemoveAt(idx);
-                            paper.SetElementStorage(colEl, "stableIds", stableIds);
-                            if (collectionType.IsArray)
-                            {
-                                var newArr = Array.CreateInstance(elementType, list.Count - 1);
-                                for (int j = 0, k = 0; j < list.Count; j++)
-                                    if (j != idx) newArr.SetValue(list[j], k++);
-                                onChange(newArr);
-                            }
-                            else
-                            {
-                                var newList = (IList)Activator.CreateInstance(list.GetType())!;
-                                for (int j = 0; j < list.Count; j++)
-                                    if (j != idx) newList.Add(list[j]);
-                                onChange(newList);
-                            }
-                        }).Show();
+                        float d = MathF.Abs(cys[t] - py);
+                        if (d < best) { best = d; target = t; }
                     }
+                    MoveTo(cur, target);
+                })
+                .OnDragEnd(_ => paper.SetElementStorage(colEl, "dragSk", (string?)null));
+        }
+
+        System.Drawing.Color DepthColor(int d) => d switch
+        {
+            0 => System.Drawing.Color.FromArgb(128, theme.Primary.C500),
+            1 => System.Drawing.Color.FromArgb(128, theme.Blue.C500),
+            _ => System.Drawing.Color.FromArgb(128, 217, 107, 216),
+        };
+
+        // ── Simple (leaf element) list ─────────────────────────
+        void DrawSimple()
+        {
+            const float rowH = 30f;
+            using (paper.Column($"{id}_coll").Width(ST).Height(UnitValue.Auto)
+                .Rounded(8).BorderColor(bd).BorderWidth(1).Clip().Enter())
+            {
+                var listEl = paper.CurrentParent;
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
+                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_se");
+
+                using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium).BackgroundColor(glass)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
+                    .Enter())
+                {
+                    paper.Box($"{id}_ci").Width(14).Height(26).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
+                    paper.Box($"{id}_cc").Width(ST).Height(26).IsNotInteractable()
+                        .Text(string.IsNullOrEmpty(label) ? $"{list.Count} elements" : $"{label}  ({list.Count})", font)
+                        .TextColor(tMid).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    paper.Box($"{id}_cv").Width(12).Height(26).Margin(0, 0, ST, ST).IsNotInteractable()
+                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
                 }
 
-                Origami.Button(paper, $"{id}_add", "+ Add", () =>
+                if (!expanded && anim <= 0.001f) return;
+
+                using (paper.Column($"{id}_body").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
                 {
-                    object? newElement = elementType.IsValueType
-                        ? Activator.CreateInstance(elementType)
-                        : elementType == typeof(string) ? "" : null;
-                    stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
-                    paper.SetElementStorage(colEl, "stableIds", stableIds);
-                    if (collectionType.IsArray)
+                    paper.Box($"{id}_chd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+
+                    for (int i = 0; i < list.Count; i++)
                     {
-                        var newArr = Array.CreateInstance(elementType, list.Count + 1);
-                        for (int j = 0; j < list.Count; j++) newArr.SetValue(list[j], j);
-                        newArr.SetValue(newElement, list.Count);
-                        onChange(newArr);
+                        int idx = i; string sk = stableIds[i];
+                        var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).RowBetween(m.SpacingLarge);
+                        if (BeingDragged(sk)) rowB.BackgroundColor(theme.Selected);
+                        CaptureRow(idx, rowB);
+                        using (rowB.Enter())
+                        {
+                            var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, OrigamiIconSet.Grip, tDim, size: 13f);
+                            GripDrag(sk, grip);
+
+                            paper.Box($"{id}_i_{sk}").Width(14).Height(rowH).IsNotInteractable()
+                                .Text(idx.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
+
+                            using (paper.Box($"{id}_v_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(m.RowHeight).Enter())
+                                DrawFieldControl(paper, $"{id}_el_{sk}", elementType, list[idx], config, v => { list[idx] = v; onChange(list); }, depth + 1);
+
+                            paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
+                                .Hovered.BackgroundColor(redBg).End()
+                                .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
+                                .OnClick(idx, (j, _) => RemoveAt(j));
+                        }
+                        if (i < list.Count - 1)
+                            paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
                     }
-                    else
-                    {
-                        var newList = (IList)Activator.CreateInstance(list.GetType())!;
-                        for (int j = 0; j < list.Count; j++) newList.Add(list[j]);
-                        newList.Add(newElement);
-                        onChange(newList);
-                    }
-                }).Show();
+
+                    paper.Box($"{id}_add").Width(ST).Height(26)
+                        .Hovered.BackgroundColor(theme.Hover).End()
+                        .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
+                        .OnClick(0, (_, _) => AddNew());
+                }
             }
-        });
+        }
+
+        // ── One nested element card (foldout with its own property fields) ──
+        void DrawElement(int i, string sk)
+        {
+            const float rowH = 28f;
+            var cardB = paper.Column($"{id}_nel_{sk}").Width(ST).Height(UnitValue.Auto)
+                .Rounded(8).BorderColor(bd).BorderWidth(1)
+                .BackgroundColor(BeingDragged(sk) ? theme.Selected : System.Drawing.Color.FromArgb(6, 255, 255, 255)).Clip();
+            CaptureRow(i, cardB);
+            using (cardB.Enter())
+            {
+                var nelEl = paper.CurrentParent;
+                bool exp = paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault);
+
+                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)));
+                if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
+                using (nh.Enter())
+                {
+                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).StopEventPropagation().Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
+                    GripDrag(sk, grip);
+
+                    paper.Box($"{id}_nc_{sk}").Width(11).Height(rowH).IsNotInteractable()
+                        .Icon(paper, exp ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
+
+                    paper.Box($"{id}_ni_{sk}").Width(UnitValue.Auto).Height(rowH).IsNotInteractable()
+                        .Text(i.ToString(), mono).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
+
+                    // Show the element's actual concrete type, not the list's (base) element type.
+                    paper.Box($"{id}_nt_{sk}").Width(ST).Height(rowH).IsNotInteractable()
+                        .Text(list[i]?.GetType().Name ?? elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+
+                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST).StopEventPropagation()
+                        .Hovered.BackgroundColor(redBg).End()
+                        .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
+                        .OnClick(i, (j, _) => RemoveAt(j));
+                }
+
+                if (exp)
+                {
+                    paper.Box($"{id}_nd_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+                    using (paper.Column($"{id}_nbody_{sk}").Width(ST).Height(UnitValue.Auto).Padding(0, 0, m.SpacingSmall, m.PaddingSmall).Enter())
+                    {
+                        var elem = list[i];
+                        int capIdx = i;
+                        var customEd = elem != null ? config.CustomEditors.GetEditor(elem.GetType()) : null;
+                        if (customEd != null)
+                            customEd.OnGUI(paper, $"{id}_nce_{sk}", elem!);
+                        else if (elem != null)
+                            Draw(paper, $"{id}_nbf_{sk}", elem, config, changed => { list[capIdx] = changed; onChange(list); }, null, depth + 1);
+                        else
+                            // Null element: a type picker to assign / instantiate a value.
+                            using (paper.Row($"{id}_npw_{sk}").Width(ST).Height(UnitValue.Auto).Padding(m.SpacingLarge, m.SpacingLarge, m.PaddingSmall, m.PaddingSmall).Enter())
+                                config.DrawTypePicker?.Invoke(paper, $"{id}_np_{sk}", elementType, null, v => { list[capIdx] = v; onChange(list); });
+                    }
+                }
+            }
+        }
+
+        // ── Nested (complex element) list ──────────────────────
+        void DrawNested()
+        {
+            var color = DepthColor(depth);
+            using (paper.Column($"{id}_nl").Width(ST).Height(UnitValue.Auto)
+                .Rounded(9).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
+            {
+                var listEl = paper.CurrentParent;
+                bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
+                float anim = paper.AnimateBool(expanded, 0.18f, id: $"{id}_ne");
+
+                using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingLarge).BackgroundColor(glass)
+                    .Hovered.BackgroundColor(theme.Hover).End()
+                    .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
+                    .Enter())
+                {
+                    paper.Box($"{id}_nli").Width(14).Height(30).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
+                    paper.Box($"{id}_nlt").Width(UnitValue.Auto).Height(30).IsNotInteractable()
+                        .Text(string.IsNullOrEmpty(label) ? elementType.Name : label, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    paper.Box($"{id}_nlc").Width(ST).Height(30).Margin(4, 0, 0, 0).IsNotInteractable()
+                        .Text($"[{list.Count}]", mono).TextColor(tLo).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    paper.Box($"{id}_nlv").Width(12).Height(30).Margin(0, 0, ST, ST).IsNotInteractable()
+                        .Icon(paper, expanded ? OrigamiIconSet.ChevronDown : OrigamiIconSet.ChevronRight, tLo, size: 11f);
+                }
+
+                if (!expanded && anim <= 0.001f) return;
+
+                using (paper.Column($"{id}_nlwrap").Width(ST).Height(UnitValue.Lerp(0, UnitValue.Auto, anim)).Clip().Enter())
+                {
+                    paper.Box($"{id}_nlhd").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
+
+                    using (paper.Column($"{id}_nlb").Width(ST).Height(UnitValue.Auto).Padding(m.Padding, m.Padding, m.Padding, m.Padding).ColBetween(m.SpacingMedium).Enter())
+                    {
+                        if (list.Count == 0)
+                            paper.Box($"{id}_nle").Width(ST).Height(24).IsNotInteractable()
+                                .Text("Empty list", font).TextColor(tDim).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter);
+                        for (int i = 0; i < list.Count; i++)
+                            DrawElement(i, stableIds[i]);
+
+                        paper.Box($"{id}_nladd").Width(ST).Height(26).Rounded(6)
+                            .Hovered.BackgroundColor(theme.Hover).End()
+                            .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
+                            .OnClick(0, (_, _) => AddNew());
+                    }
+                }
+            }
+        }
+
+        if (IsLeafElementType(elementType, config))
+            DrawSimple();
+        else
+            DrawNested();
     }
 
     // ── Dictionary ───────────────────────────────────────────
 
     private static void DrawDictionary(Paper paper, string id, Type dictType,
-        IDictionary? dict, PropertyGridConfig config, Action<object?> onChange, int depth)
+        IDictionary? dict, PropertyGridConfig config, Action<object?> onChange, int depth, string label = "")
     {
         var typeArgs = dictType.GetGenericArguments();
         Type keyType = typeArgs[0];
@@ -684,7 +917,9 @@ public static class PropertyGridRenderer
         var theme = Origami.Current;
         var m = theme.Metrics;
 
-        Origami.Foldout(paper, $"{id}_fold", $"({count})").Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", string.IsNullOrEmpty(label) ? $"({count})" : label)
+            .Badge(string.IsNullOrEmpty(label) ? null : count.ToString())
+            .Body(() =>
         {
             if (dict == null)
             {
@@ -778,7 +1013,7 @@ public static class PropertyGridRenderer
         if (depth + 1 > config.MaxDepth) return;
         var actualType = value.GetType();
 
-        Origami.Foldout(paper, $"{id}_fold", actualType.Name).Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", actualType.Name).DefaultExpanded(config.ExpandByDefault).Body(() =>
         {
             if (declaredType.IsAbstract || declaredType.IsInterface)
                 config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);
@@ -795,7 +1030,7 @@ public static class PropertyGridRenderer
     {
         if (depth + 1 > config.MaxDepth) return;
 
-        Origami.Foldout(paper, $"{id}_fold", value.GetType().Name).Body(() =>
+        Origami.Foldout(paper, $"{id}_fold", value.GetType().Name).DefaultExpanded(config.ExpandByDefault).Body(() =>
         {
             if (declaredType.IsAbstract || declaredType.IsInterface)
                 config.DrawTypePicker?.Invoke(paper, $"{id}_pick", declaredType, value, onChange);

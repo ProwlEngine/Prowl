@@ -33,7 +33,7 @@ public sealed class TextFieldBuilder
 
     private OrigamiVariant _variant = OrigamiVariant.Default;
     private UnitValue _width = UnitValue.Stretch();
-    private float _height = 32f;
+    private float _height = 24f;
     private bool _readOnly;
     private int _maxLength;
     private string _placeholder = "";
@@ -89,6 +89,7 @@ public sealed class TextFieldBuilder
         _setter = setter ?? throw new ArgumentNullException(nameof(setter));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
         _value = value ?? string.Empty;
+        _height = _theme.Metrics.RowHeight;
     }
 
     // ── Variant ────────────────────────────────────────────────────────
@@ -286,7 +287,7 @@ public sealed class TextFieldBuilder
 
             // ── Field row (border, slots, text element) ────────────────
             // Soft accent glow on focus (not a hard ring).
-            Color glowColor = hasError ? Color.FromArgb(130, 251, 113, 133) : Color.FromArgb(130, 168, 85, 247);
+            Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500.R, _theme.Red.C500.G, _theme.Red.C500.B) : Color.FromArgb(130, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);
             var rowBuilder = _paper.Row($"{_id}_row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)

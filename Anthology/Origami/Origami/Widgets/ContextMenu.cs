@@ -56,6 +56,14 @@ public sealed class ContextBuilder
         return this;
     }
 
+    /// <summary>Add a non-interactive title row (the subject of the menu, e.g. the clicked item's name),
+    /// shown prominently in normal case with a divider beneath it.</summary>
+    public ContextBuilder Title(string text, string icon = "", IOrigamiIcon? iconDraw = null)
+    {
+        Items.Add(new CtxTitle { Text = text, Icon = icon, IconDraw = iconDraw });
+        return this;
+    }
+
     /// <summary>Add a toggle item that shows a checkbox state.</summary>
     public ContextBuilder Toggle(string label, Action onClick, Func<bool> getValue, bool enabled = true)
     {
@@ -81,9 +89,10 @@ public sealed class ContextBuilder
 
     // ── Shared row geometry / palette (Nebula .w2menu spec) ───
 
-    internal const float RowHeight = 30f;
-    internal const float RowFont = 16f;   // .w2mrow font-size (Origami metric scale ~= 12px browser)
-    internal const float SubFont = 13f;   // .k shortcut / header
+    // Row height / fonts track the theme metrics so the menu follows RowHeight / FontSize changes.
+    internal static float RowHeight => Origami.Current.Metrics.RowHeight + 6f;
+    internal static float RowFont => Origami.Current.Metrics.FontSize;
+    internal static float SubFont => Origami.Current.Metrics.FontSize - 3f;
     internal const float IconSize = 15f;  // leading vector icon
     internal const float RowPadX = 9f;    // .w2mrow padding-x
     internal const float RowGap = 9f;     // .w2mrow flex gap
@@ -120,7 +129,6 @@ public sealed class ContextBuilder
                 bool hovered = Enabled && paper.IsParentHovered;
                 Color txt = !Enabled ? ink.C100                     // t-dim (disabled)
                           : Danger  ? theme.Red.C500                // .danger
-                          : On      ? theme.Primary.C700            // .on = acc-300
                           : hovered ? ink.C500                      // hover = t-hi
                           :           ink.C400;                     // t
 
@@ -136,6 +144,11 @@ public sealed class ContextBuilder
                         .Width(UnitValue.Auto).Height(RowHeight)
                         .Text(Shortcut, font).TextColor(Enabled ? ink.C200 : ink.C100)   // t-lo
                         .FontSize(SubFont).Alignment(TextAlignment.MiddleRight);
+
+                // Active/checked items (e.g. the current "Sort By") show a trailing green check.
+                if (On)
+                    paper.Box($"{id}_chk_{index}").Width(16).Height(RowHeight).IsNotInteractable()
+                        .Icon(paper, OrigamiIconSet.Check, theme.Green.C500, size: 13f);
             }
         }
 
@@ -161,10 +174,34 @@ public sealed class ContextBuilder
                     .Text(Icon, font).TextColor(color)
                     .FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
             }
-            else
+            // No icon: draw nothing (label sits flush; no reserved leading gap).
+        }
+    }
+
+    internal sealed class CtxTitle : IContextItem
+    {
+        public string Text = "";
+        public string Icon = "";
+        public IOrigamiIcon? IconDraw;
+
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        {
+            using (paper.Row($"{id}_ti_{index}").Height(RowHeight).Padding(RowPadX, RowPadX, 0, 0).RowBetween(RowGap)
+                .IsNotInteractable().Enter())
             {
-                paper.Box(boxId).Width(IconSize);   // reserve space so labels stay aligned
+                if (IconDraw != null)
+                    paper.Box($"{id}_tii_{index}").Width(IconSize).Height(RowHeight).IsNotInteractable()
+                        .Icon(paper, IconDraw, theme.Primary.C700);
+                else if (!string.IsNullOrEmpty(Icon))
+                    paper.Box($"{id}_tii_{index}").Width(IconSize).Height(RowHeight)
+                        .Text(Icon, font).TextColor(theme.Primary.C700).FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box($"{id}_tit_{index}").Width(UnitValue.Stretch()).Height(RowHeight).Clip()
+                    .Text(Text, theme.SemiBold ?? theme.Bold ?? font).TextColor(theme.Ink.C500)
+                    .FontSize(RowFont - 1f).Alignment(TextAlignment.MiddleLeft);
             }
+            paper.Box($"{id}_tid_{index}").Height(1).Margin(4, 4, 3, 4)
+                .BackgroundColor(theme.BorderSoft).IsNotInteractable();
         }
     }
 
@@ -182,8 +219,9 @@ public sealed class ContextBuilder
             {
                 paper.Box($"{id}_ht_{index}")
                     .Width(UnitValue.Stretch()).Height(14)
-                    .Text(Text.ToUpperInvariant(), theme.Medium ?? font)
+                    .Text(Text.ToUpperInvariant(), theme.SemiBold ?? theme.Bold ?? font)
                     .TextColor(theme.Ink.C100)                      // t-dim
+                    .LetterSpacing(0.5f)
                     .FontSize(SubFont).Alignment(TextAlignment.MiddleLeft);
             }
         }
@@ -214,15 +252,24 @@ public sealed class ContextBuilder
             {
                 bool hovered = Enabled && paper.IsParentHovered;
                 Color txt = !Enabled ? ink.C100 : hovered ? ink.C500 : ink.C400;
-
-                Origami.Checkbox(paper, $"{id}_t_{index}",
-                        GetValue?.Invoke() ?? false, _ => { })
-                    .NoLabel().ReadOnly().Show();
+                bool on = GetValue?.Invoke() ?? false;
 
                 paper.Box($"{id}_l_{index}")
                     .Width(UnitValue.Stretch()).Height(RowHeight)
                     .Text(Label, font).TextColor(txt)
                     .FontSize(RowFont).Alignment(TextAlignment.MiddleLeft);
+
+                // Pill toggle on the right (matches the Nebula .tg switch).
+                var acc = theme.Primary.C500;
+                using (paper.Box($"{id}_tg_{index}").Width(32).Height(18).Rounded(9)
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .BackgroundColor(on ? acc : Color.FromArgb(26, 255, 255, 255))
+                    .BorderColor(on ? Color.Transparent : theme.BorderSoft).BorderWidth(1)
+                    .IsNotInteractable()
+                    .Enter())
+                    paper.Box($"{id}_tk_{index}").Width(14).Height(14).Rounded(7)
+                        .PositionType(PositionType.SelfDirected).Position(on ? 16 : 2, 1.5f)
+                        .BackgroundColor(Color.White).IsNotInteractable();
             }
         }
     }
@@ -234,7 +281,7 @@ public sealed class ContextBuilder
             // .c2sep — 1px bd line, ~5px vertical margin, ~4px horizontal inset.
             paper.Box($"{id}_sep_{index}")
                 .Height(1).Margin(4, 4, 5, 5)
-                .BackgroundColor(Color.FromArgb(33, 178, 150, 255));   // bd
+                .BackgroundColor(theme.Neutral.C200);   // bd
         }
     }
 

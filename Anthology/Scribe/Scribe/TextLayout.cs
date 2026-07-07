@@ -51,6 +51,22 @@ namespace Prowl.Scribe
         /// </summary>
         public int AtlasVersion { get; private set; } = -1;
 
+        /// <summary>
+        /// Position-independent glyph quads (corner offsets relative to the draw origin, plus atlas
+        /// UVs), built lazily by <see cref="FontSystem.DrawLayout"/> and reused across frames. Cleared
+        /// whenever the layout is rebuilt (which includes atlas-version changes via
+        /// <see cref="EnsureUpToDate"/>), so it never carries stale UVs. Colour and draw position are
+        /// applied at emit time, so they are not baked in here.
+        /// </summary>
+        internal readonly List<DrawQuad> _drawQuads = new List<DrawQuad>();
+        internal bool _drawQuadsBuilt;
+
+        internal struct DrawQuad
+        {
+            public float X0, Y0, X1, Y1; // corner offsets relative to the draw origin
+            public float U0, V0, U1, V1; // atlas UVs
+        }
+
         public TextLayout()
         {
             Lines = new List<Line>();
@@ -62,6 +78,7 @@ namespace Prowl.Scribe
             Settings = settings;
             _fontSystem = fontSystem;
             Lines.Clear();
+            _drawQuadsBuilt = false; // layout changed -> any cached quads are stale
 
             if (string.IsNullOrEmpty(text))
             {

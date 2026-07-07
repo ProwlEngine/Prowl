@@ -236,7 +236,7 @@ public sealed class Toasts
         var semantic = GetSemantic(type, theme);
         bool hasSub = !string.IsNullOrEmpty(message);
 
-        var bg         = Color.FromArgb(247, 28, 23, 42);
+        var bg         = theme.Popover;
         var border     = theme.BorderStrong;
         var shadow     = theme.Shadow;
         var titleColor = theme.Ink.C500;
