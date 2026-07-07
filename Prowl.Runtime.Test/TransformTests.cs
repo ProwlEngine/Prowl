@@ -263,4 +263,93 @@ public class TransformTests : RuntimeTestBase
         b.SetAsFirstSibling();
         Assert.Equal(0, b.GetSiblingIndex());
     }
+
+    // ---- World matrix lazy cache ----
+    // LocalToWorldMatrix is cached and only rebuilt when this transform's Version or an ancestor's
+    // world matrix changes. These cover the invalidation paths a stale cache would get wrong.
+
+    private static Float3 WorldOrigin(Transform t) => Float4x4.TransformPoint(Float3.Zero, t.LocalToWorldMatrix);
+
+    [Fact]
+    public void WorldMatrix_SelfMove_InvalidatesCache()
+    {
+        var t = NewTransform("t");
+        t.LocalPosition = new Float3(1, 2, 3);
+        AssertVec(new Float3(1, 2, 3), WorldOrigin(t));
+        AssertVec(new Float3(1, 2, 3), WorldOrigin(t)); // cache hit, same result
+
+        t.LocalPosition = new Float3(5, 6, 7);
+        AssertVec(new Float3(5, 6, 7), WorldOrigin(t));
+    }
+
+    // The critical case: prime a child's cache, then move the PARENT (which never touches the child's
+    // own Version). The child must still refresh via the parent's world-version.
+    [Fact]
+    public void WorldMatrix_AncestorMove_InvalidatesChild()
+    {
+        var parent = NewTransform("Parent");
+        parent.LocalPosition = new Float3(10, 0, 0);
+        var child = NewTransform("Child");
+        child.SetParent(parent, false);
+        child.LocalPosition = new Float3(1, 2, 3);
+
+        AssertVec(new Float3(11, 2, 3), WorldOrigin(child)); // prime cache
+
+        parent.LocalPosition = new Float3(20, 0, 0);
+        AssertVec(new Float3(21, 2, 3), WorldOrigin(child));
+    }
+
+    // Two levels deep: moving the root must cascade all the way to the leaf.
+    [Fact]
+    public void WorldMatrix_RootMove_InvalidatesGrandchild()
+    {
+        var root = NewTransform("Root");
+        var mid = NewTransform("Mid");
+        var leaf = NewTransform("Leaf");
+        mid.SetParent(root, false);
+        leaf.SetParent(mid, false);
+        root.LocalPosition = new Float3(0, 100, 0);
+        mid.LocalPosition = new Float3(0, 10, 0);
+        leaf.LocalPosition = new Float3(0, 1, 0);
+
+        AssertVec(new Float3(0, 111, 0), WorldOrigin(leaf)); // prime whole chain
+
+        root.LocalPosition = new Float3(0, 200, 0);
+        AssertVec(new Float3(0, 211, 0), WorldOrigin(leaf));
+    }
+
+    // Reparenting keeps the local values (worldPositionStays: false) but must refresh the cached world.
+    [Fact]
+    public void WorldMatrix_Reparent_InvalidatesCache()
+    {
+        var a = NewTransform("A");
+        a.LocalPosition = new Float3(10, 0, 0);
+        var b = NewTransform("B");
+        b.LocalPosition = new Float3(100, 0, 0);
+        var child = NewTransform("Child");
+        child.SetParent(a, false);
+        child.LocalPosition = new Float3(1, 0, 0);
+
+        AssertVec(new Float3(11, 0, 0), WorldOrigin(child)); // prime cache under A
+
+        child.SetParent(b, false);
+        AssertVec(new Float3(101, 0, 0), WorldOrigin(child));
+    }
+
+    // Parent and child both move between reads: guards a cache that tracks only one of the two versions.
+    [Fact]
+    public void WorldMatrix_ParentThenChildMove_Composes()
+    {
+        var parent = NewTransform("Parent");
+        parent.LocalPosition = new Float3(10, 0, 0);
+        var child = NewTransform("Child");
+        child.SetParent(parent, false);
+        child.LocalPosition = new Float3(1, 0, 0);
+
+        AssertVec(new Float3(11, 0, 0), WorldOrigin(child));
+
+        parent.LocalPosition = new Float3(20, 0, 0);
+        child.LocalPosition = new Float3(2, 0, 0);
+        AssertVec(new Float3(22, 0, 0), WorldOrigin(child));
+    }
 }
