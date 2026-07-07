@@ -73,6 +73,8 @@ public class DockSpace
         rect = default;
         return false;
     }
+
+    public void Draw(Paper paper, float x, float y, float w, float h)
     {
         var theme = Origami.Current;
         var m = theme.Metrics;
