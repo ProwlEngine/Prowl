@@ -622,6 +622,7 @@ public sealed class ButtonBuilder
     /// <summary>Feathered coloured glow under a filled button (emulates the prototype box-shadow).</summary>
     private static void PaintGlow(Canvas canvas, float x, float y, float w, float h, float rounding, Color glow, float offY, float blur, float spread)
     {
+        if (!Origami.GlowsEnabled) return;
         float cx = x + w * 0.5f, cy = y + h * 0.5f + offY;
         float bw = w + spread * 2f, bh = h + spread * 2f;
         canvas.SaveState();

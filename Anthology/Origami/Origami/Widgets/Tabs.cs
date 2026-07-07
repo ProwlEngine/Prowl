@@ -237,11 +237,14 @@ public sealed class TabsBuilder
             if (s.SelT > 0.01f)
             {
                 float uy = y + h - 2f;
-                Color glow = Color.FromArgb((int)(150 * s.SelT), acc.R, acc.G, acc.B);
-                canvas.SaveState();
-                canvas.SetBoxBrush(x + w * 0.5f, uy + 1f, w - 2f, 2f, 1f, 10f, glow, Color.FromArgb(0, acc.R, acc.G, acc.B));
-                canvas.BeginPath(); canvas.Rect(x - 14f, uy - 11f, w + 28f, 24f); canvas.Fill();
-                canvas.RestoreState();
+                if (Origami.GlowsEnabled)
+                {
+                    Color glow = Color.FromArgb((int)(150 * s.SelT), acc.R, acc.G, acc.B);
+                    canvas.SaveState();
+                    canvas.SetBoxBrush(x + w * 0.5f, uy + 1f, w - 2f, 2f, 1f, 10f, glow, Color.FromArgb(0, acc.R, acc.G, acc.B));
+                    canvas.BeginPath(); canvas.Rect(x - 14f, uy - 11f, w + 28f, 24f); canvas.Fill();
+                    canvas.RestoreState();
+                }
                 canvas.RectFilled(x, uy, w, 2f, Color.FromArgb((int)(255 * s.SelT), acc.R, acc.G, acc.B));
             }
         }
@@ -293,6 +296,7 @@ public sealed class TabsBuilder
     // leaks into the fill/text draws that follow.
     private static void Glow(Canvas canvas, float x, float y, float w, float h, float r, Color c, float t)
     {
+        if (!Origami.GlowsEnabled) return;
         Color glow = Color.FromArgb((int)(140 * t), c.R, c.G, c.B);
         canvas.SaveState();
         canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 3f, w - 4f, h - 4f, r, 13f, glow, Color.FromArgb(0, c.R, c.G, c.B));

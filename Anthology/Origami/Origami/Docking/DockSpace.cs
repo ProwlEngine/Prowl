@@ -397,7 +397,7 @@ public class DockSpace
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
                         .BackgroundColor(theme.Primary.C500)
-                        .BoxShadow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+                        .Glow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
             }
 
             // Trailing separator on the right edge of the last tab, so the final tab (and a lone tab)
@@ -636,7 +636,7 @@ public class DockSpace
             .IsNotInteractable()
             .Rounded(1.5f)
             .BackgroundColor(theme.Primary.C500)
-            .BoxShadow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+            .Glow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
     }
 
     // ================================================================

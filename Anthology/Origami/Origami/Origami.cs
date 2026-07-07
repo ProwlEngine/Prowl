@@ -35,6 +35,21 @@ public static class Origami
     /// <summary>End a read-only scope.</summary>
     public static void EndReadOnly() { if (_readOnlyDepth > 0) _readOnlyDepth--; }
 
+    // ── Visual-effect toggles ──────────────────────────────────
+    // Origami separates a dark elevation "drop shadow" from an accent-tinted "glow" — two things
+    // Paper renders identically as box-shadows. The classification lives at the call site (where the
+    // intent is known) via the DropShadow/Glow helpers below, not guessed from colour. Hosts sync
+    // these to their own preferences (e.g. the editor's Preferences > Effects).
+
+    /// <summary>Global switch for dark elevation drop shadows (popovers, cards, dialogs). Default true.
+    /// Gates <see cref="OrigamiShadow.DropShadow{T}"/>.</summary>
+    public static bool DropShadowsEnabled = true;
+
+    /// <summary>Global switch for accent-tinted glows (selected pills, focus rings, active toolbar
+    /// buttons, tab underlines, etc.). Default true. Gates <see cref="OrigamiShadow.Glow{T}"/> and the
+    /// widgets' canvas-painted glows.</summary>
+    public static bool GlowsEnabled = true;
+
     // Transition state (lerp from start → target over duration).
     private static OrigamiTheme? _transitionStart;
     private static OrigamiTheme? _transitionTarget;
@@ -666,4 +681,23 @@ public static class Origami
             setter((TEnum)Enum.ToObject(typeof(TEnum), combined));
         }, nonZero, Current);
     }
+}
+
+/// <summary>
+/// Intent-tagged box-shadow helpers. A box-shadow is either a dark elevation <b>drop shadow</b> or an
+/// accent-tinted <b>glow</b>; these read identically to Paper but carry the caller's intent so each can
+/// be toggled independently via <see cref="Origami.DropShadowsEnabled"/> / <see cref="Origami.GlowsEnabled"/>.
+/// When the corresponding effect is disabled the shadow is simply not applied.
+/// </summary>
+public static class OrigamiShadow
+{
+    /// <summary>Apply a dark elevation drop shadow, unless drop shadows are globally disabled.</summary>
+    public static T DropShadow<T>(this StyleSetterBase<T> b, float offsetX, float offsetY, float blur,
+        float spread, System.Drawing.Color color) where T : StyleSetterBase<T>
+        => Origami.DropShadowsEnabled ? b.BoxShadow(offsetX, offsetY, blur, spread, color) : (T)b;
+
+    /// <summary>Apply an accent-tinted glow, unless glows are globally disabled.</summary>
+    public static T Glow<T>(this StyleSetterBase<T> b, float offsetX, float offsetY, float blur,
+        float spread, System.Drawing.Color color) where T : StyleSetterBase<T>
+        => Origami.GlowsEnabled ? b.BoxShadow(offsetX, offsetY, blur, spread, color) : (T)b;
 }

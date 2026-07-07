@@ -88,7 +88,7 @@ public sealed class DialogModal : IModal
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
             .Rounded(13f).Clip()
-            .BoxShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
+            .DropShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
             .Layer(layer)
             .StopEventPropagation();
 

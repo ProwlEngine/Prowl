@@ -295,7 +295,7 @@ internal static class DropdownInternal
             .Height(popH)
             .BackgroundColor(popBg)
             .BorderColor(popBorder).BorderWidth(1)
-            .BoxShadow(0, 14, 40, -6, p.Theme.Shadow)
+            .DropShadow(0, 14, 40, -6, p.Theme.Shadow)
             .Rounded(9)
             .Padding(padX, padX, padY, padY)
             .ColBetween(searchGap)

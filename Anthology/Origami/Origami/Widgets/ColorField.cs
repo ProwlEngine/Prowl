@@ -645,7 +645,7 @@ internal sealed class ColorPickerModal : IModal
             .BackgroundColor(theme.Popover)                 // solid Nebula popover
             .BorderColor(theme.BorderStrong).BorderWidth(1)    // bd-strong
             .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 14, 40, 0, theme.Shadow)
+            .DropShadow(0, 14, 40, 0, theme.Shadow)
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()

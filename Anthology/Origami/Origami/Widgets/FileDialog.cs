@@ -395,7 +395,7 @@ public static class FileDialog
             float sw = (float)paper.ScreenRect.Size.X, sh = (float)paper.ScreenRect.Size.Y;
             win.PositionType(PositionType.SelfDirected)
                .Position((sw - width) * 0.5f, (sh - height) * 0.5f)
-               .BoxShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
+               .DropShadow(0, 24, 64, 0, Color.FromArgb(166, 0, 0, 0))
                .Layer(layer).StopEventPropagation();
         }
 

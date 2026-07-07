@@ -347,6 +347,7 @@ public sealed class ButtonGroupBuilder
     // Wrapped in Save/Restore so the box brush never leaks into the following text/fill draws.
     internal static void PillGlow(Canvas canvas, float x, float y, float w, float h, float r, Color c)
     {
+        if (!Origami.GlowsEnabled) return;
         Color glow = Color.FromArgb(140, c.R, c.G, c.B);
         canvas.SaveState();
         canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 3f, w - 4f, h - 4f, r, 13f, glow, Color.FromArgb(0, c.R, c.G, c.B));

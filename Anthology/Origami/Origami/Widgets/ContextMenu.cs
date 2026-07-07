@@ -432,7 +432,7 @@ public static class ContextMenu
             .Rounded(MenuRadius)
             .Layer(layer)
             .ClampToScreen()
-            .BoxShadow(0, 14, 40, 0, theme.Shadow)
+            .DropShadow(0, 14, 40, 0, theme.Shadow)
             .StopEventPropagation();
 
         using (menuBox.Enter())
@@ -458,7 +458,7 @@ public static class ContextMenu
             .BackgroundColor(theme.Popover)
             .BorderColor(theme.BorderStrong).BorderWidth(1)
             .Rounded(MenuRadius)
-            .BoxShadow(0, 14, 40, 0, theme.Shadow);
+            .DropShadow(0, 14, 40, 0, theme.Shadow);
 
         using (menuBox.Enter())
             DrawMenuBody(paper, id, builder, font, theme, static () => { });

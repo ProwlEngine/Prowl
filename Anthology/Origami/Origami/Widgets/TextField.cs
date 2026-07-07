@@ -292,7 +292,7 @@ public sealed class TextFieldBuilder
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
                 .BorderColor(idleBorder).BorderWidth(1)
-                .Focused.BorderColor(focusBorder).BoxShadow(0, 0, 10, 1, glowColor).End()
+                .Focused.BorderColor(focusBorder).Glow(0, 0, 10, 1, glowColor).End()
                 .Rounded(_theme.Metrics.Rounding)
                 .TabIndex(0);
 

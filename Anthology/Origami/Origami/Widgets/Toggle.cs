@@ -447,7 +447,7 @@ public sealed class ToggleBuilder
 
                 // On-glow beneath the track (fades in with the value). Save/Restore so the box
                 // brush never leaks into the track / knob / text draws that follow.
-                if (t > 0.02f)
+                if (t > 0.02f && Origami.GlowsEnabled)
                 {
                     Color glow = Color.FromArgb((int)(95 * t), onBg.R, onBg.G, onBg.B);
                     canvas.SaveState();
@@ -623,7 +623,7 @@ public sealed class ToggleBuilder
 
                 // Dot glow (fades in with the value). Save/Restore so the box brush never leaks
                 // into the ring stroke / dot fill that follow.
-                if (anim > 0.02f && !_disabled)
+                if (anim > 0.02f && !_disabled && Origami.GlowsEnabled)
                 {
                     Color glow = Color.FromArgb((int)(90 * anim), onColor.R, onColor.G, onColor.B);
                     canvas.SaveState();

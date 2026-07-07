@@ -604,7 +604,7 @@ internal sealed class DatePickerModal : IModal
             .BackgroundColor(theme.Popover)                 // solid popover, crisp over content
             .BorderColor(theme.BorderStrong).BorderWidth(1)    // bd-strong
             .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 14, 40, 0, theme.Shadow)
+            .DropShadow(0, 14, 40, 0, theme.Shadow)
             .Padding(Pad, Pad, Pad, Pad)
             .ColBetween(m.SpacingMedium)
             .Layer(layer)
