@@ -59,7 +59,20 @@ public class DockSpace
 
     public DockSpace(DockNode root) { Root = root; }
 
-    public void Draw(Paper paper, float x, float y, float w, float h)
+    /// <summary>Find the screen rect of the leaf that hosts a panel of the given type (searches tabs,
+    /// so the panel need not be the active tab). Returns false if no such panel is currently docked.
+    /// Rects come from the last <see cref="Draw"/>, so call after the dock space has been drawn.</summary>
+    public bool TryGetPanelRect(Type panelType, out Rect rect)
+    {
+        foreach (var (node, r) in _leafRects)
+        {
+            if (node.Tabs == null) continue;
+            foreach (var p in node.Tabs)
+                if (panelType.IsInstanceOfType(p)) { rect = r; return true; }
+        }
+        rect = default;
+        return false;
+    }
     {
         var theme = Origami.Current;
         var m = theme.Metrics;
