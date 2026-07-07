@@ -49,7 +49,7 @@ internal sealed class CommandExecutor
     private RasterizerState _raster;
     private bool _rasterInitialized;
 
-    // Sticky property bindings — applied per-draw onto the bound program.
+    // Sticky property bindings applied per-draw onto the bound program.
     private PropertyState? _boundProperties;
     private PropertyState? _boundInstanceProperties;
 

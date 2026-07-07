@@ -7,6 +7,7 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("Physics", EditorIcons.Atom, order: 20)]
@@ -112,7 +113,7 @@ public class PhysicsSettings : ProjectSettingsBase
         // Gravity
         Origami.Header(paper, "phys_h_grav", $"{EditorIcons.Atom}  Gravity").Underline().Show();
 
-        InspectorRow.Draw(paper, "phys_gravity", "Gravity", () =>
+        EditorGUI.Row(paper, "phys_gravity", "Gravity", () =>
             Origami.Float3Field(paper, "phys_gravity_vf", new Float3(GravityX, GravityY, GravityZ),
                 v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; ProjectSettingsRegistry.SaveAll(); }).Show());
 
@@ -121,15 +122,15 @@ public class PhysicsSettings : ProjectSettingsBase
         // Solver
         Origami.Header(paper, "phys_h_solver", "Solver").Underline().Show();
 
-        InspectorRow.Draw(paper, "phys_solver_iter", "Solver Iterations", () =>
+        EditorGUI.Row(paper, "phys_solver_iter", "Solver Iterations", () =>
             Origami.IntSlider(paper, "phys_solver_iter_v", SolverIterations,
                 v => { SolverIterations = v; ProjectSettingsRegistry.SaveAll(); }, 1, 32).Show());
 
-        InspectorRow.Draw(paper, "phys_relax_iter", "Relaxation Iterations", () =>
+        EditorGUI.Row(paper, "phys_relax_iter", "Relaxation Iterations", () =>
             Origami.IntSlider(paper, "phys_relax_iter_v", RelaxIterations,
                 v => { RelaxIterations = v; ProjectSettingsRegistry.SaveAll(); }, 1, 16).Show());
 
-        InspectorRow.Draw(paper, "phys_substeps", "Sub-Steps", () =>
+        EditorGUI.Row(paper, "phys_substeps", "Sub-Steps", () =>
             Origami.IntSlider(paper, "phys_substeps_v", SubSteps,
                 v => { SubSteps = v; ProjectSettingsRegistry.SaveAll(); }, 1, 16).Show());
 
@@ -171,7 +172,7 @@ public class PhysicsSettings : ProjectSettingsBase
                 v => { PersistentContactManifold = v; ProjectSettingsRegistry.SaveAll(); })
             .LabelRight("Persistent Contact Manifold").Show();
 
-        InspectorRow.Draw(paper, "phys_specrelax", "Speculative Relaxation Factor", () =>
+        EditorGUI.Row(paper, "phys_specrelax", "Speculative Relaxation Factor", () =>
             Origami.Slider(paper, "phys_specrelax_v", SpeculativeRelaxationFactor,
                 v => { SpeculativeRelaxationFactor = v; ProjectSettingsRegistry.SaveAll(); },
                 0f, 1f).Format("F2").Show());
@@ -219,7 +220,7 @@ public class PhysicsSettings : ProjectSettingsBase
                 paper.Box($"phys_cml_{i}")
                     .Width(labelW).Height(cellSize)
                     .Text(layers[i], font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleRight);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
 
                 foreach (int j in activeIndices)
                 {

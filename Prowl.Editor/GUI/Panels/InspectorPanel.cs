@@ -89,7 +89,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             _subscribed = true;
         }
 
-        Origami.ScrollView(paper, "insp_scroll", width, height).Padding(8, 0, 8, 0).Body(() =>
+        Origami.ScrollView(paper, "insp_scroll", width, height).Padding(0, 0, 0, 0).Body(() =>
         {
             // Determine what to inspect: current selection, unless it's a folder
             var active = Selection.ActiveObject;
@@ -145,7 +145,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
                     {
                         ContentItem ci => $"{(ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant()))} {ci.Name}",
                         EngineObject eo => $"{EditorIcons.Cube} {eo.Name}",
-                        _ => obj.ToString() ?? "Unknown"
+                        _ => obj.ToString() ?? Loc.Get("inspector.unknown")
                     };
                     Origami.Label(paper, $"insp_sel_{i}", name).Show();
                 }
@@ -169,7 +169,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         paper.Box("insp_hint").Height(30)
             .Text(Loc.Get("inspector.nothing_selected_hint"), font)
             .TextColor(EditorTheme.Ink300)
-            .FontSize(EditorTheme.FontSize - 4)
+            .FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter);
     }
 
@@ -183,7 +183,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         {
             icon = ci.IsFolder ? EditorIcons.Folder : GetExtensionIcon(Path.GetExtension(ci.Name).ToLowerInvariant());
             name = ci.Name;
-            typeName = ci.IsFolder ? "Folder" : ci.TypeLabel;
+            typeName = ci.IsFolder ? Loc.Get("inspector.folder") : ci.TypeLabel;
         }
         else if (active is EngineObject eo)
         {
@@ -194,7 +194,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         else
         {
             icon = EditorIcons.CircleInfo;
-            name = active.ToString() ?? "Unknown";
+            name = active.ToString() ?? Loc.Get("inspector.unknown");
             typeName = active.GetType().Name;
         }
 
@@ -205,7 +205,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             // Large icon
             paper.Box("insp_h_icon")
                 .Width(32).Height(32)
-                .BackgroundColor(Color.FromArgb(30, 255, 255, 255))
+                .BackgroundColor(EditorTheme.Hover)
                 .Rounded(6)
                 .Text(icon, font)
                 .TextColor(EditorTheme.Purple400)
@@ -225,7 +225,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
                     .Height(14)
                     .Text(typeName, font)
                     .TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 4)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
             }
         }
@@ -270,7 +270,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
 
         if (entry != null)
         {
-            Origami.Label(paper, "insp_guid", $"GUID: {entry.Guid}").Show();
+            Origami.Label(paper, "insp_guid", $"{Loc.Get("inspector.guid")}: {entry.Guid}").Show();
             Origami.Label(paper, "insp_importer", $"{Loc.Get("inspector.importer")}: {entry.ImporterType}").Show();
 
             if (entry.MainAssetType != null)
@@ -341,19 +341,19 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
                                     break;
 
                                 case Echo.EchoType.Int:
-                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
                                         Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.Float:
-                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
                                         Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.String:
-                                    InspectorRow.Draw(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
                                         Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
@@ -439,11 +439,11 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             paper.Box("insp_sub_badge")
                 .Width(UnitValue.Auto).Height(20)
                 .ChildLeft(6).ChildRight(6)
-                .BackgroundColor(System.Drawing.Color.FromArgb(255, 80, 80, 100))
+                .BackgroundColor(EditorTheme.Selected)
                 .Rounded(4)
                 .Text(Loc.Get("inspector.sub_asset"), font)
                 .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 3)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleCenter);
 
             paper.Box("insp_sub_name")
@@ -458,7 +458,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
 
         // Info
         Origami.Label(paper, "insp_sub_type", $"{Loc.Get("inspector.type")}: {item.TypeLabel}").Show();
-        Origami.Label(paper, "insp_sub_guid", $"GUID: {item.Guid}").Show();
+        Origami.Label(paper, "insp_sub_guid", $"{Loc.Get("inspector.guid")}: {item.Guid}").Show();
         if (parentEntry != null)
             Origami.Label(paper, "insp_sub_parent", $"{Loc.Get("inspector.parent")}: {parentEntry.Path}").Show();
 
@@ -592,9 +592,9 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         };
         var textColor = log.Severity switch
         {
-            LogSeverity.Warning => System.Drawing.Color.FromArgb(255, 230, 200, 80),
-            LogSeverity.Error or LogSeverity.Exception => System.Drawing.Color.FromArgb(255, 230, 80, 80),
-            LogSeverity.Success => System.Drawing.Color.FromArgb(255, 80, 200, 80),
+            LogSeverity.Warning => EditorTheme.Amber400,
+            LogSeverity.Error or LogSeverity.Exception => EditorTheme.Red400,
+            LogSeverity.Success => EditorTheme.Green400,
             _ => EditorTheme.Ink500
         };
 
@@ -685,7 +685,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             .Hovered.BackgroundColor(EditorTheme.Ink200).End()
             .Text($"{icon}  {displayName}", font)
             .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize - 1)
+            .FontSize(EditorTheme.FontSizeSmall)
             .Alignment(PaperUI.TextAlignment.MiddleLeft)
             .OnClick(guid, (g, _) => Selection.Ping(g));
     }

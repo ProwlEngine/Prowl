@@ -64,7 +64,7 @@ public static class UIEventSystem
     /// <summary>
     /// Clears all retained <see cref="GameObject"/> references (hover/selection/pointer targets).
     /// These outlive a <see cref="Resources.Scene"/> unload and would otherwise pin disposed
-    /// GameObjects — and, during script hot-reload, the collectible AssemblyLoadContext.
+    /// GameObjects and, during script hot-reload, the collectible AssemblyLoadContext.
     /// </summary>
     [OnAssemblyUnload]
     public static void ResetState()

@@ -8,6 +8,7 @@ using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("Tags & Layers", EditorIcons.Tags, order: 10)]
@@ -48,7 +49,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                     .Height(22).ChildLeft(4)
                     .Text(Tags[i], font)
                     .TextColor(isBuiltin ? EditorTheme.Ink400 : EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 if (!isBuiltin)
@@ -96,19 +97,19 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                     paper.Box($"tl_layer_idx_{i}")
                         .Width(24).Height(22)
                         .Text(i.ToString(), font).TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 2)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleRight);
 
                     paper.Box($"tl_layer_name_{i}")
                         .Height(22).ChildLeft(4)
                         .Text(Layers[i], font).TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 1)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
             }
             else
             {
-                InspectorRow.Draw(paper, $"tl_layer_{i}", $"Layer {i}", () =>
+                EditorGUI.Row(paper, $"tl_layer_{i}", $"Layer {i}", () =>
                     Origami.TextField(paper, $"tl_layer_{i}_v", Layers[i], v =>
                     {
                         Layers[idx] = v;

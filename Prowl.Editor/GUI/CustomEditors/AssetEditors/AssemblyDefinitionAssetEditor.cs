@@ -12,6 +12,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -41,7 +42,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
 
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.FileLines}  Assembly Definition").Show();
 
-        InspectorRow.Draw(paper, $"{id}_name", "Name", () =>
+        EditorGUI.Row(paper, $"{id}_name", "Name", () =>
             Origami.TextField(paper, $"{id}_name_v", def.Name, v => def.Name = v).Show());
 
         Origami.Checkbox(paper, $"{id}_unsafe", def.AllowUnsafeCode, v => def.AllowUnsafeCode = v)

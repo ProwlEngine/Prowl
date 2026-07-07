@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -33,6 +33,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     }
 
     private string _searchText = "";
+    private bool _sceneExpanded = true;
     private Paper? _paper;
     // Rename state is managed by RenameOverlay
 
@@ -105,7 +106,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .Width(UnitValue.Auto).Height(24)
                         .Text($"{EditorIcons.ArrowLeft}  {Loc.Get("hierarchy.back")}", font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
                         .OnClick(0, (_, _) => PrefabEditingMode.Exit());
 
@@ -115,12 +116,12 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string sceneName = PrefabEditingMode.OriginalSceneName ?? "Scene";
+                    string sceneName = PrefabEditingMode.OriginalSceneName ?? Loc.Get("panel.scene");
                     paper.Box("hier_prefab_scene")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(sceneName, font)
                         .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box("hier_prefab_sep_arrow2")
                         .Width(UnitValue.Auto).Height(24)
@@ -128,13 +129,14 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string prefabName = System.IO.Path.GetFileNameWithoutExtension(
-                        PrefabEditingMode.EditingPrefabPath ?? "Prefab");
+                    string prefabName = PrefabEditingMode.EditingPrefabPath != null
+                        ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
+                        : Loc.Get("hierarchy.prefab_fallback");
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(prefabName, font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box("hier_prefab_spacer");
 
@@ -158,21 +160,37 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 return;
             }
 
-            // Scene name header
-            using (paper.Box("hier_scene_name")
+            // Scene section header (collapsible, open by default)
+            using (paper.Row("hier_scene_hdr")
                 .Height(EditorTheme.RowHeight)
-                .Margin(6, 6, 0, 6)
-                .Rounded(4)
-                .BackgroundColor(EditorTheme.Neutral200).Enter())
+                .Margin(6, 6, 0, 2)
+                .Rounded(6).Padding(8, 8, 0, 0).RowBetween(6)
+                .BackgroundColor(EditorTheme.Glass)
+                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .OnClick(0, (_, _) => _sceneExpanded = !_sceneExpanded)
+                .Enter())
             {
+                paper.Box("hier_scene_caret")
+                    .Width(10).Height(EditorTheme.RowHeight).IsNotInteractable()
+                    .Text(_sceneExpanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box("hier_scene_icon")
+                    .Width(16).Height(EditorTheme.RowHeight).IsNotInteractable()
+                    .Icon(paper, EditorIcons.Film_I, EditorTheme.Amber400, size: 14f);
+
                 paper.Box("hier_scene_name_text")
-                    .Margin(8, 0)
-                    .Height(EditorTheme.RowHeight)
-                    .Text($"{EditorIcons.Film}  {scene.Name}", font)
+                    .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight)
+                    .Text(scene.Name, font)
                     .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
             }
+
+            if (!_sceneExpanded)
+                return;
 
             using (paper.Box("hier_bg").Enter())
             {
@@ -318,12 +336,12 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         var go = (GameObject)node.UserData!;
                         string goId = go.Identifier.ToString();
 
-                        // Icon
+                        // Icon (vector, chosen from the GameObject's first component + coloured)
+                        var (goIcon, goColor) = GetGoStyle(go);
+                        if (!go.EnabledInHierarchy) goColor = Color.FromArgb(120, goColor);
                         paper.Box($"hier_ico_{goId}")
-                            .Width(16).Height(EditorTheme.RowHeight)
-                            .Text(node.Icon, font)
-                            .TextColor(node.IconColor ?? EditorTheme.Ink400)
-                            .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+                            .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
+                            .Icon(paper, goIcon, goColor, size: 14f);
 
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
@@ -336,7 +354,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                                 .Height(EditorTheme.RowHeight).ChildLeft(4)
                                 .Text(go.Name, font)
                                 .TextColor(node.LabelColor ?? EditorTheme.Ink500)
-                                .FontSize(EditorTheme.FontSize - 1)
+                                .FontSize(EditorTheme.FontSizeSmall)
                                 .Alignment(TextAlignment.MiddleLeft);
                         }
 
@@ -373,7 +391,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .Rounded(3)
                         .Text(Loc.Get("hierarchy.drop_to_spawn"), font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 2)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
                 else if (DragDrop.IsDraggingType<AssetDragPayload>())
@@ -451,30 +469,14 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         using (paper.Row("hier_toolbar")
             .Height(ToolbarHeight)
             .Margin(4, 4, 4, 0)
-            .RowBetween(4)
             .Enter())
         {
-            // Create button
-            using (paper.Box("hier_add")
-                .Width(EditorTheme.RowHeight)
-                .Height(EditorTheme.RowHeight)
-                .Rounded(4)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Plus, font)
-                .TextColor(EditorTheme.Ink500)
-                .FontSize(16f)
-                .Alignment(TextAlignment.MiddleCenter)
+            using (paper.Row("hier_search_wrap")
+                .Width(UnitValue.StretchOne).Height(25)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Enter())
-            {
-                if (paper.IsParentHovered)
-                {
-                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                        BuildCreateMenu(b, null));
-                }
-            }
-
-            // Search
-            Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v).Show();
+                Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v)
+                    .Width(UnitValue.StretchOne).Height(25).Show();
         }
     }
 
@@ -932,9 +934,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         if (entry == null)
         {
             // Broken prefab link red text
-            return go.EnabledInHierarchy
-                ? Color.FromArgb(255, 220, 80, 80)
-                : Color.FromArgb(255, 160, 60, 60);
+            return go.EnabledInHierarchy ? EditorTheme.Red400 : EditorTheme.Red300;
         }
 
         // Valid prefab purple text
@@ -948,6 +948,21 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
         if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
         return EditorIcons.Circle;
+    }
+
+    // Vector icon + accent colour chosen from the GameObject's defining (first) component.
+    private static (IOrigamiIcon icon, Color color) GetGoStyle(GameObject go)
+    {
+        var first = go.GetComponents<MonoBehaviour>().FirstOrDefault();
+        if (first is Camera)               return (EditorIcons.Camera_I, EditorTheme.Blue400);    // blue
+        if (first is Light)                return (EditorIcons.Lightbulb_I, EditorTheme.Amber400);    // amber
+        if (first is SkinnedMeshRenderer)  return (EditorIcons.Cubes_I, EditorTheme.Purple400);    // purple
+        if (first is MeshRenderer)         return (EditorIcons.Cube_I, EditorTheme.Purple400);    // purple
+        if (first != null)                 return (EditorIcons.FileCode_I, EditorTheme.Green400);   // any other component = green script
+        // Empty GameObject: a group icon when it parents others, else a dim generic mark.
+        return go.Children.Count > 0
+            ? (EditorIcons.ObjectGroup_I, EditorTheme.Ink300)
+            : (EditorIcons.Cube_I, EditorTheme.InkDim);
     }
 
     private GameObject? FindGOByIdentifier(string id)

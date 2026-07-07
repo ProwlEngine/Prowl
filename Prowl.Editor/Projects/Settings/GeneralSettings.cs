@@ -3,6 +3,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("General", EditorIcons.Gear, order: 0)]
@@ -19,15 +20,15 @@ public class GeneralSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "gen_header", $"{EditorIcons.Gear}  General").Underline().Show();
 
-        InspectorRow.Draw(paper, "gen_company", "Company Name", () =>
+        EditorGUI.Row(paper, "gen_company", "Company Name", () =>
             Origami.TextField(paper, "gen_company_v", CompanyName,
                 v => { CompanyName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        InspectorRow.Draw(paper, "gen_product", "Product Name", () =>
+        EditorGUI.Row(paper, "gen_product", "Product Name", () =>
             Origami.TextField(paper, "gen_product_v", ProductName,
                 v => { ProductName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        InspectorRow.Draw(paper, "gen_version", "Version", () =>
+        EditorGUI.Row(paper, "gen_version", "Version", () =>
             Origami.TextField(paper, "gen_version_v", Version,
                 v => { Version = v; ProjectSettingsRegistry.SaveAll(); }).Show());
     }

@@ -98,7 +98,7 @@ internal static class GraphInterfaceUtil
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
-        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible — AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
+        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
     public static void AddInput(Node node, Type type, string name)
     {
         var m = typeof(Node).GetMethod("AddInput", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -107,7 +107,7 @@ internal static class GraphInterfaceUtil
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
-        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible — AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
+        Justification = "Subgraph/relay ports require runtime generic instantiation. NOT AOT-compatible AOT consumers must avoid SubgraphNode/RelayNode (TODO: replace with dispatcher table).")]
     public static void AddOutput(Node node, Type type, string name)
     {
         var m = typeof(Node).GetMethod("AddOutput", BindingFlags.Instance | BindingFlags.NonPublic)!;

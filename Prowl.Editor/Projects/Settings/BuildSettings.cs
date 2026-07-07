@@ -9,6 +9,7 @@ using Prowl.Runtime;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 public enum BuildTarget { Windows, Linux, MacOS }
@@ -122,7 +123,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                 paper.Box($"bld_si_{i}")
                     .Width(20).Height(EditorTheme.RowHeight)
                     .Text(i.ToString(), font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
                 // Enable toggle
                 Origami.Checkbox(paper, $"bld_se_{i}", scene.Enabled,
@@ -137,7 +138,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                 paper.Box($"bld_sn_{i}")
                     .Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(displayName, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 // Move up/down
                 if (i > 0)
@@ -191,25 +192,25 @@ public sealed class BuildSettings : ProjectSettingsBase
         // Build Configuration
         Origami.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration").Underline().Show();
 
-        InspectorRow.Draw(paper, "bld_config", "Configuration", () =>
+        EditorGUI.Row(paper, "bld_config", "Configuration", () =>
             Origami.EnumDropdown(paper, "bld_config_v", Config,
                 v => { Config = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_output", "Output Directory", () =>
+        EditorGUI.Row(paper, "bld_output", "Output Directory", () =>
             Origami.TextField(paper, "bld_output_v", OutputDirectory,
                 v => { OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_packaging", "Asset Packaging", () =>
+        EditorGUI.Row(paper, "bld_packaging", "Asset Packaging", () =>
             Origami.EnumDropdown(paper, "bld_packaging_v", PackagingMode,
                 v => { PackagingMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_assetmode", "Asset Export", () =>
+        EditorGUI.Row(paper, "bld_assetmode", "Asset Export", () =>
             Origami.EnumDropdown(paper, "bld_assetmode_v", AssetMode,
                 v => { AssetMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
 
         if (PackagingMode == AssetPackagingMode.ProwlPak)
         {
-            InspectorRow.Draw(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
+            EditorGUI.Row(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
                 Origami.IntSlider(paper, "bld_maxpak_v", MaxPakSizeMB,
                     v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
                     256, 4096).Show());

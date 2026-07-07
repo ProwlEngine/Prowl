@@ -25,7 +25,7 @@ public struct NodeMessage
 
 /// <summary>
 /// Abstract base for every node in a graph. Concrete subclasses define their inputs,
-/// outputs, and behaviour. The framework treats nodes as opaque data containers —
+/// outputs, and behaviour. The framework treats nodes as opaque data containers
 /// rendering, hit-testing, and connection logic operate on the base properties (Id,
 /// Position, Inputs, Outputs).
 /// </summary>

@@ -205,7 +205,7 @@ public class ShaderGraphEditorWindow : DockPanel
             paper.Box("sg_tb_status").Width(UnitValue.Stretch()).Height(26)
                 .Text(status, EditorTheme.DefaultFont!)
                 .TextColor(_editor.IsDirty ? EditorTheme.Purple400 : EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleRight);
             Origami.Button(paper, "sg_tb_hide", EditorIcons.CircleXmark, () => _sidebarOpen = false).Width(24).Show();
         }
@@ -306,7 +306,7 @@ public class ShaderGraphEditorWindow : DockPanel
         {
             paper.Box("sg_props_none").Height(20)
                 .Text("(compile the graph to see properties)", EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
             return;
         }
@@ -324,7 +324,7 @@ public class ShaderGraphEditorWindow : DockPanel
         if (master != null)
         {
             var current = master.Lighting;
-            InspectorRow.Draw(paper, "sg_lighting_mode", "Mode", () =>
+            EditorGUI.Row(paper, "sg_lighting_mode", "Mode", () =>
                 Origami.EnumDropdown(paper, "sg_lighting_mode_v", current, v =>
                 {
                     if (v == current) return;
@@ -350,7 +350,7 @@ public class ShaderGraphEditorWindow : DockPanel
 
     private void DrawBlendingFoldout(Paper paper, ShaderGraph sg)
     {
-        InspectorRow.Draw(paper, "sg_blend", "Blend Mode", () =>
+        EditorGUI.Row(paper, "sg_blend", "Blend Mode", () =>
             Origami.EnumDropdown(paper, "sg_blend_v", sg.RenderSettings.Blend,
                 v => { var s = sg.RenderSettings; s.Blend = v; MutateSettings(s, "Blend"); }).Show());
 
@@ -358,18 +358,18 @@ public class ShaderGraphEditorWindow : DockPanel
         // { Src X; Dst Y; Mode Z; } block exactly. Hidden for presets.
         if (sg.RenderSettings.Blend == ShaderBlendMode.Custom)
         {
-            InspectorRow.Draw(paper, "sg_blend_src", "Src Factor", () =>
+            EditorGUI.Row(paper, "sg_blend_src", "Src Factor", () =>
                 Origami.EnumDropdown(paper, "sg_blend_src_v", sg.RenderSettings.BlendSrc,
                     v => { var s = sg.RenderSettings; s.BlendSrc = v; MutateSettings(s, "Src Factor"); }).Show());
-            InspectorRow.Draw(paper, "sg_blend_dst", "Dst Factor", () =>
+            EditorGUI.Row(paper, "sg_blend_dst", "Dst Factor", () =>
                 Origami.EnumDropdown(paper, "sg_blend_dst_v", sg.RenderSettings.BlendDst,
                     v => { var s = sg.RenderSettings; s.BlendDst = v; MutateSettings(s, "Dst Factor"); }).Show());
-            InspectorRow.Draw(paper, "sg_blend_op", "Blend Op", () =>
+            EditorGUI.Row(paper, "sg_blend_op", "Blend Op", () =>
                 Origami.EnumDropdown(paper, "sg_blend_op_v", sg.RenderSettings.BlendOp,
                     v => { var s = sg.RenderSettings; s.BlendOp = v; MutateSettings(s, "Blend Op"); }).Show());
         }
 
-        InspectorRow.Draw(paper, "sg_queue", "Queue", () =>
+        EditorGUI.Row(paper, "sg_queue", "Queue", () =>
             Origami.EnumDropdown(paper, "sg_queue_v", sg.RenderSettings.Queue,
                 v => { var s = sg.RenderSettings; s.Queue = v; MutateSettings(s, "Queue"); }).Show());
 
@@ -383,16 +383,16 @@ public class ShaderGraphEditorWindow : DockPanel
 
     private void DrawGeometryFoldout(Paper paper, ShaderGraph sg)
     {
-        InspectorRow.Draw(paper, "sg_cull", "Cull", () =>
+        EditorGUI.Row(paper, "sg_cull", "Cull", () =>
             Origami.EnumDropdown(paper, "sg_cull_v", sg.RenderSettings.Cull,
                 v => { var s = sg.RenderSettings; s.Cull = v; MutateSettings(s, "Cull"); }).Show());
-        InspectorRow.Draw(paper, "sg_winding", "Winding", () =>
+        EditorGUI.Row(paper, "sg_winding", "Winding", () =>
             Origami.EnumDropdown(paper, "sg_winding_v", sg.RenderSettings.Winding,
                 v => { var s = sg.RenderSettings; s.Winding = v; MutateSettings(s, "Winding"); }).Show());
         Origami.Checkbox(paper, "sg_zwrite", sg.RenderSettings.ZWrite,
                 v => { var s = sg.RenderSettings; s.ZWrite = v; MutateSettings(s, "Z Write"); })
             .LabelRight("Z Write").Show();
-        InspectorRow.Draw(paper, "sg_ztest", "Z Test", () =>
+        EditorGUI.Row(paper, "sg_ztest", "Z Test", () =>
             Origami.EnumDropdown(paper, "sg_ztest_v", sg.RenderSettings.ZTest,
                 v => { var s = sg.RenderSettings; s.ZTest = v; MutateSettings(s, "Z Test"); }).Show());
     }

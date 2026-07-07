@@ -8,6 +8,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Inspector;
@@ -20,7 +21,8 @@ public class LayerMaskPropertyEditor : PropertyEditor
         var mask = value is LayerMask lm ? lm : LayerMask.Nothing;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
-        float fontSz = EditorTheme.FontSize;
+        var m = Origami.Current.Metrics;
+        float rh = m.RowHeight;
 
         // Pull the named layers out of the tag/layer manager. Empty slots are skipped so
         // the popover only shows assignable layers (matches the legacy widget's behaviour).
@@ -34,13 +36,17 @@ public class LayerMaskPropertyEditor : PropertyEditor
         foreach (int i in validIndices)
             if (mask.HasLayer(i)) selected.Add(i);
 
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+        // Height(Auto) so the multi-select trigger's chip wrapping reflows the column instead of
+        // overflowing and overlapping the next field.
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
         {
             if (!string.IsNullOrEmpty(label))
             {
                 paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(fontSz);
+                    .Width(m.LabelWidth).Height(rh).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .Text(label, font).TextColor(Origami.Current.Ink.C300)
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
             }
 
             Origami.MultiDropdown<int>(paper, $"{id}_md", selected, picked =>
@@ -50,7 +56,7 @@ public class LayerMaskPropertyEditor : PropertyEditor
                     onChange(updated);
                 }, validIndices)
                 .Display(i => layers[i])
-                .Height(EditorTheme.RowHeight)
+                .Height(rh)
                 .SummaryFormat("{0} layers")
                 .Searchable()
                 .Show();

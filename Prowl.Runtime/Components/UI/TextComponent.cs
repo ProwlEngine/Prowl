@@ -26,12 +26,15 @@ namespace Prowl.Runtime;
 [ComponentIcon("T")] // Text
 public class TextComponent : UIBehaviour
 {
-    [SerializeField] private FontAsset _font = null!;
-    public FontAsset Font
+    [SerializeField] private AssetRef<FontAsset> _font;
+    public AssetRef<FontAsset> Font
     {
         get => _font;
         set => SetField(ref _font, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
     }
+
+    /// <summary>The assigned font, or the engine's embedded default font when none is set.</summary>
+    public FontAsset? ResolvedFont => _font.Res ?? FontAsset.LoadDefault();
 
     [SerializeField] private Color _textColor = Color.White;
     public Color TextColor
@@ -62,14 +65,14 @@ public class TextComponent : UIBehaviour
     }
 
     // ---- Material override ----
-    [SerializeField] private Material? _material;
-    public Material? Material
+    [SerializeField] private AssetRef<Material> _material;
+    public AssetRef<Material> Material
     {
         get => _material;
         set => SetField(ref _material, value, UIDirtyFlags.Material);
     }
 
-    public override Material GetMaterial() => _material ?? base.GetMaterial();
+    public override Material GetMaterial() => _material.Res ?? base.GetMaterial();
 
     /// <summary>Each TextComponent samples its font's glyph atlas; that atlas is unique
     /// per font / pixel size, so siblings can't share a draw call with non-text elements.</summary>
@@ -100,7 +103,8 @@ public class TextComponent : UIBehaviour
 
     public override void GenerateMesh(UIMeshBuilder builder, in UIContext context)
     {
-        if (Font?.FontFile is null || string.IsNullOrEmpty(Text)) return;
+        FontAsset? font = ResolvedFont;
+        if (font?.FontFile is null || string.IsNullOrEmpty(Text)) return;
 
         var rt = GameObject.RectTransform;
         if (rt is null) return;
@@ -108,7 +112,7 @@ public class TextComponent : UIBehaviour
         if (r.Size.X <= 0 || r.Size.Y <= 0) return;
 
         UIFontSystem fs = UIFontSystem.Default;
-        FontFile fontFile = Font.FontFile;
+        FontFile fontFile = font.FontFile;
         float pixelSize = Maths.Max(1, _size);
 
         // Ask Scribe to lay out the text. CreateLayout populates AtlasGlyph references

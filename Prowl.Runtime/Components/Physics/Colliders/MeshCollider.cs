@@ -46,7 +46,7 @@ public sealed class MeshCollider : Collider
         }
     }
 
-    // Cached convex hull shape and its tessellation for gizmo drawing — rebuilt when mesh or convex flag changes.
+    // Cached convex hull shape and its tessellation for gizmo drawing rebuilt when mesh or convex flag changes.
     [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 

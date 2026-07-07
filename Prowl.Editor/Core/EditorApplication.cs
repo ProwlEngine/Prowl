@@ -34,6 +34,7 @@ public class EditorApplication : Game
 
     private DockSpace _dockSpace = null!;
     private double _time;
+    private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
     private const double IntroOpenDuration = 3.0;  // bars open revealing editor
@@ -74,9 +75,11 @@ public class EditorApplication : Game
 
         Resize(Window.Size.X, Window.Size.Y);
 
-        // Load Font Awesome as fallback fonts for icons
-        LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
-        LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
+        // Load Font Awesome as fallback fonts for icons. Keep the FontFile handles so icons can also
+        // be drawn in a chosen weight directly (e.g. an outline vs filled star), independent of the
+        // fallback resolution order.
+        EditorTheme.FontIconOutline = LoadFallbackFont("Prowl.Editor.Resources.fa-regular-400.ttf");
+        EditorTheme.FontIconSolid   = LoadFallbackFont("Prowl.Editor.Resources.fa-solid-900.ttf");
 
         // Load CJK/international fallback fonts from system for localization support
         LoadSystemFallbackFonts();
@@ -287,36 +290,32 @@ public class EditorApplication : Game
 
     public void InitializeFont()
     {
-        // Pick a good system font prefer Segoe UI (Windows), then Arial, then any Regular font
-        if (EditorTheme.DefaultFontName != _curDefaultFont)
+        if (EditorTheme.DefaultFont != null) return;
+
+        EditorTheme.DefaultFont  = LoadBundledFont("Geist-Regular.ttf");
+        EditorTheme.FontMedium   = LoadBundledFont("Geist-Medium.ttf");
+        EditorTheme.FontSemiBold = LoadBundledFont("Geist-SemiBold.ttf");
+        EditorTheme.DefaultBoldFont = LoadBundledFont("Geist-Bold.ttf");
+        EditorTheme.FontMono     = LoadBundledFont("JetBrainsMono-Regular.ttf");
+        EditorTheme.FontDisplay  = LoadBundledFont("SpaceGrotesk-Bold.ttf");
+        EditorTheme.FontLogo     = LoadBundledFont("Audiowide-Regular.ttf");
+
+        _curDefaultFont = EditorTheme.DefaultFontName;
+        _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
+
+        // Rebuild the pushed Origami theme now that fonts exist.
+        EditorTheme.SyncOrigami(0f);
+    }
+
+    private static Prowl.Scribe.FontFile? LoadBundledFont(string fileName)
+    {
+        using var stream = GetEmbeddedResource(fileName);
+        if (stream == null)
         {
-            EditorTheme.DefaultFont = PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultFontName && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Regular)
-                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
-
-            _curDefaultFont = EditorTheme.DefaultFontName;
+            Runtime.Debug.LogWarning($"Missing bundled font: {fileName}");
+            return null;
         }
-
-        if (EditorTheme.DefaultBoldFontName != _curDefaultBoldFont)
-        {
-            EditorTheme.DefaultBoldFont = PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == EditorTheme.DefaultBoldFontName && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "segoe ui" && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.FamilyName == "arial" && f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts()
-                .FirstOrDefault(f => f.Style == Prowl.Scribe.FontStyle.Bold)
-                ?? PaperInstance.EnumerateSystemFonts().FirstOrDefault();
-
-            _curDefaultBoldFont = EditorTheme.DefaultBoldFontName;
-        }
+        return new Prowl.Scribe.FontFile(stream);
     }
 
     protected override void PreparePaperFrame()
@@ -408,6 +407,12 @@ public class EditorApplication : Game
         _origamiScope = EditorTheme.PushOrigami();
         OrigamiUI.Origami.BeginFrame(paper, (float)Time.UnscaledDeltaTime);
 
+        // Global visual-effect toggles (Preferences > Theme > Effects). Origami owns the drop-shadow /
+        // glow distinction and gates its DropShadow()/Glow() helpers on these; Paper just draws shadows.
+        OrigamiUI.Origami.DropShadowsEnabled = EditorTheme.DropShadows;
+        OrigamiUI.Origami.GlowsEnabled = EditorTheme.AccentGlow;
+        paper.Canvas.SetAntiAlias(EditorTheme.AntiAliasing);
+
         // Save system update (Ctrl+S + auto-save) - after theme push so toasts get icons
         SaveManager.Update((float)Time.UnscaledDeltaTime);
 
@@ -417,6 +422,7 @@ public class EditorApplication : Game
             _introTime = 0;
             _introClosing = true;
             _launcherWasOpen = false;
+            GUI.EditorGuide.ArmAutoStart(); // let the tour play once for this freshly-opened project
             if (Project.Current != null)
             {
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
@@ -496,243 +502,185 @@ public class EditorApplication : Game
         if (Project.Current != null && Runtime.Resources.Scene.Current == null)
             EditorSceneManager.EnsureSceneLoaded();
 
-        // Animated background gradients
-        paper.Box("bg_gradients")
-            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h)
-            .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-            {
-                float cx = (float)r.Size.X / 2f;
-                float cy = (float)r.Size.Y / 2f;
-                float radius = Math.Max(cx, cy) * 1.5f;
-                float t = (float)_time * 0.075f;
+        // Editor backdrop (behind the translucent glass panels) shared with the launcher.
+        _nebula ??= new GUI.NebulaBackground(paper);
+        GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime);
 
-                // Figure-eight: x = sin(t), y = sin(2t) / 2
-                float purple_x = cx + (float)Math.Sin(t) * cx * 0.85f;
-                float purple_y = cy + (float)Math.Sin(t * 2) * cy * 0.5f;
-
-                float blue_x = cx - (float)Math.Sin(t) * cx * 0.85f;
-                float blue_y = cy - (float)Math.Sin(t * 2) * cy * 0.5f;
-
-                var transparent = Prowl.Vector.Color32.FromArgb(0, 0, 0, 0);
-
-                float rx = (float)r.Min.X, ry = (float)r.Min.Y;
-                float rw = (float)r.Size.X, rh = (float)r.Size.Y;
-
-                // Purple blob
-                var purple = Prowl.Vector.Color32.FromArgb(50, 170, 80, 240);
-                canvas.SetRadialBrush(purple_x, purple_y, 0, radius, purple, transparent);
-                canvas.BeginPath();
-                canvas.Rect(rx, ry, rw, rh);
-                canvas.Fill();
-
-                // Blue blob
-                var blue = Prowl.Vector.Color32.FromArgb(50, 80, 170, 255);
-                canvas.SetRadialBrush(blue_x, blue_y, 0, radius, blue, transparent);
-                canvas.BeginPath();
-                canvas.Rect(rx, ry, rw, rh);
-                canvas.Fill();
-            }));
-
-        DrawMenuBar(paper);
-        DrawTitleFlap(paper, w, h);
+        DrawHeader(paper, w, h);
 
         float pad = EditorTheme.DockPadding;
         float dockY = EditorTheme.MenuBarHeight + pad;
-        float dockH = h - dockY - pad - EditorTheme.MenuBarHeight;
+        float dockH = h - dockY - pad - EditorTheme.StatusBarHeight;
         _dockSpace.Draw(paper, pad, dockY, w - pad * 2, dockH);
 
-        DrawStatusBar(paper);
+        DrawStatusBar(paper, w, h);
+
+        // First-run UI tour (once per user; reset from Preferences > General).
+        GUI.EditorGuide.SetDockSpace(_dockSpace);
+        if (Project.Current != null && !ProjectLauncher.IsOpen && _introTime >= IntroDuration)
+            GUI.EditorGuide.TryAutoStart(GUI.EditorGuide.WelcomeTour());
     }
 
-    private void DrawTitleFlap(Paper paper, float w, float h)
+    // Shared height for the header's interactive elements (menu bar + right-side status chips) so
+    // they line up. Centered within the taller band, which also holds the dock-padding gap.
+    private const float HeaderChipHeight = 30f;
+
+    private void DrawHeader(Paper paper, float w, float h)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Version label goes to the right side of the menu bar
+        // The full top band = menu bar height + the dock-padding gap above the dock. Everything lives
+        // inside this transparent container and vertically centers within it, so the menu bar, play
+        // pill and status cluster all sit centered in the available space.
+        float band = EditorTheme.MenuBarHeight + EditorTheme.DockPadding;
+
+        using (paper.Box("header").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, band).Enter())
+        {
+            DrawMenuBar(paper, w, band);
+            DrawPlayPill(paper, w, band, font);
+            DrawHeaderStatus(paper, w, band, font);
+        }
+    }
+
+    /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
+    private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
+    {
+        float pillH = EditorTheme.MenuBarHeight * 0.9f;
+        float btn = pillH - 12f;
+        float gap = 4f;
+        float padX = 8f;
+        float pillW = padX * 2 + btn * 3 + gap * 2;
+        float pillX = (w - pillW) / 2f;
+        float pillY = (band - pillH) / 2f;
+
+        using (paper.Row("play_pill").PositionType(PositionType.SelfDirected).Position(pillX, pillY)
+            .Size(pillW, pillH).Rounded(pillH / 2f)
+            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Enter())
+        {
+            // Auto-width inner row centered horizontally (stretch side-margins) so the buttons sit
+            // centered in the pill regardless of its width.
+            using (paper.Row("play_pill_in").Width(UnitValue.Auto).Height(pillH)
+                .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0).RowBetween(gap).Enter())
+            {
+                PlayPillButton(paper, "btn_play", btn,
+                    Application.IsPlaying ? EditorIcons.CircleStop : EditorIcons.Play, font,
+                    Application.IsPlaying ? System.Drawing.Color.FromArgb(255, 60, 160, 60) : System.Drawing.Color.Transparent,
+                    EditorTheme.Ink500,
+                    () => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); });
+
+                PlayPillButton(paper, "btn_pause", btn, EditorIcons.Pause, font,
+                    Application.IsPaused ? System.Drawing.Color.FromArgb(255, 160, 160, 60) : System.Drawing.Color.Transparent,
+                    Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300,
+                    TogglePause);
+
+                PlayPillButton(paper, "btn_step", btn, EditorIcons.ForwardStep, font,
+                    System.Drawing.Color.Transparent,
+                    Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300,
+                    StepOneFrame);
+            }
+        }
+    }
+
+    private static void PlayPillButton(Paper paper, string id, float size, string icon,
+        Prowl.Scribe.FontFile font, System.Drawing.Color bg, System.Drawing.Color fg, Action onClick)
+    {
+        paper.Box(id).Width(size).Height(size).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+            .Rounded(5).BackgroundColor(bg)
+            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
+            .Text(icon, font).TextColor(fg).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
+    /// <summary>Right-side status cluster: FPS, editor version and project name as themed chips,
+    /// then a ghost cog that opens Project Settings.</summary>
+    private void DrawHeaderStatus(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
+    {
+        float clH = HeaderChipHeight;
+        float clY = (band - clH) / 2f;
+        float pad = EditorTheme.DockPadding;
+        float gap = 6f;
+
+        var ST = UnitValue.Stretch();
+
+        int fps = Math.Min(9999, Time.UnscaledDeltaTime > 0 ? (int)(1.0 / Time.UnscaledDeltaTime) : 0);
+        float ms = (float)(Time.UnscaledDeltaTime * 1000.0);
+        string fpsNum = fps.ToString();
+        string msText = $"{ms:F1}ms";
+        var dotColor = fps >= 50 ? EditorTheme.Green400 : (fps >= 25 ? EditorTheme.Amber400 : EditorTheme.Red400);
+
         string version = Assembly.GetExecutingAssembly()
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.1";
         int plus = version.IndexOf('+');
         if (plus >= 0) version = version[..plus];
+        string versionText = $"v{version}";
+        string projectText = Project.Current?.Name ?? Loc.Get("editor.no_project");
 
-        paper.Box("version_label")
-            .PositionType(PositionType.SelfDirected)
-            .Position(w - 130, 0).Size(120, EditorTheme.MenuBarHeight)
-            .IsNotInteractable()
-            .Text($"Prowl v{version}", font)
-            .TextColor(EditorTheme.Ink400)
-            .FontSize(EditorTheme.FontSize - 2)
-            .Alignment(TextAlignment.MiddleRight);
+        // FPS pill is a fixed width so the count can grow toward the centre without shoving the
+        // FPS/ms group; the other chips size to their text.
+        float blur = Origami.Current.Metrics.WindowBackdropBlur;
+        float rectPadX = 10f, dot = 8f;
+        float fpsRectW = 120f;
+        float verRectW = rectPadX * 2 + (float)paper.MeasureText(versionText, EditorTheme.FontSizeSmall, font, 1f).X;
+        float projRectW = rectPadX * 2 + (float)paper.MeasureText(projectText, EditorTheme.FontSizeSmall, font, 1f).X;
+        float cogW = clH;
 
-        // Flap content: buttons + project + fps
-        int fps = Math.Min(9999, Time.UnscaledDeltaTime > 0 ? (int)(1.0 / Time.UnscaledDeltaTime) : 0);
-        string projectText = Project.Current?.Name ?? "No Project";
-        string fpsText = $"FPS: {fps}";
+        float totalW = fpsRectW + gap + verRectW + gap + projRectW + gap + cogW;
+        float clX = w - pad - totalW;
 
-        // Measure to size the flap
-        float btnW = 90f; // play/pause/step buttons area
-        var projMeasured = paper.MeasureText(projectText, EditorTheme.FontSize - 2, font, 1f);
-        float projW = (float)projMeasured.X + 16f;
-        float fpsW = 60f; // fixed width for FPS
-        float separatorW = 20f; // space for | separators
-        float contentW = btnW + projW + fpsW + separatorW;
-
-        float padH = 16f;
-        float topW = contentW + padH * 2 + 40f;
-        float botW = contentW + padH * 2;
-        float flapH = EditorTheme.MenuBarHeight + 6f;
-        float flapX = (w - topW) / 2f;
-        float flapY = 0f;
-        float rad = 8f;
-
-        // Draw trapezoid shape via canvas
-        paper.Box("title_flap_bg")
-            .PositionType(PositionType.SelfDirected)
-            .Position(flapX, flapY).Size(topW, flapH)
-            .IsNotInteractable()
-            .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, lr) =>
+        using (paper.Row("hdr_status").PositionType(PositionType.SelfDirected).Position(clX, clY)
+            .Size(totalW, clH).RowBetween(gap).Enter())
+        {
+            // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
+            // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
+            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(fpsRectW)).Height(clH).Rounded(7)
+                .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
+                .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
-                float cx = (float)lr.Min.X + topW / 2f;
-                float top = (float)lr.Min.Y;
-                float bot = top + flapH;
+                paper.Box("hs_fps_dot").Width(dot).Height(dot).Margin(0, 7, ST, ST).Rounded(dot / 2f)
+                    .BackgroundColor(dotColor).Glow(0, 0, 8, 0, dotColor).IsNotInteractable();
+                paper.Box("hs_fps_num").Width(UnitValue.Auto).Height(clH).Margin(0, 0, ST, ST).IsNotInteractable()
+                    .Text(fpsNum, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
+                    .Alignment(TextAlignment.MiddleLeft);
+                paper.Box("hs_fps_sp").Width(ST).Height(1).IsNotInteractable();
+                paper.Box("hs_fps_lbl").Width(UnitValue.Auto).Height(clH).Margin(0, 4, ST, ST).IsNotInteractable()
+                    .Text("FPS", font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
+                    .Alignment(TextAlignment.MiddleRight);
+                paper.Box("hs_fps_ms").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(33)).Height(clH).Margin(0, 0, ST, ST).IsNotInteractable()
+                    .Text(msText, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
+                    .Alignment(TextAlignment.MiddleRight);
+            }
 
-                float tl = cx - topW / 2f;
-                float tr = cx + topW / 2f;
-                float bl = cx - botW / 2f;
-                float br = cx + botW / 2f;
+            StatusChip(paper, "hs_ver", verRectW, clH, versionText, font);
+            StatusChip(paper, "hs_proj", projRectW, clH, projectText, font);
 
-                var nc = EditorTheme.Neutral300;
-                var flapColor = Prowl.Vector.Color32.FromArgb(nc.A, nc.R, nc.G, nc.B);
+            paper.Box("hs_cog").Width(cogW).Height(clH).Rounded(7)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink400)
+                .Hovered.TextColor(EditorTheme.Ink500).End()
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => OpenPanel(typeof(ProjectSettingsPanel)));
+        }
+    }
 
-                float r = rad;
-                float taperX = (tr - br);
-                float stopFrac = r / flapH;
-                float rsX = br + taperX * stopFrac;
-                float rsY = bot - r;
-                float lsX = bl - taperX * stopFrac;
-                float lsY = bot - r;
-
-                // Fill
-                canvas.SetFillColor(flapColor);
-                canvas.BeginPath();
-                canvas.MoveTo(tl, top);
-                canvas.LineTo(tr, top);
-                canvas.LineTo(rsX, rsY);
-                canvas.BezierCurveTo(br, bot, br, bot, br - r, bot);
-                canvas.LineTo(bl + r, bot);
-                canvas.BezierCurveTo(bl, bot, bl, bot, lsX, lsY);
-                canvas.LineTo(tl, top);
-                canvas.ClosePath();
-                canvas.FillComplexAA();
-
-                // Outline (sides + bottom only)
-                var bc = EditorTheme.Ink200;
-                canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(bc.A, bc.R, bc.G, bc.B));
-                canvas.SetStrokeWidth(1f);
-                canvas.BeginPath();
-                canvas.MoveTo(tl, top);
-                canvas.LineTo(lsX, lsY);
-                canvas.BezierCurveTo(bl, bot, bl, bot, bl + r, bot);
-                canvas.LineTo(br - r, bot);
-                canvas.BezierCurveTo(br, bot, br, bot, rsX, rsY);
-                canvas.LineTo(tr, top);
-                canvas.Stroke();
-            }));
-
-        // Interactive content inside flap centered row: Project | Buttons | FPS
-        float flapCenterX = (w - contentW) / 2f;
-        float flapContentY = 2f;
-        float btnSize = 20f;
-        float btnY = flapContentY + (EditorTheme.MenuBarHeight - btnSize) / 2f;
-        float bx = flapCenterX;
-
-        // Project name
-        paper.Box("flap_project")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, flapContentY).Size(projW, EditorTheme.MenuBarHeight)
+    private static void StatusChip(Paper paper, string id, float wRect, float hRect, string text, Prowl.Scribe.FontFile font)
+    {
+        paper.Box(id).Width(wRect).Height(hRect).Rounded(7)
+            .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable()
-            .Text(projectText, font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize)
-            .Alignment(TextAlignment.MiddleCenter);
-
-        bx += projW + 2f;
-
-        // Separator |
-        paper.Box("flap_sep1")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, flapContentY + 4).Size(1, EditorTheme.MenuBarHeight - 8)
-            .IsNotInteractable()
-            .BackgroundColor(EditorTheme.Ink200);
-
-        bx += 10f;
-
-        // Play button
-        paper.Box("btn_play")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, btnY).Size(btnSize, btnSize)
-            .Rounded(4)
-            .BackgroundColor(Application.IsPlaying ? System.Drawing.Color.FromArgb(255, 60, 160, 60) : System.Drawing.Color.Transparent)
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(Application.IsPlaying ? EditorIcons.CircleStop : EditorIcons.Play, font)
-            .TextColor(EditorTheme.Ink500).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); });
-
-        bx += btnSize + 4f;
-
-        // Pause button
-        paper.Box("btn_pause")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, btnY).Size(btnSize, btnSize)
-            .Rounded(4)
-            .BackgroundColor(Application.IsPaused ? System.Drawing.Color.FromArgb(255, 160, 160, 60) : System.Drawing.Color.Transparent)
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.Pause, font)
-            .TextColor(Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => TogglePause());
-
-        bx += btnSize + 4f;
-
-        // Step button
-        paper.Box("btn_step")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, btnY).Size(btnSize, btnSize)
-            .Rounded(4)
-            .BackgroundColor(System.Drawing.Color.Transparent)
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(EditorIcons.ForwardStep, font)
-            .TextColor(Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300).FontSize(14f)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => StepOneFrame());
-
-        bx += btnSize + 8f;
-
-        // Separator |
-        paper.Box("flap_sep2")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, flapContentY + 4).Size(1, EditorTheme.MenuBarHeight - 8)
-            .IsNotInteractable()
-            .BackgroundColor(EditorTheme.Ink200);
-
-        bx += 10f;
-
-        // FPS (fixed width)
-        paper.Box("flap_fps")
-            .PositionType(PositionType.SelfDirected)
-            .Position(bx, flapContentY).Size(fpsW, EditorTheme.MenuBarHeight)
-            .IsNotInteractable()
-            .Text(fpsText, font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize)
+            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter);
     }
 
     public override void EndGui(Paper paper)
     {
+        // On-boarding guide overlay (above panels/header, below Origami's popovers/toasts).
+        GUI.EditorGuide.Draw(paper, (float)Time.UnscaledDeltaTime);
+
         // Render all Origami overlay systems (drag-drop, context menus, modals, toasts, tooltips)
         OrigamiUI.Origami.EndFrame(paper);
 
@@ -779,65 +727,187 @@ public class EditorApplication : Game
     //  Menu Bar (Origami AppBar)
     // ================================================================
 
-    private void DrawMenuBar(Paper paper)
+    private void DrawMenuBar(Paper paper, float w, float band)
     {
-        var items = MenuRegistry.RootMenus;
-        var bar = Origami.AppBar(paper, "menubar")
-            .Height(EditorTheme.MenuBarHeight)
-            .Background(EditorTheme.Neutral200);
+        float pad = EditorTheme.DockPadding;
+        float barH = HeaderChipHeight;
+        float barY = (band - barH) / 2f;
+        var font = EditorTheme.DefaultFont;
+        // Menu labels + a Theme quick-access button, hosted at the left, matched to the status chips.
+        using (paper.Row("menubar_host").PositionType(PositionType.SelfDirected).Position(pad, barY)
+            .Width(UnitValue.Auto).Height(barH).RowBetween(4).Enter())
+        {
+            var bar = Origami.MenuBar(paper, "menubar").Height(barH);
+            foreach (var root in MenuRegistry.RootMenus)
+                if (root.HasSubItems)
+                    bar.Menu(root.Label, ctx => BuildMenu(ctx, root.SubItems));
+            bar.Show();
 
-        foreach (var root in items)
-            if (root.HasSubItems)
-                bar.Menu(root.Label, root.SubItems);
+            // Quick-access to Preferences > Theme (theming is a big part of the editor now).
+            paper.Box("hdr_theme_btn").Width(barH).Height(barH)
+                .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(7)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Text(EditorIcons.Palette, font).TextColor(EditorTheme.Ink400)
+                .Hovered.TextColor(EditorTheme.Ink500).End()
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                .Tooltip(Loc.Get("header.theme_settings"))
+                .OnPostLayout((h2, rect) => GUI.EditorGuide.RegisterThemeButton(
+                    (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y))
+                .OnClick(0, (_, _) =>
+                {
+                    OpenPanel(typeof(GUI.Panels.PreferencesPanel));
+                    (FindOpenPanel(typeof(GUI.Panels.PreferencesPanel)) as GUI.Panels.PreferencesPanel)?.ShowTheme();
+                });
+        }
+    }
 
-        bar.Show();
+    /// <summary>
+    /// Translates a registered <see cref="AppMenuItem"/> subtree into Origami's ContextBuilder,
+    /// which is how MenuBar dropdowns are populated. Dynamic label/enabled/checked funcs are
+    /// evaluated here since the dropdown is rebuilt each frame it is open.
+    /// </summary>
+    private static void BuildMenu(ContextBuilder ctx, IReadOnlyList<AppMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (item.IsSeparator)
+            {
+                ctx.Separator();
+                continue;
+            }
+
+            string label = item.DynamicLabelFunc?.Invoke() ?? item.Label;
+            bool enabled = item.IsEnabledFunc?.Invoke() ?? item.IsEnabled;
+
+            if (item.HasSubItems)
+            {
+                List<AppMenuItem> sub = item.SubItems;
+                ctx.Submenu(label, c => BuildMenu(c, sub));
+            }
+            else
+            {
+                ctx.Item(label, item.OnClick ?? (() => { }), enabled, on: item.IsCheckedFunc?.Invoke() ?? false);
+            }
+        }
     }
 
     // ================================================================
     //  Status Bar (Origami AppBar at bottom)
     // ================================================================
 
-    private static string _statusBarMessage = "Ready";
-    private static string _statusBarIcon = "";
-    private static System.Drawing.Color _statusBarColor;
+    // The status bar sources its log data from the shared ConsolePanel store; this just ensures
+    // that store is subscribed to Debug.OnLog even before the Console panel is opened.
+    private static void InitializeStatusBar() => ConsolePanel.EnsureSubscribed();
 
-    private static void InitializeStatusBar()
+    // Backend name shown in the footer. Only OpenGL exists today; when more backends land this
+    // should come from the graphics device.
+    private const string GraphicsBackend = "OpenGL 4.1";
+
+    private void DrawStatusBar(Paper paper, float w, float h)
     {
-        Runtime.Debug.OnLog += (message, _, severity) =>
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        UnitValue ST = UnitValue.StretchOne;
+        float sh = EditorTheme.StatusBarHeight;
+        float fs = EditorTheme.FontSizeSmall;
+        var dim = EditorTheme.Ink300;
+        var mono = EditorTheme.FontMono ?? font;
+
+        // Glyph-icon (EditorIcons/FontAwesome) + text cell.
+        void GlyphCell(string id, string glyph, System.Drawing.Color glyphColor, string text,
+            System.Drawing.Color textColor, string? tooltip = null)
         {
-            _statusBarMessage = message.Contains('\n') ? message.Split('\n')[0] : message;
-            switch (severity)
+            var row = paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, ST, ST);
+            if (tooltip != null) row.Tooltip(tooltip);
+            using (row.Enter())
             {
-                case Runtime.LogSeverity.Warning:   _statusBarIcon = EditorIcons.TriangleExclamation; _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 200, 80); break;
-                case Runtime.LogSeverity.Error:
-                case Runtime.LogSeverity.Exception: _statusBarIcon = EditorIcons.CircleExclamation;   _statusBarColor = System.Drawing.Color.FromArgb(255, 230, 80, 80); break;
-                case Runtime.LogSeverity.Success:   _statusBarIcon = EditorIcons.CircleCheck;         _statusBarColor = System.Drawing.Color.FromArgb(255, 80, 200, 80); break;
-                default:                            _statusBarIcon = EditorIcons.CircleInfo;          _statusBarColor = EditorTheme.Ink400; break;
+                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 4, ST, ST).IsNotInteractable()
+                    .Text(glyph, font).TextColor(glyphColor).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleCenter);
+                paper.Box(id + "_t").Width(UnitValue.Auto).Height(sh).IsNotInteractable()
+                    .Text(text, font).TextColor(textColor).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleLeft);
             }
-        };
-    }
+        }
 
-    private void DrawStatusBar(Paper paper)
-    {
-        var icon = string.IsNullOrEmpty(_statusBarIcon) ? EditorIcons.CircleInfo : _statusBarIcon;
-        var color = _statusBarColor.A == 0 ? EditorTheme.Ink400 : _statusBarColor;
-
-        Origami.AppBar(paper, "statusbar")
-            .Height(EditorTheme.MenuBarHeight)
-            .Bottom()
-            .Background(EditorTheme.Neutral200)
-            .Left(p =>
+        // Console severity icon (Origami icon) + number, for the log counters.
+        void CounterCell(string id, LogSeverity sev, int n)
+        {
+            var (icon, color) = ConsolePanel.SeverityStyle(sev);
+            using (paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, ST, ST).Enter())
             {
-                var font = EditorTheme.DefaultFont;
-                if (font == null) return;
-                p.Box("status_icon").Width(UnitValue.Auto).Height(EditorTheme.MenuBarHeight).ChildLeft(6)
-                    .IsNotInteractable().Text(icon, font).TextColor(color)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
-                p.Box("status_label").Width(UnitValue.Stretch()).Height(EditorTheme.MenuBarHeight).ChildLeft(4)
-                    .IsNotInteractable().Text(_statusBarMessage, font).TextColor(color)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(PaperUI.TextAlignment.MiddleLeft);
-            })
-            .Show();
+                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 3, ST, ST).IsNotInteractable()
+                    .Icon(paper, icon, color, size: 12f);
+                paper.Box(id + "_t").Width(UnitValue.Auto).Height(sh).IsNotInteractable()
+                    .Text(n.ToString(), font).TextColor(dim).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleLeft);
+            }
+        }
+
+        void Divider(string id) => paper.Box(id).Width(1).Height(sh).Margin(0, 0, 5, 5)
+            .BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+
+        // Uniform edge padding: the footer's left/right edges and both sides of every divider
+        // all use this, so the columns are evenly spaced and the dividers sit centered in the gap.
+        float pad = 10f;
+
+        using (paper.Row("statusbar").PositionType(PositionType.SelfDirected)
+            .Position(0, h - sh).Size(w, sh)
+            .BackgroundColor(EditorTheme.Neutral200).Enter())
+        {
+            // ---------- Column 1: console (last log on the left, counters on the right) ----------
+            using (paper.Row("sb_console").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
+            {
+                var last = ConsolePanel.LastLog();
+                if (last.HasValue)
+                {
+                    var (sev, msg, src, cnt) = last.Value;
+                    var (icon, color) = ConsolePanel.SeverityStyle(sev);
+                    paper.Box("sb_log_i").Width(16).Height(sh).Margin(0, 5, ST, ST).IsNotInteractable()
+                        .Icon(paper, icon, color, size: 13f);
+                    paper.Box("sb_log_m").Width(UnitValue.Auto).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
+                        .Text(msg, font).TextColor(EditorTheme.Ink400).FontSize(fs)
+                        .Alignment(PaperUI.TextAlignment.MiddleLeft).TextTruncate();
+                    if (!string.IsNullOrEmpty(src))
+                        paper.Box("sb_log_s").Width(UnitValue.Auto).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
+                            .Text($"[{src}]", mono).TextColor(EditorTheme.InkDim).FontSize(fs - 1)
+                            .Alignment(PaperUI.TextAlignment.MiddleLeft);
+                    if (cnt > 1)
+                        paper.Box("sb_log_c").Width(UnitValue.Auto).Height(sh).IsNotInteractable()
+                            .Text($"x{cnt}", font).TextColor(EditorTheme.InkDim).FontSize(fs - 1)
+                            .Alignment(PaperUI.TextAlignment.MiddleLeft);
+                }
+
+                paper.Box("sb_console_spacer").Width(ST);
+
+                var (info, warn, err) = ConsolePanel.LogCounts();
+                CounterCell("sb_cnt_info", LogSeverity.Normal, info);
+                CounterCell("sb_cnt_warn", LogSeverity.Warning, warn);
+                CounterCell("sb_cnt_err", LogSeverity.Error, err);
+            }
+
+            Divider("sb_div1");
+
+            // ---------- Column 2: current scene ----------
+            string? scenePath = EditorSceneManager.CurrentScenePath;
+            string sceneName = !string.IsNullOrEmpty(scenePath)
+                ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
+                : (Runtime.Resources.Scene.Current != null ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
+            using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
+                GlyphCell("sb_scene_cell", EditorIcons.Video, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
+
+            Divider("sb_div2");
+
+            // ---------- Column 3: editor stats on the left, graphics backend on the right ----------
+            using (paper.Row("sb_stats").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
+            {
+                long memMb = GC.GetTotalMemory(false) / (1024 * 1024);
+                GlyphCell("sb_sel", EditorIcons.ArrowPointer, EditorTheme.Ink300, Selection.Count.ToString(), dim, Loc.Get("editor.stat_selected"));
+                GlyphCell("sb_mem", EditorIcons.Microchip, EditorTheme.Ink300, $"{memMb} MB", dim, Loc.Get("editor.stat_memory"));
+
+                paper.Box("sb_stats_spacer").Width(ST);
+
+                GlyphCell("sb_gfx", EditorIcons.Display, EditorTheme.Ink300, GraphicsBackend, EditorTheme.Ink400);
+            }
+        }
     }
 
     // ================================================================
@@ -855,10 +925,10 @@ public class EditorApplication : Game
                 GetIcon = (ext, isDir) => isDir ? EditorIcons.Folder : FileIconRegistry.GetIconForFile("file" + ext),
                 QuickAccess =
                 [
-                    ("Desktop", EditorIcons.Desktop, Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
-                    ("Documents", EditorIcons.FolderOpen, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
-                    ("Downloads", EditorIcons.Download, System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")),
-                    ("User", EditorIcons.User, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+                    (Loc.Get("editor.dir_desktop"), EditorIcons.Desktop, Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
+                    (Loc.Get("editor.dir_documents"), EditorIcons.FolderOpen, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
+                    (Loc.Get("editor.dir_downloads"), EditorIcons.Download, System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")),
+                    (Loc.Get("editor.dir_user"), EditorIcons.User, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
                 ],
                 GetDrives = () => System.IO.DriveInfo.GetDrives()
                     .Where(d => d.IsReady).Select(d => (d.Name, d.Name)).ToArray(),
@@ -929,7 +999,7 @@ public class EditorApplication : Game
             {
                 float cx = w / 2f;
                 float cy = h / 2f;
-                var font = EditorTheme.DefaultBoldFont;
+                var font = EditorTheme.FontLogo ?? EditorTheme.DefaultBoldFont;
                 var black = Prowl.Vector.Color32.FromArgb(255, 8, 8, 10);
                 float barH = (float)h / BarCount;
                 double time = _introTime;
@@ -954,15 +1024,12 @@ public class EditorApplication : Game
                         canvas.RectFilled(slideX, barY, w, barH + 1, black);
                     }
 
-                    // Text fades in during second half
-                    if (font != null && t > 0.5f)
+                    // Logo + wordmark fade in during second half
+                    if (t > 0.5f)
                     {
                         float textPhase = (t - 0.5f) / 0.5f;
                         float eased = EaseOutQuart(textPhase);
-                        byte alpha = (byte)(eased * 255);
-                        var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
-                            new Float2(0.5f, 0.5f));
+                        DrawIntroBrand(canvas, cx, cy, (byte)(eased * 255), font);
                     }
                 }
                 // -- HOLD PHASE: brief pause with text visible --
@@ -970,12 +1037,7 @@ public class EditorApplication : Game
                 {
                     canvas.RectFilled(0, 0, w, h, black);
 
-                    if (font != null)
-                    {
-                        var textColor = Prowl.Vector.Color32.FromArgb(255, 230, 230, 230);
-                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
-                            new Float2(0.5f, 0.5f));
-                    }
+                    DrawIntroBrand(canvas, cx, cy, 255, font);
                 }
                 // -- OPEN PHASE: Bars slide OUT, text fades out --
                 else
@@ -998,28 +1060,61 @@ public class EditorApplication : Game
                         canvas.RectFilled(slideX, barY, w, barH + 1, black);
                     }
 
-                    // Text fades out quickly
-                    if (font != null && t < 0.3f)
+                    // Logo + wordmark fade out quickly
+                    if (t < 0.3f)
                     {
                         float textFade = 1f - (t / 0.3f);
                         byte alpha = (byte)(EaseOutQuart(textFade) * 255);
-                        var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
-                        canvas.DrawText("PROWL", cx, cy, textColor, 72f, font, 10f,
-                            new Float2(0.5f, 0.5f));
+                        DrawIntroBrand(canvas, cx, cy, alpha, font);
                     }
                 }
             }));
     }
 
+    // The intro brand lockup: the Prowl logo to the LEFT of the PROWL wordmark, the pair centered on
+    // (cx, cy) as one unit, both at the given fade alpha.
+    private static void DrawIntroBrand(Prowl.Quill.Canvas canvas, float cx, float cy, byte alpha, Scribe.FontFile? font)
+    {
+        const string word = "PROWL";
+        const float letterSpacing = 10f, gap = 8f;
+        var tint = System.Drawing.Color.FromArgb(alpha, 230, 230, 230);
+
+        // Size the logo to the wordmark's height and measure the text (with its spacing) so the
+        // [logo | gap | text] lockup can be centered horizontally as a whole.
+        float textW = 0f, lockupH = 88f;
+        if (font != null)
+        {
+            var m = canvas.MeasureText(word, EditorTheme.FontSizeLogo, font, letterSpacing);
+            textW = (float)m.X;
+            lockupH = (float)m.Y;
+        }
+        float logoH = lockupH * 1.375f;        // logo drawn ~38% larger than the wordmark height
+        float logoW = logoH * (282f / 264f);   // logo viewBox aspect
+        float totalW = logoW + (textW > 0f ? gap + textW : 0f);
+        float left = cx - totalW / 2f;
+
+        EditorIcons.ProwlLogo.Draw(canvas,
+            new Rect(left, cy - logoH / 2f, left + logoW, cy + logoH / 2f), tint, 1f);
+
+        if (font != null)
+        {
+            var textColor = Prowl.Vector.Color32.FromArgb(alpha, 230, 230, 230);
+            canvas.DrawText(word, left + logoW + gap, cy, textColor, EditorTheme.FontSizeLogo, font,
+                letterSpacing, new Float2(0f, 0.5f), quality: Scribe.FontQuality.Ultra);
+        }
+    }
+
     private static float EaseOutQuart(float x) => 1f - MathF.Pow(1f - x, 4f);
     private static float EaseInOutQuart(float x) => x < 0.5f ? 8f * x * x * x * x : 1f - MathF.Pow(-2f * x + 2f, 4f) / 2f;
 
-    private void LoadFallbackFont(string resourceName)
+    private Scribe.FontFile? LoadFallbackFont(string resourceName)
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
-        if (stream == null) { Runtime.Debug.LogWarning($"Could not load font resource: {resourceName}"); return; }
+        if (stream == null) { Runtime.Debug.LogWarning($"Could not load font resource: {resourceName}"); return null; }
         Runtime.Debug.Log($"Loaded fallback font: {resourceName} ({stream.Length} bytes)");
-        PaperInstance.AddFallbackFont(new Scribe.FontFile(stream));
+        var fontFile = new Scribe.FontFile(stream);
+        PaperInstance.AddFallbackFont(fontFile);
+        return fontFile;
     }
 
     private void LoadSystemFallbackFonts()
@@ -1158,7 +1253,7 @@ public class EditorApplication : Game
     }
 
     /// <summary>Open a pre-created panel instance as a floating window.</summary>
-    public void OpenPanelInstance(DockPanel panel, float width = 400, float height = 300)
+    public void OpenPanelInstance(DockPanel panel, float width = 800, float height = 560)
     {
         var node = DockNode.Leaf(panel);
         _dockSpace.FloatingWindows.Add(new FloatingWindow(node,
@@ -1205,7 +1300,7 @@ public class EditorApplication : Game
                     System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
                 EditorSceneManager.OpenScene(rel);
             }, Project.Current?.AssetsPath,
-               new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+               new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
         });
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene")}", () =>
@@ -1222,7 +1317,7 @@ public class EditorApplication : Game
                     if (!rel.EndsWith(".scene")) rel += ".scene";
                     EditorSceneManager.SaveAs(rel);
                 }, Project.Current.AssetsPath,
-                   new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+                   new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
             }
         });
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () =>
@@ -1236,7 +1331,7 @@ public class EditorApplication : Game
                 if (!rel.EndsWith(".scene")) rel += ".scene";
                 EditorSceneManager.SaveAs(rel);
             }, Project.Current.AssetsPath,
-               new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+               new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
         });
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
@@ -1271,7 +1366,7 @@ public class EditorApplication : Game
             },
             startPath: Project.Current?.PackagesPath,
             filters: new[] { "*.prowlpackage" },
-            filterLabels: new[] { "ProwlPackage (*.prowlpackage)" });
+            filterLabels: new[] { Loc.Get("editor.filter_package") });
         });
 
         // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
@@ -1281,7 +1376,7 @@ public class EditorApplication : Game
         foreach (var (type, path) in _registeredPanels)
         {
             var capturedType = type;
-            MenuRegistry.Register($"Window/{path}", () => OpenPanel(capturedType),
+            MenuRegistry.Register($"{Loc.Get("menu.window")}/{path}", () => OpenPanel(capturedType),
                 isChecked: () => IsPanelOpen(capturedType));
         }
     }
@@ -1541,6 +1636,23 @@ public class EditorApplication : Game
 
         EditorSettings.Instance.WindowMaximized = Window.InternalWindow.WindowState == Silk.NET.Windowing.WindowState.Maximized;
 
+        EditorSettings.Instance.Save();
+    }
+
+    /// <summary>Clear editor caches: cached thumbnails, the saved dock layout (reset to default), and more.</summary>
+    public void ClearEditorCache()
+    {
+        try { Thumbnails.ThumbnailGenerator.DeleteAll(); } catch { }
+        GUI.Panels.ProjectPanel.ClearThumbnailCache();
+        try
+        {
+            if (Project.Current != null && System.IO.File.Exists(Project.Current.EditorStatePath))
+                System.IO.File.Delete(Project.Current.EditorStatePath);
+        }
+        catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to clear layout: {ex.Message}"); }
+        _dockSpace.Root = CreateDefaultLayout();
+
+        EditorSettings.Instance.SeenGuides.Clear();
         EditorSettings.Instance.Save();
     }
 

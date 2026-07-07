@@ -77,6 +77,8 @@ public abstract class Game
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
 
+            _paper.DevTools.Enabled = true;
+
             BuiltInAssets.Initialize();
 
             Initialize();
@@ -376,7 +378,7 @@ public abstract class Game
     /// <see cref="PaperRenderer.UpdateProjection"/>.
     /// <para>
     /// A widget declared <c>Width(100)</c> occupies 100 logical points = 100 physical pixels at
-    /// 1× DPI and 200 physical pixels at 2× (Retina) DPI — the same physical size on screen
+    /// 1× DPI and 200 physical pixels at 2× (Retina) DPI the same physical size on screen
     /// regardless of display density, with higher pixel quality on HiDPI displays.
     /// </para>
     /// </summary>

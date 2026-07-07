@@ -6,6 +6,12 @@ using Prowl.Scribe;
 
 namespace Prowl.Editor.Theming;
 
+/// <summary>
+/// The editor's visual tokens. The editor uses Origami's default theme as the single
+/// source of truth: the colour/semantic tokens below are seeded from <see cref="OrigamiTheme.CreateDefaults"/>
+/// and the theme the editor pushes onto Origami each frame is that same default theme (with the editor's
+/// fonts + metrics). Custom-drawn editor chrome reads these tokens so it matches the Origami widgets.
+/// </summary>
 public static class EditorTheme
 {
     /// <summary>Default transition (seconds) when applying the editor theme to Origami. 0 = snap.</summary>
@@ -13,28 +19,17 @@ public static class EditorTheme
 
     // -- Editor's Origami theme state ----------------------------------
     //
-    // The editor owns its own OrigamiTheme and pushes it onto Origami's stack
-    // each frame (see PushOrigami). Origami.Root is left untouched so user code
-    // running inside the editor (e.g. game UI in play mode) sees the unmodified
-    // root unless it explicitly opts into the editor theme.
-    //
-    // SyncOrigami starts a transition into a freshly-built target theme; TickOrigami
-    // advances the lerp once per frame.
+    // The editor owns its own OrigamiTheme and pushes it onto Origami's stack each frame
+    // (see PushOrigami). Origami.Root is left untouched. SyncOrigami starts a transition into a
+    // freshly-built target theme; TickOrigami advances the lerp once per frame.
 
     private static OrigamiTheme? _origamiTheme;
 
-    /// <summary>
-    /// Live theme the editor pushes onto Origami's stack. Frame-fresh when transitioning.
-    /// Re-built on access until <see cref="DefaultFont"/> has loaded - early frames before
-    /// font initialisation would otherwise cache a Font=null theme and never recover.
-    /// <see cref="SyncOrigami"/> replaces it when the user mutates the theme.
-    /// </summary>
+    /// <summary>Live theme the editor pushes onto Origami's stack. Frame-fresh when transitioning.</summary>
     public static OrigamiTheme OrigamiTheme
     {
         get
         {
-            // Rebuild while Font is still null so we eventually capture the loaded font.
-            // Once it's set, the cached theme is stable until SyncOrigami is called.
             if (_origamiTheme == null || _origamiTheme.Font == null)
                 _origamiTheme = BuildOrigamiTheme();
             return _origamiTheme;
@@ -50,17 +45,7 @@ public static class EditorTheme
     /// <summary>True while a <see cref="SyncOrigami"/> transition is in progress.</summary>
     public static bool IsOrigamiTransitioning => _origamiTarget != null;
 
-    /// <summary>
-    /// Build an <see cref="OrigamiTheme"/> mirroring the current editor theme tokens and start
-    /// transitioning the editor's pushed theme toward it. Called from
-    /// <c>EditorSettings.ApplyTheme</c> so user theme edits propagate live.
-    /// </summary>
-    /// <remarks>
-    /// This is the only place in the editor that bridges into Origami - Origami itself has no
-    /// reference to <see cref="EditorTheme"/> or any editor type, keeping the widget library
-    /// extractable as a standalone package. The transition runs against the editor's pushed
-    /// theme; <see cref="Origami.Root"/> is never written.
-    /// </remarks>
+    /// <summary>Rebuild the pushed Origami theme and transition toward it.</summary>
     public static void SyncOrigami(float transitionSeconds = OrigamiTransitionSeconds)
     {
         var target = BuildOrigamiTheme();
@@ -86,7 +71,7 @@ public static class EditorTheme
         if (_origamiTarget == null || _origamiStart == null) return;
 
         _origamiElapsed += deltaSeconds;
-        float t = _origamiDuration > 0f ? System.Math.Clamp(_origamiElapsed / _origamiDuration, 0f, 1f) : 1f;
+        float t = _origamiDuration > 0f ? Math.Clamp(_origamiElapsed / _origamiDuration, 0f, 1f) : 1f;
 
         if (t >= 1f)
         {
@@ -103,61 +88,41 @@ public static class EditorTheme
 
     /// <summary>
     /// Push the editor's Origami theme onto Origami's stack. Wrap the editor's render in
-    /// <c>using (EditorTheme.PushOrigami()) { ... }</c> so all editor widgets see the editor
-    /// theme while user code outside the scope still sees <see cref="Origami.Root"/>.
+    /// <c>using (EditorTheme.PushOrigami()) { ... }</c>.
     /// </summary>
-    public static System.IDisposable PushOrigami() => Origami.PushTheme(OrigamiTheme);
+    public static IDisposable PushOrigami() => Origami.PushTheme(OrigamiTheme);
 
-    /// <summary>Construct the editor-flavoured Origami theme without applying it (useful for preview/diff).</summary>
-    public static OrigamiTheme BuildOrigamiTheme() => new()
+    /// <summary>
+    /// The editor theme = Origami's default palette + the editor's fonts and metrics.
+    /// Icons are left at Origami's default vector set (no override).
+    /// </summary>
+    public static OrigamiTheme BuildOrigamiTheme()
     {
-        // Neutral - editor's 5-stop ramp extended to 7 by reusing Ink200/Ink300 for the lighter end,
-        // matching how the editor itself blends Neutral into Ink at the brighter range.
-        Neutral = new OrigamiRamp
-        {
-            C100 = Neutral100, C200 = Neutral200, C300 = Neutral300,
-            C400 = Neutral400, C500 = Neutral500, C600 = Ink200, C700 = Ink300,
-        },
+        var t = OrigamiTheme.CreateDefaults();
 
-        // Editor's branded ramps map 1:1 (Purple -> Primary is the only rename).
-        Primary = RampFrom(Purple100, Purple200, Purple300, Purple400, Purple500, Purple600, Purple700),
-        Blue    = RampFrom(Blue100,   Blue200,   Blue300,   Blue400,   Blue500,   Blue600,   Blue700),
-        Red     = RampFrom(Red100,    Red200,    Red300,    Red400,    Red500,    Red600,    Red700),
+        // Origami's defaults are the base; the user's customization is overlaid on top.
+        Customization?.ApplyTo(t);
 
-        // Editor has no Green or Amber yet - hand-tuned. Replace once the editor adds them.
-        Green = RampFromHex("#0F1F15", "#162C20", "#1F4530", "#2D5C42", "#3D7A57", "#5DC07F", "#A6E5B7"),
-        Amber = RampFromHex("#1F1808", "#3A2A10", "#5C4017", "#7A5520", "#9B7332", "#E0A954", "#F4D8A8"),
-
-        // Ink ramp: the editor's 5 stops + 2 extra-bright headroom (white) for emphasis text.
-        Ink = new OrigamiRamp
-        {
-            C100 = Ink100, C200 = Ink200, C300 = Ink300,
-            C400 = Ink400, C500 = Ink500, C600 = Color.White, C700 = Color.White,
-        },
-
-        Metrics = new OrigamiMetrics
+        t.Metrics = new OrigamiMetrics
         {
             Rounding          = Roundness,
-            ContainerRounding = Roundness + 4f,
-            SmallRounding     = MathF.Max(2f, Roundness * 0.25f),
+            ContainerRounding = Roundness + 2f,
+            SmallRounding     = MathF.Max(3f, Roundness * 0.5f),
             RowHeight         = RowHeight,
             HeaderHeight      = RowHeight,
-            CompactHeight     = RowHeight - 2f,
-            SpacingSmall      = Spacing,
-            Spacing           = Spacing * 2f,
-            SpacingMedium     = 6f,
-            SpacingLarge      = 8f,
-            PaddingSmall      = Padding,
-            Padding           = Padding + 2f,
-            PaddingLarge      = Padding * 3f,
-            IndentWidth       = 16f,
-            HeaderPadX        = 6f,
-            IconWidth         = 16f,
-            IconBoxWidth      = 20f,
-            BadgePadLeft      = 6f,
+            CompactHeight     = RowHeight - 4f,
             FontSize          = FontSize,
             FontSizeSmall     = FontSize - 2f,
             LabelWidth        = LabelWidth,
+            // Spacing / padding scale derived from the two editor knobs (Spacing=4, Padding=6 reproduce
+            // Origami's stock 2/4/6/8 and 4/6/12).
+            SpacingSmall      = Spacing * 0.5f,
+            Spacing           = Spacing,
+            SpacingMedium     = Spacing * 1.5f,
+            SpacingLarge      = Spacing * 2f,
+            PaddingSmall      = Padding * (2f / 3f),
+            Padding           = Padding,
+            PaddingLarge      = Padding * 2f,
             TabBarHeight      = TabBarHeight,
             TabPadding        = TabPadding,
             TabGap            = TabGap,
@@ -166,346 +131,226 @@ public static class EditorTheme
             DockPadding       = DockPadding,
             IndicatorSize     = IndicatorSize,
             IndicatorGap      = IndicatorGap,
-        },
+            // Glass Blur toggle drives every backdrop-blur surface (dock windows, file dialog, header).
+            WindowBackdropBlur = EffectiveBlur,
+        };
 
-        Icons = new OrigamiIcons
+        t.Font         = Font;
+        t.FontMedium   = FontMedium;
+        t.FontSemiBold = FontSemiBold;
+        t.FontBold     = FontBold;
+        t.FontMono     = FontMono;
+        t.Icons        = BuildIconSet();
+        return t;
+    }
+
+    /// <summary>The editor overrides Origami's built-in SVG icon set with Font Awesome glyphs (from the
+    /// editor's <see cref="EditorIcons"/>) via the theme's <c>Icons</c> hook. Origami standalone keeps its
+    /// own vector set. Falls back to Origami's defaults until the icon font is loaded.</summary>
+    private static OrigamiIcons BuildIconSet()
+    {
+        // EditorGlyphIcon resolves the font at draw time, so chrome icons never flash blank before the
+        // editor font finishes loading.
+        Prowl.Editor.GUI.EditorGlyphIcon I(string glyph) => new(glyph, scale: 0.82f);
+        return new OrigamiIcons
         {
-            ChevronDown  = EditorIcons.ChevronDown,
-            ChevronRight = EditorIcons.ChevronRight,
-            ChevronUp    = EditorIcons.ChevronUp,
-            ChevronLeft  = EditorIcons.ChevronLeft,
-            CheckboxOff  = EditorIcons.Square,
-            CheckboxOn   = EditorIcons.SquareCheck,
-            Check        = EditorIcons.Check,
-            Close        = EditorIcons.Xmark,
-            Search       = EditorIcons.MagnifyingGlass,
-            More         = EditorIcons.EllipsisVertical,
-            Info         = EditorIcons.CircleInfo,
-            Warning      = EditorIcons.TriangleExclamation,
-            Danger       = EditorIcons.CircleExclamation,
-            Success      = EditorIcons.CircleCheck,
-            Folder       = EditorIcons.Folder,
-            File         = EditorIcons.File,
-            Drive        = EditorIcons.HardDrive,
-            Star         = EditorIcons.Star,
-            Clock        = EditorIcons.Clock,
-            Trash        = EditorIcons.Trash,
-            Plus         = EditorIcons.Plus,
-            ArrowLeft    = EditorIcons.ArrowLeft,
-            ArrowRight   = EditorIcons.ArrowRight,
-            ArrowUp      = EditorIcons.ArrowUp,
-            Pencil       = EditorIcons.Pen,
-            FolderPlus   = EditorIcons.FolderPlus,
-            Desktop      = EditorIcons.Desktop,
-            Download     = EditorIcons.Download,
-            User         = EditorIcons.User,
-            Document     = EditorIcons.FolderOpen,
-            ArrowDown    = EditorIcons.ArrowDown,
-            Duplicate    = EditorIcons.Clone,
-        },
-        Font = DefaultFont,
-    };
+            ChevronDown = I(EditorIcons.ChevronDown), ChevronRight = I(EditorIcons.ChevronRight),
+            ChevronUp = I(EditorIcons.ChevronUp), ChevronLeft = I(EditorIcons.ChevronLeft),
+            ArrowLeft = I(EditorIcons.ArrowLeft), ArrowRight = I(EditorIcons.ArrowRight),
+            ArrowUp = I(EditorIcons.ArrowUp), ArrowDown = I(EditorIcons.ArrowDown),
+            Check = I(EditorIcons.Check), Close = I(EditorIcons.Xmark),
+            Info = I(EditorIcons.CircleInfo), Warning = I(EditorIcons.TriangleExclamation),
+            Danger = I(EditorIcons.CircleExclamation), Success = I(EditorIcons.CircleCheck),
+            CheckboxOff = I(EditorIcons.Square), CheckboxOn = I(EditorIcons.SquareCheck),
+            Search = I(EditorIcons.MagnifyingGlass), More = I(EditorIcons.EllipsisVertical),
+            Eye = I(EditorIcons.Eye), EyeOff = I(EditorIcons.EyeSlash),
+            Plus = I(EditorIcons.Plus), Pencil = I(EditorIcons.Pencil),
+            Trash = I(EditorIcons.Trash), Duplicate = I(EditorIcons.Copy),
+            Folder = I(EditorIcons.Folder), FolderPlus = I(EditorIcons.FolderPlus),
+            File = I(EditorIcons.File), Document = I(EditorIcons.FileLines),
+            Drive = I(EditorIcons.HardDrive), Star = I(EditorIcons.Star),
+            Clock = I(EditorIcons.Clock), Desktop = I(EditorIcons.Desktop),
+            Download = I(EditorIcons.Download), User = I(EditorIcons.User),
+        };
+    }
 
-    private static OrigamiRamp RampFrom(Color c1, Color c2, Color c3, Color c4, Color c5, Color c6, Color c7) => new()
-    {
-        C100 = c1, C200 = c2, C300 = c3, C400 = c4, C500 = c5, C600 = c6, C700 = c7,
-    };
+    // -- Fonts ---------------------------------------------------------
 
-    private static OrigamiRamp RampFromHex(string c1, string c2, string c3, string c4, string c5, string c6, string c7) => new()
-    {
-        C100 = ColorTranslator.FromHtml(c1), C200 = ColorTranslator.FromHtml(c2),
-        C300 = ColorTranslator.FromHtml(c3), C400 = ColorTranslator.FromHtml(c4),
-        C500 = ColorTranslator.FromHtml(c5), C600 = ColorTranslator.FromHtml(c6),
-        C700 = ColorTranslator.FromHtml(c7),
-    };
-
+    /// <summary>Regular (400) weight the editor's primary UI face.</summary>
     public static FontFile? DefaultFont;
+    /// <summary>Bold (700) weight.</summary>
     public static FontFile? DefaultBoldFont;
+    public static FontFile? FontMedium;
+    public static FontFile? FontSemiBold;
+    public static FontFile? FontMono;
+    /// <summary>Display face for wordmarks / big headings (Space Grotesk).</summary>
+    public static FontFile? FontDisplay;
+    /// <summary>Logo face for the PROWL wordmark (Audiowide).</summary>
+    public static FontFile? FontLogo;
+    /// <summary>Font Awesome solid (filled) glyphs, for drawing an icon directly in the filled style.</summary>
+    public static FontFile? FontIconSolid;
+    /// <summary>Font Awesome regular (outline) glyphs, for drawing an icon directly in the outline style.</summary>
+    public static FontFile? FontIconOutline;
 
-    public static string DefaultFontName = "segoe ui";
-    public static string DefaultBoldFontName = "segoe ui";
+    public static FontFile? Font => DefaultFont;
+    public static FontFile? FontBold => DefaultBoldFont ?? FontSemiBold ?? DefaultFont;
+
+    public static string DefaultFontName = "Geist";
+    public static string DefaultBoldFontName = "Geist";
 
     // DPI Scaling value
     public static float UserScale { get; set; } = 1f;
 
-    // Sizing mutable so themes can override
-    public static float MenuBarHeight = 26f;
-    public static float RowHeight = 22f;
-    public static float Spacing = 2f;
-    public static float Padding = 4f;
+    // -- Sizing (mutable so the Preferences panel can tweak) -----------
+    public static float MenuBarHeight = 40f;
+    public static float StatusBarHeight = 26f;
+    public static float RowHeight = 24f;
+    // Base spacing/padding the full Origami metric scale (SpacingSmall..PaddingLarge) is derived from
+    // these in BuildOrigamiTheme, so tweaking them retunes gaps/padding everywhere (property grid, etc.).
+    public static float Spacing = 4f;
+    public static float Padding = 6f;
     public static float FontSize = 17f;
-    public static float LabelWidth = 200f;
-    public static float Roundness = 8f;
+    public static float FontSizeSmall = FontSize - 2f;
+    public static float FontSizeLarge = FontSize + 2f;
+    public static float FontSizeLogo = 72f;
+    public static float LabelWidth = 100f;
+    public static float Roundness = 6f;
+
+    // -- Effects (mirrored from EditorThemeData; applied globally) -----
+    public static bool GlassBlur = true;
+    public static float BlurAmount = 22f;
+    public static bool DropShadows = true;
+    public static bool AccentGlow = true;
+    public static bool AntiAliasing = true;
+    public static bool AnimatedBackground = true;
+    public static float BackgroundSpeed = 1f;
+    public static EditorBackgroundStyle BackgroundStyle = EditorBackgroundStyle.Nebula;
+    public static Color BackgroundColorA = Color.FromArgb(27, 17, 48);
+    public static Color BackgroundColorB = Color.FromArgb(8, 6, 12);
+    public static bool BgShowGradients = true;
+    public static bool BgShowStars = true;
+    public static bool BgShowComets = true;
+    public static Color BackgroundVoidColor = Color.FromArgb(6, 4, 9);
+
+    /// <summary>True when the (animated or static) nebula should be drawn rather than a gradient/solid.</summary>
+    public static bool UsesNebulaBackground => AnimatedBackground || BackgroundStyle == EditorBackgroundStyle.Nebula;
+
+    /// <summary>The blur radius actually pushed into Origami's metrics (0 when Glass Blur is off).</summary>
+    public static float EffectiveBlur => GlassBlur ? BlurAmount : 0f;
 
     public static float IndicatorSize = 28f;
     public static float IndicatorGap = 4f;
-    public static float SplitterSize = 14f;
-    public static float DockPadding = 14f;
+    public static float SplitterSize = 6f;
+    public static float DockPadding = 6f;
 
     public static float SidePixelPadding = 10f;
     public static float VerticalNavbarSpacing = 4f;
 
-    public static float TabBarHeight = 26f;
+    public static float TabBarHeight = 32f;
     public static float TabPadding = 12f;
     public static float TabCloseSize = 14f;
     public static float TabGap = 0f;
 
-    // Static color palette for the application theme.
-    // Built from 8 base colors: #101116, #16151A, #18191D, #1D1E22,
-    // #563784, #82AAC6, #271D36, #CB594F.
+    // ==================================================================
+    //  Colour tokens
     //
-    // Colors are organized into ramps using a 100-based numeric scale.
-    // Lower numbers are darker (background tints), higher numbers are lighter
-    // (text, highlights). The ★ marker denotes the primary stop of each ramp.
-    //
-    // Interactive state convention (applies to all ramps):
-    //   Normal  = ★ primary stop
-    //   Hovered = +100  (one step lighter lifts)
-    //   Pressed = -100  (one step darker  sinks)
-    //
-    // Ramps:
-    //   Neutral  100-500  Background depth stack (page -> surface)
-    //   Purple   100-700  Primary brand / interactive
-    //   Blue     100-700  Secondary / informational
-    //   Red      100-700  Danger / error / destructive
-    //   Ink      100-500  Text and border hierarchy
+    //  Origami's default theme is the source of truth. The live palette is
+    //  EditorTheme.OrigamiTheme = Origami defaults + the user's Customization
+    //  (applied in BuildOrigamiTheme). The tokens below are computed VIEWS over
+    //  that live theme, so editing a ramp in Preferences retints the whole editor
+    //  and every Origami widget at once. A few depth tokens are editor-specific
+    //  (Origami has no ramp for the void / app-shell / separator).
+    // ==================================================================
 
-    // -------------------------------------------------------------
-    //  NEUTRAL Background depth stack
-    //  Use in ascending order from the deepest layer upward.
-    //  100 = page base (behind everything), 400 = elevated surface.
-    // -------------------------------------------------------------
+    /// <summary>User customization overlaid onto Origami's defaults when building the live theme.
+    /// Null = pure Origami defaults. Set by <see cref="EditorSettings.ApplyTheme"/>.</summary>
+    public static EditorThemeData? Customization;
 
-    /// <summary>
-    /// Neutral100 #101116  "Void"
-    /// Deepest background. The lowest layer of the UI; sits behind everything else.
-    /// </summary>
-    public static Color Neutral100 = ColorTranslator.FromHtml("#101116");
+    private static OrigamiTheme T => OrigamiTheme;
 
-    /// <summary>
-    /// Neutral200 #16151A  "Abyss"
-    /// App background. The main application shell; one step above the page base.
-    /// </summary>
-    public static Color Neutral200 = ColorTranslator.FromHtml("#16151A");
+    // -- Neutral: editor depth stack. 100/200/500 are editor-specific; 300/400/600/700 map to the ramp. --
+    public static Color Neutral100 => Color.FromArgb(255, 6, 4, 9);        // void deepest base
+    public static Color Neutral200 => Color.FromArgb(240, 12, 10, 20);     // app shell
+    public static Color Neutral300 => T.Neutral.C300;                      // panels / sidebar glass
+    public static Color Neutral400 => T.Neutral.C500;                      // cards / raised surface
+    public static Color Neutral500 => Color.FromArgb(46, 178, 150, 255);   // border / separator
+    public static Color Neutral600 => T.Neutral.C600;
+    public static Color Neutral700 => T.Neutral.C700;
 
-    /// <summary>
-    /// Neutral300 #18191D  "Obsidian"
-    /// Sidebar / panels. Used for sidebars, drawers, and secondary panels.
-    /// </summary>
-    public static Color Neutral300 = ColorTranslator.FromHtml("#18191D");
+    // -- Brand ramps (the editor's ★400 slot maps to the ramp's bright C500 stop). --
+    public static Color Purple100 => T.Primary.C100;
+    public static Color Purple200 => T.Primary.C200;
+    public static Color Purple300 => T.Primary.C300;
+    public static Color Purple400 => T.Primary.C500;
+    public static Color Purple500 => T.Primary.C600;
+    public static Color Purple600 => T.Primary.C700;
+    public static Color Purple700 => T.Primary.C700;
 
-    /// <summary>
-    /// Neutral400 #1D1E22  "Slate"  ★
-    /// Cards / surfaces / elevated elements.
-    /// The topmost background layer; use for cards, modals, and raised containers.
-    /// </summary>
-    public static Color Neutral400 = ColorTranslator.FromHtml("#1D1E22");
+    public static Color Blue100 => T.Blue.C100;
+    public static Color Blue200 => T.Blue.C200;
+    public static Color Blue300 => T.Blue.C300;
+    public static Color Blue400 => T.Blue.C500;
+    public static Color Blue500 => T.Blue.C600;
+    public static Color Blue600 => T.Blue.C700;
+    public static Color Blue700 => T.Blue.C700;
 
-    /// <summary>
-    /// Neutral500 #2E2D35  "Graphite"
-    /// Default border / separator.
-    /// Dividers, input outlines, card edges, and table row lines.
-    /// </summary>
-    public static Color Neutral500 = ColorTranslator.FromHtml("#2E2D35");
+    public static Color Red100 => T.Red.C100;
+    public static Color Red200 => T.Red.C200;
+    public static Color Red300 => T.Red.C300;
+    public static Color Red400 => T.Red.C500;
+    public static Color Red500 => T.Red.C600;
+    public static Color Red600 => T.Red.C700;
+    public static Color Red700 => T.Red.C700;
 
-    // -------------------------------------------------------------
-    //  PURPLE Primary brand / interactive ramp
-    //  ★ Primary = Purple400 (#563784)
-    //
-    //  Button states:
-    //    Normal  = Purple400
-    //    Hovered = Purple500
-    //    Pressed = Purple300
-    // -------------------------------------------------------------
+    public static Color Green100 => T.Green.C100;
+    public static Color Green200 => T.Green.C200;
+    public static Color Green300 => T.Green.C300;
+    public static Color Green400 => T.Green.C500;
+    public static Color Green500 => T.Green.C600;
+    public static Color Green600 => T.Green.C700;
+    public static Color Green700 => T.Green.C700;
 
-    /// <summary>
-    /// Purple100 #1D1010  "Char"
-    /// Darkest purple tint. Deep background for critical or heavily tinted surfaces.
-    /// </summary>
-    public static Color Purple100 = ColorTranslator.FromHtml("#1D1010");
+    public static Color Amber100 => T.Amber.C100;
+    public static Color Amber200 => T.Amber.C200;
+    public static Color Amber300 => T.Amber.C300;
+    public static Color Amber400 => T.Amber.C500;
+    public static Color Amber500 => T.Amber.C600;
+    public static Color Amber600 => T.Amber.C700;
+    public static Color Amber700 => T.Amber.C700;
 
-    /// <summary>
-    /// Purple200 #271D36  "Dusk"
-    /// Subtle tinted surface. Use for hover fills on rows or list items.
-    /// </summary>
-    public static Color Purple200 = ColorTranslator.FromHtml("#271D36");
+    // -- Ink: borders (100/200 editor-specific) + text hierarchy (300 hint -> 500 primary). --
+    public static Color Ink100 => Color.FromArgb(40, 178, 150, 255);
+    public static Color Ink200 => Color.FromArgb(72, 190, 150, 255);
+    public static Color Ink300 => T.Ink.C300;
+    public static Color Ink400 => T.Ink.C400;
+    public static Color Ink500 => T.Ink.C500;
+    public static Color Ink600 => T.Ink.C600;
+    public static Color Ink700 => T.Ink.C700;
+    /// <summary>Dim text tier (below <see cref="Ink300"/>), for de-emphasised metadata.</summary>
+    public static Color InkDim => T.Ink.C200;
+    /// <summary>Faintest text tier, for the most-muted captions / placeholders.</summary>
+    public static Color InkFaint => T.Ink.C100;
 
-    /// <summary>
-    /// Purple300 #3D2660  "Twilight"
-    /// Active / pressed state background. Also used for selected item backgrounds.
-    /// </summary>
-    public static Color Purple300 = ColorTranslator.FromHtml("#3D2660");
+    // -- Semantic surfaces / states. --
+    /// <summary>Inset glass fill for toolbars, headers, tag pills and search fields within a panel.</summary>
+    public static Color Glass => T.Glass;
+    /// <summary>Menu / dropdown / popover surface (more opaque so it reads over anything).</summary>
+    public static Color Popover => T.Popover;
+    /// <summary>Soft hairline border / divider.</summary>
+    public static Color BorderSoft => T.BorderSoft;
+    /// <summary>Stronger border for focused / emphasised edges.</summary>
+    public static Color BorderStrong => T.BorderStrong;
+    /// <summary>Drop-shadow colour for popovers, dropdowns and modals.</summary>
+    public static Color Shadow => T.Shadow;
+    /// <summary>The bright accent (buttons, focus, active). Same as <see cref="Purple400"/>.</summary>
+    public static Color Accent => T.Primary.C500;
+    /// <summary>Brighter accent for hover.</summary>
+    public static Color AccentBright => T.Primary.C600;
+    /// <summary>Light accent for text / small highlights.</summary>
+    public static Color AccentText => T.Primary.C700;
 
-    /// <summary>
-    /// Purple400 #563784  "Amethyst"  ★
-    /// PRIMARY BRAND COLOR. Default fill for buttons, focus rings, and key UI actions.
-    /// </summary>
-    public static Color Purple400 = ColorTranslator.FromHtml("#563784");
+    public static Color Hover => WithAlpha(Accent, 31);
+    public static Color Selected => WithAlpha(Accent, 41);
 
-    /// <summary>
-    /// Purple500 #7252AA  "Lavender"
-    /// Hover state. One step lighter than Amethyst; use as the hovered variant of Purple400.
-    /// </summary>
-    public static Color Purple500 = ColorTranslator.FromHtml("#7252AA");
-
-    /// <summary>
-    /// Purple600 #A886D8  "Wisteria"
-    /// Highlighted text / badges / chips.
-    /// Mid-tone purple for text labels, badge text, and icon fills on dark backgrounds.
-    /// </summary>
-    public static Color Purple600 = ColorTranslator.FromHtml("#A886D8");
-
-    /// <summary>
-    /// Purple700 #D4B8F4  "Lilac"
-    /// Lightest purple highlight. Use for very soft highlights or placeholder text
-    /// that sits on a purple-tinted surface.
-    /// </summary>
-    public static Color Purple700 = ColorTranslator.FromHtml("#D4B8F4");
-
-    // -------------------------------------------------------------
-    //  BLUE Secondary / informational ramp
-    //  ★ Primary = Blue400 (#82AAC6)
-    //
-    //  Button / link states:
-    //    Normal  = Blue400
-    //    Hovered = Blue500
-    //    Pressed = Blue300
-    // -------------------------------------------------------------
-
-    /// <summary>
-    /// Blue100 #0D1A24  "Deep Ocean"
-    /// Darkest informational tint. Background for deeply nested info surfaces.
-    /// </summary>
-    public static Color Blue100 = ColorTranslator.FromHtml("#0D1A24");
-
-    /// <summary>
-    /// Blue200 #1D3044  "Midnight"
-    /// Info callout / tooltip background.
-    /// Use as the background of informational banners or tooltip panels.
-    /// </summary>
-    public static Color Blue200 = ColorTranslator.FromHtml("#1D3044");
-
-    /// <summary>
-    /// Blue300 #2E5470  "Harbor"
-    /// Pressed state. Also used for borders on secondary actions or bordered info tags.
-    /// </summary>
-    public static Color Blue300 = ColorTranslator.FromHtml("#2E5470");
-
-    /// <summary>
-    /// Blue400 #82AAC6  "Glacier"  ★
-    /// SECONDARY / INFO COLOR. Use for hyperlinks, info-state icons, and secondary CTAs.
-    /// </summary>
-    public static Color Blue400 = ColorTranslator.FromHtml("#82AAC6");
-
-    /// <summary>
-    /// Blue500 #AECADD  "Mist"
-    /// Hover state. Lighter blue text; also readable on dark info-tinted backgrounds.
-    /// </summary>
-    public static Color Blue500 = ColorTranslator.FromHtml("#AECADD");
-
-    /// <summary>
-    /// Blue600 #CDDEED  "Powder"
-    /// Soft informational highlight. Use for subtle info-state underlines or chart fill areas.
-    /// </summary>
-    public static Color Blue600 = ColorTranslator.FromHtml("#CDDEED");
-
-    /// <summary>
-    /// Blue700 #E8F2F9  "Frost"
-    /// Faintest informational background tint.
-    /// Barely-there blue wash for alternating rows or disabled info areas.
-    /// </summary>
-    public static Color Blue700 = ColorTranslator.FromHtml("#E8F2F9");
-
-    // -------------------------------------------------------------
-    //  RED Danger / error / destructive ramp
-    //  ★ Primary = Red400 (#CB594F)
-    //
-    //  Button states:
-    //    Normal  = Red400
-    //    Hovered = Red500
-    //    Pressed = Red300
-    // -------------------------------------------------------------
-
-    /// <summary>
-    /// Red100 #1C0E0E  "Char"
-    /// Darkest error tint. Background for critical error surfaces or severe alert panels.
-    /// </summary>
-    public static Color Red100 = ColorTranslator.FromHtml("#1C0E0E");
-
-    /// <summary>
-    /// Red200 #361818  "Ember"
-    /// Error background. Use as the background of error toasts or invalid input fields.
-    /// </summary>
-    public static Color Red200 = ColorTranslator.FromHtml("#361818");
-
-    /// <summary>
-    /// Red300 #7A3030  "Garnet"
-    /// Pressed state. Also used for borders on error inputs and error icon backgrounds.
-    /// </summary>
-    public static Color Red300 = ColorTranslator.FromHtml("#7A3030");
-
-    /// <summary>
-    /// Red400 #CB594F  "Cinnabar"  ★
-    /// PRIMARY DANGER COLOR. Use for delete buttons, error banners, and alert icons.
-    /// </summary>
-    public static Color Red400 = ColorTranslator.FromHtml("#CB594F");
-
-    /// <summary>
-    /// Red500 #E68880  "Blush"
-    /// Hover state. Lighter red; also readable as error message text on dark backgrounds.
-    /// </summary>
-    public static Color Red500 = ColorTranslator.FromHtml("#E68880");
-
-    /// <summary>
-    /// Red600 #F2B0AB  "Rose"
-    /// Soft danger highlight. Use for muted error indications or secondary alert text.
-    /// </summary>
-    public static Color Red600 = ColorTranslator.FromHtml("#F2B0AB");
-
-    /// <summary>
-    /// Red700 #FDE0DE  "Petal"
-    /// Faintest danger wash. Barely-perceptible red tint for error state backgrounds.
-    /// </summary>
-    public static Color Red700 = ColorTranslator.FromHtml("#FDE0DE");
-
-    // -------------------------------------------------------------
-    //  INK Text and border hierarchy
-    //  Use in ascending order: 100 = borders, 500 = primary readable text.
-    //  Never use pure black or white these stops keep the purple-dark theme cast.
-    // -------------------------------------------------------------
-
-    /// <summary>
-    /// Ink100 #2E2D35  "Graphite"
-    /// Default border / separator.
-    /// Dividers, input outlines, card edges, and table row lines.
-    /// </summary>
-    public static Color Ink100 = ColorTranslator.FromHtml("#2E2D35");
-
-    /// <summary>
-    /// Ink200 #3E3D47  "Iron"
-    /// Emphasis border.
-    /// Slightly lighter border for hover states or to distinguish nested containers.
-    /// </summary>
-    public static Color Ink200 = ColorTranslator.FromHtml("#3E3D47");
-
-    /// <summary>
-    /// Ink300 #6C6A7A  "Pewter"
-    /// Placeholder / hint text.
-    /// Input placeholders, disabled labels, and lowest-priority hints.
-    /// </summary>
-    public static Color Ink300 = ColorTranslator.FromHtml("#6C6A7A");
-
-    /// <summary>
-    /// Ink400 #B0ADBE  "Ash"
-    /// Secondary text.
-    /// Subtitles, metadata, and secondary labels. Recedes behind primary text.
-    /// </summary>
-    public static Color Ink400 = ColorTranslator.FromHtml("#B0ADBE");
-
-    /// <summary>
-    /// Ink500 #F0EEF8  "Starlight"
-    /// Primary text.
-    /// Headings, body copy, and all high-priority labels. Near-white with a purple cast.
-    /// </summary>
-    public static Color Ink500 = ColorTranslator.FromHtml("#F0EEF8");
+    public static Color WithAlpha(Color c, int a) => Color.FromArgb(a, c.R, c.G, c.B);
 }

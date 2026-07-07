@@ -50,4 +50,34 @@ public sealed class FontAsset : EngineObject
         _fontData = fontData;
         _fontFile = new FontFile(fontData);
     }
+
+    /// <summary>
+    /// Get the shared instance of a default embedded font. Returns the same asset across the whole
+    /// app. Used as the fallback font for UI text that has no font assigned.
+    /// </summary>
+    public static FontAsset LoadDefault(DefaultFont font = DefaultFont.Default)
+    {
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(font)) is FontAsset cached)
+            return cached;
+        return ParseDefault(font);
+    }
+
+    /// <summary>
+    /// Raw load of a default embedded font, invoked by <see cref="BuiltInAssets"/> on first cache
+    /// miss. Public callers should use <see cref="LoadDefault"/>.
+    /// </summary>
+    internal static FontAsset ParseDefault(DefaultFont font)
+    {
+        string fileName = font switch
+        {
+            DefaultFont.Default => "Geist-Regular.ttf",
+            _ => throw new System.ArgumentException($"Unknown default font: {font}")
+        };
+
+        using System.IO.Stream stream = EmbeddedResources.GetStream($"Assets/Defaults/{fileName}");
+        using var ms = new System.IO.MemoryStream();
+        stream.CopyTo(ms);
+        return new FontAsset(font.ToString(), ms.ToArray());
+        // AssetID/AssetPath/Name are finalized by BuiltInAssets.Get after this returns.
+    }
 }

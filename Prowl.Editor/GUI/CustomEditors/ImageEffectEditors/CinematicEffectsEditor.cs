@@ -54,11 +54,11 @@ public class CinematicEffectsEditor : CustomEditor
             Origami.Separator(paper, $"{id}_cg_sep_lgg").Show();
             Origami.Label(paper, $"{id}_cg_lgg_lbl", "Lift / Gamma / Gain").Show();
 
-            InspectorRow.Draw(paper, $"{id}_cg_lift", "Lift (Shadows)", () =>
+            EditorGUI.Row(paper, $"{id}_cg_lift", "Lift (Shadows)", () =>
                 Origami.ColorField(paper, $"{id}_cg_lift_cf", fx.Lift, v => fx.Lift = v).Show());
-            InspectorRow.Draw(paper, $"{id}_cg_gamma", "Gamma (Midtones)", () =>
+            EditorGUI.Row(paper, $"{id}_cg_gamma", "Gamma (Midtones)", () =>
                 Origami.ColorField(paper, $"{id}_cg_gamma_cf", fx.Gamma, v => fx.Gamma = v).Show());
-            InspectorRow.Draw(paper, $"{id}_cg_gain", "Gain (Highlights)", () =>
+            EditorGUI.Row(paper, $"{id}_cg_gain", "Gain (Highlights)", () =>
                 Origami.ColorField(paper, $"{id}_cg_gain_cf", fx.Gain, v => fx.Gain = v).Show());
         });
 
@@ -88,7 +88,7 @@ public class CinematicEffectsEditor : CustomEditor
             fx.EnableEdgeDetection, v => fx.EnableEdgeDetection = v, () =>
         {
             SliderRow(paper, $"{id}_edg_int", "Intensity", fx.EdgeIntensity, 0, 5, v => fx.EdgeIntensity = v);
-            InspectorRow.Draw(paper, $"{id}_edg_col", "Edge Color", () =>
+            EditorGUI.Row(paper, $"{id}_edg_col", "Edge Color", () =>
                 Origami.ColorField(paper, $"{id}_edg_col_cf", fx.EdgeColor, v => fx.EdgeColor = v).Show());
             SliderRow(paper, $"{id}_edg_bg", "Background Fade", fx.EdgeBackgroundFade, 0, 1, v => fx.EdgeBackgroundFade = v);
         });
@@ -109,7 +109,7 @@ public class CinematicEffectsEditor : CustomEditor
             SliderRow(paper, $"{id}_gr_dns", "Density", fx.GodRayDensity, 0.1f, 2.0f, v => fx.GodRayDensity = v);
             SliderRow(paper, $"{id}_gr_wgt", "Weight", fx.GodRayWeight, 0, 1, v => fx.GodRayWeight = v);
             SliderRow(paper, $"{id}_gr_thr", "Threshold", fx.GodRayThreshold, 0, 1, v => fx.GodRayThreshold = v);
-            InspectorRow.Draw(paper, $"{id}_gr_smp", "Samples", () =>
+            EditorGUI.Row(paper, $"{id}_gr_smp", "Samples", () =>
                 Origami.IntSlider(paper, $"{id}_gr_smp_v", fx.GodRaySamples,
                     v => fx.GodRaySamples = System.Math.Clamp(v, 8, 128), 8, 128).Show());
         });
@@ -118,7 +118,7 @@ public class CinematicEffectsEditor : CustomEditor
     // -- Helpers --------------------------------------------------------
 
     private static void SliderRow(Paper paper, string id, string label, float value, float min, float max, System.Action<float> setter, bool bipolar = false)
-        => InspectorRow.Draw(paper, id, label, () =>
+        => EditorGUI.Row(paper, id, label, () =>
         {
             var s = Origami.Slider(paper, $"{id}_v", value, setter, min, max).Format("F2");
             if (bipolar) s.Bipolar();

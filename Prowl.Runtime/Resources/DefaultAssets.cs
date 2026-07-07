@@ -86,6 +86,14 @@ public enum DefaultTexture
 }
 
 /// <summary>
+/// Default fonts embedded in the runtime
+/// </summary>
+public enum DefaultFont
+{
+    Default, // Geist-Regular
+}
+
+/// <summary>
 /// Default shader include files (GLSL)
 /// </summary>
 public enum DefaultShaderInclude

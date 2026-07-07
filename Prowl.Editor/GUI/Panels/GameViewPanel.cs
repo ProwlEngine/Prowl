@@ -59,35 +59,32 @@ public class GameViewPanel : DockPanel
 
         using (paper.Column("gv_root").Size(width, height).Enter())
         {
-            DrawToolbar(paper, font);
-            DrawGameView(paper, font, width, height - EditorTheme.RowHeight);
+            DrawGameView(paper, font, width, height);
         }
     }
 
-    private void DrawToolbar(Paper paper, Scribe.FontFile font)
+    public override float HeaderWidth => 28f;
+    public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        using (paper.Row("gv_toolbar")
-            .Height(EditorTheme.RowHeight)
-            .ChildLeft(EditorTheme.Padding).ChildRight(EditorTheme.Padding)
-            .RowBetween(EditorTheme.Spacing * 2)
-            .Enter())
-        {
-            var resNames = Resolutions.Select(r => r.name).ToArray();
-            Origami.Dropdown(paper, "gv_res", _resolutionIndex,
-                v => { _resolutionIndex = v; InvalidateRT(); }, resNames)
-                .Width(100).Show();
-
-            paper.Box("gv_spacer");
-
-            paper.Box("gv_stats_btn")
-                .Width(EditorTheme.RowHeight - 4).Height(EditorTheme.RowHeight - 4)
-                .Rounded(EditorTheme.Roundness * 0.5f)
-                .BackgroundColor(_showStats ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.ChartBar, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(_ => _showStats = !_showStats);
-        }
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+        paper.Box("gv_hdr_settings").Width(24).Height(24).Rounded(6)
+            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(_ => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+            {
+                b.Header(Loc.Get("panel.game"));
+                b.Submenu(Loc.Get("game.resolution"), sub =>
+                {
+                    for (int i = 0; i < Resolutions.Length; i++)
+                    {
+                        int idx = i;
+                        sub.Item(Resolutions[i].name, () => { _resolutionIndex = idx; InvalidateRT(); }, on: idx == _resolutionIndex);
+                    }
+                }, EditorIcons.Expand);
+                b.Toggle(Loc.Get("game.show_stats"), () => _showStats = !_showStats, () => _showStats);
+            }));
     }
 
     private void DrawGameView(Paper paper, Scribe.FontFile font, float width, float height)
@@ -100,7 +97,7 @@ public class GameViewPanel : DockPanel
                 paper.Box("gv_no_scene")
                     .Size(width, height)
                     .BackgroundColor(EditorTheme.Neutral100)
-                    .Text(Loc.Get("panel.game") + " - No scene loaded", font)
+                    .Text(Loc.Get("panel.game") + " - " + Loc.Get("selector.no_scene"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
                 return;
@@ -248,18 +245,23 @@ public class GameViewPanel : DockPanel
                         float rh = (float)r.Size.Y;
                         float round = EditorTheme.Roundness;
 
-                        // Draw RT with rounded corners and flipped Y
+                        // When the image fills to the top (no letterbox bar above), keep the top corners
+                        // square so it butts flush against the panel header; when letterboxed, round them.
+                        float topRound = offsetY > 0.5f ? round : 0f;
+
                         canvas.SetBrushTexture(capturedRT.MainTexture);
                         canvas.SetBrushTextureTransform(
                             Transform2D.CreateTranslation(rx, ry + rh) *
                             Transform2D.CreateScale(rw, -rh));
-                        canvas.RoundedRectFilled(rx, ry, rw, rh, round, round, round, round, Color.White);
+                        canvas.RoundedRectFilled(rx, ry, rw, rh, topRound, topRound, round, round, Color.White);
                         canvas.ClearBrushTexture();
 
-                        // Purple border stroke
-                        canvas.RoundedRect(rx, ry, rw, rh, round, round, round, round);
+                        // Border inset by half its width so the full stroke sits on top of the texture edge.
+                        float bw = playing ? 2f : 1f;
+                        float half = bw * 0.5f;
+                        canvas.RoundedRect(rx + half, ry + half, rw - bw, rh - bw, topRound, topRound, round, round);
                         canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
-                        canvas.SetStrokeWidth(playing ? 2f : 1f);
+                        canvas.SetStrokeWidth(bw);
                         canvas.Stroke();
                         });
                     });
@@ -311,7 +313,7 @@ public class GameViewPanel : DockPanel
         float pad = 7f;
         float x = rightEdge - panelW - 6;
         float y = top + 6;
-        float fs = EditorTheme.FontSize - 4;
+        float fs = EditorTheme.FontSizeSmall;
 
         var s = _gameStats;
         float fps = s.FrameTimeMs > 0 ? 1000f / s.FrameTimeMs : 0;
@@ -320,7 +322,7 @@ public class GameViewPanel : DockPanel
             .PositionType(PositionType.SelfDirected)
             .Position(x, y)
             .Width(panelW).Height(UnitValue.Auto)
-            .BackgroundColor(Color.FromArgb(230, 16, 16, 20))
+            .BackgroundColor(EditorTheme.Neutral200)
             .Rounded(5).Padding(pad, pad, pad, pad).ColBetween(1)
             .Enter())
         {
@@ -351,18 +353,18 @@ public class GameViewPanel : DockPanel
             long colorTris = s.Triangles - s.ShadowTriangles;
             long colorVerts = s.Vertices - s.ShadowVertices;
 
-            Section(paper, font, "gv_ht", "TARGET", FormatMainThread(s.ColorPassMs), fs);
-            Row(paper, font, "gv_tdc", "Draws", $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
+            Section(paper, font, "gv_ht", Loc.Get("gameview.sec_target"), FormatMainThread(s.ColorPassMs), fs);
+            Row(paper, font, "gv_tdc", Loc.Get("gameview.draws"), $"{s.DrawCalls} ({s.InstancedDrawCalls} inst)", fs, rowH,
                 "Individual GPU draw commands issued this frame. Each draw sends geometry to the GPU. Instanced draws render multiple copies in a single call.");
-            Row(paper, font, "gv_tba", "Batches", s.Batches.ToString(), fs, rowH,
+            Row(paper, font, "gv_tba", Loc.Get("gameview.batches"), s.Batches.ToString(), fs, rowH,
                 "Groups of draw calls sharing the same material and render state. Fewer batches means less CPU overhead from state changes between draws.");
-            Row(paper, font, "gv_ttr", "Tris / Verts", $"{FormatCount(colorTris)} / {FormatCount(colorVerts)}", fs, rowH,
+            Row(paper, font, "gv_ttr", Loc.Get("gameview.tris_verts"), $"{FormatCount(colorTris)} / {FormatCount(colorVerts)}", fs, rowH,
                 "Total triangles and vertices submitted to the GPU for the color pass. High counts impact GPU fill rate and vertex processing.");
-            Row(paper, font, "gv_tcu", "Culled", $"{s.RenderablesCulled}/{s.RenderablesCollected} ({cullPct}%)", fs, rowH,
+            Row(paper, font, "gv_tcu", Loc.Get("gameview.culled"), $"{s.RenderablesCulled}/{s.RenderablesCollected} ({cullPct}%)", fs, rowH,
                 "Objects removed by frustum culling before rendering. Higher percentage means more objects are outside the camera view and skipped.");
-            Row(paper, font, "gv_tlt", "Lights", $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
+            Row(paper, font, "gv_tlt", Loc.Get("gameview.lights"), $"D:{s.DirectionalLights} P:{s.PointLights} S:{s.SpotLights}", fs, rowH,
                 "Active lights this frame. D = Directional (sun), P = Point (omni), S = Spot. Each light adds a lighting pass over affected geometry.");
-            Row(paper, font, "gv_twa", "Waited", FormatMs(Graphics.LastFrameWaitMs), fs, rowH,
+            Row(paper, font, "gv_twa", Loc.Get("gameview.waited"), FormatMs(Graphics.LastFrameWaitMs), fs, rowH,
                 "Time the main thread spent blocked at end of frame waiting for the render thread to finish executing this frame's command buffers. " +
                 "High values mean the render thread is the bottleneck (GPU work or CB execution dominates the frame). " +
                 "Near-zero values mean the main thread (update + encoding) takes longer than rendering, so the render thread was already idle when we asked.");
@@ -373,32 +375,32 @@ public class GameViewPanel : DockPanel
                 int shCullPct = s.ShadowRenderablesCollected > 0
                     ? (int)(s.ShadowRenderablesCulled * 100f / s.ShadowRenderablesCollected) : 0;
 
-                Section(paper, font, "gv_hs", "SHADOWS", FormatMainThread(s.ShadowPassMs), fs);
-                Row(paper, font, "gv_sdc", "Draws", $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
+                Section(paper, font, "gv_hs", Loc.Get("gameview.sec_shadows"), FormatMainThread(s.ShadowPassMs), fs);
+                Row(paper, font, "gv_sdc", Loc.Get("gameview.draws"), $"{s.ShadowDrawCalls} ({s.ShadowInstancedDrawCalls} inst)", fs, rowH,
                     "Draw calls for shadow map rendering. Each shadow-casting light renders the scene from its perspective to build depth maps.");
-                Row(paper, font, "gv_spa", "Passes", s.ShadowPasses.ToString(), fs, rowH,
+                Row(paper, font, "gv_spa", Loc.Get("gameview.passes"), s.ShadowPasses.ToString(), fs, rowH,
                     "Number of shadow map renders. Directional lights use cascaded shadow maps (multiple passes per light). Point lights use 6 passes (cube map).");
-                Row(paper, font, "gv_str", "Tris / Verts", $"{FormatCount(s.ShadowTriangles)} / {FormatCount(s.ShadowVertices)}", fs, rowH,
+                Row(paper, font, "gv_str", Loc.Get("gameview.tris_verts"), $"{FormatCount(s.ShadowTriangles)} / {FormatCount(s.ShadowVertices)}", fs, rowH,
                     "Geometry rendered into shadow maps. This is additional to the color pass geometry and can be a major cost with many shadow casters.");
-                Row(paper, font, "gv_scu", "Culled", $"{s.ShadowRenderablesCulled}/{s.ShadowRenderablesCollected} ({shCullPct}%)", fs, rowH,
+                Row(paper, font, "gv_scu", Loc.Get("gameview.culled"), $"{s.ShadowRenderablesCulled}/{s.ShadowRenderablesCollected} ({shCullPct}%)", fs, rowH,
                     "Objects culled from shadow map rendering. Each shadow pass has its own frustum so culling rates differ from the camera.");
-                Row(paper, font, "gv_sca", "Casters", s.ShadowCasters.ToString(), fs, rowH,
+                Row(paper, font, "gv_sca", Loc.Get("gameview.casters"), s.ShadowCasters.ToString(), fs, rowH,
                     "Lights with shadow mapping enabled. Each shadow caster adds one or more shadow passes to the frame.");
             }
 
             // Post FX (only when active)
             if (s.ImageEffects > 0)
             {
-                Section(paper, font, "gv_hf", "POST FX", FormatMainThread(s.PostFxMs), fs);
+                Section(paper, font, "gv_hf", Loc.Get("gameview.sec_postfx"), FormatMainThread(s.PostFxMs), fs);
                 Row(paper, font, "gv_fx", $"{s.ImageEffects} effects", $"{s.ImageEffectPasses} passes", fs, rowH,
                     "Post-processing effects applied after rendering (bloom, tone mapping, SSAO, etc). Each effect may use multiple full-screen passes.");
             }
         }
     }
 
-    private static readonly Color Dim = Color.FromArgb(140, 160, 160, 170);
-    private static readonly Color Val = Color.FromArgb(255, 220, 220, 230);
-    private static readonly Color Hdr = Color.FromArgb(255, 140, 115, 200);
+    private static Color Dim => EditorTheme.Ink300;
+    private static Color Val => EditorTheme.Ink500;
+    private static Color Hdr => EditorTheme.Purple400;
 
     private static void DrawFrameTimeGraph(Quill.Canvas canvas, Rect r, Scribe.FontFile? font)
     {
@@ -486,12 +488,12 @@ public class GameViewPanel : DockPanel
 
     // Fixed-width "XX.XXms" so changing values don't reflow the row.
     private static string FormatMs(float ms) => $"{ms,5:0.00}ms";
-    private static string FormatMainThread(float ms) => $"Main Thread {ms,5:0.00}ms";
+    private static string FormatMainThread(float ms) => $"{Loc.Get("gameview.main_thread")} {ms,5:0.00}ms";
 
     private static Color FpsColor(float fps) =>
-        fps >= 55 ? Color.FromArgb(255, 90, 210, 120) :
-        fps >= 28 ? Color.FromArgb(255, 220, 190, 50) :
-        Color.FromArgb(255, 220, 65, 65);
+        fps >= 55 ? EditorTheme.Green400 :
+        fps >= 28 ? EditorTheme.Amber400 :
+        EditorTheme.Red400;
 
     private static string FormatCount(long n) =>
         n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" :

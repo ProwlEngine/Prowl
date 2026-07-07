@@ -42,7 +42,7 @@ public sealed class SubgraphNode : Node
         if (inner == null) return;
 
         // Walk the inner graph's nodes, find every interface node, and mirror it on
-        // this side. Type is auto-inferred from the wire connected on the inside —
+        // this side. Type is auto-inferred from the wire connected on the inside
         // an inner GraphInputNode whose Out port feeds a Float input gives this
         // SubgraphNode a Float input; if nothing's connected yet, the port stays
         // typed as object so it accepts any wire (and the user can connect inside

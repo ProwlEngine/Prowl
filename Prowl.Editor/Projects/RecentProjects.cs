@@ -10,6 +10,7 @@ public class RecentProjectEntry
     public string Path { get; set; } = "";
     public string Name { get; set; } = "";
     public DateTime LastOpened { get; set; }
+    public bool Favorite { get; set; }
 }
 
 /// <summary>
@@ -61,6 +62,26 @@ public static class RecentProjects
         _entries ??= Load();
         _entries.RemoveAll(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
         Save();
+    }
+
+    /// <summary>Mark a recent project as a favorite (or clear it) and persist.</summary>
+    public static void SetFavorite(string path, bool favorite)
+    {
+        _entries ??= Load();
+        var entry = _entries.Find(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
+        if (entry == null || entry.Favorite == favorite) return;
+        entry.Favorite = favorite;
+        Save();
+    }
+
+    /// <summary>Recent entries with favorites floated to the top; each group keeps recency order.</summary>
+    public static List<RecentProjectEntry> FavoritesFirst()
+    {
+        _entries ??= Load();
+        var ordered = new List<RecentProjectEntry>(_entries.Count);
+        foreach (var e in _entries) if (e.Favorite) ordered.Add(e);
+        foreach (var e in _entries) if (!e.Favorite) ordered.Add(e);
+        return ordered;
     }
 
     private static List<RecentProjectEntry> Load()

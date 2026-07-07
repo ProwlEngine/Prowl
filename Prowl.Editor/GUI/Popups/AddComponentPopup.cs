@@ -8,6 +8,7 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -90,7 +91,7 @@ public static class AddComponentPopup
                 .Enter())
             {
                 paper.Box("acp_title").Height(32)
-                    .Text("Add Component", font)
+                    .Text(Loc.Get("inspector.add_component"), font)
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
@@ -109,7 +110,7 @@ public static class AddComponentPopup
                 .Height(28).Padding(8, 8, 4, 4)
                 .Enter())
             {
-                Origami.SearchField(paper, "acp_search", _searchText, v => _searchText = v, "Search components...").Show();
+                Origami.SearchField(paper, "acp_search", _searchText, v => _searchText = v, Loc.Get("popup.search_components")).Show();
             }
 
             // Component list
@@ -131,9 +132,9 @@ public static class AddComponentPopup
                     if (filtered.Count == 0)
                     {
                         paper.Box("acp_empty").Height(40)
-                            .Text("No matching components", font)
+                            .Text(Loc.Get("popup.no_components"), font)
                             .TextColor(EditorTheme.Ink300)
-                            .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     }
 
                     for (int i = 0; i < filtered.Count; i++)
@@ -152,14 +153,14 @@ public static class AddComponentPopup
 
                     foreach (var group in grouped)
                     {
-                        string category = string.IsNullOrEmpty(group.Key) ? "Uncategorized" : group.Key;
+                        string category = string.IsNullOrEmpty(group.Key) ? Loc.Get("popup.uncategorized") : group.Key;
 
                         // Category header
                         paper.Box($"acp_cat_{category.GetHashCode()}")
                             .Height(20).ChildLeft(8)
                             .Text(category, font)
                             .TextColor(EditorTheme.Ink400)
-                            .FontSize(EditorTheme.FontSize - 3).Alignment(TextAlignment.MiddleLeft);
+                            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                         foreach (var comp in group.OrderBy(c => c.Name))
                         {
@@ -212,7 +213,7 @@ public static class AddComponentPopup
             paper.Box($"{id}_name")
                 .Height(EditorTheme.RowHeight)
                 .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
     }
 

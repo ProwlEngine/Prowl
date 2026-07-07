@@ -46,7 +46,7 @@ public sealed class RelayNode : Node, IAutoPruneNode
     public override System.Drawing.Color AccentColor => System.Drawing.Color.FromArgb(255, 120, 120, 135);
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("AOT", "IL3050:RequiresDynamicCode",
-        Justification = "Relay ports require runtime generic instantiation to mirror the carried type. NOT AOT-compatible — AOT consumers must avoid RelayNode (TODO: replace with dispatcher table).")]
+        Justification = "Relay ports require runtime generic instantiation to mirror the carried type. NOT AOT-compatible AOT consumers must avoid RelayNode (TODO: replace with dispatcher table).")]
     protected override void DefineNode()
     {
         var t = ResolveCarriedType();

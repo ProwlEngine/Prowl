@@ -34,11 +34,11 @@ public class UIImageEditor : CustomEditor
 
         paper.Box($"{id}_sp0").Height(EditorTheme.Spacing);
 
-        InspectorRow.Draw(paper, $"{id}_color", "Color", () =>
+        EditorGUI.Row(paper, $"{id}_color", "Color", () =>
             Origami.ColorField(paper, $"{id}_color_v", img.Color, v => img.Color = v).Show());
 
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
-            typeof(Material), img.Material,
+            typeof(Material), img.Material.Res,
             v => img.Material = v as Material, 0);
 
         Origami.Checkbox(paper, $"{id}_ray", img.RaycastTarget, v => img.RaycastTarget = v)
@@ -48,7 +48,7 @@ public class UIImageEditor : CustomEditor
 
         Origami.Header(paper, $"{id}_h_type", "Image Settings").Show();
 
-        InspectorRow.Draw(paper, $"{id}_type", "Image Type", () =>
+        EditorGUI.Row(paper, $"{id}_type", "Image Type", () =>
             Origami.EnumDropdown<ImageType>(paper, $"{id}_type_v", img.Type, v => img.Type = v).Show());
 
         switch (img.Type)
@@ -67,7 +67,7 @@ public class UIImageEditor : CustomEditor
                 break;
         }
 
-        InspectorRow.Draw(paper, $"{id}_cr", "Corner Radius", () =>
+        EditorGUI.Row(paper, $"{id}_cr", "Corner Radius", () =>
             Origami.NumericField<float>(paper, $"{id}_cr_v", img.CornerRadius,
                 v => img.CornerRadius = MathF.Max(0f, v)).Min(0f).Show());
     }
@@ -81,15 +81,15 @@ public class UIImageEditor : CustomEditor
         using (paper.Column($"{id}_left").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
         {
             PropertyGridUtils.DrawField(paper, $"{id}_tex", "Source Image",
-                typeof(Texture2D), img.Texture,
+                typeof(Texture2D), img.Texture.Res,
                 v => img.Texture = v as Texture2D, 0);
 
-            if (img.Texture != null)
+            if (img.Texture.Res != null)
             {
-                var tex = img.Texture;
+                var tex = img.Texture.Res;
                 paper.Box($"{id}_info").Height(16)
                     .Text($"{tex.Width} x {tex.Height}", font)
-                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
+                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
             }
         }
@@ -98,13 +98,13 @@ public class UIImageEditor : CustomEditor
     private static void DrawPreview(Paper paper, string id, UIImage img)
     {
         const float size = 128f;
-        var tex = img.Texture ?? UIImage.defaultTexture;
+        var tex = img.Texture.Res ?? UIImage.defaultTexture;
         var color = img.Color;
 
         paper.Box(id)
             .Size(size, size)
             .Margin(UnitValue.Stretch(), EditorTheme.Spacing + 4)
-            .BackgroundColor(System.Drawing.Color.FromArgb(255, 24, 24, 28))
+            .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.Neutral500).BorderWidth(1).Rounded(3)
             .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
             {
@@ -165,7 +165,7 @@ public class UIImageEditor : CustomEditor
         Origami.Checkbox(paper, $"{id}_pa", img.PreserveAspect, v => img.PreserveAspect = v)
             .LabelRight("Preserve Aspect").Show();
 
-        InspectorRow.Draw(paper, $"{id}_fm", "Fill Method", () =>
+        EditorGUI.Row(paper, $"{id}_fm", "Fill Method", () =>
             Origami.EnumDropdown<FillMethod>(paper, $"{id}_fm_v", img.FillMethod, v =>
             {
                 img.FillMethod = v;
@@ -174,7 +174,7 @@ public class UIImageEditor : CustomEditor
 
         DrawFillOriginRow(paper, $"{id}_fo", img);
 
-        InspectorRow.Draw(paper, $"{id}_fa", "Fill Amount", () =>
+        EditorGUI.Row(paper, $"{id}_fa", "Fill Amount", () =>
             Origami.Slider(paper, $"{id}_fa_v", img.FillAmount,
                 v => img.FillAmount = v, 0f, 1f).Format("F2").Show());
 
@@ -192,14 +192,14 @@ public class UIImageEditor : CustomEditor
     private static void DrawBorderField(Paper paper, string id, UIImage img)
     {
         // Float4 packing: X=Left, Y=Top, Z=Right, W=Bottom (source-texture pixels).
-        InspectorRow.Draw(paper, id, "Border (L/T/R/B)", () =>
+        EditorGUI.Row(paper, id, "Border (L/T/R/B)", () =>
             Origami.Float4Field(paper, $"{id}_v", img.Border, v =>
                 img.Border = new Float4(MathF.Max(0f, v.X), MathF.Max(0f, v.Y), MathF.Max(0f, v.Z), MathF.Max(0f, v.W))).Show());
     }
 
     private static void DrawPixelsPerUnitField(Paper paper, string id, UIImage img)
     {
-        InspectorRow.Draw(paper, id, "Pixels Per Unit", () =>
+        EditorGUI.Row(paper, id, "Pixels Per Unit", () =>
         {
             using (paper.Row($"{id}_row").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
             {
@@ -216,16 +216,17 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawSetNativeSizeButton(Paper paper, string id, UIImage img)
     {
-        if (img.Texture == null) return;
+        if (img.Texture.Res == null) return;
 
-        InspectorRow.Draw(paper, id, string.Empty, () =>
+        EditorGUI.Row(paper, id, string.Empty, () =>
             Origami.Button(paper, $"{id}_b", "Set Native Size", () =>
             {
                 var rt = img.GameObject?.RectTransform;
-                if (rt == null || img.Texture == null) return;
+                var tex = img.Texture.Res;
+                if (rt == null || tex == null) return;
                 float ppu = img.PixelsPerUnit > 0 ? img.PixelsPerUnit : 1f;
                 Undo.Snapshot(rt);
-                rt.SizeDelta = new Float2(img.Texture.Width / ppu, img.Texture.Height / ppu);
+                rt.SizeDelta = new Float2(tex.Width / ppu, tex.Height / ppu);
             }).Show());
     }
 
@@ -237,7 +238,7 @@ public class UIImageEditor : CustomEditor
     {
         int origin = Math.Clamp(img.FillOrigin, 0, MaxOriginIndex(img.FillMethod));
 
-        InspectorRow.Draw(paper, id, "Fill Origin", () =>
+        EditorGUI.Row(paper, id, "Fill Origin", () =>
         {
             var group = Origami.ButtonGroup(paper, $"{id}_g", origin, v => img.FillOrigin = v)
                 .Height(EditorTheme.RowHeight).FullWidth();

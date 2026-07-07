@@ -268,7 +268,7 @@ internal static class DefaultGameObjectCreators
                     return c.GameObject;
         }
 
-        // None exists — create one at the root (not selected / no rename, it's a side effect).
+        // None exists create one at the root (not selected / no rename, it's a side effect).
         var canvasGo = HierarchyPanel.CreateGameObject("Canvas", null, select: false, beginRename: false);
         canvasGo.AddComponent<GameCanvas>();
         return canvasGo;

@@ -2,6 +2,7 @@ using System;
 
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 using Prowl.Editor.Core;
@@ -22,6 +23,11 @@ public class EngineObjectPropertyEditor : PropertyEditor
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
+        // Match the Origami PropertyGrid standard row exactly so custom-typed fields line up with
+        // the reflection-drawn ones (same metrics, muted label, horizontal padding).
+        var m = Origami.Current.Metrics;
+        float rh = m.RowHeight;
+
         var eo = value as EngineObject;
         // Use the declared field type for the selector
         Type fieldType = _lastFieldType ?? typeof(EngineObject);
@@ -32,14 +38,15 @@ public class EngineObjectPropertyEditor : PropertyEditor
         string displayName = eo != null ? $"{eo.Name} ({suffix})" : $"None ({fieldType.Name})";
         string icon = eo != null ? EditorIcons.Cube : EditorIcons.Circle;
 
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(4).Enter())
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
         {
             // Label
             if (!string.IsNullOrEmpty(label))
                 paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight).ChildLeft(4)
-                    .Text(label, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+                    .Width(m.LabelWidth).Height(rh).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .Text(label, font).TextColor(Origami.Current.Ink.C300)
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
             // Check if a compatible payload is being dragged over this field
             bool isDragTarget = false;
@@ -54,12 +61,13 @@ public class EngineObjectPropertyEditor : PropertyEditor
             }
 
             // Object field row
+            var iconColor = eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300;
             var fieldEl = paper.Row($"{id}_field")
-                .Height(EditorTheme.RowHeight)
-                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Neutral300)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Rounded(3).ChildLeft(4).ChildRight(2).RowBetween(2)
-                .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.Ink200).BorderWidth(1)
+                .Height(rh)
+                .BackgroundColor(isDragTarget ? System.Drawing.Color.FromArgb(60, EditorTheme.Purple400) : EditorTheme.Glass)
+                .Hovered.BorderColor(EditorTheme.BorderStrong).End()
+                .Rounded(6).Padding(m.SpacingLarge, m.PaddingSmall, 0, 0).RowBetween(m.SpacingLarge)
+                .BorderColor(isDragTarget ? EditorTheme.Purple400 : EditorTheme.BorderSoft).BorderWidth(1)
                 .OnClick((eo, isAsset), (cap, e) =>
                 {
                     // Single click: ping the asset (highlight without selecting)
@@ -117,29 +125,26 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     DragDrop.EndDrag();
                 }
 
-                // Icon
+                // Leading type icon (no chip background)
                 paper.Box($"{id}_ico")
-                    .Width(16).Height(EditorTheme.RowHeight)
-                    .IsNotInteractable()
-                    .Text(icon, font)
-                    .TextColor(eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300)
-                    .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+                    .Width(UnitValue.Auto).Height(rh).IsNotInteractable()
+                    .Text(icon, font).TextColor(iconColor)
+                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
 
                 // Name
                 paper.Box($"{id}_name")
-                    .Height(EditorTheme.RowHeight).Clip()
+                    .Width(UnitValue.Stretch()).Height(rh).Clip()
                     .IsNotInteractable()
                     .Text(displayName, font)
-                    .TextColor(eo != null ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .TextColor(eo != null ? EditorTheme.Ink500 : EditorTheme.Ink200)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
-                // Picker circle button
+                // Picker button
                 paper.Box($"{id}_pick")
-                    .Width(20).Height(EditorTheme.RowHeight)
-                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink400)
+                    .Width(18).Height(18).Rounded(4).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .Text(EditorIcons.CircleDot, font).TextColor(EditorTheme.Ink200)
                     .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-                    .Hovered.BackgroundColor(EditorTheme.Purple400).End()
-                    .Rounded(3)
+                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .OnClick((fieldType, onChange), (cap, _) => OpenAssetSelector(cap.Item1, cap.Item2));
             }
         }

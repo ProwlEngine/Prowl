@@ -63,16 +63,16 @@ public class UIImage : UIBehaviour
         }
     }
 
-    [SerializeField] private Texture2D? _texture;
-    public Texture2D? Texture
+    [SerializeField] private AssetRef<Texture2D> _texture;
+    public AssetRef<Texture2D> Texture
     {
         get => _texture;
         set => SetField(ref _texture, value, UIDirtyFlags.Material);
     }
 
     // ---- Material override ----
-    [SerializeField] private Material? _material;
-    public Material? Material
+    [SerializeField] private AssetRef<Material> _material;
+    public AssetRef<Material> Material
     {
         get => _material;
         set => SetField(ref _material, value, UIDirtyFlags.Material);
@@ -169,7 +169,7 @@ public class UIImage : UIBehaviour
         set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
     }
 
-    public override Material GetMaterial() => _material ?? base.GetMaterial();
+    public override Material GetMaterial() => _material.Res ?? base.GetMaterial();
 
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
     {
@@ -236,7 +236,7 @@ public class UIImage : UIBehaviour
     {
         // Tile size in screen pixels: source texture native size scaled by 1/PPU. If no texture
         // is set we fall back to the rect itself so the image just stretches like Simple.
-        Texture2D? tex = _texture;
+        Texture2D? tex = _texture.Res;
         if (tex is null || tex.Width == 0 || tex.Height == 0)
         {
             b.AddQuad(local, tinted, Float2.Zero, Float2.One);
@@ -250,7 +250,7 @@ public class UIImage : UIBehaviour
 
     private Float4 ComputeUVBorder()
     {
-        Texture2D? tex = _texture;
+        Texture2D? tex = _texture.Res;
         if (tex is null || tex.Width == 0 || tex.Height == 0) return Float4.Zero;
         return new Float4(
             _border.X / tex.Width,
@@ -261,7 +261,7 @@ public class UIImage : UIBehaviour
 
     public override void PopulateProperties(PropertyState p, in UIContext _)
     {
-        p.SetTexture("_MainTex", Texture ?? defaultTexture);
+        p.SetTexture("_MainTex", _texture.Res ?? defaultTexture);
         p.SetColor("_MainColor", Color);   // tint already baked into vertex color
         p.SetVector("_Tiling", new Float2(1, 1));
         p.SetVector("_Offset", Float2.Zero);

@@ -8,7 +8,7 @@ namespace Prowl.Runtime.GraphTools;
 
 /// <summary>
 /// Pure graph-walk helpers: dependency depth, topological order, downstream reach.
-/// Lives in Runtime because every graph type's evaluator needs the same primitives —
+/// Lives in Runtime because every graph type's evaluator needs the same primitives
 /// shader compiler, behaviour-tree runner, visual-script interpreter all start by
 /// asking "what's the eval order, and how deep is each node from a leaf?".
 /// </summary>

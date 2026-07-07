@@ -25,7 +25,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
     private readonly Project _project;
     // Concurrent so the background AssetLoader thread can read entries / write loaded assets
-    // while the main thread imports/scans. (_pathToGuid is main-thread-only — the loader never touches it.)
+    // while the main thread imports/scans. (_pathToGuid is main-thread-only the loader never touches it.)
     private readonly ConcurrentDictionary<Guid, AssetEntry> _guidToEntry = new();
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<Guid, EngineObject> _loadedAssets = new();

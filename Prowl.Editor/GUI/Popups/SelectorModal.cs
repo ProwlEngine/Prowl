@@ -9,6 +9,7 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -139,7 +140,7 @@ public static class SelectorModal
 
             paper.Box("sel_close")
                 .Width(24).Height(24).Rounded(4)
-                .Hovered.BackgroundColor(Color.FromArgb(255, 180, 60, 60)).End()
+                .Hovered.BackgroundColor(EditorTheme.Red300).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                 .FontSize(12f).Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) => Close());
@@ -171,8 +172,8 @@ public static class SelectorModal
     {
         using (paper.Row("sel_tabs").Height(28).Margin(6, 6, 0, 0).RowBetween(2).Enter())
         {
-            DrawTabButton(paper, font, "sel_tab_scene", $"{EditorIcons.Sitemap}  Scene", SelectorTabs.Scene);
-            DrawTabButton(paper, font, "sel_tab_assets", $"{EditorIcons.FolderOpen}  Assets", SelectorTabs.Assets);
+            DrawTabButton(paper, font, "sel_tab_scene", $"{EditorIcons.Sitemap}  {Loc.Get("panel.scene")}", SelectorTabs.Scene);
+            DrawTabButton(paper, font, "sel_tab_assets", $"{EditorIcons.FolderOpen}  {Loc.Get("menu.assets")}", SelectorTabs.Assets);
         }
     }
 
@@ -185,7 +186,7 @@ public static class SelectorModal
             .Hovered.BackgroundColor(active ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
             .Text(label, font)
             .TextColor(active ? EditorTheme.Ink500 : EditorTheme.Ink400)
-            .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleCenter)
+            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
             .OnClick(tab, (t, _) => _activeTab = t);
     }
 
@@ -199,9 +200,9 @@ public static class SelectorModal
         if (scene == null)
         {
             paper.Box("sel_scene_empty").Height(40)
-                .Text("No scene loaded", font)
+                .Text(Loc.Get("selector.no_scene"), font)
                 .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
             return;
         }
 
@@ -266,9 +267,9 @@ public static class SelectorModal
             if (idx == 0)
             {
                 paper.Box("sel_scene_none").Height(40)
-                    .Text("No matching objects in scene", font)
+                    .Text(Loc.Get("selector.no_objects"), font)
                     .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
             }
         });
     }
@@ -302,7 +303,7 @@ public static class SelectorModal
                 paper.Box($"{id}_detail")
                     .Width(UnitValue.Auto).Height(EditorTheme.RowHeight).ChildRight(4)
                     .Text(detail, font).TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 4).Alignment(TextAlignment.MiddleRight);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }
         }
     }
@@ -317,9 +318,9 @@ public static class SelectorModal
         if (db == null)
         {
             paper.Box("sel_asset_empty").Height(40)
-                .Text("No asset database", font)
+                .Text(Loc.Get("selector.no_database"), font)
                 .TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
             return;
         }
 
@@ -352,9 +353,9 @@ public static class SelectorModal
             if (items.Count == 0)
             {
                 paper.Box("sel_asset_none").Height(40)
-                    .Text("No matching assets found", font)
+                    .Text(Loc.Get("selector.no_assets"), font)
                     .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
             }
             else
             {
@@ -387,7 +388,7 @@ public static class SelectorModal
 
         using (paper.Column(id)
             .Width(cellSize).Height(totalCellH)
-            .Hovered.BackgroundColor(Color.FromArgb(30, 255, 255, 255)).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Rounded(4)
             .OnClick(guid, (g, _) =>
             {
@@ -425,7 +426,7 @@ public static class SelectorModal
                 .Width(cellSize).Height(labelH).Clip()
                 .Text(name, font)
                 .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
         }
     }
 

@@ -158,7 +158,7 @@ public class WidgetPlaygroundPanel : DockPanel
         {
             // === Color Field (at top for testing) ===
             Origami.Header(paper, "h_col_top", "Color Field").Show();
-            InspectorRow.Draw(paper, "cf_top", "Tint", () =>
+            EditorGUI.Row(paper, "cf_top", "Tint", () =>
                 Origami.ColorField(paper, "cf_top_cf", _color, v => _color = v).Show());
 
             Origami.Separator(paper, "sep_col_top").Show();
@@ -212,9 +212,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Text Fields ===
             Origami.Header(paper, "h_txt", "Text Fields").Show();
 
-            InspectorRow.Draw(paper, "tf_text", "Message", () =>
+            EditorGUI.Row(paper, "tf_text", "Message", () =>
                 Origami.TextField(paper, "tf_text_v", _textValue, v => _textValue = v).Show());
-            InspectorRow.Draw(paper, "tf_name", "Name", () =>
+            EditorGUI.Row(paper, "tf_name", "Name", () =>
                 Origami.TextField(paper, "tf_name_v", _nameValue, v => _nameValue = v).Show());
 
             Origami.Separator(paper, "sep3").Show();
@@ -222,9 +222,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Numeric Fields ===
             Origami.Header(paper, "h_num", "Numeric Fields").Show();
 
-            InspectorRow.Draw(paper, "ff_float", "Speed", () =>
+            EditorGUI.Row(paper, "ff_float", "Speed", () =>
                 Origami.NumericField<float>(paper, "ff_float_v", _floatValue, v => _floatValue = v).Show());
-            InspectorRow.Draw(paper, "if_int", "Health", () =>
+            EditorGUI.Row(paper, "if_int", "Health", () =>
                 Origami.NumericField<int>(paper, "if_int_v", _intValue, v => _intValue = v).Show());
 
             Origami.Separator(paper, "sep4").Show();
@@ -232,10 +232,10 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Sliders ===
             Origami.Header(paper, "h_sl", "Sliders").Show();
 
-            InspectorRow.Draw(paper, "sl_norm", "Opacity", () =>
+            EditorGUI.Row(paper, "sl_norm", "Opacity", () =>
                 Origami.Slider(paper, "sl_norm_v", _sliderValue, v => _sliderValue = v, 0f, 1f)
                     .Format("F2").Show());
-            InspectorRow.Draw(paper, "sl_range", "Volume", () =>
+            EditorGUI.Row(paper, "sl_range", "Volume", () =>
                 Origami.Slider(paper, "sl_range_v", _sliderRange, v => _sliderRange = v, 0f, 100f)
                     .Format("F1").Show());
 
@@ -248,7 +248,7 @@ public class WidgetPlaygroundPanel : DockPanel
             {
                 using (paper.Column("fo_1_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
-                    InspectorRow.Draw(paper, "fo_speed", "Speed", () =>
+                    EditorGUI.Row(paper, "fo_speed", "Speed", () =>
                         Origami.NumericField<float>(paper, "fo_speed_v", _floatValue, v => _floatValue = v).Show());
                     Origami.Checkbox(paper, "fo_tog", _toggleA, v => _toggleA = v).LabelRight("Enabled").Show();
                 }
@@ -259,7 +259,7 @@ public class WidgetPlaygroundPanel : DockPanel
                 using (paper.Column("fo_2_c").Height(UnitValue.Auto).ChildLeft(16).RowBetween(4).Enter())
                 {
                     Origami.Checkbox(paper, "fo_dbg", _toggleB, v => _toggleB = v).LabelRight("Show Wireframe").Show();
-                    InspectorRow.Draw(paper, "fo_iter", "Iterations", () =>
+                    EditorGUI.Row(paper, "fo_iter", "Iterations", () =>
                         Origami.NumericField<int>(paper, "fo_iter_v", _intValue, v => _intValue = v).Show());
                 }
             });
@@ -269,9 +269,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Dropdowns ===
             Origami.Header(paper, "h_dd", "Dropdowns").Show();
 
-            InspectorRow.Draw(paper, "dd_fruit", "Fruit", () =>
+            EditorGUI.Row(paper, "dd_fruit", "Fruit", () =>
                 Origami.Dropdown(paper, "dd_fruit_v", _dropdownIndex, v => _dropdownIndex = v, Fruits).Show());
-            InspectorRow.Draw(paper, "dd_mode", "Mode", () =>
+            EditorGUI.Row(paper, "dd_mode", "Mode", () =>
                 Origami.Dropdown(paper, "dd_mode_v", _dropdown2Index, v => _dropdown2Index = v, Modes).Show());
 
             Origami.Separator(paper, "sep7").Show();
@@ -286,7 +286,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Enum Dropdown ===
             Origami.Header(paper, "h_enum", "Enum Dropdown").Show();
 
-            InspectorRow.Draw(paper, "dd_enum", "Test Enum", () =>
+            EditorGUI.Row(paper, "dd_enum", "Test Enum", () =>
                 Origami.EnumDropdown(paper, "dd_enum_v", _testEnum, v => _testEnum = v).Show());
 
             Origami.Separator(paper, "sep8b").Show();
@@ -294,7 +294,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Int Slider ===
             Origami.Header(paper, "h_isl", "Int Slider").Show();
 
-            InspectorRow.Draw(paper, "isl_1", "Count", () =>
+            EditorGUI.Row(paper, "isl_1", "Count", () =>
                 Origami.IntSlider(paper, "isl_1_v", _intSlider, v => _intSlider = v, 0, 20).Show());
 
             Origami.Separator(paper, "sep8c").Show();
@@ -302,9 +302,9 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Vector Fields ===
             Origami.Header(paper, "h_vec", "Vector Fields").Show();
 
-            InspectorRow.Draw(paper, "v2_1", "Position 2D", () =>
+            EditorGUI.Row(paper, "v2_1", "Position 2D", () =>
                 Origami.Float2Field(paper, "v2_1_vf", _vec2, v => _vec2 = v).Show());
-            InspectorRow.Draw(paper, "v3_1", "Position 3D", () =>
+            EditorGUI.Row(paper, "v3_1", "Position 3D", () =>
                 Origami.Float3Field(paper, "v3_1_vf", _vec3, v => _vec3 = v).Show());
 
             Origami.Separator(paper, "sep8d").Show();
@@ -312,7 +312,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Color Field ===
             Origami.Header(paper, "h_col", "Color Field").Show();
 
-            InspectorRow.Draw(paper, "cf_1", "Tint", () =>
+            EditorGUI.Row(paper, "cf_1", "Tint", () =>
                 Origami.ColorField(paper, "cf_1_cf", _color, v => _color = v).Show());
 
             Origami.Separator(paper, "sep8e").Show();
@@ -321,7 +321,7 @@ public class WidgetPlaygroundPanel : DockPanel
             Origami.Header(paper, "h_prog", "Progress Bar").Show();
 
             Origami.ProgressBar(paper, "pb_1", _progress).Label("Loading").ShowPercent().Show();
-            InspectorRow.Draw(paper, "pb_ctrl", "Progress", () =>
+            EditorGUI.Row(paper, "pb_ctrl", "Progress", () =>
                 Origami.Slider(paper, "pb_ctrl_v", _progress, v => _progress = v, 0f, 1f)
                     .Format("F2").Show());
 
@@ -410,7 +410,7 @@ public class WidgetPlaygroundPanel : DockPanel
             // === Animation Curve ===
             Origami.Header(paper, "h_curve", "Animation Curve").Show();
 
-            InspectorRow.Draw(paper, "curve_1", "Speed Curve", () =>
+            EditorGUI.Row(paper, "curve_1", "Speed Curve", () =>
                 CurveField.Create(paper, "curve_1_cf", _curve,
                     v => _curve = v).Show());
 

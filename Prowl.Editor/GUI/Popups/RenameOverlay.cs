@@ -115,7 +115,7 @@ public static class RenameOverlay
                 .Alignment(TextAlignment.MiddleLeft)
                 .Width(UnitValue.Stretch())
                 .Height(EditorTheme.FontSize)
-                .FontSize(EditorTheme.FontSize - 1)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .TextField(_text, settings,
                     onChange: v => _text = v,
                     intID: _activeId?.GetHashCode() ?? 0);

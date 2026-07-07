@@ -13,6 +13,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -91,7 +92,7 @@ public class PluginAssetEditor : AssetImporterEditor
         if (isNative)
         {
             var cpu = ParseCpu(s.TryGet(PluginInfo.Keys.Cpu, out var c) ? c.StringValue : "x64");
-            InspectorRow.Draw(paper, $"{id}_cpu", "CPU", () =>
+            EditorGUI.Row(paper, $"{id}_cpu", "CPU", () =>
                 Origami.EnumDropdown(paper, $"{id}_cpu_v", cpu,
                     v => s[PluginInfo.Keys.Cpu] = new EchoObject(v.ToString())).Show());
         }

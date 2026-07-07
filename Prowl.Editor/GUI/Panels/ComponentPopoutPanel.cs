@@ -4,6 +4,7 @@ using System.Linq;
 using Prowl.OrigamiUI;
 using Prowl.Editor.Inspector;
 using Prowl.PaperUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.Core;
@@ -51,16 +52,16 @@ public class ComponentPopoutPanel : DockPanel
                 paper.Box("cpop_missing_spacer");
                 paper.Box("cpop_missing_text")
                     .Height(40)
-                    .Text("Component not found in current scene", font)
+                    .Text(Loc.Get("component.not_found"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
 
                 paper.Box("cpop_missing_info")
                     .Height(24)
-                    .Text($"Looking for: {_compTypeName}", font)
+                    .Text(Loc.Get("component.looking_for", new { name = _compTypeName }), font)
                     .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 3)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleCenter);
 
                 paper.Box("cpop_missing_spacer2");
@@ -93,8 +94,8 @@ public class ComponentPopoutPanel : DockPanel
 
                 paper.Box("cpop_go")
                     .Height(28).ChildRight(8)
-                    .Text($"on {go.Name}", font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleRight);
+                    .Text(Loc.Get("component.on", new { name = go.Name }), font).TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
             }
 
             Origami.Separator(paper, "cpop_sep").Show();

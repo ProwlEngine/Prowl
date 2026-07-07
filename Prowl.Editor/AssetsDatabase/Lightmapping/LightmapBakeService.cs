@@ -173,7 +173,7 @@ public sealed class LightmapBakeService
                 }
                 if (total > 0)
                 {
-                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) — each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
+                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
                     _statsReported = true;
                 }
             }
@@ -403,7 +403,7 @@ public sealed class LightmapBakeService
         if (key != Guid.Empty && _texCache.TryGetValue(key, out var cached)) return cached;
 
         // Photonic keys textures by name and rejects duplicates, so give each one a unique name
-        // (Texture2D names aren't unique — many default to "New Texture").
+        // (Texture2D names aren't unique many default to "New Texture").
         string name = $"albedo_{_bakeTexCounter++}";
         BakeTexture? result = TryLoadFromFile(bake, tex, name) ?? TryReadback(bake, tex, name);
         if (key != Guid.Empty) _texCache[key] = result;

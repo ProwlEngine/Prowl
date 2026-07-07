@@ -2,14 +2,37 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.OrigamiUI;
-
 namespace Prowl.Editor.Core;
+
+/// <summary>
+/// A node in the editor's menu tree: a clickable item, a submenu (when it has children) or a
+/// separator. The menu bar walks this tree and translates it into Origami's ContextBuilder API.
+/// </summary>
+public sealed class AppMenuItem
+{
+    public string Label;
+    public Action? OnClick;
+    public bool IsEnabled = true;
+    public Func<bool>? IsCheckedFunc;
+    public Func<bool>? IsEnabledFunc;
+    public Func<string>? DynamicLabelFunc;
+    public bool IsSeparator;
+    public readonly List<AppMenuItem> SubItems = new();
+
+    public AppMenuItem(string label = "", Action? onClick = null)
+    {
+        Label = label;
+        OnClick = onClick;
+    }
+
+    public bool HasSubItems => SubItems.Count > 0;
+
+    public static AppMenuItem Separator() => new() { IsSeparator = true };
+}
 
 /// <summary>
 /// Central menu registry. Items are registered by path (e.g. "File/Save Scene").
 /// The menu bar reads from this to build dropdowns.
-/// Uses Origami's AppMenuItem directly - no conversion needed.
 /// </summary>
 public static class MenuRegistry
 {

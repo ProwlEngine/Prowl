@@ -18,7 +18,7 @@ public class GradientPropertyEditor : PropertyEditor
     {
         var gradient = value as Gradient ?? new Gradient();
 
-        InspectorRow.Draw(paper, id, label, () =>
+        EditorGUI.Row(paper, id, label, () =>
             GradientField.Create(paper, $"{id}_gf", gradient,
                 v => onChange(v)).Show());
     }

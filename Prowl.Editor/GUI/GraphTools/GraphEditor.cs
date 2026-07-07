@@ -15,6 +15,7 @@ using Prowl.Vector;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.GraphTools;
 
 /// <summary>
@@ -604,13 +605,13 @@ public class GraphEditor
             .Layer(Layer.Topmost)
             .ClampToScreen()
             .StopEventPropagation()
-            .BoxShadow(0, 0, 40, -25, System.Drawing.Color.FromArgb(155, System.Drawing.Color.Black))
+            .DropShadow(0, 0, 40, -25, System.Drawing.Color.FromArgb(155, System.Drawing.Color.Black))
             .Padding(6, 6, 6, 6).ColBetween(4)
             .Enter())
         {
             paper.Box("graph_popup_title").Height(20)
                 .Text("Add Node", EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 1)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             Origami.SearchField(paper, "graph_popup_search", _creationFilter,
@@ -703,7 +704,7 @@ public class GraphEditor
                 {
                     paper.Box("graph_popup_empty").Height(20)
                         .Text("(no nodes match)", EditorTheme.DefaultFont!)
-                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 2)
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
             });
@@ -725,7 +726,7 @@ public class GraphEditor
         {
             paper.Box($"{id}_title").Height(20)
                 .Text($"{EditorIcons.NoteSticky}  Sticky Note", EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
         }
     }
@@ -799,7 +800,7 @@ public class GraphEditor
         {
             paper.Box($"{id}_lbl").Height(22)
                 .Text(label, EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
         }
     }
@@ -854,12 +855,12 @@ public class GraphEditor
         {
             paper.Box($"{id}_title").Height(20)
                 .Text(reg.Title, EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize - 2)
+                .TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_cat").Width(UnitValue.Auto).Height(20)
                 .Text(reg.Category, EditorTheme.DefaultFont!)
-                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize - 3)
+                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleRight);
         }
     }

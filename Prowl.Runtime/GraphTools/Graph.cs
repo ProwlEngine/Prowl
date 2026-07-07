@@ -24,7 +24,7 @@ public enum WireRoutingStyle
 
 /// <summary>
 /// Abstract base for any node-based asset (shader graphs, behaviour trees, visual scripts, ...).
-/// Holds the graph topology nodes, edges, blackboard variables, sticky notes, groups —
+/// Holds the graph topology nodes, edges, blackboard variables, sticky notes, groups
 /// and is serialized as a regular Prowl asset via Echo. Subclasses register themselves
 /// with <see cref="CreateAssetMenuAttribute"/> for a specific file extension and provide
 /// graph-type-specific node libraries.

@@ -121,7 +121,7 @@ public abstract class Collider : MonoBehaviour
                 try
                 {
                     // Use Preserve: Update mode calls SetMassInertia() after each removal, which
-                    // iterates remaining shapes — this throws NotSupportedException for TriangleShape.
+                    // iterates remaining shapes this throws NotSupportedException for TriangleShape.
                     // Mass/inertia is recalculated in full by RegisterShapes after re-attachment.
                     _attachedBody.RemoveShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
                 }

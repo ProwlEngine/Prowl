@@ -1,15 +1,19 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
+using Prowl.Quill;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Scribe;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
+using TextAlignment = Prowl.PaperUI.TextAlignment;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -19,23 +23,14 @@ public class ConsolePanel : DockPanel
     public override string Title => Loc.Get("panel.console");
     public override string Icon => EditorIcons.Terminal;
 
-    private const float ToolbarHeight = 26f;
     private const int MaxMessages = 500;
-
-    private float FullRowHeight => _multiLine ? MultiLineRowHeight : RowHeight;
-
-    private float RowHeight = 26f;
-    private float MultiLineRowHeight => RowHeight * 1.8f;
-    private const float IconWidth = 16f;
-    private float TimeWidth => 68f;
-    private const float CountWidth = 30f;
-    private const float FontSize = 13f;
+    private static float RowHeight => EditorTheme.RowHeight + 2f;
 
     private static readonly List<LogEntry> _messages = new();
     private static bool _subscribed;
 
     // Settings
-    private bool _showTime = false;
+    private bool _showTime = true;
     private bool _collapse = true;
     private bool _multiLine = false;
 
@@ -45,154 +40,228 @@ public class ConsolePanel : DockPanel
     private bool _showErrors = true;
     private string _searchText = "";
 
-    // Cached filtered list (rebuilt when messages or filters change)
+    // Cached filtered list (rebuilt when messages or filters change).
     private static int _lastMessageCount;
     private static int _lastFilterHash;
     private static bool _lastCollapseState;
     private static readonly List<int> _filteredIndices = new();
-
-    // Selected entry for inspector display
     private static int _selectedFilteredIndex = -1;
+
+    // -- palette --
+    private static UnitValue ST => UnitValue.StretchOne;
+    private static Color Col(int r, int g, int b, int a = 255) => Color.FromArgb(a, r, g, b);
+    private static Color InfoC => EditorTheme.Blue400;
+    private static Color WarnC => EditorTheme.Amber400;
+    private static Color ErrC => EditorTheme.Red400;
+    private static Color THi => EditorTheme.Ink500;
+    private static Color TBody => EditorTheme.Ink400;
+    private static Color TMid => EditorTheme.Ink300;
+    private static Color TLo => EditorTheme.InkDim;
+    private static Color TDim => EditorTheme.InkFaint;
+    private static Color BdSoft => EditorTheme.BorderSoft;
+    private static Color Raised => EditorTheme.Neutral400;
 
     internal struct LogEntry
     {
         public string Message;
         public string FullMessage;
         public LogSeverity Severity;
-        public string TimeString; // cached formatted time
+        public string TimeString;
         public int Count;
         public DebugStackTrace? StackTrace;
 
-        // Cached text layouts (created on first draw)
-        public TextLayout? IconLayout;
-        public TextLayout? TimeLayout;
+        // Cached text layouts, built lazily on first draw and reused every frame.
+        public TextLayout? NameLayout;
         public TextLayout? MessageLayout;
+        public TextLayout? TimeLayout;
         public TextLayout? CountLayout;
-        public TextLayout? StackTraceLayout;
+        public TextLayout? SourceLayout;
+        public TextLayout? StackLayout;
     }
 
-    public ConsolePanel()
+    public ConsolePanel() => EnsureSubscribed();
+
+    /// <summary>Subscribe the shared log store to Debug.OnLog if not already. Safe to call before any
+    /// ConsolePanel is opened - the status-bar footer relies on this to show logs regardless.</summary>
+    public static void EnsureSubscribed()
     {
-        if (!_subscribed)
+        if (_subscribed) return;
+        _subscribed = true;
+        Debug.OnLog += OnLogMessage;
+    }
+
+    // ---- Status-bar footer accessors (read-only view of the shared log store) ----
+
+    /// <summary>Icon + color for a log severity, matching the console rows.</summary>
+    public static (IOrigamiIcon icon, Color color) SeverityStyle(LogSeverity severity)
+    {
+        var (icon, color, _) = LevelOf(severity);
+        return (icon, color);
+    }
+
+    /// <summary>Total Info / Warning / Error counts (including collapsed repeats).</summary>
+    public static (int info, int warn, int err) LogCounts()
+    {
+        int info = 0, warn = 0, err = 0;
+        foreach (var m in _messages)
         {
-            _subscribed = true;
-            Debug.OnLog += OnLogMessage;
+            if (m.Severity == LogSeverity.Warning) warn += m.Count;
+            else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) err += m.Count;
+            else info += m.Count;
         }
+        return (info, warn, err);
+    }
+
+    /// <summary>The most recent log entry (message, source class, collapse count), or null if none.</summary>
+    public static (LogSeverity severity, string message, string? source, int count)? LastLog()
+    {
+        if (_messages.Count == 0) return null;
+        var m = _messages[^1];
+        return (m.Severity, m.Message, SourceOf(m), m.Count);
     }
 
     private static void OnLogMessage(string message, DebugStackTrace? stackTrace, LogSeverity severity)
     {
-        // Collapse duplicates
+        string firstLine = message.Contains('\n') ? message.Split('\n')[0] : message;
+
         if (_messages.Count > 0)
         {
             var last = _messages[^1];
-            if (last.Message == message && last.Severity == severity)
+            if (last.FullMessage == message && last.Severity == severity)
             {
-                _messages[^1] = new LogEntry
-                {
-                    Message = last.Message.Contains('\n') ? last.Message.Split('\n')[0] : last.Message,
-                    FullMessage = last.Message,
-                    Severity = last.Severity,
-                    TimeString = DateTime.Now.ToString("HH:mm:ss"),
-                    Count = last.Count + 1,
-                    StackTrace = stackTrace ?? last.StackTrace
-                };
-                // Invalidate count layout since count changed
-                var updated = _messages[^1];
-                updated.CountLayout = null;
-                _messages[^1] = updated;
+                last.Count += 1;
+                last.TimeString = DateTime.Now.ToString("HH:mm:ss");
+                last.StackTrace = stackTrace ?? last.StackTrace;
+                last.TimeLayout = null;
+                last.CountLayout = null;
+                _messages[^1] = last;
                 return;
             }
         }
 
         _messages.Add(new LogEntry
         {
-            Message = message.Contains('\n') ? message.Split('\n')[0] : message,
+            Message = firstLine,
             FullMessage = message,
             Severity = severity,
             TimeString = DateTime.Now.ToString("HH:mm:ss"),
             Count = 1,
-            StackTrace = stackTrace
+            StackTrace = stackTrace,
         });
 
         while (_messages.Count > MaxMessages)
             _messages.RemoveAt(0);
     }
 
+    // ================================================================
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        using (paper.Column("con_root")
-            .Size(width, height)
-            .Enter())
+        using (paper.Column("con_root").Size(width, height).Enter())
         {
             DrawToolbar(paper, font, width);
-            DrawMessages(paper, font, width-2, height - 44);
+            DrawMessages(paper, font, width, height - 35);
         }
     }
 
+    // ================================================================
+    //  Toolbar
+    // ================================================================
     private void DrawToolbar(Paper paper, FontFile font, float width)
     {
-        using (paper.Row("con_toolbar")
-            .Height(ToolbarHeight)
-            .Margin(4, 4, 4, 0)
-            .RowBetween(12)
-            .Margin(8)
-            .Enter())
+        int infoCount = 0, warnCount = 0, errCount = 0;
+        foreach (var m in _messages)
         {
-            Origami.Button(paper, "con_clear", Loc.Get("console.clear"), () => { _messages.Clear(); _filteredIndices.Clear(); }).Width(50).Show();
+            if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
+            else if (m.Severity is LogSeverity.Error or LogSeverity.Exception) errCount += m.Count;
+            else infoCount += m.Count;
+        }
 
-            paper.Box("con_sep1").Width(1).Height(24).BackgroundColor(EditorTheme.Ink200);
-
-            int infoCount = 0, warnCount = 0, errCount = 0;
-            foreach (var m in _messages)
+        using (paper.Column("con_tb_col").Height(34).Enter())
+        {
+            using (paper.Row("con_tb").Height(33).Padding(10, 8, 0, 0).RowBetween(4).Enter())
             {
-                if (m.Severity == LogSeverity.Normal || m.Severity == LogSeverity.Success) infoCount += m.Count;
-                else if (m.Severity == LogSeverity.Warning) warnCount += m.Count;
-                else errCount += m.Count;
+                LevelChip(paper, font, "con_collapse", EditorIcons.LayerGroup_I,
+                    _collapse ? EditorTheme.AccentText : TLo, Loc.Get("console.collapse"), null, _collapse, false, () => _collapse = !_collapse);
+
+                paper.Box("con_div1").Width(1).Height(ST).Margin(4, 4, 0, 0).BackgroundColor(BdSoft).IsNotInteractable();
+
+                LevelChip(paper, font, "con_info", EditorIcons.CircleInfo_I, InfoC, null, infoCount.ToString(), _showInfo, !_showInfo, () => _showInfo = !_showInfo);
+                LevelChip(paper, font, "con_warn", EditorIcons.TriangleExclamation_I, WarnC, null, warnCount.ToString(), _showWarnings, !_showWarnings, () => _showWarnings = !_showWarnings);
+                LevelChip(paper, font, "con_err", EditorIcons.CircleExclamation_I, ErrC, null, errCount.ToString(), _showErrors, !_showErrors, () => _showErrors = !_showErrors);
+
+                paper.Box("con_sp").Width(ST);
+
+                using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, ST, ST).Enter())
+                    Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
+
+                IconBtn(paper, font, "con_clear", EditorIcons.Trash, false, () => { _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                IconBtn(paper, font, "con_opts", EditorIcons.EllipsisVertical, false,
+                    () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
-
-            Origami.Switch(paper, "con_collapse", _collapse, v => _collapse = v)
-                .LabelRight(Loc.Get("console.collapse")).Show();
-
-            using (paper.Row("buttons").RowBetween(12).Enter())
-            {
-                Origami.Switch(paper, "con_info", _showInfo, v => _showInfo = v)
-                    .Info().LabelRight($"{EditorIcons.CircleInfo} {infoCount}").Show();
-
-                Origami.Switch(paper, "con_warn", _showWarnings, v => _showWarnings = v)
-                    .Warning().LabelRight($"{EditorIcons.TriangleExclamation} {warnCount}").Show();
-
-                Origami.Switch(paper, "con_err", _showErrors, v => _showErrors = v)
-                    .Danger().LabelRight($"{EditorIcons.CircleExclamation} {errCount}").Show();
-            }
-
-            Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Show();
-
-            Origami.IconButton(paper, "con_settingsButton", $"{EditorIcons.Gear}", () =>
-            {
-                Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, menu =>
-                {
-                    menu.Submenu(Loc.Get("console.log_tests"), subMenu =>
-                    {
-                        subMenu.Item(Loc.Get("console.log"), () => Debug.Log("This is a Normal Log."))
-                            .Item(Loc.Get("console.log_warning"), () => Debug.LogWarning("This is a Warning Log."))
-                            .Item(Loc.Get("console.log_error"), () => Debug.LogError("This is an Error Log."))
-                            .Item(Loc.Get("console.log_success"), () => Debug.LogSuccess("This is a Success Log."));
-                    }, EditorIcons.Flask)
-                    .Separator()
-                    .Toggle(Loc.Get("console.show_time"), () => _showTime = !_showTime, () => _showTime)
-                    .Toggle(Loc.Get("console.multi_line"), () => _multiLine = !_multiLine, () => _multiLine);
-                });
-            }).Show();
+            paper.Box("con_tb_div").Height(1).BackgroundColor(BdSoft).IsNotInteractable();
         }
     }
 
+    // cs-lvl chip: icon + optional label + optional count; "on" gets a glass inset, "off" dims.
+    private void LevelChip(Paper p, FontFile font, string id, IOrigamiIcon icon, Color iconColor, string? label, string? count, bool on, bool dim, Action onClick)
+    {
+        var mono = EditorTheme.FontMono ?? font;
+        Color ic = dim ? Color.FromArgb(115, iconColor.R, iconColor.G, iconColor.B) : iconColor;
+
+        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).RowBetween(5).Margin(0, 0, ST, ST)
+            .BackgroundColor(on ? EditorTheme.Glass : Color.Transparent)
+            .BorderColor(on ? BdSoft : Color.Transparent).BorderWidth(1)
+            .Transition(GuiProp.BackgroundColor, 0.15f).Transition(GuiProp.BorderColor, 0.15f)
+            .Hovered.BackgroundColor(on ? EditorTheme.Glass : EditorTheme.Hover).End()
+            .OnClick(_ => onClick())
+            .Enter())
+        {
+            p.Box(id + "_i").Width(14).Height(24).Margin(0, 0, ST, ST).IsNotInteractable()
+                .Icon(p, icon, ic, size: 12f);
+            if (!string.IsNullOrEmpty(label))
+                p.Box(id + "_l").Width(UnitValue.Auto).Height(24).Margin(0, 0, ST, ST)
+                    .Text(label, font).TextColor(on ? THi : (dim ? TDim : TLo)).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            if (!string.IsNullOrEmpty(count))
+                p.Box(id + "_c").Width(UnitValue.Auto).Height(24).Margin(0, 0, ST, ST)
+                    .Text(count, mono).TextColor(dim ? TDim : TMid).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    private void IconBtn(Paper p, FontFile font, string id, string glyph, bool active, Action onClick)
+    {
+        p.Box(id).Width(26).Height(26).Rounded(7).Margin(0, 0, ST, ST)
+            .BackgroundColor(active ? EditorTheme.Selected : Color.Transparent)
+            .Transition(GuiProp.BackgroundColor, 0.15f)
+            .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
+            .Text(glyph, font).TextColor(active ? EditorTheme.Accent : TMid).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(_ => onClick());
+    }
+
+    private void BuildOptionsMenu(ContextBuilder menu)
+    {
+        menu.Submenu(Loc.Get("console.log_tests"), sub =>
+        {
+            sub.Item(Loc.Get("console.log"), () => Debug.Log("This is a Normal Log."))
+                .Item(Loc.Get("console.log_warning"), () => Debug.LogWarning("This is a Warning Log."))
+                .Item(Loc.Get("console.log_error"), () => Debug.LogError("This is an Error Log."))
+                .Item(Loc.Get("console.log_success"), () => Debug.LogSuccess("This is a Success Log."));
+        }, EditorIcons.Flask);
+        menu.Separator();
+        menu.Header(Loc.Get("console.display"));
+        menu.Toggle(Loc.Get("console.show_time"), () => _showTime = !_showTime, () => _showTime);
+        menu.Toggle(Loc.Get("console.multi_line"), () => _multiLine = !_multiLine, () => _multiLine);
+    }
+
+    // ================================================================
+    //  Message list
+    // ================================================================
+    // Rows aren't individual elements: the whole list is one fixed-height box that only paints the
+    // visible slice, drawing cached TextLayouts straight to the canvas so 500 messages stay cheap.
     private void DrawMessages(Paper paper, FontFile font, float width, float height)
     {
-        // Rebuild filtered list when needed
         int filterHash = HashCode.Combine(_showInfo, _showWarnings, _showErrors, _searchText);
         if (_lastMessageCount != _messages.Count || _lastFilterHash != filterHash || _lastCollapseState != _collapse)
         {
@@ -202,142 +271,153 @@ public class ConsolePanel : DockPanel
             RebuildFilteredList();
         }
 
-        int visibleCount = _filteredIndices.Count;
-        float totalContentHeight = visibleCount * FullRowHeight;
+        int count = _filteredIndices.Count;
+        float rowH = _multiLine ? RowHeight * 1.85f : RowHeight;
 
-        Origami.ScrollView(paper, "con_scroll", width, height).ForceScrollbar().Body(() =>
+        Origami.ScrollView(paper, "con_msgs", width, height).ForceScrollbar().Body(() =>
         {
-            // Single element for ALL messages fixed height based on count
-            paper.Box("con_content")
-                .Width(width - 10)
-                .Height(totalContentHeight)
-                .BackgroundColor(EditorTheme.Neutral100)
-                .Clip()
+            if (count == 0)
+            {
+                paper.Box("con_empty").Width(ST).Height(60)
+                    .Text(Loc.Get("console.no_logs"), font).TextColor(TDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                return;
+            }
+
+            paper.Box("con_content").Width(width - 12).Height(count * rowH).Clip()
                 .OnClick(0, (_, e) =>
                 {
-                    // Determine clicked row from mouse Y relative to content
-                    float relY = (float)e.RelativePosition.Y;
-                    float totalRowHeight = FullRowHeight;
-                    int clickedRow = (int)(relY / totalRowHeight);
-                    if (clickedRow >= 0 && clickedRow < _filteredIndices.Count)
-                    {
-                        _selectedFilteredIndex = (_selectedFilteredIndex == clickedRow) ? -1 : clickedRow;
-
-                        // Select the log entry for inspector display
-                        if (_selectedFilteredIndex >= 0)
-                        {
-                            int msgIdx = _filteredIndices[_selectedFilteredIndex];
-                            if (msgIdx < _messages.Count)
-                                Selection.Select(new ConsoleLogSelection(_messages[msgIdx]));
-                        }
-                        else
-                        {
-                            Selection.Clear();
-                        }
-                    }
+                    int row = (int)((float)e.RelativePosition.Y / rowH);
+                    if (row < 0 || row >= _filteredIndices.Count) return;
+                    _selectedFilteredIndex = row;
+                    Selection.Select(new ConsoleLogSelection(_messages[_filteredIndices[row]]));
                 })
                 .OnPostLayout((handle, contentRect) =>
                 {
-                    // Get the parent (scroll view clip) rect
-                    var containerData = paper.GetElementData(handle.Data.ParentIndex);
-                    var clipSpaceData = paper.GetElementData(containerData.ParentIndex);
-
-                    float clipTop = clipSpaceData.LayoutRect.Min.Y;
-                    float clipBottom = clipSpaceData.LayoutRect.Max.Y;
+                    var container = paper.GetElementData(handle.Data.ParentIndex);
+                    var clip = paper.GetElementData(container.ParentIndex);
                     float contentTop = (float)contentRect.Min.Y;
-
-                    // Calculate visible row range
-                    int firstVisible = Math.Max(0, (int)((clipTop - contentTop) / FullRowHeight));
-                    int lastVisible = Math.Min(visibleCount - 1, (int)((clipBottom - contentTop) / FullRowHeight));
-
-                    // Draw all visible rows in one draw call using cached TextLayouts
-                    paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        float startX = (float)r.Min.X;
-                        float paddedX = startX + 8;
-                        float startY = (float)r.Min.Y;
-                        float size = FontSize * 1.5f;
-
-                        for (int vi = firstVisible; vi <= lastVisible; vi++)
-                        {
-                            if (vi < 0 || vi >= _filteredIndices.Count) continue;
-                            int msgIdx = _filteredIndices[vi];
-                            if (msgIdx >= _messages.Count) continue;
-
-                            var totalRowSize = FullRowHeight;
-
-                            var msg = _messages[msgIdx];
-                            float rowY = startY + vi * totalRowSize;
-                            float textY = rowY + totalRowSize * (_multiLine ? 0.25f : 0.5f) - size * 0.5f + (_multiLine ? 2 : 0);
-                            float iconY = rowY + totalRowSize * 0.5f - size * 0.5f;
-
-                            GetEntryStyle(msg.Severity, vi, out string icon, out Color textColor, out Color bgColor);
-
-                            // Selection highlight
-                            if (vi == _selectedFilteredIndex)
-                                canvas.RectFilled(startX, rowY, (float)r.Size.X, totalRowSize, Color.FromArgb(60, EditorTheme.Purple400));
-                            else if (bgColor != Color.Transparent)
-                                canvas.RectFilled(startX, rowY, (float)r.Size.X, totalRowSize, bgColor);
-
-                            canvas.RectFilled(startX+2, rowY+1, (float)4, totalRowSize-2, LerpRGB(textColor, Color.Black, 0.5f));
-
-                            // Create layouts lazily
-                            msg.IconLayout ??= canvas.CreateLayout(icon, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
-                            msg.TimeLayout ??= canvas.CreateLayout(msg.TimeString, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
-                            msg.MessageLayout ??= canvas.CreateLayout(msg.Message, new TextLayoutSettings { Font = font, PixelSize = size, Quality = FontQuality.Normal });
-
-                            float padStack = 4;
-                            // Draw using cached layouts
-                            canvas.DrawLayout(msg.IconLayout, paddedX + padStack, iconY, textColor);
-                            padStack += IconWidth + 10;
-
-                            if (_showTime)
-                            {
-                                canvas.DrawLayout(msg.TimeLayout, paddedX + padStack, iconY, EditorTheme.Ink200);
-                                padStack += TimeWidth + 4;
-                            }
-
-                            if (_multiLine)
-                            {
-                                float stackSize = size * 0.8f;
-                                float stackY = rowY + totalRowSize * (_multiLine ? 0.75f : 0.5f) - stackSize * 0.5f - 2;
-                                msg.StackTraceLayout ??= canvas.CreateLayout(msg.StackTrace.StackFrames[0].ToString(), new TextLayoutSettings { Font = font, PixelSize = stackSize, Quality = FontQuality.Normal });
-                                canvas.DrawLayout(msg.StackTraceLayout, paddedX + padStack+1, stackY, LerpRGB(textColor,Color.Black,0.25f));
-                            }
-
-                            canvas.DrawLayout(msg.MessageLayout, paddedX + padStack, textY, textColor);
-
-                            // Count badge
-                            if (_collapse && msg.Count > 1)
-                            {
-                                var textSize = size / 1.2f;
-                                msg.CountLayout ??= canvas.CreateLayout(msg.Count.ToString(), new TextLayoutSettings { Font = font, PixelSize = textSize, Quality = FontQuality.Normal });
-                                float badgeW = msg.CountLayout.Size.X + 8; // Size is in scaled pixels
-                                float badgeH = RowHeight - 6;
-                                float badgeX = startX + (float)r.Size.X - badgeW - 4;
-                                float badgeY = rowY + (_multiLine ? MultiLineRowHeight*0.25f : 0) + 3;
-
-                                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, badgeH, Color.FromArgb(120, 80, 80, 85));
-                                canvas.DrawLayout(msg.CountLayout, badgeX + 4, badgeY + (badgeH - textSize) / 2f, EditorTheme.Ink400);
-                            }
-
-                            // Write back the cached layouts (struct copy)
-                            _messages[msgIdx] = msg;
-                        }
-                    });
+                    int first = Math.Max(0, (int)(((float)clip.LayoutRect.Min.Y - contentTop) / rowH) - 1);
+                    int last = Math.Min(count - 1, (int)(((float)clip.LayoutRect.Max.Y - contentTop) / rowH) + 1);
+                    paper.Draw(ref handle, (canvas, r) => DrawRows(paper, canvas, r, font, rowH, first, last));
                 });
         });
     }
 
-    private static Color LerpRGB(Color a, Color b, float t)
+    private void DrawRows(Paper paper, Canvas canvas, Rect r, FontFile font, float rowH, int first, int last)
     {
-        return Color.FromArgb(
-            (int)(a.A + (b.A - a.A) * t),
-            (int)(a.R + (b.R - a.R) * t),
-            (int)(a.G + (b.G - a.G) * t),
-            (int)(a.B + (b.B - a.B) * t)
-        );
+        var mono = EditorTheme.FontMono ?? font;
+        var semi = EditorTheme.FontSemiBold ?? font;
+        var bold = EditorTheme.FontBold ?? font;
+
+        float left = (float)r.Min.X, right = (float)r.Max.X, top = (float)r.Min.Y, w = (float)r.Size.X;
+        const float padL = 12f, padR = 12f, gap = 8f, iconSize = 14f;
+
+        var ptr = paper.PointerPos;
+        int hoverRow = (ptr.X >= left && ptr.X <= right && ptr.Y >= top && ptr.Y <= (float)r.Max.Y)
+            ? (int)(((float)ptr.Y - top) / rowH) : -1;
+
+        float LW(TextLayout l) => canvas.PixelToLogical((float)l.Size.X);
+        float LH(TextLayout l) => canvas.PixelToLogical((float)l.Size.Y);
+        void DrawMid(TextLayout l, float x, float cy, Color c) => canvas.DrawLayout(l, x, cy - LH(l) * 0.5f, c);
+        TextLayout Make(string text, FontFile f, float size) =>
+            canvas.CreateLayout(text, new TextLayoutSettings { Font = f, PixelSize = size, LineHeight = 1f, Quality = FontQuality.Normal });
+
+        for (int vi = first; vi <= last; vi++)
+        {
+            // first/last were captured at layout time; a mid-frame Clear can shrink the list before
+            // this deferred draw runs, so re-check bounds against the live collections.
+            if (vi < 0 || vi >= _filteredIndices.Count) break;
+            int msgIdx = _filteredIndices[vi];
+            if (msgIdx < 0 || msgIdx >= _messages.Count) continue;
+            var msg = _messages[msgIdx];
+            (IOrigamiIcon icon, Color color, string name) = LevelOf(msg.Severity);
+            bool selected = vi == _selectedFilteredIndex;
+
+            float rowY = top + vi * rowH;
+            float line1 = rowY + (_multiLine ? rowH * 0.33f : rowH * 0.5f);
+            float line2 = rowY + rowH * 0.70f;
+
+            if (selected)
+            {
+                canvas.RectFilled(left, rowY, w, rowH, EditorTheme.Selected);
+                canvas.RectFilled(left, rowY, 2f, rowH, EditorTheme.Accent);
+            }
+            else if (vi == hoverRow)
+                canvas.RectFilled(left, rowY, w, rowH, Col(168, 85, 247, 13));
+
+            float ix = left + padL;
+            icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);
+            float cursorX = ix + iconSize + gap;
+
+            msg.NameLayout ??= Make($"{name}:", semi, EditorTheme.FontSizeSmall);
+            DrawMid(msg.NameLayout, cursorX, line1, color);
+            cursorX += LW(msg.NameLayout) + 5f;
+
+            // Right cluster, laid out from the right edge inward; message clips before it.
+            float rightCursor = right - padR;
+
+            if (_showTime)
+            {
+                msg.TimeLayout ??= Make(msg.TimeString, mono, EditorTheme.FontSizeSmall);
+                float tw = LW(msg.TimeLayout);
+                DrawMid(msg.TimeLayout, rightCursor - tw, line1, TDim);
+                rightCursor -= tw + gap;
+            }
+
+            string? src = SourceOf(msg);
+            if (!string.IsNullOrEmpty(src))
+            {
+                msg.SourceLayout ??= Make($"[{src}]", mono, EditorTheme.FontSizeSmall);
+                float sw = LW(msg.SourceLayout);
+                DrawMid(msg.SourceLayout, rightCursor - sw, line1, TLo);
+                rightCursor -= sw + gap;
+            }
+
+            if (_collapse && msg.Count > 1)
+            {
+                msg.CountLayout ??= Make(msg.Count.ToString(), bold, EditorTheme.FontSizeSmall);
+                float cw = LW(msg.CountLayout), badgeW = cw + 12f, badgeH = 16f;
+                float badgeX = rightCursor - badgeW, badgeY = line1 - badgeH * 0.5f;
+                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, badgeH * 0.5f, Raised);
+                canvas.DrawLayout(msg.CountLayout, badgeX + (badgeW - cw) * 0.5f, line1 - LH(msg.CountLayout) * 0.5f, TMid);
+                rightCursor -= badgeW + gap;
+            }
+
+            float msgLimit = Math.Max(cursorX, rightCursor);
+            canvas.SaveState();
+            canvas.IntersectScissor(cursorX, rowY, msgLimit - cursorX, rowH);
+            msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
+            DrawMid(msg.MessageLayout, cursorX, line1, TBody);
+            if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
+            {
+                msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
+                DrawMid(msg.StackLayout, cursorX, line2, TLo);
+            }
+            canvas.RestoreState();
+
+            canvas.RectFilled(left, rowY + rowH - 1f, w, 1f, BdSoft);
+
+            _messages[msgIdx] = msg;
+        }
     }
+
+    // Class the log originated from (first captured frame's declaring type), for the source label.
+    private static string? SourceOf(LogEntry msg)
+    {
+        var frames = msg.StackTrace?.StackFrames;
+        if (frames == null || frames.Length == 0) return null;
+        string? method = frames[0].Method;
+        if (string.IsNullOrEmpty(method)) return null;
+        int dot = method.LastIndexOf('.');
+        return dot > 0 ? method[..dot] : method;
+    }
+
+    private static (IOrigamiIcon, Color, string) LevelOf(LogSeverity s) => s switch
+    {
+        LogSeverity.Warning => (EditorIcons.TriangleExclamation_I, WarnC, "warning"),
+        LogSeverity.Error or LogSeverity.Exception => (EditorIcons.CircleExclamation_I, ErrC, "error"),
+        _ => (EditorIcons.CircleInfo_I, InfoC, "info"),
+    };
 
     private void RebuildFilteredList()
     {
@@ -349,70 +429,15 @@ public class ConsolePanel : DockPanel
             if (!string.IsNullOrEmpty(_searchText) &&
                 !msg.Message.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                 continue;
+
             if (_collapse || msg.Count == 1)
-            {
                 _filteredIndices.Add(i);
-            }
-            else if (msg.Count > 1)
-            {
+            else
                 for (int t = 0; t < msg.Count; t++)
-                {
                     _filteredIndices.Add(i);
-                }
-            }
         }
-    }
-
-    private static void GetToggleStyle(LogSeverity severity, out Color textColor, out Color bgColor)
-    {
-        switch (severity)
-        {
-            case LogSeverity.Warning:
-                textColor = Color.FromArgb(255, 230, 200, 80);
-                bgColor = Color.FromArgb(20, 230, 200, 80);//visualIndex % 2 == 0 ? Color.FromArgb(10, 230, 200, 80) : Color.Transparent;
-                break;
-            case LogSeverity.Error:
-            case LogSeverity.Exception:
-                textColor = Color.FromArgb(255, 230, 80, 80);
-                bgColor = Color.FromArgb(20, 230, 80, 80);//visualIndex % 2 == 0 ? Color.FromArgb(10, 230, 80, 80) : Color.Transparent;
-                break;
-            case LogSeverity.Success:
-                textColor = Color.FromArgb(255, 80, 200, 80);
-                bgColor = Color.Transparent;
-                break;
-            default:
-                textColor = EditorTheme.Ink400;
-                bgColor = Color.FromArgb(10, 255, 255, 255);
-                break;
-        }
-    }
-
-    private static void GetEntryStyle(LogSeverity severity, int visualIndex, out string icon, out Color textColor, out Color bgColor)
-    {
-        switch (severity)
-        {
-            case LogSeverity.Warning:
-                icon = EditorIcons.TriangleExclamation;
-                textColor = Color.FromArgb(255, 230, 200, 80);
-                bgColor = Color.FromArgb(20, 230, 200, 80);//visualIndex % 2 == 0 ? Color.FromArgb(10, 230, 200, 80) : Color.Transparent;
-                break;
-            case LogSeverity.Error:
-            case LogSeverity.Exception:
-                icon = EditorIcons.CircleExclamation;
-                textColor = Color.FromArgb(255, 230, 80, 80);
-                bgColor = Color.FromArgb(20, 230, 80, 80);//visualIndex % 2 == 0 ? Color.FromArgb(10, 230, 80, 80) : Color.Transparent;
-                break;
-            case LogSeverity.Success:
-                icon = EditorIcons.CircleCheck;
-                textColor = Color.FromArgb(255, 80, 200, 80);
-                bgColor = Color.FromArgb(25, 80, 200, 80);
-                break;
-            default:
-                icon = EditorIcons.CircleInfo;
-                textColor = EditorTheme.Ink400;
-                bgColor = visualIndex % 2 == 0 ? Color.FromArgb(10, 255, 255, 255) : Color.Transparent;
-                break;
-        }
+        if (_selectedFilteredIndex >= _filteredIndices.Count)
+            _selectedFilteredIndex = -1;
     }
 
     private bool ShouldShow(LogSeverity severity) => severity switch
@@ -420,13 +445,11 @@ public class ConsolePanel : DockPanel
         LogSeverity.Normal or LogSeverity.Success => _showInfo,
         LogSeverity.Warning => _showWarnings,
         LogSeverity.Error or LogSeverity.Exception => _showErrors,
-        _ => true
+        _ => true,
     };
 }
 
-/// <summary>
-/// Wrapper for a console log entry so it can be selected and shown in the inspector.
-/// </summary>
+/// <summary>Wrapper for a console log entry so it can be selected and shown in the inspector.</summary>
 public class ConsoleLogSelection
 {
     public string Message { get; }

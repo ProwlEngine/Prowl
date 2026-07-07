@@ -354,7 +354,7 @@ internal static class CurvePopover
             paper.Box($"{id}_graph")
                 .PositionType(PositionType.SelfDirected)
                 .Position(graphX, graphY).Size(graphW, GraphH)
-                .BackgroundColor(Color.FromArgb(255, 22, 22, 26))
+                .BackgroundColor(theme.Neutral.C300)
                 .Rounded(m.SmallRounding).Clip()
                 .StopEventPropagation()
                 .OnScroll(e =>
@@ -568,7 +568,7 @@ internal sealed class CurveEditorModal : IModal
             .BackgroundColor(theme.Neutral.C300)
             .BorderColor(theme.Ink.C200).BorderWidth(1)
             .Rounded(m.ContainerRounding)
-            .BoxShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
+            .DropShadow(0, 4, 24, 0, Color.FromArgb(100, 0, 0, 0))
             .Layer(layer)
             .ClampToScreen()
             .StopEventPropagation()

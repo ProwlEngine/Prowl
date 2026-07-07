@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.MeshFeatures;
 using Prowl.Runtime.Resources;
@@ -33,6 +35,8 @@ public class MeshAssetEditor : AssetImporterEditor
 
     private static readonly Dictionary<Guid, State> _subAssetStates = new();
 
+    private static UnitValue ST => UnitValue.StretchOne;
+
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         Draw(paper, id, entry, subEntry: null, asset as Mesh, _ownState);
@@ -54,69 +58,28 @@ public class MeshAssetEditor : AssetImporterEditor
         id = $"{id}_{parentEntry.Guid:N}";
         if (subEntry != null) id = $"{id}_{subEntry.Guid:N}";
 
-        Origami.Header(paper, $"{id}_h_info", subEntry != null ? $"Mesh: {subEntry.Name}" : "Mesh").Show();
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+        var m = Origami.Current.Metrics;
 
         if (mesh == null)
         {
-            Origami.Label(paper, $"{id}_noasset", "Mesh asset failed to load.").Show();
+            EditorGUI.SectionHeader(paper, $"{id}_h_info", "Mesh", first: true);
+            paper.Box($"{id}_noasset").Width(ST).Height(m.RowHeight)
+                .Margin(m.PaddingLarge, m.PaddingLarge, 0, 0).IsNotInteractable()
+                .Text("Mesh asset failed to load.", font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             return;
         }
 
-        DrawInfoPanel(paper, id, mesh);
-
-        Origami.Separator(paper, $"{id}_sep_feat").Show();
-        DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh);
-
-        Origami.Separator(paper, $"{id}_sep_preview").Show();
-        DrawPreview(paper, id, parentEntry, subEntry, mesh, state);
+        DrawPreview(paper, id, parentEntry, subEntry, mesh, state, m);
+        DrawStatChips(paper, id, mesh, font, m);
+        DrawDetails(paper, id, mesh, font, m);
+        DrawFeaturePanel(paper, id, parentEntry, subEntry, mesh, font, m);
     }
 
-    private static void DrawInfoPanel(Paper paper, string id, Mesh mesh)
+    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state, OrigamiMetrics m)
     {
-        int verts = mesh.Vertices?.Length ?? 0;
-        int tris = (mesh.Indices?.Length ?? 0) / 3;
-        var size = mesh.bounds.Max - mesh.bounds.Min;
-
-        Origami.Label(paper, $"{id}_verts", $"Vertices: {verts:N0}").Show();
-        Origami.Label(paper, $"{id}_tris", $"Triangles: {tris:N0}").Show();
-        Origami.Label(paper, $"{id}_sub", $"Sub-Meshes: {mesh.SubMeshCount}").Show();
-        Origami.Label(paper, $"{id}_bounds", $"Bounds: {size.X:F3}, {size.Y:F3}, {size.Z:F3}").Show();
-        Origami.Label(paper, $"{id}_fmt", $"Index Format: {mesh.IndexFormat}").Show();
-
-        var attrs = "";
-        if (mesh.HasNormals) attrs += "Normals ";
-        if (mesh.HasTangents) attrs += "Tangents ";
-        if (mesh.HasUV) attrs += "UV ";
-        if (mesh.HasUV2) attrs += "UV2 ";
-        if (mesh.HasColors || mesh.HasColors32) attrs += "Colors ";
-        if (mesh.HasBoneIndices) attrs += "Bones ";
-        if (attrs.Length == 0) attrs = "(positions only)";
-        Origami.Label(paper, $"{id}_attrs", $"Attributes: {attrs.TrimEnd()}").Show();
-    }
-
-    private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
-    {
-        Origami.Header(paper, $"{id}_h_feat", "Mesh Features").Show();
-
-        var sdf = FindSDF(parentEntry, subEntry, mesh);
-        if (sdf != null)
-            Origami.Label(paper, $"{id}_sdf_info",
-                $"SDF: {sdf.Resolution.X}^3  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}").Show();
-        else
-            Origami.Label(paper, $"{id}_sdf_info", "SDF: not generated  (toggle on the parent asset to enable)").Show();
-    }
-
-    private static MeshSDF? FindSDF(AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
-    {
-        string meshName = subEntry?.Name ?? mesh.Name ?? "Mesh";
-        var sdfGuid = AssetEntry.DeriveSubAssetGuid(parentEntry.Guid, $"{meshName}_sdf");
-        return Runtime.AssetDatabase.Get(sdfGuid) as MeshSDF;
-    }
-
-    private static void DrawPreview(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, State state)
-    {
-        Origami.Header(paper, $"{id}_h_preview", "Preview").Show();
-
         state.Preview ??= new PreviewRenderer(256, 256);
         state.Preview.ShowGrid = true;
 
@@ -126,7 +89,85 @@ public class MeshAssetEditor : AssetImporterEditor
             state.Preview.SetupForMesh(mesh);
         }
 
-        state.Preview.DrawPreview(paper, $"{id}_preview_rt", 256, 256);
+        // Preview hero card wraps the 3D orbit preview in themed chrome.
+        using (paper.Box($"{id}_previewCard").Width(ST).Height(200)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
+            .Rounded(8).Clip()
+            .BackgroundColor(EditorTheme.Neutral300)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .ChildLeft().ChildRight().ChildTop().ChildBottom().Enter())
+        {
+            state.Preview.DrawPreview(paper, $"{id}_preview_rt", 184, 184);
+        }
+    }
+
+    private static void DrawStatChips(Paper paper, string id, Mesh mesh, Prowl.Scribe.FontFile font, OrigamiMetrics m)
+    {
+        int verts = mesh.Vertices?.Length ?? 0;
+        int tris = (mesh.Indices?.Length ?? 0) / 3;
+        var size = mesh.bounds.Max - mesh.bounds.Min;
+
+        using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
+            .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
+        {
+            StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
+            StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);
+            StatChip(paper, $"{id}_st_sub", $"{mesh.SubMeshCount} Sub-Meshes", font);
+            StatChip(paper, $"{id}_st_bounds", $"{size.X:F2} x {size.Y:F2} x {size.Z:F2}", font);
+            paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
+        }
+    }
+
+    private static void DrawDetails(Paper paper, string id, Mesh mesh, Prowl.Scribe.FontFile font, OrigamiMetrics m)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h_details", "Details");
+
+        ValueRow(paper, id, "_idx", "Index Format", mesh.IndexFormat.ToString(), font, m);
+
+        var attrs = "";
+        if (mesh.HasNormals) attrs += "Normals ";
+        if (mesh.HasTangents) attrs += "Tangents ";
+        if (mesh.HasUV) attrs += "UV ";
+        if (mesh.HasUV2) attrs += "UV2 ";
+        if (mesh.HasColors || mesh.HasColors32) attrs += "Colors ";
+        if (mesh.HasBoneIndices) attrs += "Bones ";
+        if (attrs.Length == 0) attrs = "(positions only)";
+        ValueRow(paper, id, "_attrs", "Attributes", attrs.TrimEnd(), font, m);
+    }
+
+    private static void DrawFeaturePanel(Paper paper, string id, AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh, Prowl.Scribe.FontFile font, OrigamiMetrics m)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h_feat", "Mesh Features");
+
+        var sdf = FindSDF(parentEntry, subEntry, mesh);
+        string sdfText = sdf != null
+            ? $"{sdf.Resolution.X}^3  padding={sdf.Padding:F3}  maxDist={sdf.MaxDistance:F3}"
+            : "Not generated (toggle on the parent asset)";
+        ValueRow(paper, id, "_sdf", "SDF", sdfText, font, m);
+    }
+
+    private static void ValueRow(Paper paper, string id, string key, string label, string value, Prowl.Scribe.FontFile font, OrigamiMetrics m)
+    {
+        EditorGUI.Row(paper, $"{id}{key}", label, () =>
+            paper.Box($"{id}{key}_v").Width(ST).Height(m.RowHeight).IsNotInteractable()
+                .Text(value, font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate());
+    }
+
+    private static void StatChip(Paper paper, string cid, string text, Prowl.Scribe.FontFile font)
+    {
+        paper.Box(cid).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .IsNotInteractable()
+            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
+
+    private static MeshSDF? FindSDF(AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
+    {
+        string meshName = subEntry?.Name ?? mesh.Name ?? "Mesh";
+        var sdfGuid = AssetEntry.DeriveSubAssetGuid(parentEntry.Guid, $"{meshName}_sdf");
+        return Runtime.AssetDatabase.Get(sdfGuid) as MeshSDF;
     }
 
     /// <summary>

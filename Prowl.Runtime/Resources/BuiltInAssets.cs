@@ -104,6 +104,14 @@ public static class BuiltInAssets
             Register($"$Default:Texture/{tex}", tex.ToString(), typeof(Texture2D),
                 () => Texture2D.ParseDefault(tex));
         }
+
+        // Fonts: raw load, shared instance (fallback for UI text with no font assigned).
+        foreach (DefaultFont f in Enum.GetValues<DefaultFont>())
+        {
+            var font = f;
+            Register($"$Default:Font/{font}", font.ToString(), typeof(FontAsset),
+                () => FontAsset.ParseDefault(font));
+        }
     }
 
     private static void Register(string path, string name, Type type, Func<EngineObject> loader)
@@ -187,6 +195,9 @@ public static class BuiltInAssets
     public static Guid GuidFor(DefaultMaterial material) => DeterministicGuid($"$Default:Material/{material}");
 
     public static Guid GuidFor(DefaultTexture tex) => DeterministicGuid($"$Default:Texture/{tex}");
+
+    /// <summary>Deterministic GUID for a built-in default font.</summary>
+    public static Guid GuidFor(DefaultFont font) => DeterministicGuid($"$Default:Font/{font}");
 
     /// <summary>
     /// Get the deterministic GUID for a default model's first mesh.

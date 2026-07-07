@@ -33,7 +33,7 @@ public static class GameObjectInspector
             DrawPrefabHeader(paper, font, go);
 
         DrawHeader(paper, font, go);
-        Origami.Separator(paper, "gi_sep_header");
+        Divider(paper, "gi_sep_header");
         if (go.RectTransform != null)
         {
             DrawRectTransform(paper, font, go);
@@ -43,7 +43,7 @@ public static class GameObjectInspector
             DrawTransform(paper, font, go);
         }
 
-        Origami.Separator(paper, "gi_sep_transform");
+        Divider(paper, "gi_sep_transform");
         DrawComponents(paper, font, go);
 
         // Only show Add Component if not a prefab instance (structure is fixed)
@@ -55,6 +55,88 @@ public static class GameObjectInspector
             PrefabUtility.DetectGOOverrides(go);
 
         paper.Box("gi_bottom_pad").Height(20);
+    }
+
+    private static UnitValue ST => UnitValue.StretchOne;
+
+    // Sections (Transform + each component) remember their collapsed state here; absent = expanded.
+    private static readonly HashSet<string> _collapsedSections = new();
+    private static bool IsExpanded(string id) => !_collapsedSections.Contains(id);
+    private static void ToggleSection(string id) { if (!_collapsedSections.Add(id)) _collapsedSections.Remove(id); }
+
+    private static bool SectionHeader(Paper paper, Prowl.Scribe.FontFile font, string id,
+        string glyph, string title, Color titleColor, Action? trailing = null, Action? onDragStart = null)
+    {
+        bool expanded = IsExpanded(id);
+        var semi = EditorTheme.FontSemiBold ?? font;
+        using (paper.Row($"{id}_head").Height(30).Padding(10, 8, 0, 0).RowBetween(7).Enter())
+        {
+            var clickRow = paper.Row($"{id}_hclick").Width(UnitValue.Stretch()).Height(30).RowBetween(7)
+                .Hovered.BackgroundColor(Color.FromArgb(13, EditorTheme.Purple400)).End()
+                .OnClick(id, (i, _) => ToggleSection(i));
+            if (onDragStart != null)
+                clickRow.OnDragStart(0, (_, _) => onDragStart());
+
+            using (clickRow.Enter())
+            {
+                paper.Box($"{id}_chev").Width(11).Height(30).IsNotInteractable()
+                    .Text(expanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font)
+                    .TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box($"{id}_ico").Width(16).Height(30).IsNotInteractable()
+                    .Text(glyph, font).TextColor(EditorTheme.AccentText).FontSize(14f).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box($"{id}_title").Width(UnitValue.Stretch()).Height(30).IsNotInteractable()
+                    .Text(title, semi).TextColor(titleColor)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+            }
+            trailing?.Invoke();
+        }
+        return expanded;
+    }
+
+    // Small ghost icon button for section-header trailing actions.
+    private static void HeaderIconBtn(Paper paper, Prowl.Scribe.FontFile font, string id, string glyph, Action onClick)
+    {
+        paper.Box(id).Width(22).Height(22).Rounded(5).Margin(0, 0, ST, ST)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(glyph, font).TextColor(EditorTheme.Ink300).FontSize(12f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
+    private static void Divider(Paper paper, string id)
+        => paper.Box(id).Width(UnitValue.Stretch()).Height(1).Margin(0, 0, 6, 6)
+            .BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+
+    private static void SelDropdown(Paper paper, Prowl.Scribe.FontFile font, string id,
+        string? label, string value, string[] options, int current, Action<int> onSelect, bool chevron, UnitValue width)
+    {
+        using (paper.Row(id).Width(width).Height(26).Rounded(7).Padding(9, 9, 0, 0).RowBetween(6)
+            .BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
+            .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+            {
+                for (int i = 0; i < options.Length; i++)
+                {
+                    int idx = i;
+                    b.Item(options[idx], () => onSelect(idx), on: idx == current);
+                }
+            }))
+            .Enter())
+        {
+            if (!string.IsNullOrEmpty(label))
+                paper.Box($"{id}_lbl").Width(UnitValue.Auto).Height(26).IsNotInteractable()
+                    .Text(label, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+            paper.Box($"{id}_val").Width(UnitValue.Stretch()).Height(26).IsNotInteractable()
+                .Text(value, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
+                .Alignment(string.IsNullOrEmpty(label) ? TextAlignment.MiddleLeft : TextAlignment.MiddleRight);
+
+            if (chevron)
+                paper.Box($"{id}_chev").Width(10).Height(26).IsNotInteractable()
+                    .Text(EditorIcons.ChevronDown, font).TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+        }
     }
 
     // ================================================================
@@ -146,17 +228,17 @@ public static class GameObjectInspector
         var t0 = gos[0].Transform;
 
         bool posMixed = gos.Any(g => !g.Transform.LocalPosition.Equals(t0.LocalPosition));
-        InspectorRow.Draw(paper, "gim_pos", MixLabel(Loc.Get("inspector.position"), posMixed), () =>
+        EditorGUI.Row(paper, "gim_pos", MixLabel(Loc.Get("inspector.position"), posMixed), () =>
             Origami.Float3Field(paper, "gim_pos_vf", t0.LocalPosition, v =>
                 Undo.ApplyGameObjectChanges(gos, "Change Position", g => g.Transform.LocalPosition, (g, x) => g.Transform.LocalPosition = x, v, coalesce: true)).Show());
 
         bool rotMixed = gos.Any(g => !g.Transform.LocalEulerAngles.Equals(t0.LocalEulerAngles));
-        InspectorRow.Draw(paper, "gim_rot", MixLabel(Loc.Get("inspector.rotation"), rotMixed), () =>
+        EditorGUI.Row(paper, "gim_rot", MixLabel(Loc.Get("inspector.rotation"), rotMixed), () =>
             Origami.Float3Field(paper, "gim_rot_vf", t0.LocalEulerAngles, v =>
                 Undo.ApplyGameObjectChanges(gos, "Change Rotation", g => g.Transform.LocalEulerAngles, (g, x) => g.Transform.LocalEulerAngles = x, v, coalesce: true)).Show());
 
         bool scaleMixed = gos.Any(g => !g.Transform.LocalScale.Equals(t0.LocalScale));
-        InspectorRow.Draw(paper, "gim_scale", MixLabel(Loc.Get("inspector.scale"), scaleMixed), () =>
+        EditorGUI.Row(paper, "gim_scale", MixLabel(Loc.Get("inspector.scale"), scaleMixed), () =>
             Origami.Float3Field(paper, "gim_scale_vf", t0.LocalScale, v =>
                 Undo.ApplyGameObjectChanges(gos, "Change Scale", g => g.Transform.LocalScale, (g, x) => g.Transform.LocalScale = x, v, coalesce: true)).Show());
     }
@@ -238,13 +320,12 @@ public static class GameObjectInspector
 
         // Enabled toggle + Name + Static
         using (paper.Row("gi_header")
-            .Height(EditorTheme.RowHeight)
-            .Margin(0, 6)
-            .RowBetween(6)
+            .Height(26)
+            .Margin(0, 0, 8, 4)
+            .Padding(11, 11, 0, 0)
+            .RowBetween(8)
             .Enter())
         {
-            paper.Box("gi_icon").Margin(6, 6, 0, 6).FontSize(EditorTheme.FontSize * 1.5f).Width(UnitValue.Auto).Text(EditorIcons.Cube, font);
-
             Origami.Checkbox(paper, "gi_enabled", go.Enabled,
                 v => { Undo.RecordGameObjectChange(go, "Toggle Enabled", go.Enabled, v, (g, x) => g.Enabled = x); go.Enabled = v; })
                 .NoLabel().Show();
@@ -257,12 +338,15 @@ public static class GameObjectInspector
                         go.Name = v;
                     }
                 })
-                .Width(UnitValue.Stretch())
+                .Width(UnitValue.Stretch()).Height(26)
                 .Show();
 
-            Origami.Checkbox(paper, "gi_static", go.IsStatic,
-                v =>
+            SelDropdown(paper, font, "gi_static", null,
+                go.IsStatic ? "Static" : "Dynamic",
+                new[] { "Dynamic", "Static" }, go.IsStatic ? 1 : 0,
+                idx =>
                 {
+                    bool v = idx == 1;
                     Undo.RecordGameObjectChange(go, "Toggle Static", go.IsStatic, v, (g, x) => g.IsStatic = x);
                     go.IsStatic = v;
 
@@ -271,62 +355,50 @@ public static class GameObjectInspector
                         Origami.Confirm("Apply to Children?",
                             $"Also set Static = {v} on all child objects of \"{go.Name}\"?",
                             () => ApplyStaticToChildren(go, v));
-                })
-                .LabelRight(Loc.Get("inspector.static")).Show();
+                }, chevron: true, width: UnitValue.Pixels(90));
         }
 
-        // Tag + Layer row (dropdowns)
+        // Tag + Layer row (label-inside sel dropdowns)
         using (paper.Row("gi_tag_layer")
-            .Height(22)
-            .RowBetween(6)
+            .Height(26)
+            .Margin(0, 0, 4, 0)
+            .Padding(11, 11, 0, 0)
+            .RowBetween(7)
             .Enter())
         {
-            // Tag dropdown
             var tagNames = TagLayerManager.tags.ToArray();
             int tagIdx = TagLayerManager.tags.IndexOf(go.Tag);
             if (tagIdx < 0) tagIdx = 0;
-
-            DrawInlineLabeled(paper, "gi_tag_row", Loc.Get("inspector.tag"), font, () =>
-                Origami.Dropdown(paper, "gi_tag", tagIdx,
-                    v =>
+            SelDropdown(paper, font, "gi_tag", Loc.Get("inspector.tag"), go.Tag, tagNames, tagIdx,
+                v =>
+                {
+                    if (v >= 0 && v < tagNames.Length)
                     {
-                        if (v >= 0 && v < tagNames.Length)
-                        {
-                            var newTag = tagNames[v];
-                            Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x);
-                            go.Tag = newTag;
-                        }
-                    }, tagNames)
-                    .Show());
+                        var newTag = tagNames[v];
+                        Undo.RecordGameObjectChange(go, "Change Tag", go.Tag, newTag, (g, x) => g.Tag = x);
+                        go.Tag = newTag;
+                    }
+                }, chevron: false, width: UnitValue.Stretch());
 
-            // Layer dropdown (filter out empty entries)
             var allLayers = TagLayerManager.layers;
             var layerNames = new List<string>();
             var layerIndices = new List<int>();
             for (int i = 0; i < allLayers.Length; i++)
-            {
-                if (!string.IsNullOrEmpty(allLayers[i]))
+                if (!string.IsNullOrEmpty(allLayers[i])) { layerNames.Add(allLayers[i]); layerIndices.Add(i); }
+
+            int selLayer = layerIndices.IndexOf(go.LayerIndex);
+            if (selLayer < 0) selLayer = 0;
+            string layerVal = selLayer >= 0 && selLayer < layerNames.Count ? layerNames[selLayer] : "";
+            SelDropdown(paper, font, "gi_layer", Loc.Get("inspector.layer"), layerVal, layerNames.ToArray(), selLayer,
+                v =>
                 {
-                    layerNames.Add(allLayers[i]);
-                    layerIndices.Add(i);
-                }
-            }
-
-            int selectedLayerIdx = layerIndices.IndexOf(go.LayerIndex);
-            if (selectedLayerIdx < 0) selectedLayerIdx = 0;
-
-            DrawInlineLabeled(paper, "gi_layer_row", Loc.Get("inspector.layer"), font, () =>
-                Origami.Dropdown(paper, "gi_layer", selectedLayerIdx,
-                    v =>
+                    if (v >= 0 && v < layerIndices.Count)
                     {
-                        if (v >= 0 && v < layerIndices.Count)
-                        {
-                            var newIdx = layerIndices[v];
-                            Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
-                            go.LayerIndex = newIdx;
-                        }
-                    }, layerNames.ToArray())
-                    .Show());
+                        var newIdx = layerIndices[v];
+                        Undo.RecordGameObjectChange(go, "Change Layer", go.LayerIndex, newIdx, (g, x) => g.LayerIndex = x);
+                        go.LayerIndex = newIdx;
+                    }
+                }, chevron: false, width: UnitValue.Stretch());
         }
     }
 
@@ -373,25 +445,43 @@ public static class GameObjectInspector
         var t = go.Transform;
         var goId = go.Identifier;
 
-        paper.Box("gi_transform_header").Height(22).ChildLeft(8)
-            .Text($"{EditorIcons.ArrowsUpDownLeftRight}  {Loc.Get("inspector.transform")}", font)
-            .TextColor(EditorTheme.Ink500)
-            .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+        bool expanded = SectionHeader(paper, font, "gi_transform", EditorIcons.ArrowsUpDownLeftRight,
+            Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
+            {
+                HeaderIconBtn(paper, font, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
+                HeaderIconBtn(paper, font, "gi_tf_dots", EditorIcons.EllipsisVertical, () =>
+                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                        b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight)));
+            });
+        if (!expanded) return;
 
         // Position
         var pos = t.LocalPosition;
-        InspectorRow.Draw(paper, "gi_pos", Loc.Get("inspector.position"), () =>
+        EditorGUI.Row(paper, "gi_pos", Loc.Get("inspector.position"), () =>
             Origami.Float3Field(paper, "gi_pos_vf", pos, v => { Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, v, (g, x) => g.Transform.LocalPosition = x, coalesce: true); t.LocalPosition = v; }).Show());
 
         // Rotation (as euler)
         var euler = t.LocalEulerAngles;
-        InspectorRow.Draw(paper, "gi_rot", Loc.Get("inspector.rotation"), () =>
+        EditorGUI.Row(paper, "gi_rot", Loc.Get("inspector.rotation"), () =>
             Origami.Float3Field(paper, "gi_rot_vf", euler, v => { Undo.RecordGameObjectChange(go, "Change Rotation", t.LocalEulerAngles, v, (g, x) => g.Transform.LocalEulerAngles = x, coalesce: true); t.LocalEulerAngles = v; }).Show());
 
         // Scale
         var scale = t.LocalScale;
-        InspectorRow.Draw(paper, "gi_scale", Loc.Get("inspector.scale"), () =>
+        EditorGUI.Row(paper, "gi_scale", Loc.Get("inspector.scale"), () =>
             Origami.Float3Field(paper, "gi_scale_vf", scale, v => { Undo.RecordGameObjectChange(go, "Change Scale", t.LocalScale, v, (g, x) => g.Transform.LocalScale = x, coalesce: true); t.LocalScale = v; }).Show());
+    }
+
+    private static void ResetTransform(GameObject go)
+    {
+        var t = go.Transform;
+        var goId = go.Identifier;
+        var (oldP, oldR, oldS) = (t.LocalPosition, t.LocalEulerAngles, t.LocalScale);
+        Undo.RegisterAction("Reset Transform",
+            undo: () => { var g = Undo.FindGO(goId); if (g != null) { g.Transform.LocalPosition = oldP; g.Transform.LocalEulerAngles = oldR; g.Transform.LocalScale = oldS; } },
+            redo: () => { var g = Undo.FindGO(goId); if (g != null) { g.Transform.LocalPosition = Float3.Zero; g.Transform.LocalEulerAngles = Float3.Zero; g.Transform.LocalScale = Float3.One; } });
+        t.LocalPosition = Float3.Zero;
+        t.LocalEulerAngles = Float3.Zero;
+        t.LocalScale = Float3.One;
     }
 
     private static readonly (Float2 min, Float2 max)[,] AnchorPresets = new (Float2, Float2)[4, 4]
@@ -433,38 +523,28 @@ public static class GameObjectInspector
         }
 
 
-        // Anchors (Min/Max) — exposed for fine-grained tweaking outside the preset grid.
-        InspectorRow.Draw(paper, "gi_rt_amin", "Anchor Min", () =>
+        // Anchors (Min/Max) exposed for fine-grained tweaking outside the preset grid.
+        EditorGUI.Row(paper, "gi_rt_amin", "Anchor Min", () =>
         {
             Origami.Float2Field(paper, "gi_rt_amin_vf", rt.AnchorMin, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Anchor Min", rt.AnchorMin, v,
-                    (g, x) =>
-                    {
-                        var r = g.RectTransform;
-                        if (r != null) r.AnchorMin = x;
-                    }, coalesce: true);
-                rt.AnchorMin = v;
+                Undo.Snapshot(rt);
+                SetAnchorsPreservingRect(rt, v, rt.AnchorMax);
             }).Show();
         });
 
-        InspectorRow.Draw(paper, "gi_rt_amax", "Anchor Max", () =>
+        EditorGUI.Row(paper, "gi_rt_amax", "Anchor Max", () =>
         {
             Origami.Float2Field(paper, "gi_rt_amax_vf", rt.AnchorMax, v =>
             {
-                Undo.RecordGameObjectChange(go, "Change Anchor Max", rt.AnchorMax, v,
-                    (g, x) =>
-                    {
-                        var r = g.RectTransform;
-                        if (r != null) r.AnchorMax = x;
-                    }, coalesce: true);
-                rt.AnchorMax = v;
+                Undo.Snapshot(rt);
+                SetAnchorsPreservingRect(rt, rt.AnchorMin, v);
             }).Show();
         });
 
         // Rotation (as euler) and scale come from the underlying Transform.
         var euler = t.LocalEulerAngles;
-        InspectorRow.Draw(paper, "gi_rt_rot", "Rotation", () =>
+        EditorGUI.Row(paper, "gi_rt_rot", "Rotation", () =>
         {
             Origami.Float3Field(paper, "gi_rt_rot_vf", euler, v =>
             {
@@ -480,7 +560,7 @@ public static class GameObjectInspector
         });
 
         var scale = t.LocalScale;
-        InspectorRow.Draw(paper, "gi_rt_scale", "Scale", () =>
+        EditorGUI.Row(paper, "gi_rt_scale", "Scale", () =>
         {
             Origami.Float3Field(paper, "gi_rt_scale_vf", scale, v =>
             {
@@ -594,7 +674,7 @@ public static class GameObjectInspector
 
                 if (stretchX && !stretchY)
                 {
-                    // Horizontal bar at a fixed Y — flip the +Y-up anchor Y for Y-down PaperUI.
+                    // Horizontal bar at a fixed Y flip the +Y-up anchor Y for Y-down PaperUI.
                     bx = 2f;
                     by = 2f + (1f - (float)minPreset.Y) * (inner - BarThickness);
                     bw = inner;
@@ -609,7 +689,7 @@ public static class GameObjectInspector
                 }
                 else
                 {
-                    // Stretch in both axes — fill the cell.
+                    // Stretch in both axes fill the cell.
                     bx = 2f;
                     by = 2f;
                     bw = inner;
@@ -633,7 +713,7 @@ public static class GameObjectInspector
     /// </summary>
     private static void DrawPositionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt, Transform t)
     {
-        InspectorRow.Draw(paper, "gi_rt_pos", "Position", () =>
+        EditorGUI.Row(paper, "gi_rt_pos", "Position", () =>
         {
             // X/Y drive RectTransform.AnchoredPosition; Z drives Transform.LocalPosition (RectTransform has no Z).
             var value = new Float3(rt.AnchoredPosition.X, rt.AnchoredPosition.Y, t.LocalPosition.Z);
@@ -652,14 +732,14 @@ public static class GameObjectInspector
                     t.LocalPosition = newLoc;
                 }
             }).Show();
-        }, EditorTheme.LabelWidth/2f);
+        }, labelWidth: EditorTheme.LabelWidth/2f);
 
     }
 
     /// <summary>Width / Height row driven by RectTransform.SizeDelta.</summary>
     private static void DrawSizeRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
     {
-        InspectorRow.Draw(paper, "gi_rt_size", "Size", () =>
+        EditorGUI.Row(paper, "gi_rt_size", "Size", () =>
         {
             Origami.Float2Field(paper, "gi_rt_size_vf", rt.SizeDelta,v =>
             {
@@ -667,13 +747,13 @@ public static class GameObjectInspector
                     (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
                 rt.SizeDelta = v;
             }).Show();
-        }, EditorTheme.LabelWidth/2f);
+        }, labelWidth: EditorTheme.LabelWidth/2f);
     }
 
     private static void DrawPivotRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
     {
 
-        InspectorRow.Draw(paper, "gi_rt_pivot", "Pivot", () =>
+        EditorGUI.Row(paper, "gi_rt_pivot", "Pivot", () =>
         {
             Origami.Float2Field(paper, "gi_rt_pivot_vf", rt.Pivot,v =>
             {
@@ -681,7 +761,7 @@ public static class GameObjectInspector
                     (g, x) => { var r = g.RectTransform; if (r != null) r.Pivot = x; }, coalesce: true);
                 rt.Pivot = v;
             }).Show();
-        }, EditorTheme.LabelWidth/2f);
+        }, labelWidth: EditorTheme.LabelWidth/2f);
 
     }
 
@@ -703,92 +783,64 @@ public static class GameObjectInspector
             string compName = comp.GetType().Name;
             string icon = GetComponentIcon(comp);
 
-            // Component foldout header draggable for component references
-            using (paper.Row($"{compId}_header")
-                .Height(24)
-                .BackgroundColor(EditorTheme.Neutral300)
-                .Rounded(3)
-                .ChildLeft(4)
-                .RowBetween(4)
-                .OnDragStart((go, comp), (cap, _) =>
+            int capturedI = i;
+            bool expanded = SectionHeader(paper, font, compId, icon, compName,
+                comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300,
+                trailing: () =>
                 {
-                    DragDrop.StartDrag(new ComponentDragPayload(cap.Item1, cap.Item2));
-                })
-                .Enter())
-            {
-                // Enabled toggle
-                Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
-                    v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
-                    .NoLabel().Show();
-
-                // Icon + Name (click to fold)
-                paper.Box($"{compId}_label")
-                    .Height(24)
-                    .Text($"{icon}  {compName}", font)
-                    .TextColor(comp.Enabled ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
-
-                // Spacer
-                paper.Box($"{compId}_spacer");
-
-                // Context menu button
-                using (paper.Box($"{compId}_gear")
-                    .Width(20).Height(24).Rounded(3)
-                    .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                    .Text(EditorIcons.EllipsisVertical, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(i, (ci, _) =>
-                    {
+                    // Wrap the checkbox so its short toggle row centers vertically in the header.
+                    using (paper.Box($"{compId}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto)
+                        .Margin(0, 0, ST, ST).Enter())
+                        Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
+                            v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
+                            .NoLabel().Show();
+                    HeaderIconBtn(paper, font, $"{compId}_gear", EditorIcons.EllipsisVertical, () =>
                         Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                            BuildComponentContextMenu(b, go, comp, ci));
-                    })
-                    .Enter())
+                            BuildComponentContextMenu(b, go, comp, capturedI)));
+                },
+                onDragStart: () => DragDrop.StartDrag(new ComponentDragPayload(go, comp)));
+
+            if (expanded)
+            {
+                // Set overridden field names for PropertyGrid highlighting
+                if (go.IsPrefabInstance)
                 {
+                    string goPath = PrefabUtility.BuildGOPath(go);
+                    var allComps = go.GetComponents<MonoBehaviour>().ToList();
+                    int compIdx = allComps.IndexOf(comp);
+                    string pathPrefix = string.IsNullOrEmpty(goPath)
+                        ? $"c{compIdx}."
+                        : $"{goPath}.c{compIdx}.";
+
+                    var overridden = new HashSet<string>();
+                    // Overrides are stored on the instance root with root-relative paths.
+                    var overrideHost = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+                    foreach (var ov in overrideHost.PrefabOverrides)
+                    {
+                        if (ov.Path.StartsWith(pathPrefix))
+                            overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
+                    }
+                    PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
                 }
-            }
 
-            // Set overridden field names for PropertyGrid highlighting
-            if (go.IsPrefabInstance)
-            {
-                string goPath = PrefabUtility.BuildGOPath(go);
-                var allComps = go.GetComponents<MonoBehaviour>().ToList();
-                int compIdx = allComps.IndexOf(comp);
-                string pathPrefix = string.IsNullOrEmpty(goPath)
-                    ? $"c{compIdx}."
-                    : $"{goPath}.c{compIdx}.";
+                // Component body use custom editor or default PropertyGrid
+                var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
+                if (customEditor != null)
+                    customEditor.OnGUI(paper, compId, comp);
+                else
+                    PropertyGridUtils.Draw(paper, compId, comp);
 
-                var overridden = new HashSet<string>();
-                // Overrides are stored on the instance root with root-relative paths.
-                var overrideHost = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
-                foreach (var ov in overrideHost.PrefabOverrides)
-                {
-                    if (ov.Path.StartsWith(pathPrefix))
-                        overridden.Add(ov.Path[pathPrefix.Length..].Split('.')[0]);
-                }
-                PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
-            }
+                PropertyGridUtils.OverriddenFields = null;
 
-            // Component body use custom editor or default PropertyGrid
-            var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
-            if (customEditor != null)
-            {
-                customEditor.OnGUI(paper, compId, comp);
+                // Draw [Button] attributed methods
+                DrawButtonMethods(paper, $"{compId}_btns", comp);
             }
-            else
-            {
-                PropertyGridUtils.Draw(paper, compId, comp);
-            }
-
-            PropertyGridUtils.OverriddenFields = null;
 
             // Auto-detect overrides by comparing against prefab source (index-based)
             if (go.IsPrefabInstance)
                 PrefabUtility.DetectComponentOverrides(go, comp);
 
-            // Draw [Button] attributed methods
-            DrawButtonMethods(paper, $"{compId}_btns", comp);
-
-            Origami.Separator(paper, $"{compId}_sep").Show();
+            Divider(paper, $"{compId}_sep");
         }
     }
 
@@ -986,9 +1038,9 @@ public static class GameObjectInspector
             : isNested ? Loc.Get("inspector.nested_prefab", new { name = prefabName })
             : Loc.Get("inspector.prefab", new { name = prefabName });
 
-        var barColor = isMissing ? Color.FromArgb(40, 220, 80, 80) : Color.FromArgb(40, EditorTheme.Purple400);
-        var borderColor = isMissing ? Color.FromArgb(255, 220, 80, 80) : EditorTheme.Purple300;
-        var textColor = isMissing ? Color.FromArgb(255, 220, 80, 80) : EditorTheme.Purple400;
+        var barColor = isMissing ? Color.FromArgb(40, EditorTheme.Red300) : Color.FromArgb(40, EditorTheme.Purple400);
+        var borderColor = isMissing ? EditorTheme.Red300 : EditorTheme.Purple300;
+        var textColor = isMissing ? EditorTheme.Red300 : EditorTheme.Purple400;
 
         // Entire prefab section in a purple-tinted container
         using (paper.Column("gi_prefab_section")
@@ -1008,7 +1060,7 @@ public static class GameObjectInspector
                     .Width(UnitValue.Stretch()).Height(24)
                     .Text($"{EditorIcons.Cubes}  {label}", font)
                     .TextColor(textColor)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 if (!isMissing)
                 {
@@ -1116,5 +1168,68 @@ public static class GameObjectInspector
             result.Append(name[i]);
         }
         return result.ToString();
+    }
+
+    // ================================================================
+    //  Anchor editing that preserves screen position
+    // ================================================================
+
+    /// <summary>
+    /// Change a RectTransform's anchors while keeping its on-screen rect fixed: the anchor reference
+    /// shifts and <see cref="RectTransform.AnchoredPosition"/> / <see cref="RectTransform.SizeDelta"/>
+    /// are back-solved against the parent rect so the element does not move (Unity-style).
+    /// </summary>
+    private static void SetAnchorsPreservingRect(RectTransform rt, Float2 newMin, Float2 newMax)
+    {
+        Rect world = rt.ComputedRect;
+        Rect parent = GetParentRect(rt);
+
+        rt.AnchorMin = newMin;
+        rt.AnchorMax = newMax;
+
+        // Without a laid-out rect (parent or self) there is nothing to preserve; just apply anchors.
+        if (parent.Size.X <= 0 || parent.Size.Y <= 0 || world.Size.X <= 0 || world.Size.Y <= 0)
+            return;
+
+        SolveAxis(newMin.X, newMax.X, parent.Min.X + newMin.X * parent.Size.X, parent.Min.X + newMax.X * parent.Size.X,
+            world.Min.X, world.Max.X, rt.Pivot.X, out float sizeX, out float posX);
+        SolveAxis(newMin.Y, newMax.Y, parent.Min.Y + newMin.Y * parent.Size.Y, parent.Min.Y + newMax.Y * parent.Size.Y,
+            world.Min.Y, world.Max.Y, rt.Pivot.Y, out float sizeY, out float posY);
+
+        rt.SizeDelta = new Float2(sizeX, sizeY);
+        rt.AnchoredPosition = new Float2(posX, posY);
+    }
+
+    // Inverse of RectTransform.ComputeRect for one axis: given the target world span [rMin,rMax] and
+    // the new anchors (in normalized + pixel form), solve the SizeDelta/AnchoredPosition that reproduce it.
+    private static void SolveAxis(float aMin, float aMax, float aMinPx, float aMaxPx,
+        float rMin, float rMax, float pivot, out float size, out float pos)
+    {
+        float rSize = rMax - rMin;
+        if (Math.Abs(aMin - aMax) < 1e-6f)
+        {
+            // Fixed: keep the size; place the pivot so the rect stays put.
+            size = rSize;
+            pos = rMin - aMinPx + pivot * rSize;
+        }
+        else
+        {
+            // Stretch: SizeDelta is padding vs the anchor span, AnchoredPosition recenters it.
+            size = (aMaxPx - aMinPx) - rSize;
+            pos = ((rMin + rMax) - (aMinPx + aMaxPx)) * 0.5f;
+        }
+    }
+
+    // The rect this element is laid out inside: the parent RectTransform's computed rect, or the
+    // canvas root rect when the element is a direct child of the canvas.
+    private static Rect GetParentRect(RectTransform rt)
+    {
+        var canvas = rt.GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
+        var parentGo = rt.GameObject.Parent;
+        var parentRt = parentGo?.RectTransform;
+        if (parentRt != null && parentGo != canvas?.GameObject &&
+            parentRt.ComputedRect.Size.X > 0 && parentRt.ComputedRect.Size.Y > 0)
+            return parentRt.ComputedRect;
+        return canvas?.RootRect ?? default;
     }
 }
