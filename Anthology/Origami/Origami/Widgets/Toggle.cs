@@ -406,12 +406,6 @@ public sealed class ToggleBuilder
         Color offBg   = Color.FromArgb(26, 255, 255, 255); // light translucent pill (prototype .tg)
         Color onBg    = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color trackBg = OrigamiRamp.LerpColor(offBg, onBg, t);
-        // Default/Primary paint the on-track as a Primary -> Secondary(Blue) gradient; semantic and
-        // Subtle variants keep the single-colour fill.
-        bool onGradient = _variant == OrigamiVariant.Default || _variant == OrigamiVariant.Primary;
-        Color onLeft    = onGradient ? _theme.Primary.C500 : onBg;
-        Color onRight   = onGradient ? _theme.Blue.C500    : onBg;
-        bool disabledCap = _disabled;
         Color borderCol  = _theme.Neutral.C200;
         Color knobFill   = _theme.Ink.C600;
         Color textOnFg   = _theme.Ink.C600;
@@ -458,25 +452,8 @@ public sealed class ToggleBuilder
                     canvas.RestoreState();
                 }
 
-                // Track — single hardware-accelerated rounded rect. Default/Primary fade off -> a
-                // Primary -> Secondary gradient; other variants stay on the single lerped colour.
-                if (onGradient)
-                {
-                    Color left  = OrigamiRamp.LerpColor(offBg, onLeft, t);
-                    Color right = OrigamiRamp.LerpColor(offBg, onRight, t);
-                    if (disabledCap)
-                    {
-                        left  = Color.FromArgb((int)(left.A * 0.4f), left.R, left.G, left.B);
-                        right = Color.FromArgb((int)(right.A * 0.4f), right.R, right.G, right.B);
-                    }
-                    canvas.SetLinearBrush(x, y, x + w, y, left, right);
-                    canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, Color.White);
-                    canvas.ClearBrush();
-                }
-                else
-                {
-                    canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
-                }
+                // Track — single hardware-accelerated rounded rect.
+                canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
 
                 // Off-state hairline border (fades out as it turns on).
                 if (t < 0.98f)

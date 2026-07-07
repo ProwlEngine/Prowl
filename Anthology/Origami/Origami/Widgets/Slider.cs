@@ -434,21 +434,6 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             thumbCol = ink.C300;
         }
 
-        // Default/Primary paint the filled portion as a Primary -> Secondary(Blue) gradient; other
-        // variants (Subtle / semantic) keep the solid single-ramp fill.
-        bool fillGradient = _variant == OrigamiVariant.Default || _variant == OrigamiVariant.Primary;
-        Color fillLeft = fill, fillRight = fill;
-        if (fillGradient)
-        {
-            fillLeft  = _theme.Primary.C500;
-            fillRight = _theme.Blue.C500;
-            if (_disabled)
-            {
-                fillLeft  = OrigamiRamp.LerpColor(fillLeft,  _theme.Neutral.C400, 0.6f);
-                fillRight = OrigamiRamp.LerpColor(fillRight, _theme.Neutral.C400, 0.6f);
-            }
-        }
-
         int tickCount = _tickCount;
         float thumbBaseR = _thumbDiameter * 0.5f;
         float trackThicknessLocal = _trackThickness;
@@ -550,32 +535,14 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                     {
                         float fx = tx + tw * fillStartFrac;
                         float fw = tw * (fillEndFrac - fillStartFrac);
-                        if (fillGradient)
-                        {
-                            canvas.SetLinearBrush(fx, ty, fx + fw, ty, fillLeft, fillRight);
-                            canvas.RoundedRectFilled(fx, ty, fw, th, trackR, Color.White);
-                            canvas.ClearBrush();
-                        }
-                        else
-                        {
-                            canvas.RoundedRectFilled(fx, ty, fw, th, trackR, fill);
-                        }
+                        canvas.RoundedRectFilled(fx, ty, fw, th, trackR, fill);
                     }
                     else
                     {
                         // Inverted fill — origin at bottom.
                         float fy = ty + th * (1f - fillEndFrac);
                         float fh = th * (fillEndFrac - fillStartFrac);
-                        if (fillGradient)
-                        {
-                            canvas.SetLinearBrush(tx, fy, tx, fy + fh, fillLeft, fillRight);
-                            canvas.RoundedRectFilled(tx, fy, tw, fh, trackR, Color.White);
-                            canvas.ClearBrush();
-                        }
-                        else
-                        {
-                            canvas.RoundedRectFilled(tx, fy, tw, fh, trackR, fill);
-                        }
+                        canvas.RoundedRectFilled(tx, fy, tw, fh, trackR, fill);
                     }
                 }
 

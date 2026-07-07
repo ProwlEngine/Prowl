@@ -149,11 +149,9 @@ public sealed class ProgressBarBuilder
         var ink = _theme.Ink;
         var ramp = _variant == OrigamiVariant.Subtle ? ink : _theme.Get(_variant);
 
-        // Nebula gradient: the Default/Primary bar runs Primary -> Secondary(Blue); semantic variants
-        // keep their own single-ramp C500 -> C600. An explicit FillColor override wins over both.
-        bool isPrimaryAccent = _variant == OrigamiVariant.Default || _variant == OrigamiVariant.Primary;
-        Color fillStart = _fillColorOverride ?? (isPrimaryAccent ? _theme.Primary.C500 : ramp.C500);
-        Color fillEnd = _fillColorOverride ?? (isPrimaryAccent ? _theme.Blue.C500 : ramp.C600);
+        // Nebula gradient: acc (#A855F7 / C500) -> acc-bright (#BD6BFF / C600).
+        Color fillStart = _fillColorOverride ?? ramp.C500;
+        Color fillEnd = _fillColorOverride ?? ramp.C600;
         Color accent = fillStart;
 
         bool hasLabel = !string.IsNullOrEmpty(_label) && font != null;
