@@ -32,7 +32,6 @@ public class PreferencesPanel : DockPanel
     private string _themeCat = "presets";
 
     private static UnitValue ST => UnitValue.StretchOne;
-    private static UnitValue STV => UnitValue.Stretch();
     // Theme-driven spacing (between elements) / padding (internal), so the whole panel scales with the theme.
     private static float SP => EditorTheme.Spacing;
     private static float PAD => EditorTheme.Padding;
@@ -174,7 +173,7 @@ public class PreferencesPanel : DockPanel
                     // Presets are short, so they get no scroll and are centered vertically in the area.
                     using (paper.Column("pref_theme_ctrls_pr").Width(ctrlW).Height(bodyH).Padding(22, 22, 0, 0).Enter())
                     using (paper.Column("pref_theme_pr_center").Width(ST).Height(UnitValue.Auto)
-                        .Margin(0, 0, STV, STV).Enter())
+                        .Margin(0, 0, ST, ST).Enter())
                         DrawThemePresets(paper, font, s, theme);
                 }
                 else
@@ -212,7 +211,7 @@ public class PreferencesPanel : DockPanel
     private void DrawThemeRail(Paper paper, Scribe.FontFile font, float w, float h)
     {
         using (paper.Column("pref_theme_rail").Width(w).Height(h).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column("pref_theme_rail_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, STV, STV)
+        using (paper.Column("pref_theme_rail_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST)
             .Padding(8, 8, 10, 10).ColBetween(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (id, label, icon) in ThemeCats)
@@ -645,7 +644,7 @@ public class PreferencesPanel : DockPanel
 
         using (paper.Column("pref_pv").Width(w).Height(ST).Padding(PAD * 2, PAD * 2, PAD * 2, PAD * 2)
             .BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column("pref_pv_center").Width(ST).Height(UnitValue.Auto).Margin(0, 0, STV, STV).ColBetween(SP * 2).Enter())
+        using (paper.Column("pref_pv_center").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST).ColBetween(SP * 2).Enter())
         {
             using (paper.Column("pref_pv_card").Width(ST).Height(cardH).Rounded(radius + 2).Clip()
                 .DropShadow(0, 10, 26, -6, Color.FromArgb(150, 0, 0, 0))
@@ -759,74 +758,6 @@ public class PreferencesPanel : DockPanel
                 .Text(value, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleRight);
         }
-    }
-
-    private void DrawRamp(Paper paper, EditorSettings s, string name, ColorRamp ramp, string[] stopNames)
-    {
-        Origami.Foldout(paper, $"pref_ramp_{name}", name).Body(() =>
-        {
-            var primaryColor = HexToVColor(ramp.Primary);
-            EditorGUI.SettingsRow(paper, $"pref_ramp_{name}_primary", $"{name} {Loc.Get("pref.primary")}", () =>
-                Origami.ColorField(paper, $"pref_ramp_{name}_primary_cf", primaryColor, v =>
-                {
-                    ramp.Primary = VColorToHex(v);
-                    s.ApplyTheme();
-                }).Show());
-
-            EditorGUI.SettingsToggle(paper, $"pref_ramp_{name}_override", Loc.Get("pref.override_stops"), ramp.OverrideAll, v =>
-            {
-                ramp.OverrideAll = v;
-                if (v && ramp.Overrides != null)
-                {
-                    for (int i = 0; i < ramp.StopCount; i++)
-                        ramp.Overrides[i] = ColorRamp.ColorToHex(ramp.GetStop(i));
-                }
-                s.ApplyTheme();
-            });
-
-            if (ramp.OverrideAll && ramp.Overrides != null)
-            {
-                for (int i = 0; i < ramp.StopCount; i++)
-                {
-                    int idx = i;
-                    string label = i < stopNames.Length ? stopNames[i] : $"Stop {i}";
-                    var stopColor = HexToVColor(ramp.Overrides[i]);
-                    EditorGUI.SettingsRow(paper, $"pref_ramp_{name}_{i}", label, () =>
-                        Origami.ColorField(paper, $"pref_ramp_{name}_{idx}_cf", stopColor, v =>
-                        {
-                            ramp.Overrides![idx] = VColorToHex(v);
-                            s.ApplyTheme();
-                        }).Show());
-                }
-            }
-        });
-    }
-
-    private void PrefTextField(Paper paper, EditorSettings s, string label, string value, Action<string> set)
-    {
-        string baseId = $"pref_ft_{label.Replace(" ", "_")}";
-        EditorGUI.SettingsRow(paper, baseId, label, () =>
-            Origami.TextField(paper, $"{baseId}_v", value, v =>
-            {
-                set(v);
-                //s.ApplyTheme();
-                s.Save();
-            }).Show());
-    }
-
-    private void SzSlider(Paper paper, EditorSettings s, string label, float value, float min, float max, Action<float> set, bool applyOnSlide = true)
-    {
-        string baseId = $"pref_sz_{label.Replace(" ", "_")}";
-        EditorGUI.SettingsRow(paper, baseId, label, () =>
-            Origami.Slider(paper, $"{baseId}_v", value, v =>
-            {
-                set(MathF.Round(v, 1));
-                if (applyOnSlide)
-                {
-                    s.ApplyTheme();
-                    s.Save();
-                }
-            }, min, max).Format("F1").Show());
     }
 
     // ================================================================
