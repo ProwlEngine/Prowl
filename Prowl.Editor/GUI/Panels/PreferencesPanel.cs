@@ -340,7 +340,10 @@ public class PreferencesPanel : DockPanel
             paper.Box($"{id}_l").Width(108).Height(minH).Margin(0, 0, ST, ST).IsNotInteractable()
                 .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft).TextTruncate();
-            using (paper.Column($"{id}_c").Width(ST).Height(UnitValue.Auto).MinHeight(minH).Margin(0, 0, ST, ST).Enter())
+            // No MinHeight here: the column sizes to the widget so its stretch top/bottom margins center
+            // it in the row. With a forced MinHeight the widget would top-align while the label stays
+            // centered, leaving them visually misaligned.
+            using (paper.Column($"{id}_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST).Enter())
                 drawControl();
         }
     }
