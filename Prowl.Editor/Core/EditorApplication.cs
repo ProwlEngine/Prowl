@@ -554,11 +554,18 @@ public class EditorApplication : Game
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
+            // Ghost buttons tint their icon by variant: green Play when stopped, red Stop while playing,
+            // amber Pause when paused; step stays neutral.
+            var play = Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
                 .OnClick(() => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); })
-                .Style(ButtonStyle.Ghost).Show();
-            Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause)
-                .Style(ButtonStyle.Ghost).Show();
+                .Style(ButtonStyle.Ghost);
+            if (Application.IsPlaying) play.Danger(); else play.Success();
+            play.Show();
+
+            var pause = Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause).Style(ButtonStyle.Ghost);
+            if (Application.IsPaused) pause.Warning();
+            pause.Show();
+
             Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
                 .Style(ButtonStyle.Ghost).Show();
         }
