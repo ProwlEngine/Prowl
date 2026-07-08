@@ -37,6 +37,17 @@ public class GameCanvas : MonoBehaviour
     /// Used by the editor to render into off-screen render textures.</summary>
     public static Float2? ScreenSizeOverride { get; set; }
 
+    /// <summary>
+    /// When true, every canvas lays out and maps to world using its <b>world-space</b> representation
+    /// (<see cref="ReferenceResolution"/> as the root rect + the GameObject transform), regardless of
+    /// its actual <see cref="RenderMode"/>. The scene view enables this so screen-space UI can be
+    /// viewed and edited in world space like any other GameObject, independent of screen/RT size.
+    /// </summary>
+    public static bool EditorWorldSpaceOverride { get; set; }
+
+    /// <summary>Whether this canvas should currently be treated as world-space (its own mode, or the editor override).</summary>
+    private bool UseWorldSpace => EditorWorldSpaceOverride || RenderMode == RenderMode.WorldSpace;
+
     // ----------------------------------------------------------------
     // CHANGED: every public field that affects layout is now a property
     //          with a backing field and dirty-marking setter.
@@ -69,7 +80,7 @@ public class GameCanvas : MonoBehaviour
     [SerializeField] private ScaleMode _uiScaleMode = ScaleMode.ConstantPixelSize;
     public ScaleMode UIScaleMode { get => _uiScaleMode; set => SetField(ref _uiScaleMode, value, UIDirtyFlags.Layout); }
 
-    [SerializeField] private Float2 _referenceResolution = new(1920f, 1080f);
+    [SerializeField] private Float2 _referenceResolution = new(1280f, 720f);
     public Float2 ReferenceResolution { get => _referenceResolution; set => SetField(ref _referenceResolution, value, UIDirtyFlags.Layout); }
 
     [SerializeField] private float _matchWidthOrHeight = 0.5f;
@@ -247,7 +258,7 @@ public class GameCanvas : MonoBehaviour
     {
         // World-space canvases have a fixed design size (their ReferenceResolution) and don't track the
         // screen. Screen-space canvases fill the surface (in design pixels, after the scale factor).
-        if (RenderMode == RenderMode.WorldSpace)
+        if (UseWorldSpace)
             return new Rect(0, 0, Maths.Max(ReferenceResolution.X, 1f), Maths.Max(ReferenceResolution.Y, 1f));
 
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
@@ -391,14 +402,12 @@ public class GameCanvas : MonoBehaviour
     /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
     /// consuming the same matrix.
     /// </remarks>
-    public Float4x4 CanvasToWorld => RenderMode switch
-    {
+    public Float4x4 CanvasToWorld => UseWorldSpace
         // World-space canvases map design pixels 1:1 to world units (through the transform), so the canvas
         // occupies its ReferenceResolution in world space and doesn't shrink when the mode is toggled.
         // Author the world size via the GameObject's Transform scale.
-        RenderMode.WorldSpace => Transform.LocalToWorldMatrix,
-        _ => Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f)),
-    };
+        ? Transform.LocalToWorldMatrix
+        : Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f));
 
     /// <summary>
     /// Returns the model matrix for a UI element under this canvas. Equivalent to

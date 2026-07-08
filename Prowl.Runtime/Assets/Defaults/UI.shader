@@ -117,6 +117,12 @@ Pass "UI"
             return max(0.5 * dot(unitRange, screenTexSize), 1.0);
         }
 
+        float sampleCoverage(vec2 uv) {
+            float d = texture(fontTexture, uv).r;
+            float sd = (d - 0.5) * sdfScreenPxRange(uv);
+            return clamp(sd + 0.5, 0.0, 1.0);
+        }
+
         void main()
         {
             float mask = scissorMask(fragPos);
@@ -131,11 +137,20 @@ Pass "UI"
             // (replicated across RGB); reconstruct sharp coverage from it.
             if (fragTexCoord.x >= 2.0) {
                 vec2 uv = fragTexCoord - vec2(2.0);
-                float sd = texture(fontTexture, uv).r;
-                float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
-                float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-                finalColor = color * coverage * mask;
+
+                // Basic SDF Text
+                finalColor = color * sampleCoverage(uv) * mask;
                 return;
+
+                // Sub-Pixel SDF Text - Needs a Dual Blend or something? It does sorta work but not well enough.
+                //vec2 uvPerScreenX = dFdx(uv);
+                //vec2 shift = uvPerScreenX / 3.0;
+                //
+                //vec3 coverage = vec3(sampleCoverage(uv - shift), sampleCoverage(uv), sampleCoverage(uv + shift));
+
+                //float alpha = (coverage.x + coverage.y + coverage.z) / 3.0;
+                //finalColor = vec4(color.rgb * coverage, alpha) * mask;
+                //return;
             }
 
             // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried

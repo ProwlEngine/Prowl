@@ -38,8 +38,8 @@ public class UIImageEditor : CustomEditor
             Origami.ColorField(paper, $"{id}_color_v", img.Color, v => img.Color = v).Show());
 
         PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material",
-            typeof(Material), img.Material.Res,
-            v => img.Material = v as Material, 0);
+            typeof(AssetRef<Material>), img.Material,
+            v => img.Material = (AssetRef<Material>)v!, 0);
 
         Origami.Checkbox(paper, $"{id}_ray", img.RaycastTarget, v => img.RaycastTarget = v)
             .LabelRight("Raycast Target").Show();
@@ -81,8 +81,8 @@ public class UIImageEditor : CustomEditor
         using (paper.Column($"{id}_left").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
         {
             PropertyGridUtils.DrawField(paper, $"{id}_tex", "Source Image",
-                typeof(Texture2D), img.Texture.Res,
-                v => img.Texture = v as Texture2D, 0);
+                typeof(AssetRef<Texture2D>), img.Texture,
+                v => img.Texture = (AssetRef<Texture2D>)v!, 0);
 
             if (img.Texture.Res != null)
             {

@@ -188,13 +188,6 @@ public sealed class UISceneEditor : ISceneViewEditor
             // Pick up any edits applied on previous frames so ComputedRect is current.
             canvas.RebuildIfDirty();
 
-            bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
-            if (camNav && _active == Handle.None)
-            {
-                _hover = Handle.None;
-                return false;
-            }
-
             Float4x4 designToWorld = canvas.CanvasToWorld;
             Float4x4 worldToDesign = designToWorld.Invert();
 
@@ -207,16 +200,6 @@ public sealed class UISceneEditor : ISceneViewEditor
             rightW /= worldPerPixel;
             upW = Float3.Normalize(upW);
             Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
-
-            if (!GizmoUtils.IntersectPlane(normalW, originW, mouseRay.Origin, mouseRay.Direction, out float tHit))
-            {
-                if (_active != Handle.None) return true;
-                _hover = Handle.None;
-                return false;
-            }
-            Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
-            Float3 designHit3 = Float4x4.TransformPoint(worldHit, worldToDesign);
-            Float2 designHit = new(designHit3.X, designHit3.Y);
 
             Rect cr = rt.ComputedRect;
             if (cr.Size.X <= 0 || cr.Size.Y <= 0)
@@ -233,6 +216,28 @@ public sealed class UISceneEditor : ISceneViewEditor
                 new Float3(cr.Min.X + cr.Size.X * 0.5f, cr.Min.Y + cr.Size.Y * 0.5f, 0), designToWorld);
             float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);
             float pickRadius = handleWorld / worldPerPixel; // design pixels
+
+            // Draw the rect outline + handles every frame, BEFORE any input-related early-out, so they
+            // never flicker off while navigating the camera or when the pointer leaves the canvas plane.
+            DrawHandles(rt, designToWorld, rightW, upW, handleWorld);
+
+            // Camera navigation (RMB/MMB) takes over: don't hit-test or drag while orbiting / panning.
+            bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
+            if (camNav && _active == Handle.None)
+            {
+                _hover = Handle.None;
+                return false;
+            }
+
+            if (!GizmoUtils.IntersectPlane(normalW, originW, mouseRay.Origin, mouseRay.Direction, out float tHit))
+            {
+                if (_active != Handle.None) return true;
+                _hover = Handle.None;
+                return false;
+            }
+            Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
+            Float3 designHit3 = Float4x4.TransformPoint(worldHit, worldToDesign);
+            Float2 designHit = new(designHit3.X, designHit3.Y);
 
             bool leftDown = Input.GetMouseButton(0);
             bool leftPressed = Input.GetMouseButtonDown(0);
@@ -298,7 +303,6 @@ public sealed class UISceneEditor : ISceneViewEditor
                 }
             }
 
-            DrawHandles(rt, designToWorld, rightW, upW, handleWorld);
             return true;
         }
         finally

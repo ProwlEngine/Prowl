@@ -66,11 +66,10 @@ public class CinematicEffectsEditor : CustomEditor
         DrawSection(paper, $"{id}_lut", EditorIcons.TableCells, "LUT Color Grading",
             fx.EnableLUT, v => fx.EnableLUT = v, () =>
         {
-            EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
-            PropertyGridUtils.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(Texture2D), fx.LUTTexture.Res,
+            PropertyGridUtils.DrawField(paper, $"{id}_lut_tex", "LUT Texture", typeof(AssetRef<Texture2D>), fx.LUTTexture,
                 newVal =>
                 {
-                    fx.LUTTexture = new AssetRef<Texture2D>(newVal as Texture2D);
+                    fx.LUTTexture = (AssetRef<Texture2D>)newVal!;
                 }, 0);
             SliderRow(paper, $"{id}_lut_cont", "Contribution", fx.LUTContribution, 0, 1, v => fx.LUTContribution = v);
         });

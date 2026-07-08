@@ -84,6 +84,14 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
         set => SetShader(value);
     }
 
+    /// <summary>The shader as an <see cref="AssetRef{Shader}"/>, for asset-reference editing.
+    /// A material must always have a shader, so assigning an empty ref is ignored.</summary>
+    public AssetRef<Shader> ShaderRef
+    {
+        get => _shader;
+        set { if (value.Res != null) SetShader(value.Res); }
+    }
+
     [SerializeField]
     public PropertyState _properties;
 
@@ -161,6 +169,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetTexture(string name, Texture2D value)  { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
     public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, AssetRef<Texture3D> value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
     public void SetTextureCube(string name, Cubemap value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
     public void SetTextureCube(string name, AssetRef<Cubemap> value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 

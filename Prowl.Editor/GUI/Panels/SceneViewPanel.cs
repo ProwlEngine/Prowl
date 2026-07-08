@@ -196,32 +196,45 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         // Update scene view editor registry based on selection
         SceneViewEditorRegistry.UpdateFromSelection();
 
-        // Let active scene editor handle input before gizmo
+        // The scene view always presents and edits UI in world space (each canvas's ReferenceResolution
+        // + GameObject transform) regardless of its RenderMode, so screen-space UI can be manipulated
+        // like any other GameObject. This wraps input, gizmos AND the render so the canvas wireframe,
+        // the element handles and the drawn mesh all agree on the same rect.
         bool sceneEditorConsumedInput = false;
-        var activeSceneEditor = SceneViewEditorRegistry.ActiveEditor;
-        if (activeSceneEditor != null && _editorCamera != null)
+        bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
+        GameCanvas.EditorWorldSpaceOverride = true;
+        try
         {
-            var cam = _editorCamera.Camera;
-            if (cam != null)
+            // Let active scene editor handle input before gizmo
+            var activeSceneEditor = SceneViewEditorRegistry.ActiveEditor;
+            if (activeSceneEditor != null && _editorCamera != null)
             {
-                // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
-                Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-                Float2 viewSize = new Float2(width, height);
-                Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
-                // Use Paper's hover state which respects overlays/popups, not just bounds
-                bool hovered = paper.IsParentHovered;
-                Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
-                sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
+                var cam = _editorCamera.Camera;
+                if (cam != null)
+                {
+                    // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
+                    Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+                    Float2 viewSize = new Float2(width, height);
+                    Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
+                    // Use Paper's hover state which respects overlays/popups, not just bounds
+                    bool hovered = paper.IsParentHovered;
+                    Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
+                    sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
+                }
             }
+
+            // Update transform gizmo for selected objects (skip if scene editor consumed input)
+            if (!sceneEditorConsumedInput)
+                UpdateTransformGizmo(paper, scene, width, height);
+
+            // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
+            DrawSelectionGizmos();
+            _editorCamera.Render(scene);
         }
-
-        // Update transform gizmo for selected objects (skip if scene editor consumed input)
-        if (!sceneEditorConsumedInput)
-            UpdateTransformGizmo(paper, scene, width, height);
-
-        // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
-        DrawSelectionGizmos();
-        _editorCamera.Render(scene);
+        finally
+        {
+            GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
+        }
 
         if (rt != null && rt.MainTexture != null)
         {
@@ -411,14 +424,12 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
         }
 
-        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable
-        // from the scene view. Push the same screen-size override the render pass uses so the
-        // canvases lay out / scale identically otherwise the picker's design-space hit test
-        // would disagree with what's actually drawn.
-        RenderTexture? sceneRT = camera.Camera?.Target;
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
-            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
+        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable from the
+        // scene view. The scene view lays UI out in world space (ReferenceResolution + transform), so
+        // pick with the same world-space override or the design-space hit test would disagree with
+        // what's drawn.
+        bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
+        GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
             GameObject? uiHit = UIPicker.Pick(scene, ray);
@@ -426,7 +437,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         }
         finally
         {
-            GameCanvas.ScreenSizeOverride = prevOverride;
+            GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
 
         return bestHit;

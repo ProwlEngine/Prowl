@@ -1940,18 +1940,28 @@ public class EditorApplication : Game
 
         Application.IsGameplayExecuting = false;
 
-        // Always allow gizmos in editor (even when not playing)
-        if (scene != null)
-            scene.DrawGizmos();
-
-        if(Selection.Count > 0)
+        // Editor gizmos are a scene-view concept, and the scene view edits UI in world space, so queue
+        // them with the world-space canvas override active - otherwise the canvas wireframe would be
+        // laid out at the screen/RT size and disagree with the world-space UI it's drawn around.
+        bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
+        GameCanvas.EditorWorldSpaceOverride = true;
+        try
         {
-            // Draw selection gizmo
-            var selectedGOs = Selection.GetSelected<GameObject>();
-            foreach (var comp in selectedGOs.SelectMany(e => e.GetComponents()))
+            // Always allow gizmos in editor (even when not playing)
+            if (scene != null)
+                scene.DrawGizmos();
+
+            if (Selection.Count > 0)
             {
-                comp.DrawGizmosSelected();
+                // Draw selection gizmo
+                var selectedGOs = Selection.GetSelected<GameObject>();
+                foreach (var comp in selectedGOs.SelectMany(e => e.GetComponents()))
+                    comp.DrawGizmosSelected();
             }
+        }
+        finally
+        {
+            GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
     }
 

@@ -46,16 +46,12 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         // Shader reference
         Origami.Separator(paper, $"{id}_sep_shader").Show();
-        EngineObjectPropertyEditor.SetFieldType(typeof(Shader));
-        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(Shader), material.Shader,
+        PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(AssetRef<Shader>), material.ShaderRef,
             newVal =>
             {
-                if (newVal is Shader s)
-                {
-                    material.Shader = s;
-                    _dirty = true;
-                    _lastPreviewAsset = null; // force preview refresh
-                }
+                material.ShaderRef = (AssetRef<Shader>)newVal!;
+                _dirty = true;
+                _lastPreviewAsset = null; // force preview refresh
             }, 0);
 
         // Shader properties one field per property declared by the shader. Values
