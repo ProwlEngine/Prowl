@@ -547,52 +547,21 @@ public class EditorApplication : Game
     /// <summary>Centered rounded "pill" holding the play / pause / step transport buttons.</summary>
     private void DrawPlayPill(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
-        float pillH = EditorTheme.MenuBarHeight * 0.9f;
-        float btn = pillH - 12f;
-        float gap = 4f;
-        float padX = 8f;
-        float pillW = padX * 2 + btn * 3 + gap * 2;
-        float pillX = (w - pillW) / 2f;
-        float pillY = (band - pillH) / 2f;
-
-        using (paper.Row("play_pill").PositionType(PositionType.SelfDirected).Position(pillX, pillY)
-            .Size(pillW, pillH).Rounded(pillH / 2f)
+        using (paper.Row("play_pill").PositionType(PositionType.SelfDirected)
+            .Size(UnitValue.Auto).Rounded(EditorTheme.Roundness)
+            .Margin(UnitValue.StretchOne)
             .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            // Auto-width inner row centered horizontally (stretch side-margins) so the buttons sit
-            // centered in the pill regardless of its width.
-            using (paper.Row("play_pill_in").Width(UnitValue.Auto).Height(pillH)
-                .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0).RowBetween(gap).Enter())
-            {
-                PlayPillButton(paper, "btn_play", btn,
-                    Application.IsPlaying ? EditorIcons.CircleStop : EditorIcons.Play, font,
-                    Application.IsPlaying ? System.Drawing.Color.FromArgb(255, 60, 160, 60) : System.Drawing.Color.Transparent,
-                    EditorTheme.Ink500,
-                    () => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); });
-
-                PlayPillButton(paper, "btn_pause", btn, EditorIcons.Pause, font,
-                    Application.IsPaused ? System.Drawing.Color.FromArgb(255, 160, 160, 60) : System.Drawing.Color.Transparent,
-                    Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300,
-                    TogglePause);
-
-                PlayPillButton(paper, "btn_step", btn, EditorIcons.ForwardStep, font,
-                    System.Drawing.Color.Transparent,
-                    Application.IsPlaying ? EditorTheme.Ink500 : EditorTheme.Ink300,
-                    StepOneFrame);
-            }
+            Origami.IconButton(paper, "btn_play", Application.IsPlaying ? EditorIcons.CircleStop_I : EditorIcons.Play_I)
+                .OnClick(() => { if (Application.IsPlaying) ExitPlayMode(); else EnterPlayMode(); })
+                .Style(ButtonStyle.Ghost).Show();
+            Origami.IconButton(paper, "btn_pause", EditorIcons.Pause_I, TogglePause)
+                .Style(ButtonStyle.Ghost).Show();
+            Origami.IconButton(paper, "btn_step", EditorIcons.ForwardStep_I, StepOneFrame)
+                .Style(ButtonStyle.Ghost).Show();
         }
-    }
-
-    private static void PlayPillButton(Paper paper, string id, float size, string icon,
-        Prowl.Scribe.FontFile font, System.Drawing.Color bg, System.Drawing.Color fg, Action onClick)
-    {
-        paper.Box(id).Width(size).Height(size).Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-            .Rounded(5).BackgroundColor(bg)
-            .Hovered.BackgroundColor(System.Drawing.Color.FromArgb(80, 255, 255, 255)).End()
-            .Text(icon, font).TextColor(fg).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
     }
 
     // ── Smoothed perf readouts ──────────────────────────────────────────
