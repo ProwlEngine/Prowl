@@ -399,6 +399,7 @@ public class EditorApplication : Game
         float h = paper.ScreenRect.Size.Y;
 
         _time += Time.UnscaledDeltaTime;
+        TickPerfStats((float)Time.UnscaledDeltaTime);
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
 
@@ -594,6 +595,35 @@ public class EditorApplication : Game
             .OnClick(0, (_, _) => onClick());
     }
 
+    // ── Smoothed perf readouts ──────────────────────────────────────────
+    // Raw per-frame FPS / frame-time flicker far too fast to read. The frame time is an exponential
+    // moving average (~0.5s time constant) so the FPS/ms readout glides continuously instead of
+    // snapping; memory samples once a second (GC total moves in coarse steps anyway).
+    private static double _perfWindow;
+    private static float _emaMs;
+    private static int _dispFps;
+    private static float _dispMs;
+    private static long _dispMemMb;
+
+    private static void TickPerfStats(float dt)
+    {
+        if (dt <= 0f) return;
+
+        float ms = dt * 1000f;
+        if (_emaMs <= 0f) _emaMs = ms;                    // seed on the first frame
+        float alpha = 1f - MathF.Exp(-dt / 2f);           // ~2s time constant, dt-based -> frame-rate independent
+        _emaMs += (ms - _emaMs) * alpha;
+        _dispMs = _emaMs;
+        _dispFps = Math.Min(9999, (int)MathF.Round(1000f / _emaMs));
+
+        _perfWindow += dt;
+        if (_perfWindow >= 1.0 || _dispMemMb == 0)
+        {
+            _dispMemMb = GC.GetTotalMemory(false) / (1024 * 1024);
+            _perfWindow = 0.0;
+        }
+    }
+
     /// <summary>Right-side status cluster: FPS, editor version and project name as themed chips,
     /// then a ghost cog that opens Project Settings.</summary>
     private void DrawHeaderStatus(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
@@ -605,8 +635,8 @@ public class EditorApplication : Game
 
         var ST = UnitValue.Stretch();
 
-        int fps = Math.Min(9999, Time.UnscaledDeltaTime > 0 ? (int)(1.0 / Time.UnscaledDeltaTime) : 0);
-        float ms = (float)(Time.UnscaledDeltaTime * 1000.0);
+        int fps = _dispFps;
+        float ms = _dispMs;
         string fpsNum = fps.ToString();
         string msText = $"{ms:F1}ms";
         var dotColor = fps >= 50 ? EditorTheme.Green400 : (fps >= 25 ? EditorTheme.Amber400 : EditorTheme.Red400);
@@ -899,7 +929,7 @@ public class EditorApplication : Game
             // ---------- Column 3: editor stats on the left, graphics backend on the right ----------
             using (paper.Row("sb_stats").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
             {
-                long memMb = GC.GetTotalMemory(false) / (1024 * 1024);
+                long memMb = _dispMemMb;
                 GlyphCell("sb_sel", EditorIcons.ArrowPointer, EditorTheme.Ink300, Selection.Count.ToString(), dim, Loc.Get("editor.stat_selected"));
                 GlyphCell("sb_mem", EditorIcons.Microchip, EditorTheme.Ink300, $"{memMb} MB", dim, Loc.Get("editor.stat_memory"));
 
