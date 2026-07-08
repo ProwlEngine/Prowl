@@ -36,6 +36,8 @@ vec3 WorldPosFromDepth(float depth, vec2 texCoord) {
 //   currentDepth: Fragment depth in light space
 //   shadowQuality: 0 = hard shadows, 1 = soft shadows
 //   shadowStrength: Multiplier for shadow intensity
+//   filterRadius: Soft PCF kernel radius in atlas texels (callers scale this per cascade so the
+//                 penumbra stays roughly constant in world space; ignored on the hard path)
 float SampleShadowPCF(
     sampler2DShadow shadowAtlas,
     vec2 atlasCoords,
@@ -43,7 +45,8 @@ float SampleShadowPCF(
     vec2 shadowMax,
     float currentDepth,
     float shadowQuality,
-    float shadowStrength)
+    float shadowStrength,
+    float filterRadius)
 {
     // Hardware depth comparison (GL_COMPARE_REF_TO_TEXTURE + GL_LEQUAL): texture() returns the
     // filtered fraction that is LIT (currentDepth <= storedDepth). With LINEAR filtering on the
@@ -57,7 +60,6 @@ float SampleShadowPCF(
     } else {
         // Soft shadows - rotated Poisson disk, each tap a hardware 2x2 comparison
         vec2 texelSize = vec2(1.0) / vec2(textureSize(shadowAtlas, 0));
-        float filterRadius = 1.5;
         float randomRotation = InterleavedGradientNoise(gl_FragCoord.xy) * 6.283185;
         float s = sin(randomRotation);
         float c = cos(randomRotation);

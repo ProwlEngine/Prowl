@@ -149,8 +149,17 @@ float SampleDirectionalShadow(vec3 worldPos, vec3 worldNormal)
     float texelWorldSize = ((cascadeParams.w * 4.0) / (cascadeParams.z * atlasSize)) * 8.0;
     float currentDepth = projCoords.z - (slopeBias + texelWorldSize);
 
+    // World-normalized PCF radius: a fixed texel kernel blurs far more world space in the coarse far
+    // cascades than the fine near ones, so the softness (and the shadow) visibly jumps at each split.
+    // Scale the kernel to hold the penumbra roughly constant in world units. cascadeParams.w = world
+    // span, .z = tile resolution. Clamped so near cascades don't over-spread the 8 taps and far cascades
+    // don't collapse below the hardware tap.
+    const float shadowPenumbraWorld = 0.04; // target penumbra in world units (Tunable)
+    float worldPerTexel = cascadeParams.w / max(cascadeParams.z, 1.0);
+    float pcfRadius = clamp(shadowPenumbraWorld / worldPerTexel, 0.75, 4.0);
+
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, _DirectionalLightShadowQuality, _DirectionalLightShadowStrength);
+                           currentDepth, _DirectionalLightShadowQuality, _DirectionalLightShadowStrength, pcfRadius);
 }
 
 float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
@@ -186,7 +195,7 @@ float SamplePointShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 world
     float currentDepth = projCoords.z - finalBias;
 
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, L.ShadowQuality, L.ShadowStrength);
+                           currentDepth, L.ShadowQuality, L.ShadowStrength, 1.5);
 }
 
 float SampleSpotShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldNormal)
@@ -210,7 +219,7 @@ float SampleSpotShadow(LightSample L, int shadowSlot, vec3 worldPos, vec3 worldN
     float currentDepth = projCoords.z - finalBias;
 
     return SampleShadowPCF(_ShadowAtlas, atlasCoords, shadowMin, shadowMax,
-                           currentDepth, L.ShadowQuality, L.ShadowStrength);
+                           currentDepth, L.ShadowQuality, L.ShadowStrength, 1.5);
 }
 
 // ============================================================
