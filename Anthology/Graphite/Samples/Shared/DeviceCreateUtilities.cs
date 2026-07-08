@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Samples;
 public static class DeviceCreateUtilities
 {
     private static readonly (GraphicsBackend backend, APIVersion version) Backend = (GraphicsBackend.Vulkan, new APIVersion(2, 1));
-    static readonly ContextAPI API = Backend.backend == GraphicsBackend.OpenGL ? ContextAPI.OpenGL : ContextAPI.Vulkan;
+    static readonly ContextAPI API = ContextAPI.Vulkan;
 
 
     public static IWindow CreateWindowAndDevice(Action<GraphicsDevice> load, Action<double> render, Action close, GraphicsDeviceOptions options)
@@ -83,21 +83,6 @@ public static class DeviceCreateUtilities
 
         switch (backend)
         {
-            case GraphicsBackend.OpenGLES:
-            case GraphicsBackend.OpenGL:
-                if (window.API.API != ContextAPI.OpenGLES && window.API.API != ContextAPI.OpenGL)
-                    throw new Exception("Attempted to make a GL graphics device without an available GL or GLES context");
-
-                OpenGL.OpenGLPlatformInfo glInfo = new(
-                    glContext: window.GLContext!,
-                    setSyncToVerticalBlank: sync =>
-                    {
-                        window.VSync = sync;
-                        window.GLContext!.SwapInterval(window.VSync ? 1 : 0);
-                    });
-
-                return GraphicsDevice.CreateOpenGL(options, glInfo, (uint)window.Size.X, (uint)window.Size.Y);
-
             case GraphicsBackend.Direct3D11:
                 if (window.Native!.Win32 == null)
                     throw new Exception("Attempted to make a D3D11 graphics device without a Win32 window!");

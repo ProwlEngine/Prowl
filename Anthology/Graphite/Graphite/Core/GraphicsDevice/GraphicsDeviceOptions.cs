@@ -24,8 +24,7 @@ public struct GraphicsDeviceOptions
     /// </summary>
     public bool SyncToVerticalBlank;
     /// <summary>
-    /// Indicates whether a 0-to-1 depth range mapping is preferred. For OpenGL, this is not the default, and is not available
-    /// on all systems.
+    /// Indicates whether a 0-to-1 depth range mapping is preferred.
     /// </summary>
     public bool PreferDepthRangeZeroToOne;
     /// <summary>
@@ -123,8 +122,7 @@ public struct GraphicsDeviceOptions
     /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
     /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
     /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred. For OpenGL,
-    /// this is not the default, and is not available on all systems.</param>
+    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
     public GraphicsDeviceOptions(
         bool debug,
         PixelFormat? swapchainDepthFormat,
@@ -149,8 +147,7 @@ public struct GraphicsDeviceOptions
     /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
     /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
     /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred. For OpenGL,
-    /// this is not the default, and is not available on all systems.</param>
+    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
     /// <param name="preferStandardClipSpaceYDirection">Indicates whether a bottom-to-top-increasing clip space Y direction
     /// is preferred. For Vulkan, this is not the default, and is not available on all systems.</param>
     public GraphicsDeviceOptions(
@@ -178,8 +175,7 @@ public struct GraphicsDeviceOptions
     /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
     /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
     /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred. For OpenGL,
-    /// this is not the default, and is not available on all systems.</param>
+    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
     /// <param name="preferStandardClipSpaceYDirection">Indicates whether a bottom-to-top-increasing clip space Y direction
     /// is preferred. For Vulkan, this is not the default, and is not available on all systems.</param>
     /// <param name="swapchainSrgbFormat">Indicates whether the main Swapchain should use an sRGB format. This value is only

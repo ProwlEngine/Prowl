@@ -61,7 +61,6 @@ internal static class Program
     {
         CompilationSession session = new();
 
-        session.RegisterModule(new GLCompiler());
         session.RegisterModule(new DXCompiler());
         session.RegisterModule(new VulkanCompiler());
 
@@ -101,7 +100,6 @@ internal static class Program
 
     static string Extension(GraphicsBackend backend) => backend switch
     {
-        GraphicsBackend.OpenGL => "glsl",
         GraphicsBackend.Direct3D11 => "hlsl",
         GraphicsBackend.Vulkan => "spv",
         _ => throw new NotSupportedException($"No known-good extension for backend {backend}."),

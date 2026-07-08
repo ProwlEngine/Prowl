@@ -9,9 +9,8 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
 {
     /// <summary>
     /// The shader attribute index assigned to the first element of this layout. Subsequent
-    /// elements are assigned <c>Location + 1</c>, <c>Location + 2</c>, ... — so on OpenGL
-    /// this is the value used in <c>layout(location = N)</c>, on Vulkan it is the
-    /// <c>VkVertexInputAttributeDescription.location</c>, and on D3D11 it has no shader
+    /// elements are assigned <c>Location + 1</c>, <c>Location + 2</c>, ... — on Vulkan
+    /// this is the <c>VkVertexInputAttributeDescription.location</c>, and on D3D11 it has no shader
     /// effect (semantics are name-based). This does <b>not</b> identify the vertex buffer
     /// binding slot; the slot is determined by the layout's index in
     /// <see cref="GraphicsProgram.VertexLayouts"/>, which is what

@@ -5,10 +5,9 @@
         <IsPackable>false</IsPackable>
         <AllowUnsafeCode>true</AllowUnsafeCode>
         <OutputType>Exe</OutputType>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN;TEST_OPENGL;TEST_OPENGLES</DefineConstants>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_OPENGL</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
+        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
         <StartupObject>Program</StartupObject>
     </PropertyGroup>
 

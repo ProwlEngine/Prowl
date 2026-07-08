@@ -80,20 +80,4 @@ internal sealed class PropertyEntry
         TextureView = null;
         Buffer = null;
     }
-
-
-    internal PropertyEntry Clone()
-    {
-        return new PropertyEntry
-        {
-            Kind = Kind,
-            UniformType = UniformType,
-            ReadOnly = ReadOnly,
-            Uniform = Uniform,
-            Buffer = Buffer,
-            Texture = Texture,
-            TextureView = TextureView,
-            Sampler = Sampler,
-        };
-    }
 }

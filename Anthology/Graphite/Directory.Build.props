@@ -17,7 +17,6 @@
     <PropertyGroup>
         <ExcludeVulkan>false</ExcludeVulkan>
         <ExcludeD3D11>false</ExcludeD3D11>
-        <ExcludeOpenGL>false</ExcludeOpenGL>
     </PropertyGroup>
 
     <PropertyGroup>

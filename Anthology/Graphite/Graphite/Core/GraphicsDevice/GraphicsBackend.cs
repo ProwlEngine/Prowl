@@ -13,12 +13,4 @@ public enum GraphicsBackend : byte
     /// Vulkan.
     /// </summary>
     Vulkan,
-    /// <summary>
-    /// OpenGL.
-    /// </summary>
-    OpenGL,
-    /// <summary>
-    /// OpenGL ES.
-    /// </summary>
-    OpenGLES,
 }

@@ -152,8 +152,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>
     /// Performs any backend-specific work when a <see cref="PropertySet"/> is merged into the command buffer.
-    /// The base class has already updated <see cref="_activeProperties"/>. Backends that record deferred commands
-    /// (OpenGL) override this to snapshot entries into the active entry list.
+    /// The base class has already updated <see cref="_activeProperties"/>.
     /// </summary>
     private protected abstract void SetPropertiesCore(PropertySet properties);
 
@@ -167,12 +166,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public void ClearProperties()
     {
         _activeProperties.Clear();     // bump merged resource version
-        ClearPropertiesCore();    // OpenGL emits a ClearPropertiesEntry; Vk/D3D11 no-op
+        ClearPropertiesCore();
     }
 
     /// <summary>
     /// Performs any backend-specific work when the merged property state is cleared.
-    /// OpenGL backends override this to emit a ClearPropertiesEntry into the active entry list.
     /// </summary>
     private protected abstract void ClearPropertiesCore();
 

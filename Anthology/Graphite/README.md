@@ -1,15 +1,15 @@
 # Prowl.Graphite
 
-A cross-platform, low-level graphics and compute abstraction for .NET, with backends for Vulkan, Direct3D 11, and OpenGL/OpenGL ES. Graphite powers the rendering layer of the Prowl Game Engine and can be used to build high-performance 2D and 3D games, simulations, tools, and other graphical applications.
+A cross-platform, low-level graphics and compute abstraction for .NET, with backends for Vulkan and Direct3D 11. Graphite powers the rendering layer of the Prowl Game Engine and can be used to build high-performance 2D and 3D games, simulations, tools, and other graphical applications.
 
 Graphite started life as a modified and butchered version of NeoVeldrid, and by extension Veldrid, but has diverged far enough in its setup and API surface that it is now considered a separate library rather than a fork. See [API Differences](#api-differences) for the systems that intentionally break from upstream Veldrid.
 
 ## Features
 
-- A single, unified API over Vulkan, Direct3D 11, OpenGL, and OpenGL ES.
+- A single, unified API over Vulkan and Direct3D 11.
 - macOS support via MoltenVK (Vulkan-over-Metal translation).
 - A monolithic `ShaderProgram` model that bundles shader and pipeline state, with per-backend shader compilation handled internally.
-- A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules (Vulkan sets/bindings, D3D registers, OpenGL uniforms).
+- A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules (Vulkan sets/bindings, D3D registers).
 - A built-in frames-in-flight ring with per-frame transient (bump-allocated) GPU memory.
 - Opt-in, zero-cost-when-disabled validation and profiling layers, toggled at compile time.
 - Per-backend build trimming, so unused backends can be excluded entirely from the build.
@@ -34,7 +34,7 @@ GraphicsDeviceOptions options = new()
     PreferStandardClipSpaceYDirection = true
 };
 
-// Backend-specific factories: GraphicsDevice.CreateVulkan / CreateD3D11 / CreateOpenGL.
+// Backend-specific factories: GraphicsDevice.CreateVulkan / CreateD3D11.
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescription, vulkanOptions);
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
@@ -66,11 +66,9 @@ The [`Samples/`](Samples) directory contains complete, runnable versions of this
 |---------------|:-------:|:-----:|:-----:|
 | Direct3D 11   | Yes     | -     | -     |
 | Vulkan        | Yes     | Yes   | Yes (via MoltenVK) |
-| OpenGL        | Yes     | Yes   | Yes   |
-| OpenGL ES     | Yes     | Yes   | -     |
 
 A device is created through the backend-specific factory methods on `GraphicsDevice`
-(`CreateVulkan`, `CreateD3D11`, `CreateOpenGL`). The `GraphicsBackend` enum enumerates the
+(`CreateVulkan`, `CreateD3D11`). The `GraphicsBackend` enum enumerates the
 available backends.
 
 ## Building
@@ -92,9 +90,8 @@ command line (`-p:Flag=true`) or in `Directory.Build.props`.
 | `DisableProfiling`  | `false` | When unset, defines `PROFILE_USAGE` and compiles in the profiling layers.   |
 | `ExcludeVulkan`     | `false` | Excludes the Vulkan backend (and its Silk.NET packages) from the build.     |
 | `ExcludeD3D11`      | `false` | Excludes the Direct3D 11 backend from the build.              |
-| `ExcludeOpenGL`     | `false` | Excludes the OpenGL / OpenGL ES backend from the build.       |
 
-Backend exclusion is also surfaced as `ExcludeVulkan` / `ExcludeD3D11` / `ExcludeOpenGL`
+Backend exclusion is also surfaced as `ExcludeVulkan` / `ExcludeD3D11`
 properties in the root `Directory.Build.props`, and each maps to a corresponding
 `EXCLUDE_*_BACKEND` compiler symbol.
 
@@ -181,7 +178,7 @@ To replace the resource binder, a new `PropertySet` API has been created. It act
 property builder that maps user-facing strings/ids to their cross-platform binding equivalent.
 Creating a shader requires more reflection information up front, but the tradeoff is that
 user-facing code never has to reason about complicated binding rules across platforms, such as the
-differences between OpenGL uniforms, D3D registers, and Vulkan sets/bindings.
+differences between D3D registers and Vulkan sets/bindings.
 
 ```cs
 // PropertyID is a lightweight wrapper over an interned string->int for fast dictionary indexing.
@@ -189,11 +186,10 @@ PropertyID internedId = "MainTexture";
 
 PropertySet propertySet = new();
 
-// SetTexture requires paired texture/sampler objects for OpenGL platforms.
-// The paired sampler is ignored on other platforms with separate sampler objects.
+// SetTexture accepts a paired sampler for platforms with combined texture/sampler binding.
 propertySet.SetTexture(internedId, MainTextureObject, MainTextureSampler);
 
-// SetSampler is a no-op on OpenGL, but binds samplers on all other platforms.
+// SetSampler binds a sampler independently of any texture.
 propertySet.SetSampler("SecondaryTexture_SamplerObject", SecondarySampler);
 
 // Transient uniform properties. Transient uniforms are owned by the buffered frames-in-flight
@@ -276,7 +272,7 @@ dotnet run --project Samples/HelloTriangle
 Tests live under [`Tests/`](Tests) and are split into CPU tests (pure value-type tests, run in
 parallel) and GPU tests (which share one device per backend and run serialized). GPU shaders are
 authored in Slang (`.slang`) under `Tests/Shaders` and compiled to per-backend bytecode at runtime
-(SPIR-V for Vulkan, GLSL for OpenGL/ES, HLSL for D3D11); there are no checked-in compiled shaders.
+(SPIR-V for Vulkan, HLSL for D3D11); there are no checked-in compiled shaders.
 See [`Tests/README.md`](Tests/README.md) for the current suite layout and the in-progress
 migration of older suites onto the `GraphicsProgram` / `PropertySet` / `Frame` API.
 

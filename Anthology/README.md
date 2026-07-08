@@ -24,7 +24,7 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Rosetta`    | Prowl.Rosetta     | Localization utilities           |
 | `Drift`      | Prowl.Drift       | 2D Physics Engine                |
 | `Slang`      | Prowl.Slang       | Bindings for the Sland Compiler  |
-| `Graphite`   | Prowl.Graphite    | Low-level GPU graphics (Vulkan / D3D11 / GL); also `.Compiler`, `.ShaderDef`, `.Variants` |
+| `Graphite`   | Prowl.Graphite    | Low-level GPU graphics (Vulkan / D3D11); also `.Compiler`, `.ShaderDef`, `.Variants` |
 
 ## Versioning
 

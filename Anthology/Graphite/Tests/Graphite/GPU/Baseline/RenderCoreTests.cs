@@ -139,13 +139,3 @@ public class VulkanRenderCoreTests : RenderCoreTests<VulkanDeviceCreator> { }
 [Collection("GPU Tests")]
 public class D3D11RenderCoreTests : RenderCoreTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLRenderCoreTests : RenderCoreTests<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESRenderCoreTests : RenderCoreTests<OpenGLESDeviceCreator> { }
-#endif

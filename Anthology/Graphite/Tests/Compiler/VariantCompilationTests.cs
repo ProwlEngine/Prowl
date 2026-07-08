@@ -9,13 +9,13 @@ namespace Prowl.Graphite.Compiler.Tests;
 
 // Exercises variant specialization end-to-end. The shared Variants shader declares a single boolean
 // variant space (DoubleColor) consumed by the vertex stage, yielding two compiled permutations; the
-// test is platform-agnostic and registers all three backends to show the variant enumeration is
+// test is platform-agnostic and registers both backends to show the variant enumeration is
 // independent of the targets.
 public class VariantCompilationTests
 {
     static CompilationResult Compile() =>
         CompilerTestHarness.CompileSharedAll("Variants",
-            () => new GLCompiler(), () => new VulkanCompiler(), () => new DXCompiler());
+            () => new VulkanCompiler(), () => new DXCompiler());
 
 
     [Fact]
@@ -41,8 +41,8 @@ public class VariantCompilationTests
             Keyword keyword = Assert.Single(variant.Variants);
             Assert.Equal("DoubleColor", keyword.Name);
 
-            // Each permutation is compiled for all three registered backends.
-            Assert.Equal(3, variant.Backends.Length);
+            // Each permutation is compiled for both registered backends.
+            Assert.Equal(2, variant.Backends.Length);
         }
 
         string[] values = result.CompiledVariants
@@ -60,11 +60,11 @@ public class VariantCompilationTests
         CompilationResult result = Compile();
 
         // Specialization should bake the chosen DoubleColor value into each permutation's code.
-        string[] vertexGlsl = result.CompiledVariants
-            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.OpenGL).Description)
+        string[] vertexHlsl = result.CompiledVariants
+            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.Direct3D11).Description)
             .Select(d => CompilerTestHarness.StageText(d, ShaderStages.Vertex))
             .ToArray();
 
-        Assert.NotEqual(vertexGlsl[0], vertexGlsl[1]);
+        Assert.NotEqual(vertexHlsl[0], vertexHlsl[1]);
     }
 }
