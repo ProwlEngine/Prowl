@@ -25,6 +25,7 @@
   </Folder>
   <Folder Name="/Samples/">
     <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
+    <Project Path="Graphite/Samples/PBRRenderer/PBRRenderer.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />

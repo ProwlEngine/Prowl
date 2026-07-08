@@ -24,22 +24,6 @@ public static class DeviceCreateUtilities
 
         switch (backend)
         {
-            case GraphicsBackend.OpenGLES:
-            case GraphicsBackend.OpenGL:
-                if (window.API.API != ContextAPI.OpenGLES && window.API.API != ContextAPI.OpenGL)
-                    throw new Exception("Attempted to make a GL graphics device without an available GL or GLES context");
-
-                Prowl.Graphite.OpenGL.OpenGLPlatformInfo glInfo = new(
-                    glContext: window.GLContext!,
-                    setSyncToVerticalBlank: sync =>
-                    {
-                        window.VSync = sync;
-                        window.GLContext!.SwapInterval(window.VSync ? 1 : 0);
-                    });
-
-                device = GraphicsDevice.CreateOpenGL(options, glInfo, (uint)window.Size.X, (uint)window.Size.Y);
-                break;
-
             case GraphicsBackend.Direct3D11:
                 if (window.Native!.Win32 == null)
                     throw new Exception("Attempted to make a D3D11 graphics device without a Win32 window!");

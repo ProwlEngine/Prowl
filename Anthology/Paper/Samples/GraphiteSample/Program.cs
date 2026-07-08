@@ -10,8 +10,6 @@ public static class Program
 
     static GraphicsAPI SilkAPI => backend switch
     {
-        GraphicsBackend.OpenGL => new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
-        GraphicsBackend.OpenGLES => new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 2)),
         GraphicsBackend.Vulkan => new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
         _ => GraphicsAPI.None
     };
@@ -23,11 +21,9 @@ public static class Program
         {
             backend = args[0] switch
             {
-                "opengl" => GraphicsBackend.OpenGL,
-                "opengles" => GraphicsBackend.OpenGLES,
                 "vulkan" => GraphicsBackend.Vulkan,
                 "d3d11" => GraphicsBackend.Direct3D11,
-                _ => throw new Exception("Unknown backend. Must be one of: [opengl, opengles, vulkan, d3d11]")
+                _ => throw new Exception("Unknown backend. Must be one of: [vulkan, d3d11]")
             };
         }
 
