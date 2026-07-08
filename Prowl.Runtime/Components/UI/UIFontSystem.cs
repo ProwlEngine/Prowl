@@ -75,18 +75,11 @@ internal sealed class UIFontSystem : IFontRenderer
     {
         if (texture is not Texture2D tex) return;
 
-        int pixelCount = bounds.Width * bounds.Height;
-        byte[] rgba = new byte[pixelCount * 4];
-        for (int i = 0; i < pixelCount; i++)
-        {
-            byte a = i < data.Length ? data[i] : (byte)0;
-            rgba[i * 4 + 0] = 255;
-            rgba[i * 4 + 1] = 255;
-            rgba[i * 4 + 2] = 255;
-            rgba[i * 4 + 3] = a;
-        }
-
-        tex.SetData(new Memory<byte>(rgba), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);
+        // Scribe hands us RGBA data (4 bytes/pixel - the single-channel SDF replicated across the
+        // channels, matching the Color4b atlas), so write it straight in like the Quill PaperRenderer
+        // does. The old per-pixel repack treated `data` as one byte/pixel and read only the first
+        // quarter of it, scattering garbage into the alpha channel - which is why nothing rendered.
+        tex.SetData(new Memory<byte>(data), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);
     }
 
     /// <summary>

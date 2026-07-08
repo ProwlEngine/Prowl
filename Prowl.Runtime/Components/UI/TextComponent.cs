@@ -161,8 +161,11 @@ public class TextComponent : UIBehaviour
 
                 // The atlas glyph is resolution independent now: metrics come from the font at the
                 // display size, and the quad is the glyph's padded distance-field region scaled to
-                // that size (matching FontSystem.DrawLayout).
-                GlyphMetrics m = fs.System.GetGlyphMetrics(ag.Font, ag.Codepoint, pixelSize) ?? default;
+                // that size (matching FontSystem.DrawLayout). Look metrics up by GLYPH INDEX, not
+                // codepoint: shaped/substituted glyphs (ligatures, and anything through the shaper)
+                // carry Codepoint == 0, which FindGlyphIndex maps to the .notdef glyph, so a
+                // codepoint lookup returns null and every glyph gets skipped.
+                GlyphMetrics m = fs.System.GetGlyphMetricsByIndex(ag.Font, ag.GlyphIndex, pixelSize) ?? default;
                 if (m.Width <= 0 || m.Height <= 0) continue; // whitespace / invisible
 
                 float sc = ag.Font.ScaleForPixelHeight(pixelSize);
