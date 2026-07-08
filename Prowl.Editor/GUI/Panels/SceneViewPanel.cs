@@ -22,7 +22,7 @@ namespace Prowl.Editor.GUI.Panels;
 public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 {
     public override string Title => Loc.Get("panel.scene");
-    public override string Icon => EditorIcons.Video;
+    public override string Icon => EditorIcons.Shapes;
 
     private EditorCamera? _editorCamera;
 

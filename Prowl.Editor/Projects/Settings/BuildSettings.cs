@@ -110,7 +110,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         if (font == null) return;
 
         // Scene List
-        Origami.Header(paper, "bld_scenes_h", $"{EditorIcons.Film}  Scenes").Underline().Show();
+        Origami.Header(paper, "bld_scenes_h", $"{EditorIcons.Shapes}  Scenes").Underline().Show();
 
         for (int i = 0; i < Scenes.Count; i++)
         {

@@ -73,7 +73,7 @@ public static class AssetTypeStyles
         [".blend"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
         [".mesh"] = new() { Icon = EditorIcons.Cubes_I, Color = Purple },
         // Scenes / prefabs.
-        [".scene"] = new() { Icon = EditorIcons.Film_I, Color = Amber },
+        [".scene"] = new() { Icon = EditorIcons.Shapes_I, Color = Amber },
         [".prefab"] = new() { Icon = EditorIcons.Cube_I, Color = Blue },
         // Audio.
         [".mp3"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
@@ -127,11 +127,12 @@ public static class AssetTypeStyles
             if (Has("Material"))                      return new() { Icon = EditorIcons.Palette_I, Color = Pink };
             if (Has("Mesh") || Has("Model"))          return new() { Icon = EditorIcons.Cubes_I, Color = Purple };
             if (Has("Shader"))                        return new() { Icon = EditorIcons.Bolt_I, Color = Pink };
-            if (Has("Scene"))                         return new() { Icon = EditorIcons.Film_I, Color = Amber };
+            if (Has("Scene"))                         return new() { Icon = EditorIcons.Shapes_I, Color = Amber };
             if (Has("Prefab") || Has("GameObject"))   return new() { Icon = EditorIcons.Cube_I, Color = Blue };
+            // Animation before Audio: "AnimationClip" must not get swallowed by the generic "Clip" rule.
+            if (Has("Animation") || Has("Anim"))      return new() { Icon = EditorIcons.Film_I, Color = Cyan };
             if (Has("Audio") || Has("Sound") || Has("Clip")) return new() { Icon = EditorIcons.Music_I, Color = Cyan };
             if (Has("Font"))                          return new() { Icon = EditorIcons.Font_I, Color = Amber };
-            if (Has("Animation") || Has("Anim"))      return new() { Icon = EditorIcons.Bolt_I, Color = Cyan };
             if (Has("Script") || Has("MonoBehaviour")) return new() { Badge = "C#", Color = Green };
         }
         return _default;

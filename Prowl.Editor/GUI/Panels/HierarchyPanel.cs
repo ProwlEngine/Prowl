@@ -179,7 +179,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
                 paper.Box("hier_scene_icon")
                     .Width(16).Height(EditorTheme.RowHeight).IsNotInteractable()
-                    .Icon(paper, EditorIcons.Film_I, EditorTheme.Amber400, size: 14f);
+                    .Icon(paper, EditorIcons.Shapes_I, EditorTheme.Amber400, size: 14f);
 
                 paper.Box("hier_scene_name_text")
                     .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight)

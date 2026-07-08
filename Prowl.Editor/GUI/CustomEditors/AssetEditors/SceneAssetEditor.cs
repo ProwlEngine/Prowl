@@ -47,7 +47,7 @@ public class SceneAssetEditor : AssetImporterEditor
         using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
         {
-            StatChip(paper, $"{id}_st_name", $"{EditorIcons.Film}  {sceneName}", font);
+            StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
             StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);
             paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
         }

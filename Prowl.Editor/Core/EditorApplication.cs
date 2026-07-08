@@ -892,7 +892,7 @@ public class EditorApplication : Game
                 ? System.IO.Path.GetFileNameWithoutExtension(scenePath)
                 : (Runtime.Resources.Scene.Current != null ? Loc.Get("editor.untitled_scene") : Loc.Get("hierarchy.no_scene_loaded"));
             using (paper.Row("sb_scene").Width(UnitValue.Auto).Height(sh).Padding(pad, pad, 0, 0).Enter())
-                GlyphCell("sb_scene_cell", EditorIcons.Video, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
+                GlyphCell("sb_scene_cell", EditorIcons.Shapes, EditorTheme.Ink300, sceneName, EditorTheme.Ink400);
 
             Divider("sb_div2");
 
@@ -1987,23 +1987,23 @@ public class EditorApplication : Game
 
     private static DockNode CreateDefaultLayout()
     {
-        // Right: Inspector | Left: everything else
-        return DockNode.Split(SplitDirection.Horizontal, 0.78f,
-            // Left side: top (Hierarchy + Scene) | bottom (Project + Console)
-            DockNode.Split(SplitDirection.Vertical, 0.65f,
-                // Top: Hierarchy | Scene View
-                DockNode.Split(SplitDirection.Horizontal, 0.25f,
-                    DockNode.Leaf(new HierarchyPanel()),
-                    DockNode.Leaf(new SceneViewPanel(), new GameViewPanel())
-                ),
-                // Bottom: Project (65%) | Console (35%)
+        // Blender/Unreal-style: a big viewport column on the left, a thin outliner/properties column
+        // on the right.
+        return DockNode.Split(SplitDirection.Horizontal, 0.8f,
+            // Left column: Scene view on top, a Project | Console strip along the bottom.
+            DockNode.Split(SplitDirection.Vertical, 0.7f,
+                DockNode.Leaf(new SceneViewPanel(), new GameViewPanel()),
+                // Bottom strip: Project (65%) | Console (35%, smaller).
                 DockNode.Split(SplitDirection.Horizontal, 0.65f,
                     DockNode.Leaf(new ProjectPanel()),
                     DockNode.Leaf(new ConsolePanel())
                 )
             ),
-            // Right: Inspector
-            DockNode.Leaf(new InspectorPanel())
+            // Right column: Hierarchy (top 30%) | Inspector (bottom 70%).
+            DockNode.Split(SplitDirection.Vertical, 0.3f,
+                DockNode.Leaf(new HierarchyPanel()),
+                DockNode.Leaf(new InspectorPanel())
+            )
         );
     }
 }
