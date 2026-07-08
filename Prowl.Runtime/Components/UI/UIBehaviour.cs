@@ -69,7 +69,7 @@ public abstract class UIBehaviour : MonoBehaviour
     /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
     public virtual void PopulateProperties(PropertyState props, in UIContext context) { }
 
-    /// <summary>The material this element draws with. Default returns the shared `GameUI` material.</summary>
+    /// <summary>The material this element draws with. Default returns the shared `DefaultUI` material.</summary>
     public virtual Material GetMaterial() => GameCanvas.SharedUIMaterial;
 
     /// <summary>True if this element should never share a draw call with siblings (e.g. text with its own font atlas).</summary>

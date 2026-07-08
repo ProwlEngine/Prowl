@@ -107,11 +107,19 @@ public class GameCanvas : MonoBehaviour
     // ----------------------------------------------------------------
 
     private static Material? s_sharedUIMaterial;
-    /// <summary>Shared <see cref="Material"/> using the <c>Default/GameUI</c> shader.
+    /// <summary>Shared <see cref="Material"/> using the <c>Default/DefaultUI</c> shader.
     /// Lazy-allocated; reused across every UI element that doesn't override
     /// <see cref="UIBehaviour.GetMaterial"/>.</summary>
     public static Material SharedUIMaterial
-        => s_sharedUIMaterial ??= new Material(Shader.LoadDefault(DefaultShader.GameUI));
+        => s_sharedUIMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DefaultUI));
+
+    private static Material? s_sharedTextMaterial;
+    /// <summary>Shared <see cref="Material"/> using the <c>Default/DefaultText</c> shader, which
+    /// reconstructs sharp coverage from the single-channel SDF glyph atlas. Reused by every text
+    /// element (UI <c>TextComponent</c> and the 3D <c>TextMeshComponent</c>) that doesn't override
+    /// its material.</summary>
+    public static Material SharedTextMaterial
+        => s_sharedTextMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DefaultText));
 
     // ----------------------------------------------------------------
     // NEW: render tree + dirty state

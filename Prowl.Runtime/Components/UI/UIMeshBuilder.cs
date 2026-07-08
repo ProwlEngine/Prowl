@@ -51,6 +51,25 @@ public sealed class UIMeshBuilder
         _indices.Add(baseIdx + 0) ;_indices.Add(baseIdx + 3); _indices.Add(baseIdx + 2);
     }
 
+    // ---------- Raw triangle-list append ----------
+    // Used to bridge Scribe's DrawQuads output (per-vertex position/uv/colour + an index list) into
+    // the mesh, so text rendering reuses Scribe's geometry instead of re-deriving it. Colour is kept
+    // per vertex so multi-colour rich text works, not just single-colour text.
+
+    /// <summary>Index the next appended vertex will get; add this to Scribe's local indices.</summary>
+    public uint NextVertex => (uint)_verts.Count;
+
+    /// <summary>Append one vertex (position in local pixel space, atlas UV, colour).</summary>
+    public void AddVertex(Float3 position, Float2 uv, Color32 color)
+    {
+        _verts.Add(position);
+        _uvs.Add(uv);
+        _colors.Add(color);
+    }
+
+    /// <summary>Append one triangle index (already offset by <see cref="NextVertex"/> at append time).</summary>
+    public void AddIndex(uint index) => _indices.Add(index);
+
     /// <summary>
     /// Tessellates a rounded rectangle by replacing each corner with an arc of
     /// <paramref name="cornerSegments"/> triangles. The result is a triangle fan

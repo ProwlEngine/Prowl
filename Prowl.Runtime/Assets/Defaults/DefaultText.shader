@@ -1,15 +1,14 @@
-Shader "Default/GameUI"
+Shader "Default/DefaultText"
 
 Properties
 {
-    _MainTex ("Texture", Texture2D) = "white"
+    _MainTex ("SDF Atlas", Texture2D) = "white"
     _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
     _Tiling ("Tiling", Vector2) = (1.0, 1.0)
     _Offset ("Offset", Vector2) = (0.0, 0.0)
-    _SdfText ("SDF Text", Float) = 0.0
 }
 
-Pass "GameUI"
+Pass "DefaultText"
 {
     Tags { "RenderOrder" = "UI" }
 
@@ -55,11 +54,10 @@ Pass "GameUI"
 			in vec3 worldPos;
 			in vec4 vColor;
 
-			uniform sampler2D _MainTex;
+			uniform sampler2D _MainTex;   // single-channel SDF replicated across RGB(A)
 			uniform vec4 _MainColor;
-			uniform float _SdfText;   // 1 when rendering single-channel SDF glyph text
 
-			// Single-channel SDF text: reconstruct sharp coverage from the distance field.
+			// Reconstruct sharp, resolution-independent coverage from the distance field.
 			const float sdfPxRange = 4.0;
 			float sdfScreenPxRange(vec2 uv) {
 				vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(_MainTex, 0));
@@ -69,16 +67,10 @@ Pass "GameUI"
 
 			void main()
 			{
-				if (_SdfText > 0.5) {
-					float sd = texture(_MainTex, texCoord0).r;
-					float screenPxDistance = sdfScreenPxRange(texCoord0) * (sd - 0.5);
-					float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-					fragColor = vColor * _MainColor * coverage;
-					return;
-				}
-
-				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
-				fragColor = albedo;
+				float sd = texture(_MainTex, texCoord0).r;
+				float screenPxDistance = sdfScreenPxRange(texCoord0) * (sd - 0.5);
+				float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+				fragColor = vColor * _MainColor * coverage;
 			}
 		}
 	ENDGLSL

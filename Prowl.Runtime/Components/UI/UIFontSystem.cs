@@ -82,12 +82,47 @@ internal sealed class UIFontSystem : IFontRenderer
         tex.SetData(new Memory<byte>(data), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);
     }
 
+    // ---- Mesh capture -------------------------------------------------------------------------
+    // A text component sets a capture target + coordinate mapping, calls Scribe's DrawLayout /
+    // RichTextLayout.Draw (which drive DrawQuads below), then clears it. Single-threaded UI build,
+    // so a single set of fields is fine.
+    private UIMeshBuilder? _target;
+    private float _originX;
+    private float _baseY;
+
     /// <summary>
-    /// Internal DrawQuads is not used- Instead <see cref="TextComponent"/> walks the
-    /// <see cref="TextLayout"/> itself and emits quads into <see cref="UIMeshBuilder"/>.
+    /// Route the next <see cref="System"/>.<c>DrawLayout</c> / rich-text draw into <paramref name="builder"/>,
+    /// mapping Scribe's +Y-down layout space (origin passed as (0,0)) into element-local +Y-up space:
+    /// <c>x -> originX + x</c>, <c>y -> baseY - y</c>. Always pair with <see cref="EndCapture"/>.
+    /// </summary>
+    public void BeginCapture(UIMeshBuilder builder, float originX, float baseY)
+    {
+        _target = builder;
+        _originX = originX;
+        _baseY = baseY;
+    }
+
+    public void EndCapture() => _target = null;
+
+    /// <summary>
+    /// Scribe's draw callback: append its generated glyph triangles to the active capture target,
+    /// transformed into element-local space, keeping per-vertex colour (so rich text works).
     /// </summary>
     public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
     {
-        // Intentionally empty.
+        UIMeshBuilder? b = _target;
+        if (b is null) return;
+
+        uint baseIdx = b.NextVertex;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            IFontRenderer.Vertex v = vertices[i];
+            b.AddVertex(
+                new Float3(_originX + v.Position.X, _baseY - v.Position.Y, 0f),
+                v.TextureCoordinate,
+                Color32.FromArgb(v.Color.A, v.Color.R, v.Color.G, v.Color.B));
+        }
+        for (int i = 0; i < indices.Length; i++)
+            b.AddIndex(baseIdx + (uint)indices[i]);
     }
 }
