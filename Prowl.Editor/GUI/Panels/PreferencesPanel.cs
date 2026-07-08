@@ -247,11 +247,11 @@ public class PreferencesPanel : DockPanel
         var semi = EditorTheme.FontSemiBold ?? font;
         using (paper.Row("pref_theme_footer").Width(ST).Height(h).Padding(PAD * 2, PAD * 2, 0, 0).RowBetween(SP * 2).Enter())
         {
-            ThChip(paper, "pref_ft_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_default")}", () => s.ResetTheme());
+            EditorGUI.Chip(paper, "pref_ft_reset", $"{EditorIcons.RotateLeft}  {Loc.Get("pref.reset_default")}", () => s.ResetTheme());
 
             paper.Box("pref_ft_sp").Width(ST).Height(1).IsNotInteractable();
 
-            ThChip(paper, "pref_ft_import", $"{EditorIcons.Upload}  {Loc.Get("pref.import")}", () =>
+            EditorGUI.Chip(paper, "pref_ft_import", $"{EditorIcons.Upload}  {Loc.Get("pref.import")}", () =>
                 EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
                 {
                     if (path == null) return;
@@ -259,7 +259,7 @@ public class PreferencesPanel : DockPanel
                     if (imported != null) { s.Theme = imported; s.ApplyTheme(); s.Save(); Toasts.Info(Loc.Get("pref.toast_theme"), Loc.Get("pref.toast_imported", new { name = imported.Name })); }
                 }, filters: new[] { "*.prowltheme" }, filterLabels: new[] { Loc.Get("pref.theme_filter") }));
 
-            ThChip(paper, "pref_ft_export", $"{EditorIcons.Download}  {Loc.Get("pref.export")}", () =>
+            EditorGUI.Chip(paper, "pref_ft_export", $"{EditorIcons.Download}  {Loc.Get("pref.export")}", () =>
                 EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
                 {
                     if (path == null) return;
@@ -321,129 +321,10 @@ public class PreferencesPanel : DockPanel
         s.ApplyTheme(); s.Save();
     }
 
-    // th-sec: uppercase accent section label. Extra top gap separates it from the previous group.
-    private void ThSec(Paper paper, string id, string text, bool first = false)
-    {
-        var semi = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        paper.Box(id).Width(ST).Height(18).Margin(0, 0, first ? 0 : SP * 2, SP).IsNotInteractable()
-            .Text(text.ToUpperInvariant(), semi).TextColor(EditorTheme.AccentText)
-            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-    }
-
-    // th-row: 108px bright label + control.
-    private void ThRow(Paper paper, string id, string label, Action drawControl, float minH = 34f, float botMargin = 0f)
-    {
-        var font = EditorTheme.DefaultFont;
-        using (paper.Row(id).Width(ST).Height(UnitValue.Auto).MinHeight(minH).Margin(0, 0, 0, botMargin).RowBetween(PAD * 2).Enter())
-        {
-            paper.Box($"{id}_l").Width(EditorTheme.LabelWidth).Height(minH).Margin(0, 0, ST, ST).IsNotInteractable()
-                .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
-                .Alignment(TextAlignment.MiddleLeft).TextTruncate();
-            // No MinHeight here: the column sizes to the widget so its stretch top/bottom margins center
-            // it in the row. With a forced MinHeight the widget would top-align while the label stays
-            // centered, leaving them visually misaligned.
-            using (paper.Column($"{id}_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST).Enter())
-                drawControl();
-        }
-    }
-
-    private void ThSlider(Paper paper, EditorSettings s, string id, string label, float value,
-        float min, float max, string fmt, Action<float> set, bool applyLive = true)
-    {
-        ThRow(paper, id, label, () =>
-            Origami.Slider(paper, $"{id}_v", value, v =>
-            {
-                set(MathF.Round(v, 2));
-                if (applyLive) s.ApplyTheme();
-                s.Save();
-            }, min, max).Format(fmt).Show());
-    }
-
-    // th-swrow: a colorbox (opens the picker) + a quick-pick palette. Small palettes (Background/Text)
-    // sit inline on one row; larger ones drop the palette to a second row (like the prototype's wrap).
-    // Explicit swatch margins since RowBetween doesn't gap these tight rows reliably.
-    private void ThSwatchRow(Paper paper, EditorSettings s, string id, string label, ColorRamp ramp, string[] palette)
-    {
-        bool inline = palette.Length <= 6;
-
-        void ColorBox() =>
-            Origami.ColorField(paper, $"{id}_cf", HexToVColor(ramp.Primary), v =>
-            { ramp.Primary = VColorToHex(v); ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); }).Width(130f).Show();
-
-        // Each swatch: a 20px colour fill with, when selected, a 2px accent ring drawn ~3px OUTSIDE
-        // it (a visible gap), so it reads as a ring even when the swatch colour equals the accent.
-        // Drawn via Quill so the ring can extend past the fill.
-        void Swatch(string hex)
-        {
-            var col = Hx(hex);
-            bool on = string.Equals(ramp.Primary, hex, StringComparison.OrdinalIgnoreCase);
-            paper.Box($"{id}_p_{hex}").Width(28).Height(28).Margin(0, SP * 2, ST, ST)
-                .OnClick(hex, (h, _) => { ramp.Primary = h; ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); })
-                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                {
-                    float cx = (float)(r.Min.X + r.Size.X / 2), cy = (float)(r.Min.Y + r.Size.Y / 2);
-                    const float sw = 20f;
-                    canvas.RoundedRectFilled(cx - sw / 2, cy - sw / 2, sw, sw, 6f,
-                        Prowl.Vector.Color32.FromArgb(255, col.R, col.G, col.B));
-                    canvas.RoundedRect(cx - sw / 2, cy - sw / 2, sw, sw, 6f);
-                    canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(30, 255, 255, 255));
-                    canvas.SetStrokeWidth(1f);
-                    canvas.Stroke();
-                    if (on)
-                    {
-                        var acc = EditorTheme.Accent;
-                        const float ring = 27f;
-                        canvas.RoundedRect(cx - ring / 2, cy - ring / 2, ring, ring, 8f);
-                        canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(255, acc.R, acc.G, acc.B));
-                        canvas.SetStrokeWidth(2f);
-                        canvas.Stroke();
-                    }
-                }));
-        }
-
-        void Palette()
-        {
-            foreach (var hex in palette)
-                Swatch(hex);
-        }
-
-        ThRow(paper, id, label, () =>
-        {
-            if (inline)
-                using (paper.Row($"{id}_r").Width(ST).Height(UnitValue.Auto).MinHeight(30).Enter())
-                {
-                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, PAD * 2, ST, ST).Enter())
-                        ColorBox();
-                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Margin(0, 0, ST, ST).Enter())
-                        Palette();
-                }
-            else
-                using (paper.Column($"{id}_r").Width(ST).Height(UnitValue.Auto).Enter())
-                {
-                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, 0, 0, SP * 2).Enter())
-                        ColorBox();
-                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Enter())
-                        Palette();
-                }
-        }, minH: inline ? 36f : 68f);
-    }
-
-    // .chip: glass pill button. leftGap adds explicit horizontal spacing from the previous chip.
-    private void ThChip(Paper paper, string id, string label, Action onClick, float leftGap = 0f)
-    {
-        var font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, ST, ST).Rounded(8).Padding(11, 11, 0, 0)
-            .BackgroundColor(EditorTheme.Neutral400).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
-    }
-
     // ---- Presets ----
     private void DrawThemePresets(Paper paper, Scribe.FontFile font, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_pr_hdr", Loc.Get("pref.builtin_themes"), first: true);
+        EditorGUI.SectionHeader(paper, "pref_pr_hdr", Loc.Get("pref.builtin_themes"), first: true, compact: true);
 
         const int cols = 3;
         for (int r = 0; r * cols < _presets.Length; r++)
@@ -495,144 +376,120 @@ public class PreferencesPanel : DockPanel
     // ---- Colors ----
     private void DrawThemeColors(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_cl_accent", Loc.Get("pref.accent"), first: true);
-        ThSwatchRow(paper, s, "accent_primary", Loc.Get("pref.primary"), theme.Purple, _accentPalette);
-        ThDiv(paper, "pref_cl_d0");
-        ThSwatchRow(paper, s, "accent_info", Loc.Get("pref.info"), theme.Blue, _accentPalette);
+        EditorGUI.SectionHeader(paper, "pref_cl_accent", Loc.Get("pref.accent"), first: true, compact: true);
+        EditorGUI.SwatchRow(paper, s, "accent_primary", Loc.Get("pref.primary"), theme.Purple, _accentPalette);
+        EditorGUI.Divider(paper, "pref_cl_d0");
+        EditorGUI.SwatchRow(paper, s, "accent_info", Loc.Get("pref.info"), theme.Blue, _accentPalette);
 
-        ThSec(paper, "pref_cl_surf", Loc.Get("pref.surfaces"));
-        ThSwatchRow(paper, s, "surf_neutral", Loc.Get("pref.neutral"), theme.Neutral, _bgPalette);
-        ThDiv(paper, "pref_cl_d1");
-        ThSwatchRow(paper, s, "surf_ink", Loc.Get("pref.ink"), theme.Ink, _textPalette);
+        EditorGUI.SectionHeader(paper, "pref_cl_surf", Loc.Get("pref.surfaces"), compact: true);
+        EditorGUI.SwatchRow(paper, s, "surf_neutral", Loc.Get("pref.neutral"), theme.Neutral, _bgPalette);
+        EditorGUI.Divider(paper, "pref_cl_d1");
+        EditorGUI.SwatchRow(paper, s, "surf_ink", Loc.Get("pref.ink"), theme.Ink, _textPalette);
 
-        ThSec(paper, "pref_cl_sem", Loc.Get("pref.semantic"));
-        ThSwatchRow(paper, s, "sem_success", Loc.Get("pref.success"), theme.Green, _accentPalette);
-        ThDiv(paper, "pref_cl_d2");
-        ThSwatchRow(paper, s, "sem_warning", Loc.Get("pref.warning"), theme.Amber, _accentPalette);
-        ThDiv(paper, "pref_cl_d3");
-        ThSwatchRow(paper, s, "sem_danger", Loc.Get("pref.danger"), theme.Red, _accentPalette);
+        EditorGUI.SectionHeader(paper, "pref_cl_sem", Loc.Get("pref.semantic"), compact: true);
+        EditorGUI.SwatchRow(paper, s, "sem_success", Loc.Get("pref.success"), theme.Green, _accentPalette);
+        EditorGUI.Divider(paper, "pref_cl_d2");
+        EditorGUI.SwatchRow(paper, s, "sem_warning", Loc.Get("pref.warning"), theme.Amber, _accentPalette);
+        EditorGUI.Divider(paper, "pref_cl_d3");
+        EditorGUI.SwatchRow(paper, s, "sem_danger", Loc.Get("pref.danger"), theme.Red, _accentPalette);
     }
-
-    // Thin divider between color rows.
-    private void ThDiv(Paper paper, string id)
-        => paper.Box(id).Width(ST).Height(1).Margin(0, 0, 0, SP).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
-
 
     // ---- Typography ----
     private void DrawThemeType(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true);
-        ThRow(paper, "pref_ty_ui", Loc.Get("pref.ui_font"), () =>
-            Origami.TextField(paper, "pref_ty_ui_v", theme.DefaultFontName, v => { theme.DefaultFontName = v; s.ApplyTheme(); s.Save(); }).Show());
-        ThRow(paper, "pref_ty_bold", Loc.Get("pref.bold_font"), () =>
-            Origami.TextField(paper, "pref_ty_bold_v", theme.DefaultBoldFontName, v => { theme.DefaultBoldFontName = v; s.ApplyTheme(); s.Save(); }).Show());
+        EditorGUI.SectionHeader(paper, "pref_ty_fonts", Loc.Get("pref.fonts"), first: true, compact: true);
+        EditorGUI.Row(paper, "pref_ty_ui", Loc.Get("pref.ui_font"), () =>
+            Origami.TextField(paper, "pref_ty_ui_v", theme.DefaultFontName, v => { theme.DefaultFontName = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
+        EditorGUI.Row(paper, "pref_ty_bold", Loc.Get("pref.bold_font"), () =>
+            Origami.TextField(paper, "pref_ty_bold_v", theme.DefaultBoldFontName, v => { theme.DefaultBoldFontName = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
 
-        ThSec(paper, "pref_ty_size", Loc.Get("pref.sizing"));
-        ThSlider(paper, s, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, "F2", v => theme.FontSize = v);
+        EditorGUI.SectionHeader(paper, "pref_ty_size", Loc.Get("pref.sizing"), compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_ty_base", Loc.Get("pref.base_size"), theme.FontSize, 8, 32, v => { theme.FontSize = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
     }
 
     // ---- Spacing & Density ----
     private void DrawThemeSpacing(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_sp_density", Loc.Get("pref.density"), first: true);
+        EditorGUI.SectionHeader(paper, "pref_sp_density", Loc.Get("pref.density"), first: true, compact: true);
 
         int densityIdx =
             (theme.Spacing == 2f && theme.Padding == 4f && theme.RowHeight == 20f) ? 0 :
             (theme.Spacing == 6f && theme.Padding == 9f && theme.RowHeight == 28f) ? 2 :
             (theme.Spacing == 4f && theme.Padding == 6f && theme.RowHeight == 24f) ? 1 : -1;
 
-        ThRow(paper, "pref_sp_seg", Loc.Get("pref.preset"), () =>
+        EditorGUI.Row(paper, "pref_sp_seg", Loc.Get("pref.preset"), () =>
             Origami.ButtonGroup(paper, "pref_sp_bg", densityIdx, idx =>
             {
                 (float sp, float pad, float rh) = idx switch { 0 => (2f, 4f, 20f), 2 => (6f, 9f, 28f), _ => (4f, 6f, 24f) };
                 theme.Spacing = sp; theme.Padding = pad; theme.RowHeight = rh;
                 s.ApplyTheme(); s.Save();
-            }).Segmented().Item(Loc.Get("pref.compact")).Item(Loc.Get("pref.cozy")).Item(Loc.Get("pref.spacious")).Show());
+            }).Segmented().Item(Loc.Get("pref.compact")).Item(Loc.Get("pref.cozy")).Item(Loc.Get("pref.spacious")).Show(), compact: true);
 
-        ThSec(paper, "pref_sp_metrics", Loc.Get("pref.metrics"));
-        ThSlider(paper, s, "pref_sp_spacing", Loc.Get("pref.spacing"), theme.Spacing, 0, 12, "F2", v => theme.Spacing = v);
-        ThSlider(paper, s, "pref_sp_padding", Loc.Get("pref.padding"), theme.Padding, 0, 16, "F2", v => theme.Padding = v);
-        ThSlider(paper, s, "pref_sp_row", Loc.Get("pref.row_height"), theme.RowHeight, 16, 40, "F2", v => theme.RowHeight = v);
-        ThSlider(paper, s, "pref_sp_menu", Loc.Get("pref.menu_bar_height"), theme.MenuBarHeight, 18, 48, "F2", v => theme.MenuBarHeight = v);
-        ThSlider(paper, s, "pref_sp_status", Loc.Get("pref.status_bar_height"), theme.StatusBarHeight, 16, 40, "F2", v => theme.StatusBarHeight = v);
-        ThSlider(paper, s, "pref_sp_label", Loc.Get("pref.label_width"), theme.LabelWidth, 60, 240, "F2", v => theme.LabelWidth = v);
-        ThSlider(paper, s, "pref_sp_dock", Loc.Get("pref.dock_spacing"), theme.DockSpacing, 0, 24, "F2", v => theme.DockSpacing = v);
-        ThSlider(paper, s, "pref_sp_tabh", Loc.Get("pref.tab_bar_height"), theme.TabBarHeight, 18, 40, "F2", v => theme.TabBarHeight = v);
-        ThSlider(paper, s, "pref_sp_tabp", Loc.Get("pref.tab_padding"), theme.TabPadding, 4, 24, "F2", v => theme.TabPadding = v);
-        ThSlider(paper, s, "pref_sp_scale", Loc.Get("pref.user_scale"), theme.UserScale, 0.5f, 2, "F2", v => theme.UserScale = v, applyLive: false);
+        EditorGUI.SectionHeader(paper, "pref_sp_metrics", Loc.Get("pref.metrics"), compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_spacing", Loc.Get("pref.spacing"), theme.Spacing, 0, 12, v => { theme.Spacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_padding", Loc.Get("pref.padding"), theme.Padding, 0, 16, v => { theme.Padding = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_row", Loc.Get("pref.row_height"), theme.RowHeight, 16, 40, v => { theme.RowHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_menu", Loc.Get("pref.menu_bar_height"), theme.MenuBarHeight, 18, 48, v => { theme.MenuBarHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_status", Loc.Get("pref.status_bar_height"), theme.StatusBarHeight, 16, 40, v => { theme.StatusBarHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_label", Loc.Get("pref.label_width"), theme.LabelWidth, 60, 240, v => { theme.LabelWidth = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_dock", Loc.Get("pref.dock_spacing"), theme.DockSpacing, 0, 24, v => { theme.DockSpacing = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_tabh", Loc.Get("pref.tab_bar_height"), theme.TabBarHeight, 18, 40, v => { theme.TabBarHeight = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_tabp", Loc.Get("pref.tab_padding"), theme.TabPadding, 4, 24, v => { theme.TabPadding = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sp_scale", Loc.Get("pref.user_scale"), theme.UserScale, 0.5f, 2, v => { theme.UserScale = v; s.Save(); }, "F2", separator: false, compact: true);
     }
 
     // ---- Corners & Borders ----
     private void DrawThemeShape(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_sh_corner", Loc.Get("pref.corner_radius"), first: true);
-        ThSlider(paper, s, "pref_sh_round", Loc.Get("pref.roundness"), theme.Roundness, 0, 20, "F2", v => theme.Roundness = v);
-    }
-
-    // th-row colour field editing a hex-string theme value.
-    private void ThColorField(Paper paper, EditorSettings s, string id, string label, Func<string> get, Action<string> set)
-    {
-        ThRow(paper, id, label, () =>
-            Origami.ColorField(paper, $"{id}_v", HexToVColor(get()), v =>
-            { set(VColorToHex(v)); s.ApplyTheme(); s.Save(); }).Width(130f).Show());
-    }
-
-    // th-row toggle: label + a pill switch pinned right.
-    private void ThToggle(Paper paper, EditorSettings s, string id, string label, bool value, Action<bool> set)
-    {
-        ThRow(paper, id, label, () =>
-        {
-            using (paper.Row($"{id}_tw").Width(UnitValue.Auto).Height(Origami.Current.Metrics.RowHeight)
-                .Margin(0, 0, ST, ST).Enter())
-                Origami.Switch(paper, $"{id}_sw", value, v => { set(v); s.ApplyTheme(); s.Save(); }).NoLabel().Show();
-        });
+        EditorGUI.SectionHeader(paper, "pref_sh_corner", Loc.Get("pref.corner_radius"), first: true, compact: true);
+        EditorGUI.SettingsSlider(paper, "pref_sh_round", Loc.Get("pref.roundness"), theme.Roundness, 0, 20, v => { theme.Roundness = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
     }
 
     // ---- Effects ----
     private void DrawThemeEffects(Paper paper, EditorSettings s, EditorThemeData theme)
     {
-        ThSec(paper, "pref_fx_depth", Loc.Get("pref.depth"), first: true);
-        ThToggle(paper, s, "pref_fx_glass", Loc.Get("pref.glass_blur"), theme.GlassBlur, v => theme.GlassBlur = v);
+        EditorGUI.SectionHeader(paper, "pref_fx_depth", Loc.Get("pref.depth"), first: true, compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_fx_glass", Loc.Get("pref.glass_blur"), theme.GlassBlur, v => { theme.GlassBlur = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         if (theme.GlassBlur)
-            ThSlider(paper, s, "pref_fx_blur", Loc.Get("pref.blur_amount"), theme.BlurAmount, 0, 40, "F2", v => theme.BlurAmount = v);
-        ThToggle(paper, s, "pref_fx_shadow", Loc.Get("pref.drop_shadows"), theme.DropShadows, v => theme.DropShadows = v);
-        ThToggle(paper, s, "pref_fx_glow", Loc.Get("pref.accent_glow"), theme.AccentGlow, v => theme.AccentGlow = v);
+            EditorGUI.SettingsSlider(paper, "pref_fx_blur", Loc.Get("pref.blur_amount"), theme.BlurAmount, 0, 40, v => { theme.BlurAmount = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_fx_shadow", Loc.Get("pref.drop_shadows"), theme.DropShadows, v => { theme.DropShadows = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_fx_glow", Loc.Get("pref.accent_glow"), theme.AccentGlow, v => { theme.AccentGlow = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
 
         // Per-layer nebula controls (apply to the animated nebula and the static-Nebula style).
         void NebulaLayers()
         {
-            ThToggle(paper, s, "pref_fx_grad", Loc.Get("pref.nebula_gradients"), theme.BgShowGradients, v => theme.BgShowGradients = v);
-            ThToggle(paper, s, "pref_fx_stars", Loc.Get("pref.stars"), theme.BgShowStars, v => theme.BgShowStars = v);
-            ThToggle(paper, s, "pref_fx_comets", Loc.Get("pref.comets"), theme.BgShowComets, v => theme.BgShowComets = v);
-            ThColorField(paper, s, "pref_fx_void", Loc.Get("pref.void_color"), () => theme.BackgroundVoidColor, v => theme.BackgroundVoidColor = v);
+            EditorGUI.SettingsToggle(paper, "pref_fx_grad", Loc.Get("pref.nebula_gradients"), theme.BgShowGradients, v => { theme.BgShowGradients = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+            EditorGUI.SettingsToggle(paper, "pref_fx_stars", Loc.Get("pref.stars"), theme.BgShowStars, v => { theme.BgShowStars = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+            EditorGUI.SettingsToggle(paper, "pref_fx_comets", Loc.Get("pref.comets"), theme.BgShowComets, v => { theme.BgShowComets = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+            EditorGUI.SettingsColorField(paper, "pref_fx_void", Loc.Get("pref.void_color"), () => theme.BackgroundVoidColor, v => { theme.BackgroundVoidColor = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         }
 
-        ThSec(paper, "pref_fx_bg", Loc.Get("pref.background"));
-        ThToggle(paper, s, "pref_fx_anim", Loc.Get("pref.animated_bg"), theme.AnimatedBackground, v => theme.AnimatedBackground = v);
+        EditorGUI.SectionHeader(paper, "pref_fx_bg", Loc.Get("pref.background"), compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_fx_anim", Loc.Get("pref.animated_bg"), theme.AnimatedBackground, v => { theme.AnimatedBackground = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
         if (theme.AnimatedBackground)
         {
-            ThSlider(paper, s, "pref_fx_speed", Loc.Get("pref.speed"), theme.BackgroundSpeed, 0, 3, "F2", v => theme.BackgroundSpeed = v);
+            EditorGUI.SettingsSlider(paper, "pref_fx_speed", Loc.Get("pref.speed"), theme.BackgroundSpeed, 0, 3, v => { theme.BackgroundSpeed = v; s.ApplyTheme(); s.Save(); }, "F2", separator: false, compact: true);
             NebulaLayers();
         }
         else
         {
-            ThRow(paper, "pref_fx_style", Loc.Get("pref.style"), () =>
+            EditorGUI.Row(paper, "pref_fx_style", Loc.Get("pref.style"), () =>
                 Origami.EnumDropdown(paper, "pref_fx_style_v", theme.BackgroundStyle,
-                    v => { theme.BackgroundStyle = v; s.ApplyTheme(); s.Save(); }).Show());
+                    v => { theme.BackgroundStyle = v; s.ApplyTheme(); s.Save(); }).Show(), compact: true);
 
             if (theme.BackgroundStyle == EditorBackgroundStyle.Gradient)
             {
-                ThColorField(paper, s, "pref_fx_ca", Loc.Get("env.top_color"), () => theme.BackgroundColorA, v => theme.BackgroundColorA = v);
-                ThColorField(paper, s, "pref_fx_cb", Loc.Get("env.bottom_color"), () => theme.BackgroundColorB, v => theme.BackgroundColorB = v);
+                EditorGUI.SettingsColorField(paper, "pref_fx_ca", Loc.Get("env.top_color"), () => theme.BackgroundColorA, v => { theme.BackgroundColorA = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
+                EditorGUI.SettingsColorField(paper, "pref_fx_cb", Loc.Get("env.bottom_color"), () => theme.BackgroundColorB, v => { theme.BackgroundColorB = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             }
             else if (theme.BackgroundStyle == EditorBackgroundStyle.Color)
             {
-                ThColorField(paper, s, "pref_fx_ca", Loc.Get("env.color"), () => theme.BackgroundColorA, v => theme.BackgroundColorA = v);
+                EditorGUI.SettingsColorField(paper, "pref_fx_ca", Loc.Get("env.color"), () => theme.BackgroundColorA, v => { theme.BackgroundColorA = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
             }
         }
 
-        ThSec(paper, "pref_fx_render", Loc.Get("pref.rendering"));
-        ThToggle(paper, s, "pref_fx_aa", Loc.Get("pref.anti_aliasing"), theme.AntiAliasing, v => theme.AntiAliasing = v);
+        EditorGUI.SectionHeader(paper, "pref_fx_render", Loc.Get("pref.rendering"), compact: true);
+        EditorGUI.SettingsToggle(paper, "pref_fx_aa", Loc.Get("pref.anti_aliasing"), theme.AntiAliasing, v => { theme.AntiAliasing = v; s.ApplyTheme(); s.Save(); }, separator: false, compact: true);
     }
 
     // ---- Live preview (mini editor chrome drawn with live EditorTheme tokens) ----
@@ -888,23 +745,5 @@ public class PreferencesPanel : DockPanel
                 }
             }
         }
-    }
-
-    // ================================================================
-    //  Color conversion helpers
-    // ================================================================
-
-    private static VColor HexToVColor(string hex)
-    {
-        var c = ColorRamp.ParseHex(hex);
-        return new VColor(c.R / 255f, c.G / 255f, c.B / 255f, 1f);
-    }
-
-    private static string VColorToHex(VColor c)
-    {
-        int r = Math.Clamp((int)(c.R * 255), 0, 255);
-        int g = Math.Clamp((int)(c.G * 255), 0, 255);
-        int b = Math.Clamp((int)(c.B * 255), 0, 255);
-        return $"#{r:X2}{g:X2}{b:X2}";
     }
 }

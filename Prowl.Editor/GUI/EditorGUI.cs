@@ -9,6 +9,7 @@ using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 
 using Color = System.Drawing.Color;
+using VColor = Prowl.Vector.Color;
 
 namespace Prowl.Editor.GUI;
 
@@ -31,62 +32,85 @@ public static class EditorGUI
     /// empty <paramref name="label"/> gives the control the full width.
     /// </summary>
     public static void Row(Paper paper, string id, string label, Action drawControl,
-        bool separator = false, float? labelWidth = null)
+        bool separator = false, float? labelWidth = null, bool compact = false, float minHeight = 0f)
     {
         var m = Origami.Current.Metrics;
 
         if (!separator)
         {
             // Inspector rhythm: the between-row gap is a Spacing-driven bottom margin (not vertical
-            // padding) so hand-drawn rows line up with the reflection-drawn PropertyGrid.
-            DrawRowLine(paper, id, label, drawControl, m, labelWidth,
-                vpad: 0, bottomMargin: m.SpacingLarge);
+            // padding) so hand-drawn rows line up with the reflection-drawn PropertyGrid. Compact rows
+            // rely on their host column's ColBetween instead, so they take no bottom margin.
+            DrawRowLine(paper, id, label, drawControl, m, labelWidth, compact, minHeight,
+                vpad: 0, bottomMargin: compact ? 0f : m.SpacingLarge);
             return;
         }
 
         // A Spacing-driven gap after the divider, so between-setting spacing tracks the theme's Spacing.
         using (paper.Column(id).Width(ST).Height(UnitValue.Auto).Margin(0, 0, 0, m.Spacing).Enter())
         {
-            DrawRowLine(paper, $"{id}_r", label, drawControl, m, labelWidth,
+            DrawRowLine(paper, $"{id}_r", label, drawControl, m, labelWidth, compact, minHeight,
                 vpad: m.PaddingSmall, bottomMargin: 0);
             paper.Box($"{id}_d").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         }
     }
 
     private static void DrawRowLine(Paper paper, string id, string label, Action drawControl,
-        OrigamiMetrics m, float? labelWidth, float vpad, float bottomMargin)
+        OrigamiMetrics m, float? labelWidth, bool compact, float minHeight, float vpad, float bottomMargin)
     {
         var font = EditorTheme.DefaultFont;
-        float rh = m.RowHeight;
+        float rh = minHeight > 0f ? minHeight : m.RowHeight;
+        // Compact rows (theme editor) use a brighter, smaller label and no horizontal padding since the
+        // hosting column already pads; standard rows use the muted label + a PaddingLarge gutter.
+        float hpad = compact ? 0f : m.PaddingLarge;
+        var labelColor = compact ? EditorTheme.Ink500 : Origami.Current.Ink.C300;
+        float labelSize = compact ? EditorTheme.FontSizeSmall : m.FontSize;
         using (paper.Row(id).Width(ST).Height(UnitValue.Auto).MinHeight(rh)
-            .Padding(m.PaddingLarge, m.PaddingLarge, vpad, vpad).RowBetween(m.Padding)
+            .Padding(hpad, hpad, vpad, vpad).RowBetween(m.Padding)
             .Margin(0, 0, 0, bottomMargin).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
                 paper.Box($"{id}_l").Width(labelWidth ?? m.LabelWidth).Height(rh)
                     .Margin(0, 0, ST, ST).IsNotInteractable()
-                    .Text(label, font).TextColor(Origami.Current.Ink.C300).FontSize(m.FontSize)
+                    .Text(label, font).TextColor(labelColor).FontSize(labelSize)
                     .Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            using (paper.Box($"{id}_c").Width(ST).Height(UnitValue.Auto).MinHeight(rh).Enter())
+            // The control sizes to its widget and centers via stretch margins. (A forced MinHeight here
+            // used to top-align the widget while the label stayed centered, so they didn't line up.)
+            using (paper.Box($"{id}_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST).Enter())
                 drawControl();
         }
     }
 
     /// <summary>A settings-window row (label + control with a bottom divider by default).</summary>
     public static void SettingsRow(Paper paper, string id, string label, Action drawControl,
-        bool separator = true, float? labelWidth = null)
-        => Row(paper, id, label, drawControl, separator, labelWidth);
+        bool separator = true, float? labelWidth = null, bool compact = false, float minHeight = 0f)
+        => Row(paper, id, label, drawControl, separator, labelWidth, compact, minHeight);
 
     /// <summary>A label + pill-toggle settings row (respects the label gutter).</summary>
     public static void SettingsToggle(Paper paper, string id, string label, bool value,
-        Action<bool> setter, bool separator = true)
+        Action<bool> setter, bool separator = true, bool compact = false)
         => SettingsRow(paper, id, label, () =>
         {
             using (paper.Row($"{id}_tw").Width(ST).Height(Origami.Current.Metrics.RowHeight)
                 .Margin(0, 0, ST, ST).Enter())
                 Origami.Switch(paper, $"{id}_sw", value, setter).NoLabel().Show();
-        }, separator);
+        }, separator, compact: compact);
+
+    /// <summary>A label + slider settings row. The value is rounded to 2 decimals before
+    /// <paramref name="setter"/> is called; <paramref name="format"/> controls the readout.</summary>
+    public static void SettingsSlider(Paper paper, string id, string label, float value, float min, float max,
+        Action<float> setter, string format = "F2", bool separator = true, bool compact = false)
+        => SettingsRow(paper, id, label, () =>
+            Origami.Slider(paper, $"{id}_v", value, v => setter(MathF.Round(v, 2)), min, max)
+                .Format(format).Show(), separator, compact: compact);
+
+    /// <summary>A label + colour-field settings row editing a "#RRGGBB" hex string.</summary>
+    public static void SettingsColorField(Paper paper, string id, string label, Func<string> get,
+        Action<string> setter, bool separator = true, bool compact = false)
+        => SettingsRow(paper, id, label, () =>
+            Origami.ColorField(paper, $"{id}_v", HexToVColor(get()), v => setter(VColorToHex(v)))
+                .Width(130f).Show(), separator, compact: compact);
 
     // =====================================================================
     //  Settings-window chrome
@@ -126,13 +150,18 @@ public static class EditorGUI
         return width;
     }
 
-    /// <summary>Uppercase accent section header, left-aligned to the row labels.</summary>
-    public static void SectionHeader(Paper paper, string id, string text, bool first = false)
+    /// <summary>Uppercase accent section header, left-aligned to the row labels. The <paramref name="compact"/>
+    /// variant (theme editor) is shorter and sits flush-left since its host column already pads.</summary>
+    public static void SectionHeader(Paper paper, string id, string text, bool first = false, bool compact = false)
     {
         var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
         if (font == null) return;
         var m = Origami.Current.Metrics;
-        paper.Box(id).Width(ST).Height(22).Margin(m.PaddingLarge, 0, first ? 2 : 14, 4).IsNotInteractable()
+        float h = compact ? 18f : 22f;
+        float leftPad = compact ? 0f : m.PaddingLarge;
+        float topGap = compact ? (first ? 0f : EditorTheme.Spacing * 2f) : (first ? 2f : 14f);
+        float botGap = compact ? EditorTheme.Spacing : 4f;
+        paper.Box(id).Width(ST).Height(h).Margin(leftPad, 0, topGap, botGap).IsNotInteractable()
             .Text(text.ToUpperInvariant(), font).TextColor(EditorTheme.AccentText)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
     }
@@ -174,5 +203,102 @@ public static class EditorGUI
                 .Padding(m.SpacingSmall, m.SpacingSmall, m.SpacingMedium, m.SpacingMedium).Enter())
                 body();
         }
+    }
+
+    /// <summary>A glass pill button (label + click). <paramref name="leftGap"/> adds explicit spacing
+    /// from a previous chip.</summary>
+    public static void Chip(Paper paper, string id, string label, Action onClick, float leftGap = 0f)
+    {
+        var font = EditorTheme.DefaultFont;
+        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, ST, ST).Rounded(8).Padding(11, 11, 0, 0)
+            .BackgroundColor(EditorTheme.Neutral400).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
+            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
+    // =====================================================================
+    //  Colour editing (theme ramps)
+    // =====================================================================
+
+    /// <summary>A colour row: a colour box (opens the picker) + a quick-pick palette of swatches, editing
+    /// a <see cref="ColorRamp"/>'s primary. Small palettes sit inline; larger ones drop to a second line.
+    /// Each selected swatch draws a 2px accent ring just outside the fill so it reads even when the swatch
+    /// colour equals the accent.</summary>
+    public static void SwatchRow(Paper paper, EditorSettings s, string id, string label, ColorRamp ramp, string[] palette)
+    {
+        float sp = EditorTheme.Spacing, pad = EditorTheme.Padding;
+        bool inline = palette.Length <= 6;
+
+        void ColorBox() =>
+            Origami.ColorField(paper, $"{id}_cf", HexToVColor(ramp.Primary), v =>
+            { ramp.Primary = VColorToHex(v); ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); }).Width(130f).Show();
+
+        void Swatch(string hex)
+        {
+            var col = ColorRamp.ParseHex(hex);
+            bool on = string.Equals(ramp.Primary, hex, StringComparison.OrdinalIgnoreCase);
+            paper.Box($"{id}_p_{hex}").Width(28).Height(28).Margin(0, sp * 2, ST, ST)
+                .OnClick(hex, (h, _) => { ramp.Primary = h; ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); })
+                .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                {
+                    float cx = (float)(r.Min.X + r.Size.X / 2), cy = (float)(r.Min.Y + r.Size.Y / 2);
+                    const float sw = 20f;
+                    canvas.RoundedRectFilled(cx - sw / 2, cy - sw / 2, sw, sw, 6f,
+                        Prowl.Vector.Color32.FromArgb(255, col.R, col.G, col.B));
+                    canvas.RoundedRect(cx - sw / 2, cy - sw / 2, sw, sw, 6f);
+                    canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(30, 255, 255, 255));
+                    canvas.SetStrokeWidth(1f);
+                    canvas.Stroke();
+                    if (on)
+                    {
+                        var acc = EditorTheme.Accent;
+                        const float ring = 27f;
+                        canvas.RoundedRect(cx - ring / 2, cy - ring / 2, ring, ring, 8f);
+                        canvas.SetStrokeColor(Prowl.Vector.Color32.FromArgb(255, acc.R, acc.G, acc.B));
+                        canvas.SetStrokeWidth(2f);
+                        canvas.Stroke();
+                    }
+                }));
+        }
+
+        void Palette() { foreach (var hex in palette) Swatch(hex); }
+
+        Row(paper, id, label, () =>
+        {
+            if (inline)
+                using (paper.Row($"{id}_r").Width(ST).Height(UnitValue.Auto).MinHeight(30).Enter())
+                {
+                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, pad * 2, ST, ST).Enter())
+                        ColorBox();
+                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Margin(0, 0, ST, ST).Enter())
+                        Palette();
+                }
+            else
+                using (paper.Column($"{id}_r").Width(ST).Height(UnitValue.Auto).Enter())
+                {
+                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, 0, 0, sp * 2).Enter())
+                        ColorBox();
+                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Enter())
+                        Palette();
+                }
+        }, compact: true, minHeight: inline ? 36f : 68f);
+    }
+
+    /// <summary>Hex string ("#RRGGBB") to a <see cref="VColor"/> (alpha 1).</summary>
+    public static VColor HexToVColor(string hex)
+    {
+        var c = ColorRamp.ParseHex(hex);
+        return new VColor(c.R / 255f, c.G / 255f, c.B / 255f, 1f);
+    }
+
+    /// <summary>A <see cref="VColor"/> back to a "#RRGGBB" hex string (alpha dropped).</summary>
+    public static string VColorToHex(VColor c)
+    {
+        int r = Math.Clamp((int)(c.R * 255), 0, 255);
+        int g = Math.Clamp((int)(c.G * 255), 0, 255);
+        int b = Math.Clamp((int)(c.B * 255), 0, 255);
+        return $"#{r:X2}{g:X2}{b:X2}";
     }
 }
