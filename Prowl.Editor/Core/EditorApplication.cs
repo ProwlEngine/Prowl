@@ -598,16 +598,14 @@ public class EditorApplication : Game
     private void DrawHeaderStatus(Paper paper, float w, float band, Prowl.Scribe.FontFile font)
     {
         float clH = HeaderChipHeight;
-        float clY = (band - clH) / 2f;
         float pad = EditorTheme.DockPadding;
-        float gap = 6f;
-
         var ST = UnitValue.Stretch();
+        float blur = Origami.Current.Metrics.WindowBackdropBlur;
+        float rectPadX = 10f, dot = 8f;
 
         int fps = _dispFps;
-        float ms = _dispMs;
         string fpsNum = fps.ToString();
-        string msText = $"{ms:F1}ms";
+        string msText = $"{_dispMs:F1}ms";
         var dotColor = fps >= 50 ? EditorTheme.Green400 : (fps >= 25 ? EditorTheme.Amber400 : EditorTheme.Red400);
 
         string version = Assembly.GetExecutingAssembly()
@@ -618,24 +616,15 @@ public class EditorApplication : Game
         string versionText = $"v{version}";
         string projectText = Project.Current?.Name ?? Loc.Get("editor.no_project");
 
-        // FPS pill is a fixed width so the count can grow toward the centre without shoving the
-        // FPS/ms group; the other chips size to their text.
-        float blur = Origami.Current.Metrics.WindowBackdropBlur;
-        float rectPadX = 10f, dot = 8f;
-        float fpsRectW = 120f;
-        float verRectW = rectPadX * 2 + (float)paper.MeasureText(versionText, EditorTheme.FontSizeSmall, font, 1f).X;
-        float projRectW = rectPadX * 2 + (float)paper.MeasureText(projectText, EditorTheme.FontSizeSmall, font, 1f).X;
-        float cogW = clH;
-
-        float totalW = fpsRectW + gap + verRectW + gap + projRectW + gap + cogW;
-        float clX = w - pad - totalW;
-
-        using (paper.Row("hdr_status").PositionType(PositionType.SelfDirected).Position(clX, clY)
-            .Size(totalW, clH).RowBetween(gap).Enter())
+        // Cluster pinned to the right edge and vertically centered by margins; every child auto-sizes to
+        // its text, so there's no width math or MeasureText.
+        using (paper.Row("hdr_status").PositionType(PositionType.SelfDirected)
+            .Width(UnitValue.Auto).Height(clH)
+            .Margin(ST, UnitValue.Pixels(pad), ST, ST).RowBetween(6).Enter())
         {
             // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
-            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(fpsRectW)).Height(clH).Rounded(7)
+            using (paper.Row("hs_fps").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(120)).Height(clH).Rounded(7)
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
@@ -653,10 +642,10 @@ public class EditorApplication : Game
                     .Alignment(TextAlignment.MiddleRight);
             }
 
-            StatusChip(paper, "hs_ver", verRectW, clH, versionText, font);
-            StatusChip(paper, "hs_proj", projRectW, clH, projectText, font);
+            StatusChip(paper, "hs_ver", clH, versionText, font);
+            StatusChip(paper, "hs_proj", clH, projectText, font);
 
-            paper.Box("hs_cog").Width(cogW).Height(clH).Rounded(7)
+            paper.Box("hs_cog").Width(clH).Height(clH).Rounded(7)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink400)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
@@ -665,14 +654,19 @@ public class EditorApplication : Game
         }
     }
 
-    private static void StatusChip(Paper paper, string id, float wRect, float hRect, string text, Prowl.Scribe.FontFile font)
+    // A themed glass chip that auto-sizes to its text (horizontal padding + Auto width, no MeasureText).
+    private static void StatusChip(Paper paper, string id, float hRect, string text, Prowl.Scribe.FontFile font)
     {
-        paper.Box(id).Width(wRect).Height(hRect).Rounded(7)
+        var ST = UnitValue.Stretch();
+        using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(7)
             .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter);
+            .IsNotInteractable().Enter())
+        {
+            paper.Box(id + "_t").Width(UnitValue.Auto).Height(hRect).Margin(0, 0, ST, ST).IsNotInteractable()
+                .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
+                .Alignment(TextAlignment.MiddleCenter);
+        }
     }
 
     public override void EndGui(Paper paper)
@@ -730,11 +724,13 @@ public class EditorApplication : Game
     {
         float pad = EditorTheme.DockPadding;
         float barH = HeaderChipHeight;
-        float barY = (band - barH) / 2f;
         var font = EditorTheme.DefaultFont;
-        // Menu labels + a Theme quick-access button, hosted at the left, matched to the status chips.
-        using (paper.Row("menubar_host").PositionType(PositionType.SelfDirected).Position(pad, barY)
-            .Width(UnitValue.Auto).Height(barH).RowBetween(4).Enter())
+        var ST = UnitValue.Stretch();
+        // Menu labels + a Theme quick-access button, pinned to the left edge and vertically centered by
+        // margins; auto width hugs the menus.
+        using (paper.Row("menubar_host").PositionType(PositionType.SelfDirected)
+            .Width(UnitValue.Auto).Height(barH)
+            .Margin(UnitValue.Pixels(pad), ST, ST, ST).RowBetween(4).Enter())
         {
             var bar = Origami.MenuBar(paper, "menubar").Height(barH);
             foreach (var root in MenuRegistry.RootMenus)
