@@ -33,7 +33,7 @@ public enum AllocBin
     Framebuffer,
 
     /// <summary>
-    /// Bin index for Vulkan pipelines; unused on D3D11/OpenGL, so counts will be 0
+    /// Bin index for Vulkan pipelines; unused on D3D11, so counts will be 0
     /// </summary>
     Pipeline,
 
@@ -43,12 +43,12 @@ public enum AllocBin
     Shader,
 
     /// <summary>
-    /// Bin index for Vulkan resource layouts; unused on D3D11/OpenGL, so counts will be 0
+    /// Bin index for Vulkan resource layouts; unused on D3D11, so counts will be 0
     /// </summary>
     ResourceLayout,
 
     /// <summary>
-    /// Bin index Vulkan descriptor sets; unused on D3D11/OpenGL, so counts will be 0
+    /// Bin index Vulkan descriptor sets; unused on D3D11, so counts will be 0
     /// </summary>
     ResourceSet,
 

@@ -138,13 +138,3 @@ public class VulkanDisposalTests : DisposalTests<VulkanDeviceCreator> { }
 [Collection("GPU Tests")]
 public class D3D11DisposalTests : DisposalTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLDisposalTests : DisposalTests<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESDisposalTests : DisposalTests<OpenGLESDeviceCreator> { }
-#endif

@@ -15,7 +15,7 @@ namespace Prowl.Graphite.Tests;
 //
 // This is a partial of TextureTestBase<T>, so any test added here is automatically picked
 // up by every per-backend concrete subclass declared at the bottom of TextureTests.cs
-// (VulkanTextureTests, D3D11TextureTests, OpenGLTextureTests, OpenGLESTextureTests).
+// (VulkanTextureTests, D3D11TextureTests).
 public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
 {
     // Regression test for a Vulkan backend bug where R16_G16_Float and R32_G32_Float were

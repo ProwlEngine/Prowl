@@ -31,7 +31,7 @@
 ### Shaders
 
 Shaders live in `Shaders/` as Slang (`.slang`) and are compiled to per-backend bytecode at
-runtime by `TestShaderLoader` (SPIR-V for Vulkan, GLSL for OpenGL/ES, HLSL for D3D11). There are
+runtime by `TestShaderLoader` (SPIR-V for Vulkan, HLSL for D3D11). There are
 no checked-in `.spv` files. Each `.slang` collapses a vertex+fragment (or compute) pair into one
 module; Slang entry-point names are not preserved on Vulkan, so every stage is created with the
 entry point `"main"`.
@@ -51,8 +51,6 @@ Backend selection is automatic based on the platform:
 |---------|---------|-------|-------|
 | D3D11 | Yes | - | - |
 | Vulkan | Yes | Yes | - |
-| OpenGL | Yes | Yes | Yes |
-| OpenGLES | Yes | Yes | - |
 
 Run all backends for the current platform:
 

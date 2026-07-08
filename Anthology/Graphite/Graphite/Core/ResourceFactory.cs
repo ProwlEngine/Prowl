@@ -71,7 +71,6 @@ public abstract partial class ResourceFactory
     /// When using the Vulkan backend, nativeTexture must be a valid VkImage handle.
     /// When using the D3D11 backend, nativeTexture must be a valid pointer to an ID3D11Texture1D, ID3D11Texture2D, or
     /// ID3D11Texture3D.
-    /// When using the OpenGL backend, nativeTexture must be a valid OpenGL texture name.
     /// The properties of the Texture will be determined from the <see cref="TextureDescription"/> passed in. These
     /// properties must match the true properties of the existing native texture.
     /// </remarks>
@@ -90,7 +89,6 @@ public abstract partial class ResourceFactory
     /// When using the Vulkan backend, nativeTexture must be a valid VkImage handle.
     /// When using the D3D11 backend, nativeTexture must be a valid pointer to an ID3D11Texture1D, ID3D11Texture2D, or
     /// ID3D11Texture3D.
-    /// When using the OpenGL backend, nativeTexture must be a valid OpenGL texture name.
     /// The properties of the Texture will be determined from the <see cref="TextureDescription"/> passed in. These
     /// properties must match the true properties of the existing native texture.
     /// </remarks>

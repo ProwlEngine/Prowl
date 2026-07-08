@@ -162,8 +162,3 @@ public class VulkanProfilingCountingTests : ProfilingCountingTests<VulkanDeviceC
 [Collection("GPU Tests")]
 public class D3D11ProfilingCountingTests : ProfilingCountingTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLProfilingCountingTests : ProfilingCountingTests<OpenGLDeviceCreator> { }
-#endif

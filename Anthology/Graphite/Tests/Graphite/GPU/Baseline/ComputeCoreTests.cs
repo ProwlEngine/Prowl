@@ -100,8 +100,3 @@ public class VulkanComputeCoreTests : ComputeCoreTests<VulkanDeviceCreator> { }
 [Collection("GPU Tests")]
 public class D3D11ComputeCoreTests : ComputeCoreTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLComputeCoreTests : ComputeCoreTests<OpenGLDeviceCreator> { }
-#endif

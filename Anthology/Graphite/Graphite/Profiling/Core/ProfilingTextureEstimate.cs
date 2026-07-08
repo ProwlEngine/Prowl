@@ -2,7 +2,7 @@ namespace Prowl.Graphite;
 
 /// <summary>
 /// Shared logical-size estimator for backends that do not expose a texture's true allocation size
-/// (D3D11, OpenGL). Sums the tightly-packed pixel bytes across every mip level and array layer,
+/// (D3D11). Sums the tightly-packed pixel bytes across every mip level and array layer,
 /// matching the convention used for buffers (logical, not alignment-padded).
 /// </summary>
 internal static class ProfilingTextureEstimate

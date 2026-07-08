@@ -35,18 +35,6 @@ public static class TestUtils
     }
 #endif
 
-    internal static void CreateOpenGLDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        window = CreateWindow(GraphicsBackend.OpenGL);
-        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.OpenGL);
-    }
-
-    internal static void CreateOpenGLESDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        window = CreateWindow(GraphicsBackend.OpenGLES);
-        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.OpenGLES);
-    }
-
     // Creates a hidden, initialized window for the given backend. Initialize() performs the
     // one-time setup the device needs (GL context, Vulkan surface, native handles) without
     // entering the blocking run loop the samples use.
@@ -69,10 +57,6 @@ public static class TestUtils
     {
         GraphicsBackend.Vulkan =>
             new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
-        GraphicsBackend.OpenGL =>
-            new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
-        GraphicsBackend.OpenGLES =>
-            new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 2)),
         GraphicsBackend.Direct3D11 =>
             new GraphicsAPI(ContextAPI.None, ContextProfile.Core, ContextFlags.Default, new APIVersion(0, 0)),
         _ => throw new ArgumentOutOfRangeException(nameof(backend))
@@ -86,21 +70,6 @@ public static class TestUtils
 
         switch (backend)
         {
-            case GraphicsBackend.OpenGLES:
-            case GraphicsBackend.OpenGL:
-                if (window.API.API != ContextAPI.OpenGLES && window.API.API != ContextAPI.OpenGL)
-                    throw new InvalidOperationException("Attempted to make a GL graphics device without an available GL or GLES context");
-
-                OpenGL.OpenGLPlatformInfo glInfo = new(
-                    glContext: window.GLContext!,
-                    setSyncToVerticalBlank: sync =>
-                    {
-                        window.VSync = sync;
-                        window.GLContext!.SwapInterval(window.VSync ? 1 : 0);
-                    });
-
-                return GraphicsDevice.CreateOpenGL(options, glInfo, (uint)window.Size.X, (uint)window.Size.Y);
-
             case GraphicsBackend.Direct3D11:
                 if (window.Native!.Win32 == null)
                     throw new InvalidOperationException("Attempted to make a D3D11 graphics device without a Win32 window!");
@@ -321,19 +290,3 @@ public class D3D11DeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
     }
 }
 #endif
-
-public class OpenGLDeviceCreator : GraphicsDeviceCreator
-{
-    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        TestUtils.CreateOpenGLDevice(out window, out gd);
-    }
-}
-
-public class OpenGLESDeviceCreator : GraphicsDeviceCreator
-{
-    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        TestUtils.CreateOpenGLESDevice(out window, out gd);
-    }
-}

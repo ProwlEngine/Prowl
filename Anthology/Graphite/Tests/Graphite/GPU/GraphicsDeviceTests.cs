@@ -107,14 +107,9 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Throws<RenderException>(() => GD.AllocateTransient(256));
     }
 
-    [SkippableFact]
+    [Fact]
     public void AllocateTransient_ExceedingHardCap_Throws()
     {
-        // GL/GLES share their context with the suite's device, so a second headless device is not
-        // available; the cap is exercised on the backends that can stand up an isolated device.
-        Skip.If(GD.BackendType is GraphicsBackend.OpenGL or GraphicsBackend.OpenGLES,
-            "Isolated headless device is unavailable for GL/GLES in tests.");
-
         GraphicsDeviceOptions options = new(true)
         {
             TransientBufferInitialSize = 4096,
@@ -238,14 +233,4 @@ public class VulkanGraphicsDeviceTests : GraphicsDeviceTests<VulkanDeviceCreator
 [Trait("Backend", "D3D11")]
 [Collection("GPU Tests")]
 public class D3D11GraphicsDeviceTests : GraphicsDeviceTests<D3D11DeviceCreator> { }
-#endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLGraphicsDeviceTests : GraphicsDeviceTests<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESGraphicsDeviceTests : GraphicsDeviceTests<OpenGLESDeviceCreator> { }
 #endif
