@@ -66,7 +66,7 @@ internal static class CompilerTestHarness
         });
 
 
-    // The compiled bytes for one stage, decoded as UTF-8 text (GLSL / HLSL targets).
+    // The compiled bytes for one stage, decoded as UTF-8 text (HLSL targets).
     public static string StageText(ShaderDescription description, ShaderStages stage)
         => Encoding.UTF8.GetString(StageOf(description, stage).ShaderBytes);
 
@@ -92,7 +92,7 @@ internal static class CompilerTestHarness
 
 
     // Each reflected vertex input becomes its own single-element layout, so these locate one by its
-    // shader location (GL / Vulkan) or by its semantic name (D3D11).
+    // shader location (Vulkan) or by its semantic name (D3D11).
     public static VertexElementDescription ElementAtLocation(ShaderDescription description, uint location)
     {
         foreach (VertexLayoutDescription layout in description.VertexLayouts)

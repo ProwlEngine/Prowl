@@ -114,9 +114,8 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler.
-    /// On OpenGL the sampler is bound alongside the texture. On Vulkan and D3D11 the sampler is also
-    /// applied to the matched sampler slot (see <see cref="CommandBuffer.SetProperties"/> remarks).
+    /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler. The sampler
+    /// is applied to the matched sampler slot (see <see cref="CommandBuffer.SetProperties"/> remarks).
     /// When <paramref name="sampler"/> is null, <see cref="GraphicsDevice.LinearSampler"/> is used.
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
@@ -128,8 +127,7 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Binds a <see cref="Sampler"/> to the named slot independently of any texture. On OpenGL this is
-    /// a no-op; the sampler is sourced from the matching <see cref="SetTexture(PropertyID,Texture,Sampler?)"/> call instead.
+    /// Binds a <see cref="Sampler"/> to the named slot independently of any texture.
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
     {
@@ -182,20 +180,5 @@ public sealed partial class PropertySet
             _entries[key] = entry;
         }
         return entry;
-    }
-
-
-    /// <summary>
-    /// Creates an independent copy of this set's current entries. Backends that defer consumption of a
-    /// <see cref="PropertySet"/> past the call to <see cref="CommandBuffer.SetProperties"/> (OpenGL) must
-    /// snapshot rather than hold a reference to the caller's set, since callers are expected to be able to
-    /// reuse and mutate the same <see cref="PropertySet"/> instance between calls.
-    /// </summary>
-    internal PropertySet Snapshot()
-    {
-        PropertySet snapshot = new(_entries.Count);
-        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _entries)
-            snapshot._entries[kv.Key] = kv.Value.Clone();
-        return snapshot;
     }
 }

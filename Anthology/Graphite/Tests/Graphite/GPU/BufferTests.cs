@@ -574,16 +574,6 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     }
 }
 
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLBufferTests : BufferTestBase<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESBufferTests : BufferTestBase<OpenGLESDeviceCreator> { }
-#endif
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
 [Collection("GPU Tests")]

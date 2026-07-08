@@ -212,8 +212,3 @@ public class VulkanPropertySetBindingTests : PropertySetBindingTests<VulkanDevic
 [Collection("GPU Tests")]
 public class D3D11PropertySetBindingTests : PropertySetBindingTests<D3D11DeviceCreator> { }
 #endif
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLPropertySetBindingTests : PropertySetBindingTests<OpenGLDeviceCreator> { }
-#endif

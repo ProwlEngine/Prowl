@@ -187,22 +187,6 @@ public abstract class SwapchainFramebufferTests<T> : GraphicsDeviceTestBase<T> w
     }
 }
 
-#if TEST_OPENGL
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLFramebufferTests : FramebufferTests<OpenGLDeviceCreator> { }
-[Trait("Backend", "OpenGL")]
-[Collection("GPU Tests")]
-public class OpenGLSwapchainFramebufferTests : SwapchainFramebufferTests<OpenGLDeviceCreator> { }
-#endif
-#if TEST_OPENGLES
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESFramebufferTests : FramebufferTests<OpenGLESDeviceCreator> { }
-[Trait("Backend", "OpenGLES")]
-[Collection("GPU Tests")]
-public class OpenGLESSwapchainFramebufferTests : SwapchainFramebufferTests<OpenGLESDeviceCreator> { }
-#endif
 #if TEST_VULKAN
 [Trait("Backend", "Vulkan")]
 [Collection("GPU Tests")]

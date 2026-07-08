@@ -24,7 +24,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
     /// <summary>
     /// The binding index for a resource.
-    /// Corresponds to OpenGL/Vulkan binding.
+    /// Corresponds to Vulkan binding.
     /// Corresponds to Metal index.
     /// Corresponds to DX11/DX12 register slot within its kind.
     /// </summary>
@@ -37,8 +37,8 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
     public ResourceLayoutElementOptions Options;
 
     /// <summary>
-    /// In-shader name the OpenGL backend resolves via <c>glGetUniformLocation</c> /
-    /// <c>glGetUniformBlockIndex</c>. Ignored by other backends. Defaults to <see cref="Name"/>.
+    /// In-shader uniform name, historically resolved by the OpenGL backend. Unused by the currently
+    /// registered backends (Vulkan, D3D11). Defaults to <see cref="Name"/>.
     /// </summary>
     public string GLUniformName;
 
@@ -81,7 +81,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
 
     /// <summary>
-    /// Constructs a fully-specified element including the OpenGL resolve name and per-field UBO metadata.
+    /// Constructs a fully-specified element including the in-shader uniform name and per-field UBO metadata.
     /// </summary>
     public ResourceLayoutElementDescription(
         PropertyID name,
@@ -155,8 +155,7 @@ public enum ResourceLayoutElementOptions
     /// Marks a <see cref="ResourceKind.TextureReadOnly"/> element that came from a combined
     /// texture-sampler type (e.g. Slang's <c>Sampler2D&lt;&gt;</c>). On Vulkan it binds as a single
     /// combined image-sampler descriptor, sourcing its sampler from the paired
-    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call. Ignored where texture
-    /// and sampler are already merged (OpenGL).
+    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call.
     /// </summary>
     CombinedImageSampler = 1 << 1,
 }

@@ -16,7 +16,6 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     /// An array containing the raw shader bytes for this stage.
     /// For Direct3D11 shaders, this array must contain HLSL bytecode or HLSL text.
     /// For Vulkan shaders, this array must contain SPIR-V bytecode.
-    /// For OpenGL and OpenGL ES shaders, this array must contain the ASCII-encoded text of the shader code.
     /// </summary>
     public byte[] ShaderBytes;
 

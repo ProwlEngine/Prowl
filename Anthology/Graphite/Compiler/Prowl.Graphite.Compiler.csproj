@@ -9,7 +9,7 @@
     <PropertyGroup>
         <PackageId>Prowl.Graphite.Compiler</PackageId>
         <Description>The Slang-based shader compiler for Prowl.Graphite.</Description>
-        <PackageTags>graphics api DirectX Vulkan OpenGL Metal direct-x direct3D11 direct3D12 slang compiler</PackageTags>
+        <PackageTags>graphics api DirectX Vulkan Metal direct-x direct3D11 direct3D12 slang compiler</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
