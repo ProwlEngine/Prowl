@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Git yok",
   "editor.git_no_repo_tip": "Bu proje bir Git deposu degil",
   "editor.git_clean": "Temiz calisma agaci ({{branch}})",
-  "editor.git_dirty": "Kaydedilmemis degisiklikler ({{branch}})"
+  "editor.git_dirty": "Kaydedilmemis degisiklikler ({{branch}})",
+  "launcher.no_results": "Aramanizla eslesen proje yok"
 }

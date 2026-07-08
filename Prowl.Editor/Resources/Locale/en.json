@@ -483,5 +483,6 @@
   "editor.git_no_repo": "No Git",
   "editor.git_no_repo_tip": "This project is not a Git repository",
   "editor.git_clean": "Clean working tree ({{branch}})",
-  "editor.git_dirty": "Uncommitted changes ({{branch}})"
+  "editor.git_dirty": "Uncommitted changes ({{branch}})",
+  "launcher.no_results": "No projects match your search"
 }

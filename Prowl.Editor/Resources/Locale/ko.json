@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Git 없음",
   "editor.git_no_repo_tip": "이 프로젝트는 Git 저장소가 아닙니다",
   "editor.git_clean": "작업 트리 깨끗함 ({{branch}})",
-  "editor.git_dirty": "커밋되지 않은 변경 사항 ({{branch}})"
+  "editor.git_dirty": "커밋되지 않은 변경 사항 ({{branch}})",
+  "launcher.no_results": "검색과 일치하는 프로젝트가 없습니다"
 }

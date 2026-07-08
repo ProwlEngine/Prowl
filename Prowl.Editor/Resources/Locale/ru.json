@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Нет Git",
   "editor.git_no_repo_tip": "Этот проект не является репозиторием Git",
   "editor.git_clean": "Рабочее дерево чисто ({{branch}})",
-  "editor.git_dirty": "Незафиксированные изменения ({{branch}})"
+  "editor.git_dirty": "Незафиксированные изменения ({{branch}})",
+  "launcher.no_results": "Нет проектов, соответствующих поиску"
 }

@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Pas de Git",
   "editor.git_no_repo_tip": "Ce projet n'est pas un depot Git",
   "editor.git_clean": "Arbre de travail propre ({{branch}})",
-  "editor.git_dirty": "Modifications non validees ({{branch}})"
+  "editor.git_dirty": "Modifications non validees ({{branch}})",
+  "launcher.no_results": "Aucun projet ne correspond a votre recherche"
 }

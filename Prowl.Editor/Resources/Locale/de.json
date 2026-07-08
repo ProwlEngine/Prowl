@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Kein Git",
   "editor.git_no_repo_tip": "Dieses Projekt ist kein Git-Repository",
   "editor.git_clean": "Sauberer Arbeitsbaum ({{branch}})",
-  "editor.git_dirty": "Nicht committete Aenderungen ({{branch}})"
+  "editor.git_dirty": "Nicht committete Aenderungen ({{branch}})",
+  "launcher.no_results": "Keine Projekte entsprechen deiner Suche"
 }

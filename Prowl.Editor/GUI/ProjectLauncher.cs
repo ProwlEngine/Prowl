@@ -27,6 +27,7 @@ public static class ProjectLauncher
 
     private static string _newProjectName = "Untitled";
     private static string _newProjectPath = "";
+    private static string _search = "";
     private static int _tab;   // 0 = Recent, 1 = New Project
     private static float _animTime;
     private static NebulaBackground? _nebula;
@@ -252,13 +253,10 @@ public static class ProjectLauncher
                 P.Box("pl_rtitle").Width(ST).Height(UnitValue.Auto).Margin(26, 0, ST, ST)
                     .Text(Loc.Get("launcher.recent_projects"), EditorTheme.FontSemiBold ?? font).FontSize(18f * TS).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
 
-                using (P.Row("pl_search").Width(200).Height(34).Rounded(9).Margin(0, 0, ST, ST)
-                    .BackgroundColor(GlassIn).BorderColor(InputBd).BorderWidth(1).Enter())
-                {
-                    IconBox(P, "pl_sico", EditorIcons.MagnifyingGlass_I, 15, TLo, 1.4f, 11);
-                    P.Box("pl_sph").Width(ST).Height(UnitValue.Auto).Margin(8, 0, ST, ST)
-                        .Text(Loc.Get("launcher.search"), font).FontSize(13f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleLeft);
-                }
+                using (P.Box("pl_search_wrap").Width(220).Height(34).Margin(0, 0, ST, ST).Enter())
+                    Origami.TextField(P, "pl_search", _search, v => _search = v)
+                        .Search(Loc.Get("launcher.search"))
+                        .Width(ST).Height(34).Show();
 
                 using (P.Row("pl_open").Width(UnitValue.Auto).Height(34).Rounded(9).Margin(9, 26, ST, ST)
                     .BackgroundColor(GlassIn).BorderColor(InputBd).BorderWidth(1)
@@ -273,12 +271,21 @@ public static class ProjectLauncher
             }
 
             var entries = RecentProjects.FavoritesFirst();
+            bool searching = !string.IsNullOrWhiteSpace(_search);
+            if (searching)
+            {
+                string q = _search.Trim();
+                entries = entries.FindAll(e =>
+                    e.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    e.Path.Contains(q, StringComparison.OrdinalIgnoreCase));
+            }
+
             Origami.ScrollView(P, "pl_cards_sv", 938, 555 - 58).Padding(22, 22, 4, 22).ColSpacing(7).Body(() =>
             {
                 if (entries.Count == 0)
                 {
                     P.Box("pl_empty").Height(120)
-                        .Text(Loc.Get("launcher.no_recent"), font).FontSize(14f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleCenter);
+                        .Text(Loc.Get(searching ? "launcher.no_results" : "launcher.no_recent"), font).FontSize(14f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleCenter);
                     return;
                 }
                 for (int i = 0; i < entries.Count; i++)

@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Sem Git",
   "editor.git_no_repo_tip": "Este projeto nao e um repositorio Git",
   "editor.git_clean": "Arvore de trabalho limpa ({{branch}})",
-  "editor.git_dirty": "Alteracoes nao confirmadas ({{branch}})"
+  "editor.git_dirty": "Alteracoes nao confirmadas ({{branch}})",
+  "launcher.no_results": "Nenhum projeto corresponde a sua busca"
 }

@@ -479,5 +479,6 @@
   "editor.git_no_repo": "Git なし",
   "editor.git_no_repo_tip": "このプロジェクトは Git リポジトリではありません",
   "editor.git_clean": "作業ツリーはクリーンです ({{branch}})",
-  "editor.git_dirty": "コミットされていない変更 ({{branch}})"
+  "editor.git_dirty": "コミットされていない変更 ({{branch}})",
+  "launcher.no_results": "検索に一致するプロジェクトがありません"
 }

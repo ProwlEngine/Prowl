@@ -479,5 +479,6 @@
   "editor.git_no_repo": "无 Git",
   "editor.git_no_repo_tip": "此项目不是 Git 仓库",
   "editor.git_clean": "工作区干净 ({{branch}})",
-  "editor.git_dirty": "有未提交的更改 ({{branch}})"
+  "editor.git_dirty": "有未提交的更改 ({{branch}})",
+  "launcher.no_results": "没有与搜索匹配的项目"
 }
