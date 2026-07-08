@@ -89,20 +89,28 @@ internal sealed class UIFontSystem : IFontRenderer
     private UIMeshBuilder? _target;
     private float _originX;
     private float _baseY;
+    private float _scale = 1f;
 
     /// <summary>
     /// Route the next <see cref="System"/>.<c>DrawLayout</c> / rich-text draw into <paramref name="builder"/>,
     /// mapping Scribe's +Y-down layout space (origin passed as (0,0)) into element-local +Y-up space:
-    /// <c>x -> originX + x</c>, <c>y -> baseY - y</c>. Always pair with <see cref="EndCapture"/>.
+    /// <c>x -> (originX + x) * scale</c>, <c>y -> (baseY - y) * scale</c>. UI text uses the default
+    /// unit scale; the 3D <c>TextMeshComponent</c> passes a world-units-per-pixel scale so the same
+    /// pixel-space layout bakes into a world-space mesh. Always pair with <see cref="EndCapture"/>.
     /// </summary>
-    public void BeginCapture(UIMeshBuilder builder, float originX, float baseY)
+    public void BeginCapture(UIMeshBuilder builder, float originX, float baseY, float scale = 1f)
     {
         _target = builder;
         _originX = originX;
         _baseY = baseY;
+        _scale = scale;
     }
 
-    public void EndCapture() => _target = null;
+    public void EndCapture()
+    {
+        _target = null;
+        _scale = 1f;
+    }
 
     /// <summary>
     /// Scribe's draw callback: append its generated glyph triangles to the active capture target,
@@ -118,7 +126,7 @@ internal sealed class UIFontSystem : IFontRenderer
         {
             IFontRenderer.Vertex v = vertices[i];
             b.AddVertex(
-                new Float3(_originX + v.Position.X, _baseY - v.Position.Y, 0f),
+                new Float3((_originX + v.Position.X) * _scale, (_baseY - v.Position.Y) * _scale, 0f),
                 v.TextureCoordinate,
                 Color32.FromArgb(v.Color.A, v.Color.R, v.Color.G, v.Color.B));
         }

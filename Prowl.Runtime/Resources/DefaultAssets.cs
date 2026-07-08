@@ -23,6 +23,7 @@ public enum DefaultShader
     Refraction,
     DefaultUI,
     DefaultText,
+    DefaultTextMesh,
 
     ProceduralSkybox,
     GradientSkybox,
