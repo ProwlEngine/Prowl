@@ -337,7 +337,7 @@ public class PreferencesPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         using (paper.Row(id).Width(ST).Height(UnitValue.Auto).MinHeight(minH).Margin(0, 0, 0, botMargin).RowBetween(PAD * 2).Enter())
         {
-            paper.Box($"{id}_l").Width(108).Height(minH).Margin(0, 0, ST, ST).IsNotInteractable()
+            paper.Box($"{id}_l").Width(EditorTheme.LabelWidth).Height(minH).Margin(0, 0, ST, ST).IsNotInteractable()
                 .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft).TextTruncate();
             // No MinHeight here: the column sizes to the widget so its stretch top/bottom margins center
