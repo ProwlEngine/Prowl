@@ -52,6 +52,14 @@ internal static class DefaultGameObjectCreators
         CreatePrimitive("Plane", DefaultModel.Plane, parent);
     }
 
+    [CreateGameObjectMenu("3D Object/Text Mesh", Icon = EditorIcons.Font, Order = 14)]
+    static void CreateTextMesh(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Text Mesh", parent);
+        var text = go.AddComponent<TextMeshComponent>();
+        text.Text = "New Text";
+    }
+
     [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15, Separator = true)]
     static void CreateTerrain(GameObject? parent)
     {
