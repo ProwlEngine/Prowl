@@ -18,7 +18,7 @@ namespace Prowl.OrigamiUI;
 /// </summary>
 internal interface IContextItem
 {
-    void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close);
+    void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer);
 }
 
 /// <summary>
@@ -110,7 +110,7 @@ public sealed class ContextBuilder
         public bool Danger;
         public bool On;
 
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             var ink = theme.Ink;
 
@@ -184,7 +184,7 @@ public sealed class ContextBuilder
         public string Icon = "";
         public IOrigamiIcon? IconDraw;
 
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             using (paper.Row($"{id}_ti_{index}").Height(RowHeight).Padding(RowPadX, RowPadX, 0, 0).RowBetween(RowGap)
                 .IsNotInteractable().Enter())
@@ -209,7 +209,7 @@ public sealed class ContextBuilder
     {
         public string Text = "";
 
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             using (paper.Row($"{id}_h_{index}")
                 .Height(UnitValue.Auto)
@@ -234,7 +234,7 @@ public sealed class ContextBuilder
         public Func<bool>? GetValue;
         public bool Enabled = true;
 
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             var ink = theme.Ink;
 
@@ -276,7 +276,7 @@ public sealed class ContextBuilder
 
     internal sealed class CtxSeparator : IContextItem
     {
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             // .c2sep — 1px bd line, ~5px vertical margin, ~4px horizontal inset.
             paper.Box($"{id}_sep_{index}")
@@ -290,7 +290,7 @@ public sealed class ContextBuilder
         public string Label = "", Icon = "";
         public ContextBuilder? Sub;
 
-        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close)
+        public void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
             var ink = theme.Ink;
 
@@ -330,7 +330,10 @@ public sealed class ContextBuilder
                     // measured from the row's border box then offset by the row's own left padding,
                     // so relative to the row's right edge: RowPadX + X - rowWidth. With rowWidth =
                     // MenuWidth - 2*MenuPad = 190, a 1px overlap is X = 190 - 9 (RowPadX) - 1 = 180.
-                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 180f, 0, close);
+                    //
+                    // Render one layer above the parent menu so the submenu sits on top of every row
+                    // in this panel (and any deeper submenu stacks above this one in turn).
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 180f, 0, close, layer + 1);
             }
         }
     }
@@ -440,7 +443,7 @@ public static class ContextMenu
             .StopEventPropagation();
 
         using (menuBox.Enter())
-            DrawMenuBody(paper, id, builder, font, theme, close);
+            DrawMenuBody(paper, id, builder, font, theme, close, layer);
     }
 
     /// <summary>
@@ -465,7 +468,7 @@ public static class ContextMenu
             .DropShadow(0, 14, 40, 0, theme.Shadow);
 
         using (menuBox.Enter())
-            DrawMenuBody(paper, id, builder, font, theme, static () => { });
+            DrawMenuBody(paper, id, builder, font, theme, static () => { }, Layer.Topmost + 500);
     }
 
     /// <summary>
@@ -484,7 +487,7 @@ public static class ContextMenu
 
     /// <summary>Draw the padded item column shared by the popup and inline previews.</summary>
     private static void DrawMenuBody(Paper paper, string id, ContextBuilder builder,
-        Scribe.FontFile font, OrigamiTheme theme, Action close)
+        Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
     {
         using (paper.Column($"{id}_col")
             .Padding(MenuPad, MenuPad, MenuPad, MenuPad)
@@ -492,7 +495,7 @@ public static class ContextMenu
             .Enter())
         {
             for (int i = 0; i < builder.Items.Count; i++)
-                builder.Items[i].Draw(paper, id, i, font, theme, close);
+                builder.Items[i].Draw(paper, id, i, font, theme, close, layer);
         }
     }
 
