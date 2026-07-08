@@ -473,5 +473,11 @@
   "guide.console.body": "Deine Logs, Warnungen und Fehler landen hier. Behalte es im Auge - hier schaust du zuerst nach, wenn etwas verrueckt spielt.",
   "guide.console.tip": "Unreals Output Log; Godots Output- und Debugger-Panels.",
   "guide.theme.title": "Mach es zu deinem",
-  "guide.theme.body": "Letzte Station! Klicke jederzeit auf diese Palette, um den gesamten Editor neu einzufaerben und zu gestalten. Los - mach Prowl zu deinem Zuhause."
+  "guide.theme.body": "Letzte Station! Klicke jederzeit auf diese Palette, um den gesamten Editor neu einzufaerben und zu gestalten. Los - mach Prowl zu deinem Zuhause.",
+  "editor.git_not_installed": "Git nicht installiert",
+  "editor.git_not_installed_tip": "Git wurde nicht im PATH gefunden",
+  "editor.git_no_repo": "Kein Git",
+  "editor.git_no_repo_tip": "Dieses Projekt ist kein Git-Repository",
+  "editor.git_clean": "Sauberer Arbeitsbaum ({{branch}})",
+  "editor.git_dirty": "Nicht committete Aenderungen ({{branch}})"
 }

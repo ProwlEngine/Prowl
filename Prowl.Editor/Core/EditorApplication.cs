@@ -891,7 +891,7 @@ public class EditorApplication : Game
 
             Divider("sb_div2");
 
-            // ---------- Column 3: editor stats on the left, graphics backend on the right ----------
+            // ---------- Column 3: editor stats on the left, graphics backend + Git on the right ----------
             using (paper.Row("sb_stats").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
             {
                 long memMb = _dispMemMb;
@@ -901,7 +901,41 @@ public class EditorApplication : Game
                 paper.Box("sb_stats_spacer").Width(ST);
 
                 GlyphCell("sb_gfx", EditorIcons.Display, EditorTheme.Ink300, GraphicsBackend, EditorTheme.Ink400);
+
+                Divider("sb_div3");
+                DrawGitCell();
             }
+        }
+
+        // Git status for the open project (branch + dirty/clean colour), far right of the footer.
+        void DrawGitCell()
+        {
+            GitInfo.Poll();
+
+            var iconColor = EditorTheme.InkDim;
+            var textColor = EditorTheme.InkDim;
+            string text, tip;
+            if (!GitInfo.GitInstalled)
+            {
+                text = Loc.Get("editor.git_not_installed");
+                tip = Loc.Get("editor.git_not_installed_tip");
+            }
+            else if (!GitInfo.IsRepository)
+            {
+                text = Loc.Get("editor.git_no_repo");
+                tip = Loc.Get("editor.git_no_repo_tip");
+            }
+            else
+            {
+                text = GitInfo.Branch;
+                iconColor = GitInfo.HasChanges ? EditorTheme.Amber400 : EditorTheme.Green400;
+                textColor = EditorTheme.Ink400;
+                tip = GitInfo.HasChanges
+                    ? Loc.Get("editor.git_dirty", new { branch = GitInfo.Branch })
+                    : Loc.Get("editor.git_clean", new { branch = GitInfo.Branch });
+            }
+
+            GlyphCell("sb_git", EditorIcons.CodeBranch, iconColor, text, textColor, tip);
         }
     }
 

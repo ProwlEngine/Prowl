@@ -473,5 +473,11 @@
   "guide.console.body": "你的日志、警告和错误都会出现在这里。多留意它--出问题时第一个该看的地方。",
   "guide.console.tip": "Unreal 的 Output Log；Godot 的 Output 与 Debugger 面板。",
   "guide.theme.title": "打造专属风格",
-  "guide.theme.body": "最后一站！随时点击这个调色板即可为整个编辑器重新配色和改变风格。来吧--让 Prowl 有家的感觉。"
+  "guide.theme.body": "最后一站！随时点击这个调色板即可为整个编辑器重新配色和改变风格。来吧--让 Prowl 有家的感觉。",
+  "editor.git_not_installed": "未安装 Git",
+  "editor.git_not_installed_tip": "在 PATH 中未找到 Git",
+  "editor.git_no_repo": "无 Git",
+  "editor.git_no_repo_tip": "此项目不是 Git 仓库",
+  "editor.git_clean": "工作区干净 ({{branch}})",
+  "editor.git_dirty": "有未提交的更改 ({{branch}})"
 }

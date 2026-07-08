@@ -477,5 +477,11 @@
 
   "editor.untitled_scene": "Untitled",
   "editor.stat_selected": "Selected Items",
-  "editor.stat_memory": "Managed Memory"
+  "editor.stat_memory": "Managed Memory",
+  "editor.git_not_installed": "Git not installed",
+  "editor.git_not_installed_tip": "Git was not found on your PATH",
+  "editor.git_no_repo": "No Git",
+  "editor.git_no_repo_tip": "This project is not a Git repository",
+  "editor.git_clean": "Clean working tree ({{branch}})",
+  "editor.git_dirty": "Uncommitted changes ({{branch}})"
 }

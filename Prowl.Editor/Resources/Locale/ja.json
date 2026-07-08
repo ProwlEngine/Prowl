@@ -473,5 +473,11 @@
   "guide.console.body": "ログ、警告、エラーはここに表示されます。目を配っておきましょう - 何か不具合が起きたら最初に見る場所です。",
   "guide.console.tip": "Unreal の Output Log、Godot の Output と Debugger パネルです。",
   "guide.theme.title": "自分好みに",
-  "guide.theme.body": "最後の停留所です！このパレットをいつでもクリックして、エディタ全体を彩り直しスタイルを変えられます。さあ - Prowl を自分の居場所にしましょう。"
+  "guide.theme.body": "最後の停留所です！このパレットをいつでもクリックして、エディタ全体を彩り直しスタイルを変えられます。さあ - Prowl を自分の居場所にしましょう。",
+  "editor.git_not_installed": "Git がインストールされていません",
+  "editor.git_not_installed_tip": "Git が PATH に見つかりません",
+  "editor.git_no_repo": "Git なし",
+  "editor.git_no_repo_tip": "このプロジェクトは Git リポジトリではありません",
+  "editor.git_clean": "作業ツリーはクリーンです ({{branch}})",
+  "editor.git_dirty": "コミットされていない変更 ({{branch}})"
 }

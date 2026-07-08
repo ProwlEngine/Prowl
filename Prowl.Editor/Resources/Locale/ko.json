@@ -473,5 +473,11 @@
   "guide.console.body": "로그, 경고, 오류가 여기에 나타납니다. 잘 지켜보세요 - 문제가 생기면 가장 먼저 볼 곳입니다.",
   "guide.console.tip": "Unreal의 Output Log, Godot의 Output 및 Debugger 패널입니다.",
   "guide.theme.title": "나만의 스타일로",
-  "guide.theme.body": "마지막 코스! 언제든 이 팔레트를 클릭해 에디터 전체의 색과 스타일을 바꿀 수 있습니다. 자 - Prowl을 내 집처럼 만들어 보세요."
+  "guide.theme.body": "마지막 코스! 언제든 이 팔레트를 클릭해 에디터 전체의 색과 스타일을 바꿀 수 있습니다. 자 - Prowl을 내 집처럼 만들어 보세요.",
+  "editor.git_not_installed": "Git가 설치되지 않음",
+  "editor.git_not_installed_tip": "PATH에서 Git를 찾을 수 없습니다",
+  "editor.git_no_repo": "Git 없음",
+  "editor.git_no_repo_tip": "이 프로젝트는 Git 저장소가 아닙니다",
+  "editor.git_clean": "작업 트리 깨끗함 ({{branch}})",
+  "editor.git_dirty": "커밋되지 않은 변경 사항 ({{branch}})"
 }

@@ -473,5 +473,11 @@
   "guide.console.body": "Tus registros, advertencias y errores llegan aqui. No lo pierdas de vista: es el primer lugar donde mirar cuando algo falla.",
   "guide.console.tip": "El Output Log de Unreal; los paneles Output y Debugger de Godot.",
   "guide.theme.title": "Hazlo tuyo",
-  "guide.theme.body": "Ultima parada! Haz clic en esta paleta cuando quieras para recolorear y reestilizar todo el editor. Vamos: haz que Prowl se sienta como en casa."
+  "guide.theme.body": "Ultima parada! Haz clic en esta paleta cuando quieras para recolorear y reestilizar todo el editor. Vamos: haz que Prowl se sienta como en casa.",
+  "editor.git_not_installed": "Git no instalado",
+  "editor.git_not_installed_tip": "No se encontro Git en el PATH",
+  "editor.git_no_repo": "Sin Git",
+  "editor.git_no_repo_tip": "Este proyecto no es un repositorio Git",
+  "editor.git_clean": "Arbol de trabajo limpio ({{branch}})",
+  "editor.git_dirty": "Cambios sin confirmar ({{branch}})"
 }

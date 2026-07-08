@@ -473,5 +473,11 @@
   "guide.console.body": "Gunlukleri, uyarilari ve hatalarin burada belirir. Goz kulak ol - bir sey ters gittiginde ilk bakilacak yer burasi.",
   "guide.console.tip": "Unreal'in Output Log'u; Godot'un Output ve Debugger panelleri.",
   "guide.theme.title": "Kendine gore yap",
-  "guide.theme.body": "Son durak! Tum editoru yeniden renklendirmek ve bicimlendirmek icin istedigin zaman bu palete tikla. Hadi - Prowl'u evin gibi hisset."
+  "guide.theme.body": "Son durak! Tum editoru yeniden renklendirmek ve bicimlendirmek icin istedigin zaman bu palete tikla. Hadi - Prowl'u evin gibi hisset.",
+  "editor.git_not_installed": "Git kurulu degil",
+  "editor.git_not_installed_tip": "Git PATH icinde bulunamadi",
+  "editor.git_no_repo": "Git yok",
+  "editor.git_no_repo_tip": "Bu proje bir Git deposu degil",
+  "editor.git_clean": "Temiz calisma agaci ({{branch}})",
+  "editor.git_dirty": "Kaydedilmemis degisiklikler ({{branch}})"
 }
