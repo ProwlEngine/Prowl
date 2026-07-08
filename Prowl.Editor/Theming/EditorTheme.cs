@@ -213,7 +213,7 @@ public static class EditorTheme
     public static float FontSizeSmall = FontSize - 2f;
     public static float FontSizeLarge = FontSize + 2f;
     public static float FontSizeLogo = 72f;
-    public static float LabelWidth = 100f;
+    public static float LabelWidth = 150f;
     public static float Roundness = 6f;
 
     // -- Effects (mirrored from EditorThemeData; applied globally) -----

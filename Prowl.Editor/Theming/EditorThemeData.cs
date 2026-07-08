@@ -109,7 +109,7 @@ public class EditorThemeData
     public float StatusBarHeight { get; set; } = 26f;
     public float RowHeight { get; set; } = 24f;
     public float FontSize { get; set; } = 17f;
-    public float LabelWidth { get; set; } = 100f;
+    public float LabelWidth { get; set; } = 150f;
     public float Spacing { get; set; } = 4f;
     public float Padding { get; set; } = 6f;
     // Single knob driving both the dock gutter padding and the splitter thickness.
