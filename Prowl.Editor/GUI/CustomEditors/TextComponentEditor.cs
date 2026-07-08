@@ -51,6 +51,11 @@ public class TextComponentEditor : CustomEditor
         EditorGUI.Row(paper, $"{id}_size", "Font Size", () =>
             Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => text.Size = v).Show());
 
+        paper.Box($"{id}_sp0.15").Height(6);
+
+        EditorGUI.Row(paper, $"{id}_quality", "Quality", () =>
+            Origami.EnumDropdown<Prowl.Scribe.FontQuality>(paper, $"{id}_quality_v", text.Quality, v => text.Quality = v).Show());
+
         paper.Box($"{id}_sp0.2").Height(6);
 
         EditorGUI.Row(paper, $"{id}_color", "Text Color", () =>

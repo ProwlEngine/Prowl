@@ -64,6 +64,15 @@ public class TextComponent : UIBehaviour
         set => SetField(ref _size, Maths.Max(1, value), UIDirtyFlags.Vertices);
     }
 
+    /// <summary>Resolution the glyph SDF is rasterized at (see <see cref="FontQuality"/>). Higher
+    /// quality keeps large text crisp at the cost of atlas space; the default is fine for body text.</summary>
+    [SerializeField] private FontQuality _quality = FontQuality.Normal;
+    public FontQuality Quality
+    {
+        get => _quality;
+        set => SetField(ref _quality, value, UIDirtyFlags.Vertices | UIDirtyFlags.Material);
+    }
+
     // ---- Material override ----
     [SerializeField] private AssetRef<Material> _material;
     public AssetRef<Material> Material
@@ -122,6 +131,7 @@ public class TextComponent : UIBehaviour
         {
             Font          = fontFile,
             PixelSize     = pixelSize,
+            Quality       = _quality,
             Alignment     = ToScribeAlignment(_alignment),
             MaxWidth      = r.Size.X,
             WrapMode      = TextWrapMode.Wrap,
