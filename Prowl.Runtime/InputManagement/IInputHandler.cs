@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -30,6 +31,9 @@ public interface IInputHandler
     bool GetMouseButtonDown(int button);
     bool GetMouseButtonUp(int button);
     void SetCursorVisible(bool visible, int miceIndex = 0);
+
+    /// <summary>Sets the hardware cursor shape (e.g. from Paper's <see cref="PaperCursor"/> hover state).</summary>
+    void SetCursorShape(PaperCursor shape, int miceIndex = 0);
 
     // Gamepad methods
     int GetGamepadCount();

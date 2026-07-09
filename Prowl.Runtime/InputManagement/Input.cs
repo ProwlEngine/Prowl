@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -69,6 +70,10 @@ public static class Input
     public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
     public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
     public static void SetCursorVisible(bool visible, int miceIndex = 0) => Current.SetCursorVisible(visible, miceIndex);
+
+    /// <summary>Sets the hardware cursor shape. Hook this to <c>Paper.OnCursorChange</c> so hovered
+    /// elements can request a shape (pointer, resize, text, ...).</summary>
+    public static void SetCursorShape(PaperCursor shape, int miceIndex = 0) => Current.SetCursorShape(shape, miceIndex);
 
     /// <summary>
     /// Whether the cursor is currently locked (hidden + recentered each frame).

@@ -1,5 +1,6 @@
 using System;
 
+using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -58,6 +59,11 @@ public class GameViewInputHandler : IInputHandler
     public void SetCursorVisible(bool visible, int miceIndex = 0)
     {
         _real.SetCursorVisible(visible, miceIndex);
+    }
+
+    public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
+    {
+        _real.SetCursorShape(shape, miceIndex);
     }
 
     // Events always forward (editor needs these for its own input processing)

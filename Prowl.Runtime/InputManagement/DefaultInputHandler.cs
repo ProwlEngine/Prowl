@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 using Silk.NET.Input;
@@ -230,6 +231,30 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public bool GetMouseButtonUp(int button) => !Down(isMousePressed, (MouseButton)button) && Down(wasMousePressed, (MouseButton)button);
 
     public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+
+    public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
+    {
+        ICursor cursor = Mice[miceIndex].Cursor;
+        // Only relevant while the cursor is visible; don't fight a locked/hidden cursor (FPS mode).
+        if (cursor.CursorMode != CursorMode.Normal)
+            return;
+
+        // Silk.NET has no grab/help shapes, so those fall back to the hand or the arrow.
+        cursor.StandardCursor = shape switch
+        {
+            PaperCursor.Pointer or PaperCursor.Grab or PaperCursor.Grabbing => StandardCursor.Hand,
+            PaperCursor.Text => StandardCursor.IBeam,
+            PaperCursor.Crosshair => StandardCursor.Crosshair,
+            PaperCursor.ResizeHorizontal => StandardCursor.HResize,
+            PaperCursor.ResizeVertical => StandardCursor.VResize,
+            PaperCursor.ResizeNWSE => StandardCursor.NwseResize,
+            PaperCursor.ResizeNESW => StandardCursor.NeswResize,
+            PaperCursor.ResizeAll => StandardCursor.ResizeAll,
+            PaperCursor.NotAllowed => StandardCursor.NotAllowed,
+            PaperCursor.Wait => StandardCursor.Wait,
+            _ => StandardCursor.Default,
+        };
+    }
 
     // Gamepad methods implementation
     public int GetGamepadCount() => Context.Gamepads.Count;
