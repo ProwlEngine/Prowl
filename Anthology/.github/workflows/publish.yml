@@ -31,10 +31,14 @@ jobs:
         run: dotnet build Anthology.slnx -c Release --no-restore
 
       # Some suites need hardware CI lacks (they pass locally with it), so they're excluded:
-      # Clay (uncommitted model assets), Slang + Graphite.Compiler (Slang native binaries),
-      # Graphite (GPU backends on a headless runner). Everything else gates the release.
+      # Clay (uncommitted model assets), Slang (native binaries fetched after this step), and all
+      # Graphite tests - Prowl.Graphite.Tests, Prowl.Graphite.ShaderDef.Tests and
+      # Prowl.Graphite.ShaderDef.Compiler.Tests (GPU backends / Slang native on a headless runner).
+      # The single "Prowl.Graphite" term covers every Graphite suite; matching by FullyQualifiedName
+      # is substring-based, so listing the exact suite names would miss the ".ShaderDef." ones.
+      # Everything else gates the release.
       - name: Test
-        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test&FullyQualifiedName!~Prowl.Graphite.Compiler.Tests&FullyQualifiedName!~Prowl.Graphite.Tests"
+        run: dotnet test Anthology.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Tests&FullyQualifiedName!~Prowl.Graphite"
 
       # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
       - name: Fetch Slang native binaries
