@@ -411,8 +411,7 @@ public class DockSpace
                     paper.Box($"t_ul_{id}")
                         .PositionType(PositionType.SelfDirected).Position(tx, tabH - 2).Size(tw, 2)
                         .IsNotInteractable()
-                        .BackgroundColor(theme.Primary.C500)
-                        .Glow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+                        .BackgroundColor(theme.Primary.C500);
             }
 
             // Trailing separator on the right edge of the last tab, so the final tab (and a lone tab)
