@@ -43,8 +43,9 @@ internal static class UIRaycaster
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas is null || !canvas.EnabledInHierarchy) continue;
 
-            // Only screen-space canvases participate in the runtime raycaster - World canvases
-            // need a 3D ray from a Camera, which lives in TryPickWorld below.
+            // Screen-space canvases only in this pass - World canvases are cast against a camera ray
+            // in TryPickWorld below, and only when nothing screen-space is hit (overlay UI composites
+            // on top of the 3D scene, so it wins the pointer).
             if (canvas.RenderMode == RenderMode.WorldSpace) continue;
 
             canvas.RebuildIfDirty();
@@ -72,8 +73,86 @@ internal static class UIRaycaster
             }
         }
 
+        // No screen-space hit -> fall back to world-space canvases via a 3D camera ray.
+        if (bestGO == null)
+            TryPickWorld(scene, screenPos, windowSize, ref bestGO, ref bestCanvas, ref bestDesign);
+
         if (bestGO == null || bestCanvas == null) return false;
         hit = new Hit(bestGO, bestCanvas, bestDesign);
+        return true;
+    }
+
+    /// <summary>
+    /// Pick for <see cref="RenderMode.WorldSpace"/> canvases: unproject the pointer through the
+    /// scene's main camera, intersect each world canvas's plane, and keep the nearest canvas whose
+    /// element sits under the resulting point. Only called when no screen-space canvas was hit.
+    /// </summary>
+    private static void TryPickWorld(Scene scene, Float2 screenPos, Float2 windowSize,
+        ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign)
+    {
+        Camera? cam = ResolveMainCamera(scene);
+        if (cam == null) return;
+
+        Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
+        float bestT = float.MaxValue;
+
+        foreach (GameObject go in scene.ActiveObjects)
+        {
+            GameCanvas? canvas = go.GetComponent<GameCanvas>();
+            if (canvas is null || !canvas.EnabledInHierarchy) continue;
+            if (canvas.RenderMode != RenderMode.WorldSpace) continue;
+
+            canvas.RebuildIfDirty();
+
+            if (!WorldRayToDesign(canvas, ray, out Float2 designPt, out float t)) continue;
+            if (t >= bestT) continue; // a nearer canvas already owns the pointer
+
+            int dfs = 0;
+            GameObject? localHit = null;
+            int localDfs = -1;
+            WalkRecurse(canvas, canvas.GameObject, designPt, scissor: null, ref dfs, ref localHit, ref localDfs);
+            if (localHit == null) continue;
+
+            bestT = t;
+            bestGO = localHit;
+            bestCanvas = canvas;
+            bestDesign = designPt;
+        }
+    }
+
+    /// <summary>The scene's primary rendering camera: the enabled camera with the highest Depth.</summary>
+    private static Camera? ResolveMainCamera(Scene scene)
+    {
+        Camera? best = null;
+        foreach (GameObject go in scene.ActiveObjects)
+        {
+            Camera? c = go.GetComponent<Camera>();
+            if (c == null || !c.EnabledInHierarchy) continue;
+            if (best == null || c.Depth > best.Depth) best = c;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Intersects a world-space ray with a world canvas's plane (the design-pixel Z=0 plane mapped
+    /// through <see cref="GameCanvas.CanvasToWorld"/>) and returns the hit point in the canvas's
+    /// design-pixel space plus the ray distance. False if the ray is parallel or hits behind the origin.
+    /// </summary>
+    private static bool WorldRayToDesign(GameCanvas canvas, Ray ray, out Float2 designPt, out float t)
+    {
+        designPt = Float2.Zero;
+
+        Float4x4 toWorld = canvas.CanvasToWorld;
+        Float3 p0 = Float4x4.TransformPoint(Float3.Zero, toWorld);
+        Float3 p1 = Float4x4.TransformPoint(new Float3(1f, 0f, 0f), toWorld);
+        Float3 p2 = Float4x4.TransformPoint(new Float3(0f, 1f, 0f), toWorld);
+        Plane plane = new Plane(p0, p1, p2);
+
+        if (!ray.Intersects(plane, out t) || t < 0f) return false;
+
+        Float3 world = ray.Origin + ray.Direction * t;
+        Float3 local = Float4x4.TransformPoint(world, toWorld.Invert());
+        designPt = new Float2(local.X, local.Y);
         return true;
     }
 

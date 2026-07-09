@@ -246,6 +246,10 @@ public class GameObject : EngineObject, ISerializable
         if (IsChildOrSameTransform(NewParent, this))
             return false;
 
+        // A UI subtree moving between canvases must rebuild both: the old canvas (this element left
+        // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
+        GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
+
         Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
         if (newScene != Scene)
@@ -308,6 +312,13 @@ public class GameObject : EngineObject, ISerializable
             Transform.MarkChanged();
 
         HierarchyStateChanged();
+
+        // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
+        // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
+        GameCanvas? uiNewCanvas = GetComponentInParent<GameCanvas>();
+        uiOldCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        if (!ReferenceEquals(uiNewCanvas, uiOldCanvas))
+            uiNewCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
 
         return true;
     }
@@ -483,6 +494,10 @@ public class GameObject : EngineObject, ISerializable
 
         // Insert at new position
         Parent.Children.Insert(index, this);
+
+        // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
+        // reorder is reflected instead of drawing in the stale order.
+        GetComponentInParent<GameCanvas>()?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>

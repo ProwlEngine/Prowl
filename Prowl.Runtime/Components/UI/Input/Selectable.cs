@@ -1,10 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-
 using Prowl.Echo;
-using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.UI;
@@ -47,6 +44,35 @@ public class Selectable : UIBehaviour,
         }
     }
 
+    /// <summary>
+    /// The effective interactable state: the local <see cref="Interactable"/> flag AND no enclosing
+    /// <see cref="CanvasGroup"/> (up to the canvas root, or the nearest one that ignores its parents)
+    /// has <see cref="CanvasGroup.Interactable"/> turned off. Pointer/submit handling gates on this, so
+    /// a non-interactable group makes its whole subtree inert while still blocking click-through.
+    /// </summary>
+    public bool IsInteractable()
+    {
+        if (!_interactable) return false;
+
+        GameObject? node = GameObject;
+        while (node != null)
+        {
+            CanvasGroup? grp = node.GetComponent<CanvasGroup>();
+            if (grp != null && grp.EnabledInHierarchy)
+            {
+                if (!grp.Interactable) return false;
+                if (grp.IgnoreParentGroups) break;
+            }
+            if (node.GetComponent<GameCanvas>() != null) break; // reached the canvas root
+            node = node.Parent;
+        }
+        return true;
+    }
+
+    /// <summary>Re-evaluate the visual state - called when an ancestor <see cref="CanvasGroup"/>
+    /// toggles interactivity (there is no automatic notification for that).</summary>
+    public void RefreshInteractable() => RefreshState(immediate: false);
+
     // ============================================================
     // Target graphic - which UIImage do we tint?
     // ============================================================
@@ -78,24 +104,6 @@ public class Selectable : UIBehaviour,
     /// <summary>Seconds the tint takes to lerp to a new target color. 0 = snap.</summary>
     [SerializeField] private float _transitionDuration = 0.08f;
     public float TransitionDuration { get => _transitionDuration; set => _transitionDuration = Maths.Max(0f, value); }
-
-    // ============================================================
-    // Per-instance SFX overrides (null = fall through to UISounds globals).
-    // ============================================================
-
-    [SerializeField] private AssetRef<AudioClip> _hoverClip;
-    [SerializeField] private AssetRef<AudioClip> _clickClip;
-    [SerializeField] private AssetRef<AudioClip> _pressClip;
-    [SerializeField] private AssetRef<AudioClip> _deniedClip;
-
-    /// <summary>Override clip for <see cref="UISound.Hover"/>. Null routes to <see cref="UISounds.HoverClip"/>.</summary>
-    public AudioClip? HoverClip { get => _hoverClip.Res; set => _hoverClip = value; }
-    /// <summary>Override clip for <see cref="UISound.Click"/>. Null routes to <see cref="UISounds.ClickClip"/>.</summary>
-    public AudioClip? ClickClip { get => _clickClip.Res; set => _clickClip = value; }
-    /// <summary>Override clip for <see cref="UISound.Press"/>. Null routes to <see cref="UISounds.PressClip"/>.</summary>
-    public AudioClip? PressClip { get => _pressClip.Res; set => _pressClip = value; }
-    /// <summary>Override clip for <see cref="UISound.Denied"/>. Null routes to <see cref="UISounds.DeniedClip"/>.</summary>
-    public AudioClip? DeniedClip { get => _deniedClip.Res; set => _deniedClip = value; }
 
     // ============================================================
     // Runtime state
@@ -160,7 +168,6 @@ public class Selectable : UIBehaviour,
     public virtual void OnPointerEnter(PointerEventData e)
     {
         _isHovered = true;
-        if (_interactable) PlaySound(UISound.Hover, HoverClip);
         RefreshState(immediate: false);
     }
 
@@ -175,14 +182,9 @@ public class Selectable : UIBehaviour,
     {
         if (e.Button != MouseButton.Left) return;
 
-        if (!_interactable)
-        {
-            PlaySound(UISound.Denied, DeniedClip);
-            return;
-        }
+        if (!IsInteractable()) return;
 
         _isPressed = true;
-        PlaySound(UISound.Press, PressClip);
         RefreshState(immediate: false);
     }
 
@@ -238,14 +240,10 @@ public class Selectable : UIBehaviour,
 
     private SelectionState ComputeState()
     {
-        if (!_interactable) return SelectionState.Disabled;
+        if (!IsInteractable()) return SelectionState.Disabled;
         if (_isPressed)     return SelectionState.Pressed;
         if (_isHovered)     return SelectionState.Highlighted;
         if (_isSelected)    return SelectionState.Selected;
         return SelectionState.Normal;
     }
-
-    /// <summary>Resolves the per-instance override against the global <see cref="UISounds"/> table and plays.</summary>
-    protected void PlaySound(UISound sound, AudioClip? overrideClip)
-        => UISounds.Play(sound, overrideClip);
 }

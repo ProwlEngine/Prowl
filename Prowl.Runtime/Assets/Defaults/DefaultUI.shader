@@ -57,9 +57,31 @@ Pass "DefaultUI"
 			uniform sampler2D _MainTex;
 			uniform vec4 _MainColor;
 
+			// Per-item rounded-rect clip (RectMask). _ClipToLocal maps the fragment's world position
+			// into the mask's local space (so the clip follows rotation/scale); the fragment is tested
+			// against _ClipRect with _ClipRadius rounded corners and a _ClipSoftness edge.
+			uniform mat4 _ClipToLocal;
+			uniform vec4 _ClipRect;      // minX, minY, maxX, maxY
+			uniform float _ClipRadius;
+			uniform float _ClipSoftness;
+			uniform float _ClipEnable;
+
+			float uiClipCoverage(vec3 worldPosition)
+			{
+				if (_ClipEnable < 0.5) return 1.0;
+				vec2 p = (_ClipToLocal * vec4(worldPosition, 1.0)).xy;
+				vec2 c = (_ClipRect.xy + _ClipRect.zw) * 0.5;
+				vec2 e = (_ClipRect.zw - _ClipRect.xy) * 0.5 - vec2(_ClipRadius);
+				vec2 d = abs(p - c) - e;
+				float dist = length(max(d, vec2(0.0))) + min(max(d.x, d.y), 0.0) - _ClipRadius;
+				float soft = max(_ClipSoftness, max(fwidth(dist), 1e-4));
+				return clamp(0.5 - dist / soft, 0.0, 1.0);
+			}
+
 			void main()
 			{
-				fragColor = texture(_MainTex, texCoord0) * vColor * _MainColor;
+				vec4 albedo = texture(_MainTex, texCoord0) * vColor * _MainColor;
+				fragColor = albedo * uiClipCoverage(worldPos);
 			}
 		}
 	ENDGLSL

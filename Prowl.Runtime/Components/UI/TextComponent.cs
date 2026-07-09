@@ -92,10 +92,6 @@ public class TextComponent : UIBehaviour
 
     public override Material GetMaterial() => _material.Res ?? GameCanvas.SharedTextMaterial;
 
-    /// <summary>Each TextComponent samples its font's glyph atlas; that atlas is unique
-    /// per font / pixel size, so siblings can't share a draw call with non-text elements.</summary>
-    public override bool RequiresPerElementMaterial => true;
-
     /// <summary>
     /// Atlas version recorded at the last successful bake. When Scribe grows the atlas
     /// (e.g. a new glyph or pixel-size variant is introduced) all existing AtlasGlyph

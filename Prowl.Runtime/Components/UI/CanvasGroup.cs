@@ -51,7 +51,35 @@ public class CanvasGroup : UIBehaviour
     public bool Interactable
     {
         get => _interactable;
-        set => SetField(ref _interactable, value, UIDirtyFlags.Hierarchy);
+        set
+        {
+            // Descendant Selectables read this through Selectable.IsInteractable(), but nothing
+            // notifies them when it flips - so push a visual refresh across the subtree so they
+            // grey out (or come back) immediately.
+            if (SetField(ref _interactable, value, UIDirtyFlags.Hierarchy))
+                RefreshDescendantSelectables();
+        }
+    }
+
+    private void RefreshDescendantSelectables()
+    {
+        Walk(GameObject, isRoot: true);
+
+        static void Walk(GameObject go, bool isRoot)
+        {
+            if (!isRoot)
+            {
+                if (go.GetComponent<GameCanvas>() != null) return;
+                CanvasGroup? nested = go.GetComponent<CanvasGroup>();
+                if (nested is { IgnoreParentGroups: true }) return;
+            }
+
+            foreach (Selectable s in go.GetComponents<Selectable>())
+                s.RefreshInteractable();
+
+            foreach (GameObject child in go.Children)
+                Walk(child, isRoot: false);
+        }
     }
 
     /// <summary>When <c>false</c>, raycasts pass through all descendant elements.</summary>

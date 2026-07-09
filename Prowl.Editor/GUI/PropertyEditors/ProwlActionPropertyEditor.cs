@@ -18,9 +18,9 @@ using Color = System.Drawing.Color;
 namespace Prowl.Editor.GUI.PropertyEditors;
 
 /// <summary>
-/// Inspector for <see cref="ProwlAction"/> - the UnityEvent-style persistent call list. Each row picks
-/// a scene GameObject, chooses a method / settable property / field on it (or any of its components)
-/// via reflection, and supplies one basic argument.
+/// Inspector for <see cref="ProwlAction"/> - the persistent call list. Each row picks a scene
+/// GameObject, chooses a method / settable property / field on it (or any of its components) via
+/// reflection, and supplies one basic argument.
 /// </summary>
 [CustomPropertyEditor(typeof(ProwlAction))]
 public class ProwlActionPropertyEditor : PropertyEditor

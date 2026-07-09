@@ -83,11 +83,9 @@ public static class UIEventSystem
 
     /// <summary>
     /// Sets the focused element. Fires <see cref="IDeselectHandler"/> on the previous
-    /// selection and <see cref="ISelectHandler"/> on the new one. Pass <c>null</c> to
-    /// clear focus. Plays the <see cref="UISound.Navigate"/> sfx when the selection
-    /// changes via navigation; pass <paramref name="playSfx"/>=false to suppress.
+    /// selection and <see cref="ISelectHandler"/> on the new one. Pass <c>null</c> to clear focus.
     /// </summary>
-    public static void SetSelected(GameObject? go, bool playSfx = true)
+    public static void SetSelected(GameObject? go)
     {
         if (ReferenceEquals(go, CurrentSelected)) return;
 
@@ -98,9 +96,6 @@ public static class UIEventSystem
 
         if (go != null)
             ExecuteHierarchy<ISelectHandler>(go, h => h.OnSelect());
-
-        if (playSfx && go != null)
-            UISounds.Play(UISound.Navigate);
     }
 
     /// <summary>
@@ -158,6 +153,28 @@ public static class UIEventSystem
             node = node.Parent;
         }
         return first;
+    }
+
+    /// <summary>Fires <typeparamref name="TInterface"/> on every enabled handler on a SINGLE node
+    /// (no hierarchy walk). Used for the pointer enter/exit chain, which visits each node explicitly.</summary>
+    private static void DispatchNode<TInterface>(GameObject node, PointerEventData e, Action<TInterface, PointerEventData> action)
+        where TInterface : class
+    {
+        foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+        {
+            if (comp is not TInterface handler || !comp.EnabledInHierarchy) continue;
+            try { action(handler, e); }
+            catch (Exception ex) { Debug.LogError($"[UIEventSystem] {typeof(TInterface).Name} threw on {comp.Name}: {ex.Message}\n{ex.StackTrace}"); }
+        }
+    }
+
+    /// <summary>True if <paramref name="node"/> is <paramref name="of"/> or one of its ancestors
+    /// (i.e. <paramref name="of"/> lies in <paramref name="node"/>'s subtree). Null <paramref name="of"/> is never contained.</summary>
+    private static bool IsAncestorOrSelf(GameObject node, GameObject? of)
+    {
+        for (GameObject? c = of; c != null; c = c.Parent)
+            if (ReferenceEquals(c, node)) return true;
+        return false;
     }
 
     // ============================================================
@@ -226,17 +243,19 @@ public static class UIEventSystem
         // ------------------------------------------------------------------------
         if (!ReferenceEquals(hovered, s_lastHovered))
         {
-            if (s_lastHovered is { IsDisposed: false })
-            {
-                FillCommon(s_left, hovered, hoveredCanvas, pos, delta, designPos);
-                ExecuteHierarchy<IPointerExitHandler>(s_lastHovered, h => h.OnPointerExit(s_left));
-            }
+            GameObject? oldHover = s_lastHovered is { IsDisposed: false } ? s_lastHovered : null;
+            FillCommon(s_left, hovered, hoveredCanvas, pos, delta, designPos);
 
-            if (hovered != null)
-            {
-                FillCommon(s_left, hovered, hoveredCanvas, pos, delta, designPos);
-                ExecuteHierarchy<IPointerEnterHandler>(hovered, h => h.OnPointerEnter(s_left));
-            }
+            // Fire Exit on every element in the old hover chain that the new chain no longer contains,
+            // and Enter on every newly-hovered element - each stopping at the lowest common ancestor so
+            // a shared parent panel doesn't flicker exit/enter as the pointer moves between its children.
+            // Unlike ExecuteHierarchy (first handler only), this notifies every ancestor, so nested hover
+            // effects (a group highlight around a hovered item) work.
+            for (GameObject? n = oldHover; n != null && !IsAncestorOrSelf(n, hovered); n = n.Parent)
+                DispatchNode<IPointerExitHandler>(n, s_left, static (h, e) => h.OnPointerExit(e));
+            for (GameObject? n = hovered; n != null && !IsAncestorOrSelf(n, oldHover); n = n.Parent)
+                DispatchNode<IPointerEnterHandler>(n, s_left, static (h, e) => h.OnPointerEnter(e));
+
             s_lastHovered = hovered;
         }
 
@@ -266,15 +285,11 @@ public static class UIEventSystem
         if (CurrentSelected is { IsDisposed: false })
         {
             if (Input.GetKeyDown(SubmitKey))
-            {
                 ExecuteHierarchy<ISubmitHandler>(CurrentSelected, h => h.OnSubmit());
-                UISounds.Play(UISound.Submit);
-            }
             if (Input.GetKeyDown(CancelKey))
             {
                 ExecuteHierarchy<ICancelHandler>(CurrentSelected, h => h.OnCancel());
-                UISounds.Play(UISound.Cancel);
-                SetSelected(null, playSfx: false);
+                SetSelected(null);
             }
 
             if (Input.GetKeyDown(KeyCode.Left))  DispatchMove(MoveDirection.Left);
@@ -327,10 +342,12 @@ public static class UIEventSystem
             e.IsDragging = false;
             e.Dragging = null;
 
-            // Multi-click streak: same widget pressed inside MultiClickWindow.
+            // Multi-click streak: the same widget clicked again within the window. Compare against the
+            // last CLICKED target - comparing against s_lastHovered was dead, since it was already set
+            // to `hovered` earlier this frame and so always matched, letting a streak span two buttons.
             if (hovered != null &&
                 currentTime - e.LastClickTime <= MultiClickWindow &&
-                ReferenceEquals(hovered, s_lastHovered))
+                ReferenceEquals(hovered, e.LastClickTarget))
                 e.ClickCount++;
             else
                 e.ClickCount = 1;
@@ -345,7 +362,7 @@ public static class UIEventSystem
                 if (button == MouseButton.Left)
                 {
                     GameObject? sel = FindAncestor<Selectable>(hovered);
-                    SetSelected(sel, playSfx: false);
+                    SetSelected(sel);
                 }
             }
         }
@@ -362,7 +379,6 @@ public static class UIEventSystem
                     e.IsDragging = true;
                     e.Dragging = e.PressedOn;
                     Bubble<IBeginDragHandler>(e.Dragging, e, static (h, ev) => h.OnBeginDrag(ev));
-                    UISounds.Play(UISound.DragStart);
                 }
             }
             else
@@ -376,21 +392,23 @@ public static class UIEventSystem
         // ---- Release ----
         if (up)
         {
-            // PointerUp goes to whatever's currently under the pointer (release-anywhere).
-            if (hovered != null)
-                Bubble<IPointerUpHandler>(hovered, e, static (h, ev) => h.OnPointerUp(ev));
+            // PointerUp goes to the element that received PointerDown, wherever the pointer is now.
+            // Routing it to the current hover instead would strand the pressed widget in its Pressed
+            // state forever when the button is released off-target.
+            if (e.PressedOn != null)
+                Bubble<IPointerUpHandler>(e.PressedOn, e, static (h, ev) => h.OnPointerUp(ev));
 
             if (e.IsDragging && e.Dragging != null)
             {
                 Bubble<IEndDragHandler>(e.Dragging, e, static (h, ev) => h.OnEndDrag(ev));
                 if (hovered != null && !ReferenceEquals(hovered, e.Dragging))
                     Bubble<IDropHandler>(hovered, e, static (h, ev) => h.OnDrop(ev));
-                UISounds.Play(UISound.DragEnd);
             }
             else if (e.PressedOn != null && ReferenceEquals(e.PressedOn, hovered))
             {
                 // Click: down + up on the same target without a drag.
                 e.LastClickTime = currentTime;
+                e.LastClickTarget = hovered;
                 Bubble<IPointerClickHandler>(hovered, e, static (h, ev) => h.OnPointerClick(ev));
             }
 

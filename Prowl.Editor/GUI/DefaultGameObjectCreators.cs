@@ -233,13 +233,6 @@ internal static class DefaultGameObjectCreators
         img.Color = new Color(1f, 1f, 1f, 0.4f);
     }
 
-    [CreateGameObjectMenu("UI/World Canvas", Icon = EditorIcons.Display, Order = 54)]
-    static void CreateWorldCanvas(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("World Canvas", parent);
-        go.AddComponent<WorldCanvas>();
-    }
-
     [CreateGameObjectMenu("UI/Rect Mask", Icon = EditorIcons.Square, Order = 56)]
     static void CreateUIRectMask(GameObject? parent)
     {

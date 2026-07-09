@@ -56,6 +56,10 @@ public sealed class PointerEventData
     /// <summary>Engine time of the most recent click - used by the multi-click detector.</summary>
     public float LastClickTime;
 
+    /// <summary>The element the most recent click landed on - the multi-click detector requires the
+    /// streak to stay on the same target (clicking two different buttons is not a double-click).</summary>
+    public GameObject? LastClickTarget;
+
     /// <summary>The canvas whose plane was hit this frame. Null if no hit.</summary>
     public GameCanvas? HitCanvas;
 
@@ -75,6 +79,7 @@ public sealed class PointerEventData
         IsDragging = false;
         ClickCount = 0;
         LastClickTime = 0f;
+        LastClickTarget = null;
         HitCanvas = null;
         Used = false;
     }

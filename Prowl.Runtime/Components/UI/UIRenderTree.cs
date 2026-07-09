@@ -26,13 +26,6 @@ internal sealed class UIRenderTree
     public IReadOnlyList<UIRenderItem> Items => _items;
     public int Count => _items.Count;
 
-    /// <summary>
-    /// Whether the tree's *contents* are stale (a canvas-level dirty flag).
-    /// Tracked separately from individual <see cref="UIBehaviour.DirtyFlags"/> so that
-    /// a single boolean check short-circuits the whole rebuild path.
-    /// </summary>
-    public bool IsDirty = true;
-
     // -------- Topology mutation --------
 
     /// <summary>
@@ -57,7 +50,7 @@ internal sealed class UIRenderTree
             it.Owner = null!; it.Canvas = null!;
             it.Mesh = null!;  it.Material = null!;
             it.Props.Clear();
-            it.ScissorPixels = null;
+            it.HasClip = false; it.ClipSource = null;
             _freeItems.Push(it);
         }
         _items.Clear();
@@ -77,6 +70,14 @@ internal sealed class UIRenderTree
     {
         for (int i = 0; i < _items.Count; i++)
             _items[i].RefreshModelIfDirty();
+    }
+
+    /// <summary>Unconditionally rebuilds every item's model matrix (for ScreenSpaceCamera canvases,
+    /// whose placement follows the render camera each frame independent of any Transform change).</summary>
+    public void RefreshAllModels()
+    {
+        for (int i = 0; i < _items.Count; i++)
+            _items[i].ForceRefreshModel();
     }
 
     // ============================================================
@@ -105,7 +106,12 @@ internal sealed class UIRenderTree
             if (ToSurface(gc.RenderMode) != surface) continue;
 
             gc.RebuildIfDirty();         // no-op if clean
-            gc.Tree.RefreshTransforms(); // matrix fast-path
+            // ScreenSpaceCamera follows the render camera every frame, so its item models must be
+            // rebuilt unconditionally; other modes use the cheap Transform-version fast-path.
+            if (gc.RenderMode == RenderMode.ScreenSpaceCamera)
+                gc.Tree.RefreshAllModels();
+            else
+                gc.Tree.RefreshTransforms();
 
             var items = gc.Tree._items;
             for (int i = 0; i < items.Count; i++)

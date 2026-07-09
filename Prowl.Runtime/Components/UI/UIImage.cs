@@ -190,6 +190,10 @@ public class UIImage : UIBehaviour
             (1f - pivot.X) * w,
             (1f - pivot.Y) * h);
 
+        // Fit the texture's aspect inside the rect (letterbox), centered, when requested.
+        if (_preserveAspect)
+            local = FitAspect(local, _texture.Res);
+
         Color tinted = Color * new Color(1, 1, 1, ctx.Alpha);
 
         switch (_type)
@@ -229,6 +233,14 @@ public class UIImage : UIBehaviour
         bt = MathF.Min(bt, maxY); bb = MathF.Min(bb, maxY);
 
         Float4 uv = ComputeUVBorder();
+        // Clamp opposite UV borders the same way as the pixel borders: if left+right (or top+bottom)
+        // exceed the full 0..1 range, the center slice's UV would invert and sample garbage. Scale each
+        // overflowing pair down proportionally so the borders just meet. (uv is L, T, R, B.)
+        float uh = uv.X + uv.Z;
+        if (uh > 1f) { uv.X /= uh; uv.Z /= uh; }
+        float uvv = uv.Y + uv.W;
+        if (uvv > 1f) { uv.Y /= uvv; uv.W /= uvv; }
+
         b.AddNineSlice(local, new Float4(bl, bt, br, bb), uv, tinted);
     }
 
@@ -236,6 +248,8 @@ public class UIImage : UIBehaviour
     {
         // Tile size in screen pixels: source texture native size scaled by 1/PPU. If no texture
         // is set we fall back to the rect itself so the image just stretches like Simple.
+        // NOTE: Border-aware tiling (keeping the sprite edges un-tiled) needs real Sprite borders,
+        // so it's deferred until the Sprite feature lands; for now Tiled always tiles the whole texture.
         Texture2D? tex = _texture.Res;
         if (tex is null || tex.Width == 0 || tex.Height == 0)
         {
@@ -246,6 +260,23 @@ public class UIImage : UIBehaviour
         float ppu = _pixelsPerUnit > 0 ? _pixelsPerUnit : 1f;
         Float2 tileSize = new Float2(tex.Width / ppu, tex.Height / ppu);
         b.AddTiled(local, tileSize, tinted);
+    }
+
+    // Fits a texture's aspect ratio inside `local`, centered (letterbox). No-op without a valid texture.
+    private static Rect FitAspect(Rect local, Texture2D? tex)
+    {
+        if (tex is null || tex.Width <= 0 || tex.Height <= 0) return local;
+        float rw = local.Size.X, rh = local.Size.Y;
+        if (rw <= 0f || rh <= 0f) return local;
+
+        float texAspect = (float)tex.Width / tex.Height;
+        float nw = rw, nh = rh;
+        if (rw / rh > texAspect) nw = rh * texAspect;  // rect wider than the texture -> shrink width
+        else                     nh = rw / texAspect;  // rect taller -> shrink height
+
+        float cx = (local.Min.X + local.Max.X) * 0.5f;
+        float cy = (local.Min.Y + local.Max.Y) * 0.5f;
+        return new Rect(cx - nw * 0.5f, cy - nh * 0.5f, cx + nw * 0.5f, cy + nh * 0.5f);
     }
 
     private Float4 ComputeUVBorder()
@@ -262,7 +293,10 @@ public class UIImage : UIBehaviour
     public override void PopulateProperties(PropertyState p, in UIContext _)
     {
         p.SetTexture("_MainTex", _texture.Res ?? defaultTexture);
-        p.SetColor("_MainColor", Color);   // tint already baked into vertex color
+        // The tint (and CanvasGroup alpha) is already baked into the vertex color in GenerateMesh,
+        // and the shader computes texture * vColor * _MainColor - so _MainColor must stay white or
+        // the color/alpha would be applied twice (a 50% tint would render at 25%).
+        p.SetColor("_MainColor", Color.White);
         p.SetVector("_Tiling", new Float2(1, 1));
         p.SetVector("_Offset", Float2.Zero);
     }

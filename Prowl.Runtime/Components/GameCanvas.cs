@@ -89,21 +89,24 @@ public class GameCanvas : MonoBehaviour
     [SerializeField] private ScreenMatchMode _screenMatchMode = ScreenMatchMode.MatchWidthOrHeight;
     public ScreenMatchMode ScreenMatchMode { get => _screenMatchMode; set => SetField(ref _screenMatchMode, value, UIDirtyFlags.Layout); }
 
-    // ----------------------------------------------------------------
-    // NEW: WorldSpace-only configuration
-    // ----------------------------------------------------------------
+    /// <summary>For <see cref="RenderMode.ScreenSpaceCamera"/>: world-unit distance from the render
+    /// camera to the plane the canvas is projected onto. Objects nearer than this can occlude the UI.</summary>
+    [SerializeField] private float _planeDistance = 10f;
+    public float PlaneDistance { get => _planeDistance; set => SetField(ref _planeDistance, Maths.Max(0.01f, value), UIDirtyFlags.Layout); }
 
-    /// <summary>How many canvas pixels equal one world unit when <see cref="RenderMode"/>
-    /// is <see cref="RenderMode.WorldSpace"/>. 100 => a 100x100 px button is 1x1 m.</summary>
-    [SerializeField] private float _referencePixelsPerUnit = 100f;
-    public float ReferencePixelsPerUnit
-    {
-        get => _referencePixelsPerUnit;
-        set => SetField(ref _referencePixelsPerUnit, Maths.Max(value, 0.001f), UIDirtyFlags.Layout);
-    }
+    // Camera placement for ScreenSpaceCamera canvases, pushed by the pipeline each frame right before
+    // it collects the Camera surface (see DefaultRenderPipeline.RenderUIQueue). It's global because a
+    // single camera drives all Camera-surface canvases for that pass.
+    private struct ScreenCamera { public Float3 Position, Forward, Up, Right; public Float4x4 Projection; public bool Valid; }
+    private static ScreenCamera s_screenCamera;
+
+    internal static void PushScreenCamera(Float3 position, Float3 forward, Float3 up, Float3 right, Float4x4 projection)
+        => s_screenCamera = new ScreenCamera { Position = position, Forward = forward, Up = up, Right = right, Projection = projection, Valid = true };
+
+    internal static void ClearScreenCamera() => s_screenCamera.Valid = false;
 
     // ----------------------------------------------------------------
-    // NEW: shared default UI material - referenced by UIBehaviour.GetMaterial
+    // Shared default UI material - referenced by UIBehaviour.GetMaterial
     // ----------------------------------------------------------------
 
     private static Material? s_sharedUIMaterial;
@@ -246,8 +249,10 @@ public class GameCanvas : MonoBehaviour
         if (!_isDirty) return;
 
         // Recompute scale factor against the current screen size *before* layout - Update()
-        // can't do this reliably because it runs without ScreenSizeOverride set.
-        ScaleFactor = ComputeScaleFactor();
+        // can't do this reliably because it runs without ScreenSizeOverride set. Assign the backing
+        // field directly: going through the property setter would MarkDirty(Layout) and re-trigger
+        // this rebuild every frame in ScaleWithScreenSize mode.
+        _scaleFactor = ComputeScaleFactor();
 
         Tree.Clear();
 
@@ -255,7 +260,7 @@ public class GameCanvas : MonoBehaviour
         _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
 
         int dfs = 0;
-        BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, ref dfs);
+        BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
         Tree.SortHierarchical();
 
         _isDirty = false;
@@ -264,9 +269,9 @@ public class GameCanvas : MonoBehaviour
 
     private Rect ComputeRootRect()
     {
-        // World-space canvases have a fixed design size (their ReferenceResolution) and don't track the
-        // screen. Screen-space canvases fill the surface (in design pixels, after the scale factor).
-        if (UseWorldSpace)
+        // World-space and ScreenSpaceCamera canvases have a fixed design size (their ReferenceResolution)
+        // and don't track the screen - the plane/transform maps that to world. Overlay fills the surface.
+        if (UseWorldSpace || RenderMode == RenderMode.ScreenSpaceCamera)
             return new Rect(0, 0, Maths.Max(ReferenceResolution.X, 1f), Maths.Max(ReferenceResolution.Y, 1f));
 
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
@@ -276,8 +281,14 @@ public class GameCanvas : MonoBehaviour
         return new Rect(0, 0, screenW, screenH);
     }
 
-    private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, Rect? canvasScissor, ref int dfsIndex)
+    private void BuildRecursive(GameObject parent, Rect parentRect, UIContext ctx, Rect? canvasScissor, UIClip? activeClip, ref int dfsIndex)
     {
+        // An auto-layout group on this container arranges its children (writes their ComputedRect)
+        // before we place them; ignored children still fall through to their own RectTransform.
+        LayoutGroup? layout = parent.GetComponent<LayoutGroup>();
+        bool arrangingChildren = layout != null && layout.EnabledInHierarchy;
+        if (arrangingChildren) layout.Arrange(parentRect);
+
         foreach (GameObject child in parent.Children)
         {
             if (!child.EnabledInHierarchy) continue;
@@ -295,29 +306,39 @@ public class GameCanvas : MonoBehaviour
             // Lay out this child's RectTransform.
             Rect childRect = parentRect;
             if (child.RectTransform is { } rt)
-                childRect = rt.ComputeRect(parentRect);
+            {
+                bool laidOutByGroup = arrangingChildren && child.GetComponent<LayoutElement>() is not { IgnoreLayout: true };
+                if (laidOutByGroup)
+                {
+                    // The group already wrote this child's ComputedRect this rebuild.
+                    childRect = rt.ComputedRect;
+                }
+                else
+                {
+                    // Standalone element: let a ContentSizeFitter size it to its content first.
+                    child.GetComponent<ContentSizeFitter>()?.ApplyFit();
+                    childRect = rt.ComputeRect(parentRect);
+                }
+            }
 
-            // ---- RectMask: intersect parent scissor with this rect, drop if fully outside. ----
+            // ---- RectMask: coarse AABB cull (canvas-space rect) + precise per-fragment clip. ----
             Rect? childScissor = canvasScissor;
+            UIClip? childClip = activeClip;
             RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy)
+            if (rectMask != null && rectMask.EnabledInHierarchy && child.RectTransform != null)
             {
                 Rect mr = rectMask.GetClipRectInCanvasPixels();
                 childScissor = canvasScissor is null ? mr : IntersectRect(canvasScissor.Value, mr);
                 // Empty scissor -> whole subtree contributes nothing. Skip it.
                 if (childScissor!.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f)
                     continue;
+                // The innermost mask supplies the shader clip; nested masks still intersect for the cull.
+                childClip = ComputeClip(rectMask);
             }
 
-            // Per-item scissor culling: if the layout rect doesn't intersect the active scissor, skip the GameObject.
+            // Coarse cull: if the layout rect can't intersect the active mask rect, skip the subtree.
             if (childScissor is { } cs && !RectsIntersect(cs, childRect))
-            {
-                // Children sit inside this rect by construction, so we can prune the whole subtree.
                 continue;
-            }
-
-            bool wroteMask = false;
-
 
             // (Re)bake every UIBehaviour that produces geometry, then add a UIRenderItem.
             foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
@@ -326,35 +347,71 @@ public class GameCanvas : MonoBehaviour
 
                 EnsureBaked(ui, childCtx);
                 if (ui.CachedMesh is { } mesh)
-                {
-                    EmitItem(ui, mesh, dfsIndex++, childScissor);
-                }
+                    EmitItem(ui, mesh, dfsIndex++, childClip);
             }
 
-            BuildRecursive(child, childRect, childCtx, childScissor, ref dfsIndex);
-
+            BuildRecursive(child, childRect, childCtx, childScissor, childClip, ref dfsIndex);
         }
+    }
+
+    /// <summary>Builds the shader clip region for a <see cref="RectMask"/>: its rect in the mask's own
+    /// pivot-centered local pixel space (the space the item's inverse-mask matrix maps into) plus radius
+    /// and softness. The world->local matrix itself is derived per item from the mask's model.</summary>
+    private static UIClip ComputeClip(RectMask mask)
+    {
+        RectTransform rt = mask.GameObject.RectTransform!;
+        Rect cr = rt.ComputedRect;
+        Float2 pivot = rt.Pivot;
+        float w = cr.Size.X, h = cr.Size.Y;
+        Float4 pad = mask.Padding;   // (left, top, right, bottom)
+
+        float minX = -pivot.X * w + pad.X;
+        float maxX = (1f - pivot.X) * w - pad.Z;
+        float minY = -pivot.Y * h + pad.W;
+        float maxY = (1f - pivot.Y) * h - pad.Y;
+
+        float radius = Maths.Clamp(mask.CornerRadius, 0f, 0.5f * Maths.Min(maxX - minX, maxY - minY));
+        return new UIClip(mask, new Float4(minX, minY, maxX, maxY), radius, mask.Softness);
     }
 
     private static void EnsureBaked(UIBehaviour ui, in UIContext childCtx)
     {
+        // The baked geometry is a function of (Vertices-dirty properties, the element's laid-out
+        // size, and the inherited alpha). The dirty flag only covers the first; a parent resize or
+        // an ancestor CanvasGroup alpha change moves the other two without flagging this element,
+        // so compare them explicitly or a stretched child would render at its stale size/alpha.
+        Float2 size = ui.GameObject.RectTransform?.ComputedRect.Size ?? Float2.Zero;
         bool needsBake = ui.CachedMesh is null
-                      || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0;
+                      || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0
+                      || !ui.LastBakeSize.Equals(size)
+                      || !ui.LastBakeAlpha.Equals(childCtx.Alpha);
         if (!needsBake) return;
 
-        ui.CachedMesh ??= new Mesh();
         UIMeshBuilder builder = UIMeshBuilder.Rent();
         try
         {
             ui.GenerateMesh(builder, childCtx);
-            if (builder.IsEmpty)      ui.CachedMesh = null;
-            else                      builder.Bake(ui.CachedMesh);
+            if (builder.IsEmpty)
+            {
+                // Element produced no geometry (e.g. empty text): drop the old mesh, disposing its
+                // GPU buffers rather than orphaning them.
+                ui.CachedMesh?.OnDispose();
+                ui.CachedMesh = null;
+            }
+            else
+            {
+                ui.CachedMesh ??= new Mesh();
+                builder.Bake(ui.CachedMesh);
+            }
         }
         finally { UIMeshBuilder.Return(builder); }
+
         ui.DirtyFlags &= ~UIDirtyFlags.Vertices;
+        ui.LastBakeSize = size;
+        ui.LastBakeAlpha = childCtx.Alpha;
     }
 
-    private void EmitItem(UIBehaviour ui, Mesh mesh, int dfsIndex, Rect? canvasScissor)
+    private void EmitItem(UIBehaviour ui, Mesh mesh, int dfsIndex, UIClip? clip)
     {
         UIRenderItem item = Tree.RentItem();
         item.Initialize(
@@ -363,28 +420,23 @@ public class GameCanvas : MonoBehaviour
             mesh:     mesh,
             material: ui.GetMaterial(),
             model:    BuildItemModel(ui),
-            sortKey:  (SortOrder << 24) | dfsIndex,
+            sortKey:  BuildSortKey(dfsIndex),
             surface:  UIRenderTree.ToSurface(RenderMode),
-            scissor:  ConvertScissorToFramebufferPixels(canvasScissor));
+            clip:     clip);
         Tree.Add(item);
     }
 
     /// <summary>
-    /// Converts a canvas-design-pixel rect into GL framebuffer pixels (origin at bottom-left,
-    /// pixel units). For Overlay/Camera modes the conversion is just a uniform scale by
-    /// <see cref="ScaleFactor"/>; for WorldSpace there's no meaningful screen-space scissor
-    /// so we return null.
+    /// Global draw-order key: <c>SortOrder</c> (dominant) then a stable per-canvas discriminator then
+    /// the depth-first index. A 64-bit key gives <c>SortOrder</c> its own high field (no more sign-bit
+    /// overflow past 127) and 21 bits each for the canvas id and DFS index. The canvas discriminator
+    /// keeps two equal-<c>SortOrder</c> canvases as contiguous layers instead of interleaving them.
     /// </summary>
-    private Float4? ConvertScissorToFramebufferPixels(Rect? canvasRect)
+    private long BuildSortKey(int dfsIndex)
     {
-        if (canvasRect is null || RenderMode == RenderMode.WorldSpace) return null;
-        Rect r = canvasRect.Value;
-        float s = Maths.Max(ScaleFactor, 0.001f);
-        float x = r.Min.X * s;
-        float y = r.Min.Y * s;
-        float w = r.Size.X * s;
-        float h = r.Size.Y * s;
-        return new Float4(x, y, w, h);
+        long canvasDisc = InstanceID & 0x1FFFFF;
+        long dfs = (uint)dfsIndex & 0x1FFFFF;
+        return ((long)SortOrder << 42) + (canvasDisc << 21) + dfs;
     }
 
     private static Rect IntersectRect(Rect a, Rect b)
@@ -410,12 +462,64 @@ public class GameCanvas : MonoBehaviour
     /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
     /// consuming the same matrix.
     /// </remarks>
-    public Float4x4 CanvasToWorld => UseWorldSpace
-        // World-space canvases map design pixels 1:1 to world units (through the transform), so the canvas
-        // occupies its ReferenceResolution in world space and doesn't shrink when the mode is toggled.
-        // Author the world size via the GameObject's Transform scale.
-        ? Transform.LocalToWorldMatrix
-        : Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f));
+    public Float4x4 CanvasToWorld
+    {
+        get
+        {
+            // World-space canvases map design pixels 1:1 to world units through the transform (author
+            // the world size via the GameObject's Transform scale).
+            if (UseWorldSpace) return Transform.LocalToWorldMatrix;
+
+            // ScreenSpaceCamera projects the design-pixel rect onto a plane in front of the render camera.
+            if (RenderMode == RenderMode.ScreenSpaceCamera && s_screenCamera.Valid) return BuildScreenCameraMatrix();
+
+            // Overlay: uniform scale by the scale factor (screen-ortho projection supplies the rest).
+            return Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f));
+        }
+    }
+
+    /// <summary>
+    /// Maps this canvas's design-pixel space onto a plane <see cref="PlaneDistance"/> in front of the
+    /// render camera, sized to fill the camera's view at that distance. Rebuilt every frame while the
+    /// camera moves (see <see cref="UIRenderTree.RefreshAllModels"/>), so ScreenSpaceCamera UI tracks it.
+    /// </summary>
+    private Float4x4 BuildScreenCameraMatrix()
+    {
+        ScreenCamera cam = s_screenCamera;
+        float d = Maths.Max(0.01f, _planeDistance);
+
+        // View extents at distance d, from the projection's diagonal. Perspective: height = 2 d tan(fovY/2)
+        // (proj[1,1] = 1/tan(fovY/2)); orthographic (proj[3,3] == 1): height is distance-independent.
+        Float4x4 proj = cam.Projection;
+        float p00 = proj[0, 0], p11 = proj[1, 1], p33 = proj[3, 3];
+        float viewH, viewW;
+        if (Maths.Abs(p33 - 1f) < 0.001f)
+        {
+            viewH = 2f / Maths.Max(1e-4f, p11);
+            viewW = 2f / Maths.Max(1e-4f, p00);
+        }
+        else
+        {
+            viewH = 2f * d / Maths.Max(1e-4f, p11);
+            viewW = viewH * (p11 / Maths.Max(1e-4f, p00));
+        }
+
+        float refW = Maths.Max(1f, ReferenceResolution.X);
+        float refH = Maths.Max(1f, ReferenceResolution.Y);
+        float sx = viewW / refW;
+        float sy = viewH / refH;
+
+        Float3 r = cam.Right, u = cam.Up, f = cam.Forward;
+        Float3 center = cam.Position + f * d;
+        Float3 origin = center - r * (sx * refW * 0.5f) - u * (sy * refH * 0.5f);
+
+        // Columns: design +X -> camera right (scaled), +Y -> camera up (scaled), +Z -> forward, plus origin.
+        return new Float4x4(
+            new Float4(r.X * sx, r.Y * sx, r.Z * sx, 0f),
+            new Float4(u.X * sy, u.Y * sy, u.Z * sy, 0f),
+            new Float4(f.X, f.Y, f.Z, 0f),
+            new Float4(origin.X, origin.Y, origin.Z, 1f));
+    }
 
     /// <summary>
     /// Returns the model matrix for a UI element under this canvas. Equivalent to

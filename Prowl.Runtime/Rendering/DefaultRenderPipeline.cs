@@ -496,6 +496,11 @@ public class DefaultRenderPipeline : RenderPipeline
         GameCanvas.ScreenSizeOverride = new Float2(css.PixelWidth, css.PixelHeight);
         try
         {
+            // ScreenSpaceCamera canvases position themselves relative to this camera; push it before
+            // collecting so their per-frame model rebuild sees it.
+            if (surface == UISurface.Camera)
+                GameCanvas.PushScreenCamera(css.CameraPosition, css.CameraForward, css.CameraUp, css.CameraRight, css.Projection);
+
             s_uiTmp.Clear();
             UIRenderTree.CollectFor(css.Scene, surface, s_uiTmp);
             if (s_uiTmp.Count == 0) return;
@@ -503,8 +508,12 @@ public class DefaultRenderPipeline : RenderPipeline
             // Items arrive in per-canvas hierarchy order; stable-sort by SortKey across canvases.
             s_uiTmp.Sort(static (a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
 
-            // Screen-space orthographic projection (origin bottom-left, +Y up to match RectTransform).
-            AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+            // The Camera surface projects through the camera (perspective, shares the scene's depth);
+            // Overlay uses a flat screen-space orthographic projection (origin bottom-left, +Y up).
+            if (surface == UISurface.Camera)
+                AssignCameraMatrices(css.View, css.Projection);
+            else
+                AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
 
             var cmd = Graphics.GetCommandBuffer("UI");
             if (targetRT != null)
@@ -527,6 +536,7 @@ public class DefaultRenderPipeline : RenderPipeline
         finally
         {
             GameCanvas.ScreenSizeOverride = prevOverride;
+            if (surface == UISurface.Camera) GameCanvas.ClearScreenCamera();
         }
     }
 
@@ -573,6 +583,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void DrawUIItems(CommandBuffer cmd, List<IRenderable> items, ViewerData viewer)
     {
+        // GetPassesWithTag allocates a fresh list per call, and UI items are drawn back-to-back with the
+        // same shared material - so memoize the resolved pass index for the last shader seen instead of
+        // re-querying (and allocating) for every one of potentially hundreds of items each frame.
+        Shader? cachedShader = null;
+        int cachedPass = -1;
+
         for (int i = 0; i < items.Count; i++)
         {
             var item = (UIRenderItem)items[i];
@@ -583,24 +599,21 @@ public class DefaultRenderPipeline : RenderPipeline
             if (mesh == null || mesh.VertexCount <= 0) continue;
 
             // UI materials carry a single pass tagged RenderOrder=UI.
-            var uiPasses = material.Shader.GetPassesWithTag("RenderOrder", "UI");
-            if (uiPasses.Count == 0) continue;
-
-            // Per-item clip rect (RectMask). ScissorPixels are framebuffer pixels (bottom-left origin).
-            if (item.ScissorPixels is { } sp)
-            {
-                int sx = (int)MathF.Floor(sp.X);
-                int sy = (int)MathF.Floor(sp.Y);
-                int sw = Math.Max(0, (int)MathF.Ceiling(sp.X + sp.Z) - sx);
-                int sh = Math.Max(0, (int)MathF.Ceiling(sp.Y + sp.W) - sy);
-                cmd.SetScissor(sx, sy, (uint)sw, (uint)sh);
-            }
+            int uiPass;
+            if (ReferenceEquals(material.Shader, cachedShader))
+                uiPass = cachedPass;
             else
             {
-                cmd.DisableScissor();
+                var uiPasses = material.Shader.GetPassesWithTag("RenderOrder", "UI");
+                uiPass = uiPasses.Count > 0 ? uiPasses[0] : -1;
+                cachedShader = material.Shader;
+                cachedPass = uiPass;
             }
+            if (uiPass < 0) continue;
 
-            cmd.DrawMesh(mesh, material, uiPasses[0], model, properties);
+            // Clipping (RectMask) is done per-fragment in the shader via the item's clip uniforms, so
+            // no GPU scissor here - that lets the clip follow rotation/scale and round its corners.
+            cmd.DrawMesh(mesh, material, uiPass, model, properties);
         }
 
         // Leave the scissor test off so the next command buffer isn't clipped.

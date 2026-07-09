@@ -9,6 +9,24 @@ using Prowl.Vector.Geometry;
 namespace Prowl.Runtime.UI;
 
 /// <summary>
+/// A rounded-rect clip region contributed by a mask (see <see cref="RectMask"/>). The fragment shader
+/// maps each pixel into the mask's local space (via the mask's inverse model) and tests it against
+/// <see cref="Rect"/> with <see cref="Radius"/> rounded corners and a <see cref="Softness"/> edge.
+/// </summary>
+internal readonly struct UIClip
+{
+    public readonly UIBehaviour Source;   // mask element - its model gives the world->local matrix
+    public readonly Float4 Rect;          // (minX, minY, maxX, maxY) in mask-local pivot-centered pixels
+    public readonly float Radius;
+    public readonly float Softness;
+
+    public UIClip(UIBehaviour source, Float4 rect, float radius, float softness)
+    {
+        Source = source; Rect = rect; Radius = radius; Softness = softness;
+    }
+}
+
+/// <summary>
 /// One drawable UI primitive. Wraps a <see cref="UIBehaviour"/>'s baked mesh and material
 /// and exposes them through <see cref="IRenderable"/> so the existing
 /// <c>DrawRenderables</c> batcher can consume them unchanged.
@@ -32,13 +50,18 @@ internal sealed class UIRenderItem : IRenderable
     public PropertyState Props = new();          // reused; never reallocated
 
     // -------- Sort + lifecycle --------
-    public int    SortKey;                       // (canvasSortOrder << 24) | depthFirstIndex
+    public long   SortKey;                       // (SortOrder << 42) | (canvasDiscriminator << 21) | depthFirstIndex
     public UISurface Surface;                    // mirrors Canvas.RenderMode, frozen at rebuild time
     public uint   LastTransformVersion;          // (matrix-only refresh)
     public UIDirtyFlags PropertyCacheState;      // tracks whether Props needs repopulating
 
-    // -------- Mask state (set by the canvas during BuildRecursive) --------
-    public Float4?    ScissorPixels;             // (x, y, w, h) in framebuffer pixels - null = no scissor
+    // -------- Clip (mask) state (set by the canvas during BuildRecursive) --------
+    public bool         HasClip;
+    public UIBehaviour? ClipSource;              // the mask element, for per-frame ClipToLocal refresh
+    public Float4x4     ClipToLocal;             // world -> mask-local space (cancels CanvasToWorld)
+    public Float4       ClipRect;                // (minX, minY, maxX, maxY) in mask-local pixels
+    public float        ClipRadius;
+    public float        ClipSoftness;
 
     // ============================================================
     // IRenderable implementation
@@ -58,14 +81,31 @@ internal sealed class UIRenderItem : IRenderable
 
     public void GetRenderingData(ViewerData v, out PropertyState p, out Mesh m, out Float4x4 model, out InstanceData[]? inst)
     {
-        // Repopulate Props only when the owning behaviour reports a Material change.
-        // The first call after a rebuild always writes (PropertyCacheState starts at All).
-        if (true)//((PropertyCacheState & (UIDirtyFlags.Material | UIDirtyFlags.Hierarchy)) != 0)
+        // Repopulate Props only when the owning behaviour reports a Material/Hierarchy change.
+        // The first call after a rebuild always writes (Initialize resets PropertyCacheState to All),
+        // and any property edit dirties the canvas -> full rebuild -> fresh item -> repopulate, so a
+        // persisted item on a static frame can safely skip this.
+        if ((PropertyCacheState & (UIDirtyFlags.Material | UIDirtyFlags.Hierarchy)) != 0)
         {
             Props.Clear();
             Props.SetInt("_ObjectID", Owner.InstanceID);
             Owner.PopulateProperties(Props, UIContext.Default);
             PropertyCacheState = UIDirtyFlags.None;
+        }
+
+        // Clip uniforms are refreshed every frame (ClipToLocal follows the mask's transform via
+        // RefreshModelIfDirty), so they live outside the cached-property block above.
+        if (HasClip)
+        {
+            Props.SetFloat("_ClipEnable", 1f);
+            Props.SetMatrix("_ClipToLocal", ClipToLocal);
+            Props.SetVector("_ClipRect", ClipRect);
+            Props.SetFloat("_ClipRadius", ClipRadius);
+            Props.SetFloat("_ClipSoftness", ClipSoftness);
+        }
+        else
+        {
+            Props.SetFloat("_ClipEnable", 0f);
         }
 
         p = Props; m = Mesh; model = Model; inst = null;
@@ -91,7 +131,7 @@ internal sealed class UIRenderItem : IRenderable
     /// <see cref="UIMeshBuilder.Bake"/> has produced a fresh mesh.
     /// </summary>
     internal void Initialize(UIBehaviour owner, GameCanvas canvas, Mesh mesh, Material material,
-                             Float4x4 model, int sortKey, UISurface surface, Float4? scissor = null)
+                             Float4x4 model, long sortKey, UISurface surface, UIClip? clip = null)
     {
         Owner = owner; Canvas = canvas;
         Mesh = mesh; Material = material;
@@ -100,7 +140,21 @@ internal sealed class UIRenderItem : IRenderable
         Surface = surface;
         LastTransformVersion = owner.Transform.Version;
         PropertyCacheState = UIDirtyFlags.All;   // forces first GetRenderingData to populate
-        ScissorPixels = scissor;
+
+        if (clip is { } c)
+        {
+            HasClip = true;
+            ClipSource = c.Source;
+            ClipRect = c.Rect;
+            ClipRadius = c.Radius;
+            ClipSoftness = c.Softness;
+            ClipToLocal = canvas.BuildItemModel(c.Source).Invert();
+        }
+        else
+        {
+            HasClip = false;
+            ClipSource = null;
+        }
     }
 
     /// <summary>
@@ -113,6 +167,18 @@ internal sealed class UIRenderItem : IRenderable
         uint v = Owner.Transform.Version;
         if (v == LastTransformVersion) return;
         Model = Canvas.BuildItemModel(Owner);
+        if (HasClip && ClipSource != null)
+            ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
         LastTransformVersion = v;
+    }
+
+    /// <summary>Unconditionally recompute the model (and clip) matrix. Used by ScreenSpaceCamera canvases,
+    /// whose placement follows the render camera every frame rather than the owning Transform.</summary>
+    internal void ForceRefreshModel()
+    {
+        Model = Canvas.BuildItemModel(Owner);
+        if (HasClip && ClipSource != null)
+            ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
+        LastTransformVersion = Owner.Transform.Version;
     }
 }
