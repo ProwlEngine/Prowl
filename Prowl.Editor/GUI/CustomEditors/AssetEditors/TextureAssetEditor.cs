@@ -19,6 +19,7 @@ public class TextureAssetEditor : AssetImporterEditor
 {
     // Cache settings across frames so changes stick until Save
     private EchoObject? _cachedSettings;
+    private bool _dirty;
     private Guid _cachedForGuid;
 
     private static UnitValue ST => UnitValue.StretchOne;
@@ -98,6 +99,7 @@ public class TextureAssetEditor : AssetImporterEditor
                     if (!_cachedSettings.TryGet(kvp.Key, out _))
                         _cachedSettings[kvp.Key] = kvp.Value.Clone();
 
+            _dirty = false;
             _cachedForGuid = entry.Guid;
         }
 
@@ -107,44 +109,62 @@ public class TextureAssetEditor : AssetImporterEditor
 
         bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
         EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", genMips,
-            v => settings["generateMipmaps"] = new EchoObject(v), separator: false);
+            v => { settings["generateMipmaps"] = new EchoObject(v); _dirty = true; }, separator: false);
 
         bool srgb = settings.TryGet("sRGB", out var srgbTag) && srgbTag.BoolValue;
         EditorGUI.SettingsToggle(paper, $"{id}_srgb", "sRGB", srgb,
-            v => settings["sRGB"] = new EchoObject(v), separator: false);
+            v => { settings["sRGB"] = new EchoObject(v); _dirty = true; }, separator: false);
 
         var currentMin = settings.TryGet("minFilter", out var minTag)
             ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
         EditorGUI.Row(paper, $"{id}_min", "Min Filter", () =>
             Origami.EnumDropdown(paper, $"{id}_min_v", currentMin,
-                v => settings["minFilter"] = new EchoObject((int)v)).Show());
+                v => { settings["minFilter"] = new EchoObject((int)v); _dirty = true; }).Show());
 
         var currentMag = settings.TryGet("magFilter", out var magTag)
             ? (TextureMag)magTag.IntValue : TextureMag.Linear;
         EditorGUI.Row(paper, $"{id}_mag", "Mag Filter", () =>
             Origami.EnumDropdown(paper, $"{id}_mag_v", currentMag,
-                v => settings["magFilter"] = new EchoObject((int)v)).Show());
+                v => { settings["magFilter"] = new EchoObject((int)v); _dirty = true; }).Show());
 
         var currentWrap = settings.TryGet("wrapMode", out var wrapTag)
             ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
         EditorGUI.Row(paper, $"{id}_wrap", "Wrap Mode", () =>
             Origami.EnumDropdown(paper, $"{id}_wrap_v", currentWrap,
-                v => settings["wrapMode"] = new EchoObject((int)v)).Show());
+                v => { settings["wrapMode"] = new EchoObject((int)v); _dirty = true; }).Show());
 
-        // Save CTA
+        // Sprite settings: mode + a button to open the full Sprite Editor. The Sprite Editor edits the
+        // shared settings instance and flags it dirty; persisting happens here via Save & Reimport.
+        var spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
+        Origami.Header(paper, $"{id}_sprite_hdr", "Sprite").Show();
+        EditorGUI.Row(paper, $"{id}_spmode", "Sprite Mode", () =>
+            Origami.EnumDropdown(paper, $"{id}_spmode_v", spriteTarget.Settings.Mode,
+                v => { spriteTarget.Settings.Mode = v; spriteTarget.Dirty = true; }).Show());
+
+        if (spriteTarget.Settings.Mode != Importers.SpriteMode.None)
+            Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
+                () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
+
+        // Save CTA - disabled until an import setting or the sprite config changes (and never in read-only,
+        // e.g. when this editor is shown for a texture sub-asset). It's a raw Box, so it must check IsReadOnly.
+        bool dirty = !Origami.IsReadOnly && (_dirty || spriteTarget.Dirty);
         paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
-            .BackgroundColor(EditorTheme.Accent)
-            .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
+            .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
+            .Hovered.BackgroundColor(dirty ? EditorTheme.AccentBright : EditorTheme.Neutral300).End()
             .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? font)
-            .TextColor(System.Drawing.Color.White).FontSize(EditorTheme.FontSizeSmall)
+            .TextColor(dirty ? System.Drawing.Color.White : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) =>
             {
+                if (!dirty) return;
+                Importers.TextureSpriteMeta.WriteInto(settings, spriteTarget.Settings);
                 var meta = MetaFile.Read(metaPath);
                 meta.Settings = settings;
                 MetaFile.Write(metaPath, meta);
                 _cachedSettings = null;
+                _dirty = false;
+                Importers.SpriteEditRegistry.ClearDirty(entry.Guid);
                 EditorAssetDatabase.Instance?.Reimport(entry.Guid);
             });
     }

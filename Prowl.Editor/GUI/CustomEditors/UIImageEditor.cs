@@ -41,8 +41,7 @@ public class UIImageEditor : CustomEditor
             typeof(AssetRef<Material>), img.Material,
             v => img.Material = (AssetRef<Material>)v!, 0);
 
-        Origami.Checkbox(paper, $"{id}_ray", img.RaycastTarget, v => img.RaycastTarget = v)
-            .LabelRight("Raycast Target").Show();
+        BoolRow(paper, $"{id}_ray", "Raycast Target", img.RaycastTarget, v => img.RaycastTarget = v);
 
         paper.Box($"{id}_sp1").Height(EditorTheme.Spacing * 2);
 
@@ -63,43 +62,51 @@ public class UIImageEditor : CustomEditor
                 DrawTiledOptions(paper, $"{id}_tiled", img);
                 break;
             case ImageType.Filled:
-                DrawFilledOptions(paper, $"{id}_filled", img, font);
+                DrawFilledOptions(paper, $"{id}_filled", img);
                 break;
         }
+    }
 
-        EditorGUI.Row(paper, $"{id}_cr", "Corner Radius", () =>
-            Origami.NumericField<float>(paper, $"{id}_cr_v", img.CornerRadius,
-                v => img.CornerRadius = MathF.Max(0f, v)).Min(0f).Show());
+    private static void BoolRow(Paper paper, string id, string label, bool value, Action<bool> setter)
+        => EditorGUI.Row(paper, id, label, () =>
+            Origami.Checkbox(paper, $"{id}_v", value, setter).Show());
+
+    /// <summary>
+    /// A sliced sprite (one that carries a border) is almost always meant to be drawn nine-sliced, so on
+    /// assignment we default the draw type from the sprite: bordered -> Sliced, otherwise -> Simple.
+    /// </summary>
+    private static void InferTypeFromSprite(UIImage img)
+    {
+        if (img.Sprite.Res is not Sprite s) return;
+        img.Type = s.HasBorder ? ImageType.Sliced : ImageType.Simple;
     }
 
     private static void DrawSourceRow(Paper paper, string id, UIImage img)
     {
-        var font = EditorTheme.DefaultFont!;
-
         DrawPreview(paper, $"{id}_prev", img);
 
         using (paper.Column($"{id}_left").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
         {
-            PropertyGridUtils.DrawField(paper, $"{id}_tex", "Source Image",
-                typeof(AssetRef<Texture2D>), img.Texture,
-                v => img.Texture = (AssetRef<Texture2D>)v!, 0);
-
-            if (img.Texture.Res != null)
-            {
-                var tex = img.Texture.Res;
-                paper.Box($"{id}_info").Height(16)
-                    .Text($"{tex.Width} x {tex.Height}", font)
-                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleLeft);
-            }
+            PropertyGridUtils.DrawField(paper, $"{id}_sprite", "Sprite",
+                typeof(AssetRef<Sprite>), img.Sprite,
+                v =>
+                {
+                    img.Sprite = (AssetRef<Sprite>)v!;
+                    InferTypeFromSprite(img);
+                }, 0);
         }
     }
 
     private static void DrawPreview(Paper paper, string id, UIImage img)
     {
         const float size = 128f;
-        var tex = img.Texture.Res ?? UIImage.defaultTexture;
+        var sprite = img.Sprite.Res;
+        var tex = sprite?.Texture.Res ?? UIImage.defaultTexture;
         var color = img.Color;
+
+        // Aspect of the drawn region: the sprite's rect when available, else the texture.
+        float srcW = sprite != null ? sprite.Rect.Width : tex.Width;
+        float srcH = sprite != null ? sprite.Rect.Height : tex.Height;
 
         paper.Box(id)
             .Size(size, size)
@@ -113,11 +120,9 @@ public class UIImageEditor : CustomEditor
                 float w = (float)r.Size.X - 4;
                 float h = (float)r.Size.Y - 4;
 
-                // Preserve aspect inside the swatch so the preview matches what the
-                // component would actually draw with PreserveAspect on.
-                if (tex.Width > 0 && tex.Height > 0)
+                if (srcW > 0 && srcH > 0)
                 {
-                    float aspect = tex.Width / (float)tex.Height;
+                    float aspect = srcW / srcH;
                     if (aspect >= 1f) { float nh = w / aspect; y += (h - nh) * 0.5f; h = nh; }
                     else { float nw = h * aspect; x += (w - nw) * 0.5f; w = nw; }
                 }
@@ -137,33 +142,24 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawSimpleOptions(Paper paper, string id, UIImage img)
     {
-        Origami.Checkbox(paper, $"{id}_pa", img.PreserveAspect, v => img.PreserveAspect = v)
-            .LabelRight("Preserve Aspect").Show();
-
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
         DrawSetNativeSizeButton(paper, $"{id}_sns", img);
     }
 
     private static void DrawSlicedOptions(Paper paper, string id, UIImage img)
     {
-        Origami.Checkbox(paper, $"{id}_pa", img.PreserveAspect, v => img.PreserveAspect = v)
-            .LabelRight("Preserve Aspect").Show();
-
-        DrawBorderField(paper, $"{id}_border", img);
-        DrawPixelsPerUnitField(paper, $"{id}_ppu", img);
-        DrawSetNativeSizeButton(paper, $"{id}_sns", img);
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
+        DrawPixelsPerUnitMultiplierField(paper, $"{id}_ppu", img);
     }
 
     private static void DrawTiledOptions(Paper paper, string id, UIImage img)
     {
-        DrawBorderField(paper, $"{id}_border", img);
-        DrawPixelsPerUnitField(paper, $"{id}_ppu", img);
-        DrawSetNativeSizeButton(paper, $"{id}_sns", img);
+        DrawPixelsPerUnitMultiplierField(paper, $"{id}_ppu", img);
     }
 
-    private static void DrawFilledOptions(Paper paper, string id, UIImage img, Prowl.Scribe.FontFile font)
+    private static void DrawFilledOptions(Paper paper, string id, UIImage img)
     {
-        Origami.Checkbox(paper, $"{id}_pa", img.PreserveAspect, v => img.PreserveAspect = v)
-            .LabelRight("Preserve Aspect").Show();
+        BoolRow(paper, $"{id}_pa", "Preserve Aspect", img.PreserveAspect, v => img.PreserveAspect = v);
 
         EditorGUI.Row(paper, $"{id}_fm", "Fill Method", () =>
             Origami.EnumDropdown<FillMethod>(paper, $"{id}_fm_v", img.FillMethod, v =>
@@ -179,35 +175,26 @@ public class UIImageEditor : CustomEditor
                 v => img.FillAmount = v, 0f, 1f).Format("F2").Show());
 
         if (IsRadial(img.FillMethod))
-        {
-            Origami.Checkbox(paper, $"{id}_cw", img.FillClockwise, v => img.FillClockwise = v)
-                .LabelRight("Clockwise").Show();
-        }
+            BoolRow(paper, $"{id}_cw", "Clockwise", img.FillClockwise, v => img.FillClockwise = v);
+
+        DrawSetNativeSizeButton(paper, $"{id}_sns", img);
     }
 
     // ================================================================
     //  Shared widgets
     // ================================================================
 
-    private static void DrawBorderField(Paper paper, string id, UIImage img)
+    private static void DrawPixelsPerUnitMultiplierField(Paper paper, string id, UIImage img)
     {
-        // Float4 packing: X=Left, Y=Top, Z=Right, W=Bottom (source-texture pixels).
-        EditorGUI.Row(paper, id, "Border (L/T/R/B)", () =>
-            Origami.Float4Field(paper, $"{id}_v", img.Border, v =>
-                img.Border = new Float4(MathF.Max(0f, v.X), MathF.Max(0f, v.Y), MathF.Max(0f, v.Z), MathF.Max(0f, v.W))).Show());
-    }
-
-    private static void DrawPixelsPerUnitField(Paper paper, string id, UIImage img)
-    {
-        EditorGUI.Row(paper, id, "Pixels Per Unit", () =>
+        EditorGUI.Row(paper, id, "Pixels Per Unit Multiplier", () =>
         {
             using (paper.Row($"{id}_row").Height(EditorTheme.RowHeight).RowBetween(4).Enter())
             {
                 using (paper.Box($"{id}_n").Width(UnitValue.Stretch()).Enter())
-                    Origami.NumericField<float>(paper, $"{id}_n_v", img.PixelsPerUnit,
-                        v => img.PixelsPerUnit = MathF.Max(0.0001f, v)).Min(0.0001f).Show();
+                    Origami.NumericField<float>(paper, $"{id}_n_v", img.PixelsPerUnitMultiplier,
+                        v => img.PixelsPerUnitMultiplier = MathF.Max(0.0001f, v)).Min(0.0001f).Show();
 
-                Origami.IconButton(paper, $"{id}_r", EditorIcons.ArrowsRotate, () => img.PixelsPerUnit = 1f)
+                Origami.IconButton(paper, $"{id}_r", EditorIcons.ArrowsRotate, () => img.PixelsPerUnitMultiplier = 1f)
                     .Width(EditorTheme.RowHeight).Height(EditorTheme.RowHeight)
                     .Tooltip("Reset to 1").Show();
             }
@@ -216,17 +203,28 @@ public class UIImageEditor : CustomEditor
 
     private static void DrawSetNativeSizeButton(Paper paper, string id, UIImage img)
     {
-        if (img.Texture.Res == null) return;
+        if (img.Sprite.Res is not Sprite s) return;
 
         EditorGUI.Row(paper, id, string.Empty, () =>
             Origami.Button(paper, $"{id}_b", "Set Native Size", () =>
             {
                 var rt = img.GameObject?.RectTransform;
-                var tex = img.Texture.Res;
-                if (rt == null || tex == null) return;
-                float ppu = img.PixelsPerUnit > 0 ? img.PixelsPerUnit : 1f;
+                if (rt == null) return;
                 Undo.Snapshot(rt);
-                rt.SizeDelta = new Float2(tex.Width / ppu, tex.Height / ppu);
+
+                // A stretched anchor (edge/fullscreen) makes SizeDelta a padding offset, so setting a
+                // literal pixel size wouldn't work. Collapse it to a bottom-left point anchor first; a
+                // point anchor is already size-driven, so leave it untouched.
+                const float eps = 1e-4f;
+                bool stretched = MathF.Abs(rt.AnchorMin.X - rt.AnchorMax.X) > eps
+                              || MathF.Abs(rt.AnchorMin.Y - rt.AnchorMax.Y) > eps;
+                if (stretched)
+                {
+                    rt.AnchorMin = Float2.Zero;
+                    rt.AnchorMax = Float2.Zero;
+                }
+
+                rt.SizeDelta = new Float2(s.Rect.Width, s.Rect.Height);
             }).Show());
     }
 

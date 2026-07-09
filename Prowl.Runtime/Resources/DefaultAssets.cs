@@ -12,6 +12,7 @@ public enum DefaultShader
     StandardTransparent,
     StandardAnisotropic,
     Unlit,
+    Sprite,
     Line,
     Invalid,
     UI,
@@ -67,6 +68,15 @@ public enum DefaultMaterial
 }
 
 /// <summary>
+/// Default sprites embedded in the runtime
+/// </summary>
+public enum DefaultSprite
+{
+    /// <summary>A rounded nine-slice panel (white fill, subtle border) used as the default UI background.</summary>
+    UIPanel,
+}
+
+/// <summary>
 /// Default textures embedded in the runtime
 /// </summary>
 public enum DefaultTexture
@@ -78,6 +88,9 @@ public enum DefaultTexture
     Emission,
     Grid,
     Noise,
+
+    // UI
+    UIPanel,
 
     // Scene helpers
     Handle,

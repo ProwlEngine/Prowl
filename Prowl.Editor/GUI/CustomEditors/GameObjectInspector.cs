@@ -633,13 +633,21 @@ public static class GameObjectInspector
                 var (capGo, capMin, capMax) = cap;
                 var r = capGo.RectTransform;
                 if (r == null) return;
-                var oldMin = r.AnchorMin;
-                var oldMax = r.AnchorMax;
+
+                // Changing the anchor preset re-parameterizes the rect but must keep it visually put,
+                // so it re-solves SizeDelta/AnchoredPosition. Snapshot the full solved state both ways
+                // so undo/redo restore the exact values rather than re-deriving them.
+                var oldMin = r.AnchorMin; var oldMax = r.AnchorMax;
+                var oldSize = r.SizeDelta; var oldPos = r.AnchoredPosition;
+
+                SetAnchorsPreservingRect(r, capMin, capMax);
+
+                var newMin = r.AnchorMin; var newMax = r.AnchorMax;
+                var newSize = r.SizeDelta; var newPos = r.AnchoredPosition;
+
                 Undo.RegisterAction("Change Anchor Preset",
-                    undo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = oldMin; rr.AnchorMax = oldMax; } },
-                    redo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = capMin; rr.AnchorMax = capMax; } });
-                r.AnchorMin = capMin;
-                r.AnchorMax = capMax;
+                    undo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = oldMin; rr.AnchorMax = oldMax; rr.SizeDelta = oldSize; rr.AnchoredPosition = oldPos; } },
+                    redo: () => { var rr = capGo.RectTransform; if (rr != null) { rr.AnchorMin = newMin; rr.AnchorMax = newMax; rr.SizeDelta = newSize; rr.AnchoredPosition = newPos; } });
             })
             .Enter())
         {
@@ -707,47 +715,128 @@ public static class GameObjectInspector
         }
     }
 
+    // Nebula axis colors, matching Origami's vector fields (X red, Y green, Z blue).
+    private static readonly System.Drawing.Color AxisXColor = System.Drawing.Color.FromArgb(255, 251, 113, 133);
+    private static readonly System.Drawing.Color AxisYColor = System.Drawing.Color.FromArgb(255, 74, 222, 128);
+    private static readonly System.Drawing.Color AxisZColor = System.Drawing.Color.FromArgb(255, 96, 165, 250);
+
+    private static bool AxisStretched(float anchorMin, float anchorMax) => MathF.Abs(anchorMin - anchorMax) > 1e-5f;
+
+    // Rect edges relative to their anchors, as functions of AnchoredPosition/SizeDelta/Pivot only
+    // (the anchor pixel positions cancel, so no parent rect is needed for these).
+    private static float OffsetMin(float anchored, float size, float pivot) => anchored - pivot * size;
+    private static float OffsetMax(float anchored, float size, float pivot) => anchored + (1f - pivot) * size;
+
+    // Solve (AnchoredPosition, SizeDelta) for one axis so its min edge (offsetMin) becomes newMin while
+    // the max edge is held - i.e. dragging the Left/Bottom field keeps the opposite edge pinned.
+    private static void SolveHoldMax(float anchored, float size, float pivot, float newMin, out float outAnchored, out float outSize)
+    {
+        float omax = OffsetMax(anchored, size, pivot);
+        outSize = omax - newMin;
+        outAnchored = newMin + pivot * outSize;
+    }
+
+    // Solve so the max edge (offsetMax) becomes newMax while the min edge is held (Right/Top field).
+    private static void SolveHoldMin(float anchored, float size, float pivot, float newMax, out float outAnchored, out float outSize)
+    {
+        float omin = OffsetMin(anchored, size, pivot);
+        outSize = newMax - omin;
+        outAnchored = omin + pivot * outSize;
+    }
+
+    private static void NumCell(Paper paper, string id, string label, System.Drawing.Color color, float value, Action<float> onChange)
+        => Origami.NumericField<float>(paper, id, value, onChange).DraggableLabel(label, color, compact: true).Show();
+
+    private static void ApplyPosSize(GameObject g, (Float2 pos, Float2 size) v)
+    {
+        var r = g.RectTransform;
+        if (r == null) return;
+        r.AnchoredPosition = v.pos;
+        r.SizeDelta = v.size;
+    }
+
+    // Writes a new value into one axis component of AnchoredPosition/SizeDelta, coalescing the undo so
+    // a scrub-drag collapses to a single step. Both are recorded together since a stretched-edge edit
+    // moves position and size at once.
+    private static void ApplyAxis(GameObject go, RectTransform rt, int axis, float newAnchored, float newSize, string desc)
+    {
+        Float2 pos = rt.AnchoredPosition, size = rt.SizeDelta;
+        Float2 nPos = axis == 0 ? new Float2(newAnchored, pos.Y) : new Float2(pos.X, newAnchored);
+        Float2 nSize = axis == 0 ? new Float2(newSize, size.Y) : new Float2(size.X, newSize);
+        Undo.RecordGameObjectChange(go, desc, (pos, size), (nPos, nSize), ApplyPosSize, coalesce: true);
+        rt.AnchoredPosition = nPos;
+        rt.SizeDelta = nSize;
+    }
+
     /// <summary>
-    /// Pos X / Pos Y / Pos Z row. X and Y come from RectTransform.AnchoredPosition,
-    /// Z comes from Transform.LocalPosition (RectTransform doesn't track Z).
+    /// Position row. Each axis is contextual (Unity-style): a fixed axis shows Pos X / Pos Y, a
+    /// stretched axis shows the edge inset (Left / Top) instead. Z always comes from Transform.LocalPosition.
     /// </summary>
     private static void DrawPositionRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt, Transform t)
     {
+        bool sx = AxisStretched(rt.AnchorMin.X, rt.AnchorMax.X);
+        bool sy = AxisStretched(rt.AnchorMin.Y, rt.AnchorMax.Y);
+        Float2 p = rt.AnchoredPosition, s = rt.SizeDelta, pv = rt.Pivot;
+
         EditorGUI.Row(paper, "gi_rt_pos", "Position", () =>
         {
-            // X/Y drive RectTransform.AnchoredPosition; Z drives Transform.LocalPosition (RectTransform has no Z).
-            var value = new Float3(rt.AnchoredPosition.X, rt.AnchoredPosition.Y, t.LocalPosition.Z);
-            Origami.Float3Field(paper, "gi_rt_apos_vf", value, v =>
+            using (paper.Row("gi_rt_pos_r").Height(UnitValue.Auto).RowBetween(6).Enter())
             {
-                if (v.X != rt.AnchoredPosition.X || v.Y != rt.AnchoredPosition.Y)
-                {
-                    var newAnchored = new Float2(v.X, v.Y);
-                    Undo.RecordGameObjectChange(go, "Change Position", rt.AnchoredPosition, newAnchored, (g, x) => g.RectTransform.AnchoredPosition = x, coalesce: true);
-                    rt.AnchoredPosition = newAnchored;
-                }
-                if (v.Z != t.LocalPosition.Z)
-                {
-                    var newLoc = new Float3(t.LocalPosition.X, t.LocalPosition.Y, v.Z);
-                    Undo.RecordGameObjectChange(go, "Change Position", t.LocalPosition, newLoc, (g, x) => g.Transform.LocalPosition = x, coalesce: true);
-                    t.LocalPosition = newLoc;
-                }
-            }).Show();
-        }, labelWidth: EditorTheme.LabelWidth/2f);
+                if (sx)
+                    NumCell(paper, "gi_rt_pos_x", "Left", AxisXColor, OffsetMin(p.X, s.X, pv.X), nv =>
+                    { SolveHoldMax(p.X, s.X, pv.X, nv, out float a, out float sz); ApplyAxis(go, rt, 0, a, sz, "Rect Left"); });
+                else
+                    NumCell(paper, "gi_rt_pos_x", "X", AxisXColor, p.X, nv =>
+                        ApplyAxis(go, rt, 0, nv, rt.SizeDelta.X, "Rect PosX"));
 
+                if (sy)
+                    NumCell(paper, "gi_rt_pos_y", "Top", AxisYColor, -OffsetMax(p.Y, s.Y, pv.Y), nv =>
+                    { SolveHoldMin(p.Y, s.Y, pv.Y, -nv, out float a, out float sz); ApplyAxis(go, rt, 1, a, sz, "Rect Top"); });
+                else
+                    NumCell(paper, "gi_rt_pos_y", "Y", AxisYColor, p.Y, nv =>
+                        ApplyAxis(go, rt, 1, nv, rt.SizeDelta.Y, "Rect PosY"));
+
+                NumCell(paper, "gi_rt_pos_z", "Z", AxisZColor, t.LocalPosition.Z, nv =>
+                {
+                    var nl = new Float3(t.LocalPosition.X, t.LocalPosition.Y, nv);
+                    Undo.RecordGameObjectChange(go, "Rect PosZ", t.LocalPosition, nl, (g, x) => g.Transform.LocalPosition = x, coalesce: true);
+                    t.LocalPosition = nl;
+                });
+            }
+        }, labelWidth: EditorTheme.LabelWidth / 2f);
     }
 
-    /// <summary>Width / Height row driven by RectTransform.SizeDelta.</summary>
+    /// <summary>
+    /// Size row. Contextual per axis: a fixed axis shows Width / Height, a stretched axis shows the
+    /// opposite edge inset (Right / Bottom). An empty third column keeps it aligned with the Z field above.
+    /// </summary>
     private static void DrawSizeRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
     {
+        bool sx = AxisStretched(rt.AnchorMin.X, rt.AnchorMax.X);
+        bool sy = AxisStretched(rt.AnchorMin.Y, rt.AnchorMax.Y);
+        Float2 p = rt.AnchoredPosition, s = rt.SizeDelta, pv = rt.Pivot;
+
         EditorGUI.Row(paper, "gi_rt_size", "Size", () =>
         {
-            Origami.Float2Field(paper, "gi_rt_size_vf", rt.SizeDelta,v =>
+            using (paper.Row("gi_rt_size_r").Height(UnitValue.Auto).RowBetween(6).Enter())
             {
-                Undo.RecordGameObjectChange(go, "Change SizeDelta", rt.SizeDelta, v,
-                    (g, x) => { var r = g.RectTransform; if (r != null) r.SizeDelta = x; }, coalesce: true);
-                rt.SizeDelta = v;
-            }).Show();
-        }, labelWidth: EditorTheme.LabelWidth/2f);
+                if (sx)
+                    NumCell(paper, "gi_rt_size_x", "Right", AxisXColor, -OffsetMax(p.X, s.X, pv.X), nv =>
+                    { SolveHoldMin(p.X, s.X, pv.X, -nv, out float a, out float sz); ApplyAxis(go, rt, 0, a, sz, "Rect Right"); });
+                else
+                    NumCell(paper, "gi_rt_size_x", "W", AxisXColor, s.X, nv =>
+                        ApplyAxis(go, rt, 0, rt.AnchoredPosition.X, nv, "Rect Width"));
+
+                if (sy)
+                    NumCell(paper, "gi_rt_size_y", "Bottom", AxisYColor, OffsetMin(p.Y, s.Y, pv.Y), nv =>
+                    { SolveHoldMax(p.Y, s.Y, pv.Y, nv, out float a, out float sz); ApplyAxis(go, rt, 1, a, sz, "Rect Bottom"); });
+                else
+                    NumCell(paper, "gi_rt_size_y", "H", AxisYColor, s.Y, nv =>
+                        ApplyAxis(go, rt, 1, rt.AnchoredPosition.Y, nv, "Rect Height"));
+
+                paper.Box("gi_rt_size_pad").Width(UnitValue.Stretch()).Height(1).IsNotInteractable();
+            }
+        }, labelWidth: EditorTheme.LabelWidth / 2f);
     }
 
     private static void DrawPivotRow(Paper paper, Prowl.Scribe.FontFile font, GameObject go, RectTransform rt)
@@ -1191,33 +1280,24 @@ public static class GameObjectInspector
         if (parent.Size.X <= 0 || parent.Size.Y <= 0 || world.Size.X <= 0 || world.Size.Y <= 0)
             return;
 
-        SolveAxis(newMin.X, newMax.X, parent.Min.X + newMin.X * parent.Size.X, parent.Min.X + newMax.X * parent.Size.X,
+        SolveAxis(parent.Min.X + newMin.X * parent.Size.X, parent.Min.X + newMax.X * parent.Size.X,
             world.Min.X, world.Max.X, rt.Pivot.X, out float sizeX, out float posX);
-        SolveAxis(newMin.Y, newMax.Y, parent.Min.Y + newMin.Y * parent.Size.Y, parent.Min.Y + newMax.Y * parent.Size.Y,
+        SolveAxis(parent.Min.Y + newMin.Y * parent.Size.Y, parent.Min.Y + newMax.Y * parent.Size.Y,
             world.Min.Y, world.Max.Y, rt.Pivot.Y, out float sizeY, out float posY);
 
         rt.SizeDelta = new Float2(sizeX, sizeY);
         rt.AnchoredPosition = new Float2(posX, posY);
     }
 
-    // Inverse of RectTransform.ComputeRect for one axis: given the target world span [rMin,rMax] and
-    // the new anchors (in normalized + pixel form), solve the SizeDelta/AnchoredPosition that reproduce it.
-    private static void SolveAxis(float aMin, float aMax, float aMinPx, float aMaxPx,
+    // Inverse of RectTransform.ComputeRect for one axis (single formula covering both fixed and
+    // stretch anchors, matching ComputeRect: size = anchorSpan + SizeDelta, min = anchorMin +
+    // AnchoredPosition - Pivot*SizeDelta). Given the target span [rMin,rMax] and the anchor pixel
+    // positions, solve the SizeDelta/AnchoredPosition that reproduce it.
+    private static void SolveAxis(float aMinPx, float aMaxPx,
         float rMin, float rMax, float pivot, out float size, out float pos)
     {
-        float rSize = rMax - rMin;
-        if (Math.Abs(aMin - aMax) < 1e-6f)
-        {
-            // Fixed: keep the size; place the pivot so the rect stays put.
-            size = rSize;
-            pos = rMin - aMinPx + pivot * rSize;
-        }
-        else
-        {
-            // Stretch: SizeDelta is padding vs the anchor span, AnchoredPosition recenters it.
-            size = (aMaxPx - aMinPx) - rSize;
-            pos = ((rMin + rMax) - (aMinPx + aMaxPx)) * 0.5f;
-        }
+        size = (rMax - rMin) - (aMaxPx - aMinPx);
+        pos = rMin - aMinPx + pivot * size;
     }
 
     // The rect this element is laid out inside: the parent RectTransform's computed rect, or the

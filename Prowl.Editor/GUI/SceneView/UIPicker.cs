@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.OrigamiUI.Gizmo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
@@ -39,7 +38,6 @@ internal static class UIPicker
         GameCanvas? bestCanvas = null;
         int bestSortOrder = int.MinValue;
         float bestT = float.PositiveInfinity;
-        int bestDfs = -1;
 
         foreach (GameObject go in scene.ActiveObjects)
         {
@@ -48,31 +46,13 @@ internal static class UIPicker
 
             canvas.RebuildIfDirty();
 
-            Float4x4 c2w = canvas.CanvasToWorld;
-            Float3 originW = Float4x4.TransformPoint(Float3.Zero, c2w);
-            Float3 rightW = Float4x4.TransformPoint(Float3.UnitX, c2w) - originW;
-            Float3 upW = Float4x4.TransformPoint(Float3.UnitY, c2w) - originW;
-            if (Float3.LengthSquared(rightW) < 1e-12f || Float3.LengthSquared(upW) < 1e-12f) continue;
-
-            Float3 normalW = Float3.Normalize(Float3.Cross(Float3.Normalize(rightW), Float3.Normalize(upW)));
-            if (!GizmoUtils.IntersectPlane(normalW, originW, ray.Origin, ray.Direction, out float tHit))
-                continue;
-            if (tHit < 0) continue;
-
-            Float3 worldHit = ray.Origin + ray.Direction * tHit;
-            Float3 designHit = Float4x4.TransformPoint(worldHit, c2w.Invert());
-            Float2 pt = new(designHit.X, designHit.Y);
-
-            int dfs = 0;
-            GameObject? localHit = null;
-            int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, pt, scissor: null, ref dfs, ref localHit, ref localDfs);
+            (GameObject? localHit, float tHit) = PickTopmost(canvas, canvas.GameObject, ray);
             if (localHit == null) continue;
 
+            // Prefer higher canvas sort order, then the nearer hit along the ray.
             bool wins =
                 canvas.SortOrder > bestSortOrder ||
-                (canvas.SortOrder == bestSortOrder && tHit < bestT - 1e-4f) ||
-                (canvas.SortOrder == bestSortOrder && System.Math.Abs(tHit - bestT) <= 1e-4f && localDfs > bestDfs);
+                (canvas.SortOrder == bestSortOrder && tHit < bestT - 1e-4f);
 
             if (wins)
             {
@@ -80,7 +60,6 @@ internal static class UIPicker
                 bestCanvas = canvas;
                 bestSortOrder = canvas.SortOrder;
                 bestT = tHit;
-                bestDfs = localDfs;
             }
         }
 
@@ -89,46 +68,42 @@ internal static class UIPicker
         return true;
     }
 
-    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Rect? scissor, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    /// <summary>
+    /// Top-most (highest draw order) pickable element hit by the world ray, or (null, 0). Later siblings
+    /// and children draw on top, so they're tested first and each subtree is descended before its own
+    /// element - the first hit is top-most. Each element is intersected as its own 3D quad (via
+    /// <see cref="UIRaycaster.RayHitsRect"/>), so out-of-plane rotation is respected. Mask clipping is
+    /// intentionally ignored so masked/clipped elements are still selectable.
+    /// </summary>
+    private static (GameObject? go, float t) PickTopmost(GameCanvas canvas, GameObject parent, Ray ray)
     {
-        foreach (GameObject child in parent.Children)
+        var children = parent.Children;
+        for (int i = children.Count - 1; i >= 0; i--)
         {
+            GameObject child = children[i];
             if (!child.EnabledInHierarchy) continue;
             if (child.GetComponent<GameCanvas>() != null) continue; // nested canvas owns its own tree
 
-            // ---- RectMask: intersect parent scissor; bail if pointer is outside the clip. ----
-            Rect? childScissor = scissor;
-            RectMask? rectMask = child.GetComponent<RectMask>();
-            if (rectMask != null && rectMask.EnabledInHierarchy)
-            {
-                Rect mr = rectMask.GetClipRectInCanvasPixels();
-                childScissor = scissor is null ? mr : UIRaycaster.IntersectRect(scissor.Value, mr);
-                if (childScissor.Value.Size.X <= 0f || childScissor.Value.Size.Y <= 0f) continue;
-            }
-            if (childScissor is { } cs && !UIRaycaster.RectContainsPoint(cs, pt))
-                continue;
-
+            (GameObject? go, float t) deeper = PickTopmost(canvas, child, ray);
+            if (deeper.go != null) return deeper;
 
             RectTransform? rt = child.RectTransform;
-            if (rt != null)
+            if (rt != null && IsPickable(child))
             {
-                bool inside = UIRaycaster.ContainsCanvasPoint(canvas, rt, pt);
-
-                foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
-                {
-                    if (!ui.EnabledInHierarchy) continue;
-
-                    if (ui is RectMask) continue;
-                    if (inside)
-                    {
-                        bestGO = child;
-                        bestDfs = dfs;
-                    }
-                    dfs++;
-                }
+                Float4x4 model = canvas.CanvasToWorld * canvas.BuildRectModel(rt);
+                if (UIRaycaster.RayHitsRect(model, rt, ray.Origin, ray.Direction, out float t))
+                    return (child, t);
             }
-
-            WalkRecurse(canvas, child, pt, childScissor, ref dfs, ref bestGO, ref bestDfs);
         }
+        return (null, 0f);
+    }
+
+    /// <summary>A GameObject is a pick candidate if it carries any enabled UI component - including a
+    /// bare <see cref="RectMask"/>, so masks are selectable too.</summary>
+    private static bool IsPickable(GameObject go)
+    {
+        foreach (UIBehaviour ui in go.GetComponents<UIBehaviour>())
+            if (ui.EnabledInHierarchy) return true;
+        return false;
     }
 }

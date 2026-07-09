@@ -1057,6 +1057,17 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             Selection.Select(go);
             Undo.RegisterCreatedObject(go, "Spawn Mesh");
         }
+        else if (asset is Sprite sprite)
+        {
+            var go = new GameObject(string.IsNullOrEmpty(sprite.Name) ? name : sprite.Name);
+            go.Transform.Position = position;
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.Sprite = sprite;
+            scene.Add(go);
+            if (parent != null) go.SetParent(parent);
+            Selection.Select(go);
+            Undo.RegisterCreatedObject(go, "Spawn Sprite");
+        }
         else if (asset is PrefabAsset)
         {
             var instance = Prefabs.PrefabUtility.InstantiatePrefab(payload.AssetGuid);

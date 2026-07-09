@@ -208,7 +208,9 @@ public class ProwlActionPropertyEditor : PropertyEditor
         foreach (MethodInfo m in t.GetMethods(flags))
         {
             if (m.IsSpecialName || m.IsGenericMethodDefinition || m.ContainsGenericParameters) continue;
-            if (m.DeclaringType == typeof(object)) continue;
+            // Skip engine plumbing - members that come from EngineObject (or above), even when a derived
+            // type overrides them (e.g. Dispose). GetBaseDefinition walks overrides back to their origin.
+            if (IsFromEngineObject(m.GetBaseDefinition().DeclaringType)) continue;
             if (m.ReturnType != typeof(void)) continue;
 
             ParameterInfo[] ps = m.GetParameters();
@@ -222,6 +224,8 @@ public class ProwlActionPropertyEditor : PropertyEditor
         foreach (PropertyInfo p in t.GetProperties(flags))
         {
             if (!p.CanWrite || p.GetIndexParameters().Length > 0) continue;
+            MethodInfo? accessor = p.GetMethod ?? p.SetMethod;
+            if (accessor != null && IsFromEngineObject(accessor.GetBaseDefinition().DeclaringType)) continue;
             if (ProwlActionArg.TryFromType(p.PropertyType, out ProwlActionArgType at) && at != ProwlActionArgType.None)
                 list.Add(new MemberOption($"{group}/{p.Name} = ({ProwlActionArg.Label(at)})", target, p.Name, at));
         }
@@ -229,8 +233,15 @@ public class ProwlActionPropertyEditor : PropertyEditor
         // Public fields of a supported type.
         foreach (FieldInfo f in t.GetFields(flags))
         {
+            if (IsFromEngineObject(f.DeclaringType)) continue;
             if (ProwlActionArg.TryFromType(f.FieldType, out ProwlActionArgType at) && at != ProwlActionArgType.None)
                 list.Add(new MemberOption($"{group}/{f.Name} = ({ProwlActionArg.Label(at)})", target, f.Name, at));
         }
     }
+
+    // True if a member introduced on this type is engine plumbing: declared on EngineObject itself or
+    // any of its base types (object, IDisposable-implementing bases, etc.). Pass the ORIGIN type - i.e.
+    // for methods/properties, the declaring type of GetBaseDefinition() so overrides resolve to source.
+    private static bool IsFromEngineObject(Type? originType)
+        => originType != null && originType.IsAssignableFrom(typeof(EngineObject));
 }

@@ -122,6 +122,13 @@ internal class Texture2DThumbnailGenerator : IThumbnailGenerator
         => ThumbnailGenerator.GenerateForTextureFile(sourceFilePath);
 }
 
+[CustomThumbnailGenerator(typeof(Sprite))]
+internal class SpriteThumbnailGenerator : IThumbnailGenerator
+{
+    public byte[]? Generate(EngineObject asset, string? sourceFilePath)
+        => ThumbnailGenerator.GenerateForSprite((Sprite)asset);
+}
+
 [CustomThumbnailGenerator(typeof(Model))]
 internal class ModelThumbnailGenerator : IThumbnailGenerator
 {

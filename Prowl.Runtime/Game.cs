@@ -76,6 +76,8 @@ public abstract class Game
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
+            // Apply the hovered element's requested cursor to the OS window.
+            _paper.OnCursorChange += c => Input.SetCursorShape(c);
 
             _paper.DevTools.Enabled = true;
 

@@ -20,6 +20,24 @@ public sealed class UIMeshBuilder
     public int  IndexCount  => _indices.Count;
     public bool IsEmpty     => _verts.Count == 0;
 
+    // ---------- UV sub-rect remap ----------
+    // Generation-time UVs are authored in 0..1 space. When drawing a Sprite that is a sub-rect of an
+    // atlas, callers set this transform so 0..1 maps into the sprite's texture region: uv' = offset + uv*scale.
+    // Only the shape-generation writes go through MapUV; text (AddVertex) and the rounded-rect clip
+    // re-emit already-final UVs and must not be remapped again.
+    private Float2 _uvOffset = Float2.Zero;
+    private Float2 _uvScale = Float2.One;
+
+    /// <summary>Sets the sub-rect UV remap applied to generated shapes. Reset to identity by <see cref="Reset"/>.</summary>
+    public void SetUVRect(Float2 offset, Float2 scale)
+    {
+        _uvOffset = offset;
+        _uvScale = scale;
+    }
+
+    private Float2 MapUV(Float2 uv) => new(_uvOffset.X + uv.X * _uvScale.X, _uvOffset.Y + uv.Y * _uvScale.Y);
+    private Float2 MapUV(float u, float v) => new(_uvOffset.X + u * _uvScale.X, _uvOffset.Y + v * _uvScale.Y);
+
     // ---------- Primitives ----------
 
     /// <summary>
@@ -39,10 +57,10 @@ public sealed class UIMeshBuilder
         _verts.Add(new Float3(r.Min.X, r.Max.Y, 0));   // BL
 
         // UVs follow the rect's aspect from (uv0) at TL to (uv1) at BR
-        _uvs.Add(new Float2(uv0.X, uv0.Y));
-        _uvs.Add(new Float2(uv1.X, uv0.Y));
-        _uvs.Add(new Float2(uv1.X, uv1.Y));
-        _uvs.Add(new Float2(uv0.X, uv1.Y));
+        _uvs.Add(MapUV(uv0.X, uv0.Y));
+        _uvs.Add(MapUV(uv1.X, uv0.Y));
+        _uvs.Add(MapUV(uv1.X, uv1.Y));
+        _uvs.Add(MapUV(uv0.X, uv1.Y));
 
         _colors.Add(c); _colors.Add(c); _colors.Add(c); _colors.Add(c);
 
@@ -86,7 +104,7 @@ public sealed class UIMeshBuilder
 
         uint centerIdx = (uint)_verts.Count;
         _verts.Add(new Float3(center.X, center.Y, 0));
-        _uvs.Add(new Float2(0.5f, 0.5f));
+        _uvs.Add(MapUV(0.5f, 0.5f));
         _colors.Add(c);
 
         // Generate perimeter vertices clockwise starting at top-left arc.
@@ -110,7 +128,7 @@ public sealed class UIMeshBuilder
                 Float2 p = corners[corner] + new Float2(MathF.Cos(a), MathF.Sin(a)) * radius;
                 _verts.Add(new Float3(p.X, p.Y, 0));
                 // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
-                _uvs.Add(new Float2((p.X - r.Min.X) / r.Size.X, (p.Y - r.Min.Y) / r.Size.Y));
+                _uvs.Add(MapUV((p.X - r.Min.X) / r.Size.X, (p.Y - r.Min.Y) / r.Size.Y));
                 _colors.Add(c);
             }
         }
@@ -306,7 +324,7 @@ public sealed class UIMeshBuilder
 
         uint pivotIdx = (uint)_verts.Count;
         _verts.Add(new Float3(pivot.X, pivot.Y, 0f));
-        _uvs.Add(new Float2((pivot.X - r.Min.X) * invSize.X, (pivot.Y - r.Min.Y) * invSize.Y));
+        _uvs.Add(MapUV((pivot.X - r.Min.X) * invSize.X, (pivot.Y - r.Min.Y) * invSize.Y));
         _colors.Add(c);
 
         uint firstPerim = (uint)_verts.Count;
@@ -315,7 +333,7 @@ public sealed class UIMeshBuilder
             float a = startAngle + dir * stops[i];
             Float2 p = RayToRectEdge(pivot, a, r);
             _verts.Add(new Float3(p.X, p.Y, 0f));
-            _uvs.Add(new Float2((p.X - r.Min.X) * invSize.X, (p.Y - r.Min.Y) * invSize.Y));
+            _uvs.Add(MapUV((p.X - r.Min.X) * invSize.X, (p.Y - r.Min.Y) * invSize.Y));
             _colors.Add(c);
         }
 
@@ -559,6 +577,11 @@ public sealed class UIMeshBuilder
     /// </summary>
     internal void Bake(Mesh m)
     {
+        // A Mesh can't hold zero-length attribute arrays (its setters reject them), so an empty builder
+        // must not be baked. Callers should skip empty builders via IsEmpty; guard here as a backstop.
+        if (_verts.Count == 0 || _indices.Count == 0)
+            return;
+
         // Use ToArray() once per attribute. Engine `Mesh` setters validate length
         // consistency and (re)allocate GPU buffers when sizes change.
         m.Vertices = _verts.ToArray();
@@ -572,6 +595,8 @@ public sealed class UIMeshBuilder
     internal void Reset()
     {
         _verts.Clear(); _uvs.Clear(); _colors.Clear(); _indices.Clear();
+        _uvOffset = Float2.Zero;
+        _uvScale = Float2.One;
     }
 
     // ---------- Pooling ----------

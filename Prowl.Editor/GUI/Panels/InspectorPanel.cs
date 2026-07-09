@@ -464,42 +464,23 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
 
         Origami.Separator(paper, "insp_sub_sep2").Show();
 
-        // Load the sub-asset and show its properties read-only
+        // A sub-asset uses the SAME custom editor as a main asset of its type, just wrapped in a read-only
+        // scope so Origami widgets are disabled. Editors that draw non-Origami interactive elements gate them
+        // on Origami.IsReadOnly themselves (e.g. TextureAssetEditor's Save button).
         var asset = Runtime.AssetDatabase.Get(item.Guid);
         if (asset != null)
         {
-            // Show type-specific preview
-            if (asset is Runtime.Resources.Texture2D tex)
+            var subEditor = parentEntry != null ? AssetImporterEditorRegistry.GetEditor(asset.GetType()) : null;
+            if (subEditor != null)
             {
-                float previewSize = 180f;
-                float aspect = tex.Width / (float)Math.Max(1, tex.Height);
-                float pw = aspect >= 1 ? previewSize : previewSize * aspect;
-                float ph = aspect >= 1 ? previewSize / aspect : previewSize;
-
-                paper.Box("insp_sub_tex_preview")
-                    .Size(pw, ph)
-                    .Margin(8, 4, 8, 4)
-                    .BackgroundColor(System.Drawing.Color.FromArgb(255, 20, 20, 22))
-                    .Rounded(4)
-                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
-                    {
-                        canvas.DrawImage(tex,
-                            (float)r.Min.X, (float)r.Min.Y,
-                            (float)r.Size.X, (float)r.Size.Y);
-                    }));
-
-                Origami.Label(paper, "insp_sub_tex_size", $"{Loc.Get("inspector.size")}: {tex.Width} x {tex.Height}").Show();
-                Origami.Label(paper, "insp_sub_tex_fmt", $"{Loc.Get("inspector.format")}: {tex.ImageFormat}").Show();
-            }
-            else if (asset is Runtime.Resources.Mesh mesh && parentEntry != null && subEntry != null)
-            {
-                Inspector.MeshAssetEditor.DrawForSubAsset(paper, "insp_sub_mesh", parentEntry, subEntry, mesh);
+                Origami.BeginReadOnly();
+                try { subEditor.OnGUI(paper, "insp_sub_editor", parentEntry!, asset); }
+                finally { Origami.EndReadOnly(); }
             }
             else
             {
-                // Generic read-only property grid
+                // Generic read-only property grid for types without a custom editor.
                 Origami.Header(paper, "insp_sub_h_props", Loc.Get("inspector.properties_readonly")).Show();
-                // Show properties as labels
                 var fields = GUI.PropertyGridUtils.GetSerializableFields(asset.GetType());
                 foreach (var field in fields)
                 {

@@ -188,6 +188,18 @@ internal class MeshDropHandler : ISceneDropHandler
     }
 }
 
+[SceneDropHandler(typeof(Sprite), Order = 23)]
+internal class SpriteDropHandler : ISceneDropHandler
+{
+    public string DropHint => $"{EditorIcons.ArrowDown}  Drop to spawn in scene";
+
+    public void Handle(AssetDragPayload payload, SceneDropContext context)
+    {
+        Float3 dropPos = SceneViewPanel.GetDropPosition(context.Scene, context.Camera, context.MouseLocal, context.PanelSize);
+        HierarchyPanel.SpawnAssetInScene(payload, null, dropPos);
+    }
+}
+
 [SceneDropHandler(typeof(PrefabAsset), Order = 22)]
 internal class PrefabDropHandler : ISceneDropHandler
 {
