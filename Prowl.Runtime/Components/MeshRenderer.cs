@@ -1,48 +1,113 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Icons;
+using System.Collections.Generic;
 
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-
-[ExecuteAlways]
-[AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
-public class MeshRenderer : MonoBehaviour, IRenderable
+/// <summary>
+/// Renders a static mesh with one or more materials (one per submesh).
+/// For single-material meshes, use Materials[0] or the legacy Material property.
+/// </summary>
+[AddComponentMenu("Rendering/Mesh Renderer")]
+[ComponentIcon("\uf1b2")] // Cube
+public class MeshRenderer : MonoBehaviour
 {
     public AssetRef<Mesh> Mesh;
-    public AssetRef<Material> Material;
 
-    public PropertyState Properties;
+    /// <summary>Materials array one per submesh. Legacy single-material meshes use index 0.</summary>
+    public List<AssetRef<Material>> Materials = new();
 
-    public override void Update()
+    /// <summary>Legacy single-material accessor. Gets/sets Materials[0].</summary>
+    public AssetRef<Material> Material
     {
-        if (!Mesh.IsAvailable) return;
-        if (!Material.IsAvailable) return;
-
-        Properties ??= new();
-
-        Properties.SetInt("_ObjectID", InstanceID);
-
-        RenderPipeline.AddRenderable(this);
+        get => Materials.Count > 0 ? Materials[0] : default;
+        set { if (Materials.Count == 0) Materials.Add(value); else Materials[0] = value; }
     }
 
-    public Material GetMaterial() => Material.Res;
-    public int GetLayer() => GameObject.layerIndex;
+    /// <summary>Index into <c>Scene.BakedLighting.Lightmaps</c>, or -1 if this renderer isn't
+    /// lightmapped. Assigned by the lightmap bake. Lightmap-static is driven by <c>GameObject.IsStatic</c>.</summary>
+    [HideInInspector] public int LightmapIndex = -1;
 
-    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
+    /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
+    [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
+
+    // Per-instance property blocks, reused across frames so a static scene collects without allocating.
+    // The command buffer snapshots these at encode time, so mutating them next frame is safe.
+    [System.NonSerialized] private PropertyState[] _propCache;
+
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        drawData = Mesh.Res;
-        properties = Properties;
-        model = Transform.localToWorldMatrix;
+        var mesh = Mesh.Res;
+        if (mesh == null || Materials.Count == 0) return;
+
+        int subCount = mesh.SubMeshCount;
+        if (_propCache == null || _propCache.Length != subCount)
+        {
+            _propCache = new PropertyState[subCount];
+            for (int i = 0; i < subCount; i++)
+                _propCache[i] = new PropertyState();
+        }
+
+        // LocalToWorldMatrix is cached on Transform, so this is cheap for a static renderer.
+        Float4x4 world = Transform.LocalToWorldMatrix;
+        Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
+
+        for (int s = 0; s < subCount; s++)
+        {
+            Material? mat = null;
+            if (s < Materials.Count)
+                mat = Materials[s].Res;
+            else if (Materials.Count > 0)
+                mat = Materials[^1].Res;
+
+            if (mat == null) continue;
+
+            PropertyState props = _propCache[s];
+            props.Clear();
+            props.SetInt("_ObjectID", InstanceID);
+            // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
+            // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
+            // inherit a stale count from a previous skinned draw using the same program.
+            if (mesh.HasBlendShapes)
+                props.SetInt("morphActiveCount", 0);
+            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
+
+            renderables.Add(new MeshRenderable(
+                mesh, mat, world,
+                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
+        }
     }
 
-    public void GetCullingData(out bool isRenderable, out Bounds bounds)
+    /// <summary>
+    /// Raycast against this renderer's mesh in world space.
+    /// </summary>
+    public bool Raycast(Ray worldRay, out float distance)
     {
-        isRenderable = _enabledInHierarchy;
-        bounds = Mesh.Res.bounds.Transform(Transform.localToWorldMatrix);
+        distance = float.MaxValue;
+        var mesh = Mesh.Res;
+        if (mesh == null) return false;
+
+        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
+        Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
+        Float3 localDirRaw = Float4x4.TransformPoint(worldRay.Origin + worldRay.Direction, worldToLocal) - localOrigin;
+        Float3 localDir = Float3.Normalize(localDirRaw);
+        var localRay = new Ray(localOrigin, localDir);
+
+        if (!localRay.Intersects(mesh.bounds, out _, out _))
+            return false;
+
+        if (mesh.Raycast(localRay, out float localDist))
+        {
+            Float3 localHit = localOrigin + localDir * localDist;
+            Float3 worldHit = Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix);
+            distance = Float3.Distance(worldRay.Origin, worldHit);
+            return true;
+        }
+        return false;
     }
 }

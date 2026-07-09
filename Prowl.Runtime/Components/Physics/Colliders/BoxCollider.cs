@@ -3,20 +3,20 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
+[AddComponentMenu("Physics/Colliders/Box Collider")]
 public sealed class BoxCollider : Collider
 {
-    [SerializeField] private Vector3 size = new(1, 1, 1);
+    [SerializeField] private Float3 size = new(1, 1, 1);
 
     /// <summary>
     /// Gets or sets the dimensions of the box.
     /// </summary>
-    public Vector3 Size
+    public Float3 Size
     {
         get => size;
         set
@@ -26,5 +26,13 @@ public sealed class BoxCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new BoxShape(MathD.Max(size.x, 0.01), MathD.Max(size.y, 0.01), MathD.Max(size.z, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new BoxShape(Maths.Max(size.X, 0.01f), Maths.Max(size.Y, 0.01f), Maths.Max(size.Z, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCube(Center, size * 0.5f, Color.Green);
+        Debug.PopMatrix();
+    }
 }

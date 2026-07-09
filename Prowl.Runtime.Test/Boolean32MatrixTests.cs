@@ -1,12 +1,6 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 using Prowl.Echo;
 using Prowl.Runtime.Utils;
 
@@ -211,8 +205,8 @@ public class Boolean32MatrixTests
         original.SetSymmetric(0, 1, true);
         original.SetSymmetric(5, 10, true);
 
-        var tags = Serializer.Serialize(original);
-        var deserialized = Serializer.Deserialize<Boolean32Matrix>(tags);
+        EchoObject tags = Serializer.Serialize(original);
+        Boolean32Matrix deserialized = Serializer.Deserialize<Boolean32Matrix>(tags);
 
         Assert.Equal(original, deserialized);
     }

@@ -1,0 +1,8 @@
+using Prowl.Runtime;
+
+[CreateAssetMenu("{[className]}", Extension = ".asset")]
+public class {[className]} : EngineObject
+{
+    public float ExampleFloat = 1f;
+    public string ExampleText = "";
+}

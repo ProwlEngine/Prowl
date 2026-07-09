@@ -3,12 +3,13 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Capsule Collider")]
+[AddComponentMenu("Physics/Colliders/Capsule Collider")]
+[ComponentIcon("\uf46b")] // Capsules
 public sealed class CapsuleCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;
@@ -34,5 +35,13 @@ public sealed class CapsuleCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(MathD.Max(radius, 0.01), MathD.Max(height, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCapsule(Center + new Float3(0, -height * 0.5f, 0), Center + new Float3(0, height * 0.5f, 0), radius, Color.Green);
+        Debug.PopMatrix();
+    }
 }

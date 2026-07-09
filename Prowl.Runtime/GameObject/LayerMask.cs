@@ -20,7 +20,9 @@ public struct LayerMask
 
     public void Clear() => mask = 0;
 
-    public bool HasLayer(int index) => (mask & (1 << index)) == (1 << index);
+    // Use 1u (unsigned) so layer 31 works - a signed 1 << 31 is int.MinValue and sign-extends
+    // to long in the comparison, which would make the top layer never match.
+    public bool HasLayer(int index) => (mask & (1u << index)) != 0;
     public void SetLayer(int index) => mask |= 1u << index;
     public void RemoveLayer(int index) => mask &= ~(1u << index);
     public static LayerMask operator |(LayerMask mask1, LayerMask mask2) => new() { mask = mask1.mask | mask2.mask };

@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -69,6 +70,20 @@ public class AnimationCurve : ISerializable
         SmoothTangents(CurveTangent.Smooth);
     }
 
+    /// <summary>
+    /// Constructs a curve.
+    /// </summary>
+    public AnimationCurve(IEnumerable<KeyFrame> keyFrames)
+    {
+        Keys = new CurveKeyCollection();
+        foreach (var key in keyFrames)
+        {
+            Keys.Add(key);
+        }
+        // Add Default keys
+        SmoothTangents(CurveTangent.Smooth);
+    }
+
     #endregion
 
     #region Public Methods
@@ -78,11 +93,11 @@ public class AnimationCurve : ISerializable
     /// </summary>
     /// <param name="position">The position on this <see cref="AnimationCurve"/>.</param>
     /// <returns>Value at the position on this <see cref="AnimationCurve"/>.</returns>
-    public double Evaluate(double position)
+    public float Evaluate(float position)
     {
         if (Keys.Count == 0)
         {
-            return 0.0;
+            return 0.0f;
         }
 
         if (Keys.Count == 1)
@@ -108,7 +123,7 @@ public class AnimationCurve : ISerializable
                 case CurveLoopType.Cycle:
                     //start -> end / start -> end
                     int cycle = GetNumberOfCycle(position);
-                    double virtualPos = position - (cycle * (last.Position - first.Position));
+                    float virtualPos = position - (cycle * (last.Position - first.Position));
                     return GetCurvePosition(virtualPos);
 
                 case CurveLoopType.CycleOffset:
@@ -138,13 +153,13 @@ public class AnimationCurve : ISerializable
                     return last.Value;
 
                 case CurveLoopType.Linear:
-                    // linear y = a*x +b with a tangeant of last point
-                    return last.Value + first.TangentOut * (position - last.Position);
+                    // linear y = a*x +b with the tangent of the last point
+                    return last.Value + last.TangentOut * (position - last.Position);
 
                 case CurveLoopType.Cycle:
                     //start -> end / start -> end
                     cycle = GetNumberOfCycle(position);
-                    double virtualPos = position - (cycle * (last.Position - first.Position));
+                    float virtualPos = position - (cycle * (last.Position - first.Position));
                     return GetCurvePosition(virtualPos);
 
                 case CurveLoopType.CycleOffset:
@@ -186,7 +201,7 @@ public class AnimationCurve : ISerializable
     /// <param name="tangentOutType">The tangent out-type. <see cref="KeyFrame.TangentOut"/> for more details.</param>
     public void SmoothTangents(CurveTangent tangentInType, CurveTangent tangentOutType)
     {
-        for (var i = 0; i < Keys.Count; ++i)
+        for (int i = 0; i < Keys.Count; ++i)
         {
             SmoothTangent(i, tangentInType, tangentOutType);
         }
@@ -209,12 +224,12 @@ public class AnimationCurve : ISerializable
     {
         // See http://msdn.microsoft.com/en-us/library/microsoft.xna.framework.curvetangent.aspx
 
-        var key = Keys[keyIndex];
+        KeyFrame key = Keys[keyIndex];
 
-        double p0, p, p1;
+        float p0, p, p1;
         p0 = p = p1 = key.Position;
 
-        double v0, v, v1;
+        float v0, v, v1;
         v0 = v = v1 = key.Value;
 
         if (keyIndex > 0)
@@ -238,8 +253,8 @@ public class AnimationCurve : ISerializable
                 key.TangentIn = v - v0;
                 break;
             case CurveTangent.Smooth:
-                var pn = p1 - p0;
-                if (Math.Abs(pn) < double.Epsilon)
+                float pn = p1 - p0;
+                if (Maths.Abs(pn) < float.Epsilon)
                     key.TangentIn = 0;
                 else
                     key.TangentIn = (v1 - v0) * ((p - p0) / pn);
@@ -255,8 +270,8 @@ public class AnimationCurve : ISerializable
                 key.TangentOut = v1 - v;
                 break;
             case CurveTangent.Smooth:
-                var pn = p1 - p0;
-                if (Math.Abs(pn) < double.Epsilon)
+                float pn = p1 - p0;
+                if (Maths.Abs(pn) < float.Epsilon)
                     key.TangentOut = 0;
                 else
                     key.TangentOut = (v1 - v0) * ((p1 - p) / pn);
@@ -268,15 +283,13 @@ public class AnimationCurve : ISerializable
 
     #region Private Methods
 
-    private int GetNumberOfCycle(double position)
+    private int GetNumberOfCycle(float position)
     {
-        double cycle = (position - Keys[0].Position) / (Keys[Keys.Count - 1].Position - Keys[0].Position);
-        if (cycle < 0.0)
-            cycle--;
-        return (int)cycle;
+        float cycle = (position - Keys[0].Position) / (Keys[Keys.Count - 1].Position - Keys[0].Position);
+        return (int)Math.Floor(cycle);
     }
 
-    private double GetCurvePosition(double position)
+    private float GetCurvePosition(float position)
     {
         //only for position in curve
         KeyFrame prev = Keys[0];
@@ -288,25 +301,18 @@ public class AnimationCurve : ISerializable
             {
                 if (prev.Continuity == CurveContinuity.Step)
                 {
-                    if (position >= 1.0)
-                    {
-                        return next.Value;
-                    }
+                    // Step holds the previous key's value across the whole segment until the next key.
                     return prev.Value;
                 }
-                double t = (position - prev.Position) / (next.Position - prev.Position);//to have t in [0,1]
-                double ts = t * t;
-                double tss = ts * t;
-                //After a lot of search on internet I have found all about spline function
-                // and Bezier (phi'sss ancient) but finally use Hermite curve
+                float t = (position - prev.Position) / (next.Position - prev.Position);// to have t in [0,1]
+                float ts = t * t;
+                float tss = ts * t;
                 //http://en.wikipedia.org/wiki/Cubic_Hermite_spline
-                //P(t) = (2*t^3 - 3t^2 + 1)*P0 + (t^3 - 2t^2 + t)m0 + (-2t^3 + 3t^2)P1 + (t^3-t^2)m1
-                //with P0.value = prev.value , m0 = prev.tangentOut, P1= next.value, m1 = next.TangentIn
-                return (2 * tss - 3 * ts + 1.0) * prev.Value + (tss - 2 * ts + t) * prev.TangentOut + (3 * ts - 2 * tss) * next.Value + (tss - ts) * next.TangentIn;
+                return (2 * tss - 3 * ts + 1.0f) * prev.Value + (tss - 2 * ts + t) * prev.TangentOut + (3 * ts - 2 * tss) * next.Value + (tss - ts) * next.TangentIn;
             }
             prev = next;
         }
-        return 0f;
+        return 0.0f;
     }
 
     public void Serialize(ref EchoObject value, SerializationContext ctx)
@@ -315,7 +321,7 @@ public class AnimationCurve : ISerializable
         value.Add("PostLoop", new EchoObject((int)PostLoop));
 
         var keyList = EchoObject.NewList();
-        foreach (var key in Keys)
+        foreach (KeyFrame key in Keys)
         {
             var keyProp = EchoObject.NewCompound();
             keyProp.Add("Position", new EchoObject(key.Position));
@@ -333,11 +339,12 @@ public class AnimationCurve : ISerializable
         PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
         PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;
 
-        var keyList = value.Get("Keys").List;
-        foreach (var key in keyList)
+        Keys.Clear();
+        List<EchoObject> keyList = value.Get("Keys").List;
+        foreach (EchoObject key in keyList)
         {
-            var position = key.Get("Position").DoubleValue;
-            var curveKey = new KeyFrame(position, key.Get("Value").DoubleValue, key.Get("TangentIn").DoubleValue, key.Get("TangentOut").DoubleValue, (CurveContinuity)key.Get("Continuity").IntValue);
+            float position = key.Get("Position").FloatValue;
+            var curveKey = new KeyFrame(position, key.Get("Value").FloatValue, key.Get("TangentIn").FloatValue, key.Get("TangentOut").FloatValue, (CurveContinuity)key.Get("Continuity").IntValue);
             Keys.Add(curveKey);
         }
     }
@@ -364,16 +371,16 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
     public CurveContinuity Continuity { get; set; }
 
     /// <summary> Gets a position of the key on the curve. </summary>
-    public double Position { get; }
+    public float Position { get; }
 
     /// <summary> Gets or sets a tangent when approaching this point from the previous point on the curve. </summary>
-    public double TangentIn { get; set; }
+    public float TangentIn { get; set; }
 
     /// <summary> Gets or sets a tangent when leaving this point to the next point on the curve. </summary>
-    public double TangentOut { get; set; }
+    public float TangentOut { get; set; }
 
     /// <summary> Gets a value of this point. </summary>
-    public double Value { get; set; }
+    public float Value { get; set; }
 
     #endregion
 
@@ -386,7 +393,7 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
     }
 
     /// <summary> Creates a new instance of <see cref="KeyFrame"/> class. </summary>
-    public KeyFrame(double position, double value, double tangentIn = 0, double tangentOut = 0, CurveContinuity continuity = CurveContinuity.Smooth)
+    public KeyFrame(float position, float value, float tangentIn = 0, float tangentOut = 0, CurveContinuity continuity = CurveContinuity.Smooth)
     {
         Position = position;
         Value = value;
@@ -410,16 +417,16 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
         if (Equals(value2, null))
             return Equals(value1, null);
 
-        return (MathD.ApproximatelyEquals(value1.Position, value2.Position))
-               && (MathD.ApproximatelyEquals(value1.Value, value2.Value))
-               && (MathD.ApproximatelyEquals(value1.TangentIn, value2.TangentIn))
-               && (MathD.ApproximatelyEquals(value1.TangentOut, value2.TangentOut))
-               && (value1.Continuity == value2.Continuity);
+        return (value1.Position == value2.Position)
+               && value1.Value == value2.Value
+               && value1.TangentIn == value2.TangentIn
+               && value1.TangentOut == value2.TangentOut
+               && value1.Continuity == value2.Continuity;
     }
 
     #region Inherited Methods
 
-    public int CompareTo(KeyFrame? other) => Position.CompareTo(other.Position);
+    public int CompareTo(KeyFrame? other) => other is null ? 1 : Position.CompareTo(other.Position);
     public bool Equals(KeyFrame? other) => (this == other);
     public override bool Equals(object? obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
     public override int GetHashCode() =>
@@ -452,12 +459,12 @@ public class CurveKeyCollection : ICollection<KeyFrame>
             if (index >= _keys.Count)
                 throw new IndexOutOfRangeException();
 
-            if (MathD.ApproximatelyEquals(_keys[index].Position, value.Position))
+            if (_keys[index].Position == value.Position)
                 _keys[index] = value;
             else
             {
                 _keys.RemoveAt(index);
-                _keys.Add(value);
+                Add(value); // sorted insert, not List.Add (which would append out of order)
             }
         }
     }

@@ -1,4 +1,9 @@
-﻿using Xunit;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
+
+using Xunit;
 
 namespace Prowl.Runtime.Test;
 
@@ -8,7 +13,7 @@ public class ColorTests
     public void Grayscale_Calculation_Is_Correct()
     {
         var color = new Color(0.5f, 0.5f, 0.5f, 1f);
-        Assert.Equal(0.5f, color.grayscale);
+        Assert.Equal(0.5f, color.Grayscale);
     }
 
     [Fact]
@@ -26,7 +31,7 @@ public class ColorTests
     {
         var color = new Color(0.1f, 0.2f, 0.3f, 0.4f);
         color[0] = 0.5f;
-        Assert.Equal(0.5f, color.r);
+        Assert.Equal(0.5f, color.R);
     }
 
     [Fact]
@@ -126,7 +131,7 @@ public class ColorTests
         float r2, float g2, float b2, float a2)
     {
         var color1 = new Color(r1, g1, b1, a1);
-        var result = scalar * color1;
+        var result = color1 * scalar;
         Assert.Equal(new Color(r2, g2, b2, a2), result);
     }
 

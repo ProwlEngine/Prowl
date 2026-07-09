@@ -3,29 +3,31 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 
-using Prowl.Runtime.Rendering;
-
-using Veldrid;
 using Prowl.Echo;
+using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Vector;
 
-namespace Prowl.Runtime;
+namespace Prowl.Runtime.Resources;
 
+/// <summary>
+/// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
+/// This is used in conjunction with the Material class to create shader variants with the correct keywords and to render things
+/// </summary>
 public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {
-    [SerializeField, HideInInspector]
-    private readonly ShaderProperty[] _properties;
+    [SerializeField]
+    private ShaderProperty[] _properties;
     public IEnumerable<ShaderProperty> Properties => _properties;
 
 
-    [SerializeField, HideInInspector]
-    private readonly ShaderPass[] _passes;
+    [SerializeField]
+    private ShaderPass[] _passes;
     public IEnumerable<ShaderPass> Passes => _passes;
 
 
-    private readonly Dictionary<string, int> _nameIndexLookup = new();
-    private readonly Dictionary<string, List<int>> _tagIndexLookup = new();
+    private Dictionary<string, int> _nameIndexLookup = [];
+    private Dictionary<string, List<int>> _tagIndexLookup = [];
 
 
     internal Shader() : base("New Shader") { }
@@ -60,7 +62,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(int passIndex)
     {
-        passIndex = Math.Clamp(passIndex, 0, _passes.Length - 1);
+        passIndex = Maths.Clamp(passIndex, 0, _passes.Length - 1);
         return _passes[passIndex];
     }
 
@@ -88,7 +90,7 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         {
             foreach (int index in passesWithTag)
             {
-                ShaderPass pass = this._passes[index];
+                ShaderPass pass = _passes[index];
 
                 if (pass.HasTag(tag, tagValue))
                     passes.Add(index);
@@ -96,6 +98,111 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         }
 
         return passes;
+    }
+
+    /// <summary>
+    /// Loads a shader from a file path
+    /// </summary>
+    public static Shader LoadFromFile(string filePath)
+    {
+        if (!System.IO.File.Exists(filePath))
+            throw new System.IO.FileNotFoundException($"Shader file not found: {filePath}");
+
+        string shaderCode = System.IO.File.ReadAllText(filePath);
+
+        if (!AssetImporting.ShaderParser.ParseShader(filePath, shaderCode, path =>
+        {
+            // Include resolver for #include directives
+            string? absolutePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filePath)!, path));
+            if (System.IO.File.Exists(absolutePath))
+                return System.IO.File.ReadAllText(absolutePath);
+
+            // Then try embedded resources (for default includes like VertexAttributes, Fragment, etc.)
+            try
+            {
+                return EmbeddedResources.ReadAllText(path);
+            }
+            catch
+            {
+                // Also try with Assets/Defaults/ prefix
+                try
+                {
+                    return EmbeddedResources.ReadAllText($"Assets/Defaults/{path}");
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }, out Shader? shader))
+        {
+            throw new System.Exception($"Failed to parse shader: {filePath}");
+        }
+
+        if (shader.IsNotValid())
+            throw new System.Exception($"Shader parsing returned null: {filePath}");
+
+        shader.AssetPath = filePath;
+        return shader;
+    }
+
+    /// <summary>
+    /// Get the shared instance of a default embedded shader. Returns the same instance
+    /// across the whole app so ShaderPass variant caches aren't defeated by repeated
+    /// re-parsing the parse happens exactly once per shader enum value.
+    /// </summary>
+    public static Shader LoadDefault(DefaultShader shader)
+    {
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(shader)) is Shader cached)
+            return cached;
+        // BuiltInAssets.Initialize() hasn't run, or the loader errored parse directly
+        // as a last resort so this method never silently returns null.
+        return ParseDefault(shader);
+    }
+
+    /// <summary>
+    /// Raw parse of a default embedded shader invoked by <see cref="BuiltInAssets"/>
+    /// on the first cache miss. Public callers should use <see cref="LoadDefault"/>.
+    /// </summary>
+    internal static Shader ParseDefault(DefaultShader shader)
+    {
+        string fileName = shader.ToString();
+
+        string resourcePath = $"Assets/Defaults/{fileName}.shader";
+        string shaderCode = EmbeddedResources.ReadAllText(resourcePath);
+
+        if (!AssetImporting.ShaderParser.ParseShader(resourcePath, shaderCode, path =>
+        {
+            // Include resolver for embedded resources
+            try
+            {
+                return EmbeddedResources.ReadAllText(path);
+            }
+            catch
+            {
+                return null;
+            }
+        }, out Shader? result))
+        {
+            throw new System.Exception($"Failed to parse default shader: {shader}");
+        }
+
+        if (result.IsNotValid())
+            throw new System.Exception($"Default shader parsing returned null: {shader}");
+
+        // AssetID/AssetPath/Name are set by BuiltInAssets.Get after the loader returns,
+        // so we don't set them here keeping the raw parse free of registry coupling.
+        return result;
+    }
+
+    /// <summary>
+    /// Loads a default shader include file (for use by shader parser)
+    /// </summary>
+    internal static string LoadDefaultInclude(DefaultShaderInclude include)
+    {
+        string fileName = include.ToString();
+
+        return EmbeddedResources.ReadAllText($"Assets/Defaults/{fileName}.glsl");
     }
 
     public void OnBeforeSerialize() { }

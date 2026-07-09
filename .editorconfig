@@ -63,6 +63,20 @@ dotnet_naming_symbols.constant_fields.applicable_kinds   = field
 dotnet_naming_symbols.constant_fields.required_modifiers = const
 dotnet_naming_style.pascal_case_style.capitalization = pascal_case
 
+# public fields should be PascalCase
+dotnet_naming_rule.public_fields_should_be_pascal_case.severity = suggestion
+dotnet_naming_rule.public_fields_should_be_pascal_case.symbols  = public_fields
+dotnet_naming_rule.public_fields_should_be_pascal_case.style    = pascal_case_style
+dotnet_naming_symbols.public_fields.applicable_kinds = field
+dotnet_naming_symbols.public_fields.applicable_accessibilities = public
+
+# public properties should be PascalCase
+dotnet_naming_rule.public_properties_should_be_pascal_case.severity = suggestion
+dotnet_naming_rule.public_properties_should_be_pascal_case.symbols  = public_properties
+dotnet_naming_rule.public_properties_should_be_pascal_case.style    = pascal_case_style
+dotnet_naming_symbols.public_properties.applicable_kinds = property
+dotnet_naming_symbols.public_properties.applicable_accessibilities = public
+
 # static fields should have s_ prefix
 dotnet_naming_rule.static_fields_should_have_prefix.severity = suggestion
 dotnet_naming_rule.static_fields_should_have_prefix.symbols  = static_fields

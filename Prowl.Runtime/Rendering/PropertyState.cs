@@ -1,203 +1,354 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
+using System.Linq;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
-using Matrix4x4F = System.Numerics.Matrix4x4;
-using Vector2F = System.Numerics.Vector2;
-using Vector3F = System.Numerics.Vector3;
-using Vector4F = System.Numerics.Vector4;
+using Texture2D = Prowl.Runtime.Resources.Texture2D;
 
 namespace Prowl.Runtime.Rendering;
 
-public struct ValueProperty
-{
-    public ValueType type;
-    public byte width;
-    public byte height;
-    public int arraySize;
-
-    public byte[] data;
-
-
-    public readonly void CopyTo(ref ValueProperty property)
-    {
-        property.type = type;
-        property.arraySize = arraySize;
-        property.width = width;
-        property.height = height;
-
-        if ((data == null) != (property.data == null))
-            property.data = null;
-
-        if (data != null)
-        {
-            if (property.data == null || property.data.Length != data.Length)
-                property.data = new byte[data.Length];
-
-            Buffer.BlockCopy(data, 0, property.data, 0, data.Length);
-        }
-    }
-}
-
 public partial class PropertyState
 {
-    public bool IsEmpty => _values.Count == 0 && _buffers.Count == 0;
+    // Internal so the command executor (PropertyApply) can walk these directly without
+    // forcing every access through allocating accessor methods. Keep [SerializeField]
+    // so the editor and Echo serializer still see them.
+    [SerializeField] internal Dictionary<string, Color> _colors = [];
+    [SerializeField] internal Dictionary<string, Float2> _vectors2 = [];
+    [SerializeField] internal Dictionary<string, Float3> _vectors3 = [];
+    [SerializeField] internal Dictionary<string, Float4> _vectors4 = [];
+    [SerializeField] internal Dictionary<string, float> _floats = [];
+    [SerializeField] internal Dictionary<string, int> _ints = [];
+    [SerializeField] internal Dictionary<string, Float4x4> _matrices = [];
+    [SerializeField] internal Dictionary<string, Float4x4[]> _matrixArr = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Texture2D>> _textures = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Texture3D>> _textures3D = [];
+    [SerializeField] internal Dictionary<string, AssetRef<Cubemap>> _texturesCube = [];
+    [SerializeField] internal Dictionary<string, GraphicsBuffer> _buffers = [];
+    [SerializeField] internal Dictionary<string, uint> _bufferBindings = [];
 
-    [SerializeIgnore]
-    internal Dictionary<string, ValueProperty> _values;
-
-    [SerializeIgnore]
-    internal Dictionary<string, (Veldrid.Texture?, Veldrid.Sampler?)> _textures;
-
-    [SerializeIgnore]
-    internal Dictionary<string, (Veldrid.DeviceBuffer?, int, int)> _buffers;
-
-
-    public PropertyState()
-    {
-        _values = [];
-        _textures = [];
-        _buffers = [];
-    }
+    public PropertyState() { }
 
     public PropertyState(PropertyState clone)
     {
-        _values = new(clone._values);
+        _colors = new(clone._colors);
+        _vectors2 = new(clone._vectors2);
+        _vectors3 = new(clone._vectors3);
+        _vectors4 = new(clone._vectors4);
+        _floats = new(clone._floats);
+        _ints = new(clone._ints);
+        _matrices = new(clone._matrices);
+        _matrixArr = new(clone._matrixArr);
         _textures = new(clone._textures);
+        _textures3D = new(clone._textures3D);
+        _texturesCube = new(clone._texturesCube);
         _buffers = new(clone._buffers);
+        _bufferBindings = new(clone._bufferBindings);
     }
 
-    public void ApplyOverride(PropertyState overrideState)
+    public bool IsEmpty => _colors.Count == 0 && _vectors4.Count == 0 && _vectors3.Count == 0 && _vectors2.Count == 0 && _floats.Count == 0 && _ints.Count == 0 && _matrices.Count == 0 && _textures.Count == 0 && _textures3D.Count == 0;
+
+    private ulong HashDictionary<T>(Dictionary<string, T> dict, ulong hash)
     {
-        foreach (KeyValuePair<string, ValueProperty> pair in overrideState._values)
+        foreach (var kvp in dict.OrderBy(x => x.Key))
         {
-            ValueProperty prop = _values.GetValueOrDefault(pair.Key, default);
-
-            pair.Value.CopyTo(ref prop);
-
-            _values[pair.Key] = prop;
+            hash ^= (ulong)kvp.Key.GetHashCode();
+            hash *= 1099511628211UL;
+            hash ^= (ulong)kvp.Value.GetHashCode();
+            hash *= 1099511628211UL;
         }
-
-        foreach (KeyValuePair<string, (Veldrid.Texture?, Veldrid.Sampler?)> pair in overrideState._textures)
-            _textures[pair.Key] = pair.Value;
-
-        foreach (KeyValuePair<string, (Veldrid.DeviceBuffer?, int, int)> pair in overrideState._buffers)
-            _buffers[pair.Key] = pair.Value;
+        return hash;
     }
 
+    /// <summary>
+    /// Computes a FNV-1a 64-bit hash representing the current state of all properties.
+    /// Used for material batching to group objects with identical material properties together,
+    /// minimizing GPU state changes. Properties are ordered by key to ensure consistent hashing.
+    /// </summary>
+    /// <returns>A 64-bit FNV-1a hash of all property key-value pairs</returns>
+    public ulong ComputeHash()
+    {
+        ulong hash = 14695981039346656037UL; // FNV-1a offset basis
 
-    public void SetColor(string name, Color value)
-        => WriteData(name, value, ValueType.Float, 4, 1);
+        // Hash all property dictionaries (order is important for consistency)
+        hash = HashDictionary(_floats, hash);
+        hash = HashDictionary(_ints, hash);
+        hash = HashDictionary(_vectors2, hash);
+        hash = HashDictionary(_vectors3, hash);
+        hash = HashDictionary(_vectors4, hash);
+        hash = HashDictionary(_colors, hash);
+        hash = HashDictionary(_matrices, hash);
+        hash = HashDictionary(_textures, hash);
+        hash = HashDictionary(_textures3D, hash);
+        hash = HashDictionary(_buffers, hash);
 
-    public void SetVector(string name, Vector2F value)
-        => WriteData(name, value, ValueType.Float, 2, 1);
+        return hash;
+    }
 
-    public void SetVector(string name, Vector3F value)
-        => WriteData(name, value, ValueType.Float, 3, 1);
+    // Setters
+    public void SetColor(string name, Color value) => _colors[name] = value;
+    public void SetVector(string name, Float2 value) => _vectors2[name] = (Float2)value;
+    public void SetVector(string name, Float3 value) => _vectors3[name] = (Float3)value;
+    public void SetVector(string name, Float4 value) => _vectors4[name] = (Float4)value;
+    public void SetFloat(string name, float value) => _floats[name] = value;
+    public void SetInt(string name, int value) => _ints[name] = value;
+    public void SetMatrix(string name, Float4x4 value) => _matrices[name] = (Float4x4)value;
+    public void SetMatrices(string name, Float4x4[] value) => _matrixArr[name] = [.. value.Select(x => (Float4x4)x)];
+    public void SetTexture(string name, Texture2D value) => _textures[name] = new AssetRef<Texture2D>(value);
+    public void SetTexture(string name, AssetRef<Texture2D> value) => _textures[name] = value;
+    public void SetTexture3D(string name, Texture3D value) => _textures3D[name] = new AssetRef<Texture3D>(value);
+    public void SetTexture3D(string name, AssetRef<Texture3D> value) => _textures3D[name] = value;
+    public void SetTextureCube(string name, Cubemap value) => _texturesCube[name] = new AssetRef<Cubemap>(value);
+    public void SetTextureCube(string name, AssetRef<Cubemap> value) => _texturesCube[name] = value;
+    public void SetBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
+    {
+        _buffers[name] = value;
+        _bufferBindings[name] = bindingPoint;
+    }
 
-    public void SetVector(string name, Vector4F value)
-        => WriteData(name, value, ValueType.Float, 4, 1);
+    /// <summary>Yield the names of every property that has a value set on this
+    /// <see cref="PropertyState"/>, regardless of type. Used by callers that need
+    /// to iterate over "all properties this state owns" e.g. Material's
+    /// override-tracking migration.</summary>
+    public System.Collections.Generic.IEnumerable<string> EnumerateNames()
+    {
+        foreach (var k in _floats.Keys)     yield return k;
+        foreach (var k in _ints.Keys)       yield return k;
+        foreach (var k in _vectors2.Keys)   yield return k;
+        foreach (var k in _vectors3.Keys)   yield return k;
+        foreach (var k in _vectors4.Keys)   yield return k;
+        foreach (var k in _colors.Keys)     yield return k;
+        foreach (var k in _matrices.Keys)   yield return k;
+        foreach (var k in _textures.Keys)   yield return k;
+        foreach (var k in _textures3D.Keys) yield return k;
+        foreach (var k in _texturesCube.Keys) yield return k;
+    }
 
-    public void SetFloat(string name, float value)
-        => WriteData(name, value, ValueType.Float, 1, 1);
+    /// <summary>Drop the entry for <paramref name="name"/> from every type bucket.
+    /// Idempotent no-op for names that aren't present. Used by the material
+    /// inspector's revert-to-default action so the next render falls back to the
+    /// shader's live default value.</summary>
+    public void RemoveProperty(string name)
+    {
+        _floats.Remove(name);
+        _ints.Remove(name);
+        _vectors2.Remove(name);
+        _vectors3.Remove(name);
+        _vectors4.Remove(name);
+        _colors.Remove(name);
+        _matrices.Remove(name);
+        _matrixArr.Remove(name);
+        _textures.Remove(name);
+        _textures3D.Remove(name);
+        _texturesCube.Remove(name);
+        _buffers.Remove(name);
+        _bufferBindings.Remove(name);
+    }
 
-    public void SetInt(string name, int value)
-        => WriteData(name, value, ValueType.Int, 1, 1);
+    // Getters
+    // Has* methods check if a property exists without retrieving it
+    public bool HasFloat(string name) => _floats.ContainsKey(name);
+    public bool HasInt(string name) => _ints.ContainsKey(name);
+    public bool HasVector2(string name) => _vectors2.ContainsKey(name);
+    public bool HasVector3(string name) => _vectors3.ContainsKey(name);
+    public bool HasVector4(string name) => _vectors4.ContainsKey(name);
+    public bool HasColor(string name) => _colors.ContainsKey(name);
+    public bool HasMatrix(string name) => _matrices.ContainsKey(name);
+    public bool HasTexture(string name) => _textures.ContainsKey(name);
+    public bool HasTexture3D(string name) => _textures3D.ContainsKey(name);
+    public bool HasTextureCube(string name) => _texturesCube.ContainsKey(name);
 
-    public void SetMatrix(string name, Matrix4x4F value)
-        => WriteData(name, value, ValueType.Float, 4, 4);
-    public void SetTexture(string name, Texture value)
-        => _textures[name] = (value.InternalTexture, value.Sampler.InternalSampler);
-
-    public void SetRawTexture(string name, Veldrid.Texture value, Veldrid.Sampler? sampler = null)
-        => _textures[name] = (value, sampler);
-
-    public void SetBuffer(string name, GraphicsBuffer value, int start = 0, int length = -1)
-        => _buffers[name] = (value.Buffer, start, length);
-
-    public void SetRawBuffer(string name, Veldrid.DeviceBuffer value, int start = 0, int length = -1)
-        => _buffers[name] = (value, start, length);
-
-    public void SetIntArray(string name, int[] values)
-        => WriteData(name, values, ValueType.Int, 1, 1);
-
-    public void SetFloatArray(string name, float[] values)
-        => WriteData(name, values, ValueType.Float, 1, 1);
-
-    public void SetVectorArray(string name, Vector2F[] values)
-        => WriteData(name, values, ValueType.Float, 2, 1);
-
-    public void SetVectorArray(string name, Vector3F[] values)
-        => WriteData(name, values, ValueType.Float, 3, 1);
-
-    public void SetVectorArray(string name, Vector4F[] values)
-        => WriteData(name, values, ValueType.Float, 4, 1);
-
-    public void SetColorArray(string name, Color[] values)
-        => WriteData(name, values, ValueType.Float, 4, 1);
-
-    public void SetMatrixArray(string name, Matrix4x4F[] values)
-        => WriteData(name, values, ValueType.Float, 4, 4);
+    public Color GetColor(string name) => _colors.TryGetValue(name, out Color value) ? value : Color.White;
+    public Float2 GetVector2(string name) => _vectors2.TryGetValue(name, out Float2 value) ? value : Float2.Zero;
+    public Float3 GetVector3(string name) => _vectors3.TryGetValue(name, out Float3 value) ? value : Float3.Zero;
+    public Float4 GetVector4(string name) => _vectors4.TryGetValue(name, out Float4 value) ? value : Float4.Zero;
+    public float GetFloat(string name) => _floats.TryGetValue(name, out float value) ? value : 0;
+    public int GetInt(string name) => _ints.TryGetValue(name, out int value) ? value : 0;
+    public Float4x4 GetMatrix(string name) => _matrices.TryGetValue(name, out Float4x4 value) ? (Float4x4)value : Float4x4.Identity;
+    public Texture2D? GetTexture(string name) => _textures.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Texture2D> GetTextureRef(string name) => _textures.TryGetValue(name, out var value) ? value : default;
+    public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Texture3D> GetTexture3DRef(string name) => _textures3D.TryGetValue(name, out var value) ? value : default;
+    public Cubemap? GetTextureCube(string name) => _texturesCube.TryGetValue(name, out var value) ? value.Res : null;
+    public AssetRef<Cubemap> GetTextureCubeRef(string name) => _texturesCube.TryGetValue(name, out var value) ? value : default;
+    public GraphicsBuffer GetBuffer(string name) => _buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
+    public uint GetBufferBinding(string name) => _bufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
 
     public void Clear()
     {
-        _values.Clear();
+        _textures.Clear();
+        _textures3D.Clear();
+        _texturesCube.Clear();
+        _matrices.Clear();
+        _matrixArr.Clear();
+        _ints.Clear();
+        _floats.Clear();
+        _vectors2.Clear();
+        _vectors3.Clear();
+        _vectors4.Clear();
+        _colors.Clear();
         _buffers.Clear();
+        _bufferBindings.Clear();
     }
 
-    private unsafe void WriteData<T>(string name, T newData, ValueType type, int width, int height) where T : unmanaged
+    public void ApplyOverride(PropertyState properties)
     {
-        int tSize = sizeof(T);
-
-        ValueProperty property = _values.GetValueOrDefault(name, default);
-
-        property.type = type;
-        property.arraySize = 0;
-        property.width = (byte)width;
-        property.height = (byte)height;
-
-        // If the previous value was larger than a vector4, and the new value isn't
-        // the array size will be downgraded to save on memory footprint.
-        if (property.data == null || property.data.Length < tSize || (tSize < 16 && property.data.Length != tSize))
-        {
-            property.data = new byte[tSize];
-
-            _values[name] = property;
-        }
-
-        MemoryMarshal.Write(new Span<byte>(property.data), newData);
+        foreach (KeyValuePair<string, Color> item in properties._colors)
+            _colors[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Float2> item in properties._vectors2)
+            _vectors2[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Float3> item in properties._vectors3)
+            _vectors3[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Float4> item in properties._vectors4)
+            _vectors4[item.Key] = item.Value;
+        foreach (KeyValuePair<string, float> item in properties._floats)
+            _floats[item.Key] = item.Value;
+        foreach (KeyValuePair<string, int> item in properties._ints)
+            _ints[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Float4x4> item in properties._matrices)
+            _matrices[item.Key] = item.Value;
+        foreach (KeyValuePair<string, Float4x4[]> item in properties._matrixArr)
+            _matrixArr[item.Key] = item.Value;
+        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in properties._textures)
+            _textures[item.Key] = item.Value;
+        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in properties._textures3D)
+            _textures3D[item.Key] = item.Value;
+        foreach (KeyValuePair<string, AssetRef<Cubemap>> item in properties._texturesCube)
+            _texturesCube[item.Key] = item.Value;
+        foreach (KeyValuePair<string, GraphicsBuffer> item in properties._buffers)
+            _buffers[item.Key] = item.Value;
+        foreach (KeyValuePair<string, uint> item in properties._bufferBindings)
+            _bufferBindings[item.Key] = item.Value;
     }
 
+}
 
-    private unsafe void WriteData<T>(string name, T[] newData, ValueType type, int width, int height) where T : unmanaged
+public partial class PropertyState
+{
+    // Global static dictionaries. Internal so PropertyApply (executor) can walk them.
+    internal static Dictionary<string, Color> s_globalColors = [];
+    internal static Dictionary<string, Float2> s_globalVectors2 = [];
+    internal static Dictionary<string, Float3> s_globalVectors3 = [];
+    internal static Dictionary<string, Float4> s_globalVectors4 = [];
+    internal static Dictionary<string, float> s_globalFloats = [];
+    internal static Dictionary<string, int> s_globalInts = [];
+    internal static Dictionary<string, Float4x4> s_globalMatrices = [];
+    internal static Dictionary<string, System.Numerics.Matrix4x4[]> s_globalMatrixArr = [];
+    internal static Dictionary<string, Texture2D> s_globalTextures = [];
+    internal static Dictionary<string, Texture3D> s_globalTextures3D = [];
+    internal static Dictionary<string, Cubemap> s_globalTexturesCube = [];
+    internal static Dictionary<string, GraphicsBuffer> s_globalBuffers = [];
+    internal static Dictionary<string, uint> s_globalBufferBindings = [];
+
+    // Global setters route through a one-op CommandBuffer so the dict mutation
+    // runs on the render thread, ordered against draws and free of races with
+    // PropertyApply's enumeration.
+    public static void SetGlobalColor(string name, Color value)
     {
-        int tSize = sizeof(T) * newData.Length;
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalColor");
+        cmd.SetGlobalColor(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float2 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec2");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float3 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec3");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalVector(string name, Float4 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalVec4");
+        cmd.SetGlobalVector(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalFloat(string name, float value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalFloat");
+        cmd.SetGlobalFloat(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalInt(string name, int value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalInt");
+        cmd.SetGlobalInt(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalMatrix(string name, Float4x4 value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalMatrix");
+        cmd.SetGlobalMatrix(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalMatrices(string name, Float4x4[] value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalMatrices");
+        cmd.SetGlobalMatrices(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalTexture(string name, Texture2D value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTexture");
+        cmd.SetGlobalTexture(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalTexture3D(string name, Texture3D value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTexture3D");
+        cmd.SetGlobalTexture3D(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalTextureCube(string name, Cubemap? value)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalTextureCube");
+        cmd.SetGlobalTextureCube(name, value); Graphics.Submit(cmd);
+    }
+    public static void SetGlobalBuffer(string name, GraphicsBuffer value, uint bindingPoint = 0)
+    {
+        using var cmd = Graphics.GetCommandBuffer("SetGlobalBuffer");
+        cmd.SetGlobalBuffer(name, value, bindingPoint); Graphics.Submit(cmd);
+    }
 
-        ValueProperty property = _values.GetValueOrDefault(name, default);
+    // Render-thread-only direct mutations, invoked by executor handlers. Bypass the
+    // CB plumbing so they don't recurse into another submit.
+    internal static void SetGlobalMatricesInternal(string name, Float4x4[] value)
+        => s_globalMatrixArr[name] = [.. value.Select(x => (System.Numerics.Matrix4x4)(Float4x4)x)];
 
-        property.type = type;
-        property.arraySize = 0;
-        property.width = (byte)width;
-        property.height = (byte)height;
+    internal static void ClearGlobalsInternal()
+    {
+        s_globalTextures.Clear();
+        s_globalTextures3D.Clear();
+        s_globalTexturesCube.Clear();
+        s_globalMatrices.Clear();
+        s_globalInts.Clear();
+        s_globalFloats.Clear();
+        s_globalVectors2.Clear();
+        s_globalVectors3.Clear();
+        s_globalVectors4.Clear();
+        s_globalColors.Clear();
+        s_globalMatrixArr.Clear();
+        s_globalBuffers.Clear();
+        s_globalBufferBindings.Clear();
+    }
 
-        // If the previous value was larger than a vector4, and the new value isn't
-        // the array size will be downgraded to save on memory footprint.
-        if (property.data == null || property.data.Length < tSize || (tSize < 16 && property.data.Length != tSize))
-        {
-            property.data = new byte[tSize];
+    // Global getters
+    public static Color GetGlobalColor(string name) => s_globalColors.TryGetValue(name, out Color value) ? value : Color.White;
+    public static Float2 GetGlobalVector2(string name) => s_globalVectors2.TryGetValue(name, out Float2 value) ? value : Float2.Zero;
+    public static Float3 GetGlobalVector3(string name) => s_globalVectors3.TryGetValue(name, out Float3 value) ? value : Float3.Zero;
+    public static Float4 GetGlobalVector4(string name) => s_globalVectors4.TryGetValue(name, out Float4 value) ? value : Float4.Zero;
+    public static float GetGlobalFloat(string name) => s_globalFloats.TryGetValue(name, out float value) ? value : 0;
+    public static int GetGlobalInt(string name) => s_globalInts.TryGetValue(name, out int value) ? value : 0;
+    public static Float4x4 GetGlobalMatrix(string name) => s_globalMatrices.TryGetValue(name, out Float4x4 value) ? value : Float4x4.Identity;
+    public static Texture2D? GetGlobalTexture(string name) => s_globalTextures.TryGetValue(name, out Texture2D value) ? value : null;
+    public static Texture3D? GetGlobalTexture3D(string name) => s_globalTextures3D.TryGetValue(name, out Texture3D value) ? value : null;
+    public static Cubemap? GetGlobalTextureCube(string name) => s_globalTexturesCube.TryGetValue(name, out Cubemap value) ? value : null;
+    public static GraphicsBuffer GetGlobalBuffer(string name) => s_globalBuffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
+    public static uint GetGlobalBufferBinding(string name) => s_globalBufferBindings.TryGetValue(name, out uint value) ? value : 0;
 
-            _values[name] = property;
-        }
-
-
-        fixed (T* dataPtr = newData)
-        fixed (byte* valuePtr = property.data)
-            Buffer.MemoryCopy(dataPtr, valuePtr, property.data.Length, tSize);
+    public static void ClearGlobals()
+    {
+        using var cmd = Graphics.GetCommandBuffer("ClearAllGlobals");
+        cmd.ClearAllGlobals();
+        Graphics.Submit(cmd);
     }
 }

@@ -1,174 +1,52 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
-
-using System;
-using System.Collections.Generic;
-
-using Prowl.Echo;
-using Prowl.Runtime.Audio;
-using Prowl.Runtime.SceneManagement;
-
-using Veldrid;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Provides global application state flags.
+/// </summary>
 public static class Application
 {
-    public static bool IsRunning;
-    public static bool IsPlaying = false;
-    public static bool IsEditor { get; private set; }
+    /// <summary>
+    /// True when the game is actively running (play mode in editor, or standalone player).
+    /// </summary>
+    public static bool IsPlaying { get; set; }
 
-    public static string? DataPath = null;
+    /// <summary>
+    /// True when running inside the editor (false in standalone builds).
+    /// </summary>
+    public static bool IsEditor { get; set; }
 
-    public static IAssetProvider AssetProvider;
+    /// <summary>
+    /// True when running without a window or graphics device (e.g. a dedicated server, or a build
+    /// launched with --headless). Gameplay, physics and scripts still run; rendering does not.
+    /// </summary>
+    public static bool IsHeadless { get; set; }
 
-    public static event Action Initialize;
-    public static event Action Update;
-    public static event Action Render;
-    public static event Action Quitting;
+    /// <summary>
+    /// True when play mode is paused. Update/FixedUpdate/LateUpdate stop, but rendering continues.
+    /// </summary>
+    public static bool IsPaused { get; set; }
 
-    private static readonly TimeData s_appTime = new();
+    /// <summary>
+    /// When true, one frame of gameplay executes then IsPaused reasserts.
+    /// Set by the editor Step button, consumed by the game loop.
+    /// </summary>
+    internal static bool StepRequested { get; set; }
 
-    private static readonly GraphicsBackend[] s_preferredWindowsBackends = // Covers Windows/UWP
-    [
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.Vulkan,
-        GraphicsBackend.Direct3D11,
-        GraphicsBackend.OpenGLES,
-    ];
+    /// <summary>Whether gameplay should execute this frame (playing and not paused, or stepping).</summary>
+    public static bool ShouldRunGameplay => IsPlaying && (!IsPaused || StepRequested);
 
-    private static readonly GraphicsBackend[] s_preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
-    [
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.Vulkan,
-        GraphicsBackend.OpenGLES,
-    ];
+    /// <summary>
+    /// True while gameplay code (Update/FixedUpdate) is executing.
+    /// Used by the editor's input filtering to distinguish gameplay input from editor input.
+    /// </summary>
+    public static bool IsGameplayExecuting { get; set; }
 
-    private static readonly GraphicsBackend[] s_preferredMacBackends = // Covers MacOS/Apple
-    [
-        GraphicsBackend.Metal,
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.OpenGLES,
-    ];
-
-    public static GraphicsBackend GetBackend()
-    {
-        if (RuntimeUtils.IsWindows())
-        {
-            return s_preferredWindowsBackends[0];
-        }
-        else if (RuntimeUtils.IsMac())
-        {
-            return s_preferredMacBackends[0];
-        }
-
-        return s_preferredUnixBackends[0];
-    }
-
-    public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
-    {
-        AssetProvider = assetProvider;
-        IsEditor = editor;
-
-        Debug.Log("Initializing...");
-
-        Screen.s_load = AppInitialize;
-
-        Screen.s_update = AppUpdate;
-
-        Screen.s_closing = AppClose;
-
-        IsRunning = true;
-        IsPlaying = true; // Base application is not the editor, isplaying is always true
-
-        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Maximized);
-    }
-
-    static void AppInitialize()
-    {
-        Serializer.GetAllDependencyRefsInEcho = GetAllAssetRefsInEcho;
-
-        Graphics.Initialize(true, GetBackend());
-        SceneManager.Initialize();
-        AudioSystem.Initialize();
-
-        AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
-
-        AssemblyManager.Initialize();
-
-        Initialize?.Invoke();
-
-        Debug.LogSuccess("Initialization complete");
-    }
-
-    static void AppUpdate()
-    {
-        try
-        {
-            s_appTime.Update();
-
-            Time.TimeStack.Push(s_appTime);
-
-            AudioSystem.UpdatePool();
-
-            Update?.Invoke();
-            Render?.Invoke();
-
-            Time.TimeStack.Pop();
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.ToString());
-        }
-    }
-
-    static void AppClose()
-    {
-        IsRunning = false;
-        Quitting?.Invoke();
-        Graphics.Dispose();
-        Physics.World.Clear();
-        AudioSystem.Dispose();
-        AssemblyManager.Dispose();
-        Debug.Log("Is terminating...");
-    }
-
-    static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
-    {
-        Debug.Log("[Unhandled Exception] " + (e.ExceptionObject as Exception).Message + "\n" + (e.ExceptionObject as Exception).StackTrace);
-    }
-
-
-    private static void GetAllAssetRefsInEcho(EchoObject echo, HashSet<Guid> deps)
-    {
-        if (echo.TagType == EchoType.List)
-        {
-            foreach (var tag in (List<EchoObject>)echo.Value!)
-                GetAllAssetRefsInEcho(tag, deps);
-        }
-        else if (echo.TagType == EchoType.Compound)
-        {
-            var dict = (Dictionary<string, EchoObject>)echo.Value!;
-            if (echo.TryGet("$type", out var typeName)) // See if we are an asset ref
-            {
-                if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && echo.TryGet("AssetID", out var assetId))
-                {
-                    if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
-                        deps.Add(id);
-                }
-            }
-            foreach (var (_, tag) in dict)
-                GetAllAssetRefsInEcho(tag, deps);
-        }
-    }
-
-    public static void Quit()
-    {
-        if (Application.IsEditor && Application.IsPlaying)
-        {
-            // Its in Editor and in playmode, Quit doesn't do anything
-            return;
-        }
-        Screen.Close();
-    }
+    /// <summary>
+    /// Directory containing the running executable (standalone) or project root (editor).
+    /// Used by PlayerAssetDatabase to locate assets relative to the executable.
+    /// </summary>
+    public static string DataPath { get; set; } = System.AppContext.BaseDirectory;
 }

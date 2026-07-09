@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
+
+using Prowl.PaperUI;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -10,24 +12,36 @@ public interface IInputHandler
 {
     string Clipboard { get; set; }
     bool IsAnyKeyDown { get; }
-
-    IReadOnlyList<char> InputString { get; set; }
-
-    Vector2 MouseDelta { get; }
-    Vector2Int MousePosition { get; set; }
+    Float2 MouseDelta { get; }
+    Int2 MousePosition { get; set; }
     float MouseWheelDelta { get; }
-    Vector2Int PrevMousePosition { get; }
+    Int2 PrevMousePosition { get; }
 
-    bool CursorVisible { get; set; }
-    bool CursorLocked { get; set; }
+    event Action<KeyCode, bool> OnKeyEvent;
+    event Action<MouseButton, float, float, bool, bool> OnMouseEvent;
 
-    event Action<Key, bool> OnKeyEvent;
-    event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
+    // Keyboard methods
+    char? GetPressedChar();
+    bool GetKey(KeyCode key);
+    bool GetKeyDown(KeyCode key);
+    bool GetKeyUp(KeyCode key);
 
-    bool GetKey(Key key);
-    bool GetKeyDown(Key key);
-    bool GetKeyUp(Key key);
-    bool GetMouseButton(MouseButton button);
-    bool GetMouseButtonDown(MouseButton button);
-    bool GetMouseButtonUp(MouseButton button);
+    // Mouse methods
+    bool GetMouseButton(int button);
+    bool GetMouseButtonDown(int button);
+    bool GetMouseButtonUp(int button);
+    void SetCursorVisible(bool visible, int miceIndex = 0);
+
+    /// <summary>Sets the hardware cursor shape (e.g. from Paper's <see cref="PaperCursor"/> hover state).</summary>
+    void SetCursorShape(PaperCursor shape, int miceIndex = 0);
+
+    // Gamepad methods
+    int GetGamepadCount();
+    bool IsGamepadConnected(int gamepadIndex);
+    bool GetGamepadButton(int gamepadIndex, GamepadButton button);
+    bool GetGamepadButtonDown(int gamepadIndex, GamepadButton button);
+    bool GetGamepadButtonUp(int gamepadIndex, GamepadButton button);
+    Float2 GetGamepadAxis(int gamepadIndex, int axisIndex);
+    float GetGamepadTrigger(int gamepadIndex, int triggerIndex);
+    void SetGamepadVibration(int gamepadIndex, float leftMotor, float rightMotor);
 }

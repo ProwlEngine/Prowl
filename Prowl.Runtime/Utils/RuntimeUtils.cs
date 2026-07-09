@@ -11,7 +11,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
-using Prowl.Runtime.Utils;
 using Prowl.Echo;
 
 namespace Prowl.Runtime;
@@ -51,7 +50,7 @@ public static class RuntimeUtils
         s_deepCopyByAssignmentCache.Clear();
         s_executionOrderCache.Clear();
     }
-	
+
     public static bool IsARM() =>
         RuntimeInformation.OSArchitecture == Architecture.Arm ||
         RuntimeInformation.OSArchitecture == Architecture.Arm64;
@@ -73,26 +72,37 @@ public static class RuntimeUtils
     public static Type? FindType(string qualifiedTypeName)
     {
         Type? t = Type.GetType(qualifiedTypeName);
-
         if (t != null)
-        {
             return t;
-        }
-        else
-        {
-            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                t = asm.GetType(qualifiedTypeName);
-                if (t != null)
-                    return t;
 
-                // If not found, try to find by name without namespace
-                t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(qualifiedTypeName, StringComparison.OrdinalIgnoreCase));
+        // Strip assembly qualifier to get just the namespace-qualified type name.
+        // Assembly-qualified names look like "Namespace.Type, AssemblyName, Version=..."
+        // asm.GetType() needs just "Namespace.Type" to search within a specific assembly.
+        string typeNameOnly = qualifiedTypeName;
+        int commaIdx = qualifiedTypeName.IndexOf(',');
+        if (commaIdx >= 0)
+            typeNameOnly = qualifiedTypeName.Substring(0, commaIdx).Trim();
+
+        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            t = asm.GetType(qualifiedTypeName);
+            if (t != null)
+                return t;
+
+            // Try with stripped assembly qualifier
+            if (typeNameOnly != qualifiedTypeName)
+            {
+                t = asm.GetType(typeNameOnly);
                 if (t != null)
                     return t;
             }
-            return null;
+
+            // If not found, try to find by name without namespace
+            t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+            if (t != null)
+                return t;
         }
+        return null;
     }
 
     public static PropertyInfo GetInstanceProperty(this Type type, string name)
@@ -217,11 +227,11 @@ public static class RuntimeUtils
 
     public static FieldInfo[] GetSerializableFields(this object target)
     {
-        FieldInfo[] fields = GetAllFields(target.GetType()).ToArray();
+        FieldInfo[] fields = [.. GetAllFields(target.GetType())];
         // Only allow Publics or ones with SerializeField
-        fields = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null).ToArray();
+        fields = [.. fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null)];
         // Remove Public NonSerialized fields
-        fields = fields.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null).ToArray();
+        fields = [.. fields.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null)];
         return fields;
     }
 
@@ -260,7 +270,7 @@ public static class RuntimeUtils
             label = label.Substring(1);
 
         // Use a StringBuilder to avoid modifying the original string in the loop
-        StringBuilder result = new StringBuilder(label.Length * 2);
+        StringBuilder result = new(label.Length * 2);
         result.Append(char.ToUpper(label[0]));
 
         // Add space before each Capital letter (except the first)
@@ -286,9 +296,9 @@ public static class RuntimeUtils
 
     public static IEnumerable<Type> GetTypesWithAttribute<T>()
     {
-        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
-        foreach (var assembly in assemblies)
-            foreach (var type in assembly.GetTypes())
+        Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        foreach (Assembly assembly in assemblies)
+            foreach (Type type in assembly.GetTypes())
                 if (type.GetCustomAttributes(typeof(T), true).Length > 0)
                     yield return type;
     }
@@ -356,8 +366,7 @@ public static class RuntimeUtils
         lock (s_deepCopyByAssignmentCache)
         {
             // If we have no evidence so far, check the cache and iterate fields
-            bool isPlainOldData;
-            if (s_deepCopyByAssignmentCache.TryGetValue(typeInfo, out isPlainOldData))
+            if (s_deepCopyByAssignmentCache.TryGetValue(typeInfo, out bool isPlainOldData))
             {
                 return isPlainOldData;
             }
@@ -470,7 +479,7 @@ public static class RuntimeUtils
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static unsafe int NonNormalizedAsInt(bool b) =>
-        (int)(*(byte*)(&b));
+        *(byte*)(&b);
 
     internal static int? GetExecutionOrder(MonoBehaviour a)
     {

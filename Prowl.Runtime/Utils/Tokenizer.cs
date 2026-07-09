@@ -56,7 +56,7 @@ public class Tokenizer
         }
 
         TokenPosition = InputPosition;
-        var firstChar = Input.Span[InputPosition];
+        char firstChar = Input.Span[InputPosition];
 
         // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
         if (IsQuote.Invoke(firstChar, this))
@@ -106,16 +106,19 @@ public class Tokenizer
 
     public string ParseQuotedStringValue()
     {
-        var token = Token;
+        ReadOnlySpan<char> token = Token;
 
-        var s = new char[token.Length];
-        var len = 0;
+        char[] s = new char[token.Length];
+        int len = 0;
 
-        var quote = Token[0];
+        if (token.Length < 2)
+            throw new InvalidDataException($"Invalid quoted string \"{token}\" at position {TokenPosition}. Expected at least opening and closing quotes.");
+
+        char quote = Token[0];
         if (token[^1] != quote)
             throw new InvalidDataException($"Missing ending quote from string \"{token}\" at position {TokenPosition}");
 
-        var original = token;
+        ReadOnlySpan<char> original = token;
         token = token[1..^1];
 
         while (!token.IsEmpty)
@@ -162,13 +165,14 @@ public class Tokenizer
             token = token[1..];
         }
 
-        var result = new string(s[..len]);
+        string result = new string(s[..len]);
         return result;
     }
 
     static bool DefaultWhitespaceHandler(char c, Tokenizer t)
     {
-        return char.IsWhiteSpace(c);
+        // Use explicit whitespace check to avoid culture-dependent behavior
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r';
     }
 
     static bool DefaultQuoteHandler(char c, Tokenizer t)

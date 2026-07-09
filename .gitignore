@@ -48,7 +48,7 @@ artifacts/
 **/Properties/launchSettings.json
 
 # VS Code
-.vscode/
+# .vscode/
 
 *_i.c
 *_p.c
@@ -58,7 +58,6 @@ artifacts/
 # If a meta file is in the editor, it's (probably) needed, so don't ignore it.
 # *.meta
 
-*.obj
 *.pch
 *.pdb
 *.pgc
@@ -169,6 +168,9 @@ PublishScripts/
 **/packages/*
 # except build/, which is used as an MSBuild target.
 !**/packages/build/
+# Keep the editor Packages source directory
+!Prowl.Editor/Packages/
+!Prowl.Editor/Packages/**
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/packages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
@@ -325,7 +327,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
-.vscode
+# .vscode
 *.code-workspace
 
 # Local History for Visual Studio Code

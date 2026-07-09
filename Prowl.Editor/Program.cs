@@ -1,312 +1,121 @@
-﻿// This file is part of the Prowl Game Engine
-// Licensed under the MIT License. See the LICENSE file in the project root for details.
+using Prowl.Editor.Core;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
 
-using System.Diagnostics;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using System;
+using System.Collections.Generic;
 
-using CommandLine;
-
-using Prowl.Echo;
-using Prowl.Editor.Assets;
-using Prowl.Editor.Editor.CLI;
-using Prowl.Editor.Preferences;
-using Prowl.Editor.ProjectSettings;
-using Prowl.Editor.Utilities;
-using Prowl.Runtime;
-using Prowl.Runtime.Cloning;
-using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor;
 
+
 public static class Program
 {
-    private static bool IsReloadingExternalAssemblies { get; set; }
-    public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+    /// <summary>If set via --project arg, the editor opens this project directly (skips launcher).</summary>
+    public static string? StartupProjectPath { get; private set; }
 
-    private static bool s_createdDefaultWindows;
-    private static bool s_opened;
+    /// <summary>If set via --restore-scene arg, this scene is loaded instead of the last saved scene.</summary>
+    public static string? RestoreScenePath { get; private set; }
+
+    /// <summary>If set via --buildmode arg, the editor runs a build directly and doesn't start any UI.</summary>
+    public static bool BuildMode { get; private set; } = false;
+
+    /// <summary>If set via --output arg, it builds the game into this path when built through the --build arg.</summary>
+    public static string? BuildOutputPath { get; private set; }
 
 
-    public static int Main(string[] args)
+    private static void LogCommands(List<string> args)
     {
-        return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions>(args)
-                     .MapResult(
-                         (CliOpenOptions options) => Run(options),
-                         (CliCreateOptions options) => CreateCommand(options),
-                         errs => 1); // error
-    }
-
-    private static int CreateCommand(CliCreateOptions options)
-    {
-        Console.WriteLine("Creating a new project");
-
-        if (options?.ProjectPath is not null && !options.ProjectPath.Exists)
+        foreach ((string[] aliases, Action<List<string>> a, int m, string desc) in s_commands)
         {
-            Project.CreateNew(options.ProjectPath);
-        }
-        else
-        {
-            Console.WriteLine("Path is not valid or already exists");
+            if (args.Count == 0 || Array.Exists(aliases, (x) => x.Equals(args[1])))
+                Console.WriteLine($"[{string.Join(", ", aliases)}]: {desc}");
         }
 
-        return 0;
+        Environment.Exit(0);
     }
 
-    private static int Run(CliOpenOptions options)
+
+    private static (string[] commandAliases, Action<List<string>> commandAction, int mandatoryArgs, string description)[] s_commands =
+    [
+        (["--help", "-help", "-h"], LogCommands, -1,
+            "Displays help information for a specific command, or all commands if no command is specified"),
+
+        (["--project", "-project", "-p"], (args) => StartupProjectPath = args[0], 1,
+            "Opens the provided source project path directly (skips launcher)"),
+
+        (["--restore-scene", "-restore", "-r"], (args) => RestoreScenePath = args[0], 1,
+            "Loads the provided scene as the default scene to open instead of the last saved scene"),
+
+        (["--buildmode", "-build", "-b"], (args) => { BuildMode = true; StartupProjectPath = args[0]; }, 1,
+            "Builds a project directly without opening the editor UI"),
+
+        (["--output", "-output", "-o"], (args) => BuildOutputPath = args[0], 1,
+            "Specifies the build output path when the editor builds a project"),
+    ];
+
+
+    private static void ReadArguments(string[] args)
     {
-        // set global Culture to invariant
-        Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
-        Application.Initialize += () =>
+        Queue<string> argQueue = new(args);
+
+        while (argQueue.TryDequeue(out string result))
         {
-            // Editor-specific initialization code
-            EditorGuiManager.Initialize();
-            ImporterAttribute.GenerateLookUp();
+            (string[]? a, Action<List<string>>? action, int argsCount, string? d) =
+                Array.Find(s_commands, (x) => Array.Exists(x.commandAliases, (x) => x.Equals(result)));
 
-            // Start with the project window open
-            new ProjectsWindow();
-        };
+            List<string> cmdArgs = [];
 
-        Application.Update += () =>
-        {
-            EngineObject.HandleDestroyed();
-
-            if (!s_opened && options?.ProjectPath is not null && options.ProjectPath.Exists)
+            while (argQueue.TryPeek(out string next))
             {
-                Project.Open(new Project(options.ProjectPath));
-                s_opened = true;
+                // Next argument is a command
+                if (next.StartsWith('-'))
+                    break;
+
+                if (argsCount > -1 && cmdArgs.Count + 1 > argsCount)
+                    throw new Exception($"Too many arguments specified for '{result}'");
+
+                cmdArgs.Add(argQueue.Dequeue());
             }
-            //EditorGui.SetupDock();
 
-            AssetDatabase.InternalUpdate();
+            if (cmdArgs.Count < argsCount)
+                throw new Exception($"Not enough arguments specified for '{result}'");
 
-            if (PlayMode.Current == PlayMode.Mode.Editing) // Dont recompile scripts unless were in editor mode
-                CheckReloadingAssemblies();
-
-            // Editor-specific update code
-            if (Project.HasProject)
-            {
-                if (!s_createdDefaultWindows)
-                {
-                    Runtime.Debug.Log("Creating default windows");
-                    s_createdDefaultWindows = true;
-                    //new EditorMainMenubar();
-                    var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
-                    var assetbrowser = EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
-                    // Add Asset Tree, When we do this AssetBrowser node will subdivide into two children
-                    var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser, Docking.DockZone.Left, 0.2f);
-                    // So for the Inspector we need to use the Child to dock now
-                    var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1], Docking.DockZone.Right, 0.75f);
-                    // Now Asset Browser is Subdivided twice,
-                    assetbrowser = assetbrowser.Child[1].Child[0];
-                    var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top, 0.65f);
-                    var scene = EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);
-
-                    // and finally hierarchy on top of asset tree
-                    var hierarchy = EditorGuiManager.DockWindowTo(new HierarchyWindow(), assettree, Docking.DockZone.Top, 0.65f);
-
-                    // new ProjectSettingsWindow();
-                    // new PreferencesWindow();
-                    // new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
-                }
-
-                Application.DataPath = Project.Active.ProjectPath;
-
-                if (GeneralPreferences.Instance.LockFPS)
-                {
-                    Graphics.VSync = false;
-                    Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
-                }
-                else
-                {
-                    Graphics.VSync = GeneralPreferences.Instance.VSync;
-                    Screen.FramesPerSecond = 0;
-                }
-
-                if (Hotkeys.IsHotkeyDown("Undo", new() { Key = Key.Z, Ctrl = true }))
-                    UndoRedoManager.Undo();
-                else if (Hotkeys.IsHotkeyDown("Redo", new() { Key = Key.Y, Ctrl = true }))
-                    UndoRedoManager.Redo();
-
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
-                    EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
-                    EditorGuiManager.SaveScene();
-
-                //Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing || PlayMode.Current == PlayMode.Mode.Paused;
-                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
-
-                try
-                {
-                    bool hasGameWindow = GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive;
-                    // Push GameWindow's input handler
-                    if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow).InputHandler);
-
-                    PlayMode.GameTime.Update();
-                    Time.TimeStack.Push(PlayMode.GameTime);
-                    SceneManager.Update();
-                    Time.TimeStack.Pop();
-
-                    if (hasGameWindow) Input.PopHandler();
-                }
-                catch (Exception e)
-                {
-                    Runtime.Debug.LogError("Scene Update Error: " + e.ToString());
-                }
-            }
-        };
-
-        Application.Render += () =>
-        {
-            EditorGuiManager.Update();
-
-            Graphics.EndFrame();
-        };
-
-        Application.Quitting += () =>
-        {
-            if (PlayMode.Current == PlayMode.Mode.Playing)
-                PlayMode.Stop();
-
-            if (Project.HasProject)
-                Project.Active.SaveTempScene();
-        };
-
-        Application.Run("Prowl Editor", 1920, 1080, new EditorAssetProvider(), true);
-
-        return 0;
-    }
-
-    public static void CheckReloadingAssemblies()
-    {
-        if (IsReloadingExternalAssemblies && Screen.IsFocused && PlayMode.Current == PlayMode.Mode.Editing)
-        {
-            IsReloadingExternalAssemblies = false;
-
-            if (Project.HasProject)
-            {
-                Project active = Project.Active!;
-
-                // If we have already loaded external assemblies
-                // Unfortunately we need to restart the editor
-                // This is because we cannot unload loaded assemblies reliably, as user code or editor code may still be referencing said assemblies
-                if (AssemblyManager.HasExternalAssemblies)
-                {
-                    // Save temp scene
-                    active.SaveTempScene();
-
-                    // TODO: Save window layout
-                    // TODO: Save Undo/Redo stack
-
-                    // Restart the editor
-                    RestartEditor();
-
-                    return;
-                }
-
-                SceneManager.StoreScene();
-                //SceneManager.Clear(); // SceneManager.Clear has OnAssemblyUnload
-
-                try
-                {
-                    // Unload External Assemblies
-                    AssemblyManager.Unload();
-
-
-                    DirectoryInfo temp = active.TempDirectory;
-                    DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo project = new DirectoryInfo(Path.Combine(bin.FullName, Project.GameCSProjectName, "Editor"));
-                    DirectoryInfo editor = new DirectoryInfo(Path.Combine(bin.FullName, Project.EditorCSProjectName));
-
-                    DirectoryInfo tmpProject = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.GameCSProjectName));
-                    DirectoryInfo tmpEditor = new DirectoryInfo(Path.Combine(temp.FullName, "obj", Project.EditorCSProjectName));
-
-                    string projectOutputPath = Path.Combine(project.FullName, Project.GameCSProjectName + ".dll");
-                    string editorOutputPath = Path.Combine(editor.FullName, Project.EditorCSProjectName + ".dll");
-
-                    // Delete everything under Temp/bin
-                    int attempts = 1;
-                    while (true)
-                    {
-                        try
-                        {
-                            if (bin.Exists)
-                                Directory.Delete(bin.FullName, true);
-                            break;
-                        }
-                        catch (Exception e)
-                        {
-                            Runtime.Debug.Log($"Error deleting temp/bin: '" + e.Message + $"' Retrying {attempts}/16");
-                            attempts++;
-                            if (attempts >= 16)
-                                break;
-
-                            Thread.Sleep(1000);
-                            continue;
-                        }
-                    }
-
-                    bin.Create();
-
-                    DotnetCompileOptions options = new DotnetCompileOptions()
-                    {
-                        isRelease = false,
-                        isSelfContained = false,
-                        outputPath = project,
-                        tempPath = tmpProject
-                    };
-
-                    active.GenerateGameProject();
-                    active.CompileGameAssembly(options);
-                    Assembly? gameAssembly = AssemblyManager.LoadExternalAssembly(projectOutputPath, true);
-
-                    if (gameAssembly != null)
-                    {
-                        Runtime.Debug.Log($"Successfully reloaded project assemblies");
-
-                        options.outputPath = editor;
-                        options.tempPath = tmpEditor;
-
-                        active.GenerateEditorProject(gameAssembly);
-                        active.CompileEditorAssembly(options);
-                        Assembly? editorAssembly = AssemblyManager.LoadExternalAssembly(editorOutputPath, true);
-
-                        if (editorAssembly != null)
-                            Runtime.Debug.Log($"Successfully reloaded editor assemblies");
-                    }
-                }
-                catch (Exception e)
-                {
-                    Runtime.Debug.LogException(new Exception("Error reloading assemblies", e));
-                }
-                finally
-                {
-                    AssemblyMethodAttributeBase.FindAll();
-                    OnAssemblyLoadAttribute.Invoke();
-
-                    SceneManager.RestoreScene();
-                    SceneManager.ClearStoredScene();
-                }
-            }
-            else
-            {
-                Runtime.Debug.LogError("Cannot reload assemblies, No project loaded.");
-            }
+            action.Invoke(cmdArgs);
         }
     }
 
-    public static void RestartEditor()
+
+    public static void Main(string[] args)
     {
-        // Reopen the same project
-        string arguments = $"-p \"{Project.Active.ProjectPath}\"";
-        ProcessStartInfo startInfo = new ProcessStartInfo(Environment.ProcessPath, arguments);
-        startInfo.UseShellExecute = true;
+        ReadArguments(args);
 
-        Process.Start(startInfo);
+        if (BuildMode)
+        {
+            ProjectSettingsRegistry.Initialize();
 
-        // Exit the current instance of the application
-        Screen.Close();
+            var project = Project.Open(StartupProjectPath);
+            project.SetActive();
+
+            // Load user script assemblies before registry scanning
+            ScriptAssemblyManager.LoadAssemblies(project);
+
+            // Initialize asset database for the already-opened project
+            var db = new EditorAssetDatabase(Project.Current!);
+            db.Initialize();
+
+            // Load project settings
+            ProjectSettingsRegistry.OnProjectOpened();
+
+            Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
+            return;
+        }
+
+        var editor = new EditorApplication();
+        editor.Run("Prowl Editor", 1920, 1080);
+
+        //Runtime.Window.InternalWindow.WindowState = EditorSettings.Instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;
     }
 }

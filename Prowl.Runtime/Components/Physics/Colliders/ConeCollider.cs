@@ -3,12 +3,13 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Cone Collider")]
+[AddComponentMenu("Physics/Colliders/Cone Collider")]
+[ComponentIcon("\ue4dc")] // Burst
 public sealed class ConeCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;
@@ -34,5 +35,13 @@ public sealed class ConeCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new ConeShape(MathD.Max(radius, 0.01), MathD.Max(height, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new ConeShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCone(Center + new Float3(0, -height * 0.5f, 0), new Float3(0, height, 0), radius, Color.Green);
+        Debug.PopMatrix();
+    }
 }

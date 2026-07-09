@@ -9,79 +9,73 @@ namespace Prowl.Runtime;
 
 public class TimeData
 {
-    public double unscaledDeltaTime;
-    public double unscaledTotalTime;
-    public double deltaTime;
-    public double time;
-    public double smoothUnscaledDeltaTime;
-    public double smoothDeltaTime;
+    public float UnscaledDeltaTime;
+    public float UnscaledTotalTime;
+    public float DeltaTime;
+    public float Time;
+    public float SmoothUnscaledDeltaTime;
+    public float SmoothDeltaTime;
 
-    private Stopwatch stopwatch;
+    private Stopwatch _stopwatch;
 
     public TimeData() { }
 
-    public long frameCount;
+    public long FrameCount;
 
-    public double timeScale = 1f;
-    public float timeScaleF => (float)timeScale;
-    public double timeSmoothFactor = .25f;
+    public float TimeScale = 1f;
+    public float TimeSmoothFactor = .25f;
 
     public void Update()
     {
-        stopwatch ??= Stopwatch.StartNew();
+        _stopwatch ??= Stopwatch.StartNew();
 
-        double dt = stopwatch.Elapsed.TotalMilliseconds / 1000.0;
+        float dt = (float)_stopwatch.Elapsed.TotalMilliseconds / 1000.0f;
 
-        frameCount++;
+        FrameCount++;
 
-        unscaledDeltaTime = dt;
-        unscaledTotalTime += unscaledDeltaTime;
+        UnscaledDeltaTime = dt;
+        UnscaledTotalTime += UnscaledDeltaTime;
 
-        deltaTime = dt * timeScale;
-        time += deltaTime;
+        DeltaTime = dt * TimeScale;
+        Time += DeltaTime;
 
-        smoothUnscaledDeltaTime = smoothUnscaledDeltaTime + (dt - smoothUnscaledDeltaTime) * timeSmoothFactor;
-        smoothDeltaTime = smoothUnscaledDeltaTime * dt;
+        SmoothUnscaledDeltaTime += (dt - SmoothUnscaledDeltaTime) * TimeSmoothFactor;
+        SmoothDeltaTime = SmoothUnscaledDeltaTime * TimeScale;
 
-        stopwatch.Restart();
+        _stopwatch.Restart();
     }
 }
 
 public static class Time
 {
+    private static readonly TimeData s_defaultTime = new();
 
     public static Stack<TimeData> TimeStack { get; } = new();
 
-    public static TimeData CurrentTime => TimeStack.Peek();
+    public static TimeData CurrentTime => TimeStack.Count > 0 ? TimeStack.Peek() : s_defaultTime;
 
-    public static double unscaledDeltaTime => CurrentTime.unscaledDeltaTime;
-    public static double unscaledTotalTime => CurrentTime.unscaledTotalTime;
+    public static float UnscaledDeltaTime => CurrentTime.UnscaledDeltaTime;
+    public static float UnscaledTotalTime => CurrentTime.UnscaledTotalTime;
 
-    public static double deltaTime => CurrentTime.deltaTime;
-    public static float deltaTimeF => (float)deltaTime;
-    public static double fixedDeltaTime => 1.0 / (PhysicsSetting.Instance?.TargetFrameRate ?? 50);
-    public static double time => CurrentTime.time;
+    public static float DeltaTime => CurrentTime.DeltaTime;
+    public static float FixedDeltaTime = 1.0f / 60.0f;
+    public static int MaxFixedIterations = 3;
+    public static float TimeSinceStartup => CurrentTime.Time;
 
-    public static double smoothUnscaledDeltaTime => CurrentTime.smoothUnscaledDeltaTime;
-    public static double smoothDeltaTime => CurrentTime.smoothDeltaTime;
+    public static float SmoothUnscaledDeltaTime => CurrentTime.SmoothUnscaledDeltaTime;
+    public static float SmoothDeltaTime => CurrentTime.SmoothDeltaTime;
 
-    public static long frameCount => CurrentTime.frameCount;
+    public static long FrameCount => CurrentTime.FrameCount;
 
-    public static double timeScale
+    public static float TimeScale
     {
-        get => CurrentTime.timeScale;
-        set => CurrentTime.timeScale = value;
+        get => CurrentTime.TimeScale;
+        set => CurrentTime.TimeScale = value;
     }
 
-    public static float timeScaleF
+    public static float TimeSmoothFactor
     {
-        get => (float)timeScale;
-        set => timeScale = value;
-    }
-
-    public static double timeSmoothFactor
-    {
-        get => CurrentTime.timeSmoothFactor;
-        set => CurrentTime.timeSmoothFactor = value;
+        get => CurrentTime.TimeSmoothFactor;
+        set => CurrentTime.TimeSmoothFactor = value;
     }
 }

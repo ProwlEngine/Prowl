@@ -3,12 +3,13 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Cylinder Collider")]
+[AddComponentMenu("Physics/Colliders/Cylinder Collider")]
+[ComponentIcon("\uf46b")] // Capsules (closest shape)
 public sealed class CylinderCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;
@@ -34,5 +35,13 @@ public sealed class CylinderCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new CylinderShape(MathD.Max(radius, 0.01), MathD.Max(height, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new CylinderShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireCylinder(Center, Quaternion.Identity, radius, height, Color.Green);
+        Debug.PopMatrix();
+    }
 }

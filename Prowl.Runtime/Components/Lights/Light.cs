@@ -1,35 +1,97 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
-using Prowl.Runtime.Rendering.Pipelines;
+using Prowl.Runtime.Rendering;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+public enum ShadowQuality
+{
+    Hard = 0,
+    Soft = 1
+}
+
+/// <summary>
+/// How a light participates in lightmap baking.
+/// </summary>
+public enum LightBakeMode
+{
+    /// <summary>Not baked. Lit entirely in realtime; never written into a lightmap or probe.</summary>
+    Realtime = 0,
+    /// <summary>Direct lighting + shadows are realtime; the light's indirect (bounced) GI is baked
+    /// into lightmaps/probes. (Baked-Indirect; the light still uploads as a realtime light.)</summary>
+    Mixed = 1,
+    /// <summary>Fully baked (direct + indirect + shadows) into lightmaps/probes. Excluded from the
+    /// realtime light set, so it only affects lightmapped static geometry (and probes).</summary>
+    Baked = 2,
+}
+
+[ComponentIcon("\uf185")] // Sun
 public abstract class Light : MonoBehaviour, IRenderableLight
 {
 
-    public Color color = Color.white;
-    public float intensity = 16.0f;
-    [Range(0, 1, true)]
-    public float shadowBias = 0.05f;
-    [Range(0, 3, true)]
-    public float shadowNormalBias = 1f;
-    public bool castShadows = true;
+    public Color Color = Color.White;
+    public float Intensity = 1.0f;
+    public float ShadowStrength = 1.0f;
+    public float ShadowBias = 0.001f;
+    public float ShadowNormalBias = 0.0f;
+    public bool CastShadows = true;
+    public ShadowQuality ShadowQuality = ShadowQuality.Soft;
+
+    /// <summary>How this light is baked. <see cref="LightBakeMode.Baked"/> lights are excluded from
+    /// the realtime light set by <see cref="Rendering.SceneLightSystem"/> (they live entirely in the
+    /// lightmap/probes); Mixed and Realtime lights light in realtime as usual.</summary>
+    public LightBakeMode BakeMode = LightBakeMode.Realtime;
+
+    /// <summary>
+    /// Slot index into the per-light shadow arrays (point: <c>_PointShadowMatrices</c>,
+    /// spot: <c>_SpotShadowMatrices</c>). -1 if no shadow data was uploaded for this light
+    /// this frame. Directional lights store shadow data in the cascade arrays instead;
+    /// for them this remains -1 even when shadows are active.
+    /// Owned and populated by <see cref="Rendering.SceneLightSystem"/> during reconcile.
+    /// </summary>
+    public int ShadowSlot { get; internal set; } = -1;
 
 
-    public override void Update()
+    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        RenderPipeline.AddLight(this);
+        lights.Add(this);
     }
 
-    public virtual int GetLightID() => this.InstanceID;
+    public virtual int GetLayer() => GameObject.LayerIndex;
+    public virtual int GetLightID() => InstanceID;
     public abstract LightType GetLightType();
-    public virtual Vector3 GetLightPosition() => Transform.position;
-    public virtual Vector3 GetLightDirection() => Transform.forward;
-    public virtual bool DoCastShadows() => castShadows;
-    public abstract void GetShadowMatrix(out Matrix4x4 view, out Matrix4x4 projection);
+    public virtual Float3 GetLightPosition() => Transform.Position;
+    public virtual Float3 GetLightDirection() => Transform.Forward;
+    public virtual bool DoCastShadows() => CastShadows;
 
-    public abstract GPULight GetGPULight(int res, bool cameraRelative, Vector3 cameraPosition);
+    /// <summary>
+    /// Renders this light's shadow map into the shadow atlas.
+    /// Called by the render pipeline during shadow pass.
+    /// </summary>
+    /// <param name="pipeline">The current render pipeline</param>
+    /// <param name="cameraPosition">Position of the camera in world space</param>
+    /// <param name="renderables">List of all renderables that could cast shadows</param>
+    /// <summary>Render this light's shadow map(s) into the shared shadow atlas.
+    ///
+    /// <para>
+    /// Implementations rent and submit their own <see cref="CommandBuffer"/> per face
+    /// (point lights), cascade (directional), or single tile (spot). They CANNOT share
+    /// a CB across multiple faces because each face calls <see cref="RenderPipeline.AssignCameraMatrices"/>
+    /// which uploads view/proj into the single GlobalUniforms UBO sharing a CB would
+    /// queue all the face draws to execute against whatever matrices the LAST face
+    /// uploaded.
+    /// </para>
+    ///
+    /// <para>
+    /// The shadow atlas itself has already been bound + cleared by the caller in a
+    /// separate setup CB before this method runs.
+    /// </para>
+    /// </summary>
+    public abstract void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables);
+
+    public abstract ForwardLightData GetForwardLightData();
 }

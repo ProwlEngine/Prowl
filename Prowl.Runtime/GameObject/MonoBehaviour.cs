@@ -2,28 +2,24 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
+using System.Diagnostics.CodeAnalysis;
 
-using Prowl.Runtime.Cloning;
-using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Utils;
 using Prowl.Echo;
+using Prowl.PaperUI;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
 /// <summary>
 /// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
-/// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
+/// MonoBehaviour provides lifecycle methods for game object behaviors.
 /// </summary>
-[CloneBehavior(CloneBehavior.ChildObject)]
-public abstract class MonoBehaviour : EngineObject
+public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiver
 {
-    private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
-
-    [SerializeField, HideInInspector, CloneField(CloneFieldFlags.IdentityRelevant)]
+    [SerializeField, HideInInspector]
     private Guid _identifier = Guid.NewGuid();
 
     [SerializeField, HideInInspector]
@@ -31,24 +27,40 @@ public abstract class MonoBehaviour : EngineObject
     [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
 
-    private Dictionary<string, Coroutine> _coroutines = new();
-    private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
-    private Dictionary<string, Coroutine> _fixedUpdateCoroutines = new();
-
     private GameObject _go;
 
     /// <summary>
     /// Gets or sets the hide flags for this MonoBehaviour.
     /// </summary>
     [HideInInspector]
-    public HideFlags hideFlags;
+    public HideFlags HideFlags;
 
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
-    private bool _executeAlways = false;
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
-    private bool _hasAwoken = false;
-    [SerializeIgnore, CloneField(CloneFieldFlags.Skip)]
+    [SerializeIgnore]
     private bool _hasStarted = false;
+
+    [SerializeIgnore]
+    private bool _hasBeenEnabled = false;
+
+    [SerializeIgnore]
+    private bool? _executeAlwaysCached;
+
+    /// <summary>Whether this component is currently in its scene's update registry. Guards against
+    /// double-registration and lets the registry skip already-tracked components.</summary>
+    [SerializeIgnore]
+    internal bool _updateRegistered;
+
+    /// <summary>
+    /// Whether this component's gameplay methods should execute.
+    /// True when in play mode, or when the component has [ExecuteAlways].
+    /// </summary>
+    internal bool ShouldExecuteGameplay
+    {
+        get
+        {
+            _executeAlwaysCached ??= GetType().IsDefined(typeof(ExecuteAlwaysAttribute), true);
+            return Application.IsPlaying || _executeAlwaysCached.Value;
+        }
+    }
 
     /// <summary>
     /// Gets the identifier for this MonoBehaviour.
@@ -67,21 +79,20 @@ public abstract class MonoBehaviour : EngineObject
     public Transform Transform => _go.Transform;
 
     /// <summary>
-    /// Gets or sets whether this MonoBehaviour should execute in edit mode.
-    /// </summary>
-    public bool ExecuteAlways { get => _executeAlways; internal set => _executeAlways = value; }
-    /// <summary>
-    /// Gets whether the Awake method has been called.
-    /// </summary>
-    public bool HasAwoken { get => _hasAwoken; internal set => _hasAwoken = value; }
-    /// <summary>
     /// Gets whether the Start method has been called.
     /// </summary>
     public bool HasStarted { get => _hasStarted; internal set => _hasStarted = value; }
+
+    /// <summary>
+    /// Gets whether OnEnable has ever been called on this component.
+    /// Used to determine if OnDispose should be called during cleanup.
+    /// </summary>
+    public bool HasBeenEnabled { get => _hasBeenEnabled; internal set => _hasBeenEnabled = value; }
+
     /// <summary>
     /// Gets the tag of the GameObject this MonoBehaviour is attached to.
     /// </summary>
-    public string Tag => _go.tag;
+    public string Tag => _go.Tag;
 
     /// <summary>
     /// Gets or sets whether the MonoBehaviour is enabled.
@@ -105,10 +116,10 @@ public abstract class MonoBehaviour : EngineObject
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
     /// <summary>
-    /// The parent <see cref="Prowl.Runtime.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
-    /// 
+    /// The parent <see cref="Prowl.Runtime.Resources.Scene"/> to which this <see cref="Prowl.Runtime.MonoBehaviour"/> belongs.
+    ///
     /// Note that this property is derived from the components <see cref="GameObject"/>, as a
-    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Scene"/> without a 
+    /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
     /// <see cref="GameObject"/>.
     /// </summary>
     public Scene? Scene => GameObject?.Scene ?? null;
@@ -123,14 +134,14 @@ public abstract class MonoBehaviour : EngineObject
     public bool CompareTag(string otherTag) => _go.CompareTag(otherTag);
 
     #region Component API
-    // This is used to make the Component API more similar to Unity's, Its generally recommended to use the GameObject instead
+    // Convenience component-access API mirrored onto the behaviour; it's generally recommended to use the GameObject instead
     /// <inheritdoc cref="GameObject.AddComponent{T}"/>"
     public T AddComponent<T>() where T : MonoBehaviour, new() => (T)AddComponent(typeof(T));
     /// <inheritdoc cref="GameObject.AddComponent(Type)"/>"
-    public MonoBehaviour AddComponent(Type type) => GameObject.AddComponent(type);
+    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type) => GameObject.AddComponent(type);
     /// <inheritdoc cref="GameObject.RemoveComponent{T}"/>"
     public void RemoveComponent<T>(T component) where T : MonoBehaviour => GameObject.RemoveComponent(component);
-    /// <inheritdoc cref="GameObject.RemoveComponent(Type)"/>"
+    /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
     public void RemoveComponent(MonoBehaviour component) => GameObject.RemoveComponent(component);
     /// <inheritdoc cref="GameObject.RemoveComponent(MonoBehaviour)"/>"
     public void RemoveSelf() => GameObject.RemoveComponent(this);
@@ -141,7 +152,7 @@ public abstract class MonoBehaviour : EngineObject
     /// <inheritdoc cref="GameObject.GetComponentByIdentifier(Guid)"/>"
     public MonoBehaviour? GetComponentByIdentifier(Guid identifier) => GameObject.GetComponentByIdentifier(identifier);
     /// <inheritdoc cref="GameObject.TryGetComponent{T}(out T)"/>"
-    public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
+    public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()).IsValid();
     /// <inheritdoc cref="GameObject.GetComponents{T}"/>"
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
     /// <inheritdoc cref="GameObject.GetComponents(Type)"/>"
@@ -168,16 +179,16 @@ public abstract class MonoBehaviour : EngineObject
     /// Gets the index of this Component in its GameObject's Component list.
     /// </summary>
     /// <returns>The index of this Component in its GameObject's Component list, or null if it has no GameObject.</returns>
-    /// <exception cref="Exception">Thrown if the Component is not found in its GameObject's Component list.</exception>q
+    /// <exception cref="Exception">Thrown if the Component is not found in its GameObject's Component list.</exception>
     public int? GetSiblingIndex()
     {
-        if (GameObject == null) return null;
+        if (GameObject.IsNotValid()) return null;
 
         for (int i = 0; i < GameObject._components.Count; i++)
             if (object.ReferenceEquals(GameObject._components[i], this))
                 return i;
 
-        throw new Exception($"This Component appears to be in Limbo, This should never happen!, The Component believes its a child of {GameObject.Name} but they don't have it as an attatched component!");
+        throw new Exception($"This Component appears to be in Limbo, This should never happen!, The Component believes its a child of {GameObject.Name} but they don't have it as an attached component!");
     }
 
     /// <summary>
@@ -186,13 +197,13 @@ public abstract class MonoBehaviour : EngineObject
     /// <param name="index">The new index of this Component.</param>
     public void SetSiblingIndex(int index)
     {
-        if (GameObject == null) return;
+        if (GameObject.IsNotValid()) return;
 
         // Remove this object from current position
         GameObject._components.Remove(this);
 
         // Ensure index is within bounds
-        index = Math.Max(0, Math.Min(index, GameObject._components.Count));
+        index = Maths.Max(0, Maths.Min(index, GameObject._components.Count));
 
         // Insert at new position
         GameObject._components.Insert(index, this);
@@ -207,23 +218,30 @@ public abstract class MonoBehaviour : EngineObject
     {
         _go = go;
 
-        bool isEnabled = _enabled && _go.enabledInHierarchy;
+        bool isEnabled = _enabled && _go.EnabledInHierarchy;
         _enabledInHierarchy = isEnabled;
     }
 
     /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
+    /// OnEnable/OnDisable are only called if the GameObject is in an active Scene.
     /// </summary>
     internal void HierarchyStateChanged()
     {
-        bool newState = _enabled && _go.enabledInHierarchy;
+        bool newState = _enabled && _go.EnabledInHierarchy;
         if (newState != _enabledInHierarchy)
         {
             _enabledInHierarchy = newState;
-            if (newState)
-                Do(OnEnable);
-            else
-                Do(OnDisable);
+
+            // Only call OnEnable/OnDisable if we're in an active Scene
+            Scene? scene = _go.Scene;
+            if (scene.IsValid() && scene.IsActive)
+            {
+                if (newState)
+                    InternalOnEnable();
+                else
+                    InternalOnDisable();
+            }
         }
     }
 
@@ -233,7 +251,10 @@ public abstract class MonoBehaviour : EngineObject
     /// <returns>True if the MonoBehaviour can be destroyed, false otherwise.</returns>
     internal bool CanDestroy()
     {
-#warning "Need to apply this to Component Deletion in Inspector, to make sure not to delete dependant Components"
+        // Skip dependency check if the entire GameObject is being disposed
+        if (_go.IsDisposed)
+            return true;
+
         if (_go.IsComponentRequired(this, out Type dependentType))
         {
             Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");
@@ -247,17 +268,26 @@ public abstract class MonoBehaviour : EngineObject
     // Lifecycle methods
 
     /// <summary>
-    /// Called when the script instance is being loaded.
+    /// Called when the GameObject is added to a Scene.
+    /// This happens before OnEnable and only once per scene add.
     /// </summary>
-    public virtual void Awake() { }
+    public virtual void OnAddedToScene() { }
+
+    /// <summary>
+    /// Called when the GameObject is removed from a Scene.
+    /// This happens after OnDisable and only once per scene remove.
+    /// </summary>
+    public virtual void OnRemovedFromScene() { }
 
     /// <summary>
     /// Called when the object becomes enabled and active.
+    /// Only called when the GameObject is in a Scene and enabled.
     /// </summary>
     public virtual void OnEnable() { }
 
     /// <summary>
     /// Called when the object becomes disabled or inactive.
+    /// Only called when the GameObject was in a Scene and becomes disabled.
     /// </summary>
     public virtual void OnDisable() { }
 
@@ -282,367 +312,100 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void LateUpdate() { }
 
     /// <summary>
+    /// Called every frame per camera to collect render data.
+    /// Always called regardless of play mode.
+    /// Components add their renderables/lights to the provided lists.
+    /// Camera is provided for LOD and distance-based decisions.
+    /// </summary>
+    public virtual void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) { }
+
+    /// <summary>
     /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmos() { }
 
     /// <summary>
-    /// Called for rendering and handling GUI gizmos when the object is selected.
+    /// Called for rendering and handling GUI gizmos.
     /// </summary>
     public virtual void DrawGizmosSelected() { }
 
     /// <summary>
     /// Called for drawing and handling interaction with Runtime/Ingame UI
-    /// Executed on any camera with the GUILayer component
     /// </summary>
-    /// <param name="gui"></param>
-    public virtual void OnGUI(Gui gui) { }
+    /// <param name="paper"></param>
+    public virtual void OnGui(Paper paper) { }
 
-    /// <summary>
-    /// Called when a new level is loaded.
-    /// </summary>
-    public virtual void OnLevelWasLoaded() { }
-
-    /// <summary>
-    /// Called when the camera (On this gameobject) has rendered the scene.
-    /// <see cref="ImageEffectOpaqueAttribute"/> can be used to specify the order of execution.
-    /// <see cref="ImageEffectAllowedInSceneViewAttribute"/> can be used to specify if the effect should be rendered in the Scene View.
-    /// </summary>
-    public virtual void OnRenderImage(RenderTexture src, RenderTexture dest) { }
-
-    /// <summary>
-    /// Called right before the camera starts rendering.
-    /// </summary>
-    public virtual void OnPreCull(Camera camera) { }
-
-    /// <summary>
-    /// Called right before the camera starts rendering the scene.
-    /// </summary>
-    public virtual void OnPreRender(Camera camera) { }
-
-    /// <summary>
-    /// Called after the camera has finished rendering the scene.
-    /// </summary>
-    public virtual void OnPostRender(Camera camera) { }
-
-    /// <summary>
-    /// Called when the MonoBehaviour will be destroyed.
-    /// </summary>
-    public virtual void OnDestroy() { }
-
-    /// <summary>
-    /// Internal method to handle the Awake lifecycle event.
-    /// </summary>
-    internal void InternalAwake()
-    {
-        if (HasAwoken) return;
-        HasAwoken = true;
-        Awake();
-
-        if (EnabledInHierarchy)
-            Do(OnEnable);
-    }
-
-    /// <summary>
-    /// Internal method to handle the Start lifecycle event.
-    /// </summary>
+    /// <summary>Gated Start only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
         if (HasStarted) return;
+        if (!ShouldExecuteGameplay) return;
         HasStarted = true;
-        Start();
+        try { Start(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Start() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
-    /// <summary>
-    /// Executes the specified action, considering the ExecuteAlways attribute.
-    /// </summary>
-    /// <param name="action">The action to execute.</param>
-    internal void Do(Action action)
+    /// <summary>Gated Update only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalUpdate()
     {
-        bool always;
-        if (CachedExecuteAlways.TryGetValue(GetType(), out bool value))
-            always = value;
-        else
-        {
-            always = GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
-            CachedExecuteAlways[GetType()] = always;
-        }
+        if (!ShouldExecuteGameplay) return;
+        try { Update(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] Update() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
 
-        try
-        {
-            if (Application.IsPlaying || always)
-                action();
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"Error: {e.Message} \n StackTrace: {e.StackTrace}");
-        }
+    /// <summary>Gated LateUpdate only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalLateUpdate()
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { LateUpdate(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] LateUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    /// <summary>Gated FixedUpdate only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalFixedUpdate()
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { FixedUpdate(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] FixedUpdate() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    /// <summary>Gated OnEnable only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalOnEnable()
+    {
+        _hasBeenEnabled = true;
+        // Register for ticking whenever enabled in an active scene, regardless of play mode; the
+        // per-tick gate (ShouldExecuteGameplay) decides whether the callbacks actually run.
+        GameObject?.Scene?.ComponentRegistry.Register(this);
+        if (!ShouldExecuteGameplay) return;
+        try { OnEnable(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
+    internal void InternalOnDisable()
+    {
+        GameObject?.Scene?.ComponentRegistry.Unregister(this);
+        if (!ShouldExecuteGameplay) return;
+        try { OnDisable(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        // Always generate fresh identifier Scene restores them after deserialization
+        _identifier = Guid.NewGuid();
     }
 
     /// <summary>
-    /// Clears the cached ExecuteAlways attributes when the assembly is unloaded.
+    /// Called when the MonoBehaviour will be destroyed.
+    /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
     /// </summary>
-    [OnAssemblyUnload]
-    public static void ClearCache() => CachedExecuteAlways.Clear();
-
     public override void OnDispose()
     {
-        if (GameObject != null)
+        if (GameObject.IsValid())
             GameObject.RemoveComponent(this);
-    }
-
-    /// <summary>
-    /// Starts a coroutine with the specified method name.
-    /// </summary>
-    /// <param name="methodName">The name of the coroutine method to start.</param>
-    /// <returns>A Coroutine object representing the started coroutine.</returns>
-    public Coroutine StartCoroutine(string methodName)
-    {
-        methodName = methodName.Trim();
-        var method = GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-        if (method == null)
-        {
-            Debug.LogError("Coroutine '" + methodName + "' couldn't be started, the method doesn't exist.");
-            return null;
-        }
-
-        var coroutine = new Coroutine(method.Invoke(this, null) as IEnumerator);
-
-        if (coroutine.Enumerator.Current is WaitForEndOfFrame)
-            _endOfFrameCoroutines.Add(methodName, coroutine);
-        else if (coroutine.Enumerator.Current is WaitForFixedUpdate)
-            _fixedUpdateCoroutines.Add(methodName, coroutine);
-        else
-            _coroutines.Add(methodName, coroutine);
-
-        return coroutine;
-    }
-
-    /// <summary>
-    /// Stops all running coroutines on this MonoBehaviour.
-    /// </summary>
-    public void StopAllCoroutines()
-    {
-        _coroutines.Clear();
-        _endOfFrameCoroutines.Clear();
-        _fixedUpdateCoroutines.Clear();
-    }
-
-    /// <summary>
-    /// Stops the coroutine with the specified method name.
-    /// </summary>
-    /// <param name="methodName">The name of the coroutine method to stop.</param>
-    public void StopCoroutine(string methodName)
-    {
-        methodName = methodName.Trim();
-        _coroutines.Remove(methodName);
-        _endOfFrameCoroutines.Remove(methodName);
-        _fixedUpdateCoroutines.Remove(methodName);
-    }
-
-    /// <summary>
-    /// Base class for all yield instructions used in coroutines.
-    /// </summary>
-    public class YieldInstruction
-    {
-    }
-
-    /// <summary>
-    /// Suspends the coroutine execution for the given amount of seconds.
-    /// </summary>
-    public class WaitForSeconds : YieldInstruction
-    {
-        public double Duration { get; private set; }
-        public WaitForSeconds(float seconds)
-        {
-            Duration = Time.time + seconds;
-        }
-    }
-
-    /// <summary>
-    /// Waits until the end of the frame after all cameras and GUI is rendered, just before displaying the frame on screen.
-    /// </summary>
-    public class WaitForEndOfFrame : YieldInstruction
-    {
-    }
-
-    /// <summary>
-    /// Waits until the next fixed frame rate update function.
-    /// </summary>
-    public class WaitForFixedUpdate : YieldInstruction
-    {
-    }
-
-    /// <summary>
-    /// Represents a coroutine in the Prowl Game Engine.
-    /// </summary>
-    public sealed class Coroutine : YieldInstruction
-    {
-        internal bool isDone { get; private set; }
-        internal IEnumerator Enumerator { get; private set; }
-        internal Coroutine(IEnumerator routine)
-        {
-            Enumerator = routine;
-        }
-
-        internal bool CanRun
-        {
-            get
-            {
-                object current = Enumerator.Current;
-
-                if (current is Coroutine)
-                {
-                    Coroutine dep = current as Coroutine;
-                    return dep.isDone;
-                }
-                else if (current is WaitForSeconds)
-                {
-                    WaitForSeconds wait = current as WaitForSeconds;
-                    return wait.Duration <= Time.time;
-                }
-                else
-                {
-                    return true;
-                }
-            }
-        }
-
-        internal void Run()
-        {
-            if (CanRun)
-            {
-                isDone = !Enumerator.MoveNext();
-            }
-        }
-    }
-
-    internal void UpdateCoroutines()
-    {
-        _coroutines ??= new Dictionary<string, Coroutine>();
-        var tempList = new Dictionary<string, Coroutine>(_coroutines);
-        _coroutines.Clear();
-        foreach (var coroutine in tempList)
-        {
-            coroutine.Value.Run();
-            if (coroutine.Value.isDone)
-            {
-                if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
-                    _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
-                else if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
-                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
-                else
-                    _coroutines.Add(coroutine.Key, coroutine.Value);
-            }
-        }
-    }
-
-    internal void UpdateEndOfFrameCoroutines()
-    {
-        _endOfFrameCoroutines ??= new Dictionary<string, Coroutine>();
-        var tempList = new Dictionary<string, Coroutine>(_endOfFrameCoroutines);
-        _endOfFrameCoroutines.Clear();
-        foreach (var coroutine in tempList)
-        {
-            coroutine.Value.Run();
-            if (coroutine.Value.isDone)
-            {
-                if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
-                    _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
-                else
-                    _coroutines.Add(coroutine.Key, coroutine.Value);
-            }
-        }
-    }
-
-    internal void UpdateFixedUpdateCoroutines()
-    {
-        _fixedUpdateCoroutines ??= new Dictionary<string, Coroutine>();
-        var tempList = new Dictionary<string, Coroutine>(_fixedUpdateCoroutines);
-        _fixedUpdateCoroutines.Clear();
-        foreach (var coroutine in tempList)
-        {
-            coroutine.Value.Run();
-            if (coroutine.Value.isDone)
-            {
-                if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
-                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
-                else
-                    _coroutines.Add(coroutine.Key, coroutine.Value);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Calls the method named methodName on every MonoBehaviour in this game object or any of its children.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void BroadcastMessage(string methodName, params object[] objs) => GameObject.BroadcastMessage(methodName, objs);
-
-    /// <summary>
-    /// Calls the method named methodName on every MonoBehaviour in this game object.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
-
-    /// <summary>
-    /// Creates a deep copy of this Component.
-    /// </summary>
-    /// <returns>A reference to a newly created deep copy of this Component.</returns>
-    public MonoBehaviour Clone()
-    {
-        return this.DeepClone();
-    }
-    /// <summary>
-    /// Deep-copies this Components data to the specified target Component. If source and 
-    /// target Component Type do not match, the operation will fail.
-    /// </summary>
-    /// <param name="target">The target Component to copy to.</param>
-    public void CopyTo(MonoBehaviour target)
-    {
-        this.DeepCopyTo(target);
-    }
-
-    public override void SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
-    {
-        MonoBehaviour target = targetObj as MonoBehaviour;
-        this.OnSetupCloneTargets(targetObj, setup);
-    }
-
-    public override void CopyDataTo(object targetObj, ICloneOperation operation)
-    {
-        MonoBehaviour target = targetObj as MonoBehaviour;
-        if (!operation.Context.PreserveIdentity)
-            target._identifier = _identifier;
-        target._enabled = _enabled;
-        target._enabledInHierarchy = _enabledInHierarchy;
-        this.OnCopyDataTo(targetObj, operation);
-    }
-
-    /// <summary>
-    /// This method prepares the <see cref="CopyTo"/> operation for custom Component Types.
-    /// It uses reflection to prepare the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.SetupCloneTargets"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    protected virtual void OnSetupCloneTargets(object target, ICloneTargetSetup setup)
-    {
-        setup.HandleObject(this, target);
-    }
-
-    /// <summary>
-    /// This method performs the <see cref="CopyTo"/> operation for custom Component Types.
-    /// It uses reflection to perform the cloning operation automatically, but you can implement
-    /// this method in order to handle certain fields and cases manually. See <see cref="ICloneExplicit.CopyDataTo"/>
-    /// for a more thorough explanation.
-    /// </summary>
-    /// <param name="target">The target Component where this Components data is copied to.</param>
-    /// <param name="operation"></param>
-    protected virtual void OnCopyDataTo(object target, ICloneOperation operation)
-    {
-        operation.HandleObject(this, target);
     }
 
     #endregion

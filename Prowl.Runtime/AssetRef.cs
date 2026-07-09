@@ -1,60 +1,84 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Prowl.Echo;
-using Prowl.Runtime.Cloning;
 
 namespace Prowl.Runtime;
 
-// Taken and modified from Duality's ContentRef.cs
-// https://github.com/AdamsLair/duality/blob/master/Source/Core/Duality/ContentRef.cs
+internal sealed class DependencySerializationContext : SerializationContext
+{
+    public HashSet<Guid> Dependencies = new HashSet<Guid>();
+}
 
+/// <summary>
+/// A serializable reference to an asset. Stores a GUID for persistent identification
+/// and caches the resolved instance. When the asset is needed, it's loaded via AssetDatabase.Get().
+/// This solves the "stale reference" problem all references to the same asset share the same
+/// resolved instance, and re-resolving always gets the latest version.
+/// </summary>
 public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 {
-    [CloneBehavior(CloneBehavior.Reference), CloneField(CloneFieldFlags.DontSkip)]
     private T? instance;
-    [CloneField(CloneFieldFlags.DontSkip)]
-    private Guid assetID = Guid.Empty;
-    [CloneField(CloneFieldFlags.DontSkip)]
-    private ushort fileID = 0;
+    private Guid assetID;
 
     /// <summary>
-    /// The actual <see cref="EngineObject"/>. If currently unavailable, it is loaded and then returned.
-    /// Because of that, this Property is only null if the references Resource is missing, invalid, or
-    /// this content reference has been explicitly set to null. Never returns disposed Resources.
+    /// The resolved asset.
+    /// <para>
+    /// When async asset loading is enabled (<see cref="AssetLoadingConfig.AsyncEnabled"/>),
+    /// this is non-blocking: it returns the cached instance if available, otherwise it queues
+    /// a background load and returns <c>null</c> for now. Callers MUST handle a transient null
+    /// (the asset will stream in over subsequent frames). Use <see cref="EnsureLoaded"/> when an
+    /// immediate value is required. When async loading is disabled, this blocks and loads
+    /// synchronously (legacy behavior).
+    /// </para>
+    /// Also returns null if the asset is genuinely missing or this ref is explicitly null.
     /// </summary>
     public T? Res
     {
         get
         {
-            if (instance == null || instance.IsDestroyed) RetrieveInstance();
+            if (instance.IsValid())
+                return instance;
+
+            if (assetID == Guid.Empty)
+            {
+                instance = null;
+                return null;
+            }
+
+            if (AssetLoadingConfig.AsyncEnabled)
+            {
+                // Non-blocking: cached instance if present, otherwise kick off a background
+                // load and return null until it streams in.
+                instance = AssetDatabase.GetCached(assetID) as T;
+                if (instance == null)
+                    AssetLoader.Request(assetID);
+            }
+            else
+            {
+                // Synchronous (legacy) behavior: block on the calling thread until loaded.
+                instance = AssetDatabase.Get(assetID) as T;
+            }
+
             return instance;
         }
         set
         {
-            assetID = value == null ? Guid.Empty : value.AssetID;
-            fileID = value == null ? (ushort)0 : value.FileID;
             instance = value;
+            assetID = value?.AssetID ?? Guid.Empty;
         }
     }
 
-    /// <summary>
-    /// Returns the current reference to the Resource that is stored locally. No attemp is made to load or reload
-    /// the Resource if currently unavailable.
-    /// </summary>
-    public T? ResWeak
-    {
-        get { return instance == null || instance.IsDestroyed ? null : instance; }
-    }
+    /// <summary>Returns the cached instance without attempting to load. May be null.</summary>
+    public T? ResWeak => instance.IsValid() ? instance : null;
 
-    /// <summary>
-    /// The path where to look for the Resource, if it is currently unavailable.
-    /// </summary>
+    /// <summary>The asset GUID. Prefers the live instance's AssetID when available.</summary>
     public Guid AssetID
     {
-        get { return assetID; }
+        get => (instance.IsValid() && instance.AssetID != Guid.Empty) ? instance.AssetID : assetID;
         set
         {
             assetID = value;
@@ -63,109 +87,24 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         }
     }
 
-    /// <summary>
-    /// The Asset index inside the asset file. 0 is the Main Asset
-    /// </summary>
-    public ushort FileID
-    {
-        get => fileID;
-        set => fileID = value;
-    }
-
-
-    /// <summary>
-    /// Returns whether this content reference has been explicitly set to null.
-    /// </summary>
-    public bool IsExplicitNull
-    {
-        get
-        {
-            return instance == null && assetID == Guid.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Returns whether this content reference is available in general. This may trigger loading it, if currently unavailable.
-    /// </summary>
-    public bool IsAvailable
-    {
-        get
-        {
-            if (instance != null && !instance.IsDestroyed) return true;
-            RetrieveInstance();
-            return instance != null;
-        }
-    }
-
-    /// <summary>
-    /// Returns whether the referenced Resource is currently loaded.
-    /// </summary>
-    public bool IsLoaded
-    {
-        get
-        {
-            if (instance != null && !instance.IsDestroyed) return true;
-            return Application.AssetProvider.HasAsset(assetID);
-        }
-    }
-
-    /// <summary>
-    /// Returns whether the Resource has been generated at runtime and cannot be retrieved via content path.
-    /// </summary>
-    public bool IsRuntimeResource
-    {
-        get { return instance != null && assetID == Guid.Empty; }
-    }
-
-    public string Name
-    {
-        get
-        {
-            if (instance != null) return instance.IsDestroyed ? "DESTROYED_" + instance.Name : instance.Name;
-            return "No Instance";
-        }
-    }
-
+    public bool IsExplicitNull => instance == null && AssetID == Guid.Empty;
+    public bool IsRuntimeResource => instance != null && AssetID == Guid.Empty;
+    public string Name => instance != null ? (instance.IsNotValid() ? "DESTROYED" : instance.Name) : "None";
     public Type InstanceType => typeof(T);
 
-    /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
-    /// the specified alias.
-    /// </summary>
-    /// <param name="id"></param>
+    public AssetRef(T? res)
+    {
+        instance = res;
+        assetID = res?.AssetID ?? Guid.Empty;
+    }
+
     public AssetRef(Guid id)
     {
         instance = null;
         assetID = id;
-        FileID = 0;
     }
 
-    /// <summary>
-    /// Creates a ContentRef pointing to the <see cref="EngineObject"/> at the specified id / using
-    /// the specified alias.
-    /// </summary>
-    /// <param name="id"></param>
-    public AssetRef(Guid id, ushort fileId)
-    {
-        instance = null;
-        assetID = id;
-        fileID = fileId;
-    }
-    /// <summary>
-    /// Creates a ContentRef pointing to the specified <see cref="EngineObject"/>.
-    /// </summary>
-    /// <param name="res">The Resource to reference.</param>
-    public AssetRef(T? res)
-    {
-        instance = res;
-        assetID = res != null ? res.AssetID : Guid.Empty;
-        fileID = res != null ? res.FileID : (ushort)0;
-    }
-
-    public object? GetInstance()
-    {
-        return Res;
-    }
+    public object? GetInstance() => Res;
 
     public void SetInstance(object? obj)
     {
@@ -176,141 +115,91 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     }
 
     /// <summary>
-    /// Loads the associated content as if it was accessed now.
-    /// You don't usually need to call this method. It is invoked implicitly by trying to
-    /// access the <see cref="AssetRef{T}"/>.
+    /// Block until the asset is loaded, prioritizing it ahead of background streaming.
+    /// Use this when an immediate, non-null value is required (e.g. editor inspectors, or a
+    /// system that cannot tolerate a transient null from <see cref="Res"/>). When async loading
+    /// is disabled this is equivalent to a normal synchronous resolve.
     /// </summary>
     public void EnsureLoaded()
     {
-        if (instance == null || instance.IsDestroyed)
-            RetrieveInstance();
-    }
-    /// <summary>
-    /// Discards the resolved content reference cache to allow garbage-collecting the Resource
-    /// without losing its reference. Accessing it will result in reloading the Resource.
-    /// </summary>
-    public void Detach()
-    {
-        instance = null;
-    }
+        if (instance.IsValid())
+            return;
 
-    private void RetrieveInstance()
-    {
-        if (assetID != Guid.Empty)
-            instance = (T)Application.AssetProvider.LoadAsset<T>(assetID, fileID);
-        else if (instance != null && instance.AssetID != Guid.Empty)
-            instance = (T)Application.AssetProvider.LoadAsset<T>(instance.AssetID, instance.FileID);
-        else
-            instance = null;
-    }
-
-    public override string ToString()
-    {
-        Type resType = typeof(T);
-
-        char stateChar;
-        if (IsRuntimeResource)
-            stateChar = 'R';
-        else if (IsExplicitNull)
-            stateChar = 'N';
-        else if (IsLoaded)
-            stateChar = 'L';
-        else
-            stateChar = '_';
-
-        return $"[{stateChar}] {resType.Name}";
-    }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is AssetRef<T> @ref)
-            return this == @ref;
-        else
-            return base.Equals(obj);
-    }
-
-    public override int GetHashCode()
-    {
-        if (assetID != Guid.Empty) return assetID.GetHashCode() + fileID.GetHashCode();
-        else if (instance != null) return instance.GetHashCode();
-        else return 0;
-    }
-
-    public bool Equals(AssetRef<T> other)
-    {
-        return this == other;
-    }
-
-    public static implicit operator AssetRef<T>(T res)
-    {
-        return new AssetRef<T>(res);
-    }
-    public static explicit operator T(AssetRef<T> res)
-    {
-        return res.Res;
-    }
-
-    /// <summary>
-    /// Compares two AssetRefs for equality.
-    /// </summary>
-    /// <param name="first"></param>
-    /// <param name="second"></param>
-    /// <remarks>
-    /// This is a two-step comparison. First, their actual Resources references are compared.
-    /// If they're both not null and equal, true is returned. Otherwise, their AssetID's are compared for equality
-    /// </remarks>
-    public static bool operator ==(AssetRef<T> first, AssetRef<T> second)
-    {
-        // Old check, didn't work for XY == null when XY was a Resource created at runtime
-        //if (first.instance != null && second.instance != null)
-        //    return first.instance == second.instance;
-        //else
-        //    return first.assetID == second.assetID;
-
-        // Completely identical
-        if (first.instance == second.instance && first.assetID == second.assetID)
-            return true;
-        // Same instances
-        else if (first.instance != null && second.instance != null)
-            return first.instance == second.instance;
-        // Null checks
-        else if (first.IsExplicitNull) return second.IsExplicitNull;
-        else if (second.IsExplicitNull) return first.IsExplicitNull;
-        // Path comparison
-        else
+        if (assetID == Guid.Empty)
         {
-            Guid? firstPath = first.instance != null ? first.instance.AssetID : first.assetID;
-            Guid? secondPath = second.instance != null ? second.instance.AssetID : second.assetID;
-            return firstPath == secondPath && first.fileID == second.fileID;
+            instance = null;
+            return;
         }
-    }
-    /// <summary>
-    /// Compares two AssetRefs for inequality.
-    /// </summary>
-    /// <param name="first"></param>
-    /// <param name="second"></param>
-    public static bool operator !=(AssetRef<T> first, AssetRef<T> second)
-    {
-        return !(first == second);
+
+        instance = AssetLoadingConfig.AsyncEnabled
+            ? AssetLoader.LoadBlocking(assetID) as T
+            : AssetDatabase.Get(assetID) as T;
     }
 
+    /// <summary>Clear the cached instance. Next access will re-resolve from the database.</summary>
+    public void Detach() => instance = null;
 
-    public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
+    // ================================================================
+    //  Serialization stores AssetID + inline instance for runtime resources
+    // ================================================================
+
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        compoundTag.Add("AssetID", new EchoObject(assetID.ToString()));
-        if (assetID != Guid.Empty)
-            ctx.AddDependency(assetID);
-        if (fileID != 0)
-            compoundTag.Add("FileID", new EchoObject(fileID));
-        if (IsRuntimeResource)
-            compoundTag.Add("Instance", Serializer.Serialize(typeof(T), instance, ctx));
+        Guid id = AssetID; // Uses live instance ID when available
+
+        compound.Add("AssetID", new EchoObject(id.ToString()));
+
+        if (id != Guid.Empty && ctx is DependencySerializationContext tracker)
+            tracker.Dependencies.Add(id);
+
+        // Only serialize the instance inline if it's a runtime resource (no asset ID)
+        if (id == Guid.Empty && instance != null)
+            compound.Add("Instance", Echo.Serializer.Serialize(typeof(T), instance, ctx));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        assetID = Guid.Parse(value["AssetID"].StringValue);
-        fileID = value.TryGet("FileID", out EchoObject fileTag) ? fileTag.UShortValue : (ushort)0;
-        if (assetID == Guid.Empty && value.TryGet("Instance", out EchoObject tag))
-            instance = Serializer.Deserialize<T?>(tag, ctx);
+        if (value.TryGet("AssetID", out var idTag))
+            assetID = Guid.Parse(idTag.StringValue);
+        else
+            assetID = Guid.Empty;
+
+        if (assetID != Guid.Empty && ctx is DependencySerializationContext tracker)
+        {
+            tracker.Dependencies.Add(assetID);
+        }
+
+        // If no asset ID, try to deserialize an inline instance
+        if (assetID == Guid.Empty && value.TryGet("Instance", out EchoObject instTag))
+            instance = Echo.Serializer.Deserialize<T?>(instTag, ctx);
+        else
+            instance = null; // Will be resolved lazily via Res property
+    }
+
+    // ================================================================
+    //  Operators
+    // ================================================================
+
+    public static implicit operator AssetRef<T>(T? res) => new(res);
+
+    public override bool Equals(object? obj) => obj is AssetRef<T> other && this == other;
+
+    public override int GetHashCode() => AssetID != Guid.Empty ? AssetID.GetHashCode() : (instance?.GetHashCode() ?? 0);
+
+    public static bool operator ==(AssetRef<T> a, AssetRef<T> b)
+    {
+        if (a.instance != null && b.instance != null)
+            return a.instance == b.instance;
+        if (a.IsExplicitNull && b.IsExplicitNull)
+            return true;
+        return a.AssetID == b.AssetID && a.AssetID != Guid.Empty;
+    }
+
+    public static bool operator !=(AssetRef<T> a, AssetRef<T> b) => !(a == b);
+
+    public override string ToString()
+    {
+        char state = IsRuntimeResource ? 'R' : IsExplicitNull ? 'N' : instance.IsValid() ? 'L' : '_';
+        return $"[{state}] {typeof(T).Name}";
     }
 }

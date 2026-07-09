@@ -1,0 +1,37 @@
+using System;
+
+using Prowl.Runtime;
+
+public class {[className]} : MonoBehaviour
+{
+    public float MaxHealth = 100f;
+
+    private float _current;
+
+    public float Current => _current;
+    public float Normalized => MaxHealth > 0 ? _current / MaxHealth : 0f;
+    public bool IsDead => _current <= 0f;
+
+    public event Action<float>? HealthChanged;
+    public event Action? Died;
+
+    public override void OnEnable()
+    {
+        _current = MaxHealth;
+    }
+
+    public void Damage(float amount)
+    {
+        if (IsDead || amount <= 0f) return;
+        _current = MathF.Max(0f, _current - amount);
+        HealthChanged?.Invoke(_current);
+        if (IsDead) Died?.Invoke();
+    }
+
+    public void Heal(float amount)
+    {
+        if (IsDead || amount <= 0f) return;
+        _current = MathF.Min(MaxHealth, _current + amount);
+        HealthChanged?.Invoke(_current);
+    }
+}

@@ -3,16 +3,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices.Marshalling;
+using System.Runtime.CompilerServices;
 
-using Prowl.Runtime.Cloning;
-using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
-
-using SoftCircuits.Collections;
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -20,13 +18,12 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-[CloneBehavior(CloneBehavior.Reference)]
-public class GameObject : EngineObject, ISerializable, ICloneExplicit
+public class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 
-    internal List<MonoBehaviour> _components = new();
-    private MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
+    internal List<MonoBehaviour> _components = [];
+    private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
@@ -34,60 +31,62 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
-    [SerializeField]
-    // DONT RENAME, GameObjectEditor finds this field by name "prefabLink" Doesn't use NameOf since its private
-    private PrefabLink prefabLink = null;
 
-    // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
+    // We don't serialize parent, since if we want to serialize X object who is a child to Y object, we don't want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
     private GameObject? _parent;
 
     [SerializeField]
-    // DONT RENAME, GameObjectEditor finds this field by name "_transform" Doesn't use NameOf since its private
     private Transform _transform = new();
 
     [SerializeIgnore]
     private WeakReference<Scene> _scene;
+
+    // Prefab instance data (inert when _prefabAssetId == Guid.Empty)
+    private Guid _prefabAssetId = Guid.Empty;
+    private List<PropertyOverride>? _prefabOverrides;
+    private int _prefabComponentCount = -1; // Number of components in prefab source (-1 = not prefab)
+    private int _prefabChildCount = -1;     // Number of children in prefab source (-1 = not prefab)
 
     #endregion
 
     #region Public Fields/Properties
 
     /// <summary> The Tag Index of this GameObject </summary>
-    public int tagIndex;
+    public int TagIndex;
 
     /// <summary> The Layer Index of this GameObject </summary>
-    public int layerIndex;
+    public int LayerIndex;
 
     /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
-    public HideFlags hideFlags = HideFlags.None;
+    [HideInInspector] public HideFlags HideFlags = HideFlags.None;
 
     /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
-    public bool enabled
+    public bool Enabled
     {
         get => _enabled;
         set { if (value != _enabled) { SetEnabled(value); } }
     }
 
-    /// <summary> Gets whether this gameobejct is enabled in the hierarchy, so if its parent is disabled this will return false </summary>
-    public bool enabledInHierarchy => _enabledInHierarchy;
+    /// <summary> Gets whether this gameobject is enabled in the hierarchy, so if its parent is disabled this will return false </summary>
+    public bool EnabledInHierarchy => _enabledInHierarchy;
 
     /// <summary> The Tag of this GameObject </summary>
-    public string tag
+    public string Tag
     {
-        get => TagLayerManager.GetTag(tagIndex);
-        set => tagIndex = TagLayerManager.GetTagIndex(value);
+        get => TagLayerManager.GetTag(TagIndex);
+        set => TagIndex = TagLayerManager.GetTagIndex(value);
     }
 
     /// <summary> The Layer of this GameObject </summary>
-    public string layer
+    public string Layer
     {
-        get => TagLayerManager.GetLayer(layerIndex);
-        set => layerIndex = TagLayerManager.GetLayerIndex(value);
+        get => TagLayerManager.GetLayer(LayerIndex);
+        set => LayerIndex = TagLayerManager.GetLayerIndex(value);
     }
 
     /// <summary> The Static flag of this GameObject, Changing this may not behave as expected! </summary>
-    public bool isStatic
+    public bool IsStatic
     {
         get => _static;
         set => _static = value;
@@ -96,49 +95,75 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <summary> The Identifier of this GameObject </summary>
     public Guid Identifier => _identifier;
 
+    /// <summary>Set the identifier. Used by Scene to restore stable identities after deserialization.</summary>
+    internal void SetIdentifier(Guid id) => _identifier = id;
+
     /// <summary> The Parent of this GameObject, Can be null </summary>
-    public GameObject? parent => _parent;
+    public GameObject? Parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
-    public List<GameObject> children = [];
+    public List<GameObject> Children = [];
 
-    public int childCount => children.Count;
+    public int ChildCount => Children.Count;
 
-    /// <summary>
-    /// The <see cref="PrefabLink"/> that connects this object to a <see cref="Prefab"/>.
-    /// </summary>
-    public PrefabLink PrefabLink
-    {
-        get => prefabLink;
-        internal set => prefabLink = value;
-    }
 
     /// <summary>
-    /// The <see cref="PrefabLink"/> that connects this object or one or its parent GameObjects to a <see cref="Prefab"/>.
-    /// </summary>
-    /// <remarks>
-    /// This does not necessarily mean that this GameObject will be affected by the PrefabLink, since it might not be part of
-    /// the linked Prefab. It simply indicates the returned PrefabLink's potential to adjust this GameObject when being applied.
-    /// </remarks>
-    public PrefabLink AffectedByPrefabLink
-    {
-        get
-        {
-            if (prefabLink != null) return prefabLink;
-            else if (parent != null) return parent.AffectedByPrefabLink;
-            else return null;
-        }
-    }
-
-    /// <summary>
-    /// The GameObjects parent <see cref="Prowl.Runtime.Scene"/>. Each GameObject can belong to
-    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Scene.Add(GameObject)"/> and
-    /// <see cref="Prowl.Runtime.Scene.Remove(GameObject)"/> methods.
+    /// The GameObjects parent <see cref="Prowl.Runtime.Resources.Scene"/>. Each GameObject can belong to
+    /// exactly one Scene, or no Scene at all. To add or remove GameObjects to / from a Scene, use the <see cref="Prowl.Runtime.Resources.Scene.Add(GameObject)"/> and
+    /// <see cref="Prowl.Runtime.Resources.Scene.Remove(GameObject)"/> methods.
     /// </summary>
     public Scene? Scene
     {
         get => _scene != null && _scene.TryGetTarget(out Scene? scene) ? scene : null;
         internal set => _scene = new(value);
+    }
+
+    /// <summary>Is this GameObject a prefab instance?</summary>
+    public bool IsPrefabInstance => _prefabAssetId != Guid.Empty;
+
+    /// <summary>The prefab asset GUID, or Guid.Empty if not a prefab instance.</summary>
+    public Guid PrefabAssetId
+    {
+        get => _prefabAssetId;
+        set => _prefabAssetId = value;
+    }
+
+    /// <summary>Per-instance property overrides for this prefab instance.</summary>
+    public List<PropertyOverride> PrefabOverrides
+    {
+        get => _prefabOverrides ??= new();
+        set => _prefabOverrides = value;
+    }
+
+    /// <summary>Number of components in the prefab source. Used for structure enforcement.</summary>
+    public int PrefabComponentCount
+    {
+        get => _prefabComponentCount;
+        set => _prefabComponentCount = value;
+    }
+
+    /// <summary>Number of children in the prefab source. Used for structure enforcement.</summary>
+    public int PrefabChildCount
+    {
+        get => _prefabChildCount;
+        set => _prefabChildCount = value;
+    }
+
+    /// <summary>Clear all prefab tracking data on this GameObject.</summary>
+    public void ClearPrefabData()
+    {
+        _prefabAssetId = Guid.Empty;
+        _prefabOverrides = null;
+        _prefabComponentCount = -1;
+        _prefabChildCount = -1;
+    }
+
+    /// <summary>Clear all prefab data on this GameObject and all descendants.</summary>
+    public void ClearPrefabDataRecursive()
+    {
+        ClearPrefabData();
+        foreach (var child in Children)
+            child.ClearPrefabDataRecursive();
     }
 
     #endregion
@@ -147,10 +172,25 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         get
         {
-            _transform.gameObject = this; // ensure game object is this
+            _transform.GameObject = this; // ensure game object is this
             return _transform;
         }
     }
+
+    /// <summary>
+    /// The <see cref="RectTransform"/> component on this GameObject, or null if it has none.
+    /// </summary>
+    public RectTransform? RectTransform
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => GetComponent<RectTransform>();
+    }
+
+    /// <summary>
+    /// Ensures this GameObject has a <see cref="RectTransform"/> component, adding one if missing.
+    /// </summary>
+    public RectTransform EnsureRectTransform()
+        => GetComponent<RectTransform>() ?? AddComponent<RectTransform>();
 
     /// <summary>
     /// Checks if this GameObject is a child or the same as the given parent transform.
@@ -160,8 +200,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>True if this GameObject is a child or the same as the given parent, false otherwise.</returns>
     public static bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
     {
+        if (inParent.IsNotValid()) return false;
         GameObject child = transform;
-        while (child != null)
+        while (child.IsValid())
         {
             if (child == inParent)
                 return true;
@@ -178,10 +219,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <returns>True if this GameObject is a child of the given parent, false otherwise.</returns>
     public bool IsChildOf(GameObject parent)
     {
-        if (InstanceID == parent.InstanceID) return false; // Not a child their the same object
+        if (parent.IsNotValid()) return false;
 
-        GameObject child = this;
-        while (child != null)
+        GameObject child = _parent;
+        while (child.IsValid())
         {
             if (child == parent)
                 return true;
@@ -205,7 +246,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (IsChildOrSameTransform(NewParent, this))
             return false;
 
-        Scene newScene = (NewParent != null) ? NewParent.Scene : Scene;
+        // A UI subtree moving between canvases must rebuild both: the old canvas (this element left
+        // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
+        GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
+
+        Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
         if (newScene != Scene)
         {
@@ -213,90 +258,91 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             newScene?.Add(this);
         }
 
-        // Save the old position in worldspace
-        Vector3 worldPosition = new Vector3();
-        Quaternion worldRotation = new Quaternion();
-        Matrix4x4 worldScale = new Matrix4x4();
+        // Save world-space transform before reparenting
+        Float3 worldPosition = new();
+        Quaternion worldRotation = new();
+        Float3 worldLossyScale = new();
 
         if (worldPositionStays)
         {
-            worldPosition = Transform.position;
-            worldRotation = Transform.rotation;
-            worldScale = Transform.GetWorldRotationAndScale();
+            worldPosition = Transform.Position;
+            worldRotation = Transform.Rotation;
+            worldLossyScale = Transform.LossyScale;
         }
 
         if (NewParent != _parent)
         {
             // If it already has an father, remove this from fathers children
-            if (_parent != null)
-                _parent.children.Remove(this);
+            if (_parent.IsValid())
+                _parent.Children.Remove(this);
 
-            if (NewParent != null)
-                NewParent.children.Add(this);
+            if (NewParent.IsValid())
+                NewParent.Children.Add(this);
 
             _parent = NewParent;
         }
 
         if (worldPositionStays)
         {
-            if (_parent != null)
+            if (_parent.IsValid())
             {
-                Transform.localPosition = _parent.Transform.InverseTransformPoint(worldPosition);
-                Transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.rotation) * worldRotation);
+                Transform.LocalPosition = _parent.Transform.InverseTransformPoint(worldPosition);
+                Transform.LocalRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.Rotation) * worldRotation);
+
+                // Preserve world scale: localScale = worldScale / parentWorldScale (component-wise)
+                Float3 parentScale = _parent.Transform.LossyScale;
+                Transform.LocalScale = new Float3(
+                    Maths.Abs(parentScale.X) > float.Epsilon ? worldLossyScale.X / parentScale.X : worldLossyScale.X,
+                    Maths.Abs(parentScale.Y) > float.Epsilon ? worldLossyScale.Y / parentScale.Y : worldLossyScale.Y,
+                    Maths.Abs(parentScale.Z) > float.Epsilon ? worldLossyScale.Z / parentScale.Z : worldLossyScale.Z);
             }
             else
             {
-                Transform.localPosition = worldPosition;
-                Transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
+                Transform.LocalPosition = worldPosition;
+                Transform.LocalRotation = Quaternion.NormalizeSafe(worldRotation);
+                // No parent local scale = world scale
+                Transform.LocalScale = worldLossyScale;
             }
-
-            Transform.localScale = Vector3.one;
-            Matrix4x4 inverseRS = Transform.GetWorldRotationAndScale().Invert() * worldScale;
-            Transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
         }
 
+        // When worldPositionStays is true the local setters above already bumped the version; when
+        // false, the local values are unchanged but the new parent changes the world transform, so
+        // signal the change explicitly (world-space caches keyed on Version would otherwise go stale).
+        if (!worldPositionStays)
+            Transform.MarkChanged();
+
         HierarchyStateChanged();
+
+        // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
+        // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
+        GameCanvas? uiNewCanvas = GetComponentInParent<GameCanvas>();
+        uiOldCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        if (!ReferenceEquals(uiNewCanvas, uiOldCanvas))
+            uiNewCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
 
         return true;
     }
 
     #region Constructors
 
-    /// <summary>Creates a new gameobject with tbe name 'New GameObject'.</summary>
+    /// <summary>Creates a new gameobject with the name 'New GameObject'.</summary>
     public GameObject() : base("New GameObject") { }
 
     /// <summary>Creates a new gameobject.</summary>
     /// <param name="name">The name of the gameobject.</param>
     public GameObject(string name = "New GameObject") : base(name) { }
 
-    /// <summary>
-    /// Creates a GameObject based on a specific <see cref="Prowl.Runtime.Prefab"/>.
-    /// </summary>
-    /// <param name="prefab">The Prefab that will be applied to this GameObject.</param>
-    /// <seealso cref="Prowl.Runtime.Prefab"/>
-    public GameObject(AssetRef<Prefab> prefab)
-    {
-        if (!prefab.IsAvailable) return;
-        if (Application.IsEditor == false)
-        {
-            prefab.Res.CopyTo(this);
-        }
-        else
-        {
-            PrefabUtility.LinkToPrefab(this, prefab);
-            PrefabLink.Apply();
-        }
-    }
 
     #endregion
 
     /// <summary> Recursive function to check if this GameObject is a parent of another GameObject </summary>
     public bool IsParentOf(GameObject go)
     {
-        if (go.parent?.InstanceID == InstanceID)
+        if (go.IsNotValid()) return false;
+        if (go.Parent?.InstanceID == InstanceID)
             return true;
 
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
             if (child.IsParentOf(go))
                 return true;
 
@@ -310,29 +356,29 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="otherTag">The tag to compare against.</param>
     /// <returns>True if the tags match, false otherwise.</returns>
-    public bool CompareTag(string otherTag) => TagLayerManager.GetTag(tagIndex).Equals(otherTag, StringComparison.OrdinalIgnoreCase);
+    public bool CompareTag(string otherTag) => TagLayerManager.GetTag(TagIndex).Equals(otherTag, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Finds a GameObject by name.
+    /// Finds a GameObject by name in the same scene.
     /// </summary>
     /// <param name="otherName">The name of the GameObject to find.</param>
     /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public static GameObject Find(string otherName, bool ignoreCase = false) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    public GameObject Find(string otherName, bool ignoreCase = false) => Scene?.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
     /// <summary>
-    /// Finds a GameObject with the specified tag.
+    /// Finds a GameObject with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public static GameObject FindGameObjectWithTag(string otherTag) => SceneManager.Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
+    public GameObject FindGameObjectWithTag(string otherTag) => Scene?.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
 
     /// <summary>
-    /// Finds all GameObjects with the specified tag.
+    /// Finds all GameObjects with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public static GameObject[] FindGameObjectsWithTag(string otherTag) => SceneManager.Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
+    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene?.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray() ?? [];
 
 
     /// <summary>
@@ -341,9 +387,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     public IEnumerable<GameObject> GetChildrenDeep()
     {
-        if (children == null) return Enumerable.Empty<GameObject>();
+        if (Children == null) return [];
 
-        int startCapacity = Math.Max(children.Count * 2, 8);
+        int startCapacity = Maths.Max(Children.Count * 2, 8);
         List<GameObject> result = new(startCapacity);
         GetChildrenDeep(result);
         return result;
@@ -355,10 +401,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     public void GetChildrenDeep(List<GameObject> resultList)
     {
-        if (children == null) return;
-        resultList.AddRange(children);
-        for (int i = 0; i < children.Count; i++)
-            children[i].GetChildrenDeep(resultList);
+        if (Children == null) return;
+        resultList.AddRange(Children);
+        for (int i = 0; i < Children.Count; i++)
+            Children[i].GetChildrenDeep(resultList);
     }
 
     public GameObject GetChildAtIndexPath(IEnumerable<int> indexPath)
@@ -367,9 +413,9 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         foreach (int i in indexPath)
         {
             if (i < 0) return null;
-            if (curObj.children == null) return null;
-            if (i >= curObj.children.Count) return null;
-            curObj = curObj.children[i];
+            if (curObj.Children == null) return null;
+            if (i >= curObj.Children.Count) return null;
+            curObj = curObj.Children[i];
         }
         return curObj;
     }
@@ -383,10 +429,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public List<int> GetIndexPathOfChild(GameObject child)
     {
         List<int> path = [];
-        while (child.parent != null && child != this)
+        while (child.Parent.IsValid() && child != this)
         {
-            path.Add(child.parent.children.IndexOf(child));
-            child = child.parent;
+            path.Add(child.Parent.Children.IndexOf(child));
+            child = child.Parent;
         }
         path.Reverse();
         return path;
@@ -396,19 +442,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Finds child a GameObject by its identifier.
     /// </summary>
     /// <param name="identifier"></param>
+    /// <param name="deep"></param>
     public GameObject FindChildByIdentifier(Guid identifier, bool deep = true)
     {
         if (_identifier == identifier)
             return this;
 
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
         {
             if (child.Identifier == identifier)
                 return child;
             if (deep)
             {
                 GameObject found = child.FindChildByIdentifier(identifier);
-                if (found != null)
+                if (found.IsValid())
                     return found;
             }
         }
@@ -419,16 +466,16 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Gets the index of this GameObject in its parent's children list.
     /// </summary>
     /// <returns>The index of this GameObject in its parent's children list, or null if it has no parent.</returns>
-    /// <exception cref="Exception">Thrown if the GameObject is not found in its parent's children list.</exception>q
+    /// <exception cref="Exception">Thrown if the GameObject is not found in its parent's children list.</exception>
     public int? GetSiblingIndex()
     {
-        if (parent == null) return null;
+        if (Parent.IsNotValid()) return null;
 
-        for(int i=0; i<parent.children.Count; i++)
-            if (parent.children[i] == this)
+        for (int i = 0; i < Parent.Children.Count; i++)
+            if (Parent.Children[i] == this)
                 return i;
 
-        throw new Exception($"This gameobject appears to be in Limbo, This should never happen!, The gameobject believes its a child of {parent.Name} but parent doesnt have it as a child!");
+        throw new Exception($"This gameobject appears to be in Limbo, This should never happen!, The gameobject believes its a child of {Parent.Name} but parent doesn't have it as a child!");
     }
 
     /// <summary>
@@ -437,34 +484,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <param name="index">The new index of this GameObject.</param>
     public void SetSiblingIndex(int index)
     {
-        if (parent == null) return;
+        if (Parent.IsNotValid()) return;
 
         // Remove this object from current position
-        parent.children.Remove(this);
+        Parent.Children.Remove(this);
 
         // Ensure index is within bounds
-        index = Math.Max(0, Math.Min(index, parent.children.Count));
+        index = Maths.Max(0, Maths.Min(index, Parent.Children.Count));
 
         // Insert at new position
-        parent.children.Insert(index, this);
-    }
+        Parent.Children.Insert(index, this);
 
-    /// <summary>
-    /// Performs pre-update operations on the GameObject's components.
-    /// </summary>
-    internal void PreUpdate()
-    {
-        foreach (var component in _components)
-        {
-            if (!component.HasAwoken)
-                component.Do(component.InternalAwake);
-
-            if (!component.HasStarted)
-                if (component.EnabledInHierarchy)
-                {
-                    component.Do(component.InternalStart);
-                }
-        }
+        // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
+        // reorder is reflected instead of drawing in the stale order.
+        GetComponentInParent<GameCanvas>()?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>
@@ -479,7 +512,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="type">The type of component to add.</param>
     /// <returns>The newly added MonoBehaviour component.</returns>
-    public MonoBehaviour AddComponent(Type type)
+    public MonoBehaviour AddComponent([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] Type type)
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
 
@@ -492,27 +525,24 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                     continue;
 
                 // If there is already a component on the object
-                if (GetComponent(requiredComponentType) != null)
+                if (GetComponent(requiredComponentType).IsValid())
                     continue;
 
-                // Recursive call to attempt to add the new component
+                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
                 AddComponent(requiredComponentType);
+#pragma warning restore IL2072
             }
         }
 
         var newComponent = Activator.CreateInstance(type) as MonoBehaviour;
-        if (newComponent == null) return null;
+        if (newComponent.IsNotValid()) return null;
 
         newComponent.AttachToGameObject(this);
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
 
-        if (enabledInHierarchy)
-        {
-            newComponent.Do(newComponent.InternalAwake);
-        }
-
-        SortComponents();
+        NotifyComponentAddedToScene(newComponent);
 
         return newComponent;
     }
@@ -535,23 +565,38 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                     continue;
 
                 // If there is already a component on the object
-                if (GetComponent(requiredComponentType) != null)
+                if (GetComponent(requiredComponentType).IsValid())
                     continue;
 
-                // Recursive call to attempt to add the new component
+                // Types referenced by [RequireComponent(typeof(...))] are preserved by the typeof() expression.
+#pragma warning disable IL2072
                 AddComponent(requiredComponentType);
+#pragma warning restore IL2072
             }
         }
 
         comp.AttachToGameObject(this);
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
-        if (enabledInHierarchy)
-        {
-            comp.Do(comp.InternalAwake);
-        }
 
-        SortComponents();
+        NotifyComponentAddedToScene(comp);
+    }
+
+    /// <summary>
+    /// When a component is added to a GameObject that already lives in a scene, it is entering that
+    /// scene now: fire OnAddedToScene (mirroring Scene.AddObject), then OnEnable if the scene is
+    /// active and the component is enabled.
+    /// </summary>
+    private void NotifyComponentAddedToScene(MonoBehaviour comp)
+    {
+        Scene? scene = Scene;
+        if (!scene.IsValid()) return;
+
+        try { comp.OnAddedToScene(); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{comp.GetType().Name}] OnAddedToScene() threw: {ex.Message}\n{ex.StackTrace}"); }
+
+        if (scene.IsActive && comp.EnabledInHierarchy)
+            comp.InternalOnEnable();
     }
 
     /// <summary>
@@ -560,16 +605,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <typeparam name="T">The type of components to remove.</typeparam>
     public void RemoveAll<T>() where T : MonoBehaviour
     {
-        IReadOnlyCollection<MonoBehaviour> components;
-        if (_componentCache.TryGetValue(typeof(T), out components))
+        if (_componentCache.TryGetValue(typeof(T), out IReadOnlyCollection<MonoBehaviour>? components))
         {
-            foreach (MonoBehaviour c in components)
-                if (c.EnabledInHierarchy)
-                    c.Do(c.OnDisable);
-            foreach (MonoBehaviour c in components)
+            // Create a copy to avoid potential collection modification issues
+            var componentList = components.ToList();
+
+            // OnDisable is only called if OnEnable was previously called
+            foreach (MonoBehaviour c in componentList)
+                if (c.HasBeenEnabled && c.EnabledInHierarchy)
+                    c.InternalOnDisable();
+
+            foreach (MonoBehaviour c in componentList)
             {
-                if (c.HasStarted) // OnDestroy is only called if the component has previously been active
-                    c.Do(c.OnDestroy);
+                if (c.HasBeenEnabled) // OnDispose is only called if OnEnable was previously called
+                    c.Dispose();
 
                 _components.Remove(c);
             }
@@ -588,10 +637,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (component.CanDestroy() == false) return;
 
         _components.Remove(component);
-        _componentCache.Remove(typeof(T), component);
+        _componentCache.Remove(component.GetType(), component);
 
-        if (component.EnabledInHierarchy) component.Do(component.OnDisable);
-        if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
+        // OnDisable and OnDispose are only called if OnEnable was previously called
+        if (component.HasBeenEnabled)
+        {
+            if (component.EnabledInHierarchy) component.InternalOnDisable();
+            component.Dispose();
+        }
     }
 
     /// <summary>
@@ -602,11 +655,17 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     {
         if (component.CanDestroy() == false) return;
 
-        _components.Remove(component);
-        _componentCache.Remove(component.GetType(), component);
+        if (_components.Remove(component))
+        {
+            _componentCache.Remove(component.GetType(), component);
 
-        if (component.EnabledInHierarchy) component.Do(component.OnDisable);
-        if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
+            // OnDisable and OnDispose are only called if OnEnable was previously called
+            if (component.HasBeenEnabled)
+            {
+                if (component.EnabledInHierarchy) component.InternalOnDisable();
+                component.Dispose();
+            }
+        }
     }
 
     /// <summary>
@@ -616,7 +675,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public void RemoveComponent(Guid component)
     {
         MonoBehaviour? comp = GetComponentByIdentifier(component);
-        if (comp != null)
+        if (comp.IsValid())
             RemoveComponent(comp);
     }
 
@@ -635,10 +694,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public MonoBehaviour? GetComponent(Type type)
     {
         if (type == null) return null;
-        if (_componentCache.TryGetValue(type, out var components))
-            return components.First();
+        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+            return components.FirstOrDefault();
         else
-            foreach (var comp in _components)
+            foreach (MonoBehaviour comp in _components)
                 if (comp.GetType().IsAssignableTo(type))
                     return comp;
         return null;
@@ -670,7 +729,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// <typeparam name="T">The type of component to get.</typeparam>
     /// <param name="component">The output parameter to store the found component.</param>
     /// <returns>True if a component of type T was found, false otherwise.</returns>
-    public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
+    public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()).IsValid();
 
     /// <summary>
     /// Gets all components of type T attached to the GameObject.
@@ -694,11 +753,11 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         }
         else
         {
-            if (_componentCache.TryGetValue(type, out var components))
-                foreach (var comp in components)
+            if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+                foreach (MonoBehaviour comp in components)
                     yield return comp;
             else
-                foreach (var comp in _components)
+                foreach (MonoBehaviour comp in _components)
                     if (comp.GetType().IsAssignableTo(type))
                         yield return comp;
         }
@@ -725,20 +784,20 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf && enabledInHierarchy)
+        if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
             component = GetComponent(componentType);
-            if (component != null)
+            if (component.IsValid())
                 return component;
         }
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.parent) != null)
+        while ((parent = parent.Parent).IsValid())
         {
-            if (parent.enabledInHierarchy || includeInactive)
+            if (parent.EnabledInHierarchy || includeInactive)
             {
                 component = parent.GetComponent(componentType);
-                if (component != null)
+                if (component.IsValid())
                     return component;
             }
         }
@@ -764,14 +823,14 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
-        if (includeSelf && enabledInHierarchy)
+        if (includeSelf && (EnabledInHierarchy || includeInactive))
             foreach (MonoBehaviour component in GetComponents(type))
                 yield return component;
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.parent) != null)
+        while ((parent = parent.Parent).IsValid())
         {
-            if (parent.enabledInHierarchy || includeInactive)
+            if (parent.EnabledInHierarchy || includeInactive)
                 foreach (MonoBehaviour component in parent.GetComponents(type))
                     yield return component;
         }
@@ -798,38 +857,43 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf && enabledInHierarchy)
+        if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
             component = GetComponent(componentType);
-            if (component != null)
+            if (component.IsValid())
                 return component;
         }
         // Now check all children
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
         {
-            if (enabledInHierarchy || includeInactive)
-            {
-                component = child.GetComponent(componentType) ?? child.GetComponentInChildren(componentType);
-                if (component != null)
-                    return component;
-            }
+            // Skip inactive children unless includeInactive is true
+            if (!child.EnabledInHierarchy && !includeInactive)
+                continue;
+
+            component = child.GetComponentInChildren(componentType, true, includeInactive);
+            if (component.IsValid())
+                return component;
         }
         return null;
     }
 
-    public MonoBehaviour GetComponentInChildrenByIdentifier(Guid identifier, bool includeSelf = true)
+    public MonoBehaviour GetComponentInChildrenByIdentifier(Guid identifier, bool includeSelf = true, bool includeInactive = false)
     {
-        if (includeSelf)
+        if (includeSelf && (EnabledInHierarchy || includeInactive))
         {
             MonoBehaviour component = GetComponentByIdentifier(identifier);
-            if (component != null)
+            if (component.IsValid())
                 return component;
         }
 
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
         {
-            MonoBehaviour component = child.GetComponentByIdentifier(identifier);
-            if (component != null)
+            // Skip inactive children unless includeInactive is true
+            if (!child.EnabledInHierarchy && !includeInactive)
+                continue;
+
+            MonoBehaviour component = child.GetComponentInChildrenByIdentifier(identifier, true, includeInactive);
+            if (component.IsValid())
                 return component;
         }
         return null;
@@ -854,15 +918,18 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
-        if (includeSelf && enabledInHierarchy)
+        if (includeSelf && (EnabledInHierarchy || includeInactive))
             foreach (MonoBehaviour component in GetComponents(type))
                 yield return component;
         // Now check all children
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
         {
-            if (enabledInHierarchy || includeInactive)
-                foreach (MonoBehaviour component in child.GetComponentsInChildren(type, true, includeInactive))
-                    yield return component;
+            // Skip inactive children unless includeInactive is true
+            if (!child.EnabledInHierarchy && !includeInactive)
+                continue;
+
+            foreach (MonoBehaviour component in child.GetComponentsInChildren(type, true, includeInactive))
+                yield return component;
         }
     }
 
@@ -901,115 +968,41 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         return false;
     }
 
-    private void SortComponents()
-    {
-        _components.Sort((a, b) =>
-        {
-            int orderA = RuntimeUtils.GetExecutionOrder(a) ?? 0;
-            int orderB = RuntimeUtils.GetExecutionOrder(b) ?? 0;
-            return orderA.CompareTo(orderB);
-        });
-    }
-
-    private static GameObject Internal_Instantiate(GameObject obj)
-    {
-        if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
-        GameObject newObj = obj.Clone();
-        newObj.AssetID = Guid.Empty;
-        return newObj;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original)
-    {
-        var clone = Internal_Instantiate(original);
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original with the specified parent and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <param name="parent">The parent GameObject for the new instance.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original, GameObject? parent)
-    {
-        GameObject clone = Internal_Instantiate(original);
-        clone.SetParent(parent);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        clone.SetParent(parent);
-        SceneManager.Scene.Add(clone);
-        return clone;
-    }
-
-    /// <summary>
-    /// Instantiates a new GameObject from the original with the specified position, rotation, parent, and adds it to the scene.
-    /// </summary>
-    /// <param name="original">The original GameObject to clone.</param>
-    /// <param name="position">The position for the new instance.</param>
-    /// <param name="rotation">The rotation for the new instance.</param>
-    /// <param name="parent">The parent GameObject for the new instance.</param>
-    /// <returns>A new instance of the GameObject.</returns>
-    public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent)
-    {
-        GameObject clone = Internal_Instantiate(original);
-        clone.Transform.position = position;
-        clone.Transform.rotation = rotation;
-        clone.SetParent(parent, true);
-        return clone;
-    }
-
-    /// <inheritdoc cref="Instantiate(GameObject)"/>
-    public static GameObject Instantiate(AssetRef<Prefab> original, GameObject? parent, Vector3 position, Quaternion rotation)
-    {
-        if (!original.IsAvailable) return null;
-        GameObject clone = original.Res.Instantiate();
-        clone.Transform.position = position;
-        clone.Transform.rotation = rotation;
-        clone.SetParent(parent, true);
-        return clone;
-    }
-
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
     public override void OnDispose()
     {
-        for (int i = children.Count - 1; i >= 0; i--)
-            children[i].DestroyImmediate();
+        for (int i = Children.Count - 1; i >= 0; i--)
+            Children[i].Dispose();
 
         for (int i = _components.Count - 1; i >= 0; i--)
         {
-            MonoBehaviour component = _components.ElementAt(i);
-            if (component.IsDestroyed) continue;
-            if (component.EnabledInHierarchy) component.Do(component.OnDisable);
-            if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
-            component.DestroyImmediate();
+            MonoBehaviour component = _components[i];
+            if (component.IsDisposed) continue;
+
+            // Only call OnDisable/OnDispose if OnEnable was previously called
+            if (component.HasBeenEnabled)
+            {
+                // Only call OnDisable if the component is enabled in hierarchy AND the scene is active
+                // This prevents calling OnDisable twice when disposing after scene deactivation
+                Scene? scene = Scene;
+                if (component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
+                    component.InternalOnDisable();
+
+                component.Dispose();
+            }
         }
         _components.Clear();
 
-        if (_parent != null && !_parent.IsDestroyed)
+        // Sever every graph link so a disposed GameObject is a dead-end. Without this, anything
+        // still holding a reference to this GameObject (an editor panel, a render cache, a stray
+        // delegate) transitively keeps its components - and therefore their user-script types and
+        // the collectible AssemblyLoadContext - alive, which blocks script hot-reload.
+        _componentCache.Clear();
+        Children.Clear();
+
+        if (_parent.IsValid() && !_parent.IsDisposed)
             SetParent(null);
     }
 
@@ -1036,7 +1029,7 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 component.HierarchyStateChanged();
         }
 
-        foreach (GameObject child in children)
+        foreach (GameObject child in Children)
             child.HierarchyStateChanged();
     }
 
@@ -1044,44 +1037,97 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// Checks if the parent of this GameObject is enabled.
     /// </summary>
     /// <returns>True if the parent is enabled or if there is no parent, false otherwise.</returns>
-    private bool IsParentEnabled() => parent == null || parent.enabledInHierarchy;
+    private bool IsParentEnabled() => Parent.IsNotValid() || Parent.EnabledInHierarchy;
 
     /// <summary>
-    /// Calls the specified method on every MonoBehaviour in this GameObject and its children.
+    /// Prints the GameObject hierarchy including all components and children to Debug.Log.
+    /// Useful for debugging scene structure.
     /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void BroadcastMessage(string methodName, params object[] objs)
+    public void Print()
     {
-        foreach (MonoBehaviour component in GetComponents<MonoBehaviour>())
-            component.SendMessage(methodName, objs);
-
-        foreach (GameObject child in children)
-            child.BroadcastMessage(methodName, objs);
+        System.Text.StringBuilder sb = new();
+        sb.AppendLine("========================================");
+        sb.AppendLine($"GameObject Hierarchy: {Name}");
+        sb.AppendLine("========================================");
+        PrintRecursive(this, sb, "", true);
+        sb.AppendLine("========================================");
+        Debug.Log(sb.ToString());
     }
 
-    /// <summary>
-    /// Calls the specified method on every MonoBehaviour in this GameObject.
-    /// </summary>
-    /// <param name="methodName">The name of the method to call.</param>
-    /// <param name="objs">Optional parameters to pass to the method.</param>
-    public void SendMessage(string methodName, params object[] objs)
+    private void PrintRecursive(GameObject obj, System.Text.StringBuilder sb, string indent, bool isRoot)
     {
-        foreach (MonoBehaviour c in GetComponents<MonoBehaviour>())
+        // Print GameObject info
+        string enabledIndicator = obj.Enabled ? "" : " [DISABLED]";
+        string staticIndicator = obj.IsStatic ? " [STATIC]" : "";
+        sb.AppendLine($"{indent}{obj.Name}{enabledIndicator}{staticIndicator}");
+
+        // Print additional info
+        string detailIndent = indent + "  ";
+        if (!string.IsNullOrEmpty(obj.Tag) && obj.Tag != "Untagged")
+            sb.AppendLine($"{detailIndent}Tag: {obj.Tag}");
+        if (!string.IsNullOrEmpty(obj.Layer) && obj.Layer != "Default")
+            sb.AppendLine($"{detailIndent}Layer: {obj.Layer}");
+
+        // Print Transform info
+        Transform t = obj.Transform;
+        sb.AppendLine($"{detailIndent}Position: {FormatVector(t.LocalPosition)} (World: {FormatVector(t.Position)})");
+        sb.AppendLine($"{detailIndent}Rotation: {FormatVector(t.LocalEulerAngles)} (World: {FormatVector(t.EulerAngles)})");
+        sb.AppendLine($"{detailIndent}Scale: {FormatVector(t.LocalScale)} (Lossy: {FormatVector(t.LossyScale)})");
+
+        // Print Components
+        var components = obj.GetComponents<MonoBehaviour>().ToList();
+        if (components.Count > 0)
         {
-            MethodInfo method = c.GetType().GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-            method?.Invoke(c, objs);
+            sb.AppendLine($"{detailIndent}Components ({components.Count}):");
+            foreach (MonoBehaviour? comp in components)
+            {
+                string compEnabled = comp.Enabled ? "" : " [DISABLED]";
+                sb.AppendLine($"{detailIndent}  - {comp.GetType().Name}{compEnabled}");
+            }
         }
+
+        // Print Children
+        if (obj.Children.Count > 0)
+        {
+            sb.AppendLine($"{detailIndent}Children ({obj.Children.Count}):");
+            for (int i = 0; i < obj.Children.Count; i++)
+            {
+                bool isLast = i == obj.Children.Count - 1;
+                string childIndent = indent + (isRoot ? "  " : "  ");
+                string connector = isLast ? "└─ " : "├─ ";
+                string nextIndent = indent + (isRoot ? "  " : "  ") + (isLast ? "   " : "│  ");
+
+                sb.Append($"{childIndent}{connector}");
+                PrintRecursive(obj.Children[i], sb, nextIndent, false);
+            }
+        }
+    }
+
+
+    public override void OnValidate()
+    {
+        base.OnValidate();
+        var targets = GetComponentsInChildren<MonoBehaviour>();
+        foreach (var target in targets)
+        {
+            target.OnValidate();
+        }
+    }
+
+    private string FormatVector(Float3 v)
+    {
+        return $"({v.X:F2}, {v.Y:F2}, {v.Z:F2})";
     }
 
     /// <summary>
     /// Serializes the GameObject to a SerializedProperty.
     /// </summary>
+    /// <param name="compoundTag"></param>
     /// <param name="ctx">The serialization context.</param>
     /// <returns>A SerializedProperty containing the GameObject's data.</returns>
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
-        compoundTag.Add("Name", new EchoObject(Name));
+        SerializeHeader(compoundTag);
 
         compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
         compoundTag.Add("Static", new EchoObject((byte)(_static ? 1 : 0)));
@@ -1089,20 +1135,12 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         compoundTag.Add("Enabled", new EchoObject((byte)(_enabled ? 1 : 0)));
         compoundTag.Add("EnabledInHierarchy", new EchoObject((byte)(_enabledInHierarchy ? 1 : 0)));
 
-        compoundTag.Add("TagIndex", new EchoObject(tagIndex));
-        compoundTag.Add("LayerIndex", new EchoObject(layerIndex));
+        compoundTag.Add("TagIndex", new EchoObject(TagIndex));
+        compoundTag.Add("LayerIndex", new EchoObject(LayerIndex));
 
-        compoundTag.Add("HideFlags", new EchoObject((int)hideFlags));
+        compoundTag.Add("HideFlags", new EchoObject((int)HideFlags));
 
-        compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
-        compoundTag.Add("PrefabLink", Serializer.Serialize(prefabLink, ctx));
-
-        if (AssetID != Guid.Empty)
-        {
-            compoundTag.Add("AssetID", new EchoObject(AssetID.ToString()));
-            if (FileID != 0)
-                compoundTag.Add("FileID", new EchoObject(FileID));
-        }
+        compoundTag.Add("Transform", Serializer.Serialize(typeof(object), _transform, ctx));
 
         EchoObject components = EchoObject.NewList();
         foreach (MonoBehaviour comp in _components)
@@ -1110,9 +1148,21 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
         compoundTag.Add("Components", components);
 
         EchoObject children = EchoObject.NewList();
-        foreach (GameObject child in this.children)
+        foreach (GameObject child in Children)
             children.ListAdd(Serializer.Serialize(typeof(GameObject), child, ctx));
         compoundTag.Add("Children", children);
+
+        // Prefab data (only written for prefab instances)
+        if (_prefabAssetId != Guid.Empty)
+        {
+            compoundTag.Add("PrefabAssetId", new EchoObject(_prefabAssetId.ToString()));
+            if (_prefabOverrides is { Count: > 0 })
+                compoundTag.Add("PrefabOverrides", Serializer.Serialize(typeof(object), _prefabOverrides, ctx));
+            if (_prefabComponentCount >= 0)
+                compoundTag.Add("PrefabComponentCount", new EchoObject(_prefabComponentCount));
+            if (_prefabChildCount >= 0)
+                compoundTag.Add("PrefabChildCount", new EchoObject(_prefabChildCount));
+        }
     }
 
     /// <summary>
@@ -1120,41 +1170,33 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="value">The SerializedProperty containing the GameObject's data.</param>
     /// <param name="ctx">The serialization context.</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Deserialization needs to map a serialized $type string back to a concrete component type. User game types must be preserved by the consuming application's trim configuration.")]
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Name = value["Name"].StringValue;
-        if (Guid.TryParse(value["Identifier"]?.StringValue ?? "", out var identifier))
-            _identifier = identifier;
+        DeserializeHeader(value);
+
+        // Always generate fresh identifier Scene restores them after deserialization
+        _identifier = Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"]?.ByteValue == 1;
-        tagIndex = value["TagIndex"]?.IntValue ?? 0;
-        layerIndex = value["LayerIndex"]?.IntValue ?? 0;
-        hideFlags = (HideFlags)value["HideFlags"]?.IntValue!;
+        TagIndex = value["TagIndex"]?.IntValue ?? 0;
+        LayerIndex = value["LayerIndex"]?.IntValue ?? 0;
+        HideFlags = (HideFlags)(value["HideFlags"]?.IntValue ?? 0);
+
+        // Prefab data
+        if (Guid.TryParse(value.Get("PrefabAssetId")?.StringValue, out Guid prefabId))
+            _prefabAssetId = prefabId;
+        if (value.TryGet("PrefabOverrides", out var overridesTag))
+            _prefabOverrides = Serializer.Deserialize<List<PropertyOverride>>(overridesTag, ctx);
+        if (value.TryGet("PrefabComponentCount", out var compCount))
+            _prefabComponentCount = compCount.IntValue;
+        if (value.TryGet("PrefabChildCount", out var childCount))
+            _prefabChildCount = childCount.IntValue;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
-        _transform.gameObject = this;
-        if (value.TryGet("PrefabLink", out EchoObject? link))
-        {
-            prefabLink = Serializer.Deserialize<PrefabLink>(link, ctx);
-            if (prefabLink != null)
-                prefabLink.Obj = this;
-        }
-
-        if (value.TryGet("AssetID", out EchoObject? guid))
-            AssetID = Guid.Parse(guid.StringValue);
-        if (value.TryGet("FileID", out EchoObject? fileID))
-            FileID = fileID.UShortValue;
-
-        EchoObject children = value["Children"];
-        this.children = [];
-        foreach (EchoObject childTag in children.List)
-        {
-            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
-            if (child == null) continue;
-            child._parent = this;
-            this.children.Add(child);
-        }
+        _transform.GameObject = this;
 
         EchoObject comps = value["Components"];
         _components = [];
@@ -1170,8 +1212,10 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
                 if (oType == null)
                 {
                     Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
-                    MissingMonobehaviour missing = new MissingMonobehaviour();
-                    missing.ComponentData = compTag;
+                    MissingMonobehaviour missing = new()
+                    {
+                        ComponentData = compTag
+                    };
                     _components.Add(missing);
                     continue;
                 }
@@ -1183,12 +1227,28 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
             }
 
             MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
-            if (component == null) continue;
+            if (component.IsNotValid()) continue;
             _components.Add(component);
+            _componentCache.Add(component.GetType(), component);
         }
         // Attach all components
         foreach (MonoBehaviour comp in _components)
             comp.AttachToGameObject(this);
+
+        // Children are deserialized AFTER components so the visit order matches serialization
+        // (Serialize writes Components then Children). Echo's reference encoding is single-pass and
+        // definition-first, so visiting out of order would turn intra-object references (e.g. a
+        // component referencing another component, including across the parent/child boundary, or a
+        // cyclic reference) into broken forward refs.
+        EchoObject children = value["Children"];
+        Children = [];
+        foreach (EchoObject childTag in children.List)
+        {
+            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
+            if (child.IsNotValid()) continue;
+            child._parent = this;
+            Children.Add(child);
+        }
     }
 
     /// <summary>
@@ -1196,178 +1256,29 @@ public class GameObject : EngineObject, ISerializable, ICloneExplicit
     /// </summary>
     /// <param name="compTag">The SerializedProperty containing the component data.</param>
     /// <param name="ctx">The serialization context.</param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Recovery path: looks up a previously-missing component type by its serialized name. User game types must be preserved by the consuming application's trim configuration.")]
     private void HandleMissingComponent(EchoObject compTag, SerializationContext ctx)
     {
         // Were missing! see if we can recover
         MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
+        if (missing == null || missing.ComponentData == null) return;
+
         EchoObject oldData = missing.ComponentData;
         // Try to recover the component
-        if (oldData.TryGet("$type", out EchoObject? typeProp))
+        if (oldData.TryGet("$type", out EchoObject? typeProp)
+            && !string.IsNullOrWhiteSpace(typeProp?.StringValue))
         {
-            Type oType = RuntimeUtils.FindType(typeProp.StringValue);
+            Type? oType = RuntimeUtils.FindType(typeProp!.StringValue);
             if (oType != null)
             {
                 // We have the type! Deserialize it and add it to the components
                 MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(oldData);
-                if (component != null)
+                if (component.IsValid())
                 {
                     _components.Add(component);
                 }
             }
         }
-    }
-
-    /// <summary>
-    /// Creates a deep copy of this GameObject.
-    /// </summary>
-    /// <returns>A reference to a newly created deep copy of this GameObject.</returns>
-    public new GameObject Clone()
-    {
-        return this.DeepClone();
-    }
-
-    /// <summary>
-    /// Deep-copies this GameObject's data to the specified target GameObject.
-    /// </summary>
-    /// <param name="target">The target GameObject to copy to.</param>
-    public void CopyTo(GameObject target)
-    {
-        this.DeepCopyTo(target);
-    }
-
-    void ICloneExplicit.SetupCloneTargets(object targetObj, ICloneTargetSetup setup)
-    {
-        GameObject target = targetObj as GameObject;
-        bool isPrefabApply = setup.Context is ApplyPrefabContext;
-
-        // We don't destroy anything when Applying a prefab
-        // Since the user could have added new components or children those should stay
-        // 15/11/2024 - For now we destroy everything when applying a prefab
-        // This is to ensure the editor acts reliably and consistently
-        // Otherwise theres some weird edge cases like for example:
-        // 1. Create prefab with a child
-        // 2. Spawn in twice
-        // 3. In one instance delete the child and apply
-        // The other instance will not delete the child but will disconnect it from the prefab
-        // GameObject & Component adding/removing should be VarMods, so they can be re-applied
-        // after everything has been reset
-        //if (!isPrefabApply || ApplyPrefabContext.IsRevert)
-        {
-            // Destroy all Components in the target GameObject
-            for (int i = target._components.Count - 1; i >= 0; i--)
-            {
-                var targetsIdentifier = target._components[i].Identifier;
-                // If we dont have that identifier then we can delete it
-                if (GetComponentByIdentifier(targetsIdentifier) == null)
-                    target._components.ElementAt(i).DestroyImmediate();
-            }
-
-            // Destroy all child objects in the target GameObject
-            if (target.children != null)
-            {
-                for (int i = target.children.Count - 1; i >= 0; i--)
-                {
-                    var targetsIdentifier = target.children[i].Identifier;
-                    var ourGO = FindChildByIdentifier(targetsIdentifier, false);
-
-                    // If we dont have that identifier then we can delete it
-                    if (ourGO == null)
-                        target.children[i].DestroyImmediate();
-                }
-            }
-        }
-
-        // Create missing Components in the target GameObject and link components to target
-        foreach (MonoBehaviour myComp in _components)
-        {
-            var targetComp = target.GetComponentByIdentifier(myComp.Identifier);
-            if (targetComp == null)
-                targetComp = target.AddComponent(myComp.GetType());
-
-            int? index = myComp.GetSiblingIndex();
-            if (index.HasValue && index != targetComp.GetSiblingIndex())
-                targetComp.SetSiblingIndex(index.Value);
-
-            setup.HandleObject(myComp, targetComp, CloneBehavior.ChildObject);
-        }
-
-        // Create missing child objects in the target GameObject
-        if (children != null)
-        {
-            for (int i = 0; i < children.Count; i++)
-            {
-                GameObject targetChild = target.FindChildByIdentifier(children[i].Identifier, false);
-                if(targetChild == null)
-                {
-                    targetChild = new GameObject();
-                    targetChild._identifier = children[i]._identifier;
-                    targetChild.SetParent(target);
-                }
-
-                int? index = children[i].GetSiblingIndex();
-                if (index.HasValue && index != targetChild.GetSiblingIndex())
-                    targetChild.SetSiblingIndex(index.Value);
-
-                setup.HandleObject(children[i], targetChild, CloneBehavior.ChildObject);
-            }
-        }
-
-        // Handle referenced and child objects
-        setup.HandleObject(_transform, target._transform, CloneBehavior.ChildObject);
-        setup.HandleObject(_scene, target._scene, CloneBehavior.Reference);
-        setup.HandleObject(prefabLink, target.prefabLink);
-    }
-
-    void ICloneExplicit.CopyDataTo(object targetObj, ICloneOperation operation)
-    {
-        GameObject target = targetObj as GameObject;
-
-        // InstanceID is special and should not be copied
-        // Its a value guranteed to be unique to each instance of an EngineObject
-        //target._instanceID = _instanceID;
-
-        // Copy plain old data
-        target.Name = Name;
-        if (!operation.Context.PreserveIdentity)
-            target._identifier = _identifier;
-        target._static = _static;
-        target._enabled = _enabled;
-        target._enabledInHierarchy = _enabledInHierarchy;
-        target.tagIndex = tagIndex;
-        target.layerIndex = layerIndex;
-        target.hideFlags = hideFlags;
-
-        target.AssetID = AssetID;
-        target.FileID = FileID;
-
-        operation.HandleObject<Transform>(_transform);
-
-        // Copy Components from source to target
-        for (int i = 0; i < _components.Count; i++)
-        {
-            operation.HandleObject<MonoBehaviour>(_components.ElementAt(i));
-        }
-
-        // Copy child objects from source to target
-        if (children != null)
-        {
-            for (int i = 0; i < children.Count; i++)
-            {
-                operation.HandleObject<GameObject>(children[i]);
-            }
-        }
-
-        // Copy the objects parent scene as a weak reference, i.e.
-        // by assignment, and only when the the scene is itself part of the
-        // copied object graph. That way, cloning a GameObject but not its
-        // scene will result in a clone that doesn't reference a parent scene.
-        Scene targetScene = operation.GetWeakTarget(Scene);
-        if (targetScene != null)
-        {
-            target.Scene = targetScene;
-        }
-
-        // Copy the objects prefab link
-        operation.HandleObject(prefabLink, ref target.prefabLink, true);
     }
 }

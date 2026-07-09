@@ -3,12 +3,13 @@
 
 using Jitter2.Collision.Shapes;
 
-using Prowl.Icons;
 using Prowl.Echo;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Sphere Collider")]
+[AddComponentMenu("Physics/Colliders/Sphere Collider")]
+[ComponentIcon("\uf111")] // Circle
 public sealed class SphereCollider : Collider
 {
     [SerializeField] private float radius = 0.5f;
@@ -23,5 +24,13 @@ public sealed class SphereCollider : Collider
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new SphereShape(MathD.Max(radius, 0.01))];
+    public override RigidBodyShape[] CreateShapes() => [new SphereShape(Maths.Max(radius, 0.01f))];
+
+    public override void DrawGizmos()
+    {
+        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
+        Debug.PushMatrix(matrix);
+        Debug.DrawWireSphere(Center, radius, Color.Green);
+        Debug.PopMatrix();
+    }
 }
