@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\ShaderDef.Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+        <ProjectReference Include="..\..\Tools\SlangHlslProbe\SlangHlslProbe.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="KnownGood\**\*" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Shaders\**\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+</Project>

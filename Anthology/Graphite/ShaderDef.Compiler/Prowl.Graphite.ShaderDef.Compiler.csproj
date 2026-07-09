@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <OutputType>Library</OutputType>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>Prowl.Graphite.ShaderDef.Compiler</PackageId>
+        <Description>The Slang-based shader parser and compiler for Prowl.Graphite.ShaderDef.</Description>
+        <PackageTags>graphics api DirectX Vulkan Metal direct-x direct3D11 direct3D12 slang compiler shader</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Slang\Slang\Prowl.Slang.csproj" />
+        <ProjectReference Include="..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
+        <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\ShaderDef\Prowl.Graphite.ShaderDef.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Compiler.Tests" />
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
+    </ItemGroup>
+</Project>

@@ -15,9 +15,8 @@
     <Project Path="Drift/Drift/Drift.csproj" />
     <Project Path="Slang/Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
-    <Project Path="Graphite/Compiler/Prowl.Graphite.Compiler.csproj" />
     <Project Path="Graphite/ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
-    <Project Path="Graphite/Variants/Prowl.Graphite.Variants.csproj" />
+    <Project Path="Graphite/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
@@ -39,8 +38,7 @@
     <Project Path="Paper/Tests/Paper.Tests.csproj" />
     <Project Path="Slang/Tests/Prowl.Slang.Tests.csproj" />
     <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
-    <Project Path="Graphite/Tests/Compiler/Prowl.Graphite.Compiler.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
-    <Project Path="Graphite/Tests/Variants/Prowl.Graphite.Variants.Tests.csproj" />
+    <Project Path="Graphite/Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
   </Folder>
 </Solution>

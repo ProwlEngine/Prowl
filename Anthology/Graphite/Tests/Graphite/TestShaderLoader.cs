@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-using Prowl.Graphite.Compiler;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 
 namespace Prowl.Graphite.Tests;
 
@@ -29,23 +30,27 @@ internal static class TestShaderLoader
         return File.Exists(full) ? File.ReadAllBytes(full) : null;
     }
 
-    private static ShaderDescription Compile(GraphicsBackend backend, string moduleFile, ShaderType type)
+    private static ShaderDescription Compile(GraphicsBackend backend, string moduleFile)
     {
-        CompilationSession session = new();
-        session.RegisterModule(s_modules[backend]());
+        SlangShaderCompiler compiler = new();
+        compiler.RegisterModule(s_modules[backend]());
 
-        session.BeginSession([new DirectoryInfo(ShaderDirectory)], LoadFile);
-        CompilationResult result = session.CompileShader(moduleFile, type);
-        session.EndSession();
+        compiler.BeginSession([new DirectoryInfo(ShaderDirectory)], LoadFile);
 
-        return result.CompiledVariants[0].Backends[0].Description;
+        string source = File.ReadAllText(Path.Combine(ShaderDirectory, moduleFile));
+        ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
+        ShaderDescription description = compiler.Compile(pass, [], backend);
+
+        compiler.EndSession();
+
+        return description;
     }
 
     // Compiles the vertex + fragment entry points of a module into stage descriptions.
     public static ShaderStageDescription[] LoadGraphics(GraphicsBackend backend, string moduleFile)
-        => Compile(backend, moduleFile, ShaderType.Rasterization).Stages;
+        => Compile(backend, moduleFile).Stages;
 
     // Compiles a single compute entry point into a stage description.
     public static ShaderStageDescription LoadCompute(GraphicsBackend backend, string moduleFile)
-        => Compile(backend, moduleFile, ShaderType.Compute).Stages[0];
+        => Compile(backend, moduleFile).Stages[0];
 }

@@ -17,7 +17,7 @@
         <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
-        <ProjectReference Include="..\..\Compiler\Prowl.Graphite.Compiler.csproj" />
+        <ProjectReference Include="..\..\ShaderDef.Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
     </ItemGroup>
 
     <ItemGroup>

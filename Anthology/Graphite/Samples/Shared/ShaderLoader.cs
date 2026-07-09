@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
-using Prowl.Graphite.Compiler;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 
 
 namespace Prowl.Graphite.Samples;
@@ -21,18 +23,20 @@ public static class ShaderLoader
 
     public static GraphicsProgram CreateShader(GraphicsDevice device)
     {
-        CompilationSession session = new();
-        session.RegisterModule(s_modules[device.BackendType]());
+        SlangShaderCompiler compiler = new();
+        compiler.RegisterModule(s_modules[device.BackendType]());
 
-        session.BeginSession(FileLoader.SearchDirectories, FileLoader.Load);
+        compiler.BeginSession(FileLoader.SearchDirectories, FileLoader.Load);
 
-        CompilationResult result = session.CompileShader("Shader.slang", ShaderType.Rasterization);
+        Memory<byte>? loaded = FileLoader.Load("Shader.slang");
+        string source = Encoding.UTF8.GetString(loaded!.Value.Span);
+        ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
+        ShaderDescription description = compiler.Compile(pass, [], device.BackendType);
 
-        session.EndSession();
+        compiler.EndSession();
 
         // Reflection fills in the stages, vertex inputs, and resource bindings; the loader still owns
         // the fixed-function pipeline state the shader source does not describe.
-        ShaderDescription description = result.CompiledVariants[0].Backends[0].Description;
         description.BlendState = BlendStateDescription.SingleDisabled;
         description.DepthStencilState = DepthStencilStateDescription.DepthOnlyLessEqual;
         description.RasterizerState = new(FaceCullMode.Back, FrontFace.Clockwise, true, false);

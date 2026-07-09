@@ -2,6 +2,8 @@ using System;
 
 using Xunit;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
@@ -10,7 +12,7 @@ public class PassStateTests
     [Fact]
     public void Empty_LeavesEverythingUnset()
     {
-        ParsedPassState s = Parse.State("");
+        PassState s = Parse.State("");
 
         Assert.Null(s.CullMode);
         Assert.Null(s.DepthFunc);
@@ -62,7 +64,7 @@ public class PassStateTests
     [Fact]
     public void Blend_SetsAllFourFactors()
     {
-        ParsedPassState s = Parse.State("Blend SourceAlpha InverseSourceAlpha");
+        PassState s = Parse.State("Blend SourceAlpha InverseSourceAlpha");
 
         Assert.Equal(BlendFactor.SourceAlpha, s.BlendSrcRgb);
         Assert.Equal(BlendFactor.SourceAlpha, s.BlendSrcAlpha);
@@ -74,7 +76,7 @@ public class PassStateTests
     [Fact]
     public void BlendRGB_SetsOnlyRgbFactors()
     {
-        ParsedPassState s = Parse.State("BlendRGB One Zero");
+        PassState s = Parse.State("BlendRGB One Zero");
 
         Assert.Equal(BlendFactor.One, s.BlendSrcRgb);
         Assert.Equal(BlendFactor.Zero, s.BlendDstRgb);
@@ -86,7 +88,7 @@ public class PassStateTests
     [Fact]
     public void BlendAlpha_SetsOnlyAlphaFactors()
     {
-        ParsedPassState s = Parse.State("BlendAlpha One Zero");
+        PassState s = Parse.State("BlendAlpha One Zero");
 
         Assert.Equal(BlendFactor.One, s.BlendSrcAlpha);
         Assert.Equal(BlendFactor.Zero, s.BlendDstAlpha);
@@ -101,7 +103,7 @@ public class PassStateTests
     [InlineData("Maximum", BlendFunction.Maximum)]
     public void BlendOp_SetsBothBlendFunctions(string value, BlendFunction expected)
     {
-        ParsedPassState s = Parse.State($"BlendOp {value}");
+        PassState s = Parse.State($"BlendOp {value}");
 
         Assert.Equal(expected, s.BlendFunctionRgb);
         Assert.Equal(expected, s.BlendFunctionAlpha);
@@ -146,7 +148,7 @@ public class PassStateTests
     [Fact]
     public void Offset_SetsFillAndNegativeValues()
     {
-        ParsedPassState s = Parse.State("Offset -1 -2");
+        PassState s = Parse.State("Offset -1 -2");
 
         Assert.True(s.EnablePolygonOffsetFill);
         Assert.Equal(-1f, s.PolygonOffsetFactor);
@@ -157,7 +159,7 @@ public class PassStateTests
     [Fact]
     public void MultipleCommands_Combine()
     {
-        ParsedPassState s = Parse.State("""
+        PassState s = Parse.State("""
             Cull Front
             ZWrite Off
             ZTest Greater
@@ -173,7 +175,7 @@ public class PassStateTests
     public void StopsAtUnknownIdentifier()
     {
         // "Banana" is not a render-state command, so parsing stops there and Cull is captured.
-        ParsedPassState s = Parse.State("Cull Back Banana");
+        PassState s = Parse.State("Cull Back Banana");
 
         Assert.Equal(FaceCullMode.Back, s.CullMode);
     }

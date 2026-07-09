@@ -4,10 +4,12 @@ using Prowl.Vector;
 
 using Xunit;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
-// End-to-end coverage of ParsedShader.Parse composing all components together.
+// End-to-end coverage of ShaderParser.Parse composing all components together.
 public class ShaderTests
 {
     const string FullShader = """
@@ -45,7 +47,7 @@ public class ShaderTests
     [Fact]
     public void ParsesNamePropertiesPassesAndFallback()
     {
-        ParsedShader shader = Parse.Shader(FullShader);
+        ShaderDefinition shader = Parse.Shader(FullShader);
 
         Assert.Equal("Example/Standard", shader.Name);
         Assert.Equal("Hidden/Fallback", shader.Fallback);
@@ -59,7 +61,7 @@ public class ShaderTests
     public void CommentsAreStripped()
     {
         // If line/block comments weren't stripped, parsing would have thrown long before this.
-        ParsedShader shader = Parse.Shader(FullShader);
+        ShaderDefinition shader = Parse.Shader(FullShader);
 
         Assert.Equal(new Float4(1, 0.5f, 0.25f, 1), shader.Properties![0].Value);
     }
@@ -68,7 +70,7 @@ public class ShaderTests
     [Fact]
     public void OptionalPropertiesBlock_DefaultsToEmpty()
     {
-        ParsedShader shader = Parse.Shader("""
+        ShaderDefinition shader = Parse.Shader("""
             Shader "Min"
             {
                 Pass { SLANGPROGRAM void main() {} ENDSLANG }
@@ -83,7 +85,7 @@ public class ShaderTests
     [Fact]
     public void MultiplePasses_AllParsedInOrder()
     {
-        ParsedShader shader = Parse.Shader("""
+        ShaderDefinition shader = Parse.Shader("""
             Shader "Multi"
             {
                 Pass { Name "A" SLANGPROGRAM void a() {} ENDSLANG }
@@ -179,7 +181,7 @@ public class ShaderTests
     [Fact]
     public void UnnamedPasses_DoNotCollide()
     {
-        ParsedShader shader = Parse.Shader("""
+        ShaderDefinition shader = Parse.Shader("""
             Shader "X"
             {
                 Pass { SLANGPROGRAM void a() {} ENDSLANG }

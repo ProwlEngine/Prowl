@@ -2,10 +2,12 @@ using System.Collections.Generic;
 
 using Xunit;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
-// Tags are only reachable through a pass, so they are driven via ParsedPass.Parse.
+// Tags are only reachable through a pass, so they are driven via ShaderParser.ParsePass.
 public class TagsTests
 {
     static Dictionary<string, string> TagsOf(string pass) => Parse.Pass(pass).Tags;
@@ -14,7 +16,7 @@ public class TagsTests
     [Fact]
     public void NoTagsBlock_TagsNull()
     {
-        ParsedPass pass = Parse.Pass("""
+        ShaderPass pass = Parse.Pass("""
             Pass
             {
                 SLANGPROGRAM void main() {} ENDSLANG

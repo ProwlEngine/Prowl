@@ -8,16 +8,18 @@
 
     <PropertyGroup>
         <PackageId>Prowl.Graphite.ShaderDef</PackageId>
-        <Description>The ShaderDef language spec for Prowl.Graphite.</Description>
-        <PackageTags>graphics api DirectX Vulkan Metal direct-x direct3D11 direct3D12</PackageTags>
+        <Description>The ShaderDef language spec and variant runtime for Prowl.Graphite.</Description>
+        <PackageTags>graphics api DirectX Vulkan Metal direct-x direct3D11 direct3D12 shader variant keyword</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
+        <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
         <ProjectReference Include="..\Graphite\Prowl.Graphite.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Tests" />
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Compiler" />
+        <InternalsVisibleTo Include="Prowl.Graphite.ShaderDef.Compiler.Tests" />
     </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -6,8 +7,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Prowl.Graphite;
-using Prowl.Graphite.Compiler;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 
 namespace SlangQuickCompile;
 
@@ -59,23 +60,28 @@ internal static class Program
 
     static void Process(string module, string shaderDir, string knownGoodDir, bool write, bool dump)
     {
-        CompilationSession session = new();
+        SlangShaderCompiler compiler = new();
 
-        session.RegisterModule(new DXCompiler());
-        session.RegisterModule(new VulkanCompiler());
+        compiler.RegisterModule(new DXCompiler());
+        compiler.RegisterModule(new VulkanCompiler());
 
-        session.BeginSession([new DirectoryInfo(shaderDir), new DirectoryInfo(AppContext.BaseDirectory)]);
+        compiler.BeginSession([new DirectoryInfo(shaderDir), new DirectoryInfo(AppContext.BaseDirectory)]);
 
-        CompilationResult result = session.CompileShader(module, ShaderType.Rasterization);
+        string source = File.ReadAllText(Path.Combine(shaderDir, module + ".slang"));
+        ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
 
-        session.EndSession();
+        IReadOnlyList<VariantSpace> axes = compiler.GetAxes(pass);
+        Keyword[][] combos = GenerateCombos(axes);
 
-        foreach (VariantResult variant in result.CompiledVariants)
+        GraphicsBackend[] backends = [GraphicsBackend.Direct3D11, GraphicsBackend.Vulkan];
+
+        foreach (Keyword[] combo in combos)
         {
-            string suffix = VariantSuffix(variant.Variants);
+            string suffix = VariantSuffix(combo);
 
-            foreach ((ShaderDescription description, GraphicsBackend backend) in variant.Backends)
+            foreach (GraphicsBackend backend in backends)
             {
+                ShaderDescription description = compiler.Compile(pass, combo, backend);
                 string extension = Extension(backend);
 
                 foreach (ShaderStageDescription stage in description.Stages)
@@ -95,6 +101,42 @@ internal static class Program
                 }
             }
         }
+
+        compiler.EndSession();
+    }
+
+
+    // Enumerates every keyword combination across the given axes, as an odometer with the last axis
+    // varying fastest.
+    static Keyword[][] GenerateCombos(IReadOnlyList<VariantSpace> axes)
+    {
+        int total = 1;
+        for (int i = 0; i < axes.Count; i++)
+            total *= axes[i].Values.Count;
+
+        Keyword[][] result = new Keyword[total][];
+        int[] indices = new int[axes.Count];
+
+        for (int count = 0; count < total; count++)
+        {
+            Keyword[] combo = new Keyword[axes.Count];
+            for (int i = 0; i < axes.Count; i++)
+                combo[i] = new Keyword(axes[i].Name, axes[i].Values[indices[i]]);
+
+            result[count] = combo;
+
+            for (int i = axes.Count - 1; i >= 0; i--)
+            {
+                indices[i]++;
+
+                if (indices[i] < axes[i].Values.Count)
+                    break;
+
+                indices[i] = 0;
+            }
+        }
+
+        return result;
     }
 
 

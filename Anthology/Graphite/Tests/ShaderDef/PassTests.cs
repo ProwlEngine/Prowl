@@ -1,5 +1,7 @@
 using Xunit;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
@@ -8,7 +10,7 @@ public class PassTests
     [Fact]
     public void FullPass_ParsesAllParts()
     {
-        ParsedPass pass = Parse.Pass("""
+        ShaderPass pass = Parse.Pass("""
             Pass 0
             {
                 Name "Forward"
@@ -30,7 +32,7 @@ public class PassTests
     [Fact]
     public void WithoutOptionalParts_UsesDefaults()
     {
-        ParsedPass pass = Parse.Pass("""
+        ShaderPass pass = Parse.Pass("""
             Pass
             {
                 SLANGPROGRAM
@@ -48,7 +50,7 @@ public class PassTests
     [Fact]
     public void NameOnly_Parsed()
     {
-        ParsedPass pass = Parse.Pass("""
+        ShaderPass pass = Parse.Pass("""
             Pass
             {
                 Name "ShadowCaster"

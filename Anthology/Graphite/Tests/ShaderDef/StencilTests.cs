@@ -1,15 +1,17 @@
 using Xunit;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
-// Stencil is reached through a render-state command, so it is driven via ParsedPassState.Parse.
+// Stencil is reached through a render-state command, so it is driven via ShaderParser.ParsePassState.
 public class StencilTests
 {
     [Fact]
     public void Ref_Sets()
     {
-        ParsedPassState s = Parse.State("""Stencil { Ref 3 }""");
+        PassState s = Parse.State("""Stencil { Ref 3 }""");
 
         Assert.Equal(3, s.StencilRef);
     }
@@ -18,7 +20,7 @@ public class StencilTests
     [Fact]
     public void ReadAndWriteMask_Set()
     {
-        ParsedPassState s = Parse.State("""
+        PassState s = Parse.State("""
             Stencil
             {
                 ReadMask 15
@@ -34,7 +36,7 @@ public class StencilTests
     [Fact]
     public void Comp_SetsBothFaces()
     {
-        ParsedPassState s = Parse.State("""Stencil { Comp Equal }""");
+        PassState s = Parse.State("""Stencil { Comp Equal }""");
 
         Assert.Equal(ComparisonKind.Equal, s.StencilFrontFunc);
         Assert.Equal(ComparisonKind.Equal, s.StencilBackFunc);
@@ -44,7 +46,7 @@ public class StencilTests
     [Fact]
     public void CompFrontAndCompBack_SetIndividualFaces()
     {
-        ParsedPassState s = Parse.State("""
+        PassState s = Parse.State("""
             Stencil
             {
                 CompFront Less
@@ -60,7 +62,7 @@ public class StencilTests
     [Fact]
     public void PassFailZFail_SetBothFaces()
     {
-        ParsedPassState s = Parse.State("""
+        PassState s = Parse.State("""
             Stencil
             {
                 Pass Replace
@@ -81,7 +83,7 @@ public class StencilTests
     [Fact]
     public void FrontBackVariants_SetIndividualFaces()
     {
-        ParsedPassState s = Parse.State("""
+        PassState s = Parse.State("""
             Stencil
             {
                 PassFront Replace
@@ -105,7 +107,7 @@ public class StencilTests
     [Fact]
     public void EmptyBlock_LeavesUnset()
     {
-        ParsedPassState s = Parse.State("""Stencil { }""");
+        PassState s = Parse.State("""Stencil { }""");
 
         Assert.Null(s.StencilRef);
         Assert.Null(s.StencilFrontFunc);

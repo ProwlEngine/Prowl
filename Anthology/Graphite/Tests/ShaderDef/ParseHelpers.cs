@@ -1,5 +1,7 @@
 using Prowl.Crumb;
 
+using Prowl.Graphite.ShaderDef.Compiler;
+
 namespace Prowl.Graphite.ShaderDef.Tests;
 
 
@@ -7,18 +9,10 @@ namespace Prowl.Graphite.ShaderDef.Tests;
 // straight from a source string.
 internal static class Parse
 {
-    public static ShaderProperty Property(string source)
-    {
-        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
-        return ParsedProperty.Parse(ref t);
-    }
+    public static ShaderProperty Property(string source) => ShaderParser.ParseProperty(source);
 
 
-    public static ParsedPassState State(string source)
-    {
-        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
-        return ParsedPassState.Parse(ref t);
-    }
+    public static PassState State(string source) => ShaderParser.ParsePassState(source);
 
 
     public static string Slang(string source)
@@ -28,12 +22,8 @@ internal static class Parse
     }
 
 
-    public static ParsedPass Pass(string source)
-    {
-        Tokenizer<ShaderToken> t = ShaderTokenizer.Create(source);
-        return ParsedPass.Parse(ref t);
-    }
+    public static ShaderPass Pass(string source) => ShaderParser.ParsePass(source);
 
 
-    public static ParsedShader Shader(string source) => ParsedShader.Parse(source);
+    public static ShaderDefinition Shader(string source) => ShaderParser.Parse(source);
 }

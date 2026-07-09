@@ -9,7 +9,7 @@
     <ItemGroup>
         <ProjectReference Include="../Shared/Shared.csproj" />
         <ProjectReference Include="../../ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
-        <ProjectReference Include="../../Variants/Prowl.Graphite.Variants.csproj" />
+        <ProjectReference Include="../../ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
         <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
         <ProjectReference Include="../../../Photonic/Photonic/Photonic.csproj" />
         <ProjectReference Include="../../../Unwrapper/Unwrapper/Unwrapper.csproj" />
