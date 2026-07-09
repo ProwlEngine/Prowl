@@ -14,7 +14,7 @@
           <!-- One version for the whole family. Bump this single line to release everything.
                Baseline 2.3.0 sits above the highest legacy package (Prowl.Echo 2.2.1) so the
                first Anthology publish of any package is never treated as older than NuGet has. -->
-          <Version>2.5.1</Version>
+          <Version>2.5.4</Version>
 
           <RepositoryUrl>https://github.com/ProwlEngine/Anthology</RepositoryUrl>
           <RepositoryType>git</RepositoryType>
