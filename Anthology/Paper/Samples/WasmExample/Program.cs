@@ -20,10 +20,30 @@ public partial class App
         var (cw, ch) = _renderer.GetCanvasSize();
 
         P = new Paper(_renderer, cw, ch, new FontAtlasSettings());
+        P.OnCursorChange += c => WebGLInterop.SetCursor(MapCursor(c));
         Shared.PaperDemo.Initialize(P);
 
         Console.WriteLine($"Initialized: {cw}x{ch}");
     }
+
+    // The browser supports the full CSS cursor set, so this is a direct mapping.
+    private static string MapCursor(PaperCursor c) => c switch
+    {
+        PaperCursor.Pointer => "pointer",
+        PaperCursor.Grab => "grab",
+        PaperCursor.Grabbing => "grabbing",
+        PaperCursor.Text => "text",
+        PaperCursor.Crosshair => "crosshair",
+        PaperCursor.ResizeHorizontal => "ew-resize",
+        PaperCursor.ResizeVertical => "ns-resize",
+        PaperCursor.ResizeNWSE => "nwse-resize",
+        PaperCursor.ResizeNESW => "nesw-resize",
+        PaperCursor.ResizeAll => "move",
+        PaperCursor.NotAllowed => "not-allowed",
+        PaperCursor.Wait => "wait",
+        PaperCursor.Help => "help",
+        _ => "default",
+    };
 
     [JSExport]
     internal static void OnFrame(double deltaTime)

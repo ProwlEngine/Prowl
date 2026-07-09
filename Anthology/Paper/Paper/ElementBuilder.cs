@@ -946,6 +946,30 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Sets the mouse cursor shape shown while this element is hovered (e.g.
+        /// <see cref="PaperCursor.Pointer"/> for clickable elements, <see cref="PaperCursor.ResizeHorizontal"/>
+        /// for a splitter). Read the resolved shape via <see cref="Paper.CurrentCursor"/> or hook
+        /// <see cref="Paper.OnCursorChange"/> to apply it to the OS window.
+        /// </summary>
+        public ElementBuilder Cursor(PaperCursor cursor)
+        {
+            _handle.Data.Cursor = cursor;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the mouse cursor shape shown while this element is pressed/dragged (e.g.
+        /// <see cref="PaperCursor.Grabbing"/> to pair with a <see cref="PaperCursor.Grab"/> hover cursor).
+        /// While dragging this takes priority over <see cref="Cursor"/>; if left unset the drag falls
+        /// back to the hover cursor.
+        /// </summary>
+        public ElementBuilder CursorDragging(PaperCursor cursor)
+        {
+            _handle.Data.CursorDragging = cursor;
+            return this;
+        }
+
         /// <summary>Makes any event on this element not trigger any parent events.</summary>
         public ElementBuilder StopEventPropagation()
         {
@@ -2009,6 +2033,21 @@ namespace Prowl.PaperUI
             int intID)
         {
             Clip();
+
+            // Editable text shows the I-beam cursor. When the field is hooked into an interactable
+            // parent (a common wrapping pattern is IsNotInteractable + HookToParent so the wrapper row
+            // takes focus/clicks), surface the cursor on that parent too, since it - not this
+            // non-interactable element - is what the pointer actually hovers.
+            if (!settings.ReadOnly)
+            {
+                _handle.Data.Cursor = PaperCursor.Text;
+                if (_handle.Data.IsHookedToParent)
+                {
+                    ElementHandle textParent = _handle.GetParentHandle();
+                    if (textParent.IsValid && textParent.Data.Cursor == PaperCursor.Inherit)
+                        textParent.Data.Cursor = PaperCursor.Text;
+                }
+            }
 
             if(_paper.IsParentFocused && isMultiLine)
             {

@@ -194,6 +194,10 @@ const webgl = {
         return window.devicePixelRatio || 1;
     },
 
+    setCursor(css) {
+        if (gl && gl.canvas) gl.canvas.style.cursor = css;
+    },
+
     createTexture(texId, width, height) {
         const tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);

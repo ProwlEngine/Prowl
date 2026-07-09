@@ -34,6 +34,14 @@ namespace Prowl.PaperUI.LayoutEngine
         public bool IsNotInteractable;
         public bool StopPropagation;
 
+        /// <summary>Mouse cursor shape requested while this element is hovered. Defaults to
+        /// <see cref="PaperCursor.Inherit"/> (take the nearest ancestor's, or the arrow at the root).</summary>
+        public PaperCursor Cursor;
+
+        /// <summary>Mouse cursor shape requested while this element is pressed/dragged. Defaults to
+        /// <see cref="PaperCursor.Inherit"/>, which falls back to <see cref="Cursor"/> during a drag.</summary>
+        public PaperCursor CursorDragging;
+
         // Event handlers
         public Action<ClickEvent> OnClick;
         public Action<ClickEvent> OnPress;

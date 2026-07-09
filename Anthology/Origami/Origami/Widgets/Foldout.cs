@@ -173,6 +173,7 @@ public sealed class FoldoutBuilder
                 header.OnClick(_ => _onExpandChanged(!expanded));
             else
                 header.OnClick(_ => _paper.SetElementStorage(header._handle, "exp", !expanded));
+            header.Cursor(PaperCursor.Pointer);
 
             using (header.Enter())
             {

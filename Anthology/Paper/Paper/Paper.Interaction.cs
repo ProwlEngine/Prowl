@@ -213,6 +213,20 @@ namespace Prowl.PaperUI
         public int ActiveElementId => _activeElementId;
         public int FocusedElementId => _focusedElementId;
 
+        private PaperCursor _currentCursor = PaperCursor.Default;
+
+        /// <summary>
+        /// The mouse cursor shape requested by the element currently under the pointer (or the element
+        /// being dragged), resolved by walking up the hierarchy for the nearest set cursor. Defaults to
+        /// <see cref="PaperCursor.Default"/> when nothing requests one. Read this each frame - or hook
+        /// <see cref="OnCursorChange"/> - and apply it to the OS window from your host application.
+        /// </summary>
+        public PaperCursor CurrentCursor => _currentCursor;
+
+        /// <summary>Fires when <see cref="CurrentCursor"/> changes, so a host can set the OS cursor
+        /// only on change rather than every frame.</summary>
+        public event Action<PaperCursor> OnCursorChange;
+
         /// <summary>
         /// Programmatically set focus to an element.
         /// If no element is specified, focuses the current parent.
@@ -277,6 +291,11 @@ namespace Prowl.PaperUI
 
             // Process hover events
             HandleHoverEvents(previousHoveredElementId);
+
+            // Resolve the desired mouse cursor. While an element is pressed/dragged its cursor wins
+            // (so a resize/grab cursor sticks even if the pointer slips off the handle); otherwise the
+            // hovered element decides.
+            UpdateCursor();
 
             // Process scroll events
             if (_theHoveredElementId != 0 && PointerWheel != 0)
@@ -493,6 +512,42 @@ namespace Prowl.PaperUI
                 ref ElementData data = ref current.Data;
                 _elementsInBubblePath.Add(data.ID);
                 current = current.GetParentHandle();
+            }
+        }
+
+        /// <summary>
+        /// Resolves the desired mouse cursor and raises <see cref="OnCursorChange"/> if it changed.
+        /// A pressed/dragged element wins over the hovered one; on each element up the chain a dragged
+        /// element prefers <see cref="ElementData.CursorDragging"/> then <see cref="ElementData.Cursor"/>,
+        /// and the nearest set cursor wins (CSS-like inheritance).
+        /// </summary>
+        private void UpdateCursor()
+        {
+            bool dragging = _activeElementId != 0;
+            int fromId = dragging ? _activeElementId : _theHoveredElementId;
+
+            PaperCursor resolved = PaperCursor.Default;
+            ElementHandle current = fromId != 0 ? FindElementByID(fromId) : default;
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (dragging && data.CursorDragging != PaperCursor.Inherit)
+                {
+                    resolved = data.CursorDragging;
+                    break;
+                }
+                if (data.Cursor != PaperCursor.Inherit)
+                {
+                    resolved = data.Cursor;
+                    break;
+                }
+                current = current.GetParentHandle();
+            }
+
+            if (resolved != _currentCursor)
+            {
+                _currentCursor = resolved;
+                OnCursorChange?.Invoke(resolved);
             }
         }
 

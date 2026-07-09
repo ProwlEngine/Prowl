@@ -491,6 +491,9 @@ public sealed class TreeBuilder
                 });
             }
 
+            if (_onSelect != null || _onSelectModified != null)
+                row.Cursor(PaperCursor.Pointer);
+
             if (_onDoubleClick != null)
                 row.OnDoubleClick(e =>
                 {
@@ -507,7 +510,7 @@ public sealed class TreeBuilder
 
             // Drag
             if (_onDragStart != null && (_canDrag == null || _canDrag(node)))
-                row.OnDragStart(_ => _onDragStart(capturedNode));
+                row.OnDragStart(_ => _onDragStart(capturedNode)).CursorDragging(PaperCursor.Grabbing);
 
             // Hover (for drag-drop position tracking)
             if (_onHover != null)
@@ -618,6 +621,8 @@ public sealed class TreeBuilder
                             }
                         }
                     });
+
+                caret.Cursor(PaperCursor.Pointer);
 
                 using (caret.Enter())
                     _paper.Draw((canvas, r) => DrawCaret(canvas, r, caretT, caretCol));
@@ -774,7 +779,7 @@ public sealed class TreeBuilder
                 .StopEventPropagation();
 
             if (_onTrailingIconClick != null && !disabled)
-                trailBox.OnClick(_ => _onTrailingIconClick(node));
+                trailBox.OnClick(_ => _onTrailingIconClick(node)).Cursor(PaperCursor.Pointer);
         }
     }
 }

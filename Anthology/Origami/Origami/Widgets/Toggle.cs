@@ -235,7 +235,7 @@ public sealed class ToggleBuilder
             if (interactive)
             {
                 row.TabIndex(0);
-                row.OnClick(_ => _setter(!_value));
+                row.OnClick(_ => _setter(!_value)).Cursor(PaperCursor.Pointer);
             }
 
             using (row.Enter())

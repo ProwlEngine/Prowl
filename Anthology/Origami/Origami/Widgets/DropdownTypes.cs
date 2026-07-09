@@ -356,7 +356,8 @@ internal static class DropdownInternal
                                 paper.SetElementStorage(p.TriggerHandle, KeySearch, string.Empty);
                                 paper.SetElementStorage(p.TriggerHandle, KeyHighlight, 0);
                                 paper.SetElementStorage(p.TriggerHandle, KeyPage, 0);
-                            });
+                            })
+                            .Cursor(PaperCursor.Pointer);
                     }
                 }
             }
@@ -405,7 +406,8 @@ internal static class DropdownInternal
                                     if (!enabled) return;
                                     p.OnItemClick(capturedReal, capturedItem);
                                     if (p.CloseOnSelect) paper.SetElementStorage(p.TriggerHandle, KeyOpen, false);
-                                });
+                                })
+                                .Cursor(enabled ? PaperCursor.Pointer : PaperCursor.NotAllowed);
 
                             using (row.Enter())
                             {
@@ -495,7 +497,8 @@ internal static class DropdownInternal
                         {
                             if (!canPrev) return;
                             paper.SetElementStorage(p.TriggerHandle, KeyPage, capturedPage - 1);
-                        });
+                        })
+                        .Cursor(canPrev ? PaperCursor.Pointer : PaperCursor.NotAllowed);
 
                     paper.Box($"{p.Id}_pg_label")
                         .Width(UnitValue.Stretch()).Height(paginationH)
@@ -513,7 +516,8 @@ internal static class DropdownInternal
                         {
                             if (!canNext) return;
                             paper.SetElementStorage(p.TriggerHandle, KeyPage, capturedPage + 1);
-                        });
+                        })
+                        .Cursor(canNext ? PaperCursor.Pointer : PaperCursor.NotAllowed);
                 }
             }
         }

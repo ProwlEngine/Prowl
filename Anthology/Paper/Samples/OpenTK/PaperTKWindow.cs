@@ -1,5 +1,6 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using OpenTK.Windowing.Common;
+using OpenTK.Windowing.Common.Input;
 using OpenTK.Windowing.Desktop;
 using Prowl.PaperUI;
 
@@ -20,8 +21,26 @@ namespace OpenTKSample
             _renderer = new PaperRenderer();
             _renderer.Initialize(FramebufferSize.X, FramebufferSize.Y);
             P = new Paper(_renderer, ClientRectangle.Size.X, ClientRectangle.Size.Y, new Prowl.Quill.FontAtlasSettings());
+            P.OnCursorChange += c => Cursor = MapCursor(c);
             Shared.PaperDemo.Initialize(P);
         }
+
+        // Map Paper's cursor vocabulary to OpenTK's standard cursors. OpenTK has no grab/wait/help
+        // shapes, so those fall back to the closest match (hand) or the arrow.
+        private static MouseCursor MapCursor(PaperCursor c) => c switch
+        {
+            PaperCursor.Pointer => MouseCursor.PointingHand,
+            PaperCursor.Grab or PaperCursor.Grabbing => MouseCursor.Hand,
+            PaperCursor.Text => MouseCursor.IBeam,
+            PaperCursor.Crosshair => MouseCursor.Crosshair,
+            PaperCursor.ResizeHorizontal => MouseCursor.ResizeEW,
+            PaperCursor.ResizeVertical => MouseCursor.ResizeNS,
+            PaperCursor.ResizeNWSE => MouseCursor.ResizeNWSE,
+            PaperCursor.ResizeNESW => MouseCursor.ResizeNESW,
+            PaperCursor.ResizeAll => MouseCursor.ResizeAll,
+            PaperCursor.NotAllowed => MouseCursor.NotAllowed,
+            _ => MouseCursor.Default,
+        };
 
         protected override void OnRenderFrame(FrameEventArgs args)
         {

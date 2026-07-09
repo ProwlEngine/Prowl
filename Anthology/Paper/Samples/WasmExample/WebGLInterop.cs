@@ -19,6 +19,9 @@ public static partial class WebGLInterop
     [JSImport("webgl.getDevicePixelRatio", "main.js")]
     internal static partial double GetDevicePixelRatio();
 
+    [JSImport("webgl.setCursor", "main.js")]
+    internal static partial void SetCursor(string css);
+
     [JSImport("webgl.createTexture", "main.js")]
     internal static partial void CreateTexture(int texId, int width, int height);
 

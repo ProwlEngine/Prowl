@@ -197,7 +197,8 @@ public class DockSpace
                 if (total > 0)
                     n.SplitRatio = Math.Clamp(n.SplitRatio + (horiz ? e.Delta.X : e.Delta.Y) / total, 0.1f, 0.9f);
             })
-            .OnDragEnd(e => _splitterDragNode = null);
+            .OnDragEnd(e => _splitterDragNode = null)
+            .Cursor(horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical);
     }
 
     private float EstimateSplitSize(DockNode n, bool horiz)
@@ -268,7 +269,7 @@ public class DockSpace
             // In a floating window, dragging the tab-bar background (behind the tabs) moves the whole
             // window — the tabs sit on top with StopEventPropagation, so a tab drag still detaches it.
             if (fw != null)
-                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta);
+                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta).Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
             else
                 tabbar.IsNotInteractable();
 
@@ -339,7 +340,8 @@ public class DockSpace
                         _dragSourceNode = newNode;
                         _dragSourceWindow = newFw;
                         CleanupTree();
-                    });
+                    })
+                    .Cursor(PaperCursor.Pointer).CursorDragging(PaperCursor.Grabbing);
 
                 // Full-height separator on the left edge of every tab after the first.
                 if (i > 0)
@@ -390,6 +392,7 @@ public class DockSpace
                         .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
                         .StopEventPropagation()
                         .OnClick((node, ci, fw), (cap, e) => cap.Item1.RemoveTab(cap.Item2))
+                        .Cursor(PaperCursor.Pointer)
                         .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
                         {
                             float ccx = (float)(rr.Min.X + rr.Size.X / 2);
@@ -535,7 +538,17 @@ public class DockSpace
                     captured.Position += new Float2(0, actualDelta);
                     captured.Size = new Float2(captured.Size.X, newH);
                 }
-            });
+            })
+            .Cursor(ResizeCursorFor(right, bottom, left, top));
+    }
+
+    // Diagonal cursors: NW-SE runs top-left/bottom-right, NE-SW runs top-right/bottom-left.
+    private static PaperCursor ResizeCursorFor(bool right, bool bottom, bool left, bool top)
+    {
+        bool horiz = left || right, vert = top || bottom;
+        if (horiz && vert)
+            return ((top && left) || (bottom && right)) ? PaperCursor.ResizeNWSE : PaperCursor.ResizeNESW;
+        return horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical;
     }
 
     private void BringToFront(int index)

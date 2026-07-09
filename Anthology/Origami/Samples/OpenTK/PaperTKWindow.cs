@@ -1,5 +1,6 @@
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Windowing.Common;
+using OpenTK.Windowing.Common.Input;
 using OpenTK.Windowing.Desktop;
 using OpenTKSample;
 using Prowl.PaperUI;
@@ -34,9 +35,25 @@ namespace OrigamiSample
             _renderer = new PaperRenderer();
             _renderer.Initialize(FramebufferSize.X, FramebufferSize.Y);
             _paper = new Paper(_renderer, ClientSize.X, ClientSize.Y, new Prowl.Quill.FontAtlasSettings());
+            _paper.OnCursorChange += c => Cursor = MapCursor(c);
             _editor = new NebulaEditor(_paper);
             _editor.SetPlaygroundCategory(_initialCat);
         }
+
+        private static MouseCursor MapCursor(PaperCursor c) => c switch
+        {
+            PaperCursor.Pointer => MouseCursor.PointingHand,
+            PaperCursor.Grab or PaperCursor.Grabbing => MouseCursor.Hand,
+            PaperCursor.Text => MouseCursor.IBeam,
+            PaperCursor.Crosshair => MouseCursor.Crosshair,
+            PaperCursor.ResizeHorizontal => MouseCursor.ResizeEW,
+            PaperCursor.ResizeVertical => MouseCursor.ResizeNS,
+            PaperCursor.ResizeNWSE => MouseCursor.ResizeNWSE,
+            PaperCursor.ResizeNESW => MouseCursor.ResizeNESW,
+            PaperCursor.ResizeAll => MouseCursor.ResizeAll,
+            PaperCursor.NotAllowed => MouseCursor.NotAllowed,
+            _ => MouseCursor.Default,
+        };
 
         protected override void OnRenderFrame(FrameEventArgs args)
         {

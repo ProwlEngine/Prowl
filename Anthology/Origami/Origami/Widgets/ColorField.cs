@@ -135,6 +135,7 @@ public sealed class ColorFieldBuilder
                 float anchorY = (float)e.ElementRect.Max.Y + 2;
                 Modal.Push(new ColorPickerModal(id, value, setter, showAlpha, hdr, palette, anchorX, anchorY));
             });
+            row.Cursor(PaperCursor.Pointer);
         }
 
         using (row.Enter())
@@ -252,6 +253,7 @@ public sealed class ColorFieldBuilder
         _paper.Box($"{_id}_cf_sv").Size(size, size)
             .OnClick(e => SetSV(popEl, e, a))
             .OnDragging(e => SetSV(popEl, e, a))
+            .Cursor(PaperCursor.Crosshair)
             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
             {
                 float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, ht = (float)r.Size.Y;
@@ -298,6 +300,7 @@ public sealed class ColorFieldBuilder
         _paper.Box($"{_id}_cf_hue").Size(BarWidth, height)
             .OnClick(e => SetHue(popEl, e))
             .OnDragging(e => SetHue(popEl, e))
+            .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing)
             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
             {
                 float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, ht = (float)r.Size.Y;
@@ -336,6 +339,7 @@ public sealed class ColorFieldBuilder
         _paper.Box($"{_id}_cf_alpha").Size(BarWidth, height).Rounded(alphaRound)
             .OnClick(e => SetAlpha(popEl, e))
             .OnDragging(e => SetAlpha(popEl, e))
+            .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing)
             .OnPostLayout((handle, rect) => _paper.Draw(ref handle, (canvas, r) =>
             {
                 float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, ht = (float)r.Size.Y;

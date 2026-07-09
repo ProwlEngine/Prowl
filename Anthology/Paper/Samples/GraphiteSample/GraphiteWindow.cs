@@ -89,8 +89,25 @@ public class GraphiteWindow : IDisposable
         _renderer.Initialize(_window.FramebufferSize.X, _window.FramebufferSize.Y, _whiteTexture);
 
         _paper = new Paper(_renderer, _window.Size.X, _window.Size.Y, new Prowl.Quill.FontAtlasSettings());
+        _paper.OnCursorChange += c => _input.Mice[0].Cursor.StandardCursor = MapCursor(c);
         PaperDemo.Initialize(_paper);
     }
+
+    // Silk.NET has no grab/help shapes, so those fall back to the hand or the arrow.
+    private static StandardCursor MapCursor(PaperCursor c) => c switch
+    {
+        PaperCursor.Pointer or PaperCursor.Grab or PaperCursor.Grabbing => StandardCursor.Hand,
+        PaperCursor.Text => StandardCursor.IBeam,
+        PaperCursor.Crosshair => StandardCursor.Crosshair,
+        PaperCursor.ResizeHorizontal => StandardCursor.HResize,
+        PaperCursor.ResizeVertical => StandardCursor.VResize,
+        PaperCursor.ResizeNWSE => StandardCursor.NwseResize,
+        PaperCursor.ResizeNESW => StandardCursor.NeswResize,
+        PaperCursor.ResizeAll => StandardCursor.ResizeAll,
+        PaperCursor.NotAllowed => StandardCursor.NotAllowed,
+        PaperCursor.Wait => StandardCursor.Wait,
+        _ => StandardCursor.Default,
+    };
 
 
     private void SetupInputHandlers()

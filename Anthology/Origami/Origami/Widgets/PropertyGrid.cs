@@ -477,7 +477,8 @@ public static class PropertyGridRenderer
                             double newVal = startVal + (double)e.TotalDelta.X * multiplier;
                             object? converted = ConvertFromDouble(newVal, fieldType);
                             if (converted != null) onChange(converted);
-                        });
+                        })
+                        .Cursor(PaperCursor.ResizeHorizontal);
                 }
                 else
                 {
@@ -717,7 +718,8 @@ public static class PropertyGridRenderer
                     }
                     MoveTo(cur, target);
                 })
-                .OnDragEnd(_ => paper.SetElementStorage(colEl, "dragSk", (string?)null));
+                .OnDragEnd(_ => paper.SetElementStorage(colEl, "dragSk", (string?)null))
+                .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
         }
 
         System.Drawing.Color DepthColor(int d) => d switch
@@ -741,6 +743,7 @@ public static class PropertyGridRenderer
                 using (paper.Row($"{id}_ch").Width(ST).Height(26).RoundedTop(8).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
+                    .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
                     paper.Box($"{id}_ci").Width(14).Height(26).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, acc, size: 12f);
@@ -777,7 +780,7 @@ public static class PropertyGridRenderer
                             paper.Box($"{id}_x_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
                                 .Hovered.BackgroundColor(redBg).End()
                                 .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
-                                .OnClick(idx, (j, _) => RemoveAt(j));
+                                .OnClick(idx, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
                         }
                         if (i < list.Count - 1)
                             paper.Box($"{id}_d_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
@@ -786,7 +789,7 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_add").Width(ST).Height(26)
                         .Hovered.BackgroundColor(theme.Hover).End()
                         .Text("+ Add Element", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(0, (_, _) => AddNew());
+                        .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);
                 }
             }
         }
@@ -806,7 +809,8 @@ public static class PropertyGridRenderer
 
                 var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingMedium)
                     .Hovered.BackgroundColor(theme.Hover).End()
-                    .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)));
+                    .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)))
+                    .Cursor(PaperCursor.Pointer);
                 if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
                 using (nh.Enter())
                 {
@@ -826,7 +830,7 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST).StopEventPropagation()
                         .Hovered.BackgroundColor(redBg).End()
                         .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
-                        .OnClick(i, (j, _) => RemoveAt(j));
+                        .OnClick(i, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
                 }
 
                 if (exp)
@@ -864,6 +868,7 @@ public static class PropertyGridRenderer
                 using (paper.Row($"{id}_nlh").Width(ST).Height(30).RoundedTop(9).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).RowBetween(m.SpacingLarge).BackgroundColor(glass)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(0, (_, _) => paper.SetElementStorage(listEl, "exp", !paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault)))
+                    .Cursor(PaperCursor.Pointer)
                     .Enter())
                 {
                     paper.Box($"{id}_nli").Width(14).Height(30).Margin(0, 0, ST, ST).IsNotInteractable().Icon(paper, OrigamiIconSet.Layers, color, size: 13f);
@@ -892,7 +897,7 @@ public static class PropertyGridRenderer
                         paper.Box($"{id}_nladd").Width(ST).Height(26).Rounded(6)
                             .Hovered.BackgroundColor(theme.Hover).End()
                             .Text($"+ Add {elementType.Name}", font).TextColor(acc).FontSize(m.FontSize).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick(0, (_, _) => AddNew());
+                            .OnClick(0, (_, _) => AddNew()).Cursor(PaperCursor.Pointer);
                     }
                 }
             }
