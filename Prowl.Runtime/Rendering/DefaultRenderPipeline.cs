@@ -403,9 +403,6 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         RenderStats.EndPostFx();
 
-        // ─── Screen-space UI (Camera surface) composited into the scene color ───
-        RenderUIQueue(css, colorRT, UISurface.Camera, data);
-
         // ─── Gizmos + final blit CB ───
         var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
         if (data.DisplayGizmos)
@@ -496,11 +493,6 @@ public class DefaultRenderPipeline : RenderPipeline
         GameCanvas.ScreenSizeOverride = new Float2(css.PixelWidth, css.PixelHeight);
         try
         {
-            // ScreenSpaceCamera canvases position themselves relative to this camera; push it before
-            // collecting so their per-frame model rebuild sees it.
-            if (surface == UISurface.Camera)
-                GameCanvas.PushScreenCamera(css.CameraPosition, css.CameraForward, css.CameraUp, css.CameraRight, css.Projection);
-
             s_uiTmp.Clear();
             UIRenderTree.CollectFor(css.Scene, surface, s_uiTmp);
             if (s_uiTmp.Count == 0) return;
@@ -508,12 +500,8 @@ public class DefaultRenderPipeline : RenderPipeline
             // Items arrive in per-canvas hierarchy order; stable-sort by SortKey across canvases.
             s_uiTmp.Sort(static (a, b) => ((UIRenderItem)a).SortKey.CompareTo(((UIRenderItem)b).SortKey));
 
-            // The Camera surface projects through the camera (perspective, shares the scene's depth);
-            // Overlay uses a flat screen-space orthographic projection (origin bottom-left, +Y up).
-            if (surface == UISurface.Camera)
-                AssignCameraMatrices(css.View, css.Projection);
-            else
-                AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
+            // Screen-space orthographic projection (origin bottom-left, +Y up to match RectTransform).
+            AssignCameraMatrices(Float4x4.Identity, BuildScreenOrtho(css));
 
             var cmd = Graphics.GetCommandBuffer("UI");
             if (targetRT != null)
@@ -536,7 +524,6 @@ public class DefaultRenderPipeline : RenderPipeline
         finally
         {
             GameCanvas.ScreenSizeOverride = prevOverride;
-            if (surface == UISurface.Camera) GameCanvas.ClearScreenCamera();
         }
     }
 
@@ -559,7 +546,6 @@ public class DefaultRenderPipeline : RenderPipeline
             if (data.IsSceneView)
             {
                 // The scene view shows every canvas in world space, regardless of RenderMode.
-                UIRenderTree.CollectFor(css.Scene, UISurface.Camera, s_uiTmp);
                 UIRenderTree.CollectFor(css.Scene, UISurface.Overlay, s_uiTmp);
             }
             if (s_uiTmp.Count == 0) return;

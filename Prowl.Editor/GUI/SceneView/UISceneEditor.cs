@@ -188,19 +188,6 @@ public sealed class UISceneEditor : ISceneViewEditor
             // Pick up any edits applied on previous frames so ComputedRect is current.
             canvas.RebuildIfDirty();
 
-            Float4x4 designToWorld = canvas.CanvasToWorld;
-            Float4x4 worldToDesign = designToWorld.Invert();
-
-            Float3 originW = Float4x4.TransformPoint(Float3.Zero, designToWorld);
-            Float3 rightW = Float4x4.TransformPoint(Float3.UnitX, designToWorld) - originW;
-            Float3 upW = Float4x4.TransformPoint(Float3.UnitY, designToWorld) - originW;
-            float worldPerPixel = Float3.Length(rightW);
-            if (worldPerPixel < 1e-9f)
-                return _active != Handle.None;
-            rightW /= worldPerPixel;
-            upW = Float3.Normalize(upW);
-            Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
-
             Rect cr = rt.ComputedRect;
             if (cr.Size.X <= 0 || cr.Size.Y <= 0)
             {
@@ -209,17 +196,36 @@ public sealed class UISceneEditor : ISceneViewEditor
                 return false;
             }
 
+            // Work in the element's own model frame (BuildItemModel = CanvasToWorld * BuildRectModel),
+            // so the outline, handles and drag follow the element's (and its parents') rotation and
+            // scale rather than the flat canvas plane. The element's pivot-centered local space maps to
+            // the canvas layout rect by a translation of the pivot position, so the mouse hit is shifted
+            // by that pivot and the existing canvas-space hit-test / drag math is reused unchanged.
+            Float4x4 frameToWorld = canvas.BuildItemModel(_target);
+            Float4x4 worldToFrame = frameToWorld.Invert();
+            Float2 pivotCanvasPos = new(cr.Min.X + rt.Pivot.X * cr.Size.X, cr.Min.Y + rt.Pivot.Y * cr.Size.Y);
+
+            Float3 originW = Float4x4.TransformPoint(Float3.Zero, frameToWorld);
+            Float3 rightW = Float4x4.TransformPoint(Float3.UnitX, frameToWorld) - originW;
+            Float3 upW = Float4x4.TransformPoint(Float3.UnitY, frameToWorld) - originW;
+            float worldPerPixel = Float3.Length(rightW);
+            if (worldPerPixel < 1e-9f)
+                return _active != Handle.None;
+            rightW /= worldPerPixel;
+            upW = Float3.Normalize(upW);
+            Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
+
             Rect parentRect = ResolveParentRect(rt);
 
             Float3 camPos = camera.GameObject.Transform.Position;
             Float3 centerW = Float4x4.TransformPoint(
-                new Float3(cr.Min.X + cr.Size.X * 0.5f, cr.Min.Y + cr.Size.Y * 0.5f, 0), designToWorld);
+                new Float3(cr.Min.X + cr.Size.X * 0.5f - pivotCanvasPos.X, cr.Min.Y + cr.Size.Y * 0.5f - pivotCanvasPos.Y, 0), frameToWorld);
             float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);
             float pickRadius = handleWorld / worldPerPixel; // design pixels
 
             // Draw the rect outline + handles every frame, BEFORE any input-related early-out, so they
             // never flicker off while navigating the camera or when the pointer leaves the canvas plane.
-            DrawHandles(rt, designToWorld, rightW, upW, handleWorld);
+            DrawHandles(rt, frameToWorld, pivotCanvasPos, rightW, upW, handleWorld);
 
             // Camera navigation (RMB/MMB) takes over: don't hit-test or drag while orbiting / panning.
             bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
@@ -236,8 +242,10 @@ public sealed class UISceneEditor : ISceneViewEditor
                 return false;
             }
             Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
-            Float3 designHit3 = Float4x4.TransformPoint(worldHit, worldToDesign);
-            Float2 designHit = new(designHit3.X, designHit3.Y);
+            // Map the world hit into the element's local frame, then shift by the pivot so it lands in
+            // the same canvas layout space HitTest / ApplyDrag operate in (un-rotated, un-scaled).
+            Float3 localHit = Float4x4.TransformPoint(worldHit, worldToFrame);
+            Float2 designHit = new(localHit.X + pivotCanvasPos.X, localHit.Y + pivotCanvasPos.Y);
 
             bool leftDown = Input.GetMouseButton(0);
             bool leftPressed = Input.GetMouseButtonDown(0);
@@ -249,41 +257,40 @@ public sealed class UISceneEditor : ISceneViewEditor
 
                 if (leftPressed && viewportHovered && !camNav)
                 {
-                    // Resize / pivot / anchor handles on the current target win first - that's
-                    // the active edit affordance. For Handle.Move (clicked inside the rect body)
-                    // and Handle.None we re-pick across every canvas so a click on a sibling /
-                    // child UI element switches the selection instead of starting a drag on the
-                    // currently-selected ancestor.
-                    if (_hover != Handle.None && _hover != Handle.Move)
+                    // Resolve the top-most UI element under the cursor first, so draw order is respected:
+                    // a child (or any element) drawn on top of the selected one is selectable instead of
+                    // being blocked by the selected element's handles/body.
+                    GameObject? topMost = UIPicker.Pick(scene, mouseRay);
+                    bool topIsSelected = ReferenceEquals(topMost, _target.GameObject);
+
+                    if (_hover != Handle.None && _hover != Handle.Move && (topIsSelected || topMost == null))
                     {
+                        // Grab a resize / pivot / anchor handle of the selected element - but only when
+                        // the cursor isn't over a different top-most element (handles can extend past the
+                        // rect, so a null top-most still counts as grabbing the handle).
                         _active = _hover;
                         _dragStartDesign = designHit;
                         _dragStartRect = cr;
                         _dragStartState = LayoutState.Capture(rt);
                     }
-                    else
+                    else if (topIsSelected)
                     {
-                        GameObject? uiHit = UIPicker.Pick(scene, mouseRay);
-
-                        if (uiHit == _target.GameObject)
-                        {
-                            // Topmost UI under cursor IS the current target - start a Move drag.
-                            _active = Handle.Move;
-                            _dragStartDesign = designHit;
-                            _dragStartRect = cr;
-                            _dragStartState = LayoutState.Capture(rt);
-                        }
-                        else if (uiHit != null)
-                        {
-                            // Different UI element under cursor - switch selection. The registry
-                            // reactivates this editor against the new target on the next frame.
-                            if (Input.IsCtrlPressed) Selection.ToggleSelection(uiHit);
-                            else Selection.Select(uiHit);
-                        }
-                        else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
-                        {
-                            Selection.Clear();
-                        }
+                        // Top-most under the cursor IS the current target - start a Move drag.
+                        _active = Handle.Move;
+                        _dragStartDesign = designHit;
+                        _dragStartRect = cr;
+                        _dragStartState = LayoutState.Capture(rt);
+                    }
+                    else if (topMost != null)
+                    {
+                        // A different element is on top - switch selection to it. The registry
+                        // reactivates this editor against the new target on the next frame.
+                        if (Input.IsCtrlPressed) Selection.ToggleSelection(topMost);
+                        else Selection.Select(topMost);
+                    }
+                    else if (!Input.IsCtrlPressed && !Input.IsShiftPressed)
+                    {
+                        Selection.Clear();
                     }
                 }
             }
@@ -413,10 +420,8 @@ public sealed class UISceneEditor : ISceneViewEditor
                 return;
         }
 
-        // Move / resize - snap to whole pixels and keep a minimum size.
-        minX = MathF.Round(minX); maxX = MathF.Round(maxX);
-        minY = MathF.Round(minY); maxY = MathF.Round(maxY);
-
+        // Move / resize - keep a minimum size. (No per-frame pixel rounding: it made the size flicker
+        // as the cursor moved sub-pixel; the drag tracks the cursor smoothly instead.)
         if (maxX - minX < MinRectSize)
         {
             if (_active is Handle.ResizeL or Handle.ResizeBL or Handle.ResizeTL)
@@ -524,13 +529,14 @@ public sealed class UISceneEditor : ISceneViewEditor
     //  Drawing
     // ================================================================
 
-    private void DrawHandles(RectTransform rt, Float4x4 designToWorld, Float3 rightW, Float3 upW, float handleWorld)
+    private void DrawHandles(RectTransform rt, Float4x4 frameToWorld, Float2 pivotCanvasPos, Float3 rightW, Float3 upW, float handleWorld)
     {
         Rect cr = rt.ComputedRect;
         Rect parentRect = ResolveParentRect(rt);
         float half = handleWorld * 0.5f;
 
-        Float3 ToWorld(Float2 d) => Float4x4.TransformPoint(new Float3(d.X, d.Y, 0), designToWorld);
+        // Canvas layout point -> element local (subtract pivot) -> world (element model). Follows rotation/scale.
+        Float3 ToWorld(Float2 d) => Float4x4.TransformPoint(new Float3(d.X - pivotCanvasPos.X, d.Y - pivotCanvasPos.Y, 0), frameToWorld);
 
         // Rect outline - brightened while moving.
         bool moving = _active == Handle.Move || (_active == Handle.None && _hover == Handle.Move);

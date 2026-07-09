@@ -171,14 +171,4 @@ internal sealed class UIRenderItem : IRenderable
             ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
         LastTransformVersion = v;
     }
-
-    /// <summary>Unconditionally recompute the model (and clip) matrix. Used by ScreenSpaceCamera canvases,
-    /// whose placement follows the render camera every frame rather than the owning Transform.</summary>
-    internal void ForceRefreshModel()
-    {
-        Model = Canvas.BuildItemModel(Owner);
-        if (HasClip && ClipSource != null)
-            ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
-        LastTransformVersion = Owner.Transform.Version;
-    }
 }

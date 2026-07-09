@@ -89,22 +89,6 @@ public class GameCanvas : MonoBehaviour
     [SerializeField] private ScreenMatchMode _screenMatchMode = ScreenMatchMode.MatchWidthOrHeight;
     public ScreenMatchMode ScreenMatchMode { get => _screenMatchMode; set => SetField(ref _screenMatchMode, value, UIDirtyFlags.Layout); }
 
-    /// <summary>For <see cref="RenderMode.ScreenSpaceCamera"/>: world-unit distance from the render
-    /// camera to the plane the canvas is projected onto. Objects nearer than this can occlude the UI.</summary>
-    [SerializeField] private float _planeDistance = 10f;
-    public float PlaneDistance { get => _planeDistance; set => SetField(ref _planeDistance, Maths.Max(0.01f, value), UIDirtyFlags.Layout); }
-
-    // Camera placement for ScreenSpaceCamera canvases, pushed by the pipeline each frame right before
-    // it collects the Camera surface (see DefaultRenderPipeline.RenderUIQueue). It's global because a
-    // single camera drives all Camera-surface canvases for that pass.
-    private struct ScreenCamera { public Float3 Position, Forward, Up, Right; public Float4x4 Projection; public bool Valid; }
-    private static ScreenCamera s_screenCamera;
-
-    internal static void PushScreenCamera(Float3 position, Float3 forward, Float3 up, Float3 right, Float4x4 projection)
-        => s_screenCamera = new ScreenCamera { Position = position, Forward = forward, Up = up, Right = right, Projection = projection, Valid = true };
-
-    internal static void ClearScreenCamera() => s_screenCamera.Valid = false;
-
     // ----------------------------------------------------------------
     // Shared default UI material - referenced by UIBehaviour.GetMaterial
     // ----------------------------------------------------------------
@@ -269,9 +253,9 @@ public class GameCanvas : MonoBehaviour
 
     private Rect ComputeRootRect()
     {
-        // World-space and ScreenSpaceCamera canvases have a fixed design size (their ReferenceResolution)
-        // and don't track the screen - the plane/transform maps that to world. Overlay fills the surface.
-        if (UseWorldSpace || RenderMode == RenderMode.ScreenSpaceCamera)
+        // World-space canvases have a fixed design size (their ReferenceResolution) and don't track the
+        // screen. Screen-space canvases fill the surface (in design pixels, after the scale factor).
+        if (UseWorldSpace)
             return new Rect(0, 0, Maths.Max(ReferenceResolution.X, 1f), Maths.Max(ReferenceResolution.Y, 1f));
 
         float rawW = ScreenSizeOverride?.X ?? Window.InternalWindow.FramebufferSize.X;
@@ -456,70 +440,18 @@ public class GameCanvas : MonoBehaviour
     /// <summary>
     /// Base canvas -> world transform without per-element pivot / rotation / scale. Per-mode:
     ///   - WorldSpace -> <see cref="Transform.LocalToWorldMatrix"/> (design pixels map 1:1 to world units)
-    ///   - ScreenSpaceOverlay / ScreenSpaceCamera -> scale(<see cref="ScaleFactor"/>)
+    ///   - ScreenSpaceOverlay -> scale(<see cref="ScaleFactor"/>)
     /// </summary>
     /// <remarks>
     /// Exposed so the scene-view editor and gizmos stay in sync with the actual rendering by
     /// consuming the same matrix.
     /// </remarks>
-    public Float4x4 CanvasToWorld
-    {
-        get
-        {
-            // World-space canvases map design pixels 1:1 to world units through the transform (author
-            // the world size via the GameObject's Transform scale).
-            if (UseWorldSpace) return Transform.LocalToWorldMatrix;
-
-            // ScreenSpaceCamera projects the design-pixel rect onto a plane in front of the render camera.
-            if (RenderMode == RenderMode.ScreenSpaceCamera && s_screenCamera.Valid) return BuildScreenCameraMatrix();
-
-            // Overlay: uniform scale by the scale factor (screen-ortho projection supplies the rest).
-            return Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f));
-        }
-    }
-
-    /// <summary>
-    /// Maps this canvas's design-pixel space onto a plane <see cref="PlaneDistance"/> in front of the
-    /// render camera, sized to fill the camera's view at that distance. Rebuilt every frame while the
-    /// camera moves (see <see cref="UIRenderTree.RefreshAllModels"/>), so ScreenSpaceCamera UI tracks it.
-    /// </summary>
-    private Float4x4 BuildScreenCameraMatrix()
-    {
-        ScreenCamera cam = s_screenCamera;
-        float d = Maths.Max(0.01f, _planeDistance);
-
-        // View extents at distance d, from the projection's diagonal. Perspective: height = 2 d tan(fovY/2)
-        // (proj[1,1] = 1/tan(fovY/2)); orthographic (proj[3,3] == 1): height is distance-independent.
-        Float4x4 proj = cam.Projection;
-        float p00 = proj[0, 0], p11 = proj[1, 1], p33 = proj[3, 3];
-        float viewH, viewW;
-        if (Maths.Abs(p33 - 1f) < 0.001f)
-        {
-            viewH = 2f / Maths.Max(1e-4f, p11);
-            viewW = 2f / Maths.Max(1e-4f, p00);
-        }
-        else
-        {
-            viewH = 2f * d / Maths.Max(1e-4f, p11);
-            viewW = viewH * (p11 / Maths.Max(1e-4f, p00));
-        }
-
-        float refW = Maths.Max(1f, ReferenceResolution.X);
-        float refH = Maths.Max(1f, ReferenceResolution.Y);
-        float sx = viewW / refW;
-        float sy = viewH / refH;
-
-        Float3 r = cam.Right, u = cam.Up, f = cam.Forward;
-        Float3 center = cam.Position + f * d;
-        Float3 origin = center - r * (sx * refW * 0.5f) - u * (sy * refH * 0.5f);
-
-        // Columns: design +X -> camera right (scaled), +Y -> camera up (scaled), +Z -> forward, plus origin.
-        return new Float4x4(
-            new Float4(r.X * sx, r.Y * sx, r.Z * sx, 0f),
-            new Float4(u.X * sy, u.Y * sy, u.Z * sy, 0f),
-            new Float4(f.X, f.Y, f.Z, 0f),
-            new Float4(origin.X, origin.Y, origin.Z, 1f));
-    }
+    public Float4x4 CanvasToWorld => UseWorldSpace
+        // World-space canvases map design pixels 1:1 to world units (through the transform), so the canvas
+        // occupies its ReferenceResolution in world space and doesn't shrink when the mode is toggled.
+        // Author the world size via the GameObject's Transform scale.
+        ? Transform.LocalToWorldMatrix
+        : Float4x4.CreateScale(Maths.Max(ScaleFactor, 0.001f));
 
     /// <summary>
     /// Returns the model matrix for a UI element under this canvas. Equivalent to

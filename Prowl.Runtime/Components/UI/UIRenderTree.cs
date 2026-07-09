@@ -72,14 +72,6 @@ internal sealed class UIRenderTree
             _items[i].RefreshModelIfDirty();
     }
 
-    /// <summary>Unconditionally rebuilds every item's model matrix (for ScreenSpaceCamera canvases,
-    /// whose placement follows the render camera each frame independent of any Transform change).</summary>
-    public void RefreshAllModels()
-    {
-        for (int i = 0; i < _items.Count; i++)
-            _items[i].ForceRefreshModel();
-    }
-
     // ============================================================
     // Static scene query - the pipeline's entry point
     // ============================================================
@@ -106,12 +98,7 @@ internal sealed class UIRenderTree
             if (ToSurface(gc.RenderMode) != surface) continue;
 
             gc.RebuildIfDirty();         // no-op if clean
-            // ScreenSpaceCamera follows the render camera every frame, so its item models must be
-            // rebuilt unconditionally; other modes use the cheap Transform-version fast-path.
-            if (gc.RenderMode == RenderMode.ScreenSpaceCamera)
-                gc.Tree.RefreshAllModels();
-            else
-                gc.Tree.RefreshTransforms();
+            gc.Tree.RefreshTransforms(); // matrix fast-path
 
             var items = gc.Tree._items;
             for (int i = 0; i < items.Count; i++)
@@ -125,8 +112,7 @@ internal sealed class UIRenderTree
     /// </summary>
     internal static UISurface ToSurface(RenderMode m) => m switch
     {
-        RenderMode.WorldSpace        => UISurface.World,
-        RenderMode.ScreenSpaceCamera => UISurface.Camera,
-        _                            => UISurface.Overlay,
+        RenderMode.WorldSpace => UISurface.World,
+        _                     => UISurface.Overlay,
     };
 }
