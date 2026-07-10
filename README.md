@@ -1,10 +1,10 @@
 ﻿<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
 
-![Github top languages](https://img.shields.io/github/languages/top/michaelsakharov/prowl)
-[![GitHub version](https://img.shields.io/github/v/release/michaelsakharov/prowl?include_prereleases&style=flat-square)](https://github.com/michaelsakharov/prowl/releases)
-[![GitHub license](https://img.shields.io/github/license/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/blob/main/LICENSE.txt)
-[![GitHub issues](https://img.shields.io/github/issues/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/issues)
-[![GitHub stars](https://img.shields.io/github/stars/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/stargazers)
+![Github top languages](https://img.shields.io/github/languages/top/ProwlEngine/Prowl)
+[![GitHub version](https://img.shields.io/github/v/release/ProwlEngine/Prowl?include_prereleases&style=flat-square)](https://github.com/ProwlEngine/Prowl/releases)
+[![GitHub license](https://img.shields.io/github/license/ProwlEngine/Prowl?style=flat-square)](https://github.com/ProwlEngine/Prowl/blob/main/LICENSE.txt)
+[![GitHub issues](https://img.shields.io/github/issues/ProwlEngine/Prowl?style=flat-square)](https://github.com/ProwlEngine/Prowl/issues)
+[![GitHub stars](https://img.shields.io/github/stars/ProwlEngine/Prowl?style=flat-square)](https://github.com/ProwlEngine/Prowl/stargazers)
 [![Discord](https://img.shields.io/discord/1151582593519722668?logo=discord
 )](https://discord.gg/BqnJ9Rn4sn)
 
@@ -29,10 +29,11 @@ Prowl is an open-source, **[MIT-licensed](#span-aligncenter-license-span)** game
 
 It aims to provide a seamless transition for developers familiar with _Unity_ by maintaining a similar API while also following KISS and staying as small and customizable as possible. Ideally, _Unity_ projects can port over with as little resistance as possible.
 
-Please keep in mind that Prowl is incredibly new and under very active development, Untill a full 1.0 release comes out, breaking changes are expected.
+Prowl is currently in **1.0-preview**, following a complete rewrite of the Editor, renderer, physics, audio, and UI. Projects made with older versions of Prowl are not compatible with 1.0-preview, there is no migration path. Until the final 1.0 release, further breaking changes are still possible.
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
+<!-- TODO: these screenshots are from the pre-1.0-preview Editor UI and no longer reflect the current Editor, replace with fresh 1.0-preview screenshots -->
 | ![Screenshot 2024-06-27 172952](https://github.com/michaelsakharov/Prowl/assets/8621606/80df58cc-53ac-4582-b722-1800d6cd4d13) | ![Screenshot 2024-06-27 172106](https://github.com/michaelsakharov/Prowl/assets/8621606/c13e9145-6b35-4ea5-ad66-523a275d0bc9) |
 | :-: | :-: |
 | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/91ab57be-b215-40a8-871b-baf1dfc9ea58) | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1cc6bb14-7c41-46e9-a581-c79ba51fc45f) |
@@ -42,11 +43,12 @@ Please keep in mind that Prowl is incredibly new and under very active developme
 # <span align="center">✨ Features ✨</span>
 
 -   **General:**
-    - Cross-Platform! Windows, Linux & Mac!
+    - Cross-Platform! Windows, Linux & Mac, for both the Editor and exported builds
     - Unity-like Editor & Scripting API
-    - C# Scripting with .NET 9
+    - C# Scripting with .NET 10
     - GameObject & MonoBehaviour Component Architecture
-    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Prowl.Paper))
+    - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
+    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Prowl.Paper)), Editor built on top of [Origami](https://github.com/ProwlEngine/Prowl.Origami)
     - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Prowl.Quill)
     - Full-Featured Editor
         - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
@@ -61,12 +63,17 @@ Please keep in mind that Prowl is incredibly new and under very active developme
         - Rebindable Shortcut/Hotkey System
         - Editor Theming with Customizable Color Palettes and sizing
         - Playtest directly in the Editor
+        - Hot-Reloading Scripts
+        - Localization - English, German, Spanish, French, Italian, Japanese, Korean, Polish, Portuguese, Russian, Turkish & Chinese
+        - Managed & Native Plugins with Assembly Definitions
     - Physics using [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
         - Colliders: Box, Sphere, Capsule, Cylinder, Cone, Convex Hull, Mesh, Model, Terrain
-        - Constraints: Ball Socket, Hinge, Fixed Angle, Cone Limit, Distance Limit, Angular Motor, Linear Motor
+        - Wheel Collider (raycast-based vehicle wheel, with suspension & slip-based grip)
+        - Joints & Constraints: Ball Socket, Hinge Joint, Hinge Angle, Fixed Angle, Cone Limit, Distance Limit, Twist Angle, Prismatic, Universal, Point On Line, Point On Plane, Angular Motor, Linear Motor
         - Character Controller
-        - Collision Layers & Filtering
-        - Raycasting & Shape Casting
+        - Trigger Volumes (Box, Sphere, Capsule)
+        - Collision Layers & Filtering (LayerMask)
+        - Raycasting & Shape Query API
     - Audio via MiniAudio
         - Spatial 3D Audio with Attenuation & Doppler
         - Supports WAV, MP3, OGG, FLAC
@@ -82,20 +89,25 @@ Please keep in mind that Prowl is incredibly new and under very active developme
         - `.inputactions` assets with a dedicated editor
         - Action phases (Disabled / Started / Performed / Cancelled)
         - Composite bindings (WASD → Float2, D-pad, etc.) for keyboard, mouse & gamepad
+    - GameObject-Based UI, including World Space UI
+        - `RectTransform`-driven layout, Buttons, Sliders, layout groups, drag & drop event handlers
+    - Prowl Actions - persistent, inspector-configurable event callbacks
     - Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector)
         - Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
     - Build System - Build to Standalone Application
         - Packed Asset Files (.prowlpak)
         - Only exports used assets
+        - Per-platform build profiles
         - Supports Windows, Mac & Linux
+    - Unit Tested - 450+ tests across the Runtime and Editor
 
 -   **Graphics Rendering:**
     - OpenGL Backend via [Silk.NET](https://github.com/dotnet/Silk.NET)
 	- Dedicated Render Thread
     - Extensible Render Pipeline (Custom Pipelines Supported)
     - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
-	- Custom UV-Unwrapper and Lightmapper
+	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic)
 	- Baked Light Probes
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
     - Node-Based **Shader Graph**
@@ -110,8 +122,9 @@ Please keep in mind that Prowl is incredibly new and under very active developme
         - Noise nodes (FastNoiseLite): OpenSimplex2 / OpenSimplex2S / Perlin / Value / Cellular (Voronoi) / Domain Warp, with FBM / Ridged / PingPong fractal variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
         - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
-    - Mesh Renderer & Skinned Mesh Renderer with Bone Animation
+    - Mesh Renderer & Skinned Mesh Renderer with Bone Animation and Blendshapes
     - Line Renderer
+    - Sprites, with Sprite Sheet slicing (Grid, Isometric & Automatic alpha-based slicing) and a dedicated Sprite Editor
     - Render Textures & Texture3D
     - GPU Instancing & Frustum Culling
     - Point, Spot, and Directional Lights
@@ -152,7 +165,7 @@ Please keep in mind that Prowl is incredibly new and under very active developme
     - Forward & Reverse Dependency Tracking
 	- Threaded Asset Loading
     - Supported Formats:
-        - Models: GLTF, GLB, OBJ (Custom Importer, FBX Planned)
+        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay))
         - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
         - Audio: WAV, MP3, OGG, FLAC
 
@@ -164,13 +177,13 @@ Getting Prowl up and running is super easy!
 
 ## Releases
 
-> **Note**: There are no official releases yet so you need to download this repository to use Prowl!
+> **Note**: Prowl is now at **1.0-preview**, grab it from the [Releases page](https://github.com/ProwlEngine/Prowl/releases). Projects made with older, pre-1.0-preview versions of Prowl are not compatible and cannot be migrated.
 
 ## Build from source
 
 ### Prerequisites
 
-* [.NET 9](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 
 ### Installation
 
@@ -220,6 +233,9 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 - [Prowl.Scribe](https://github.com/ProwlEngine/Prowl.Scribe) - TrueType font parsing, glyph rasterization & markdown layout
 - [Prowl.Rosetta](https://github.com/ProwlEngine/Prowl.Rosetta) - For Editor Localisation
 - [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector) - 64-bit Math Library
+- [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper) - UV Unwrapper
+- [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic) - Progressive Lightmapper
+- [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay) - Model Importing (GLTF, GLB, OBJ, FBX)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
