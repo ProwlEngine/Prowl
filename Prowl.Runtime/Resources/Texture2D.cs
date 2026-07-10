@@ -287,6 +287,10 @@ public sealed class Texture2D : Texture, ISerializable
             if (generateMipmaps)
                 texture.GenerateMipmaps();
 
+            // Image-content textures default to linear filtering (the base Texture default is Nearest,
+            // which suits depth/data textures). Importer/user settings still override this afterward.
+            texture.SetTextureFilters(generateMipmaps ? TextureMin.LinearMipmapLinear : TextureMin.Linear, TextureMag.Linear);
+
             return texture;
         }
         catch
