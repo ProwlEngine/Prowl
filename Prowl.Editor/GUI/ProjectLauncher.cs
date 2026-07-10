@@ -42,9 +42,9 @@ public static class ProjectLauncher
     private static UnitValue ST => UnitValue.StretchOne;
 
     private static Color Col(int r, int g, int b, float a = 1f) => Color.FromArgb((int)Math.Round(a * 255), r, g, b);
-    private static Color WinGlass => Col(20, 16, 36, 0.72f);
+    private static Color WinGlass => EditorTheme.WithAlpha(EditorTheme.Neutral300, 184); // panel glass, tracks theme
     private static Color GlassIn => EditorTheme.Glass;
-    private static Color Raised => Col(38, 32, 54, 0.8f);
+    private static Color Raised => EditorTheme.WithAlpha(EditorTheme.Neutral400, 204); // raised surface, tracks theme
     private static Color Bd => Color.FromArgb(33, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B);
     private static Color BdSoft => EditorTheme.BorderSoft;
     private static Color BdStrong => EditorTheme.BorderStrong;
