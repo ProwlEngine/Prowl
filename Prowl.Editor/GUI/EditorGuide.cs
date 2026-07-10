@@ -227,7 +227,7 @@ public static class EditorGuide
             {
                 if (!string.IsNullOrEmpty(step.Icon))
                     paper.Box("grd_icon").Width(centered ? 40 : 30).Height(centered ? 40 : 30)
-                        .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(9)
+                        .Margin(0, 13, UnitValue.Stretch(), UnitValue.Stretch()).Rounded(9)
                         .BackgroundColor(Color.FromArgb(60, 255, 255, 255)).IsNotInteractable()
                         .Text(step.Icon, semi).TextColor(Color.White).FontSize(centered ? 20f : 15f)
                         .Alignment(TextAlignment.MiddleCenter);
@@ -238,11 +238,13 @@ public static class EditorGuide
                     .FontSize(centered ? 22f : 17f).Alignment(TextAlignment.MiddleLeft);
             }
 
-            // Body copy (regular font, consistent padding).
-            paper.Box("grd_body").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-                .Padding(pad, pad, pad, string.IsNullOrEmpty(step.TipKey) ? pad : 12).IsNotInteractable()
-                .Text(Loc.Get(step.BodyKey), font).Wrap(Scribe.TextWrapMode.Wrap)
-                .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+            // Body copy (regular font). The text lives in a child box so the parent's padding actually
+            // insets it - a box's own .Text() is drawn at the full rect and ignores Padding.
+            using (paper.Box("grd_body").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
+                .Padding(pad, pad, pad, string.IsNullOrEmpty(step.TipKey) ? pad : 12).IsNotInteractable().Enter())
+                paper.Box("grd_body_t").Width(UnitValue.StretchOne).Height(UnitValue.Auto).IsNotInteractable()
+                    .Text(Loc.Get(step.BodyKey), font).Wrap(Scribe.TextWrapMode.Wrap)
+                    .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
 
             // Optional migration tip (Unreal / Godot equivalent).
             if (!string.IsNullOrEmpty(step.TipKey))
@@ -250,7 +252,10 @@ public static class EditorGuide
                     .Margin(pad, pad, 0, 4).Rounded(8).Padding(10, 10, 8, 8).RowBetween(8)
                     .BackgroundColor(EditorTheme.Selected).Enter())
                 {
-                    paper.Box("grd_tip_i").Width(16).Height(UnitValue.StretchOne).Margin(0, 0, UnitValue.Stretch(), 0).IsNotInteractable()
+                    // Own-text is only aligned horizontally, so center the bulb by centering its
+                    // (auto-height) box in the row via top+bottom stretch margins; the right margin
+                    // is the gap to the text (RowBetween doesn't apply to explicit-margin children).
+                    paper.Box("grd_tip_i").Width(16).Height(UnitValue.Auto).Margin(0, 8, UnitValue.Stretch(), UnitValue.Stretch()).IsNotInteractable()
                         .Text(EditorIcons.Lightbulb, font).TextColor(EditorTheme.AccentText)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     paper.Box("grd_tip_t").Width(UnitValue.StretchOne).Height(UnitValue.Auto).IsNotInteractable()
@@ -273,7 +278,7 @@ public static class EditorGuide
 
                 paper.Box("grd_spc").Width(UnitValue.StretchOne).Height(1).IsNotInteractable();
 
-                using (paper.Row("grd_btns").Width(UnitValue.Auto).Height(UnitValue.StretchOne)
+                using (paper.Row("grd_btns").Width(UnitValue.Auto).Height(UnitValue.Auto)
                     .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch()).RowBetween(8).Enter())
                 {
                     if (!first)
