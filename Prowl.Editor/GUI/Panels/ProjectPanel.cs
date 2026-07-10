@@ -1228,10 +1228,31 @@ public class ProjectPanel : DockPanel
             .Tooltip(sub.Name)
             .Enter())
         {
-            paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0).Rounded(8)
-                .BackgroundLinearGradient(0, 0, 1, 1, Color.FromArgb(58, style.Color), Color.FromArgb(16, style.Color))
-                .BorderColor(Color.FromArgb(68, style.Color)).BorderWidth(1)
-                .Icon(paper, style.Icon, style.Color, size: 20f);
+            var thumbTex = GetThumbnailTexture(sub.Guid);
+            if (thumbTex != null)
+            {
+                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0)
+                    .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
+                    {
+                        float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
+                        canvas.DrawImageRounded(thumbTex, x, y, w, h, 8f);
+                        var bd = Prowl.Vector.Color32.FromArgb(BdSoft.A, BdSoft.R, BdSoft.G, BdSoft.B);
+                        canvas.SaveState();
+                        canvas.SetStrokeColor(bd);
+                        canvas.SetStrokeWidth(1f);
+                        canvas.BeginPath();
+                        canvas.RoundedRect(x + 0.5f, y + 0.5f, w - 1f, h - 1f, 8f);
+                        canvas.Stroke();
+                        canvas.RestoreState();
+                    }));
+            }
+            else
+            {
+                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0).Rounded(8)
+                    .BackgroundLinearGradient(0, 0, 1, 1, Color.FromArgb(58, style.Color), Color.FromArgb(16, style.Color))
+                    .BorderColor(Color.FromArgb(68, style.Color)).BorderWidth(1)
+                    .Icon(paper, style.Icon, style.Color, size: 20f);
+            }
 
             paper.Box($"proj_subnm_{sub.Guid}").Width(UnitValue.Stretch()).Height(14).Clip()
                 .Text(sub.Name, font).TextColor(TMid).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
