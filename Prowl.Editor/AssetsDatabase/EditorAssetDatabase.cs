@@ -1210,6 +1210,46 @@ public class EditorAssetDatabase : IAssetDatabase
     //  File Watching (per-frame update)
     // ================================================================
 
+    /// <summary>Import a newly created or modified file, tracking it if it isn't already.</summary>
+    private void ImportFileChange(string absolutePath, string relativePath, List<string> imported)
+    {
+        string ext = Path.GetExtension(absolutePath);
+        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+        var meta = MetaFile.EnsureMeta(absolutePath, importerName);
+
+        if (!_guidToEntry.ContainsKey(meta.Guid))
+        {
+            var entry = new AssetEntry
+            {
+                Guid = meta.Guid,
+                Path = relativePath,
+                ImporterType = importerName,
+                NeedsReimport = true
+            };
+            _guidToEntry[meta.Guid] = entry;
+            _pathToGuid[relativePath] = meta.Guid;
+        }
+        else
+        {
+            _guidToEntry[meta.Guid].NeedsReimport = true;
+        }
+
+        // Dispose previous main + sub-asset instances so any holding
+        // AssetRef detects them as invalid and re-resolves to the freshly
+        // imported instance. The Reimport() entry-point already does this;
+        // the watcher path needs to match or downstream refs (e.g. a
+        // Material pointing at a regenerated shader sub-asset) keep the
+        // stale instance until the user manually reimports.
+        var existingEntry = _guidToEntry[meta.Guid];
+        DisposeAndRemove(meta.Guid);
+        if (existingEntry.SubAssets != null)
+            foreach (var sub in existingEntry.SubAssets)
+                DisposeAndRemove(sub.Guid);
+
+        RunImport(existingEntry);
+        imported.Add(relativePath);
+    }
+
     public void ProcessFileChanges()
     {
         if (_watcher == null) return;
@@ -1234,44 +1274,8 @@ public class EditorAssetDatabase : IAssetDatabase
             {
                 case FileEventType.Created:
                 case FileEventType.Modified:
-                {
-                    string ext = Path.GetExtension(evt.Path);
-                    string importerName = ImporterRegistry.GetImporterTypeName(ext);
-                    var meta = MetaFile.EnsureMeta(evt.Path, importerName);
-
-                    if (!_guidToEntry.ContainsKey(meta.Guid))
-                    {
-                        var entry = new AssetEntry
-                        {
-                            Guid = meta.Guid,
-                            Path = relativePath,
-                            ImporterType = importerName,
-                            NeedsReimport = true
-                        };
-                        _guidToEntry[meta.Guid] = entry;
-                        _pathToGuid[relativePath] = meta.Guid;
-                    }
-                    else
-                    {
-                        _guidToEntry[meta.Guid].NeedsReimport = true;
-                    }
-
-                    // Dispose previous main + sub-asset instances so any holding
-                    // AssetRef detects them as invalid and re-resolves to the freshly
-                    // imported instance. The Reimport() entry-point already does this;
-                    // the watcher path needs to match or downstream refs (e.g. a
-                    // Material pointing at a regenerated shader sub-asset) keep the
-                    // stale instance until the user manually reimports.
-                    var existingEntry = _guidToEntry[meta.Guid];
-                    DisposeAndRemove(meta.Guid);
-                    if (existingEntry.SubAssets != null)
-                        foreach (var sub in existingEntry.SubAssets)
-                            DisposeAndRemove(sub.Guid);
-
-                    RunImport(existingEntry);
-                    imported.Add(relativePath);
+                    ImportFileChange(evt.Path, relativePath, imported);
                     break;
-                }
 
                 case FileEventType.Deleted:
                 {
@@ -1318,7 +1322,16 @@ public class EditorAssetDatabase : IAssetDatabase
                     if (evt.OldPath != null)
                     {
                         string oldRelative = ToRelativePath(evt.OldPath);
-                        if (_pathToGuid.TryGetValue(oldRelative, out var guid))
+                        if (!_pathToGuid.TryGetValue(oldRelative, out var guid))
+                        {
+                            // The old path was never tracked e.g. the "write-to-temp-then-rename-
+                            // into-place" atomic-save pattern collapses Created+Renamed within the
+                            // debounce window before the temp file is ever imported. Treat the
+                            // destination as a brand-new file instead of silently dropping it until
+                            // the next full rescan.
+                            ImportFileChange(evt.Path, relativePath, imported);
+                        }
+                        else
                         {
                             _pathToGuid.Remove(oldRelative);
                             _pathToGuid[relativePath] = guid;
