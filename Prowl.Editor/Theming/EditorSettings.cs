@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Text.Json;
 
@@ -89,12 +88,12 @@ public class EditorSettings
         EditorTheme.AnimatedBackground = t.AnimatedBackground;
         EditorTheme.BackgroundSpeed = t.BackgroundSpeed;
         EditorTheme.BackgroundStyle = t.BackgroundStyle;
-        try { EditorTheme.BackgroundColorA = System.Drawing.ColorTranslator.FromHtml(t.BackgroundColorA); } catch { }
-        try { EditorTheme.BackgroundColorB = System.Drawing.ColorTranslator.FromHtml(t.BackgroundColorB); } catch { }
+        EditorTheme.BackgroundColorA = ColorRamp.ParseHex(t.BackgroundColorA);
+        EditorTheme.BackgroundColorB = ColorRamp.ParseHex(t.BackgroundColorB);
         EditorTheme.BgShowGradients = t.BgShowGradients;
         EditorTheme.BgShowStars = t.BgShowStars;
         EditorTheme.BgShowComets = t.BgShowComets;
-        try { EditorTheme.BackgroundVoidColor = System.Drawing.ColorTranslator.FromHtml(t.BackgroundVoidColor); } catch { }
+        EditorTheme.BackgroundVoidColor = ColorRamp.ParseHex(t.BackgroundVoidColor);
 
         // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
         // theme tweaks animate instead of snapping.
@@ -147,11 +146,5 @@ public class EditorSettings
         Theme = EditorThemeData.CreateDefault();
         ApplyTheme();
         Save();
-    }
-
-    private static Color ParseColor(string hex)
-    {
-        try { return ColorTranslator.FromHtml(hex); }
-        catch { return Color.Magenta; }
     }
 }
