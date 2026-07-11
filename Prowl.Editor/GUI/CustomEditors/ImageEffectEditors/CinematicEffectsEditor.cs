@@ -1,3 +1,4 @@
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Theming;
@@ -16,6 +17,9 @@ public class CinematicEffectsEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var fx = (CinematicEffects)target;
+
+        // Pre-snapshot: captures entire component state before any widget mutates it
+        Undo.Snapshot(fx);
 
         // -- Vignette --------------------------------------
         DrawSection(paper, $"{id}_vignette", EditorIcons.Eye, "Vignette",
