@@ -961,12 +961,22 @@ public class EditorAssetDatabase : IAssetDatabase
                 try { File.Delete(cachePath); } catch { }
         }
 
-        // Delete files
-        if (File.Exists(absolutePath))
-            File.Delete(absolutePath);
-        string metaPath = MetaFile.GetMetaPath(absolutePath);
-        if (File.Exists(metaPath))
-            File.Delete(metaPath);
+        // Delete files. The index/dispose state above has already been cleared, so an
+        // unhandled exception here (e.g. the file is locked by an external app) would leave
+        // the database thinking the asset is gone while it still exists on disk. Catch and
+        // warn instead of throwing, matching the best-effort cache/thumbnail cleanup above.
+        try
+        {
+            if (File.Exists(absolutePath))
+                File.Delete(absolutePath);
+            string metaPath = MetaFile.GetMetaPath(absolutePath);
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Failed to delete asset file '{relativePath}': {ex.Message}");
+        }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
