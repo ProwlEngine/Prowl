@@ -30,7 +30,7 @@ public static class Program
     {
         foreach ((string[] aliases, Action<List<string>> a, int m, string desc) in s_commands)
         {
-            if (args.Count == 0 || Array.Exists(aliases, (x) => x.Equals(args[1])))
+            if (args.Count == 0 || Array.Exists(aliases, (x) => x.Equals(args[0])))
                 Console.WriteLine($"[{string.Join(", ", aliases)}]: {desc}");
         }
 
@@ -65,6 +65,9 @@ public static class Program
         {
             (string[]? a, Action<List<string>>? action, int argsCount, string? d) =
                 Array.Find(s_commands, (x) => Array.Exists(x.commandAliases, (x) => x.Equals(result)));
+
+            if (action == null)
+                throw new Exception($"Unknown argument '{result}'");
 
             List<string> cmdArgs = [];
 
