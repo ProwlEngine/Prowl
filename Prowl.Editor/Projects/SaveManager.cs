@@ -38,6 +38,13 @@ public static class SaveManager
     /// <summary>Whether auto-save is enabled.</summary>
     public static bool AutoSaveEnabled = true;
 
+    /// <summary>
+    /// True while <see cref="OnSave"/> handlers are running as part of an auto-save rather than a
+    /// manual Ctrl+S. Handlers should check this before showing user-facing prompts (e.g. a Save As
+    /// dialog for a never-saved scene) - auto-save must never interrupt the user unattended.
+    /// </summary>
+    public static bool IsAutoSave { get; private set; }
+
     private static double _timeSinceLastSave;
     private static bool _saveRequestedThisFrame;
 
@@ -82,6 +89,7 @@ public static class SaveManager
         if (_saveRequestedThisFrame) return;
         _saveRequestedThisFrame = true;
         _timeSinceLastSave = 0;
+        IsAutoSave = isAutoSave;
 
         if (OnSave == null) return;
 
