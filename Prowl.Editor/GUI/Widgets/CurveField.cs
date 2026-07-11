@@ -406,15 +406,31 @@ internal static class CurvePopover
                     CurveRenderer.DrawRulerV(canvas, r, vMinV, vMaxV, theme.Font)));
 
             // Interactive keyframe handles
+            bool dragActive = paper.GetElementStorage(el, "dragActive", false);
             for (int i = 0; i < curve.Keys.Count; i++)
             {
                 var key = curve.Keys[i];
-                float kx = graphX + (key.Position - vMinT) * tToX;
-                float ky = graphY + GraphH - (key.Value - vMinV) * vToY;
+                bool isSelected = i == selectedIdx;
+
+                // While the selected key is being dragged, render its live (uncommitted) position
+                // instead of touching curve.Keys every frame. Keys.Add does a sorted insert, so
+                // mutating the array mid-drag can reorder it the moment the dragged key crosses a
+                // neighbor's time - which changes its index and, with it, this box's id ($"{id}_key_{i}"),
+                // breaking the in-progress drag's identity onto whatever key now sits at that index.
+                // Deferring the actual insert to OnDragEnd keeps the array (and every box id) stable
+                // for the whole gesture.
+                float posT = key.Position, posV = key.Value;
+                if (isSelected && dragActive)
+                {
+                    posT = paper.GetElementStorage(el, "dragT", posT);
+                    posV = paper.GetElementStorage(el, "dragV", posV);
+                }
+
+                float kx = graphX + (posT - vMinT) * tToX;
+                float ky = graphY + GraphH - (posV - vMinV) * vToY;
                 if (kx < graphX - 12 || kx > graphX + graphW + 12 || ky < graphY - 12 || ky > graphY + GraphH + 12)
                     continue;
 
-                bool isSelected = i == selectedIdx;
                 int idx = i;
 
                 // Tangent handles for selected key
@@ -436,14 +452,35 @@ internal static class CurvePopover
                     .Rounded(dotSize * 0.5f)
                     .StopEventPropagation()
                     .OnClick(idx, (ci, _) => paper.SetElementStorage(el, "sel", ci))
-                    .OnDragStart(idx, (ci, _) => paper.SetElementStorage(el, "sel", ci))
+                    .OnDragStart(idx, (ci, _) =>
+                    {
+                        paper.SetElementStorage(el, "sel", ci);
+                        var k = curve.Keys[ci];
+                        paper.SetElementStorage(el, "dragActive", true);
+                        paper.SetElementStorage(el, "dragT", k.Position);
+                        paper.SetElementStorage(el, "dragV", k.Value);
+                    })
                     .OnDragging(idx, (ci, e) =>
                     {
                         float dx = (float)e.Delta.X / graphW * rngT;
                         float dy = -(float)e.Delta.Y / GraphH * rngV;
+                        float t = paper.GetElementStorage(el, "dragT", 0f) + dx;
+                        float v = paper.GetElementStorage(el, "dragV", 0f) + dy;
+                        paper.SetElementStorage(el, "dragT", t);
+                        paper.SetElementStorage(el, "dragV", v);
+                    })
+                    .OnDragEnd(idx, (ci, _) =>
+                    {
+                        if (!paper.GetElementStorage(el, "dragActive", false)) return;
+                        paper.SetElementStorage(el, "dragActive", false);
+
+                        float t = paper.GetElementStorage(el, "dragT", 0f);
+                        float v = paper.GetElementStorage(el, "dragV", 0f);
                         var k = curve.Keys[ci];
+                        var moved = new KeyFrame(t, v, k.TangentIn, k.TangentOut, k.Continuity);
                         curve.Keys.RemoveAt(ci);
-                        curve.Keys.Add(new KeyFrame(k.Position + dx, k.Value + dy, k.TangentIn, k.TangentOut, k.Continuity));
+                        curve.Keys.Add(moved);
+                        paper.SetElementStorage(el, "sel", curve.Keys.IndexOf(moved));
                         onChange(curve);
                     })
                     .OnRightClick(idx, (ci, _) =>
