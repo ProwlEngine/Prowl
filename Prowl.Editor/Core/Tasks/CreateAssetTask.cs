@@ -95,6 +95,11 @@ public class CreateAssetTask : EditorTask
         string filePath = Path.Combine(absFolder, name);
 
         var stream = EditorApplication.GetEmbeddedResource("NewShader.template");
+        if (stream == null)
+        {
+            Debug.LogError("Failed to create shader: embedded resource 'NewShader.template' is missing.");
+            return null;
+        }
 
         using (StreamReader reader = new StreamReader(stream))
         {
