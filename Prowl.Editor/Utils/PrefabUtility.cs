@@ -215,6 +215,7 @@ public static class PrefabUtility
         if (scene != null)
         {
             scene.Remove(instanceRoot);
+            instanceRoot.Dispose();
             scene.Add(fresh);
             if (parent != null)
             {
@@ -531,6 +532,7 @@ public static class PrefabUtility
             fresh.Transform.LocalScale = scale;
 
             scene.Remove(root);
+            root.Dispose();
             scene.Add(fresh);
             if (parent != null)
             {
