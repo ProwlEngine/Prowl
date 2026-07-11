@@ -206,16 +206,6 @@ public abstract class BuildPipeline
         }
     }
 
-    /// <summary>Run dotnet publish and return result.</summary>
-    protected (int exitCode, string stdout, string stderr) RunDotnetPublish(
-        string csprojPath, string config, string rid, bool selfContained, string outputDir)
-    {
-        string args = $"publish \"{csprojPath}\" -c {config} -r {rid} " +
-            $"--self-contained {selfContained.ToString().ToLower()} -o \"{outputDir}\"";
-
-        return ScriptCompiler.RunDotnetCommand(args, Path.GetDirectoryName(csprojPath)!);
-    }
-
     protected static async Task<(int exitCode, string stdout, string stderr)> RunDotnetAsync(
         string arguments,
         BuildProgress? progress = null,
