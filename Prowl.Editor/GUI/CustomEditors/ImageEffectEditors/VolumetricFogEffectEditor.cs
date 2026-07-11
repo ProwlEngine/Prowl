@@ -1,3 +1,4 @@
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -12,6 +13,9 @@ public class VolumetricFogEffectEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var fx = (VolumetricFogEffect)target;
+
+        // Pre-snapshot: captures entire component state before any widget mutates it
+        Undo.Snapshot(fx);
 
         Origami.Header(paper, $"{id}_h_main", $"{EditorIcons.Cloud}  Volumetric Fog").Underline().Show();
 
