@@ -9,7 +9,6 @@ using Prowl.Echo;
 using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
-using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects;
 
@@ -30,6 +29,9 @@ public class EditorAssetDatabase : IAssetDatabase
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<Guid, EngineObject> _loadedAssets = new();
     private readonly ConcurrentDictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
+    // GPU-uploaded thumbnail cache. Main-thread-only (texture creation isn't thread-safe), same
+    // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
+    private readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailTextures = new();
     // Per-thread re-entrancy guard that breaks dependency/sub-asset cycles during deserialize.
     [ThreadStatic] private static HashSet<Guid>? _loadingStack;
     // Serializes the deserialize body so concurrent loads of the same asset collapse onto one.
@@ -628,6 +630,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 _subAssetIndex.TryRemove(oldGuid, out _);
                 if (_loadedAssets.TryRemove(oldGuid, out var oldObj)) oldObj?.Dispose();
                 ThumbnailGenerator.DeleteThumbnail(oldGuid, _project.ThumbnailsPath);
+                InvalidateThumbnailTexture(oldGuid);
                 string oldCache = GetCachePath(oldGuid);
                 if (File.Exists(oldCache)) try { File.Delete(oldCache); } catch { }
             }
@@ -643,10 +646,12 @@ public class EditorAssetDatabase : IAssetDatabase
             // Update dependency graph
             _dependencies.SetDependencies(entry.Guid, ctx.Dependencies);
 
-            // Queue thumbnail generation (lazy, one per frame)
+            // Queue thumbnail generation (lazy, one per frame) and drop any cached GPU texture for
+            // the old content so the next access rebuilds it from the freshly generated thumbnail.
             {
                 string? sourceFile = ctx.MainAsset is Runtime.Resources.Texture2D ? absolutePath : null;
                 ThumbnailGenerator.Enqueue(entry.Guid, ctx.MainAsset, sourceFile);
+                InvalidateThumbnailTexture(entry.Guid);
             }
 
             return true;
@@ -810,6 +815,57 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
     public (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
 
+    /// <summary>
+    /// Resolve an asset GUID to its cached GPU thumbnail texture, building it from the on-disk
+    /// pixel cache (<see cref="LoadThumbnail"/>) on first use. Returns null when no thumbnail
+    /// exists yet. Shared by every UI that shows asset thumbnails (Project panel, asset pickers,
+    /// Terrain layer tiles, etc.) so there's one GPU copy per asset, invalidated automatically
+    /// whenever this database reimports or deletes that asset.
+    /// </summary>
+    public Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
+    {
+        if (guid == Guid.Empty) return null;
+
+        if (_thumbnailTextures.TryGetValue(guid, out var cached))
+            return cached;
+
+        var thumb = LoadThumbnail(guid);
+        if (thumb == null) return null;
+
+        try
+        {
+            var (w, h, pixels) = thumb.Value;
+            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            tex.SetData<byte>(pixels);
+            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            _thumbnailTextures[guid] = tex;
+            return tex;
+        }
+        catch
+        {
+            _thumbnailTextures[guid] = null;
+            return null;
+        }
+    }
+
+    /// <summary>Dispose and drop a single cached thumbnail texture so it's rebuilt from disk on next access.</summary>
+    public void InvalidateThumbnailTexture(Guid guid)
+    {
+        if (_thumbnailTextures.TryGetValue(guid, out var tex))
+        {
+            tex?.Dispose();
+            _thumbnailTextures.Remove(guid);
+        }
+    }
+
+    /// <summary>Dispose and clear every cached thumbnail texture (e.g. after the thumbnail size setting changes).</summary>
+    public void ClearThumbnailTextureCache()
+    {
+        foreach (var tex in _thumbnailTextures.Values)
+            tex?.Dispose();
+        _thumbnailTextures.Clear();
+    }
+
     // ================================================================
     //  Asset CRUD
     // ================================================================
@@ -962,12 +1018,14 @@ public class EditorAssetDatabase : IAssetDatabase
             var entry = _guidToEntry.TryGetValue(guid, out var e) ? e : null;
             DisposeAndRemove(guid);
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
+            InvalidateThumbnailTexture(guid);
             if (entry?.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.TryRemove(sub.Guid, out _);
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
+                    InvalidateThumbnailTexture(sub.Guid);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);
@@ -1192,14 +1250,14 @@ public class EditorAssetDatabase : IAssetDatabase
                 foreach (var sub in entry.SubAssets)
                     DisposeAndRemove(sub.Guid);
 
-            // Clear old thumbnails and invalidate UI cache
+            // Clear old thumbnails and invalidate the cached GPU texture
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
-            ProjectPanel.InvalidateThumbnail(guid);
+            InvalidateThumbnailTexture(guid);
             if (entry.SubAssets != null)
                 foreach (var sub in entry.SubAssets)
                 {
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
-                    ProjectPanel.InvalidateThumbnail(sub.Guid);
+                    InvalidateThumbnailTexture(sub.Guid);
                 }
 
             entry.NeedsReimport = true;
@@ -1450,6 +1508,8 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         _watcher?.Dispose();
         _watcher = null;
+
+        ClearThumbnailTextureCache();
 
         // Clear the global registrations if they still point at this instance, so a torn-down
         // database (e.g. between tests) doesn't leave dangling statics behind.

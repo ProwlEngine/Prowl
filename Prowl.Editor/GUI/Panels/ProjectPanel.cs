@@ -73,7 +73,6 @@ public class ProjectPanel : DockPanel
     private bool _contentBgHovered;
     // Rename state is managed by RenameOverlay
     private static readonly HashSet<Guid> _expandedAssets = new(); // files with sub-assets expanded
-    private static readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailCache = new();
     private static Guid _pendingPingNavigate; // Navigate to pinged asset's folder on next frame
     private static Guid _lastPingedGuid; // Track when a new ping starts
     private const float MinThumbSize = 20f;  // Below this = list mode
@@ -479,7 +478,7 @@ public class ProjectPanel : DockPanel
 
         if (moved > 0)
         {
-            _thumbnailCache.Clear(); // paths changed thumbnail lookup may be stale
+            // Thumbnails are keyed by GUID, not path, so a move/rename doesn't invalidate them.
             Runtime.Debug.Log($"Moved {moved} item(s) to '{(string.IsNullOrEmpty(destRelFolder) ? "Assets" : destRelFolder)}'.");
         }
     }
@@ -1230,7 +1229,7 @@ public class ProjectPanel : DockPanel
             .Tooltip(sub.Name)
             .Enter())
         {
-            var thumbTex = GetThumbnailTexture(sub.Guid);
+            var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(sub.Guid);
             if (thumbTex != null)
             {
                 paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0)
@@ -1350,7 +1349,7 @@ public class ProjectPanel : DockPanel
             }
 
             // Thumbnail area
-            var thumbTex = GetThumbnailTexture(item.Guid);
+            var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(item.Guid);
             if (thumbTex != null)
             {
                 // Rounded image tile (texture-brushed rounded rect) + a matching rounded border.
@@ -1565,56 +1564,6 @@ public class ProjectPanel : DockPanel
     }
 
     private static string GetFileIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
-
-    /// <summary>Resolve an asset GUID to its cached thumbnail texture (loads from disk on first use).
-    /// Returns null when no thumbnail exists yet. Shared with other editors (e.g. TerrainEditor tiles).</summary>
-    public static Runtime.Resources.Texture2D? GetThumbnailTexture(Guid guid)
-    {
-        if (guid == Guid.Empty) return null;
-
-        if (_thumbnailCache.TryGetValue(guid, out var cached))
-            return cached;
-
-        // Try loading from disk don't cache null so we retry when thumbnail is generated
-        var db = EditorAssetDatabase.Instance;
-        if (db == null) return null;
-
-        var thumb = db.LoadThumbnail(guid);
-        if (thumb == null) return null;
-
-        try
-        {
-            var (w, h, pixels) = thumb.Value;
-            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
-            tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            _thumbnailCache[guid] = tex;
-            return tex;
-        }
-        catch
-        {
-            _thumbnailCache[guid] = null;
-            return null;
-        }
-    }
-
-    /// <summary>Clear the thumbnail cache (e.g. after reimport).</summary>
-    public static void ClearThumbnailCache()
-    {
-        foreach (var tex in _thumbnailCache.Values)
-            tex?.Dispose();
-        _thumbnailCache.Clear();
-    }
-
-    /// <summary>Invalidate a single thumbnail so it reloads from disk on next access.</summary>
-    public static void InvalidateThumbnail(Guid guid)
-    {
-        if (_thumbnailCache.TryGetValue(guid, out var tex))
-        {
-            tex?.Dispose();
-            _thumbnailCache.Remove(guid);
-        }
-    }
 
     private static string GetSubAssetIcon(Type? type)
     {

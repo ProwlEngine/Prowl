@@ -246,7 +246,7 @@ public class TerrainEditor : CustomEditor
                         paper.Box($"{id}_l{i}_bar").Width(2).Height(UnitValue.StretchOne)
                             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
-                    var albThumb = Prowl.Editor.GUI.Panels.ProjectPanel.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
+                    var albThumb = EditorAssetDatabase.Instance?.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
                     var swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(4)
                         .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                         .BorderColor(EditorTheme.WithAlpha(SColor.White, 38)).BorderWidth(1).IsNotInteractable();
@@ -581,7 +581,7 @@ public class TerrainEditor : CustomEditor
                             .BorderColor(sel ? EditorTheme.WithAlpha(EditorTheme.Accent, 102) : SColor.Transparent).BorderWidth(1)
                             .OnClick(_ => onSelect(capture)).Enter())
                         {
-                            var thumb = Prowl.Editor.GUI.Panels.ProjectPanel.GetThumbnailTexture(getThumbGuid(idx));
+                            var thumb = EditorAssetDatabase.Instance?.GetThumbnailTexture(getThumbGuid(idx));
                             var thumbBox = paper.Box($"{id}_t{idx}_th").Width(46).Height(46).Rounded(9)
                                 .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0)
                                 .BackgroundColor(EditorTheme.WithAlpha(tint, 34))

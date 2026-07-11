@@ -48,9 +48,6 @@ public static class SelectorModal
     private static Action<object?>? _callback;
     private static string _searchText = "";
 
-    // Thumbnail cache (shared with ProjectPanel would be ideal, but keep it simple)
-    private static readonly Dictionary<Guid, Texture2D?> _thumbCache = new();
-
     public static bool IsOpen => _open;
 
     /// <summary>
@@ -384,7 +381,7 @@ public static class SelectorModal
     private static void DrawAssetGridItem(Paper paper, Prowl.Scribe.FontFile font,
         string id, Guid guid, string name, float cellSize, float labelH, float totalCellH)
     {
-        var thumbTex = GetThumbnailTexture(guid);
+        var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(guid);
 
         using (paper.Column(id)
             .Width(cellSize).Height(totalCellH)
@@ -455,33 +452,5 @@ public static class SelectorModal
         }
         parts.Reverse();
         return string.Join("/", parts);
-    }
-
-    private static Texture2D? GetThumbnailTexture(Guid guid)
-    {
-        if (guid == Guid.Empty) return null;
-
-        if (_thumbCache.TryGetValue(guid, out var cached))
-            return cached;
-
-        var db = EditorAssetDatabase.Instance;
-        if (db == null) return null;
-
-        var thumb = db.LoadThumbnail(guid);
-        if (thumb == null) return null;
-
-        try
-        {
-            var (w, h, pixels) = thumb.Value;
-            var tex = new Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
-            tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            _thumbCache[guid] = tex;
-            return tex;
-        }
-        catch
-        {
-            return null;
-        }
     }
 }

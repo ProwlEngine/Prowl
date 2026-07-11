@@ -1680,7 +1680,7 @@ public class EditorApplication : Game
     public void ClearEditorCache()
     {
         try { Thumbnails.ThumbnailGenerator.DeleteAll(); } catch { }
-        GUI.Panels.ProjectPanel.ClearThumbnailCache();
+        EditorAssetDatabase.Instance?.ClearThumbnailTextureCache();
         try
         {
             if (Project.Current != null && System.IO.File.Exists(Project.Current.EditorStatePath))
