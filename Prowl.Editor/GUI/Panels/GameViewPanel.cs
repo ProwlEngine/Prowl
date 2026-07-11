@@ -534,4 +534,12 @@ public class GameViewPanel : DockPanel
         _rt?.Dispose();
         _rt = null;
     }
+
+    public override void OnClosed()
+    {
+        InvalidateRT();
+        _gamePaperRenderer?.Dispose();
+        _gamePaperRenderer = null;
+        _gamePaper = null;
+    }
 }

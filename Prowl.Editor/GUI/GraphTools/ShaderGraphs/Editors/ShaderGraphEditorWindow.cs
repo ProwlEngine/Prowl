@@ -72,6 +72,13 @@ public class ShaderGraphEditorWindow : DockPanel
         SaveManager.OnSave += OnProjectSave;
     }
 
+    public override void OnClosed()
+    {
+        SaveManager.OnSave -= OnProjectSave;
+        _preview?.Dispose();
+        _preview = null;
+    }
+
     private string? OnProjectSave()
     {
         if (_graph == null || !_editor.IsDirty) return null;

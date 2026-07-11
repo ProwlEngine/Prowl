@@ -66,6 +66,15 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
     private static bool IsFolderSelection(object? obj)
         => obj is ContentItem ci && ci.IsFolder;
 
+    public override void OnClosed()
+    {
+        if (_subscribed)
+        {
+            Selection.OnSelectionChanged -= OnSelectionChanged;
+            _subscribed = false;
+        }
+    }
+
     private void OnSelectionChanged()
     {
         var active = Selection.ActiveObject;
