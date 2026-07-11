@@ -148,7 +148,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float Strength = 1f;
 
         // Uniform ambient
-        public Float4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
+        public Float4 Color = new(0.43, 0.55f, 0.65f, 1.0f);
 
         // Hemisphere ambient
         public Float4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
