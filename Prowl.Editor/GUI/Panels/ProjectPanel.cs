@@ -1121,21 +1121,11 @@ public class ProjectPanel : DockPanel
 
             if (item.IsFolder)
             {
-                string oldAbs = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
-                string newAbs = Path.Combine(Project.Current.AssetsPath, newRelPath);
-                if (Directory.Exists(newAbs) || File.Exists(newAbs))
-                {
+                bool success = EditorAssetDatabase.Instance?.MoveFolder(item.RelativePath, newRelPath) ?? false;
+                if (!success)
                     Toasts.Show(Loc.Get("toast.rename_failed"), Loc.Get("toast.rename_exists", new { name = newName }), ToastType.Warning, 3f);
-                }
-                else if (Directory.Exists(oldAbs))
-                {
-                    Directory.Move(oldAbs, newAbs);
-                    string oldMeta = MetaFile.GetMetaPath(oldAbs);
-                    string newMeta = MetaFile.GetMetaPath(newAbs);
-                    if (File.Exists(oldMeta)) File.Move(oldMeta, newMeta);
-                    if (_currentFolder == item.RelativePath)
-                        _currentFolder = newRelPath;
-                }
+                else if (_currentFolder == item.RelativePath)
+                    _currentFolder = newRelPath;
             }
             else
             {
