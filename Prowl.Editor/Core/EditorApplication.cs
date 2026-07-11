@@ -232,6 +232,11 @@ public class EditorApplication : Game
             }
             return false;
         };
+        // A collection element is a "simple" (one-line object-picker row) rather than an expanded
+        // per-element foldout when the host has a single-control editor for it - the same set the
+        // FallbackFieldDrawer above handles: EngineObject-derived types (GameObject, Material, ...) and
+        // AssetRef<T>. Without this, e.g. GameObject[] renders each element's internal fields instead.
+        PropertyGridConfig.IsSimpleFieldType = fieldType => PropertyEditorRegistry.GetEditor(fieldType) != null;
 
         // Register save handlers
         SaveManager.OnSave += () =>
