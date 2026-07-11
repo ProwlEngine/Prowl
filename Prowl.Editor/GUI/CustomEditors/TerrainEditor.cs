@@ -486,46 +486,20 @@ public class TerrainEditor : CustomEditor
                 v => { terrain.TreeDistance = MathF.Max(1f, v); }, 50f, 2000f).Format("F0").Show());
     }
 
-    /// <summary>Brush preview swatch + Size / Strength / Falloff sliders (design .tr-brushrow).</summary>
+    /// <summary>Size / Strength / Falloff sliders (design .tr-brushrow).</summary>
     private static void DrawBrushBlock(Paper paper, string id, Prowl.Scribe.FontFile font, string title = "Brush")
     {
         var m = Origami.Current.Metrics;
         EditorGUI.SectionHeader(paper, $"{id}_h", title);
-        using (paper.Row($"{id}_row").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
-            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.SpacingLarge).Enter())
+        using (paper.Column($"{id}_col").Width(UnitValue.StretchOne).Height(UnitValue.Auto)
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
         {
-            DrawBrushPreview(paper, $"{id}_prev");
-            using (paper.Column($"{id}_col").Width(UnitValue.StretchOne).Height(UnitValue.Auto).Enter())
-            {
-                EditorGUI.Row(paper, $"{id}_size", "Size", () =>
-                    Origami.Slider(paper, $"{id}_size_v", BrushSize, v => BrushSize = v, 1f, 500f).Format("F0").Show());
-                EditorGUI.Row(paper, $"{id}_str", "Strength", () =>
-                    Origami.Slider(paper, $"{id}_str_v", BrushStrength, v => BrushStrength = v, 0f, 1f).Format("F2").Show());
-                EditorGUI.Row(paper, $"{id}_fall", "Falloff", () =>
-                    Origami.Slider(paper, $"{id}_fall_v", BrushFalloff, v => BrushFalloff = v, 0f, 1f).Format("F2").Show());
-            }
-        }
-    }
-
-    /// <summary>Circular brush preview: outer ring opacity tracks falloff, inner disc size/opacity track falloff/strength.</summary>
-    private static void DrawBrushPreview(Paper paper, string id)
-    {
-        var acc = EditorTheme.Accent;
-        float innerD = 16f + BrushFalloff * 24f;
-        int innerA = Math.Clamp((int)(100f + BrushStrength * 130f), 0, 255);
-        int ringA = Math.Clamp((int)((0.25f + BrushFalloff * 0.5f) * 255f), 0, 255);
-        using (paper.Box(id).Width(58).Height(58).Rounded(9)
-            .BackgroundColor(EditorTheme.Neutral300).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Clip().Enter())
-        {
-            using (paper.Box($"{id}_ring").Width(47).Height(47).Rounded(24)
-                .Margin(UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch())
-                .BorderColor(EditorTheme.WithAlpha(EditorTheme.AccentText, ringA)).BorderWidth(1.5f)
-                .IsNotInteractable().Enter())
-            {
-                paper.Box($"{id}_disc").Width(innerD).Height(innerD).Rounded(innerD * 0.5f)
-                    .Margin(UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch(), UnitValue.Stretch())
-                    .BackgroundColor(SColor.FromArgb(innerA, acc.R, acc.G, acc.B)).IsNotInteractable();
-            }
+            EditorGUI.Row(paper, $"{id}_size", "Size", () =>
+                Origami.Slider(paper, $"{id}_size_v", BrushSize, v => BrushSize = v, 1f, 500f).Format("F0").Show());
+            EditorGUI.Row(paper, $"{id}_str", "Strength", () =>
+                Origami.Slider(paper, $"{id}_str_v", BrushStrength, v => BrushStrength = v, 0f, 1f).Format("F2").Show());
+            EditorGUI.Row(paper, $"{id}_fall", "Falloff", () =>
+                Origami.Slider(paper, $"{id}_fall_v", BrushFalloff, v => BrushFalloff = v, 0f, 1f).Format("F2").Show());
         }
     }
 
