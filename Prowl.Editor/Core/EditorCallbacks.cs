@@ -20,11 +20,15 @@ public class OnUndoRedoAttribute : Attribute { }
 
 /// <summary>
 /// Discovers and registers static callback methods marked with editor callback attributes.
-/// Call Initialize() once at editor startup.
+/// Call Initialize() once at editor startup; Clear()/Initialize() again around a script
+/// hot-reload so delegates bound to the old AssemblyLoadContext's MethodInfos are dropped
+/// and callbacks in the freshly-loaded assemblies get (re-)registered.
 /// </summary>
 public static class EditorCallbacks
 {
     private static bool _initialized;
+    private static readonly List<Action> _sceneSavedDelegates = new();
+    private static readonly List<Action> _undoRedoDelegates = new();
 
     public static void Initialize()
     {
@@ -45,6 +49,7 @@ public static class EditorCallbacks
                         {
                             var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
                             EditorSceneManager.OnSceneSaved += del;
+                            _sceneSavedDelegates.Add(del);
                             sceneSaved++;
                         }
 
@@ -52,6 +57,7 @@ public static class EditorCallbacks
                         {
                             var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
                             Undo.OnUndoRedo += del;
+                            _undoRedoDelegates.Add(del);
                             undoRedo++;
                         }
                     }
@@ -61,5 +67,23 @@ public static class EditorCallbacks
         }
 
         Debug.Log($"[EditorCallbacks] Registered {sceneSaved} OnSceneSaved, {undoRedo} OnUndoRedo callbacks.");
+    }
+
+    /// <summary>
+    /// Unsubscribe every callback registered by <see cref="Initialize"/> and allow it to run
+    /// again. Call before a script assembly unload any delegate left subscribed here is bound
+    /// to a user-script MethodInfo and would pin the dying AssemblyLoadContext alive.
+    /// </summary>
+    public static void Clear()
+    {
+        foreach (var del in _sceneSavedDelegates)
+            EditorSceneManager.OnSceneSaved -= del;
+        _sceneSavedDelegates.Clear();
+
+        foreach (var del in _undoRedoDelegates)
+            Undo.OnUndoRedo -= del;
+        _undoRedoDelegates.Clear();
+
+        _initialized = false;
     }
 }

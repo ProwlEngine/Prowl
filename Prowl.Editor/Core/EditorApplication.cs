@@ -1465,6 +1465,9 @@ public class EditorApplication : Game
         // Release Paper callbacks as they might otherwise pin ALC types across a reload.
         ReleasePaperRetainedCallbacks();
 
+        // 1c. Drop [OnSceneSaved]/[OnUndoRedo] delegates bound to user-script MethodInfos.
+        EditorCallbacks.Clear();
+
         // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
         _savedEditorScene = null;
         _savedEditorTime = null;
@@ -1617,6 +1620,9 @@ public class EditorApplication : Game
 
         // Run every [OnAssemblyLoad] hook
         ScriptReloadCallbacks.InvokeAssemblyLoad();
+
+        // Re-scan for [OnSceneSaved]/[OnUndoRedo] methods (Clear() reset _initialized in ReleaseScriptReferences).
+        EditorCallbacks.Initialize();
 
         MenuRegistry.Clear();
         RegisterMenus();
