@@ -1351,6 +1351,9 @@ public class TerrainEditor : CustomEditor
     {
         if (ActiveDetailIndex < 0 || ActiveDetailIndex >= data.DetailLayers.Count) return;
 
+        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
+        float sign = shiftHeld ? -1f : 1f;
+
         int res = data.DetailResolution;
         float radiusPixels = BrushSize / data.Size * (res - 1);
         int cx = (int)(uv.X * (res - 1));
@@ -1371,7 +1374,7 @@ public class TerrainEditor : CustomEditor
                 float t = dist / radiusPixels;
                 float falloffStart = 1f - BrushFalloff;
                 float falloff = 1f - SmoothStep(falloffStart, 1f, t);
-                float delta = BrushStrength * falloff * dt * 3f;
+                float delta = BrushStrength * falloff * dt * 3f * sign;
 
                 float d = data.GetDetailDensity(ActiveDetailIndex, x, z);
                 d += delta;
