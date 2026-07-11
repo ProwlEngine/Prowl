@@ -28,10 +28,10 @@
     <!-- <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Rosetta\Rosetta\Rosetta.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" /> -->
-    <PackageReference Include="Prowl.Origami" Version="2.5.4" />
-    <PackageReference Include="Prowl.Photonic" Version="2.5.4" />
-    <PackageReference Include="Prowl.Rosetta" Version="2.5.4" />
-    <PackageReference Include="Prowl.Unwrapper" Version="2.5.4" />
+    <PackageReference Include="Prowl.Origami" Version="2.5.5" />
+    <PackageReference Include="Prowl.Photonic" Version="2.5.5" />
+    <PackageReference Include="Prowl.Rosetta" Version="2.5.5" />
+    <PackageReference Include="Prowl.Unwrapper" Version="2.5.5" />
   </ItemGroup>
 
   <ItemGroup>
