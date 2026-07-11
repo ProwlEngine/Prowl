@@ -408,6 +408,7 @@ public class Transform
             localAxis = Float3.Normalize(localAxis);
             Quaternion q = Quaternion.AxisAngle(localAxis, rad);
             _localRotation = Quaternion.NormalizeSafe(_localRotation * q);
+            _version++;
         }
     }
 
