@@ -102,7 +102,16 @@ public class SpriteEditorWindow : DockPanel
     // texture inspector's Save & Reimport does the write. Revert reloads the shared instance from disk.
     private void RevertChanges()
     {
+        // Register the reload as an undo step, like any other edit (but without Mutate's forced
+        // Dirty = true, since Reload already correctly clears it). Without this, the prior Mutate
+        // records already on the (global) undo stack are unaware the settings were just reloaded,
+        // so a Ctrl+Z would replay a stale pre-revert snapshot and silently resurrect the edits
+        // Revert just discarded.
+        EditSnapshot before = Capture();
         SpriteEditRegistry.Reload(_textureGuid);
+        EditSnapshot after = Capture();
+        Undo.RegisterAction("Revert Sprite Changes", () => Restore(before), () => Restore(after));
+
         _selected = -1;
         EnsureSingleSlice();
     }
@@ -741,11 +750,16 @@ public class SpriteEditorWindow : DockPanel
 
         int texW = (int)tex.Width, texH = (int)tex.Height;
 
-        canvas.SaveState();
-        canvas.TransformBy(Prowl.Vector.Spatial.Transform2D.CreateTranslation(ox, oy));
-        _view.ApplyTransform(canvas);
-        canvas.DrawImage(tex, 0, 0, texW, texH, new Color32(255, 255, 255, 255));
-        canvas.RestoreState();
+        // Draw the texture in screen space with a flipped V (textures are stored Y-up), the same brush idiom
+        // the scene view uses for its render target. Matches how the slice rects are placed via ScreenOf.
+        Float2 imgTL = ScreenOf(Float2.Zero);
+        float imgW = texW * _view.Zoom, imgH = texH * _view.Zoom;
+        canvas.SetBrushTexture(tex);
+        canvas.SetBrushTextureTransform(
+            Prowl.Vector.Spatial.Transform2D.CreateTranslation(imgTL.X, imgTL.Y + imgH) *
+            Prowl.Vector.Spatial.Transform2D.CreateScale(imgW, -imgH));
+        canvas.RectFilled(imgTL.X, imgTL.Y, imgW, imgH, new Color32(255, 255, 255, 255));
+        canvas.ClearBrushTexture();
 
         for (int i = 0; i < _settings.Slices.Count; i++)
         {
