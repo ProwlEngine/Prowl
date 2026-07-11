@@ -814,7 +814,11 @@ public static class PropertyGridRenderer
                 if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
                 using (nh.Enter())
                 {
-                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).StopEventPropagation().Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
+                    // Absorb the click (so the grip doesn't toggle the card header's expand) per-event
+                    // rather than blanket .StopEventPropagation(), so the wheel still bubbles to a
+                    // parent ScrollView. The reorder drag (GripDrag) bubbles harmlessly - the header
+                    // has no drag handler.
+                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
                     GripDrag(sk, grip);
 
                     paper.Box($"{id}_nc_{sk}").Width(11).Height(rowH).IsNotInteractable()
@@ -827,10 +831,10 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_nt_{sk}").Width(ST).Height(rowH).IsNotInteractable()
                         .Text(list[i]?.GetType().Name ?? elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST).StopEventPropagation()
+                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
                         .Hovered.BackgroundColor(redBg).End()
                         .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
-                        .OnClick(i, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
+                        .OnClick(i, (j, e) => { e.StopPropagation(); RemoveAt(j); }).Cursor(PaperCursor.Pointer);
                 }
 
                 if (exp)
