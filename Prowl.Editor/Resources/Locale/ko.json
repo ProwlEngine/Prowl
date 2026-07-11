@@ -280,6 +280,8 @@
   "build.toast_already_msg": "이 씬은 이미 빌드에 있습니다.",
   "build.toast_no_scenes": "씬 없음",
   "build.toast_no_scenes_msg": "빌드하기 전에 활성화된 씬을 하나 이상 추가하세요.",
+  "build.toast_build_running": "빌드 진행 중",
+  "build.toast_build_running_msg": "빌드가 이미 실행 중입니다. 완료될 때까지 기다린 후 다시 시도하세요.",
   "build.platform": "플랫폼",
   "build.configuration": "구성",
   "build.output_dir": "출력 디렉터리",

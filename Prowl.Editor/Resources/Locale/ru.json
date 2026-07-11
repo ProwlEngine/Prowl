@@ -280,6 +280,8 @@
   "build.toast_already_msg": "Эта сцена уже в сборке.",
   "build.toast_no_scenes": "Нет сцен",
   "build.toast_no_scenes_msg": "Добавьте хотя бы одну включённую сцену перед сборкой.",
+  "build.toast_build_running": "Сборка выполняется",
+  "build.toast_build_running_msg": "Сборка уже выполняется. Дождитесь её завершения, прежде чем запускать новую.",
   "build.platform": "Платформа",
   "build.configuration": "Конфигурация",
   "build.output_dir": "Каталог вывода",

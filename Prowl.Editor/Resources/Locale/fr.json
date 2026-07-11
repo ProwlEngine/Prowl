@@ -280,6 +280,8 @@
   "build.toast_already_msg": "Cette scene est deja dans le build.",
   "build.toast_no_scenes": "Aucune scene",
   "build.toast_no_scenes_msg": "Ajoutez au moins une scene activee avant de compiler.",
+  "build.toast_build_running": "Compilation en cours",
+  "build.toast_build_running_msg": "Une compilation est deja en cours. Attendez qu'elle se termine avant d'en demarrer une autre.",
   "build.platform": "Plateforme",
   "build.configuration": "Configuration",
   "build.output_dir": "Repertoire de sortie",

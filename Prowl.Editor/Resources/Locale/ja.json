@@ -280,6 +280,8 @@
   "build.toast_already_msg": "このシーンはすでにビルドに含まれています。",
   "build.toast_no_scenes": "シーンがありません",
   "build.toast_no_scenes_msg": "ビルドする前に、有効なシーンを少なくとも1つ追加してください。",
+  "build.toast_build_running": "ビルド中",
+  "build.toast_build_running_msg": "ビルドはすでに実行中です。完了するまで待ってから、もう一度実行してください。",
   "build.platform": "プラットフォーム",
   "build.configuration": "構成",
   "build.output_dir": "出力ディレクトリ",

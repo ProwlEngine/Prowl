@@ -280,6 +280,8 @@
   "build.toast_already_msg": "Bu sahne zaten derlemede.",
   "build.toast_no_scenes": "Sahne yok",
   "build.toast_no_scenes_msg": "Derlemeden once en az bir etkin sahne ekleyin.",
+  "build.toast_build_running": "Derleme Devam Ediyor",
+  "build.toast_build_running_msg": "Bir derleme zaten calisiyor. Baskasini baslatmadan once bitmesini bekleyin.",
   "build.platform": "Platform",
   "build.configuration": "Yapilandirma",
   "build.output_dir": "Cikti dizini",

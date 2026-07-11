@@ -280,6 +280,8 @@
   "build.toast_already_msg": "Esta escena ya esta en la compilacion.",
   "build.toast_no_scenes": "Sin escenas",
   "build.toast_no_scenes_msg": "Anade al menos una escena habilitada antes de compilar.",
+  "build.toast_build_running": "Compilacion en curso",
+  "build.toast_build_running_msg": "Ya hay una compilacion en curso. Espera a que termine antes de iniciar otra.",
   "build.platform": "Plataforma",
   "build.configuration": "Configuracion",
   "build.output_dir": "Directorio de salida",

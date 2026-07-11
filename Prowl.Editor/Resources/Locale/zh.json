@@ -280,6 +280,8 @@
   "build.toast_already_msg": "此场景已在构建中。",
   "build.toast_no_scenes": "无场景",
   "build.toast_no_scenes_msg": "构建前请至少添加一个已启用的场景。",
+  "build.toast_build_running": "正在构建",
+  "build.toast_build_running_msg": "已有一个构建正在运行。请等待其完成后再开始另一个。",
   "build.platform": "平台",
   "build.configuration": "配置",
   "build.output_dir": "输出目录",

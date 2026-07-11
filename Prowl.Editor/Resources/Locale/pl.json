@@ -280,6 +280,8 @@
   "build.toast_already_msg": "Ta scena jest juz w kompilacji.",
   "build.toast_no_scenes": "Brak scen",
   "build.toast_no_scenes_msg": "Dodaj co najmniej jedna wlaczona scene przed kompilacja.",
+  "build.toast_build_running": "Kompilacja w toku",
+  "build.toast_build_running_msg": "Kompilacja jest juz w trakcie. Poczekaj, az sie zakonczy, zanim rozpoczniesz kolejna.",
   "build.platform": "Platforma",
   "build.configuration": "Konfiguracja",
   "build.output_dir": "Katalog wyjsciowy",

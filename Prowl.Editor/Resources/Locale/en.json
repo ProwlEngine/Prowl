@@ -281,6 +281,8 @@
   "build.toast_already_msg": "This scene is already in the build.",
   "build.toast_no_scenes": "No Scenes",
   "build.toast_no_scenes_msg": "Add at least one enabled scene to the build before building.",
+  "build.toast_build_running": "Build In Progress",
+  "build.toast_build_running_msg": "A build is already running. Wait for it to finish before starting another.",
   "build.platform": "Platform",
   "build.configuration": "Configuration",
   "build.output_dir": "Output Directory",
