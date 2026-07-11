@@ -22,6 +22,10 @@ public interface IInputHandler
 
     // Keyboard methods
     char? GetPressedChar();
+
+    /// <summary>The characters typed this frame, read non-destructively (any number of consumers can read
+    /// it). Cleared at the frame boundary. Prefer this over <see cref="GetPressedChar"/> for text input.</summary>
+    string InputString { get; }
     bool GetKey(KeyCode key);
     bool GetKeyDown(KeyCode key);
     bool GetKeyUp(KeyCode key);

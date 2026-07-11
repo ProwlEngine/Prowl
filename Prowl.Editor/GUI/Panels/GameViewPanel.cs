@@ -16,7 +16,7 @@ using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
 // Aliased to avoid clashing with Prowl.PaperUI types used elsewhere in this file.
-using UIEventSystem = Prowl.Runtime.UI.UIEventSystem;
+using RuntimeEventSystem = Prowl.Runtime.UI.EventSystem;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -280,16 +280,24 @@ public class GameViewPanel : DockPanel
                     Float2 inRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
                     bool inside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
 
-                    UIEventSystem.Viewport = new UIEventSystem.HostViewport
-                    {
-                        ReferenceSize = new Float2(rtW, rtH),
-                        PointerPosition = inRT,
-                        ReceivesInput = hovered && inside,
-                    };
+                    // Gameplay scripts read Input.MousePosition in render-target pixel space (matching
+                    // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
+                    // Published unconditionally (unlike the UI viewport below, which needs an EventSystem).
+                    GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
+
+                    if (RuntimeEventSystem.Current is { } es)
+                        es.Viewport = new RuntimeEventSystem.HostViewport
+                        {
+                            ReferenceSize = new Float2(rtW, rtH),
+                            PointerPosition = inRT,
+                            ReceivesInput = hovered && inside,
+                        };
                 }
                 else
                 {
-                    UIEventSystem.Viewport = null;
+                    GameViewInputHandler.Viewport = null;
+                    if (RuntimeEventSystem.Current is { } es)
+                        es.Viewport = null;
                 }
 
                 // Stats overlay (top-right of viewport, theme sized)

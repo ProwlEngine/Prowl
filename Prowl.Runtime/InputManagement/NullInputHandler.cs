@@ -22,6 +22,7 @@ internal class NullInputHandler : IInputHandler
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent { add { } remove { } }
 
     public char? GetPressedChar() => null;
+    public string InputString => string.Empty;
     public bool GetKey(KeyCode key) => false;
     public bool GetKeyDown(KeyCode key) => false;
     public bool GetKeyUp(KeyCode key) => false;

@@ -64,6 +64,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     private Queue<char> pressedChars { get; set; } = new();
 
+    // Characters typed this frame, accumulated as KeyChar events arrive (during DoEvents) and cleared at
+    // the frame boundary (LateUpdate). Unlike the pressedChars queue this is read non-destructively, so
+    // any number of consumers - Paper, GameObject UI, user UI - can all see the same input each frame.
+    private string _inputString = string.Empty;
+
     public event Action<KeyCode, bool> OnKeyEvent;
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent;
 
@@ -101,7 +106,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
 
         foreach (IKeyboard keyboard in Keyboards)
-            keyboard.KeyChar += (keyboard, c) => pressedChars.Enqueue(c);
+            keyboard.KeyChar += (keyboard, c) => { pressedChars.Enqueue(c); _inputString += c; };
 
         UpdateKeyStates();
     }
@@ -123,6 +128,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     internal void LateUpdate()
     {
+        // Typed characters live for exactly one frame: they arrive during DoEvents, are read (non
+        // destructively) by every consumer during Update, and are cleared here at the frame boundary.
+        _inputString = string.Empty;
+        pressedChars.Clear();
+
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
@@ -212,6 +222,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             return c;
         return null;
     }
+
+    public string InputString => _inputString;
 
     // TryGetValue (not the indexer) so an unmapped key/button - e.g. KeyCode.Unknown, which isn't in
     // the dictionaries - returns false instead of throwing KeyNotFoundException.

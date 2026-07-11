@@ -208,6 +208,33 @@ public class TextComponent : UIBehaviour
         }
     }
 
+    /// <summary>
+    /// Measures the width, in design pixels, of <paramref name="s"/> laid out on a single line with this
+    /// component's current font, size and quality. Input fields use this to place the caret and selection
+    /// box relative to the text. Returns 0 for empty text or when no font is available.
+    /// </summary>
+    public float MeasureWidth(string? s)
+    {
+        FontAsset? font = ResolvedFont;
+        if (font?.FontFile is null || string.IsNullOrEmpty(s)) return 0f;
+
+        TextLayoutSettings settings = new TextLayoutSettings
+        {
+            Font          = font.FontFile,
+            PixelSize     = Maths.Max(1, _size),
+            Quality       = _quality,
+            Alignment     = ScribeAlign.Left,
+            MaxWidth      = float.MaxValue,
+            WrapMode      = TextWrapMode.NoWrap,
+            LineHeight    = 1.0f,
+            TabSize       = 4,
+            LetterSpacing = 0f,
+            WordSpacing   = 0f,
+        };
+        TextLayout layout = UIFontSystem.Default.System.CreateLayout(s, settings);
+        return (float)layout.Size.X;
+    }
+
     public override void PopulateProperties(PropertyState p, in UIContext _)
     {
         // Always re-read the atlas through System.Texture - it can be replaced when the

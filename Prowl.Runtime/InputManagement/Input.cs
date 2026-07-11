@@ -61,6 +61,10 @@ public static class Input
 
     // Keyboard
     public static char? GetPressedChar() => Current.GetPressedChar();
+
+    /// <summary>The characters typed this frame, read non-destructively. Prefer this over
+    /// <see cref="GetPressedChar"/> for text input - multiple consumers can read it in the same frame.</summary>
+    public static string InputString => Current.InputString;
     public static bool GetKey(KeyCode key) => Current.GetKey(key);
     public static bool GetKeyDown(KeyCode key) => Current.GetKeyDown(key);
     public static bool GetKeyUp(KeyCode key) => Current.GetKeyUp(key);

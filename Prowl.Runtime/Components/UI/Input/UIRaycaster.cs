@@ -164,6 +164,27 @@ internal static class UIRaycaster
         return true;
     }
 
+    /// <summary>
+    /// Projects a screen pointer into <paramref name="canvas"/>'s design space without requiring an
+    /// element hit. Used to keep a drag tracking the pointer after it leaves every raycast target
+    /// (otherwise the hit-test yields no design position and sliders/scrollbars snap to the origin).
+    /// Returns false when the projection is undefined (degenerate scale, no camera, or a parallel ray).
+    /// </summary>
+    internal static bool TryProjectPointer(GameCanvas canvas, Float2 screenPos, Float2 windowSize, out Float2 designPt)
+    {
+        if (canvas.RenderMode == RenderMode.WorldSpace)
+        {
+            designPt = Float2.Zero;
+            Scene? scene = canvas.GameObject.Scene;
+            if (scene == null) return false;
+            Camera? cam = ResolveMainCamera(scene);
+            if (cam == null) return false;
+            Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
+            return WorldRayToDesign(canvas, ray, out designPt, out _);
+        }
+        return ScreenToDesign(canvas, screenPos, windowSize, out designPt);
+    }
+
     private static bool ScreenToDesign(GameCanvas canvas, Float2 screenPos, Float2 windowSize, out Float2 designPt)
     {
         float scale = canvas.ScaleFactor;

@@ -102,9 +102,6 @@ public abstract class Game
                 // UNSCALED delta
                 Input.UpdateActions(Time.UnscaledDeltaTime);
 
-                // UI input runs after low-level Input is fresh and before script Updates
-                UIEventSystem.Tick(time.Time);
-
                 BeginUpdate();
 
                 SimulationStep(Time.DeltaTime);
@@ -435,13 +432,10 @@ public abstract class Game
         if (wheelDelta != 0)
             _paper.SetPointerWheel(wheelDelta);
 
-        // Handle keyboard input
-        char? c = Input.GetPressedChar();
-        while (c != null)
-        {
-            _paper.AddInputCharacter((c.Value).ToString());
-            c = Input.GetPressedChar();
-        }
+        // Handle keyboard input. InputString is read non-destructively, so the GameObject UI (and any
+        // user UI) still sees the same characters this frame.
+        foreach (char ch in Input.InputString)
+            _paper.AddInputCharacter(ch.ToString());
 
         // Handle key states for keys
         // Fortunately Papers key enums have almost all the same names
