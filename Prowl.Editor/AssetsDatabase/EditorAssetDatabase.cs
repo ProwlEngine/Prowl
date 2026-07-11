@@ -490,18 +490,21 @@ public class EditorAssetDatabase : IAssetDatabase
         if (dirty.Count == 0) return;
 
         Runtime.Debug.Log($"Importing {dirty.Count} assets...");
-        int success = 0;
+        // Collect successful paths directly RunImport also clears NeedsReimport on failed
+        // imports (to avoid retrying every frame), so filtering dirty by !NeedsReimport
+        // afterward would include failed imports too and fire OnAssetsImported for them.
+        var succeeded = new List<string>();
 
         foreach (var entry in dirty)
         {
             if (RunImport(entry))
-                success++;
+                succeeded.Add(entry.Path);
         }
 
-        Runtime.Debug.Log($"Import complete: {success}/{dirty.Count} succeeded.");
+        Runtime.Debug.Log($"Import complete: {succeeded.Count}/{dirty.Count} succeeded.");
 
-        if (success > 0)
-            OnAssetsImported?.Invoke(dirty.Where(e => !e.NeedsReimport).Select(e => e.Path).ToArray());
+        if (succeeded.Count > 0)
+            OnAssetsImported?.Invoke(succeeded.ToArray());
     }
 
     private bool RunImport(AssetEntry entry)
