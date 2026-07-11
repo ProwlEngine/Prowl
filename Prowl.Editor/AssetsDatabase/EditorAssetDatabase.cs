@@ -60,6 +60,10 @@ public class EditorAssetDatabase : IAssetDatabase
 
         ImporterRegistry.Initialize();
 
+        // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
+        // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
+        CleanupOrphanedMetaTempFiles();
+
         // Try loading cached index for fast startup
         var cached = MetadataCache.Load(_project.MetadataDbPath);
         if (cached.Count > 0)
@@ -102,6 +106,23 @@ public class EditorAssetDatabase : IAssetDatabase
 
         // Initialize GameResources mapping for editor play mode
         RefreshResourcesMap();
+    }
+
+    /// <summary>
+    /// Delete leftover ".meta.tmp" files from a previous session's write that never got
+    /// renamed into place (e.g. the editor crashed mid-write). These are always incomplete
+    /// data never valid on their own so ScanAssets must not pick them up as real asset files.
+    /// </summary>
+    private void CleanupOrphanedMetaTempFiles()
+    {
+        var assetsPath = _project.AssetsPath;
+        if (!Directory.Exists(assetsPath)) return;
+
+        foreach (var tmp in Directory.EnumerateFiles(assetsPath, "*.meta.tmp", SearchOption.AllDirectories))
+        {
+            try { File.Delete(tmp); }
+            catch (Exception ex) { Runtime.Debug.LogWarning($"Failed to delete orphaned meta temp file '{tmp}': {ex.Message}"); }
+        }
     }
 
     /// <summary>Scan all assets under Resources/ folders and update GameResources mapping.</summary>
