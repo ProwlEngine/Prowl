@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Prowl.Editor.Projects;
@@ -50,9 +51,21 @@ public static class RecentProjects
             LastOpened = DateTime.UtcNow
         });
 
-        // Trim
-        if (_entries.Count > MaxRecent)
-            _entries.RemoveRange(MaxRecent, _entries.Count - MaxRecent);
+        // Trim the non-favorite tail to MaxRecent entries. Favorites are never evicted regardless
+        // of count or age - starring a project is meant to pin it in this list permanently.
+        int nonFavoriteCount = _entries.Count(e => !e.Favorite);
+        if (nonFavoriteCount > MaxRecent)
+        {
+            int toRemove = nonFavoriteCount - MaxRecent;
+            for (int i = _entries.Count - 1; i >= 0 && toRemove > 0; i--)
+            {
+                if (!_entries[i].Favorite)
+                {
+                    _entries.RemoveAt(i);
+                    toRemove--;
+                }
+            }
+        }
 
         Save();
     }
