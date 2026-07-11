@@ -982,33 +982,61 @@ public static class PropertyGridRenderer
                     }
                 }
 
-                // Add entry row with key input
+                // Add entry row: enum keys pick from a dropdown (Convert.ChangeType can't parse a string
+                // into an enum, so a text field would silently fail); other key types parse a typed string.
                 using (paper.Row($"{id}_addrow").Height(m.RowHeight).RowBetween(m.Spacing).Enter())
                 {
                     var addRowEl = paper.CurrentParent;
-                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
 
-                    Origami.TextField(paper, $"{id}_newkey", pendingKey,
-                            v => paper.SetElementStorage(addRowEl, "pendingKey", v))
-                        .Placeholder("Key...").Width(UnitValue.Stretch()).SubmitOnEnter().Show();
-
-                    Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
+                    void AddEntry(object? typedKey)
                     {
-                        string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
-                        if (string.IsNullOrWhiteSpace(pk)) return;
-                        try
+                        if (typedKey == null || dict.Contains(typedKey)) return;
+                        object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
+                            : valueType == typeof(string) ? "" : null;
+                        dict.Add(typedKey, newVal);
+                        onChange(dict);
+                    }
+
+                    if (keyType.IsEnum)
+                    {
+                        var names = Enum.GetNames(keyType);
+                        var values = Enum.GetValues(keyType);
+                        int sel = paper.GetElementStorage(addRowEl, "pendingKeyIdx", 0);
+                        if (sel < 0 || sel >= names.Length) sel = 0;
+
+                        Origami.Dropdown(paper, $"{id}_newkey", sel,
+                                idx => paper.SetElementStorage(addRowEl, "pendingKeyIdx", idx), names)
+                            .Width(UnitValue.Stretch()).Show();
+
+                        Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
                         {
-                            object? typedKey = keyType == typeof(string) ? pk
-                                : Convert.ChangeType(pk, keyType, System.Globalization.CultureInfo.InvariantCulture);
-                            if (typedKey == null || dict.Contains(typedKey)) return;
-                            object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
-                                : valueType == typeof(string) ? "" : null;
-                            dict.Add(typedKey, newVal);
-                            onChange(dict);
-                            paper.SetElementStorage(addRowEl, "pendingKey", "");
-                        }
-                        catch { }
-                    }).Show();
+                            int idx = paper.GetElementStorage(addRowEl, "pendingKeyIdx", 0);
+                            if (idx >= 0 && idx < values.Length)
+                                AddEntry(values.GetValue(idx));
+                        }).Show();
+                    }
+                    else
+                    {
+                        string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
+
+                        Origami.TextField(paper, $"{id}_newkey", pendingKey,
+                                v => paper.SetElementStorage(addRowEl, "pendingKey", v))
+                            .Placeholder("Key...").Width(UnitValue.Stretch()).SubmitOnEnter().Show();
+
+                        Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
+                        {
+                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
+                            if (string.IsNullOrWhiteSpace(pk)) return;
+                            try
+                            {
+                                object? typedKey = keyType == typeof(string) ? pk
+                                    : Convert.ChangeType(pk, keyType, System.Globalization.CultureInfo.InvariantCulture);
+                                AddEntry(typedKey);
+                                paper.SetElementStorage(addRowEl, "pendingKey", "");
+                            }
+                            catch { }
+                        }).Show();
+                    }
                 }
             }
         });
