@@ -28,6 +28,8 @@
   "game.show_stats": "統計を表示",
 
   "dialog.delete_assets": "アセットを削除",
+  "dialog.unsaved_prefab": "未保存のPrefabの変更",
+  "dialog.unsaved_prefab_body": "「{{name}}」には未保存の変更があります。切り替える前に保存しますか？",
 
   "hierarchy.delete": "削除",
   "hierarchy.duplicate": "複製",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "ロシアンルーレット",
   "env.ignore_albedo": "アルベドを無視 (デバッグ)",
   "env.generate_lighting": "ライティングを生成",
+  "env.toast_bake_busy": "ベイク実行中",
+  "env.toast_bake_busy_msg": "別のシーンが既にベイク中です。完了するまで待ってから、もう一度実行してください。",
 
   "pref.general": "一般",
   "pref.language": "言語",

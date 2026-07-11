@@ -28,6 +28,8 @@
   "game.show_stats": "Показать статистику",
 
   "dialog.delete_assets": "Удалить ассеты",
+  "dialog.unsaved_prefab": "Несохранённые изменения Prefab",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" содержит несохранённые изменения. Сохранить перед переключением?",
 
   "hierarchy.delete": "Удалить",
   "hierarchy.duplicate": "Дублировать",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "Русская рулетка",
   "env.ignore_albedo": "Игнорировать альбедо (отладка)",
   "env.generate_lighting": "Сгенерировать освещение",
+  "env.toast_bake_busy": "Выполняется запекание",
+  "env.toast_bake_busy_msg": "Другая сцена уже запекается. Дождитесь завершения, прежде чем запускать новое.",
 
   "pref.general": "Общие",
   "pref.language": "Язык",

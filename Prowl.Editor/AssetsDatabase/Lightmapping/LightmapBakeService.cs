@@ -45,6 +45,10 @@ public sealed class LightmapBakeService
     public bool IsBaking => _job != null;
     public float Progress { get; private set; }
     public string Status { get; private set; } = "Idle";
+    /// <summary>The scene the in-flight bake belongs to, or null when idle. Only one bake can run at
+    /// a time; callers showing bake UI for a scene should compare this against their own scene
+    /// rather than trusting <see cref="IsBaking"/> alone, which is true for any scene while baking.</summary>
+    public Scene? TargetScene => _scene;
 
     /// <summary>Begin a bake of <paramref name="scene"/>. Returns false (with a logged reason) if there's nothing to bake.</summary>
     public bool Start(Scene scene, Scene.LightmapBakeSettings settings)

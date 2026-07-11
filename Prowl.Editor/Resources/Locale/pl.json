@@ -28,6 +28,8 @@
   "game.show_stats": "Pokaz statystyki",
 
   "dialog.delete_assets": "Usun assety",
+  "dialog.unsaved_prefab": "Niezapisane zmiany Prefabu",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" ma niezapisane zmiany. Zapisac przed przelaczeniem?",
 
   "hierarchy.delete": "Usun",
   "hierarchy.duplicate": "Duplikuj",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "Rosyjska ruletka",
   "env.ignore_albedo": "Ignoruj albedo (debug)",
   "env.generate_lighting": "Generuj oswietlenie",
+  "env.toast_bake_busy": "Trwa wypiekanie",
+  "env.toast_bake_busy_msg": "Inna scena jest juz wypiekana. Poczekaj, az sie zakonczy, zanim rozpoczniesz kolejne.",
 
   "pref.general": "Ogolne",
   "pref.language": "Jezyk",

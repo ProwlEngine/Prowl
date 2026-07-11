@@ -28,6 +28,8 @@
   "game.show_stats": "Mostra statistiche",
 
   "dialog.delete_assets": "Elimina asset",
+  "dialog.unsaved_prefab": "Modifiche al Prefab non salvate",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" ha modifiche non salvate. Salvare prima di cambiare?",
 
   "hierarchy.delete": "Elimina",
   "hierarchy.duplicate": "Duplica",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "Roulette russa",
   "env.ignore_albedo": "Ignora albedo (debug)",
   "env.generate_lighting": "Genera illuminazione",
+  "env.toast_bake_busy": "Bake in corso",
+  "env.toast_bake_busy_msg": "Un'altra scena e gia in fase di bake. Attendi che finisca prima di avviarne un altro.",
 
   "pref.general": "Generale",
   "pref.language": "Lingua",

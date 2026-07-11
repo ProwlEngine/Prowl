@@ -28,6 +28,8 @@
   "game.show_stats": "Istatistikleri Goster",
 
   "dialog.delete_assets": "Varliklari Sil",
+  "dialog.unsaved_prefab": "Kaydedilmemis Prefab Degisiklikleri",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" kaydedilmemis degisiklikler iceriyor. Degistirmeden once kaydedilsin mi?",
 
   "hierarchy.delete": "Sil",
   "hierarchy.duplicate": "Cogalt",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "Rus ruleti",
   "env.ignore_albedo": "Albedoyu yoksay (hata ayikla)",
   "env.generate_lighting": "Aydinlatma olustur",
+  "env.toast_bake_busy": "Pisirme Devam Ediyor",
+  "env.toast_bake_busy_msg": "Baska bir sahne zaten pisiriliyor. Baskasini baslatmadan once bitmesini bekleyin.",
 
   "pref.general": "Genel",
   "pref.language": "Dil",

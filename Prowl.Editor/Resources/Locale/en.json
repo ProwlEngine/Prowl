@@ -28,6 +28,8 @@
   "game.show_stats": "Show Stats",
 
   "dialog.delete_assets": "Delete Assets",
+  "dialog.unsaved_prefab": "Unsaved Prefab Changes",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" has unsaved changes. Save before switching?",
 
   "hierarchy.delete": "Delete",
   "hierarchy.duplicate": "Duplicate",
@@ -327,6 +329,8 @@
   "env.russian_roulette": "Russian Roulette",
   "env.ignore_albedo": "Ignore Albedo (debug)",
   "env.generate_lighting": "Generate Lighting",
+  "env.toast_bake_busy": "Bake In Progress",
+  "env.toast_bake_busy_msg": "Another scene is already baking. Wait for it to finish before starting another.",
 
   "pref.general": "General",
   "pref.language": "Language",

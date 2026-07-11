@@ -182,7 +182,9 @@ public class EnvironmentPanel : DockPanel
 
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
-        bool baking = _bake.IsBaking;
+        // IsBaking alone doesn't say WHICH scene it's for - only one bake can run at a time, so
+        // switching to a different scene while it's in flight must not show this scene as baking too.
+        bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         var s = scene.LightmapBake;
         void Touch() => EditorSceneManager.IsDirty = true;
 
@@ -255,7 +257,15 @@ public class EnvironmentPanel : DockPanel
                 using (paper.Row($"{id}_btns").Width(ST).Height(34).RowBetween(8).Enter())
                 {
                     CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent, true,
-                        () => _bake.Start(scene, scene.LightmapBake));
+                        () =>
+                        {
+                            if (_bake.IsBaking)
+                            {
+                                Toasts.Warning(Loc.Get("env.toast_bake_busy"), Loc.Get("env.toast_bake_busy_msg"));
+                                return;
+                            }
+                            _bake.Start(scene, scene.LightmapBake);
+                        });
                     if (hasBaked)
                         ChipButton(paper, $"{id}_clear", Loc.Get("console.clear"), () => _bake.Clear(scene));
                 }

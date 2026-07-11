@@ -28,6 +28,8 @@
   "game.show_stats": "显示统计信息",
 
   "dialog.delete_assets": "删除资产",
+  "dialog.unsaved_prefab": "未保存的Prefab更改",
+  "dialog.unsaved_prefab_body": "\"{{name}}\" 有未保存的更改。切换前是否保存？",
 
   "hierarchy.delete": "删除",
   "hierarchy.duplicate": "复制",
@@ -326,6 +328,8 @@
   "env.russian_roulette": "俄罗斯轮盘",
   "env.ignore_albedo": "忽略反照率 (调试)",
   "env.generate_lighting": "生成光照",
+  "env.toast_bake_busy": "正在烘焙",
+  "env.toast_bake_busy_msg": "另一个场景已在烘焙中。请等待其完成后再开始另一个。",
 
   "pref.general": "通用",
   "pref.language": "语言",
