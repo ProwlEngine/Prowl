@@ -53,8 +53,12 @@ public static class RenameOverlay
     {
         if (!_active) return;
         _active = false;
+        // Blank/whitespace input isn't a valid name - treat it as a cancel (not a silent no-op) so
+        // callers whose onCancel resets their own "is renaming" state actually get that signal.
         if (!string.IsNullOrWhiteSpace(_text))
             _onConfirm?.Invoke(_text);
+        else
+            _onCancel?.Invoke();
         _onConfirm = null;
         _onCancel = null;
         _activeId = null;
