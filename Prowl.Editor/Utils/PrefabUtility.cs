@@ -686,7 +686,13 @@ public static class PrefabUtility
         if (finalFieldInfo == null) return;
 
         var deserialized = Serializer.Deserialize(value, finalFieldInfo.FieldType);
-        if (deserialized != null)
+
+        // A null result is a legitimate override value for reference-type fields (e.g. clearing
+        // an object reference) skipping the write there would silently drop the override. Only
+        // skip when the field is a non-nullable value type, where a null result means the
+        // deserialize genuinely failed (SetValue would otherwise throw ArgumentException).
+        bool fieldAllowsNull = !finalFieldInfo.FieldType.IsValueType || Nullable.GetUnderlyingType(finalFieldInfo.FieldType) != null;
+        if (deserialized != null || fieldAllowsNull)
             finalFieldInfo.SetValue(current, deserialized);
     }
 
