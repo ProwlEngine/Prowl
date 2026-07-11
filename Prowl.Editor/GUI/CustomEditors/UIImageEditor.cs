@@ -132,7 +132,26 @@ public class UIImageEditor : CustomEditor
                     Math.Clamp((int)(color.R * 255), 0, 255),
                     Math.Clamp((int)(color.G * 255), 0, 255),
                     Math.Clamp((int)(color.B * 255), 0, 255));
-                canvas.DrawImage(tex, x, y, w, h, tint);
+
+                // Draw only the sprite's sub-rect (flipped V, textures are Y-up); no sprite -> whole texture.
+                float texW = tex.Width, texH = tex.Height;
+                float u0 = 0f, v0 = 0f, du = 1f, dv = 1f;
+                if (sprite != null && texW > 0 && texH > 0)
+                {
+                    u0 = sprite.Rect.X / texW; v0 = sprite.Rect.Y / texH;
+                    du = sprite.Rect.Width / texW; dv = sprite.Rect.Height / texH;
+                }
+                if (du <= 0f) du = 1f;
+                if (dv <= 0f) dv = 1f;
+
+                float sx = w / du, sy = -h / dv;
+                float tx = x - u0 * sx, ty = (y + h) - v0 * sy;
+                canvas.SetBrushTexture(tex);
+                canvas.SetBrushTextureTransform(
+                    Prowl.Vector.Spatial.Transform2D.CreateTranslation(tx, ty) *
+                    Prowl.Vector.Spatial.Transform2D.CreateScale(sx, sy));
+                canvas.RectFilled(x, y, w, h, tint);
+                canvas.ClearBrushTexture();
             }));
     }
 
