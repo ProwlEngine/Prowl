@@ -101,6 +101,13 @@ public class TextComponent : UIBehaviour
     /// </summary>
     [SerializeIgnore] private int _lastAtlasVersion = -1;
 
+    // Cached rich-text layout. Reused across frames so its animation start-time survives (a fresh
+    // layout each rebuild would re-anchor to "now" and freeze animated effects). Rebuilt only when the
+    // text or layout-affecting settings change.
+    [SerializeIgnore] private RichTextLayout? _richLayout;
+    [SerializeIgnore] private int _richSig;
+    [SerializeIgnore] private bool _richAnimated;
+
     public override void Update()
     {
         int v = UIFontSystem.Default.System.AtlasVersion;
@@ -109,6 +116,11 @@ public class TextComponent : UIBehaviour
             _lastAtlasVersion = v;
             MarkDirty(UIDirtyFlags.Vertices);
         }
+
+        // Animated rich-text effects (wave, shake, rainbow, typewriter, ...) are time-driven, so the
+        // mesh has to be rebuilt every frame to advance them.
+        if (_richText && _richAnimated)
+            MarkDirty(UIDirtyFlags.Vertices);
     }
 
     // ============================================================
@@ -157,12 +169,19 @@ public class TextComponent : UIBehaviour
                 Alignment = ToScribeAlignment(_alignment),
                 DefaultColor = color,
             };
-            RichTextLayout layout = new RichTextLayout(_text, rich);
-            layout.Update(fs.System);
+            int sig = HashCode.Combine(_text, pixelSize, (int)_quality, w, (int)_alignment, tinted, context.Alpha);
+            if (_richLayout == null || sig != _richSig)
+            {
+                if (_richLayout == null) _richLayout = new RichTextLayout(_text, rich);
+                else { _richLayout.SetSource(_text); _richLayout.SetSettings(rich); }
+                _richLayout.Update(fs.System);
+                _richAnimated = _richLayout.Effects.Count > 0;
+                _richSig = sig;
+            }
 
-            float verticalOffset = ComputeVerticalOffset(_alignment, h, layout.Size.Y);
+            float verticalOffset = ComputeVerticalOffset(_alignment, h, _richLayout.Size.Y);
             fs.BeginCapture(builder, originX, originY - verticalOffset);
-            try { layout.Draw(fs.System, fs, Float2.Zero, 0.0); }
+            try { _richLayout.Draw(fs.System, fs, Float2.Zero, (double)Time.TimeSinceStartup); }
             finally { fs.EndCapture(); }
         }
         else
