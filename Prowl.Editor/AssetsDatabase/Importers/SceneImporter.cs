@@ -14,7 +14,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".scene")]
 public class SceneImporter : AssetImporter
 {
-    public override int Version => 2; // Bumped: now tracks PrefabAssetId deps
+    public override int Version => 3; // Bumped: re-import to regenerate scenes cached by the pre-fix
+                                      // GameObject deserializer (which could drop every object to null).
 
     public override bool Import(ImportContext ctx)
     {
