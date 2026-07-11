@@ -316,12 +316,10 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             {
                 if (ShortcutManager.IsPressed("Scene/Delete"))
                 {
-                    foreach (var go in Selection.GetSelected<GameObject>().ToList())
-                    {
-                        Undo.RegisterDestroyObject(go, "Delete GameObject");
-                        scene.Remove(go);
-                        go.Dispose();
-                    }
+                    // Shared with HierarchyPanel so the viewport enforces the same prefab
+                    // structural-child protection and undo registration as the Hierarchy's Delete.
+                    foreach (var go in HierarchyPanel.ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList()))
+                        HierarchyPanel.DeleteGameObject(go);
                     Selection.Clear();
                     EditorSceneManager.IsDirty = true;
                 }

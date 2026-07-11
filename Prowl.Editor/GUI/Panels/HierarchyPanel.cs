@@ -205,7 +205,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 {
                     if (ShortcutManager.IsPressed("Hierarchy/Delete"))
                     {
-                        foreach (var go in Selection.GetSelected<GameObject>().ToList())
+                        foreach (var go in ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList()))
                             DeleteGameObject(go);
                     }
                     else if (ShortcutManager.IsPressed("Hierarchy/Duplicate"))
@@ -545,7 +545,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         var targetParent = target.Parent;
         bool targetIsRoot = targetParent == null || !targetParent.IsValid();
 
-        foreach (var dragged in goDrop.GameObjects)
+        // A descendant dragged alongside its own ancestor moves implicitly with it; reparenting it
+        // again here would yank it out from under the ancestor and flatten it as a sibling instead.
+        foreach (var dragged in ExcludeNestedSelections(goDrop.GameObjects))
         {
             if (dragged == target || IsDescendantOf(target, dragged))
                 continue;
@@ -676,6 +678,32 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         return false;
     }
 
+    /// <summary>
+    /// Filters out any GameObject whose ancestor is also present in the same collection. A
+    /// per-item operation (delete, reparent) applied to an ancestor already cascades to its
+    /// descendants structurally, so re-applying it to a separately-selected descendant corrupts
+    /// undo (double-serializes it) or flattens it out of its parent during a reparent.
+    /// </summary>
+    internal static List<GameObject> ExcludeNestedSelections(IReadOnlyCollection<GameObject> selection)
+    {
+        var result = new List<GameObject>(selection.Count);
+        foreach (var go in selection)
+        {
+            bool hasSelectedAncestor = false;
+            foreach (var other in selection)
+            {
+                if (!ReferenceEquals(other, go) && IsDescendantOf(go, other))
+                {
+                    hasSelectedAncestor = true;
+                    break;
+                }
+            }
+            if (!hasSelectedAncestor)
+                result.Add(go);
+        }
+        return result;
+    }
+
     // ================================================================
     //  Context Menus
     // ================================================================
@@ -770,7 +798,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
                 builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
-                    foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
+                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
                 }, icon: EditorIcons.Trash);
 
                 builder.Separator();
@@ -874,7 +902,10 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         });
     }
 
-    private void DeleteGameObject(GameObject go)
+    /// <summary>Delete a GameObject, blocking deletion of prefab-structural children (with a toast)
+    /// and registering proper undo. Shared with SceneViewPanel's in-viewport Delete shortcut so both
+    /// entry points enforce the same rules instead of the viewport bypassing them.</summary>
+    internal static void DeleteGameObject(GameObject go)
     {
         // Block deleting prefab children that are part of the prefab structure
         if (go.Parent != null && go.Parent.IsPrefabInstance && go.Parent.PrefabChildCount >= 0)
