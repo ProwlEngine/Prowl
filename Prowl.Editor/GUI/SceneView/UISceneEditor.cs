@@ -60,47 +60,6 @@ public sealed class UISceneEditor : ISceneViewEditor
     }
 
     // ================================================================
-    //  Overlay Preview - temporary World-Space state
-    // ================================================================
-
-    /// <summary>
-    /// Captures the original state of an Overlay canvas before the temporary
-    /// World-Space preview is activated. Used to cleanly revert when the editor
-    /// deactivates (deselect, play mode, save, shutdown, etc.).
-    /// </summary>
-    private struct OverlayPreviewState
-    {
-        public bool IsActive;
-        public GameCanvas Canvas;
-
-        // Original canvas properties
-        public RenderMode OriginalRenderMode;
-
-        // Original transform properties
-        public Float3 OriginalPosition;
-        public Quaternion OriginalRotation;
-        public Float3 OriginalScale;
-    }
-
-    /// <summary>
-    /// World-space Y position for the first Overlay preview canvas.
-    /// Subsequent canvases are offset by <see cref="OverlayPreviewSpacing"/>.
-    /// Placed far from typical scene content to avoid visual interference.
-    /// </summary>
-    private const float OverlayPreviewBaseY = 2000f;
-
-    /// <summary>Y spacing between multiple simultaneously previewed Overlay canvases.</summary>
-    private const float OverlayPreviewSpacing = 500f;
-
-    /// <summary>Global counter for assigning non-overlapping preview positions.</summary>
-    private static int s_overlayPreviewCount;
-
-    /// <summary>Index of this editor's preview slot (used for Y offset).</summary>
-    private int _overlayPreviewIndex;
-
-    private OverlayPreviewState _overlayPreview;
-
-    // ================================================================
     //  Constants / colors
     // ================================================================
 
@@ -136,31 +95,15 @@ public sealed class UISceneEditor : ISceneViewEditor
     private Float3 _dragPlaneNormal;
     private Float3 _dragPlaneOrigin;
 
-    // Save hook subscription tracking
-    private bool _subscribedToSaveHook;
-
     public int Priority => 0;
 
     public void OnActivate(GameObject target)
     {
         _target = target.GetComponent<UIBehaviour>();
-
-        if (_target == null) return;
-
-        GameCanvas? canvas = _target.GetCanvas();
-        if (canvas == null) return;
-
-
-        // If the canvas is Overlay, activate the temporary World-Space preview.
-        //if (canvas.RenderMode == RenderMode.ScreenSpaceOverlay)
-        //    ActivateOverlayPreview(canvas);
     }
 
     public void OnDeactivate()
     {
-        // Revert any active Overlay preview before releasing the target.
-        //RevertOverlayPreview();
-
         _target = null;
         _hover = Handle.None;
         _active = Handle.None;
