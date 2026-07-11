@@ -79,7 +79,8 @@ public class DesktopBuildProfile : PlatformBuildProfile
     public override void ToDefault()
     {
         Platform = BuildTarget.Windows;
-        SelfContained = true;
+        SelfContained = false;
+        PublishTrimmed = false;
         WindowWidth = 1280;
         WindowHeight = 720;
     }
