@@ -26,10 +26,10 @@ public class DirectionalLight : Light
         Four = 4,
     }
 
-    public Resolution ShadowResolution = Resolution._1024;
-    public CascadeCount Cascades = CascadeCount.Four;
+    public Resolution ShadowResolution = Resolution._2048;
+    public CascadeCount Cascades = CascadeCount.Two;
 
-    public float ShadowDistance = 100f;
+    public float ShadowDistance = 70f;
 
     // Cascade data (max 4 cascades)
     private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
