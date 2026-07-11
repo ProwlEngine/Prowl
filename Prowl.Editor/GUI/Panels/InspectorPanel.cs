@@ -165,6 +165,46 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
 
             paper.Box("insp_bottom_pad").Height(20);
         });
+
+        // Drag a script (.cs) from the Project panel onto the inspector to add it as a component.
+        DrawScriptComponentDropZone(paper, font, width, height);
+    }
+
+    /// <summary>
+    /// While a single GameObject is selected and a script asset that resolves to a component type is
+    /// being dragged, overlays the inspector with a drop target that adds that component on drop.
+    /// </summary>
+    private static void DrawScriptComponentDropZone(Paper paper, Scribe.FontFile font, float width, float height)
+    {
+        if (!DragDrop.IsDragging && !DragDrop.IsDropFrame) return;
+        if (DragDrop.Payload is not AssetDragPayload payload) return;
+
+        var go = Selection.ActiveObject as GameObject;
+        if (go == null || Selection.GetSelected<GameObject>().Count() != 1) return;
+
+        Type? componentType = Prowl.Editor.Projects.Scripting.ScriptComponentResolver.ResolveComponentType(payload);
+        if (componentType == null) return;
+
+        using (paper.Box("insp_script_drop")
+            .PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, height)
+            .Layer(Layer.Overlay)
+            .BackgroundColor(Color.FromArgb(38, EditorTheme.Purple400))
+            .BorderColor(EditorTheme.Purple400).BorderWidth(2).Rounded(6)
+            .Enter())
+        {
+            paper.Box("insp_script_drop_lbl")
+                .Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).IsNotInteractable()
+                .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}: {componentType.Name}", font)
+                .TextColor(EditorTheme.Purple400)
+                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
+
+            // Complete the drop: the drag has ended (released) while over this overlay.
+            if (paper.IsParentHovered && !DragDrop.IsDragging)
+            {
+                Popups.AddComponentPopup.AddComponentWithUndo(go, componentType);
+                DragDrop.EndDrag();
+            }
+        }
     }
 
     private void DrawEmpty(Paper paper, Scribe.FontFile font, float width)

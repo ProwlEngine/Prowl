@@ -961,7 +961,7 @@ public class ProjectPanel : DockPanel
 
             builder.Separator();
 
-            builder.Item(Loc.Get("project.rename"), () => StartRename(item, inTree), enabled: !isMulti && !isRoot, icon: EditorIcons.PenToSquare);
+            builder.Item(Loc.Get("project.rename"), () => StartRename(item, inTree), enabled: !isMulti && !isRoot && CanRename(item), icon: EditorIcons.PenToSquare);
             builder.Item(Loc.Get("project.copy_path"), () => paper_SetClipboard(item.RelativePath), icon: EditorIcons.Copy);
             if (!item.IsFolder && item.Guid != Guid.Empty)
                 builder.Item(Loc.Get("project.copy_guid"), () => paper_SetClipboard(item.Guid.ToString()), icon: EditorIcons.Fingerprint);
@@ -1103,8 +1103,20 @@ public class ProjectPanel : DockPanel
         });
     }
 
+    // Renaming a .cs file only renames the file, not the class it declares, breaking the file-name =
+    // class-name convention and every serialized reference to that component type. Disabled until proper
+    // script renaming (rename the class + serialized type aliasing) is supported.
+    private static bool CanRename(ContentItem item)
+        => item.IsFolder || !string.Equals(Path.GetExtension(item.Name), ".cs", StringComparison.OrdinalIgnoreCase);
+
     private void StartRename(ContentItem item, bool inTree = false)
     {
+        if (!CanRename(item))
+        {
+            Toasts.Show(Loc.Get("toast.rename_failed"), "Renaming script files isn't supported yet - it would break the class/file-name link.", ToastType.Warning, 4f);
+            return;
+        }
+
         string id = inTree ? $"proj_folder_{item.RelativePath}" : $"proj_asset_{item.RelativePath}";
         string editName = item.IsFolder ? item.Name : Path.GetFileNameWithoutExtension(item.Name);
 

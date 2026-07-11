@@ -187,17 +187,7 @@ public static class AddComponentPopup
             {
                 if (_targetGo != null)
                 {
-                    var addedComp = _targetGo.AddComponent(type);
-                    if (addedComp != null)
-                    {
-                        var compId = addedComp.Identifier;
-                        var goId = _targetGo.Identifier;
-                        var serialized = Echo.Serializer.Serialize(addedComp.GetType(), addedComp);
-                        var compType = addedComp.GetType();
-                        Undo.RegisterAction("Add Component",
-                            undo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = g.GetComponentByIdentifier(compId); if (c != null) g.RemoveComponent(c); },
-                            redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
-                    }
+                    AddComponentWithUndo(_targetGo, type);
                     Close();
                 }
             })
@@ -215,6 +205,26 @@ public static class AddComponentPopup
                 .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
+    }
+
+    /// <summary>
+    /// Adds a component of <paramref name="type"/> to <paramref name="go"/> and registers a matching
+    /// undo/redo step. Shared by the popup and the drag-a-script-onto-the-inspector path.
+    /// </summary>
+    public static MonoBehaviour? AddComponentWithUndo(GameObject go, Type type)
+    {
+        var addedComp = go.AddComponent(type);
+        if (addedComp != null)
+        {
+            var compId = addedComp.Identifier;
+            var goId = go.Identifier;
+            var serialized = Echo.Serializer.Serialize(addedComp.GetType(), addedComp);
+            var compType = addedComp.GetType();
+            Undo.RegisterAction("Add Component",
+                undo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = g.GetComponentByIdentifier(compId); if (c != null) g.RemoveComponent(c); },
+                redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
+        }
+        return addedComp;
     }
 
     private static List<ComponentEntry> GatherComponents()
