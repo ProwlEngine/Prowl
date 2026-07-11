@@ -50,12 +50,9 @@ public class BuildSettingsPanel : DockPanel
 
     public static string BuildState = "";
 
-    public static System.Threading.Thread BuildPipelineThread;
-
     public static float BuildProgress = 0f;
 
-    public static bool IsBuildRunning =>
-       BuildPipelineThread != null && BuildPipelineThread.IsAlive;
+    public static bool IsBuildRunning => _activeProgress != null && !_activeProgress.IsComplete;
 
     public override string Title => Loc.Get("panel.build");
 
@@ -63,7 +60,7 @@ public class BuildSettingsPanel : DockPanel
 
     private BuildSettings _buildSettings;
 
-    private BuildProgress _activeProgress;
+    private static BuildProgress _activeProgress;
 
     private int _selectedIndex;
 
@@ -93,6 +90,12 @@ public class BuildSettingsPanel : DockPanel
                 BuildState = state.Message.Contains("\n") ? state.Message.Split('\n')[0] : state.Message;
                 BuildState = BuildState.Trim();
             }
+
+            // Build finished: drop the reference so the footer returns to the idle summary
+            // instead of being stuck on the last progress line forever, and so IsBuildRunning
+            // (and thus a second Build click) sees the build as no longer running.
+            if (_activeProgress.IsComplete)
+                _activeProgress = null;
         }
         else
         {
@@ -271,6 +274,12 @@ public class BuildSettingsPanel : DockPanel
 
     private void TryStartBuild(bool andRun)
     {
+        if (IsBuildRunning)
+        {
+            Toasts.Warning(Loc.Get("build.toast_build_running"), Loc.Get("build.toast_build_running_msg"));
+            return;
+        }
+
         if (_buildSettings.Scenes.Count(s => s.Enabled) == 0)
         {
             Toasts.Warning(Loc.Get("build.toast_no_scenes"), Loc.Get("build.toast_no_scenes_msg"));
