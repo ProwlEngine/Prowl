@@ -1045,69 +1045,6 @@ public static class GameObjectInspector
         }
     }
 
-    private static void BuildAddComponentMenu(ContextBuilder builder, GameObject go)
-    {
-        // Gather all MonoBehaviour types
-        var componentTypes = new List<(string path, string icon, Type type)>();
-
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
-            {
-                if (!typeof(MonoBehaviour).IsAssignableFrom(type) || type.IsAbstract) continue;
-                if (type == typeof(MonoBehaviour)) continue;
-
-                var menuAttr = type.GetCustomAttribute<AddComponentMenuAttribute>();
-                string path = menuAttr?.Path ?? type.Name;
-                string icon = menuAttr?.Icon ?? EditorIcons.PuzzlePiece;
-                componentTypes.Add((path, icon, type));
-            }
-        }
-
-        // Build menu tree from paths
-        var categories = new Dictionary<string, List<(string name, string icon, Type type)>>();
-
-        foreach (var (path, icon, type) in componentTypes.OrderBy(c => c.path))
-        {
-            int lastSlash = path.LastIndexOf('/');
-            if (lastSlash >= 0)
-            {
-                string category = path[..lastSlash];
-                string name = path[(lastSlash + 1)..];
-                if (!categories.ContainsKey(category))
-                    categories[category] = new();
-                categories[category].Add((name, icon, type));
-            }
-            else
-            {
-                if (!categories.ContainsKey(""))
-                    categories[""] = new();
-                categories[""].Add((path, icon, type));
-            }
-        }
-
-        // Root items
-        if (categories.TryGetValue("", out var rootItems))
-        {
-            foreach (var (name, icon, type) in rootItems)
-                builder.Item(name, () => go.AddComponent(type), icon: icon);
-        }
-
-        // Categories as submenus
-        foreach (var (category, items) in categories.Where(kv => kv.Key != "").OrderBy(kv => kv.Key))
-        {
-            builder.Submenu(category, sub =>
-            {
-                foreach (var (name, icon, type) in items)
-                    sub.Item(name, () => go.AddComponent(type), icon: icon);
-            });
-        }
-    }
-
     // ================================================================
     //  Prefab Header
     // ================================================================
