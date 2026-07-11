@@ -189,7 +189,7 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<GameCanvas>();
     }
 
-    [CreateGameObjectMenu("UI/Event System", Icon = EditorIcons.ArrowPointer, Order = 59)]
+    [CreateGameObjectMenu("UI/Event System", Icon = EditorIcons.ArrowPointer, Order = 61)]
     static void CreateEventSystem(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Event System", parent);
@@ -214,7 +214,7 @@ internal static class DefaultGameObjectCreators
     }
 
 
-    [CreateGameObjectMenu("UI/Button", Icon = EditorIcons.MobileButton, Order = 52)]
+    [CreateGameObjectMenu("UI/Button", Icon = EditorIcons.MobileButton, Order = 53)]
     static void CreateUIButton(GameObject? parent)
     {
         var go = NewUIElement("Button", parent);
@@ -224,7 +224,7 @@ internal static class DefaultGameObjectCreators
         button.TargetGraphic = image;
     }
 
-    [CreateGameObjectMenu("UI/Slider", Icon = EditorIcons.Sliders, Order = 54)]
+    [CreateGameObjectMenu("UI/Slider", Icon = EditorIcons.Sliders, Order = 55)]
     static void CreateUISlider(GameObject? parent)
     {
         var go = NewUIElement("Slider", parent);
@@ -253,7 +253,7 @@ internal static class DefaultGameObjectCreators
         slider.Value = 0.5f;
     }
 
-    [CreateGameObjectMenu("UI/Scroll View", Icon = EditorIcons.RectangleList, Order = 55)]
+    [CreateGameObjectMenu("UI/Scroll View", Icon = EditorIcons.RectangleList, Order = 56)]
     static void CreateUIScrollView(GameObject? parent)
     {
         const float bar = 12f; // scrollbar thickness / gutter
@@ -327,7 +327,7 @@ internal static class DefaultGameObjectCreators
         return bar;
     }
 
-    [CreateGameObjectMenu("UI/Input Field", Icon = EditorIcons.Keyboard, Order = 57)]
+    [CreateGameObjectMenu("UI/Input Field", Icon = EditorIcons.Keyboard, Order = 58)]
     static void CreateUIInputField(GameObject? parent)
     {
         var go = NewUIElement("Input Field", parent);
@@ -388,7 +388,7 @@ internal static class DefaultGameObjectCreators
         field.Caret = caretRt;
     }
 
-    [CreateGameObjectMenu("UI/Dropdown", Icon = EditorIcons.ChevronDown, Order = 58)]
+    [CreateGameObjectMenu("UI/Dropdown", Icon = EditorIcons.ChevronDown, Order = 59)]
     static void CreateUIDropdown(GameObject? parent)
     {
         var go = NewUIElement("Dropdown", parent);
@@ -436,7 +436,7 @@ internal static class DefaultGameObjectCreators
         rt.AnchoredPosition = Float2.Zero;
     }
 
-    [CreateGameObjectMenu("UI/Panel", Icon = EditorIcons.WindowMaximize, Order = 53)]
+    [CreateGameObjectMenu("UI/Panel", Icon = EditorIcons.WindowMaximize, Order = 54)]
     static void CreateUIPanel(GameObject? parent)
     {
         var go = NewUIElement("Panel", parent);
@@ -452,7 +452,7 @@ internal static class DefaultGameObjectCreators
         img.Color = new Color(1f, 1f, 1f, 0.4f);
     }
 
-    [CreateGameObjectMenu("UI/Rect Mask", Icon = EditorIcons.Square, Order = 56)]
+    [CreateGameObjectMenu("UI/Rect Mask", Icon = EditorIcons.Square, Order = 57)]
     static void CreateUIRectMask(GameObject? parent)
     {
         var go = NewUIElement("Rect Mask", parent);
