@@ -248,13 +248,21 @@ public class UIImage : UIBehaviour
     private void EmitSliced(UIMeshBuilder b, Rect local, Color tinted)
     {
         // Borders are in source pixels, scaled by the display multiplier and drawn in the RectTransform's
-        // pixel space; clamp so opposite borders never overlap (which would invert the center quad).
+        // pixel space.
         float m = _pixelsPerUnitMultiplier > 0 ? _pixelsPerUnitMultiplier : 1f;
         Float4 border = EffectiveBorder;
         float bl = border.X * m, bt = border.Y * m, br = border.Z * m, bb = border.W * m;
-        float maxX = local.Size.X * 0.5f, maxY = local.Size.Y * 0.5f;
-        bl = MathF.Min(bl, maxX); br = MathF.Min(br, maxX);
-        bt = MathF.Min(bt, maxY); bb = MathF.Min(bb, maxY);
+
+        // When the rect is too small to fit the borders, scale ALL of them by a single factor rather than
+        // clamping each axis on its own. Independent clamping squishes a square corner into a rectangle
+        // (a thin element keeps full-height side corners but tiny top/bottom ones); a uniform scale keeps
+        // every corner at its native aspect - square corners stay square - while still guaranteeing
+        // opposite borders never overlap (which would invert the center quad).
+        float w = local.Size.X, h = local.Size.Y;
+        float scale = 1f;
+        if (bl + br > w && bl + br > 0f) scale = MathF.Min(scale, w / (bl + br));
+        if (bt + bb > h && bt + bb > 0f) scale = MathF.Min(scale, h / (bt + bb));
+        if (scale < 1f) { bl *= scale; br *= scale; bt *= scale; bb *= scale; }
 
         Float4 uv = ComputeUVBorder();
         // Clamp opposite UV borders the same way as the pixel borders: if left+right (or top+bottom)
