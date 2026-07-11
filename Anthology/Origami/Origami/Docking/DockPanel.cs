@@ -38,4 +38,12 @@ public abstract class DockPanel
     /// Restore panel state from a previously serialized blob.
     /// </summary>
     public virtual void RestoreState(JsonObject state) { }
+
+    /// <summary>
+    /// Called once when the user closes this panel's tab, permanently removing it from the dock
+    /// tree. NOT called when the tab is merely dragged to a different dock/floating window - the
+    /// panel stays open in that case. Override to release resources (GPU handles, event
+    /// subscriptions, etc.) the panel would otherwise hold onto for the rest of the process.
+    /// </summary>
+    public virtual void OnClosed() { }
 }

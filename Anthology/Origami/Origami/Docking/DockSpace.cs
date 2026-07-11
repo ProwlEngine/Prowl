@@ -396,7 +396,7 @@ public class DockSpace
                         .Rounded(closeSz / 2)
                         .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
                         // Per-event stop so closing a tab doesn't select/drag it, while the wheel bubbles.
-                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.Item1.RemoveTab(cap.Item2); })
+                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.Item1.RemoveTab(cap.Item2)?.OnClosed(); })
                         .Cursor(PaperCursor.Pointer)
                         .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
                         {
