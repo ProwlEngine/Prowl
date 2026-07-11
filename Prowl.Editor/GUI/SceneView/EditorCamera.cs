@@ -353,6 +353,8 @@ public class EditorCamera
         {
             Float2 delta = Input.MouseDelta;
             float zoomDelta = (delta.X + delta.Y) * 0.02f * _orbitDistance;
+            Float3 forward = GetForwardFromAngles();
+            _position += forward * zoomDelta;
             _orbitDistance = MathF.Max(0.1f, _orbitDistance - zoomDelta);
             UpdateTransform();
             consumed = true;
