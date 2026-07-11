@@ -349,6 +349,8 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         _rt?.Dispose();
         _rt = null;
-        _scene.Disable();
+
+        // Disposes every GameObject still in the scene (camera + light), not just disables it.
+        _scene.Dispose();
     }
 }
