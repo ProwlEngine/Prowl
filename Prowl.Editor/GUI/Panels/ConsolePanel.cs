@@ -40,12 +40,14 @@ public class ConsolePanel : DockPanel
     private bool _showErrors = true;
     private string _searchText = "";
 
-    // Cached filtered list (rebuilt when messages or filters change).
-    private static int _lastMessageCount;
-    private static int _lastFilterHash;
-    private static bool _lastCollapseState;
-    private static readonly List<int> _filteredIndices = new();
-    private static int _selectedFilteredIndex = -1;
+    // Cached filtered list (rebuilt when messages or filters change). Per-instance: each Console
+    // tab has its own filter settings/selection, so the cache derived from them must be per-instance
+    // too - a shared static cache lets two open tabs stomp each other's filtered view and selection.
+    private int _lastMessageCount;
+    private int _lastFilterHash;
+    private bool _lastCollapseState;
+    private readonly List<int> _filteredIndices = new();
+    private int _selectedFilteredIndex = -1;
 
     // -- palette --
     private static UnitValue ST => UnitValue.StretchOne;
