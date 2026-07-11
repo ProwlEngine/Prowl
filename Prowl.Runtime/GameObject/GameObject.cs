@@ -1195,12 +1195,18 @@ public class GameObject : EngineObject, ISerializable
         if (value.TryGet("PrefabChildCount", out var childCount))
             _prefabChildCount = childCount.IntValue;
 
-        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
+        // A GameObject always needs a Transform. If the serialized one can't be restored (e.g. an
+        // unresolved forward $id reference from a scene's flat-array + nested-children encoding), fall
+        // back to a fresh Transform rather than NRE - a single bad object would otherwise throw out of
+        // the serializeObj array and drop every object in the scene.
+        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx) ?? new Transform();
         _transform.GameObject = this;
 
         EchoObject comps = value["Components"];
         _components = [];
-        foreach (EchoObject compTag in comps.List)
+        // comps is null when this echo is a bare $id reference stub (an unresolved forward reference);
+        // guard so such an object degrades to an empty GameObject instead of NREing out of the whole scene.
+        foreach (EchoObject compTag in comps?.List ?? [])
         {
             // Fallback for Missing Type
             EchoObject? typeProperty = compTag.Get("$type");
@@ -1242,7 +1248,7 @@ public class GameObject : EngineObject, ISerializable
         // cyclic reference) into broken forward refs.
         EchoObject children = value["Children"];
         Children = [];
-        foreach (EchoObject childTag in children.List)
+        foreach (EchoObject childTag in children?.List ?? [])
         {
             GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child.IsNotValid()) continue;

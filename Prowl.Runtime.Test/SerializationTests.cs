@@ -198,6 +198,49 @@ public class SerializationTests : RuntimeTestBase
         Assert.NotNull(clone.FindObjectByIdentifier<SerializableComponent>(compId));
     }
 
+    // A GameObject whose serialized Transform can't be restored (an unresolved forward $id reference,
+    // which some scenes' flat-array + nested-children encoding produces) must not throw - it has to
+    // fall back to a fresh Transform. Before the fix this NREs on `_transform.GameObject = this`.
+    [Fact]
+    public void GameObject_Deserialize_WithUnresolvableTransform_FallsBackAndDoesNotThrow()
+    {
+        var go = CreateGameObject("Obj");
+        var echo = Serializer.Serialize(go);
+        echo.Remove("Transform"); // Transform now deserializes to null
+
+        var clone = Serializer.Deserialize<GameObject>(echo);
+
+        Assert.NotNull(clone);
+        Assert.NotNull(clone!.Transform);                 // a GameObject must always have a Transform
+        Assert.Same(clone, clone.Transform.GameObject);   // and it must be wired back to the object
+    }
+
+    // The real-world failure this hunts: one GameObject with an unrestorable Transform used to make the
+    // ENTIRE scene deserialize to zero objects, because the NRE propagated out of the serializeObj array
+    // and Echo dropped the whole field. The healthy objects (and the recovered one) must survive.
+    [Fact]
+    public void Scene_RoundTrip_OneObjectWithUnresolvableTransform_DoesNotWipeScene()
+    {
+        var scene = CreateScene();
+        scene.Add(CreateGameObject("Healthy1"));
+        scene.Add(CreateGameObject("Broken"));
+        scene.Add(CreateGameObject("Healthy2"));
+
+        var echo = Serializer.Serialize(scene);
+
+        // Drop the "Broken" object's Transform in the serialized array to simulate the unresolved ref.
+        foreach (var el in echo["serializeObj"]["array"].List)
+            if (el.TryGet("Name", out var n) && n.StringValue == "Broken")
+                el.Remove("Transform");
+
+        var clone = Serializer.Deserialize<Scene>(echo);
+
+        Assert.Equal(3, clone.AllObjects.Count());
+        Assert.Contains(clone.AllObjects, g => g.Name == "Healthy1");
+        Assert.Contains(clone.AllObjects, g => g.Name == "Healthy2");
+        Assert.All(clone.AllObjects, g => Assert.NotNull(g.Transform));
+    }
+
     // ---------------------------------------------------------------------
     // AssetRef (custom ISerializable: inline instance vs AssetID reference)
     // ---------------------------------------------------------------------
