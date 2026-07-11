@@ -341,7 +341,6 @@ namespace Prowl.PaperUI
                 // Store the PARENT's accumulated transform (not this element's).
                 // HitTestElementTree will apply this element's own transform when testing.
                 _layeredElements.Add((handle, parentTransform));
-                return;
             }
 
             // Accumulate this element's transform for children
@@ -349,12 +348,10 @@ namespace Prowl.PaperUI
             Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
             Transform2D combinedTransform = styleTransform * parentTransform;
 
-            Transform2D childTransform = combinedTransform;
-
             foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
-                CollectLayeredElements(child, childTransform);
+                CollectLayeredElements(child, combinedTransform);
             }
         }
 
