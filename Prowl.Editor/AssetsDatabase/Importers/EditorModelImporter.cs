@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -94,17 +95,27 @@ public class EditorModelImporter : AssetImporter
         string assetsRoot = Project.Current?.AssetsPath ?? "";
         if (string.IsNullOrEmpty(assetsRoot)) return;
 
+        // A disk-backed texture is loaded once by the model importer but can be referenced by
+        // multiple material slots (the source file references it once, by index), so collect every
+        // live texture object that gets replaced by an AssetRef here and dispose each only once,
+        // after every slot referencing it has been resolved - disposing eagerly per-slot would free
+        // a texture a later slot still needs to read.
+        var resolved = new HashSet<Texture2D>();
+
         foreach (var mat in data.Materials)
         {
             if (mat == null) continue;
-            ResolveSlot(mat, "_MainTex", modelDir, assetsRoot, db, ctx);
-            ResolveSlot(mat, "_NormalTex", modelDir, assetsRoot, db, ctx);
-            ResolveSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, ctx);
-            ResolveSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, ctx);
+            ResolveSlot(mat, "_MainTex", modelDir, assetsRoot, db, ctx, resolved);
+            ResolveSlot(mat, "_NormalTex", modelDir, assetsRoot, db, ctx, resolved);
+            ResolveSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, ctx, resolved);
+            ResolveSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, ctx, resolved);
         }
+
+        foreach (var tex in resolved)
+            tex.Dispose();
     }
 
-    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportContext ctx)
+    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportContext ctx, HashSet<Texture2D> resolved)
     {
         var tex = mat._properties.GetTexture(slot);
         if (tex == null || tex.IsDisposed) return;
@@ -113,16 +124,27 @@ public class EditorModelImporter : AssetImporter
         if (string.IsNullOrEmpty(texPath)) return;
 
         string? relativePath = null;
-        if (Path.IsPathRooted(texPath))
+        try
         {
-            if (texPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
-                relativePath = Path.GetRelativePath(assetsRoot, texPath).Replace('\\', '/');
+            if (Path.IsPathRooted(texPath))
+            {
+                if (texPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                    relativePath = Path.GetRelativePath(assetsRoot, texPath).Replace('\\', '/');
+            }
+            else
+            {
+                string abs = Path.GetFullPath(Path.Combine(modelDir, texPath));
+                if (abs.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                    relativePath = Path.GetRelativePath(assetsRoot, abs).Replace('\\', '/');
+            }
         }
-        else
+        catch (Exception)
         {
-            string abs = Path.GetFullPath(Path.Combine(modelDir, texPath));
-            if (abs.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
-                relativePath = Path.GetRelativePath(assetsRoot, abs).Replace('\\', '/');
+            // tex.AssetPath isn't a real filesystem path - e.g. a shared built-in/default texture
+            // (Texture2D.LoadDefault fallback for an unset material slot) carries a synthetic
+            // "$Default:Texture/Normal"-style identifier, and the embedded ':' makes Path.GetFullPath
+            // throw NotSupportedException on Windows. Nothing to resolve; leave the live texture as-is.
+            return;
         }
 
         if (relativePath == null) return;
@@ -135,6 +157,7 @@ public class EditorModelImporter : AssetImporter
         // At runtime, AssetRef lazy-loads via AssetDatabase.Get().
         mat.SetTexture(slot, new AssetRef<Texture2D>(entry.Guid));
         ctx.AddDependency(entry.Guid);
+        resolved.Add(tex);
     }
 
     public override EchoObject? DefaultSettings()
