@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 using Prowl.Editor.Projects.Settings;
 
@@ -486,11 +487,21 @@ public static class ScriptCompiler
             using var process = System.Diagnostics.Process.Start(psi);
             if (process == null) return (-1, "", "Failed to start dotnet process");
 
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit(120_000); // 120s timeout (multiple assemblies may build)
+            // Read both streams concurrently: draining stdout then stderr sequentially deadlocks
+            // if the child fills the other stream's pipe buffer first and blocks waiting on us.
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
 
-            return (process.ExitCode, stdout, stderr);
+            bool exited = process.WaitForExit(120_000); // 120s timeout (multiple assemblies may build)
+            if (!exited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                process.WaitForExit();
+            }
+
+            Task.WaitAll(stdoutTask, stderrTask);
+
+            return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
         }
         catch (Exception ex)
         {
