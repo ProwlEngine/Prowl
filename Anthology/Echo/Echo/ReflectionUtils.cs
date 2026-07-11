@@ -108,8 +108,36 @@ public static class ReflectionUtils
                 if (t != null)
                     return t;
             }
-            return null;
+
+            // Former-name fallback: the serialized type may have been renamed. Look for a loaded type
+            // carrying [FormerlySerializedAs(oldName)] whose old name matches the (now-missing) requested
+            // name - either the old namespace-qualified name or the old short name.
+            return FindTypeByFormerName(typeNameOnly);
         });
+    }
+
+    private static Type? FindTypeByFormerName(string typeNameOnly)
+    {
+        string shortName = typeNameOnly;
+        int dot = typeNameOnly.LastIndexOf('.');
+        if (dot >= 0) shortName = typeNameOnly[(dot + 1)..];
+
+        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] types;
+            try { types = asm.GetTypes(); }
+            catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(type => type != null).Cast<Type>().ToArray(); }
+
+            foreach (Type type in types)
+            {
+                foreach (var attr in type.GetCustomAttributes<FormerlySerializedAsAttribute>(false))
+                {
+                    if (attr.oldName == typeNameOnly || attr.oldName == shortName)
+                        return type;
+                }
+            }
+        }
+        return null;
     }
 
     internal static CachedFieldInfo[] GetSerializableFields(this object target)

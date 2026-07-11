@@ -23,7 +23,15 @@ public class SerializeIfAttribute : Attribute
     public SerializeIfAttribute(string conditionMemberName) => ConditionMemberName = conditionMemberName;
 }
 
-[AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
+/// <summary>
+/// Preserves a member's or type's previous serialized name across a rename.
+///
+/// On a <b>field</b>: old serialized data stored under <see cref="oldName"/> is read into the field.
+/// On a <b>class/struct</b>: old serialized <c>$type</c> data referencing <see cref="oldName"/> (the
+/// former type name) resolves to this type, so renaming a serialized type (e.g. a component script)
+/// doesn't orphan existing data. The name may be the old namespace-qualified name or the old short name.
+/// </summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
 public class FormerlySerializedAsAttribute : Attribute
 {
     public string oldName { get; set; }
