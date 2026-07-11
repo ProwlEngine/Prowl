@@ -91,47 +91,92 @@ public sealed class AnyObjectFormat : ISerializationFormat
             return DeserializePrimitiveValue(value, targetType);
         }
 
-        // Handle reference resolution for non-value types
+        // Reference handling for non-value types. A serialized reference is written as only { "$id": N }
+        // (optionally $type-wrapped); a definition carries real field data. This lets a reference that
+        // arrives BEFORE its definition (a forward reference) be resolved to a placeholder now and
+        // back-patched when the definition shows up, so every reference ends up on one populated instance.
         EchoObject? id = null;
-        if (!targetType.IsValueType &&
-            value.TryGet("$id", out id) &&
-            context.idToObject.TryGetValue(id.IntValue, out object? existingObj))
-        {
-            return existingObj;
-        }
+        bool hasId = !targetType.IsValueType && value.TryGet("$id", out id);
+        int idValue = hasId ? id!.IntValue : 0;
+        bool carriesBody = HasBody(value);
 
-        // The target type is now passed in correctly by the centralized system
-        // We don't need to extract $type here - it's already been handled
-        Type objectType = targetType;
-
-        if (objectType.IsInterface || objectType.IsAbstract)
-        {
-            Serializer.Logger.Error($"Cannot deserialize to interface or abstract type: {objectType.FullName}.");
-            return null;
-        }
-
-        // Create the object instance
         object result;
-        try
+
+        if (hasId && context.idToObject.TryGetValue(idValue, out object? existing))
         {
-            result = Activator.CreateInstance(objectType, nonPublic: true)!;
+            // We already have an instance for this id - a definition seen earlier, or a placeholder we
+            // created from an earlier forward reference.
+            if (!carriesBody)
+                return existing; // a plain reference use - hand back the shared instance
+
+            // A body for an id we already have: back-patch the placeholder. A second full definition for
+            // the same id is malformed data.
+            if (!context.fullyDefinedIds.Add(idValue))
+                throw new InvalidOperationException(
+                    $"Echo: encountered a second definition for $id {idValue}. A reference id may be defined at most once.");
+
+            result = existing; // populate the existing instance in place
         }
-        catch (MissingMethodException ex)
+        else
         {
-            Serializer.Logger.Error($"No parameterless constructor found for type: {objectType.FullName}.", ex);
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Serializer.Logger.Error($"Failed to create instance of type: {objectType.FullName}.", ex);
-            return null;
+            // The target type is now passed in correctly by the centralized system
+            // We don't need to extract $type here - it's already been handled
+            Type objectType = targetType;
+
+            if (objectType.IsInterface || objectType.IsAbstract)
+            {
+                Serializer.Logger.Error($"Cannot deserialize to interface or abstract type: {objectType.FullName}.");
+                return null;
+            }
+
+            // Create the object instance
+            try
+            {
+                result = Activator.CreateInstance(objectType, nonPublic: true)!;
+            }
+            catch (MissingMethodException ex)
+            {
+                Serializer.Logger.Error($"No parameterless constructor found for type: {objectType.FullName}.", ex);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Serializer.Logger.Error($"Failed to create instance of type: {objectType.FullName}.", ex);
+                return null;
+            }
+
+            // Register before deserializing fields so cyclic/forward references resolve to this instance.
+            if (hasId)
+            {
+                context.idToObject[idValue] = result;
+                if (carriesBody)
+                    context.fullyDefinedIds.Add(idValue);
+                else
+                    // Forward-reference stub: return an empty placeholder now; its definition (which carries
+                    // the body) will populate this same instance when it is reached later.
+                    return result;
+            }
         }
 
-        // Register the object for reference resolution
-        if (!objectType.IsValueType && id is not null)
-            context.idToObject[id.IntValue] = result;
+        DeserializeBody(value, result, context);
+        return result;
+    }
 
-        // Deserialize the object's data
+    /// <summary>
+    /// True when <paramref name="value"/> carries field data (a definition) rather than being a bare
+    /// reference stub of only <c>$id</c> (and an optional <c>$type</c> wrapper).
+    /// </summary>
+    private static bool HasBody(EchoObject value)
+    {
+        foreach (var key in value.Tags.Keys)
+            if (key != "$id" && key != "$type")
+                return true;
+        return false;
+    }
+
+    /// <summary>Deserialize a compound's fields into an already-created instance.</summary>
+    private static void DeserializeBody(EchoObject value, object result, SerializationContext context)
+    {
         if (result is ISerializable serializable)
         {
             serializable.Deserialize(value, context);
@@ -149,7 +194,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
                     object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.Field.FieldType, context);
 
                     if (cachedField.Field.IsInitOnly)
-                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Field.Name}' in type '{objectType.FullName}'.");
+                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Field.Name}' in type '{result.GetType().FullName}'.");
 
                     cachedField.Field.SetValue(result, deserializedValue);
                 }
@@ -163,8 +208,6 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
         if (result is ISerializationCallbackReceiver callback)
             callback.OnAfterDeserialize();
-
-        return result;
     }
 
     /// <summary>
