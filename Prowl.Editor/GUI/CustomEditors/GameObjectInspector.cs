@@ -956,6 +956,7 @@ public static class GameObjectInspector
             var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);
             var compType = comp.GetType();
             var compId = comp.Identifier;
+            var compIndex = index;
             var goId = go.Identifier;
             Undo.RegisterAction("Remove Component",
                 undo: () =>
@@ -963,7 +964,12 @@ public static class GameObjectInspector
                     var g = Undo.FindGO(goId);
                     if (g == null) return;
                     var restored = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour;
-                    if (restored != null) { restored.Identifier = compId; g.AddComponent(restored); }
+                    if (restored != null)
+                    {
+                        restored.Identifier = compId;
+                        g.AddComponent(restored);
+                        restored.SetSiblingIndex(compIndex);
+                    }
                 },
                 redo: () =>
                 {
