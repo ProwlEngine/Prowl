@@ -107,10 +107,25 @@ public sealed class CustomObjectEditorRegistry
 {
     private readonly Dictionary<Type, CustomObjectEditor> _editors = new();
 
-    public void Register<T>(CustomObjectEditor editor) => _editors[typeof(T)] = editor;
-    public void Register(Type type, CustomObjectEditor editor) => _editors[type] = editor;
+    // Caches the resolved editor (or null) per queried type so the base-chain + interface walk
+    // (which allocates via GetInterfaces) doesn't run every frame. Weakly keyed so hot-reloaded
+    // script types evict with their AssemblyLoadContext; reset when registrations change.
+    private sealed class Resolved { public CustomObjectEditor? Editor; }
+    private System.Runtime.CompilerServices.ConditionalWeakTable<Type, Resolved> _resolveCache = new();
+
+    public void Register<T>(CustomObjectEditor editor) { _editors[typeof(T)] = editor; _resolveCache = new(); }
+    public void Register(Type type, CustomObjectEditor editor) { _editors[type] = editor; _resolveCache = new(); }
 
     public CustomObjectEditor? GetEditor(Type type)
+    {
+        // TryGetValue first so cache hits allocate nothing (a factory lambda would capture `this`).
+        if (_resolveCache.TryGetValue(type, out var cached)) return cached.Editor;
+        var resolved = new Resolved { Editor = ResolveEditor(type) };
+        _resolveCache.Add(type, resolved);
+        return resolved.Editor;
+    }
+
+    private CustomObjectEditor? ResolveEditor(Type type)
     {
         if (_editors.TryGetValue(type, out var editor)) return editor;
         var current = type.BaseType;
@@ -124,7 +139,7 @@ public sealed class CustomObjectEditorRegistry
         return null;
     }
 
-    public void Clear() => _editors.Clear();
+    public void Clear() { _editors.Clear(); _resolveCache = new(); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -298,16 +313,15 @@ public static class PropertyGridRenderer
             var type = representative.GetType();
             var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
 
-            var buttonMethods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Where(m2 => m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute") && m2.GetParameters().Length == 0)
-                .ToArray();
+            var buttonMethods = GetButtonMethods(type);
 
             for (int i = 0; i < fields.Length; i++)
             {
                 var field = fields[i];
                 string fieldId = $"{id}_{field.Name}";
 
-                var attrs = field.GetCustomAttributes(true).OfType<Attribute>().ToArray();
+                var meta = GetFieldMeta(field);
+                var attrs = meta.Attributes;
                 bool skip = false;
                 bool handled = false;
 
@@ -332,7 +346,7 @@ public static class PropertyGridRenderer
                     var handler = config.Handlers.GetHandler(attr.GetType());
                     if (handler != null)
                     {
-                        string label = FormatFieldName(field.Name);
+                        string label = meta.Label;
                         IsMixedField = isMixed;
                         bool h = handler.OnDraw(paper, fieldId, label, attr, field, representative, applyAll, depth);
                         IsMixedField = false;
@@ -344,7 +358,7 @@ public static class PropertyGridRenderer
                 {
                     var value = field.GetValue(representative);
                     var fieldType = field.FieldType;
-                    string label = FormatFieldName(field.Name);
+                    string label = meta.Label;
                     bool isOverridden = overrides?.Contains(field.Name) ?? false;
 
                     DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
@@ -359,12 +373,10 @@ public static class PropertyGridRenderer
             }
 
             // [Button] methods (invoked on every target)
-            foreach (var method in buttonMethods)
+            foreach (var button in buttonMethods)
             {
-                var btnAttr = method.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
-                var labelProp = btnAttr.GetType().GetProperty("Label");
-                string label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(method.Name);
-                Origami.Button(paper, $"{id}_btn_{method.Name}", label, () =>
+                var method = button.Method;
+                Origami.Button(paper, $"{id}_btn_{method.Name}", button.Label, () =>
                 {
                     for (int t = 0; t < targets.Count; t++)
                     {
@@ -1132,8 +1144,54 @@ public static class PropertyGridRenderer
         catch { return null; }
     }
 
-    /// <summary>Get serializable fields for a type (matches Echo's logic).</summary>
+    // Reflection results are invariant per type/field, but the inspector rebuilds every frame
+    // (immediate mode), so cache them. Keyed weakly so hot-reloaded script types don't pin their
+    // (collectible) AssemblyLoadContext - entries evict when the type is unloaded.
+    private sealed class FieldMeta
+    {
+        public Attribute[] Attributes = Array.Empty<Attribute>();
+        public string Label = "";
+    }
+    private sealed class ButtonMethod
+    {
+        public MethodInfo Method = null!;
+        public string Label = "";
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, FieldInfo[]> s_fieldCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FieldInfo, FieldMeta> s_fieldMeta = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, ButtonMethod[]> s_buttonCache = new();
+
+    /// <summary>Cached attributes + display label for a field.</summary>
+    private static FieldMeta GetFieldMeta(FieldInfo field)
+        => s_fieldMeta.GetValue(field, static f => new FieldMeta
+        {
+            Attributes = f.GetCustomAttributes(true).OfType<Attribute>().ToArray(),
+            Label = FormatFieldName(f.Name),
+        });
+
+    /// <summary>Cached parameterless [Button] methods (with resolved labels) for a type.</summary>
+    private static ButtonMethod[] GetButtonMethods(Type type)
+        => s_buttonCache.GetValue(type, static t =>
+            t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+             .Where(m2 => m2.GetParameters().Length == 0
+                       && m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute"))
+             .Select(m2 =>
+             {
+                 var btnAttr = m2.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
+                 var labelProp = btnAttr.GetType().GetProperty("Label");
+                 return new ButtonMethod
+                 {
+                     Method = m2,
+                     Label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(m2.Name),
+                 };
+             })
+             .ToArray());
+
+    /// <summary>Get serializable fields for a type (matches Echo's logic). Cached per type.</summary>
     public static FieldInfo[] GetSerializableFields(Type type)
+        => s_fieldCache.GetValue(type, static t => ComputeSerializableFields(t));
+
+    private static FieldInfo[] ComputeSerializableFields(Type type)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         var fields = new List<FieldInfo>();
