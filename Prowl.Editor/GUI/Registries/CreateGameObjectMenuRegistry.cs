@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Core;
@@ -108,79 +109,80 @@ public static class CreateGameObjectMenuRegistry
 
     /// <summary>
     /// Build the create menu for a context menu builder (used in Hierarchy panel).
-    /// Items are organized into submenus based on their path separators.
+    /// Items are organized into submenus based on their path separators, recursing to
+    /// arbitrary depth (e.g. "Effects/Fog/Global" becomes an "Effects" submenu containing
+    /// a "Fog" submenu containing a "Global" item).
     /// </summary>
     public static void BuildMenu(ContextBuilder builder, GameObject? parent)
     {
-        // Group entries by top-level path segment
-        var topLevel = new List<MenuEntry>();
-        var submenus = new Dictionary<string, List<MenuEntry>>(StringComparer.Ordinal);
+        BuildLevel(builder, parent, _entries, 0, suppressLeadingSeparator: false);
+    }
 
-        foreach (var entry in _entries)
+    /// <summary>
+    /// Renders one menu level: entries whose path (past <paramref name="consumedLength"/>) has no
+    /// further "/" become items here, entries that do get grouped into a submenu per next segment
+    /// and rendered recursively. A separator flag is resolved once, at the shallowest level where
+    /// its entry is distinguishable as its group's first item (so it lands right before the
+    /// submenu that entry lives in, not inside every level of that submenu chain too); deeper
+    /// recursion for that same leading entry is told to suppress the flag via
+    /// <paramref name="suppressLeadingSeparator"/> so it isn't rendered again lower down.
+    /// </summary>
+    private static void BuildLevel(ContextBuilder builder, GameObject? parent, List<MenuEntry> levelEntries, int consumedLength, bool suppressLeadingSeparator)
+    {
+        var leaves = new List<MenuEntry>();
+        var categoryOrder = new List<string>();
+        var categories = new Dictionary<string, List<MenuEntry>>(StringComparer.Ordinal);
+
+        foreach (var entry in levelEntries)
         {
-            int slashIdx = entry.Path.IndexOf('/');
+            string rel = entry.Path[consumedLength..];
+            int slashIdx = rel.IndexOf('/');
             if (slashIdx < 0)
             {
-                topLevel.Add(entry);
+                leaves.Add(entry);
             }
             else
             {
-                string category = entry.Path[..slashIdx];
-                if (!submenus.TryGetValue(category, out var list))
+                string category = rel[..slashIdx];
+                if (!categories.TryGetValue(category, out var list))
                 {
                     list = [];
-                    submenus[category] = list;
+                    categories[category] = list;
+                    categoryOrder.Add(category);
                 }
                 list.Add(entry);
             }
         }
 
-        // Render top-level items and submenus interleaved by order
-        // We need a unified ordering, so build a combined list
-        var combined = new List<(int order, bool isSeparator, string? submenuKey, MenuEntry? entry)>();
+        // Unified ordering of this level's leaves and submenu categories. Entries arrive here
+        // pre-sorted by Order (from Initialize), so each category's list[0] is its lowest-order child.
+        var items = new List<(int order, MenuEntry? leaf, string? category)>();
+        foreach (var leaf in leaves) items.Add((leaf.Order, leaf, null));
+        foreach (var category in categoryOrder) items.Add((categories[category][0].Order, null, category));
 
-        foreach (var e in topLevel)
+        bool isFirstItem = true;
+        foreach (var (_, leaf, category) in items.OrderBy(i => i.order))
         {
-            if (e.Separator) combined.Add((e.Order - 1, true, null, null));
-            combined.Add((e.Order, false, null, e));
-        }
-        foreach (var (key, list) in submenus)
-        {
-            int minOrder = list[0].Order;
-            // Check if first item has separator flag
-            if (list[0].Separator) combined.Add((minOrder - 1, true, null, null));
-            combined.Add((minOrder, false, key, null));
-        }
+            bool skipSeparator = isFirstItem && suppressLeadingSeparator;
+            isFirstItem = false;
 
-        combined.Sort((a, b) => a.order.CompareTo(b.order));
-
-        foreach (var (_, isSeparator, submenuKey, entry) in combined)
-        {
-            if (isSeparator)
+            if (leaf.HasValue)
             {
-                builder.Separator();
-            }
-            else if (submenuKey != null)
-            {
-                var list = submenus[submenuKey];
-                // Use icon from the first entry in the submenu, or default
-                string submenuIcon = !string.IsNullOrEmpty(list[0].Icon) ? list[0].Icon : "";
-                builder.Submenu(submenuKey, sub =>
-                {
-                    foreach (var subEntry in list)
-                    {
-                        var captured = subEntry;
-                        string itemName = captured.Path[(captured.Path.IndexOf('/') + 1)..];
-                        string icon = !string.IsNullOrEmpty(captured.Icon) ? captured.Icon : "";
-                        sub.Item(itemName, () => captured.Method.Invoke(null, [parent]), icon: icon);
-                    }
-                }, icon: submenuIcon);
-            }
-            else if (entry.HasValue)
-            {
-                var e = entry.Value;
+                var e = leaf.Value;
+                if (!skipSeparator && e.Separator) builder.Separator();
+                string itemName = e.Path[consumedLength..];
                 string icon = !string.IsNullOrEmpty(e.Icon) ? e.Icon : "";
-                builder.Item(e.Path, () => e.Method.Invoke(null, [parent]), icon: icon);
+                builder.Item(itemName, () => e.Method.Invoke(null, [parent]), icon: icon);
+            }
+            else if (category != null)
+            {
+                var list = categories[category];
+                bool hoistSeparator = !skipSeparator && list[0].Separator;
+                if (hoistSeparator) builder.Separator();
+                string icon = !string.IsNullOrEmpty(list[0].Icon) ? list[0].Icon : "";
+                int nextConsumed = consumedLength + category.Length + 1;
+                bool childSuppress = skipSeparator || hoistSeparator;
+                builder.Submenu(category, sub => BuildLevel(sub, parent, list, nextConsumed, childSuppress), icon);
             }
         }
     }
