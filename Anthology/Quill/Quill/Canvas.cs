@@ -1260,6 +1260,24 @@ namespace Prowl.Quill
             AddTriangleCount(1);
         }
 
+        /// <summary>
+        /// Appends a batch of triangle indices in one go, updating the draw call once for the whole
+        /// batch. Pair with <see cref="AddVertices"/> so external mesh producers (glyph runs, custom
+        /// geometry) batch into a single draw-state check instead of one per triangle.
+        /// The index count must be a multiple of three.
+        /// </summary>
+        public void AddTriangles(List<uint> indices)
+        {
+            if (indices.Count == 0)
+                return;
+
+            Reserve(_indices, indices.Count);
+            for (int i = 0; i < indices.Count; i++)
+                _indices.Add(indices[i]);
+
+            AddTriangleCount(indices.Count / 3);
+        }
+
         private void AddTriangleCount(int count)
         {
             int currentHash = ComputeDrawStateHash();
