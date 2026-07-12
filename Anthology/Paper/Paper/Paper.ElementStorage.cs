@@ -29,10 +29,11 @@ namespace Prowl.PaperUI
         {
             int index;
             ElementData elementData = ElementData.Create(id);
-            // Share the one persistent per-id style instead of allocating a throwaway each frame
-            // (the old fresh ElementStyle here was discarded by UpdateStyles anyway). Build-phase
-            // reads of the style now see the element's real values rather than defaults.
+            // Share the one persistent per-id style and reset it for this frame: current values revert
+            // to defaults, and the builder's declarations below define the element (anything omitted
+            // reverts). Persistent animation state survives the reset (it lives out-of-line).
             elementData._elementStyle = GetOrCreateStyle(id);
+            elementData._elementStyle.BeginFrame();
 
             if (_freeIndices.Count > 0)
             {

@@ -294,22 +294,16 @@ namespace Prowl.PaperUI
     {
         #region Fields
 
-        // State tracking
-        private HashSet<GuiProp> _propertiesSetThisFrame = new HashSet<GuiProp>();
-        private HashSet<GuiProp> _propertiesWithTransitions = new HashSet<GuiProp>();
-        private bool _firstFrame = true;
-
         // Resolved current values as typed fields (see StyleValues) - what layout/render read every
-        // frame. Starts as a copy of the defaults so an unset field already holds its default.
+        // frame. Reset to the defaults at the start of each frame (BeginFrame); the builder then
+        // re-declares this frame's values, so anything not re-declared naturally reverts to default.
         private StyleValues _current = _defaultStyleValues;
-        // Target values for the transition machinery (written once per set per frame; cold path).
-        private Dictionary<GuiProp, object> _targetValues = new Dictionary<GuiProp, object>();
 
-        // Transition state
-        private Dictionary<GuiProp, TransitionConfig> _transitionConfigs = new Dictionary<GuiProp, TransitionConfig>();
-        private Dictionary<GuiProp, InterpolationState> _interpolations = new Dictionary<GuiProp, InterpolationState>();
+        // Lazily allocated, and only for elements that actually configure a transition. Non-animated
+        // elements carry none of the transition machinery.
+        private Transitions? _transitions;
 
-        // Inheritance
+        // Inheritance (opt-in via InheritStyle; usually null).
         private ElementStyle? _parent;
 
         private static readonly object[] _defaultValues = CreateDefaults();
@@ -320,12 +314,14 @@ namespace Prowl.PaperUI
         #region Public Methods
 
         /// <summary>
-        /// Marks the end of a frame, resetting per-frame state.
+        /// Starts a fresh frame for this element: reverts current values to their defaults (unset), so
+        /// the builder's declarations this frame define the element and anything omitted reverts. Fields
+        /// hold defaults again; persistent animation state lives in <see cref="_transitions"/>.
         /// </summary>
-        public void EndOfFrame()
+        public void BeginFrame()
         {
-            _propertiesSetThisFrame.Clear();
-            _firstFrame = false;
+            _current = _defaultStyleValues;
+            _transitions?.BeginFrame();
         }
 
         /// <summary>
@@ -342,7 +338,7 @@ namespace Prowl.PaperUI
         public bool HasValue(GuiProp property) => _current.Has(property);
 
         /// <summary>True if the property is currently mid-transition (used by DevTools).</summary>
-        internal bool IsAnimating(GuiProp property) => _interpolations.ContainsKey(property);
+        internal bool IsAnimating(GuiProp property) => _transitions != null && _transitions.IsAnimating(property);
 
         /// <summary>
         /// Gets the current value of a property, falling back to parent or default.
@@ -391,43 +387,22 @@ namespace Prowl.PaperUI
         public FontQuality GetTextQuality() => (_parent != null && !_current.Has(GuiProp.TextQuality)) ? (FontQuality)_parent.GetValue(GuiProp.TextQuality) : _current.TextQuality;
 
         /// <summary>
-        /// Sets a property value directly without transition.
+        /// Sets a property value directly (already-resolved values such as the root size). In the new
+        /// model this is the same as declaring a value for the frame.
         /// </summary>
-        public void SetDirectValue(GuiProp property, object value)
-        {
-            _propertiesSetThisFrame.Add(property);
-
-            // Set the value directly without transition
-            _current.Set(property, value);
-            _targetValues[property] = value; // Ensure target matches current
-            _interpolations.Remove(property); // Remove any existing interpolation state
-        }
+        public void SetDirectValue(GuiProp property, object value) => _current.Set(property, value);
 
         /// <summary>
-        /// Sets a property's target value for transition.
+        /// Declares a property's value for this frame. Applied straight to the current values; if the
+        /// property is animating, the transition pass (Update) overrides it with the tweened value.
         /// </summary>
-        public void SetNextValue(GuiProp property, object value)
-        {
-            _propertiesSetThisFrame.Add(property);
-
-            // Store the target value - this is where we want to end up
-            _targetValues[property] = value;
-        }
+        public void SetNextValue(GuiProp property, object value) => _current.Set(property, value);
 
         /// <summary>
-        /// Configures a transition for a property.
+        /// Configures a transition for a property this frame (re-declared each frame, as before).
         /// </summary>
         public void SetTransitionConfig(GuiProp property, float duration, Func<float, float>? easing = null)
-        {
-            // Store the transition configuration for this property
-            _transitionConfigs[property] = new TransitionConfig {
-                Duration = duration,
-                EasingFunction = easing
-            };
-
-            // Mark this property as having a transition
-            _propertiesWithTransitions.Add(property);
-        }
+            => (_transitions ??= new Transitions()).Configure(property, duration, easing);
 
         /// <summary>
         /// Removes a property value and any related transition state.
@@ -437,51 +412,16 @@ namespace Prowl.PaperUI
             // Reset the field back to its default (unset fields must read as default), then mark unset.
             _current.Set(property, GetDefaultValue(property));
             _current.ClearProp(property);
-            _targetValues.Remove(property);
-            _transitionConfigs.Remove(property);
-            _interpolations.Remove(property);
+            _transitions?.Remove(property);
         }
 
         /// <summary>
-        /// Updates all property transitions for the current frame.
+        /// Advances any per-frame transitions, overriding the declared values in <see cref="_current"/>
+        /// with their tweened values. A no-op (and free) for elements that configured no transitions.
         /// </summary>
         public void Update(float deltaTime)
         {
-            if (!_firstFrame)
-            {
-                // Initialize values for properties with transitions
-                InitializeTransitionProperties();
-            }
-
-            // Track completed transitions for cleanup
-            List<GuiProp> completedInterpolations = new List<GuiProp>();
-
-            // Process all properties that have target values
-            foreach (var property in _targetValues.Keys)
-            {
-                // Get the target value based on what was set this frame or inherited
-                object targetValue = GetTargetValue(property);
-
-                // If the property has a transition config, set up an interpolation
-                if (_transitionConfigs.TryGetValue(property, out var config))
-                {
-                    ProcessPropertyWithTransition(property, targetValue, config, deltaTime, completedInterpolations);
-                }
-                else
-                {
-                    // No transition config, set immediately
-                    _current.Set(property, targetValue);
-                }
-            }
-
-            // Clean up completed interpolations
-            foreach (var property in completedInterpolations)
-            {
-                _interpolations.Remove(property);
-            }
-
-            // Clear transition configs after processing - they don't persist across frames
-            _transitionConfigs.Clear();
+            _transitions?.Advance(deltaTime, ref _current, this);
         }
 
         /// <summary>
@@ -516,103 +456,9 @@ namespace Prowl.PaperUI
         #region Private Helper Methods
 
         /// <summary>
-        /// Initializes values for properties with transitions.
-        /// </summary>
-        private void InitializeTransitionProperties()
-        {
-            foreach (var property in _propertiesWithTransitions)
-            {
-                // If we don't have a current value yet for a property with transition,
-                // initialize it with the default or parent value
-                if (!_current.Has(property))
-                {
-                    if (_parent != null && _parent.HasValue(property))
-                        _current.Set(property, _parent.GetValue(property));
-                    else
-                        _current.Set(property, GetDefaultValue(property));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets the target value for a property based on explicit setting or inheritance.
-        /// </summary>
-        private object GetTargetValue(GuiProp property)
-        {
-            if (_propertiesSetThisFrame.Contains(property)) // If property was set this frame, use the explicit value
-                return _targetValues[property];
-            else if (_parent != null && _parent.HasValue(property)) // If not set, but has parent, use parent value
-                return _parent.GetValue(property);
-            else // If not set and no parent, use default value
-                return GetDefaultValue(property);
-        }
-
-        /// <summary>
-        /// Processes transitions for a property.
-        /// </summary>
-        private void ProcessPropertyWithTransition(GuiProp property, object targetValue, TransitionConfig config,
-            float deltaTime, List<GuiProp> completedInterpolations)
-        {
-            // If we don't have a current value yet, initialize it immediately
-            object? currentValue;
-            if (!_current.Has(property))
-            {
-                currentValue = targetValue;
-                _current.Set(property, currentValue);
-                return;
-            }
-            currentValue = _current.GetBoxed(property);
-
-            // Skip if the values are already equal
-            if (currentValue.Equals(targetValue))
-                return;
-
-            // Create or update interpolation state
-            if (!_interpolations.TryGetValue(property, out var state))
-            {
-                state = new InterpolationState {
-                    StartValue = currentValue,
-                    TargetValue = targetValue,
-                    Duration = config.Duration,
-                    EasingFunction = config.EasingFunction,
-                    CurrentTime = 0
-                };
-                _interpolations[property] = state;
-            }
-            else if (!state.TargetValue.Equals(targetValue))
-            {
-                // Target has changed, restart interpolation
-                state.StartValue = currentValue;
-                state.TargetValue = targetValue;
-                state.Duration = config.Duration;
-                state.EasingFunction = config.EasingFunction;
-                state.CurrentTime = 0;
-            }
-
-            // Update the interpolation
-            state.CurrentTime += deltaTime;
-
-            if (state.CurrentTime >= state.Duration)
-            {
-                // Interpolation complete
-                _current.Set(property, targetValue);
-                completedInterpolations.Add(property);
-            }
-            else
-            {
-                // Calculate interpolated value
-                float t = state.CurrentTime / state.Duration;
-                if (state.EasingFunction != null)
-                    t = state.EasingFunction(t);
-
-                _current.Set(property, Interpolate(state.StartValue, state.TargetValue, t));
-            }
-        }
-
-        /// <summary>
         /// Interpolates between two values based on their type.
         /// </summary>
-        private object Interpolate(object start, object end, float t)
+        internal object Interpolate(object start, object end, float t)
         {
             if (start is float floatStart && end is float floatEnd)
             {
@@ -778,16 +624,89 @@ namespace Prowl.PaperUI
 
         #region Nested Types
 
-        /// <summary>
-        /// Helper class to track interpolation state.
-        /// </summary>
-        private class InterpolationState
+        /// <summary>Persistent interpolation state for one animating property.</summary>
+        private sealed class Interp
         {
-            public object StartValue { get; set; }
-            public object TargetValue { get; set; }
-            public float Duration { get; set; }
-            public Func<float, float>? EasingFunction { get; set; }
-            public float CurrentTime { get; set; }
+            public object Start;
+            public object Target;
+            public object Current;
+            public float Time;
+        }
+
+        /// <summary>
+        /// Out-of-line transition state, allocated only for elements that configure a transition.
+        /// Holds the per-frame configs (which properties transition this frame) and the persistent
+        /// interpolation state that carries the animated value across frames.
+        /// </summary>
+        private sealed class Transitions
+        {
+            private readonly Dictionary<GuiProp, TransitionConfig> _frameConfigs = new();
+            private readonly Dictionary<GuiProp, Interp> _interps = new();
+
+            public void BeginFrame() => _frameConfigs.Clear();
+
+            public void Configure(GuiProp property, float duration, Func<float, float>? easing)
+                => _frameConfigs[property] = new TransitionConfig { Duration = duration, EasingFunction = easing };
+
+            public void Remove(GuiProp property)
+            {
+                _frameConfigs.Remove(property);
+                _interps.Remove(property);
+            }
+
+            public bool IsAnimating(GuiProp property) => _interps.ContainsKey(property);
+
+            /// <summary>
+            /// For every property configured with a transition this frame, advance its interpolation
+            /// toward the value the builder declared (or the default if it wasn't declared) and write
+            /// the tweened result back into the element's current values.
+            /// </summary>
+            public void Advance(float dt, ref StyleValues current, ElementStyle owner)
+            {
+                if (_frameConfigs.Count == 0) return;
+
+                foreach (var kv in _frameConfigs)
+                {
+                    GuiProp property = kv.Key;
+                    TransitionConfig config = kv.Value;
+
+                    // The value declared this frame (or the default, since BeginFrame reset unset fields).
+                    object target = current.GetBoxed(property);
+
+                    if (!_interps.TryGetValue(property, out var interp))
+                    {
+                        // First observation of this property - snap, don't animate from nothing.
+                        _interps[property] = new Interp { Start = target, Target = target, Current = target, Time = config.Duration };
+                        continue;
+                    }
+
+                    if (!Equals(interp.Target, target))
+                    {
+                        // Target changed - restart from the current animated value.
+                        interp.Start = interp.Current;
+                        interp.Target = target;
+                        interp.Time = 0f;
+                    }
+
+                    if (interp.Time < config.Duration)
+                    {
+                        interp.Time += dt;
+                        if (interp.Time >= config.Duration)
+                        {
+                            interp.Current = interp.Target;
+                        }
+                        else
+                        {
+                            float t = config.Duration > 0f ? interp.Time / config.Duration : 1f;
+                            if (config.EasingFunction != null) t = config.EasingFunction(t);
+                            interp.Current = owner.Interpolate(interp.Start, interp.Target, t);
+                        }
+                    }
+
+                    // Override the declared snap with the animated value.
+                    current.Set(property, interp.Current);
+                }
+            }
         }
 
         #endregion
@@ -868,14 +787,13 @@ namespace Prowl.PaperUI
         /// </summary>
         private void EndOfFrameCleanupStyles(HashSet<int> createdElements)
         {
-            // Clean up any elements that haven't been accessed this frame
+            // Drop styles for elements that weren't present this frame. Per-frame reset now happens
+            // when the element is (re)created (ElementStyle.BeginFrame), not here.
             List<int> elementsToRemove = new List<int>();
             foreach (var kvp in _activeStyles)
             {
                 if (!createdElements.Contains(kvp.Key))
                     elementsToRemove.Add(kvp.Key);
-                else
-                    kvp.Value.EndOfFrame(); // Reset the style for the next frame
             }
 
             foreach (var id in elementsToRemove)
