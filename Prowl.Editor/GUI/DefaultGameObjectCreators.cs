@@ -52,7 +52,7 @@ internal static class DefaultGameObjectCreators
         CreatePrimitive("Plane", DefaultModel.Plane, parent);
     }
 
-    [CreateGameObjectMenu("3D Object/Text Mesh", Icon = EditorIcons.Font, Order = 14)]
+    [CreateGameObjectMenu("3D Object/Text Mesh", Icon = EditorIcons.Font, Order = 14, Separator = true)]
     static void CreateTextMesh(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Text Mesh", parent);
@@ -60,7 +60,7 @@ internal static class DefaultGameObjectCreators
         text.Text = "New Text";
     }
 
-    [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15, Separator = true)]
+    [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15)]
     static void CreateTerrain(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Terrain", parent);
@@ -85,7 +85,7 @@ internal static class DefaultGameObjectCreators
 
     // ---- Lights ----
 
-    [CreateGameObjectMenu("Light/Directional Light", Icon = EditorIcons.Sun, Order = 20, Separator = true)]
+    [CreateGameObjectMenu("Light/Directional Light", Icon = EditorIcons.Sun)]
     static void CreateDirectionalLight(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Directional Light", parent);
@@ -110,7 +110,7 @@ internal static class DefaultGameObjectCreators
 
     // ---- Fog Volumes ----
 
-    [CreateGameObjectMenu("Fog Volume/Global", Icon = EditorIcons.Cloud, Order = 25, Separator = true)]
+    [CreateGameObjectMenu("Effects/Fog/Global", Icon = EditorIcons.Cloud, Order = 25)]
     static void CreateGlobalFogVolume(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Global Fog Volume", parent);
@@ -118,7 +118,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Global;
     }
 
-    [CreateGameObjectMenu("Fog Volume/Box", Icon = EditorIcons.Cube, Order = 26)]
+    [CreateGameObjectMenu("Effects/Fog/Box", Icon = EditorIcons.Cube, Order = 26)]
     static void CreateBoxFogVolume(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Box Fog Volume", parent);
@@ -127,7 +127,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Box;
     }
 
-    [CreateGameObjectMenu("Fog Volume/Sphere", Icon = EditorIcons.CircleDot, Order = 27)]
+    [CreateGameObjectMenu("Effects/Fog/Sphere", Icon = EditorIcons.CircleDot, Order = 27)]
     static void CreateSphereFogVolume(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Sphere Fog Volume", parent);
@@ -136,7 +136,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Sphere;
     }
 
-    [CreateGameObjectMenu("Fog Volume/Cylinder", Icon = EditorIcons.Circle, Order = 28)]
+    [CreateGameObjectMenu("Effects/Fog/Cylinder", Icon = EditorIcons.Circle, Order = 28)]
     static void CreateCylinderFogVolume(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Cylinder Fog Volume", parent);
@@ -145,7 +145,7 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Cylinder;
     }
 
-    [CreateGameObjectMenu("Fog Volume/Cone", Icon = EditorIcons.Bullseye, Order = 29)]
+    [CreateGameObjectMenu("Effects/Fog/Cone", Icon = EditorIcons.Bullseye, Order = 29)]
     static void CreateConeFogVolume(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Cone Fog Volume", parent);
@@ -154,9 +154,26 @@ internal static class DefaultGameObjectCreators
         v.Shape = FogVolumeShape.Cone;
     }
 
+    // ---- Particle System ----
+
+    [CreateGameObjectMenu("Effects/Particle System", Icon = EditorIcons.SprayCanSparkles, Order = 60)]
+    static void CreateParticleSystem(GameObject? parent)
+    {
+        var go = HierarchyPanel.CreateGameObject("Particle System", parent);
+        var ps = go.AddComponent<ParticleSystemComponent>();
+        ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
+        ps.Emission.Enabled = true;
+        ps.Emission.RateOverTime = new MinMaxCurve(10f);
+        ps.Emission.Shape = EmissionShape.Cone;
+        ps.Initial.Enabled = true;
+        ps.Initial.StartLifetime = new MinMaxCurve(2f);
+        ps.Initial.StartSpeed = new MinMaxCurve(3f);
+        ps.Initial.StartSize = new MinMaxCurve(0.2f);
+    }
+
     // ---- Audio ----
 
-    [CreateGameObjectMenu("Audio/Audio Source", Icon = EditorIcons.VolumeHigh, Order = 30, Separator = true)]
+    [CreateGameObjectMenu("Audio/Audio Source", Icon = EditorIcons.VolumeHigh, Order = 30)]
     static void CreateAudioSource(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Audio Source", parent);
@@ -170,18 +187,9 @@ internal static class DefaultGameObjectCreators
         go.AddComponent<AudioListener>();
     }
 
-    // ---- Camera ----
-
-    [CreateGameObjectMenu("Camera", Icon = EditorIcons.Camera, Order = 40, Separator = true)]
-    static void CreateCamera(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("Camera", parent);
-        go.AddComponent<Camera>();
-    }
-
     // ---- UI ----
 
-    [CreateGameObjectMenu("UI/Canvas", Icon = EditorIcons.BorderAll, Order = 50, Separator = true)]
+    [CreateGameObjectMenu("UI/Canvas", Icon = EditorIcons.BorderAll, Order = 50)]
     static void CreateCanvas(GameObject? parent)
     {
         var go = HierarchyPanel.CreateGameObject("Canvas", parent);
@@ -509,21 +517,13 @@ internal static class DefaultGameObjectCreators
         return canvasGo;
     }
 
-    // ---- Particle System ----
+    // ---- Camera ----
 
-    [CreateGameObjectMenu("Particle System", Icon = EditorIcons.SprayCanSparkles, Order = 60)]
-    static void CreateParticleSystem(GameObject? parent)
+    [CreateGameObjectMenu("Camera", Icon = EditorIcons.Camera, Order = 80)]
+    static void CreateCamera(GameObject? parent)
     {
-        var go = HierarchyPanel.CreateGameObject("Particle System", parent);
-        var ps = go.AddComponent<ParticleSystemComponent>();
-        ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
-        ps.Emission.Enabled = true;
-        ps.Emission.RateOverTime = new MinMaxCurve(10f);
-        ps.Emission.Shape = EmissionShape.Cone;
-        ps.Initial.Enabled = true;
-        ps.Initial.StartLifetime = new MinMaxCurve(2f);
-        ps.Initial.StartSpeed = new MinMaxCurve(3f);
-        ps.Initial.StartSize = new MinMaxCurve(0.2f);
+        var go = HierarchyPanel.CreateGameObject("Camera", parent);
+        go.AddComponent<Camera>();
     }
 
     // ---- Helper ----
