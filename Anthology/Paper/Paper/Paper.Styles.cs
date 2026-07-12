@@ -306,8 +306,9 @@ namespace Prowl.PaperUI
         // Inheritance (opt-in via InheritStyle; usually null).
         private ElementStyle? _parent;
 
-        private static readonly object[] _defaultValues = CreateDefaults();
-        private static readonly StyleValues _defaultStyleValues = StyleValues.FromDefaults(_defaultValues);
+        // The default value for every property, as a single StyleValues (mask left at 0 = "unset").
+        // BeginFrame copies this into _current to revert an element to defaults each frame.
+        private static readonly StyleValues _defaultStyleValues = CreateDefaults();
 
         #endregion
 
@@ -345,16 +346,11 @@ namespace Prowl.PaperUI
         /// </summary>
         public object GetValue(GuiProp property)
         {
-            // Explicitly set: return it (boxed - this is the compatibility shim; hot readers use the
-            // typed accessors below instead).
-            if (_current.Has(property))
-                return _current.GetBoxed(property);
-
-            // Otherwise check parent
-            if (_parent != null)
+            // Boxing shim for cold callers (DevTools, templates); hot readers use the typed accessors.
+            // Inherit from the parent only when not set locally; otherwise GetBoxed returns the set
+            // value, or the field's default when unset.
+            if (!_current.Has(property) && _parent != null)
                 return _parent.GetValue(property);
-
-            // Otherwise return default (unset fields hold defaults, so GetBoxed is the default here).
             return _current.GetBoxed(property);
         }
 
@@ -403,17 +399,6 @@ namespace Prowl.PaperUI
         /// </summary>
         public void SetTransitionConfig(GuiProp property, float duration, Func<float, float>? easing = null)
             => (_transitions ??= new Transitions()).Configure(property, duration, easing);
-
-        /// <summary>
-        /// Removes a property value and any related transition state.
-        /// </summary>
-        public void ClearValue(GuiProp property)
-        {
-            // Reset the field back to its default (unset fields must read as default), then mark unset.
-            _current.Set(property, GetDefaultValue(property));
-            _current.ClearProp(property);
-            _transitions?.Remove(property);
-        }
 
         /// <summary>
         /// Advances any per-frame transitions, overriding the declared values in <see cref="_current"/>
@@ -531,93 +516,77 @@ namespace Prowl.PaperUI
             return HSV.Lerp(a, b, t).ToColor();
         }
 
-        /// <summary>
-        /// Gets the default value for a property.
-        /// </summary>
-        private object GetDefaultValue(GuiProp property) => _defaultValues[(int)property];
-
         #endregion
 
         #region Private Methods
 
-        // Retained for API compatibility; defaults are built once at type initialization.
-        public static void InitializeDefaults() { }
-
-        private static object[] CreateDefaults()
+        private static StyleValues CreateDefaults()
         {
-            // Assuming GuiProp enum values are contiguous starting from 0
-            int maxEnumValue = Enum.GetValues(typeof(GuiProp)).Cast<GuiProp>().Max(x => (int)x);
-            var d = new object[maxEnumValue + 1];
+            var d = new StyleValues();
 
-            // Visual Properties
-            d[(int)GuiProp.BackgroundColor] = Color.Transparent;
-            d[(int)GuiProp.BackgroundGradient] = Gradient.None;
-            d[(int)GuiProp.BorderColor] = Color.Transparent;
-            d[(int)GuiProp.BorderWidth] = 0.0f;
-            d[(int)GuiProp.Rounded] = new Float4(0, 0, 0, 0);
-            d[(int)GuiProp.BoxShadow] = BoxShadow.None;
-            d[(int)GuiProp.BackdropBlur] = 0.0f;
+            // Visual
+            d.BackgroundColor = Color.Transparent;
+            d.BackgroundGradient = Gradient.None;
+            d.BorderColor = Color.Transparent;
+            d.BorderWidth = 0.0f;
+            d.Rounded = new Float4(0, 0, 0, 0);
+            d.BoxShadow = BoxShadow.None;
+            d.BackdropBlur = 0.0f;
+            d.BackgroundImage = null;
 
-            // Image Properties
-            d[(int)GuiProp.BackgroundImage] = (object?)null;
+            // Layout
+            d.AspectRatio = -1.0f;
+            d.Width = UnitValue.Stretch();
+            d.Height = UnitValue.Stretch();
+            d.MinWidth = UnitValue.Pixels(0);
+            d.MaxWidth = UnitValue.Pixels(float.MaxValue);
+            d.MinHeight = UnitValue.Pixels(0);
+            d.MaxHeight = UnitValue.Pixels(float.MaxValue);
+            d.Left = UnitValue.Auto;
+            d.Right = UnitValue.Auto;
+            d.Top = UnitValue.Auto;
+            d.Bottom = UnitValue.Auto;
+            d.MinLeft = UnitValue.Pixels(float.MinValue);
+            d.MaxLeft = UnitValue.Pixels(float.MaxValue);
+            d.MinRight = UnitValue.Pixels(float.MinValue);
+            d.MaxRight = UnitValue.Pixels(float.MaxValue);
+            d.MinTop = UnitValue.Pixels(float.MinValue);
+            d.MaxTop = UnitValue.Pixels(float.MaxValue);
+            d.MinBottom = UnitValue.Pixels(float.MinValue);
+            d.MaxBottom = UnitValue.Pixels(float.MaxValue);
+            d.ChildLeft = UnitValue.Auto;
+            d.ChildRight = UnitValue.Auto;
+            d.ChildTop = UnitValue.Auto;
+            d.ChildBottom = UnitValue.Auto;
+            d.RowBetween = UnitValue.Auto;
+            d.ColBetween = UnitValue.Auto;
+            d.PaddingLeft = UnitValue.Pixels(0);
+            d.PaddingRight = UnitValue.Pixels(0);
+            d.PaddingTop = UnitValue.Pixels(0);
+            d.PaddingBottom = UnitValue.Pixels(0);
 
-            // Core Layout Properties
-            d[(int)GuiProp.AspectRatio] = -1.0f;
-            d[(int)GuiProp.Width] = UnitValue.Stretch();
-            d[(int)GuiProp.Height] = UnitValue.Stretch();
-            d[(int)GuiProp.MinWidth] = UnitValue.Pixels(0);
-            d[(int)GuiProp.MaxWidth] = UnitValue.Pixels(float.MaxValue);
-            d[(int)GuiProp.MinHeight] = UnitValue.Pixels(0);
-            d[(int)GuiProp.MaxHeight] = UnitValue.Pixels(float.MaxValue);
+            // Transform
+            d.TranslateX = 0.0f;
+            d.TranslateY = 0.0f;
+            d.ScaleX = 1.0f;
+            d.ScaleY = 1.0f;
+            d.Rotate = 0.0f;
+            d.SkewX = 0.0f;
+            d.SkewY = 0.0f;
+            d.OriginX = 0.5f;
+            d.OriginY = 0.5f;
+            d.Transform = Transform2D.Identity;
 
-            // Positioning Properties
-            d[(int)GuiProp.Left] = UnitValue.Auto;
-            d[(int)GuiProp.Right] = UnitValue.Auto;
-            d[(int)GuiProp.Top] = UnitValue.Auto;
-            d[(int)GuiProp.Bottom] = UnitValue.Auto;
-            d[(int)GuiProp.MinLeft] = UnitValue.Pixels(float.MinValue);
-            d[(int)GuiProp.MaxLeft] = UnitValue.Pixels(float.MaxValue);
-            d[(int)GuiProp.MinRight] = UnitValue.Pixels(float.MinValue);
-            d[(int)GuiProp.MaxRight] = UnitValue.Pixels(float.MaxValue);
-            d[(int)GuiProp.MinTop] = UnitValue.Pixels(float.MinValue);
-            d[(int)GuiProp.MaxTop] = UnitValue.Pixels(float.MaxValue);
-            d[(int)GuiProp.MinBottom] = UnitValue.Pixels(float.MinValue);
-            d[(int)GuiProp.MaxBottom] = UnitValue.Pixels(float.MaxValue);
+            // Text
+            d.TextColor = Color.White;
+            d.WordSpacing = 0.0f;
+            d.LetterSpacing = 0.0f;
+            d.LineHeight = 1.0f;
+            d.TabSize = 4;
+            d.FontSize = 16.0f;
+            d.TextQuality = FontQuality.Normal;
 
-            // Child Layout Properties
-            d[(int)GuiProp.ChildLeft] = UnitValue.Auto;
-            d[(int)GuiProp.ChildRight] = UnitValue.Auto;
-            d[(int)GuiProp.ChildTop] = UnitValue.Auto;
-            d[(int)GuiProp.ChildBottom] = UnitValue.Auto;
-            d[(int)GuiProp.RowBetween] = UnitValue.Auto;
-            d[(int)GuiProp.ColBetween] = UnitValue.Auto;
-            d[(int)GuiProp.PaddingLeft] = UnitValue.Pixels(0);
-            d[(int)GuiProp.PaddingRight] = UnitValue.Pixels(0);
-            d[(int)GuiProp.PaddingTop] = UnitValue.Pixels(0);
-            d[(int)GuiProp.PaddingBottom] = UnitValue.Pixels(0);
-
-            // Transform Properties
-            d[(int)GuiProp.TranslateX] = 0.0f;
-            d[(int)GuiProp.TranslateY] = 0.0f;
-            d[(int)GuiProp.ScaleX] = 1.0f;
-            d[(int)GuiProp.ScaleY] = 1.0f;
-            d[(int)GuiProp.Rotate] = 0.0f;
-            d[(int)GuiProp.SkewX] = 0.0f;
-            d[(int)GuiProp.SkewY] = 0.0f;
-            d[(int)GuiProp.OriginX] = 0.5f;
-            d[(int)GuiProp.OriginY] = 0.5f;
-            d[(int)GuiProp.Transform] = Transform2D.Identity;
-
-            // Text Properties
-            d[(int)GuiProp.TextColor] = Color.White;
-            d[(int)GuiProp.WordSpacing] = 0.0f;
-            d[(int)GuiProp.LetterSpacing] = 0.0f;
-            d[(int)GuiProp.LineHeight] = 1.0f;
-            d[(int)GuiProp.TabSize] = 4;
-            d[(int)GuiProp.FontSize] = 16.0f;
-            d[(int)GuiProp.TextQuality] = FontQuality.Normal;
-
-            return d;
+            return d; // mask stays 0: these are defaults, not "explicitly set"
         }
 
         #endregion

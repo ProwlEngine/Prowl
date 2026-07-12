@@ -19,8 +19,8 @@ namespace Prowl.PaperUI
     {
         private ulong _set;
 
-        // One field per GuiProp. Unset fields carry the default (see FromDefaults), so reads never
-        // need a separate default lookup.
+        // One field per GuiProp. An ElementStyle starts each field at its default (see CreateDefaults),
+        // so a read is just a field access - no separate default lookup.
         public Color BackgroundColor;
         public Gradient BackgroundGradient;
         public Color BorderColor;
@@ -44,18 +44,6 @@ namespace Prowl.PaperUI
         public FontQuality TextQuality;
 
         public readonly bool Has(GuiProp p) => (_set & (1UL << (int)p)) != 0;
-
-        public void ClearProp(GuiProp p) => _set &= ~(1UL << (int)p);
-
-        /// <summary>Builds the default value set from the (boxed) defaults array, with nothing marked set.</summary>
-        public static StyleValues FromDefaults(object[] defaults)
-        {
-            var s = new StyleValues();
-            for (int i = 0; i < defaults.Length; i++)
-                s.Set((GuiProp)i, defaults[i]);
-            s._set = 0;
-            return s;
-        }
 
         /// <summary>Sets a property from a boxed value (unboxing into the typed field) and marks it set.</summary>
         public void Set(GuiProp p, object v)
