@@ -249,6 +249,10 @@ public class EditorApplication : Game
             }
             if (EditorSceneManager.Save())
                 return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" });
+
+            // No path yet - prompt for one, but never interrupt an unattended auto-save.
+            if (!SaveManager.IsAutoSave)
+                PromptSaveAs();
             return null;
         };
         SaveManager.OnSave += () =>
@@ -1308,6 +1312,7 @@ public class EditorApplication : Game
     /// </summary>
     public bool IsPanelOpen(Type panelType) => FindOpenPanel(panelType) != null;
 
+    /// <summary>Prompt for a scene file path and save the current scene there.</summary>
     private void PromptSaveAs()
     {
         if (Project.Current == null) return;
@@ -1317,9 +1322,12 @@ public class EditorApplication : Game
             string rel = EditorAssetDatabase.NormalizePath(
                 System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
             if (!rel.EndsWith(".scene")) rel += ".scene";
-            EditorSceneManager.SaveAs(rel);
+
+            if (EditorSceneManager.SaveAs(rel))
+                Toasts.Success(Loc.Get("save.saved"),
+                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" }));
         }, Project.Current.AssetsPath,
-           new[] { "*.scene" }, new[] { "Scene Files (*.scene)" });
+           new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
     }
 
     // ================================================================
@@ -1348,33 +1356,9 @@ public class EditorApplication : Game
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene")}", () =>
         {
             if (!EditorSceneManager.Save())
-            {
-                // No path yet prompt Save As
-                if (Project.Current == null) return;
-                EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
-                {
-                    if (path == null || Project.Current == null) return;
-                    string rel = EditorAssetDatabase.NormalizePath(
-                        System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
-                    if (!rel.EndsWith(".scene")) rel += ".scene";
-                    EditorSceneManager.SaveAs(rel);
-                }, Project.Current.AssetsPath,
-                   new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
-            }
+                PromptSaveAs();
         });
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () =>
-        {
-            if (Project.Current == null) return;
-            EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
-            {
-                if (path == null || Project.Current == null) return;
-                string rel = EditorAssetDatabase.NormalizePath(
-                    System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
-                if (!rel.EndsWith(".scene")) rel += ".scene";
-                EditorSceneManager.SaveAs(rel);
-            }, Project.Current.AssetsPath,
-               new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
-        });
+        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () => PromptSaveAs());
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
         MenuRegistry.RegisterSeparator(file);
