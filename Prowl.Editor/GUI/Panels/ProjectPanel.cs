@@ -556,7 +556,7 @@ public class ProjectPanel : DockPanel
 
             // Build flat node list by walking directories recursively
             var nodes = new List<OrigamiUI.TreeNode>();
-            BuildFolderNodes(nodes, Project.Current!.AssetsPath, "Assets", 0);
+            BuildFolderNodes(nodes, "", "Assets", 0);
 
             // Build a parallel ContentItem list for multi-select via Selection.HandleListClick
             var folderItems = new List<object>();
@@ -648,21 +648,17 @@ public class ProjectPanel : DockPanel
         }
     }
 
-    private static void BuildFolderNodes(List<OrigamiUI.TreeNode> nodes, string absolutePath, string displayName, int depth)
+    private static void BuildFolderNodes(List<OrigamiUI.TreeNode> nodes, string relativePath, string displayName, int depth)
     {
-        string relativePath = depth == 0
-            ? ""
-            : Path.GetRelativePath(Project.Current!.AssetsPath, absolutePath).Replace('\\', '/');
-
-        string[] subDirs;
-        try
-        {
-            subDirs = Directory.GetDirectories(absolutePath)
-                .Where(d => !Path.GetFileName(d).StartsWith('.'))
-                .OrderBy(d => d)
-                .ToArray();
-        }
-        catch { subDirs = Array.Empty<string>(); }
+        // Read the folder structure from the asset database's cached index instead of walking the
+        // filesystem every frame.
+        var db = EditorAssetDatabase.Instance;
+        var subDirs = db != null
+            ? db.GetSubFolders(relativePath)
+                .Where(f => !f.Name.StartsWith('.'))
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : new List<EditorAssetDatabase.FolderRecord>();
 
         nodes.Add(new OrigamiUI.TreeNode
         {
@@ -670,14 +666,14 @@ public class ProjectPanel : DockPanel
             Label = displayName,
             Icon = EditorIcons.Folder,
             IconColor = EditorTheme.Amber400,
-            HasChildren = subDirs.Length > 0,
+            HasChildren = subDirs.Count > 0,
             DefaultExpanded = depth < 2,
             Depth = depth,
             UserData = relativePath
         });
 
         foreach (var subDir in subDirs)
-            BuildFolderNodes(nodes, subDir, Path.GetFileName(subDir), depth + 1);
+            BuildFolderNodes(nodes, subDir.RelativePath, subDir.Name, depth + 1);
     }
 
     // ================================================================
@@ -1090,6 +1086,7 @@ public class ProjectPanel : DockPanel
                             Directory.Delete(absPath, true);
                         string metaPath = MetaFile.GetMetaPath(absPath);
                         if (File.Exists(metaPath)) File.Delete(metaPath);
+                        db.InvalidateFolderIndex();
                     }
                     if (_currentFolder == sel.RelativePath || _currentFolder.StartsWith(sel.RelativePath + "/"))
                         _currentFolder = "";
@@ -1473,73 +1470,55 @@ public class ProjectPanel : DockPanel
 
     private List<ContentItem> GetContentEntries(EditorAssetDatabase db)
     {
-        string folderAbsPath = string.IsNullOrEmpty(_currentFolder)
-            ? Project.Current!.AssetsPath
-            : Path.Combine(Project.Current!.AssetsPath, _currentFolder);
-
-        if (!Directory.Exists(folderAbsPath)) return new List<ContentItem>();
-
+        // Folders and files come from the asset database's cached index (single source of truth),
+        // not per-frame filesystem calls.
         var folders = new List<ContentItem>();
-        try
+        foreach (var sub in db.GetSubFolders(_currentFolder ?? ""))
         {
-            foreach (var dir in Directory.GetDirectories(folderAbsPath))
+            if (!_showHidden && sub.Name.StartsWith('.')) continue;
+            folders.Add(new ContentItem
             {
-                string dirName = Path.GetFileName(dir);
-                if (!_showHidden && dirName.StartsWith('.')) continue;
-                string relPath = Path.GetRelativePath(Project.Current.AssetsPath, dir).Replace('\\', '/');
-                folders.Add(new ContentItem
-                {
-                    Name = dirName, RelativePath = relPath, IsFolder = true,
-                    Icon = EditorIcons.Folder, TypeLabel = "Folder",
-                });
-            }
+                Name = sub.Name, RelativePath = sub.RelativePath, IsFolder = true,
+                Icon = EditorIcons.Folder, TypeLabel = "Folder",
+            });
         }
-        catch { }
         folders = folders.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
         // Files gathered as units (a top-level file plus any expanded sub-assets) so sorting keeps
         // sub-assets attached to their parent.
         var units = new List<(ContentItem item, List<ContentItem> subs)>();
-        try
+        foreach (var fileRec in db.GetFolderFiles(_currentFolder ?? ""))
         {
-            foreach (var file in Directory.GetFiles(folderAbsPath))
+            string fileName = fileRec.Name;
+            if (!_showHidden && fileName.StartsWith('.')) continue;
+
+            string relPath = fileRec.RelativePath;
+            string ext = Path.GetExtension(fileName).ToLowerInvariant();
+            var entry = db.GetEntry(relPath);
+            bool hasSubAssets = entry?.SubAssets != null && entry.SubAssets.Length > 0;
+
+            var item = new ContentItem
             {
-                string fileName = Path.GetFileName(file);
-                if (fileName.EndsWith(".meta")) continue;
-                if (!_showHidden && fileName.StartsWith('.')) continue;
+                Name = fileName, RelativePath = relPath, IsFolder = false,
+                Icon = GetFileIcon(ext),
+                TypeLabel = entry?.MainAssetType?.Name ?? ext.TrimStart('.').ToUpperInvariant(),
+                Guid = entry?.Guid ?? Guid.Empty, HasSubAssets = hasSubAssets,
+                Size = fileRec.Size, Modified = fileRec.Modified,
+            };
 
-                string relPath = Path.GetRelativePath(Project.Current.AssetsPath, file).Replace('\\', '/');
-                string ext = Path.GetExtension(fileName).ToLowerInvariant();
-                var entry = db.GetEntry(relPath);
-                bool hasSubAssets = entry?.SubAssets != null && entry.SubAssets.Length > 0;
+            // Sub-assets are ALWAYS gathered onto the parent (item.Subs); the views decide whether
+            // to reveal them (grid drawer / expandable table rows) based on _expandedAssets.
+            if (hasSubAssets && entry != null)
+                foreach (var sub in entry.SubAssets)
+                    item.Subs.Add(new ContentItem
+                    {
+                        Name = sub.Name, RelativePath = $"{relPath}#{sub.Name}", IsFolder = false,
+                        IsSubAsset = true, Icon = GetSubAssetIcon(sub.Type),
+                        TypeLabel = sub.Type?.Name ?? "Unknown", Guid = sub.Guid, ParentGuid = entry.Guid,
+                    });
 
-                long size = 0; DateTime mod = DateTime.MinValue;
-                try { var fi = new FileInfo(file); size = fi.Length; mod = fi.LastWriteTimeUtc; } catch { }
-
-                var item = new ContentItem
-                {
-                    Name = fileName, RelativePath = relPath, IsFolder = false,
-                    Icon = GetFileIcon(ext),
-                    TypeLabel = entry?.MainAssetType?.Name ?? ext.TrimStart('.').ToUpperInvariant(),
-                    Guid = entry?.Guid ?? Guid.Empty, HasSubAssets = hasSubAssets,
-                    Size = size, Modified = mod,
-                };
-
-                // Sub-assets are ALWAYS gathered onto the parent (item.Subs); the views decide whether
-                // to reveal them (grid drawer / expandable table rows) based on _expandedAssets.
-                if (hasSubAssets && entry != null)
-                    foreach (var sub in entry.SubAssets)
-                        item.Subs.Add(new ContentItem
-                        {
-                            Name = sub.Name, RelativePath = $"{relPath}#{sub.Name}", IsFolder = false,
-                            IsSubAsset = true, Icon = GetSubAssetIcon(sub.Type),
-                            TypeLabel = sub.Type?.Name ?? "Unknown", Guid = sub.Guid, ParentGuid = entry.Guid,
-                        });
-
-                units.Add((item, item.Subs));
-            }
+            units.Add((item, item.Subs));
         }
-        catch { }
 
         IEnumerable<(ContentItem item, List<ContentItem> subs)> sorted = _sortBy switch
         {
