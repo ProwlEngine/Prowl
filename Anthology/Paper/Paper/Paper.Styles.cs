@@ -349,7 +349,7 @@ namespace Prowl.PaperUI
             // Boxing shim for cold callers (DevTools, templates); hot readers use the typed accessors.
             // Inherit from the parent only when not set locally; otherwise GetBoxed returns the set
             // value, or the field's default when unset.
-            if (!_current.Has(property) && _parent != null)
+            if (_parent != null && !_current.Has(property))
                 return _parent.GetValue(property);
             return _current.GetBoxed(property);
         }
