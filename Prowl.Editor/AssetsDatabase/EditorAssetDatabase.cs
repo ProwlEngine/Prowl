@@ -42,6 +42,18 @@ public class EditorAssetDatabase : IAssetDatabase
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
 
+    // Cached folder/file structure - the single source of truth the Project Panel reads instead of
+    // hitting Directory.GetDirectories/GetFiles every frame. Rebuilt from one tree walk whenever the
+    // watcher reports a structural change (see ProcessFileChanges), otherwise served from memory.
+    // Main-thread-only (the panel and ProcessFileChanges both run there), so no locking is needed.
+    private sealed class FolderContents
+    {
+        public readonly List<FolderRecord> SubFolders = new();
+        public readonly List<FileRecord> Files = new();
+    }
+    private readonly Dictionary<string, FolderContents> _folderIndex = new(StringComparer.OrdinalIgnoreCase);
+    private bool _folderIndexDirty = true;
+
     // Events
     public event Action<string[]>? OnAssetsImported;
     public event Action<string[]>? OnAssetsDeleted;
@@ -771,6 +783,93 @@ public class EditorAssetDatabase : IAssetDatabase
     public string[] GetAllAssetPaths()
         => _pathToGuid.Keys.ToArray();
 
+    // ================================================================
+    //  Folder / file structure (cached tree the Project Panel reads)
+    // ================================================================
+
+    /// <summary>An immediate child folder of some folder, relative to the Assets root.</summary>
+    public readonly struct FolderRecord
+    {
+        public readonly string RelativePath;
+        public readonly string Name;
+        public FolderRecord(string relativePath, string name) { RelativePath = relativePath; Name = name; }
+    }
+
+    /// <summary>An asset file (non-.meta) within a folder, with its cached size and modified time.</summary>
+    public readonly struct FileRecord
+    {
+        public readonly string RelativePath;
+        public readonly string Name;
+        public readonly long Size;
+        public readonly DateTime Modified;
+        public FileRecord(string relativePath, string name, long size, DateTime modified)
+        { RelativePath = relativePath; Name = name; Size = size; Modified = modified; }
+    }
+
+    /// <summary>Immediate subfolders of the given folder (""=Assets root). Served from the cached index.</summary>
+    public IReadOnlyList<FolderRecord> GetSubFolders(string folderRelativePath)
+    {
+        EnsureFolderIndex();
+        return _folderIndex.TryGetValue(NormalizePath(folderRelativePath ?? ""), out var c)
+            ? c.SubFolders : Array.Empty<FolderRecord>();
+    }
+
+    /// <summary>Immediate asset files of the given folder (""=Assets root). Served from the cached index.</summary>
+    public IReadOnlyList<FileRecord> GetFolderFiles(string folderRelativePath)
+    {
+        EnsureFolderIndex();
+        return _folderIndex.TryGetValue(NormalizePath(folderRelativePath ?? ""), out var c)
+            ? c.Files : Array.Empty<FileRecord>();
+    }
+
+    /// <summary>Force the folder/file index to rebuild on next query. Driven by the asset watcher.</summary>
+    public void InvalidateFolderIndex() => _folderIndexDirty = true;
+
+    private void EnsureFolderIndex()
+    {
+        if (!_folderIndexDirty) return;
+        _folderIndex.Clear();
+        _folderIndexDirty = false;
+
+        var assetsPath = _project.AssetsPath;
+        if (!Directory.Exists(assetsPath)) return;
+        BuildFolderIndex(assetsPath, "");
+    }
+
+    private void BuildFolderIndex(string absolutePath, string relativePath)
+    {
+        var contents = new FolderContents();
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(absolutePath))
+            {
+                string name = Path.GetFileName(dir);
+                string childRel = relativePath.Length == 0 ? name : relativePath + "/" + name;
+                contents.SubFolders.Add(new FolderRecord(childRel, name));
+
+                // List hidden folders (so the content view can show them under "Show Hidden") but
+                // don't descend into them - matches the folder tree's existing '.'-prefix skip and
+                // avoids walking large hidden trees like .git.
+                if (!name.StartsWith('.'))
+                    BuildFolderIndex(dir, childRel);
+            }
+
+            foreach (var file in Directory.EnumerateFiles(absolutePath))
+            {
+                string name = Path.GetFileName(file);
+                if (name.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+
+                string childRel = relativePath.Length == 0 ? name : relativePath + "/" + name;
+                long size = 0; DateTime mod = DateTime.MinValue;
+                try { var fi = new FileInfo(file); size = fi.Length; mod = fi.LastWriteTimeUtc; } catch { }
+                contents.Files.Add(new FileRecord(childRel, name, size, mod));
+            }
+        }
+        catch { }
+
+        _folderIndex[relativePath] = contents;
+    }
+
     public DependencyGraph Dependencies => _dependencies;
     public string ThumbnailsPath => _project.ThumbnailsPath;
 
@@ -1062,6 +1161,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetsDeleted?.Invoke(new[] { relativePath });
+        _folderIndexDirty = true;
 
         // Script deleted - trigger recompile
         if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
@@ -1137,6 +1237,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
+        _folderIndexDirty = true;
         return true;
     }
 
@@ -1223,6 +1324,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        _folderIndexDirty = true;
         return true;
     }
 
@@ -1344,6 +1446,12 @@ public class EditorAssetDatabase : IAssetDatabase
 
         foreach (var evt in events)
         {
+            // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
+            // change a file's size/date, so the cached folder index the Project Panel reads is stale.
+            // .meta files are ours and don't affect the displayed structure.
+            if (!evt.Path.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                _folderIndexDirty = true;
+
             // Skip directory events - ScanAssets handles directory .meta creation
             if (Directory.Exists(evt.Path)) continue;
 

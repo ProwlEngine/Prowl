@@ -131,6 +131,7 @@ public static class AssetCreateMenu
         string newPath = Path.Combine(absFolder, name);
         Directory.CreateDirectory(newPath);
         MetaFile.EnsureMeta(newPath, "DefaultImporter");
+        EditorAssetDatabase.Instance?.InvalidateFolderIndex();
         Debug.Log($"Created folder: {name}");
         string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         return relPath;
