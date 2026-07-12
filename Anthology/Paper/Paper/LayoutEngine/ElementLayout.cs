@@ -1510,11 +1510,32 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
 
+        // Records this frame's ProcessText result so the element's later layout/render passes can
+        // reuse it (see the memo early-out at the top of ProcessText). widthIndependent marks text
+        // whose size does not depend on availableWidth (plain left/no-wrap/no-truncate).
+        private static Float2 Memo(ref ElementData element, Float2 size, float availableWidth, bool widthIndependent)
+        {
+            element._textMemoSize = size;
+            element._textMemoWidth = availableWidth;
+            element._textMemoWidthIndependent = widthIndependent;
+            element._textMemoValid = true;
+            return size;
+        }
+
         internal static Float2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
             //if (element.ProcessedText) return Vector2.zero;
 
             if (string.IsNullOrWhiteSpace(element.Paragraph)) return Float2.Zero;
+
+            // Per-frame memo: this runs several times per frame (stretch resolution) plus once at
+            // render. Once we've computed the size this frame, reuse it while the width still applies
+            // (width-independent plain text always applies; width-dependent text must match). The
+            // cached _textLayout/_quillRichText/_quillMarkdown set on the first compute stay valid on
+            // the same per-frame ElementData, so the render pass still finds them.
+            if (element._textMemoValid
+                && (element._textMemoWidthIndependent || element._textMemoWidth == availableWidth))
+                return element._textMemoSize;
 
             element.ProcessedText = true;
 
@@ -1564,7 +1585,8 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
                 element._quillRichText = richText;
 
-                return richText.Size; // QuillRichText.Size is already in logical units.
+                // QuillRichText.Size is already in logical units. Width matters only when wrapping.
+                return Memo(ref element, richText.Size, availableWidth, element.WrapMode != TextWrapMode.Wrap);
             }
 
             if (element.IsMarkdown == false)
@@ -1601,13 +1623,13 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (cachedLayout != null && cachedKey.Equals(ptKey))
                     {
                         element._textLayout = cachedLayout;
-                        return (Float2)cachedLayout.Size * invScale;
+                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, true);
                     }
 
                     element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
                     gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
                     gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
-                    return (Float2)element._textLayout.Size * invScale;
+                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, true);
                 }
 
                 string text = element.Paragraph;
@@ -1624,7 +1646,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (cachedLayout != null && cachedKey.Equals(trKey))
                     {
                         element._textLayout = cachedLayout;
-                        return (Float2)cachedLayout.Size * invScale;
+                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, false);
                     }
 
                     var measure = settings;
@@ -1650,12 +1672,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     element._textLayout = canvas.CreateLayout(text, settings);
                     gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
                     gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
-                    return (Float2)element._textLayout.Size * invScale;
+                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
                 }
 
                 element._textLayout = canvas.CreateLayout(text, settings);
 
-                return (Float2)element._textLayout.Size * invScale;
+                return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
             }
             else
             {
@@ -1670,7 +1692,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 
                 var markdownResult = element._quillMarkdown;
-                return (markdownResult?.Size ?? Float2.Zero) * invScale;
+                return Memo(ref element, (markdownResult?.Size ?? Float2.Zero) * invScale, availableWidth, false);
             }
         }
 

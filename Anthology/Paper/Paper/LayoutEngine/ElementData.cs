@@ -133,6 +133,16 @@ namespace Prowl.PaperUI.LayoutEngine
         /// </summary>
         public int Layer;
 
+        // Per-frame memo for ProcessText. Layout runs an element several times per frame during
+        // stretch resolution, and DrawText calls ProcessText again at render; each pass otherwise
+        // re-derives identical settings and repeats the layout-cache lookups. The first compute of
+        // the frame fills these; later calls reuse the size while the width still applies.
+        // ElementData is recreated every frame, so _textMemoValid starts false automatically.
+        internal Float2 _textMemoSize;
+        internal float _textMemoWidth;
+        internal bool _textMemoWidthIndependent;
+        internal bool _textMemoValid;
+
         // Layout results
         public bool ProcessedText;
         public float X;
