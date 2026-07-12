@@ -188,7 +188,10 @@ namespace Prowl.PaperUI.LayoutEngine
                 _textLayout = null,
                 _renderCommands = null,
                 _foregroundRenderCommands = null,
-                _elementStyle = new ElementStyle(),
+                // Assigned from the persistent per-id style store by CreateElement instead of a fresh
+                // throwaway allocation each frame (the old new ElementStyle() here was discarded by
+                // UpdateStyles, which repoints this at the _activeStyles entry anyway).
+                _elementStyle = null,
                 _scissorEnabled = false,
                 _clampToScreen = false,
                 // Default to Layer.Base (0). Fully qualified because the RHS shadows the LHS

@@ -29,6 +29,10 @@ namespace Prowl.PaperUI
         {
             int index;
             ElementData elementData = ElementData.Create(id);
+            // Share the one persistent per-id style instead of allocating a throwaway each frame
+            // (the old fresh ElementStyle here was discarded by UpdateStyles anyway). Build-phase
+            // reads of the style now see the element's real values rather than defaults.
+            elementData._elementStyle = GetOrCreateStyle(id);
 
             if (_freeIndices.Count > 0)
             {

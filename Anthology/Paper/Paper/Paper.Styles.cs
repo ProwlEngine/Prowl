@@ -299,8 +299,10 @@ namespace Prowl.PaperUI
         private HashSet<GuiProp> _propertiesWithTransitions = new HashSet<GuiProp>();
         private bool _firstFrame = true;
 
-        // Property values
-        private Dictionary<GuiProp, object> _currentValues = new Dictionary<GuiProp, object>();
+        // Resolved current values as typed fields (see StyleValues) - what layout/render read every
+        // frame. Starts as a copy of the defaults so an unset field already holds its default.
+        private StyleValues _current = _defaultStyleValues;
+        // Target values for the transition machinery (written once per set per frame; cold path).
         private Dictionary<GuiProp, object> _targetValues = new Dictionary<GuiProp, object>();
 
         // Transition state
@@ -311,6 +313,7 @@ namespace Prowl.PaperUI
         private ElementStyle? _parent;
 
         private static readonly object[] _defaultValues = CreateDefaults();
+        private static readonly StyleValues _defaultStyleValues = StyleValues.FromDefaults(_defaultValues);
 
         #endregion
 
@@ -336,7 +339,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Checks if a property has a value.
         /// </summary>
-        public bool HasValue(GuiProp property) => _currentValues.ContainsKey(property);
+        public bool HasValue(GuiProp property) => _current.Has(property);
 
         /// <summary>True if the property is currently mid-transition (used by DevTools).</summary>
         internal bool IsAnimating(GuiProp property) => _interpolations.ContainsKey(property);
@@ -346,17 +349,46 @@ namespace Prowl.PaperUI
         /// </summary>
         public object GetValue(GuiProp property)
         {
-            // If we have the value, return it
-            if (_currentValues.TryGetValue(property, out var value))
-                return value;
+            // Explicitly set: return it (boxed - this is the compatibility shim; hot readers use the
+            // typed accessors below instead).
+            if (_current.Has(property))
+                return _current.GetBoxed(property);
 
             // Otherwise check parent
             if (_parent != null)
                 return _parent.GetValue(property);
 
-            // Otherwise return default
-            return GetDefaultValue(property);
+            // Otherwise return default (unset fields hold defaults, so GetBoxed is the default here).
+            return _current.GetBoxed(property);
         }
+
+        // ── Typed accessors (no boxing / no dictionary) for the hot layout & render loops ──
+        // The common case (no inherited parent) is a direct typed field read.
+
+        /// <summary>Typed read of a UnitValue property (layout), honouring set/parent/default.</summary>
+        public UnitValue GetUnit(GuiProp property)
+        {
+            if (_parent != null && !_current.Has(property))
+                return (UnitValue)_parent.GetValue(property);
+            return _current.GetUnit(property);
+        }
+
+        public Color GetBackgroundColor() => (_parent != null && !_current.Has(GuiProp.BackgroundColor)) ? (Color)_parent.GetValue(GuiProp.BackgroundColor) : _current.BackgroundColor;
+        public Gradient GetBackgroundGradient() => (_parent != null && !_current.Has(GuiProp.BackgroundGradient)) ? (Gradient)_parent.GetValue(GuiProp.BackgroundGradient) : _current.BackgroundGradient;
+        public Color GetBorderColor() => (_parent != null && !_current.Has(GuiProp.BorderColor)) ? (Color)_parent.GetValue(GuiProp.BorderColor) : _current.BorderColor;
+        public float GetBorderWidth() => (_parent != null && !_current.Has(GuiProp.BorderWidth)) ? (float)_parent.GetValue(GuiProp.BorderWidth) : _current.BorderWidth;
+        public Float4 GetRounded() => (_parent != null && !_current.Has(GuiProp.Rounded)) ? (Float4)_parent.GetValue(GuiProp.Rounded) : _current.Rounded;
+        public BoxShadow GetBoxShadow() => (_parent != null && !_current.Has(GuiProp.BoxShadow)) ? (BoxShadow)_parent.GetValue(GuiProp.BoxShadow) : _current.BoxShadow;
+        public float GetBackdropBlur() => (_parent != null && !_current.Has(GuiProp.BackdropBlur)) ? (float)_parent.GetValue(GuiProp.BackdropBlur) : _current.BackdropBlur;
+        public object GetBackgroundImage() => (_parent != null && !_current.Has(GuiProp.BackgroundImage)) ? _parent.GetValue(GuiProp.BackgroundImage) : _current.BackgroundImage;
+        public Color GetTextColor() => (_parent != null && !_current.Has(GuiProp.TextColor)) ? (Color)_parent.GetValue(GuiProp.TextColor) : _current.TextColor;
+        public float GetAspectRatio() => (_parent != null && !_current.Has(GuiProp.AspectRatio)) ? (float)_parent.GetValue(GuiProp.AspectRatio) : _current.AspectRatio;
+        public float GetFontSize() => (_parent != null && !_current.Has(GuiProp.FontSize)) ? (float)_parent.GetValue(GuiProp.FontSize) : _current.FontSize;
+        public float GetLineHeight() => (_parent != null && !_current.Has(GuiProp.LineHeight)) ? (float)_parent.GetValue(GuiProp.LineHeight) : _current.LineHeight;
+        public float GetLetterSpacing() => (_parent != null && !_current.Has(GuiProp.LetterSpacing)) ? (float)_parent.GetValue(GuiProp.LetterSpacing) : _current.LetterSpacing;
+        public float GetWordSpacing() => (_parent != null && !_current.Has(GuiProp.WordSpacing)) ? (float)_parent.GetValue(GuiProp.WordSpacing) : _current.WordSpacing;
+        public int GetTabSize() => (_parent != null && !_current.Has(GuiProp.TabSize)) ? (int)_parent.GetValue(GuiProp.TabSize) : _current.TabSize;
+        public FontQuality GetTextQuality() => (_parent != null && !_current.Has(GuiProp.TextQuality)) ? (FontQuality)_parent.GetValue(GuiProp.TextQuality) : _current.TextQuality;
 
         /// <summary>
         /// Sets a property value directly without transition.
@@ -366,7 +398,7 @@ namespace Prowl.PaperUI
             _propertiesSetThisFrame.Add(property);
 
             // Set the value directly without transition
-            _currentValues[property] = value;
+            _current.Set(property, value);
             _targetValues[property] = value; // Ensure target matches current
             _interpolations.Remove(property); // Remove any existing interpolation state
         }
@@ -402,7 +434,9 @@ namespace Prowl.PaperUI
         /// </summary>
         public void ClearValue(GuiProp property)
         {
-            _currentValues.Remove(property);
+            // Reset the field back to its default (unset fields must read as default), then mark unset.
+            _current.Set(property, GetDefaultValue(property));
+            _current.ClearProp(property);
             _targetValues.Remove(property);
             _transitionConfigs.Remove(property);
             _interpolations.Remove(property);
@@ -436,7 +470,7 @@ namespace Prowl.PaperUI
                 else
                 {
                     // No transition config, set immediately
-                    _currentValues[property] = targetValue;
+                    _current.Set(property, targetValue);
                 }
             }
 
@@ -462,36 +496,17 @@ namespace Prowl.PaperUI
             TransformBuilder builder = s_transformBuilder ??= new TransformBuilder();
             builder.Reset();
 
-            // Set transform properties from the current values
-            if (_currentValues.TryGetValue(GuiProp.TranslateX, out var translateX))
-                builder.SetTranslateX((float)translateX);
-
-            if (_currentValues.TryGetValue(GuiProp.TranslateY, out var translateY))
-                builder.SetTranslateY((float)translateY);
-
-            if (_currentValues.TryGetValue(GuiProp.ScaleX, out var scaleX))
-                builder.SetScaleX((float)scaleX);
-
-            if (_currentValues.TryGetValue(GuiProp.ScaleY, out var scaleY))
-                builder.SetScaleY((float)scaleY);
-
-            if (_currentValues.TryGetValue(GuiProp.Rotate, out var rotate))
-                builder.SetRotate((float)rotate);
-
-            if (_currentValues.TryGetValue(GuiProp.SkewX, out var skewX))
-                builder.SetSkewX((float)skewX);
-
-            if (_currentValues.TryGetValue(GuiProp.SkewY, out var skewY))
-                builder.SetSkewY((float)skewY);
-
-            if (_currentValues.TryGetValue(GuiProp.OriginX, out var originX))
-                builder.SetOriginX((float)originX);
-
-            if (_currentValues.TryGetValue(GuiProp.OriginY, out var originY))
-                builder.SetOriginY((float)originY);
-
-            if (_currentValues.TryGetValue(GuiProp.Transform, out var customTransform))
-                builder.SetCustomTransform((Transform2D)customTransform);
+            // Set transform properties from the current values (typed, only when explicitly set).
+            if (_current.Has(GuiProp.TranslateX)) builder.SetTranslateX(_current.TranslateX);
+            if (_current.Has(GuiProp.TranslateY)) builder.SetTranslateY(_current.TranslateY);
+            if (_current.Has(GuiProp.ScaleX)) builder.SetScaleX(_current.ScaleX);
+            if (_current.Has(GuiProp.ScaleY)) builder.SetScaleY(_current.ScaleY);
+            if (_current.Has(GuiProp.Rotate)) builder.SetRotate(_current.Rotate);
+            if (_current.Has(GuiProp.SkewX)) builder.SetSkewX(_current.SkewX);
+            if (_current.Has(GuiProp.SkewY)) builder.SetSkewY(_current.SkewY);
+            if (_current.Has(GuiProp.OriginX)) builder.SetOriginX(_current.OriginX);
+            if (_current.Has(GuiProp.OriginY)) builder.SetOriginY(_current.OriginY);
+            if (_current.Has(GuiProp.Transform)) builder.SetCustomTransform(_current.Transform);
 
             return builder.Build(rect);
         }
@@ -509,12 +524,12 @@ namespace Prowl.PaperUI
             {
                 // If we don't have a current value yet for a property with transition,
                 // initialize it with the default or parent value
-                if (!_currentValues.ContainsKey(property))
+                if (!_current.Has(property))
                 {
                     if (_parent != null && _parent.HasValue(property))
-                        _currentValues[property] = _parent.GetValue(property);
+                        _current.Set(property, _parent.GetValue(property));
                     else
-                        _currentValues[property] = GetDefaultValue(property);
+                        _current.Set(property, GetDefaultValue(property));
                 }
             }
         }
@@ -539,12 +554,14 @@ namespace Prowl.PaperUI
             float deltaTime, List<GuiProp> completedInterpolations)
         {
             // If we don't have a current value yet, initialize it immediately
-            if (!_currentValues.TryGetValue(property, out object? currentValue))
+            object? currentValue;
+            if (!_current.Has(property))
             {
                 currentValue = targetValue;
-                _currentValues[property] = currentValue;
+                _current.Set(property, currentValue);
                 return;
             }
+            currentValue = _current.GetBoxed(property);
 
             // Skip if the values are already equal
             if (currentValue.Equals(targetValue))
@@ -578,7 +595,7 @@ namespace Prowl.PaperUI
             if (state.CurrentTime >= state.Duration)
             {
                 // Interpolation complete
-                _currentValues[property] = targetValue;
+                _current.Set(property, targetValue);
                 completedInterpolations.Add(property);
             }
             else
@@ -588,7 +605,7 @@ namespace Prowl.PaperUI
                 if (state.EasingFunction != null)
                     t = state.EasingFunction(t);
 
-                _currentValues[property] = Interpolate(state.StartValue, state.TargetValue, t);
+                _current.Set(property, Interpolate(state.StartValue, state.TargetValue, t));
             }
         }
 
@@ -816,19 +833,26 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Gets the persistent style for an element id, creating it if needed. This is the single
+        /// per-id style instance the builder writes to and layout/render read from, so an element
+        /// shares one style across frames instead of allocating a throwaway each frame.
+        /// </summary>
+        internal ElementStyle GetOrCreateStyle(int elementID)
+        {
+            if (!_activeStyles.TryGetValue(elementID, out var style))
+            {
+                style = new ElementStyle();
+                _activeStyles[elementID] = style;
+            }
+            return style;
+        }
+
+        /// <summary>
         /// Set a style property value (no transition).
         /// </summary>
         internal void SetStyleProperty(int elementID, GuiProp property, object value)
         {
-            if (!_activeStyles.TryGetValue(elementID, out var style))
-            {
-                // Create a new style if it doesn't exist
-                style = new ElementStyle();
-                _activeStyles[elementID] = style;
-            }
-
-            // Set the next value
-            style.SetNextValue(property, value);
+            GetOrCreateStyle(elementID).SetNextValue(property, value);
         }
 
         /// <summary>
@@ -836,15 +860,7 @@ namespace Prowl.PaperUI
         /// </summary>
         internal void SetTransitionConfig(int elementID, GuiProp property, float duration, Func<float, float>? easing = null)
         {
-            if (!_activeStyles.TryGetValue(elementID, out var style))
-            {
-                // Create a new style if it doesn't exist
-                style = new ElementStyle();
-                _activeStyles[elementID] = style;
-            }
-
-            // Set up the transition configuration
-            style.SetTransitionConfig(property, duration, easing);
+            GetOrCreateStyle(elementID).SetTransitionConfig(property, duration, easing);
         }
 
         /// <summary>

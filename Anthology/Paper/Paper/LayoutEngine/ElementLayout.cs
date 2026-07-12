@@ -19,8 +19,8 @@ namespace Prowl.PaperUI.LayoutEngine
         {
             ref var data = ref elementHandle.Data;
 
-            var wValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Width);
-            var hValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Height);
+            var wValue = data._elementStyle.GetUnit(GuiProp.Width);
+            var hValue = data._elementStyle.GetUnit(GuiProp.Height);
             float width = wValue.IsPixels ? wValue.Px : throw new Exception("Root element must have fixed width");
             float height = hValue.IsPixels ? hValue.Px : throw new Exception("Root element must have fixed height");
 
@@ -38,7 +38,7 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         private static UnitValue GetProp(ref ElementData element, LayoutType parentType, GuiProp row, GuiProp column)
-            => (UnitValue)element._elementStyle.GetValue(parentType == LayoutType.Row ? row : column);
+            => element._elementStyle.GetUnit(parentType == LayoutType.Row ? row : column);
 
         private static UnitValue GetMain(ref ElementData element, LayoutType parentType) => GetProp(ref element, parentType, GuiProp.Width, GuiProp.Height);
         private static UnitValue GetCross(ref ElementData element, LayoutType parentType) => GetProp(ref element, parentType, GuiProp.Height, GuiProp.Width);
@@ -173,7 +173,7 @@ namespace Prowl.PaperUI.LayoutEngine
             float computedCross = cross.HasGrow ? parentCross : cross.Floor(parentCross);
 
             // Apply aspect ratio if set
-            var aspectRatio = (float)element._elementStyle.GetValue(GuiProp.AspectRatio);
+            var aspectRatio = element._elementStyle.GetAspectRatio();
             if (aspectRatio >= 0)
             {
                 aspectRatio = Maths.Max(0.001f, aspectRatio); // Prevent divide-by-zero
@@ -1554,12 +1554,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     ItalicFont = element.FontItalic,
                     BoldItalicFont = element.FontBoldItalic,
                     MonoFont = element.FontMono,
-                    PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize)),
-                    Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality),
-                    LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight)),
-                    LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing)),
-                    WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing)),
-                    TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize),
+                    PixelSize = element._elementStyle.GetFontSize(),
+                    Quality = element._elementStyle.GetTextQuality(),
+                    LineHeight = element._elementStyle.GetLineHeight(),
+                    LetterSpacing = element._elementStyle.GetLetterSpacing(),
+                    WordSpacing = element._elementStyle.GetWordSpacing(),
+                    TabSize = element._elementStyle.GetTabSize(),
                     WrapMode = element.WrapMode,
                     MaxWidth = element.WrapMode == TextWrapMode.Wrap ? availableWidth : 0f,
                     Alignment = ToScribeAlignment(element.TextAlignment),
@@ -1593,12 +1593,12 @@ namespace Prowl.PaperUI.LayoutEngine
             {
                 var settings = TextLayoutSettings.Default;
 
-                settings.WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing));
-                settings.LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing));
-                settings.LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight));
-                settings.TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize);
-                settings.PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize));
-                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
+                settings.WordSpacing = element._elementStyle.GetWordSpacing();
+                settings.LetterSpacing = element._elementStyle.GetLetterSpacing();
+                settings.LineHeight = element._elementStyle.GetLineHeight();
+                settings.TabSize = element._elementStyle.GetTabSize();
+                settings.PixelSize = element._elementStyle.GetFontSize();
+                settings.Quality = element._elementStyle.GetTextQuality();
 
                 settings.Alignment = ToScribeAlignment(element.TextAlignment);
 
@@ -1687,7 +1687,7 @@ namespace Prowl.PaperUI.LayoutEngine
                 var i = element.FontItalic;
                 var bi = element.FontBoldItalic;
                 var settings = MarkdownLayoutSettings.Default(r, availableWidth, m, b, i, bi);
-                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
+                settings.Quality = element._elementStyle.GetTextQuality();
 
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 

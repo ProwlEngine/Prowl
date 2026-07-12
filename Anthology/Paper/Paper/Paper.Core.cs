@@ -392,9 +392,9 @@ namespace Prowl.PaperUI
             }
 
             // Draw box shadow before background
-            var rounded = (Float4)data._elementStyle.GetValue(GuiProp.Rounded);
+            var rounded = data._elementStyle.GetRounded();
             bool hasRounding = rounded.X > 0 || rounded.Y > 0 || rounded.Z > 0 || rounded.W > 0;
-            var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
+            var boxShadow = data._elementStyle.GetBoxShadow();
             if (boxShadow.IsVisible)
             {
                 // Soft falloff: the lit "core" of the brush box is the element box itself (no outward
@@ -441,7 +441,7 @@ namespace Prowl.PaperUI
 
             // Draw backdrop blur (frosted glass) behind the background. The blurred backdrop is laid
             // down with a transparent fill so the element's own background color acts as the glass tint.
-            var backdropBlur = (float)data._elementStyle.GetValue(GuiProp.BackdropBlur);
+            var backdropBlur = data._elementStyle.GetBackdropBlur();
             if (backdropBlur > 0f)
             {
                 _canvas.SetBackdropBlur(backdropBlur);
@@ -453,7 +453,7 @@ namespace Prowl.PaperUI
             }
 
             // Draw background (gradient overrides background color)
-            var gradient = (Gradient)data._elementStyle.GetValue(GuiProp.BackgroundGradient);
+            var gradient = data._elementStyle.GetBackgroundGradient();
             if (gradient.Type != GradientType.None)
             {
                 switch (gradient.Type)
@@ -494,7 +494,7 @@ namespace Prowl.PaperUI
             }
             else
             {
-                var backgroundColor = (Color)data._elementStyle.GetValue(GuiProp.BackgroundColor);
+                var backgroundColor = data._elementStyle.GetBackgroundColor();
                 if (backgroundColor.A > 0)
                 {
                     if (hasRounding)
@@ -505,15 +505,15 @@ namespace Prowl.PaperUI
             }
 
             // Draw background image if set (rendered on top of background color/gradient)
-            var bgImage = data._elementStyle.GetValue(GuiProp.BackgroundImage);
+            var bgImage = data._elementStyle.GetBackgroundImage();
             if (bgImage != null)
             {
                 _canvas.DrawImage(bgImage, rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
             // Draw border if needed
-            var borderColor = (Color)data._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderColor = data._elementStyle.GetBorderColor();
+            var borderWidth = data._elementStyle.GetBorderWidth();
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
                 _canvas.BeginPath();
@@ -602,13 +602,13 @@ namespace Prowl.PaperUI
             var rect = data.LayoutRect;
             float minX = rect.Min.X, minY = rect.Min.Y, maxX = rect.Max.X, maxY = rect.Max.Y;
 
-            float border = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            float border = data._elementStyle.GetBorderWidth();
             if (border > 0f)
             {
                 minX -= border; minY -= border; maxX += border; maxY += border;
             }
 
-            var shadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
+            var shadow = data._elementStyle.GetBoxShadow();
             if (shadow.IsVisible)
             {
                 float reach = shadow.Spread + shadow.Blur;
@@ -693,7 +693,7 @@ namespace Prowl.PaperUI
 
             Canvas canvas = handle.Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
 
-            var color = (Color32)(Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
+            var color = (Color32)handle.Data._elementStyle.GetTextColor();
 
             // Calculate vertical alignment offset
             float yOffset = 0;
