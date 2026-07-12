@@ -208,6 +208,16 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>Resets all properties to their defaults so a single instance can be reused.</summary>
+        public void Reset()
+        {
+            _translateX = 0; _translateY = 0;
+            _scaleX = 1; _scaleY = 1;
+            _rotate = 0; _skewX = 0; _skewY = 0;
+            _originX = 0.5f; _originY = 0.5f;
+            _customTransform = null;
+        }
+
         #endregion
 
         #region Build Method
@@ -444,9 +454,14 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the complete transform for an element.
         /// </summary>
+        // Reused per thread so the per-element per-frame transform build (render + every hit-test walk)
+        // doesn't allocate a TransformBuilder each call. Non-reentrant: Build completes before we recurse.
+        [ThreadStatic] private static TransformBuilder? s_transformBuilder;
+
         public Transform2D GetTransformForElement(Rect rect)
         {
-            TransformBuilder builder = new TransformBuilder();
+            TransformBuilder builder = s_transformBuilder ??= new TransformBuilder();
+            builder.Reset();
 
             // Set transform properties from the current values
             if (_currentValues.TryGetValue(GuiProp.TranslateX, out var translateX))

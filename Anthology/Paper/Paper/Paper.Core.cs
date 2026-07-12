@@ -26,6 +26,13 @@ namespace Prowl.PaperUI
 
         private readonly Dictionary<int, Hashtable> _storage = new Dictionary<int, Hashtable>();
 
+        // Reused across frames so the deferred-layer render doesn't allocate a dictionary + buckets
+        // every frame. Buckets are pooled and returned as each layer drains.
+        private readonly SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>> _deferredRender = new();
+        private readonly Stack<List<(ElementHandle handle, Transform2D transform)>> _deferredBucketPool = new();
+        // Scratch list reused by EndOfFrameCleanupStorage (avoids _storage.Keys.ToArray() each frame).
+        private readonly List<int> _storageCleanupScratch = new List<int>();
+
         // Rendering context
         private Canvas _canvas;
         private ICanvasRenderer _renderer;
@@ -250,12 +257,16 @@ namespace Prowl.PaperUI
             // at the correct position even though they draw later. We bucket by layer value so
             // any int Layer works, not just the three named tiers; a child at layer 250 inside
             // a parent at layer 150 ends up in its own bucket and gets drained after layer 150.
-            var deferred = new SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>();
+            var deferred = _deferredRender;
+            deferred.Clear();
             RenderElement(_rootElementHandle, Layer.Base, deferred);
 
             while (deferred.Count > 0)
             {
-                int nextLayer = deferred.Keys.First();
+                // SortedDictionary keeps keys ascending, so the first is the lowest layer. foreach uses the
+                // struct enumerator (no allocation), unlike LINQ .Keys.First().
+                int nextLayer = 0;
+                foreach (var k in deferred.Keys) { nextLayer = k; break; }
                 var list = deferred[nextLayer];
                 deferred.Remove(nextLayer);
 
@@ -266,6 +277,9 @@ namespace Prowl.PaperUI
                     RenderElement(handle, nextLayer, deferred);
                     _canvas.RestoreState();
                 }
+
+                list.Clear();
+                _deferredBucketPool.Push(list);
             }
             __t = _devTools.Phase("Render", __t);
 
@@ -353,7 +367,7 @@ namespace Prowl.PaperUI
             {
                 if (!deferred.TryGetValue(data.Layer, out var bucket))
                 {
-                    bucket = new List<(ElementHandle handle, Transform2D transform)>();
+                    bucket = _deferredBucketPool.Count > 0 ? _deferredBucketPool.Pop() : new List<(ElementHandle handle, Transform2D transform)>();
                     deferred[data.Layer] = bucket;
                 }
                 bucket.Add((handle, _canvas.GetTransform()));
@@ -1000,15 +1014,18 @@ namespace Prowl.PaperUI
 
         private void EndOfFrameCleanupStorage()
         {
-            var keys = _storage.Keys.ToArray();
-            foreach (var storedID in keys)
+            // Collect stale ids into a reused scratch list (can't Remove while enumerating _storage.Keys),
+            // avoiding the per-frame _storage.Keys.ToArray() allocation.
+            _storageCleanupScratch.Clear();
+            foreach (var storedID in _storage.Keys)
             {
-                if (_createdElements.Contains(storedID))
-                    continue;
-
                 // We didnt create this element this frame, so it no longer exists, delete any storage for it.
-                _storage.Remove(storedID);
+                if (!_createdElements.Contains(storedID))
+                    _storageCleanupScratch.Add(storedID);
             }
+
+            for (int i = 0; i < _storageCleanupScratch.Count; i++)
+                _storage.Remove(_storageCleanupScratch[i]);
         }
 
         #endregion
