@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Prefabs;
-using Prowl.Editor.GUI.Popups;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -1040,14 +1039,33 @@ public static class GameObjectInspector
     {
         using (paper.Row("gi_add_comp_row").Height(28).ChildLeft(20).ChildRight(20).Enter())
         {
-            paper.Box("gi_add_comp")
+            var trigger = paper.Box("gi_add_comp")
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}", font)
-                .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(go, (g, _) => AddComponentPopup.Open(g));
+                .OnClick(go, (g, _) => ToggleAddComponentPopup(g));
+
+            using (trigger.Enter())
+            {
+                var trigHandle = paper.CurrentParent;
+
+                paper.Box("gi_add_comp_lbl")
+                    .Width(UnitValue.Stretch()).Height(28).IsNotInteractable()
+                    .Text($"{EditorIcons.Plus}  {Loc.Get("inspector.add_component")}", font)
+                    .TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
+
+                if (_addComponentOpen && _addComponentTarget == go)
+                {
+                    if (paper.IsKeyPressed(PaperKey.Escape))
+                        CloseAddComponentPopup();
+                    else
+                    {
+                        RenderAddComponentBackdrop(paper);
+                        RenderAddComponentPopover(paper, trigHandle);
+                    }
+                }
+            }
         }
     }
 
@@ -1254,5 +1272,342 @@ public static class GameObjectInspector
             parentRt.ComputedRect.Size.X > 0 && parentRt.ComputedRect.Size.Y > 0)
             return parentRt.ComputedRect;
         return canvas?.RootRect ?? default;
+    }
+
+    // ================================================================
+    //  Add Component Popup
+    // ================================================================
+
+    private struct ComponentEntry
+    {
+        public string Path;     // Full path e.g. "Physics/Colliders/Box Collider"
+        public string Category; // e.g. "Physics/Colliders"
+        public string Name;     // e.g. "Box Collider"
+        public string Icon;
+        public Type Type;
+    }
+
+    private static bool _addComponentOpen;
+    private static GameObject? _addComponentTarget;
+    private static string _addComponentSearch = "";
+    private static List<string> _addComponentNavStack = [];
+    private static List<ComponentEntry>? _cachedComponents;
+
+    // Matches Origami's DropdownBuilder default popover cap (Widgets/Dropdown.cs), so the Add
+    // Component popover scrolls the same way any other dropdown in the editor does.
+    private const float PopoverMaxListHeight = 320f;
+
+    /// <summary>
+    /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
+    /// including user ones) so the script AssemblyLoadContext can be collected.
+    /// </summary>
+    [Runtime.OnAssemblyUnload]
+    public static void ClearAddComponentCache() => _cachedComponents = null;
+
+    private static void ToggleAddComponentPopup(GameObject target)
+    {
+        if (_addComponentOpen && _addComponentTarget == target)
+        {
+            CloseAddComponentPopup();
+            return;
+        }
+
+        _addComponentTarget = target;
+        _addComponentSearch = "";
+        _addComponentNavStack = [];
+        _cachedComponents ??= GatherComponents();
+        _addComponentOpen = true;
+    }
+
+    private static void CloseAddComponentPopup()
+    {
+        _addComponentOpen = false;
+        _addComponentTarget = null;
+    }
+
+    // Fullscreen, invisible click-catcher so clicking anywhere outside the popover closes it —
+    // the same click-outside behaviour Origami's dropdowns use (see DropdownInternal.RenderBackdrop).
+    private static void RenderAddComponentBackdrop(Paper paper)
+    {
+        paper.Box("gi_acp_backdrop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(-9999, -9999)
+            .Size(99999, 99999)
+            .Layer(Layer.Overlay)
+            .StopEventPropagation()
+            .OnClick(0, (_, _) => CloseAddComponentPopup());
+    }
+
+    // Popover anchored directly below the Add Component button, styled like Origami's dropdown
+    // popovers (Widgets/Dropdown.cs / DropdownTypes.cs): same background, border, shadow, rounding
+    // and row hover treatment, all sourced from EditorTheme so it stays in sync with the rest of
+    // the editor's theme.
+    private static void RenderAddComponentPopover(Paper paper, ElementHandle trigHandle)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+
+        float triggerWidth = trigHandle.Data.LayoutRect.Size.X > 0 ? (float)trigHandle.Data.LayoutRect.Size.X : 280f;
+        float triggerHeight = trigHandle.Data.LayoutRect.Size.Y > 0 ? (float)trigHandle.Data.LayoutRect.Size.Y : 28f;
+
+        const float padX = 5f, padY = 5f, searchH = 28f, searchGap = 4f;
+
+        using (paper.Column("gi_acp_pop")
+            .PositionType(PositionType.SelfDirected)
+            .Position(0, triggerHeight + 4f)
+            .Width(triggerWidth)
+            .Height(UnitValue.Auto)
+            .BackgroundColor(EditorTheme.Popover)
+            .BorderColor(EditorTheme.BorderStrong).BorderWidth(1)
+            .DropShadow(0, 14, 40, -6, EditorTheme.Shadow)
+            .Rounded(EditorTheme.Roundness + 2f)
+            .Padding(padX, padX, padY, padY)
+            .ColBetween(searchGap)
+            .HookToParent()
+            .Layer(Layer.Topmost)
+            .ClampToScreen()
+            .StopEventPropagation()
+            .Enter())
+        {
+            using (paper.Row("gi_acp_search_row").Height(searchH).Enter())
+            {
+                Origami.SearchField(paper, "gi_acp_search", _addComponentSearch, v => _addComponentSearch = v, Loc.Get("popup.search_components")).Show();
+            }
+
+            var components = _cachedComponents ?? [];
+
+            Origami.ScrollView(paper, "gi_acp_scroll", triggerWidth - padX * 2, PopoverMaxListHeight)
+                .Padding(0)
+                .Body(() =>
+            {
+                if (!string.IsNullOrEmpty(_addComponentSearch))
+                    DrawAddComponentSearchResults(paper, font, components);
+                else
+                    DrawAddComponentBrowseLevel(paper, font, components);
+            });
+        }
+    }
+
+    // Flat, globally-filtered list shown while the search box has text (ignores current folder).
+    private static void DrawAddComponentSearchResults(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
+    {
+        var filtered = components.Where(c =>
+            c.Name.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase) ||
+            c.Path.Contains(_addComponentSearch, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (filtered.Count == 0)
+        {
+            paper.Box("acp_empty").Height(40)
+                .Text(Loc.Get("popup.no_components"), font)
+                .TextColor(EditorTheme.Ink300)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+            return;
+        }
+
+        for (int i = 0; i < filtered.Count; i++)
+            DrawComponentItem(paper, font, $"acp_item_{i}", filtered[i]);
+    }
+
+    // Unity-style click-to-navigate browser: the current folder's subfolders and components,
+    // with a "Back" row when nested. Clicking a folder drills in; clicking Back steps back out.
+    private static void DrawAddComponentBrowseLevel(Paper paper, Prowl.Scribe.FontFile font, List<ComponentEntry> components)
+    {
+        string prefix = string.Join("/", _addComponentNavStack);
+        var (leaves, subfolders) = SplitComponentLevel(components, prefix);
+
+        if (_addComponentNavStack.Count > 0)
+        {
+            string currentName = _addComponentNavStack[^1];
+            using (paper.Row("acp_back")
+                .Height(EditorTheme.RowHeight)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+                .OnClick(0, (_, _) => _addComponentNavStack.RemoveAt(_addComponentNavStack.Count - 1))
+                .Enter())
+            {
+                paper.Box("acp_back_ico").Width(16).Height(EditorTheme.RowHeight)
+                    .Text(EditorIcons.ChevronLeft, font).TextColor(EditorTheme.Ink400)
+                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+                paper.Box("acp_back_name").Height(EditorTheme.RowHeight)
+                    .Text(currentName, font).TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            }
+
+            paper.Box("acp_back_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
+        }
+
+        foreach (var folder in subfolders)
+        {
+            var captured = folder;
+            using (paper.Row($"acp_folder_{folder}")
+                .Height(EditorTheme.RowHeight)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+                .OnClick(0, (_, _) => _addComponentNavStack.Add(captured))
+                .Enter())
+            {
+                paper.Box($"acp_folder_{folder}_ico").Width(16).Height(EditorTheme.RowHeight)
+                    .Text(EditorIcons.Folder, font).TextColor(EditorTheme.Ink400)
+                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box($"acp_folder_{folder}_name")
+                    .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
+                    .Text(folder, font).TextColor(EditorTheme.Ink500)
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+
+                paper.Box($"acp_folder_{folder}_arw").Width(16).Height(EditorTheme.RowHeight)
+                    .Text(EditorIcons.ChevronRight, font).TextColor(EditorTheme.Ink300)
+                    .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+            }
+        }
+
+        if (subfolders.Count > 0 && leaves.Count > 0)
+            paper.Box("acp_level_sep").Height(1).Margin(8, 3, 8, 3).BackgroundColor(EditorTheme.BorderSoft);
+
+        foreach (var comp in leaves)
+            DrawComponentItem(paper, font, $"acp_item_{comp.Type.Name}", comp);
+
+        if (subfolders.Count == 0 && leaves.Count == 0)
+        {
+            paper.Box("acp_empty").Height(40)
+                .Text(Loc.Get("popup.no_components"), font)
+                .TextColor(EditorTheme.Ink300)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+        }
+    }
+
+    // Splits components into this level's direct items (Category == prefix) and its immediate
+    // subfolder names (the next path segment past prefix), so browsing can drill in one segment
+    // at a time regardless of how deep the full category path goes.
+    private static (List<ComponentEntry> Leaves, List<string> Subfolders) SplitComponentLevel(List<ComponentEntry> components, string prefix)
+    {
+        var leaves = new List<ComponentEntry>();
+        var subfolders = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var c in components)
+        {
+            if (c.Category == prefix)
+            {
+                leaves.Add(c);
+                continue;
+            }
+
+            if (prefix.Length > 0 && !c.Category.StartsWith(prefix + "/", StringComparison.Ordinal))
+                continue;
+
+            string rel = prefix.Length > 0 ? c.Category[(prefix.Length + 1)..] : c.Category;
+            int slash = rel.IndexOf('/');
+            subfolders.Add(slash < 0 ? rel : rel[..slash]);
+        }
+
+        var sortedSubfolders = subfolders.ToList();
+        sortedSubfolders.Sort(StringComparer.OrdinalIgnoreCase);
+        leaves.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        return (leaves, sortedSubfolders);
+    }
+
+    private static void DrawComponentItem(Paper paper, Prowl.Scribe.FontFile font, string id, ComponentEntry comp)
+    {
+        using (paper.Row(id)
+            .Height(EditorTheme.RowHeight)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Rounded(6).ChildLeft(9).ChildRight(9).RowBetween(9)
+            .OnClick(comp.Type, (type, _) =>
+            {
+                if (_addComponentTarget != null)
+                {
+                    AddComponentWithUndo(_addComponentTarget, type);
+                    CloseAddComponentPopup();
+                }
+            })
+            .Enter())
+        {
+            paper.Box($"{id}_ico")
+                .Width(16).Height(EditorTheme.RowHeight)
+                .Text(comp.Icon, font).TextColor(EditorTheme.Ink400)
+                .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+
+            paper.Box($"{id}_name")
+                .Height(EditorTheme.RowHeight)
+                .Text(comp.Name, font).TextColor(EditorTheme.Ink500)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+        }
+    }
+
+    /// <summary>
+    /// Adds a component of <paramref name="type"/> to <paramref name="go"/> and registers a matching
+    /// undo/redo step. Shared by the popup and the drag-a-script-onto-the-inspector path.
+    /// </summary>
+    public static MonoBehaviour? AddComponentWithUndo(GameObject go, Type type)
+    {
+        var addedComp = go.AddComponent(type);
+        if (addedComp != null)
+        {
+            var compId = addedComp.Identifier;
+            var goId = go.Identifier;
+            var serialized = Echo.Serializer.Serialize(addedComp.GetType(), addedComp);
+            var compType = addedComp.GetType();
+            Undo.RegisterAction("Add Component",
+                undo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = g.GetComponentByIdentifier(compId); if (c != null) g.RemoveComponent(c); },
+                redo: () => { var g = Undo.FindGO(goId); if (g == null) return; var c = Echo.Serializer.Deserialize(serialized, compType) as MonoBehaviour; if (c != null) { c.Identifier = compId; g.AddComponent(c); } });
+        }
+        return addedComp;
+    }
+
+    private static List<ComponentEntry> GatherComponents()
+    {
+        var result = new List<ComponentEntry>();
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] types;
+            try { types = assembly.GetTypes(); }
+            catch { continue; }
+
+            foreach (var type in types)
+            {
+                if (!typeof(MonoBehaviour).IsAssignableFrom(type) || type.IsAbstract) continue;
+                if (type == typeof(MonoBehaviour)) continue;
+                if (type.Name == "MissingMonobehaviour") continue;
+
+                var menuAttr = type.GetCustomAttribute<AddComponentMenuAttribute>();
+                string path = menuAttr?.Path ?? type.Name;
+                string icon = menuAttr?.Icon ?? "";
+
+                int lastSlash = path.LastIndexOf('/');
+                string category = lastSlash >= 0 ? path[..lastSlash] : "";
+                string name = lastSlash >= 0 ? path[(lastSlash + 1)..] : path;
+
+                // Default icons by category
+                if (string.IsNullOrEmpty(icon))
+                {
+                    icon = category switch
+                    {
+                        var c when c.StartsWith("Rendering") => EditorIcons.Cube,
+                        var c when c.StartsWith("Audio") => EditorIcons.VolumeHigh,
+                        var c when c.StartsWith("Light") => EditorIcons.Sun,
+                        var c when c.Contains("Collider") => EditorIcons.VectorSquare,
+                        var c when c.Contains("Constraint") || c.Contains("Joint") => EditorIcons.Link,
+                        var c when c.StartsWith("Physics") => EditorIcons.Atom,
+                        var c when c.StartsWith("UI") => EditorIcons.Desktop,
+                        var c when c.StartsWith("Effects") => EditorIcons.Burst,
+                        var c when c.StartsWith("Terrain") => EditorIcons.Mountain,
+                        _ => EditorIcons.PuzzlePiece
+                    };
+                }
+
+                result.Add(new ComponentEntry
+                {
+                    Path = path,
+                    Category = category,
+                    Name = name,
+                    Icon = icon,
+                    Type = type
+                });
+            }
+        }
+
+        return result;
     }
 }

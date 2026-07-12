@@ -201,7 +201,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             // Complete the drop: the drag has ended (released) while over this overlay.
             if (paper.IsParentHovered && !DragDrop.IsDragging)
             {
-                Popups.AddComponentPopup.AddComponentWithUndo(go, componentType);
+                GameObjectInspector.AddComponentWithUndo(go, componentType);
                 DragDrop.EndDrag();
             }
         }
