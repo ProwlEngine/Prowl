@@ -404,10 +404,10 @@ public static class PropertyGridRenderer
         var font = theme.Font;
         var ink = theme.Ink;
 
-        // Complex collections (element type has its own fields) and dictionaries span the full section
-        // width with a self-labelled header. Simple collections (leaf element types like Material refs,
-        // colors, primitives) keep the normal label gutter and draw their compact card in the control
-        // column - matching Nebula's `.i2field > .i2label + .coll` vs full-width `.i2field.full > .nl`.
+        // Complex collections (element type has its own fields) span the full section width with a
+        // self-labelled header. Simple collections (leaf element types like Material refs, colors,
+        // primitives) keep the normal label gutter and draw their compact card in the control column -
+        // matching Nebula's `.i2field > .i2label + .coll` vs full-width `.i2field.full > .nl`.
         bool isLeafCollection = false;
         if (drawer == null && fieldType != typeof(string))
         {
@@ -423,12 +423,6 @@ public static class PropertyGridRenderer
                         DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth, label);
                     return;
                 }
-            }
-            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-            {
-                using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
-                    DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth, label);
-                return;
             }
         }
 
@@ -530,14 +524,11 @@ public static class PropertyGridRenderer
             return;
         }
 
-        // 4. Dictionary<K,V>
-        if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-        {
-            DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth);
-            return;
-        }
+        // Dictionaries and other unsupported types (Nullable&lt;T&gt;, Guid/DateTime, non-IList collections,
+        // ...) are intentionally not editable in the property grid - they fall through to the read-only
+        // "unsupported" note below.
 
-        // 5. Nested object
+        // 4. Nested object
         if (value != null)
         {
             var customEditor = config.CustomEditors.GetEditor(value.GetType());
@@ -555,22 +546,25 @@ public static class PropertyGridRenderer
             }
         }
 
-        // 6. Null reference-type with "Create" button
+        // 5. Null reference-type with "Create" button
         if (value == null && !fieldType.IsValueType)
         {
             DrawNullObject(paper, id, fieldType, config, onChange);
             return;
         }
 
-        // 7. Fallback: read-only label
+        // 6. Fallback: read-only "unsupported type" note.
         {
             var font = Origami.Current.Font;
             var met = Origami.Current.Metrics;
             if (font != null)
-                paper.Box($"{id}_fb").Height(met.RowHeight)
-                    .Text(value?.ToString() ?? "(null)", font).TextColor(Origami.Current.Ink.C400)
+            {
+                string typeName = fieldType.Name.Split('`')[0]; // strip generic arity (Dictionary`2 -> Dictionary)
+                paper.Box($"{id}_fb").Height(met.RowHeight).IsNotInteractable()
+                    .Text($"({typeName} - unsupported)", font).TextColor(Origami.Current.Ink.C300)
                     .FontSize(met.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
+            }
         }
     }
 
@@ -578,12 +572,45 @@ public static class PropertyGridRenderer
 
     private static void DrawEnum(Paper paper, string id, Type enumType, object? value, Action<object?> onChange)
     {
+        // [Flags] enums hold a combination of bits, so a single-select dropdown can neither show nor set
+        // combinations - use a multi-select of the individual flags instead.
+        if (enumType.IsDefined(typeof(FlagsAttribute), false))
+        {
+            DrawFlagsEnum(paper, id, enumType, value, onChange);
+            return;
+        }
+
         var names = Enum.GetNames(enumType);
         var values = Enum.GetValues(enumType);
         int currentIdx = value != null ? Array.IndexOf(values, value) : 0;
         if (currentIdx < 0) currentIdx = 0;
 
         Origami.Dropdown(paper, id, currentIdx, idx => onChange(values.GetValue(idx)), names).Show();
+    }
+
+    private static void DrawFlagsEnum(Paper paper, string id, Type enumType, object? value, Action<object?> onChange)
+    {
+        ulong valueU = value != null ? Convert.ToUInt64(value) : 0;
+
+        var nonZero = new List<object>();
+        var current = new List<object>();
+        foreach (var v in Enum.GetValues(enumType))
+        {
+            ulong u = Convert.ToUInt64(v);
+            if (u == 0) continue;              // skip the None/0 entry - clearing all boxes = no bits
+            nonZero.Add(v!);
+            if ((valueU & u) == u) current.Add(v!);
+        }
+
+        Origami.MultiDropdown<object>(paper, id, current,
+            selected =>
+            {
+                ulong combined = 0;
+                foreach (var f in selected) combined |= Convert.ToUInt64(f);
+                onChange(Enum.ToObject(enumType, combined));
+            }, nonZero)
+            .Display(o => Enum.GetName(enumType, o) ?? o.ToString() ?? "")
+            .Show();
     }
 
     // ── Collection ───────────────────────────────────────────
@@ -911,135 +938,6 @@ public static class PropertyGridRenderer
             DrawSimple();
         else
             DrawNested();
-    }
-
-    // ── Dictionary ───────────────────────────────────────────
-
-    private static void DrawDictionary(Paper paper, string id, Type dictType,
-        IDictionary? dict, PropertyGridConfig config, Action<object?> onChange, int depth, string label = "")
-    {
-        var typeArgs = dictType.GetGenericArguments();
-        Type keyType = typeArgs[0];
-        Type valueType = typeArgs[1];
-
-        int count = dict?.Count ?? 0;
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-
-        Origami.Foldout(paper, $"{id}_fold", string.IsNullOrEmpty(label) ? $"({count})" : label)
-            .Badge(string.IsNullOrEmpty(label) ? null : count.ToString())
-            .Body(() =>
-        {
-            if (dict == null)
-            {
-                Origami.Button(paper, $"{id}_create", "Create", () =>
-                {
-                    onChange(Activator.CreateInstance(dictType));
-                }).Show();
-                return;
-            }
-
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
-            {
-                // Gather keys into a list for indexed access
-                var keys = new List<object>();
-                foreach (var key in dict.Keys) keys.Add(key);
-
-                for (int i = 0; i < keys.Count; i++)
-                {
-                    int localIdx = i;
-                    var keyObj = keys[i];
-
-                    using (paper.Row($"{id}_entry_{localIdx}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
-                    {
-                        // Key display (read-only)
-                        var font = theme.Font;
-                        if (font != null)
-                        {
-                            paper.Box($"{id}_key_{localIdx}")
-                                .Width(m.LabelWidth).Height(m.RowHeight)
-                                .Padding(m.PaddingSmall, 0, 0, 0)
-                                .IsNotInteractable()
-                                .Text($"[{keyObj}]", font).TextColor(theme.Ink.C500)
-                                .FontSize(m.FontSize);
-                        }
-
-                        // Value (editable)
-                        using (paper.Column($"{id}_val_{localIdx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
-                        {
-                            var capturedKey = keyObj;
-                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, dict[keyObj], config,
-                                v => { dict[capturedKey] = v; onChange(dict); }, depth + 1);
-                        }
-
-                        // Remove button
-                        var keyToRemove = keyObj;
-                        Origami.IconButton(paper, $"{id}_rm_{localIdx}", theme.Icons.Close, () =>
-                        {
-                            dict.Remove(keyToRemove);
-                            onChange(dict);
-                        }).Show();
-                    }
-                }
-
-                // Add entry row: enum keys pick from a dropdown (Convert.ChangeType can't parse a string
-                // into an enum, so a text field would silently fail); other key types parse a typed string.
-                using (paper.Row($"{id}_addrow").Height(m.RowHeight).RowBetween(m.Spacing).Enter())
-                {
-                    var addRowEl = paper.CurrentParent;
-
-                    void AddEntry(object? typedKey)
-                    {
-                        if (typedKey == null || dict.Contains(typedKey)) return;
-                        object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
-                            : valueType == typeof(string) ? "" : null;
-                        dict.Add(typedKey, newVal);
-                        onChange(dict);
-                    }
-
-                    if (keyType.IsEnum)
-                    {
-                        var names = Enum.GetNames(keyType);
-                        var values = Enum.GetValues(keyType);
-                        int sel = paper.GetElementStorage(addRowEl, "pendingKeyIdx", 0);
-                        if (sel < 0 || sel >= names.Length) sel = 0;
-
-                        Origami.Dropdown(paper, $"{id}_newkey", sel,
-                                idx => paper.SetElementStorage(addRowEl, "pendingKeyIdx", idx), names)
-                            .Width(UnitValue.Stretch()).Show();
-
-                        Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
-                        {
-                            int idx = paper.GetElementStorage(addRowEl, "pendingKeyIdx", 0);
-                            if (idx >= 0 && idx < values.Length)
-                                AddEntry(values.GetValue(idx));
-                        }).Show();
-                    }
-                    else
-                    {
-                        string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
-
-                        Origami.TextField(paper, $"{id}_newkey", pendingKey,
-                                v => paper.SetElementStorage(addRowEl, "pendingKey", v))
-                            .Placeholder("Key...").Width(UnitValue.Stretch()).SubmitOnEnter().Show();
-
-                        Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
-                        {
-                            string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
-                            if (string.IsNullOrWhiteSpace(pk)) return;
-                            try
-                            {
-                                object? typedKey = keyType == typeof(string) ? pk
-                                    : Convert.ChangeType(pk, keyType, System.Globalization.CultureInfo.InvariantCulture);
-                                AddEntry(typedKey);
-                                paper.SetElementStorage(addRowEl, "pendingKey", "");
-                            }
-                            catch { }
-                        }).Show();
-                    }
-                }
-            }
-        });
     }
 
     // ── Nested Object ────────────────────────────────────────
