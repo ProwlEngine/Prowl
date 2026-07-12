@@ -712,6 +712,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     {
         Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
+            builder.Header("Create");
             BuildCreateMenu(builder, null);
         });
     }
@@ -725,6 +726,67 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             if (selectedGOs.Count == 0) return;
 
             bool multiSelect = selectedGOs.Count > 1;
+
+            builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = Selection.Count }) : firstSelected.Name, iconDraw: GetGoStyle(firstSelected).icon);
+
+            // Create parent to first selected
+            builder.Submenu("Create", (b) => { BuildCreateMenu(b, firstSelected); }, EditorIcons.Plus);
+
+            builder.Separator();
+
+            if (multiSelect)
+            {
+                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
+                {
+                    var dupes = GameObjectClipboard.Duplicate(selectedGOs);
+                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                }, icon: EditorIcons.Copy);
+
+                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
+                {
+                    StartRenameGO(firstSelected!, selectedGOs);
+                }, icon: EditorIcons.PenToSquare);
+
+                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
+                {
+                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
+                }, icon: EditorIcons.Trash);
+
+                builder.Separator();
+
+                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
+                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
+                {
+                    bool newState = !anyEnabled;
+                    var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
+                    Undo.RegisterAction(newState ? "Enable All" : "Disable All",
+                        undo: () => { foreach (var (id, old) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; } },
+                        redo: () => { foreach (var (id, _) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = newState; } });
+                    foreach (var go in selectedGOs) go.Enabled = newState;
+                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+            else
+            {
+                var go = firstSelected!;
+                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
+                {
+                    var dupes = GameObjectClipboard.Duplicate([go]);
+                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                }, icon: EditorIcons.Copy);
+                builder.Item(Loc.Get("hierarchy.rename"), () =>
+                {
+                    StartRenameGO(go, [go]);
+                }, icon: EditorIcons.PenToSquare);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                builder.Separator();
+                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
+                {
+                    Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
+                    go.Enabled = !go.Enabled;
+                }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+
+            builder.Separator();
 
             // Move to View / Move View To
             var cam = SceneViewPanel.ActiveCamera;
@@ -779,61 +841,19 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 builder.Separator();
             }
 
-            // Create parent to first selected
-            BuildCreateMenu(builder, firstSelected);
-            builder.Separator();
-
             if (multiSelect)
             {
-                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
-                {
-                    var dupes = GameObjectClipboard.Duplicate(selectedGOs);
-                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-
-                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
-                {
-                    StartRenameGO(firstSelected!, selectedGOs);
-                }, icon: EditorIcons.PenToSquare);
-
                 builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
                     foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
-                }, icon: EditorIcons.Trash);
-
-                builder.Separator();
-
-                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
-                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
-                {
-                    bool newState = !anyEnabled;
-                    var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
-                    Undo.RegisterAction(newState ? "Enable All" : "Disable All",
-                        undo: () => { foreach (var (id, old) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; } },
-                        redo: () => { foreach (var (id, _) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = newState; } });
-                    foreach (var go in selectedGOs) go.Enabled = newState;
-                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                }, icon: EditorIcons.Trash, danger: true);
             }
             else
             {
                 var go = firstSelected!;
-                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
-                {
-                    var dupes = GameObjectClipboard.Duplicate([go]);
-                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-                builder.Item(Loc.Get("hierarchy.rename"), () =>
-                {
-                    StartRenameGO(go, [go]);
-                }, icon: EditorIcons.PenToSquare);
-                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
-                builder.Separator();
-                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
-                {
-                    Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
-                    go.Enabled = !go.Enabled;
-                }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash, danger: true);
             }
+
         });
     }
 
