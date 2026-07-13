@@ -6,6 +6,9 @@ using Prowl.Editor.Theming;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 
 
 namespace Prowl.Editor;
@@ -93,6 +96,8 @@ public static class Program
 
     public static void Main(string[] args)
     {
+        RegisterMiniAudioExResolver();
+
         ReadArguments(args);
 
         if (BuildMode)
@@ -120,5 +125,50 @@ public static class Program
         editor.Run("Prowl Editor", 1920, 1080);
 
         //Runtime.Window.InternalWindow.WindowState = EditorSettings.Instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;
+    }
+
+    /// <summary>
+    /// "miniaudioex" is the only native audio library that isn't a real NuGet native-asset package
+    /// (it's manually vendored via Prowl.Runtime.csproj's CopyLibraries target into runtimes/&lt;rid&gt;/native/),
+    /// so a self-contained Editor publish never flattens it to the app root and the default probing
+    /// doesn't find it there either - it must be resolved explicitly.
+    /// This is registered here (Editor-only), not inside Prowl.Runtime.dll: exported Player builds
+    /// already register their own DllImportResolver for that same assembly (DesktopBuildPipeline's
+    /// generated Program.cs), and NativeLibrary.SetDllImportResolver allows only one resolver per
+    /// assembly - a second registration throws.
+    /// </summary>
+    private static void RegisterMiniAudioExResolver()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, (libraryName, _, _) =>
+        {
+            if (libraryName != "miniaudioex")
+                return IntPtr.Zero;
+
+            string? os = OperatingSystem.IsWindows() ? "win"
+                       : OperatingSystem.IsMacOS() ? "osx"
+                       : OperatingSystem.IsLinux() ? "linux"
+                       : null;
+
+            // ProcessArchitecture (not OSArchitecture): a 32-bit process on a 64-bit Windows OS must
+            // load the x86 native lib, not x64 - Libraries/win-x86 exists precisely for that case.
+            string? arch = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "x64",
+                Architecture.X86 => "x86",
+                Architecture.Arm64 => "arm64",
+                Architecture.Arm => "arm",
+                _ => null,
+            };
+
+            if (os == null || arch == null)
+                return IntPtr.Zero;
+
+            string fileName = OperatingSystem.IsWindows() ? "miniaudioex.dll"
+                             : OperatingSystem.IsMacOS() ? "libminiaudioex.dylib"
+                             : "libminiaudioex.so";
+
+            string path = Path.Combine(AppContext.BaseDirectory, "runtimes", $"{os}-{arch}", "native", fileName);
+            return File.Exists(path) ? NativeLibrary.Load(path) : IntPtr.Zero;
+        });
     }
 }
