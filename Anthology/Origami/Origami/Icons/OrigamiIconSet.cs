@@ -48,6 +48,9 @@ public static class OrigamiIconSet
     public static readonly SvgIcon List    = new("M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4v.1M2.5 8v.1M2.5 12v.1");
     // Drag-handle grip: two columns of three dots (tiny strokes render as dots with round caps).
     public static readonly SvgIcon Grip    = new("M6 4v.1M10 4v.1M6 8v.1M10 8v.1M6 12v.1M10 12v.1");
+    // Splitter grips: a single line of three dots, oriented to match the splitter bar itself.
+    public static readonly SvgIcon GripVertical   = new("M8 4v.1M8 8v.1M8 12v.1");
+    public static readonly SvgIcon GripHorizontal = new("M4 8v.1M8 8v.1M12 8v.1");
     // Sort: descending-width lines.
     public static readonly SvgIcon Sort    = new("M3 4.5h10M4.5 8h7M6 11.5h4");
 
