@@ -33,12 +33,11 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
-<!-- TODO: these screenshots are from the pre-1.0-preview Editor UI and no longer reflect the current Editor, replace with fresh 1.0-preview screenshots -->
-| ![Screenshot 2024-06-27 172952](https://github.com/michaelsakharov/Prowl/assets/8621606/80df58cc-53ac-4582-b722-1800d6cd4d13) | ![Screenshot 2024-06-27 172106](https://github.com/michaelsakharov/Prowl/assets/8621606/c13e9145-6b35-4ea5-ad66-523a275d0bc9) |
+| ![Screenshot](https://github.com/user-attachments/assets/f124906e-c403-4618-93e7-461b39ba4deb) | ![Screenshot](https://github.com/user-attachments/assets/956c6f00-2052-464e-b426-0b3cdbbe45de) |
 | :-: | :-: |
-| ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/91ab57be-b215-40a8-871b-baf1dfc9ea58) | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1cc6bb14-7c41-46e9-a581-c79ba51fc45f) |
-| ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/b7fb26e0-568f-4bd7-9282-3e2fd12b38a9) | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1b376ae7-8f13-41ea-ba1d-a49f777398ac) |
-| ![UntitledFLightModel](https://github.com/michaelsakharov/Prowl/assets/8621606/58a3c640-6ace-4f2f-8de6-e3bf5bbf9865) | ![Untitled](https://github.com/michaelsakharov/Prowl/assets/8621606/5165f2c4-681f-4cf7-8579-1152c971d142) |
+| ![image](https://github.com/user-attachments/assets/974cc488-379c-4db8-bd39-ff6024e341c6) | ![image](https://github.com/user-attachments/assets/5b00b701-5b61-4fd1-afaa-265ef9d578e7) |
+| ![image](https://github.com/user-attachments/assets/e0ec6307-2368-4df5-b7a8-ef7665df2207) | ![image](https://github.com/user-attachments/assets/e59d63d2-d2d9-4ddb-afa7-4a465caa2cc9) |
+| ![UntitledFLightModel](https://github.com/user-attachments/assets/71486b58-a81f-440a-ad43-cabdb1e6d6ba) | ![Untitled](https://github.com/user-attachments/assets/4255a0fe-689f-4696-b062-2d62ca35a23c) |
 
 # <span align="center">✨ Features ✨</span>
 
@@ -110,16 +109,6 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic)
 	- Baked Light Probes
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
-    - Node-Based **Shader Graph**
-        - 150+ nodes across 14 categories (Math, Vector, Color, UV, Geometry, Scene Data, Lighting, Noise, Post-Effect, Utility, …)
-        - Vertex-stage support (Position offset for wind / wobble / displacement)
-        - Fragment + Vertex + DepthNormals + Shadow pass emission from one graph
-        - Alpha cutout + vertex offset forwarded into shadow & depth passes automatically
-        - Lighting modes: Unlit / PBR / Lambert / Blinn-Phong
-        - Template seed graphs (Lit Basic / Transparent / Terrain / Grass / Particle / Sky / Post Effect / Custom Lighting)
-        - Inline **Custom Code** (raw GLSL) node
-        - Control flow (Branch), Local Get/Set variables
-        - Noise nodes (FastNoiseLite): OpenSimplex2 / OpenSimplex2S / Perlin / Value / Cellular (Voronoi) / Domain Warp, with FBM / Ridged / PingPong fractal variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
         - Albedo, Normal, Surface (AO / Roughness / Metallic), Emission Maps
     - Mesh Renderer & Skinned Mesh Renderer with Bone Animation and Blendshapes
