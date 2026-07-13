@@ -266,6 +266,14 @@ public class DesktopBuildPipeline : BuildPipeline
                 }
             }
 
+            // 7b. macOS ships as a real .app bundle, not a bare folder of files.
+            if (desktopProfile.Platform == BuildTarget.MacOS)
+            {
+                progress?.Log("Bundling macOS .app...", 0.92f);
+                var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+                BundleMacApp(outputDirectory, project.Name, general.ProductName, general.CompanyName, general.Version);
+            }
+
             // 8. Clean temp
             if (Directory.Exists(buildTempDir))
                 try { Directory.Delete(buildTempDir, true); } catch { }
@@ -812,5 +820,75 @@ public class DesktopBuildPipeline : BuildPipeline
                 File.Move(pdbPath, pdbDest, true);
             }
         }
+    }
+
+    /// <summary>
+    /// Wraps a finished publish output (executable + Content/ + runtimes/, all sitting flat in
+    /// <paramref name="outputDir"/>) into a real "ProductName.app" bundle: everything moves under
+    /// Contents/MacOS unchanged (so AppContext.BaseDirectory-relative lookups like "Content/Settings"
+    /// keep working with no engine-side path changes), plus a minimal Contents/Info.plist.
+    /// Does NOT code-sign or notarize - Gatekeeper will still show an "unidentified developer"
+    /// warning on a machine that downloaded the .app until the user right-clicks Open (or runs
+    /// `xattr -cr`). That needs an Apple Developer account and is out of scope here.
+    /// </summary>
+    private static void BundleMacApp(string outputDir, string executableName, string productName, string companyName, string version)
+    {
+        // Snapshot BEFORE creating the bundle folder so it never sweeps up itself.
+        var existingEntries = Directory.GetFileSystemEntries(outputDir).ToList();
+
+        string appDir = Path.Combine(outputDir, $"{productName}.app");
+        string macOsDir = Path.Combine(appDir, "Contents", "MacOS");
+        Directory.CreateDirectory(macOsDir);
+
+        foreach (var entry in existingEntries)
+        {
+            string dest = Path.Combine(macOsDir, Path.GetFileName(entry));
+            if (Directory.Exists(entry))
+                Directory.Move(entry, dest);
+            else
+                File.Move(entry, dest);
+        }
+
+        // Only meaningful when building ON macOS/Linux - Windows can't hold POSIX exec bits, so a
+        // .app built for macOS while cross-publishing from Windows will need `chmod +x` after the
+        // bundle reaches an actual Mac (e.g. as part of however it's unzipped/transferred there).
+        string exePath = Path.Combine(macOsDir, executableName);
+        if (!OperatingSystem.IsWindows() && File.Exists(exePath))
+        {
+            try
+            {
+                UnixFileMode mode = File.GetUnixFileMode(exePath);
+                File.SetUnixFileMode(exePath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            }
+            catch { /* best-effort */ }
+        }
+
+        string bundleId = $"com.{SanitizeBundleIdSegment(companyName)}.{SanitizeBundleIdSegment(productName)}";
+
+        string plist = $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>CFBundleName</key><string>{productName}</string>
+                <key>CFBundleDisplayName</key><string>{productName}</string>
+                <key>CFBundleExecutable</key><string>{executableName}</string>
+                <key>CFBundleIdentifier</key><string>{bundleId}</string>
+                <key>CFBundlePackageType</key><string>APPL</string>
+                <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+                <key>CFBundleVersion</key><string>{version}</string>
+                <key>CFBundleShortVersionString</key><string>{version}</string>
+                <key>NSHighResolutionCapable</key><true/>
+            </dict>
+            </plist>
+            """;
+        File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), plist);
+    }
+
+    // Bundle identifier segments are restricted to alphanumerics, dots and hyphens.
+    private static string SanitizeBundleIdSegment(string s)
+    {
+        string cleaned = new string([.. s.Where(c => char.IsLetterOrDigit(c) || c is '-' or '.')]);
+        return cleaned.Length > 0 ? cleaned : "prowlgame";
     }
 }

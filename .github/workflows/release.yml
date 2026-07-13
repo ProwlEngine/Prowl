@@ -35,10 +35,46 @@ jobs:
           --self-contained true
           --output ./publish/${{ matrix.runtime }}/Prowl
 
+      # macOS ships as a real Prowl.app bundle, not a bare folder - everything moves under
+      # Contents/MacOS unchanged (no engine-side path assumptions to update) plus a minimal
+      # Contents/Info.plist. Not code-signed/notarized: Gatekeeper will still show an
+      # "unidentified developer" warning until the user right-clicks Open (or runs `xattr -cr`).
+      - name: Bundle macOS .app (${{ matrix.runtime }})
+        if: startsWith(matrix.runtime, 'osx-')
+        run: |
+          set -e
+          PUB="./publish/${{ matrix.runtime }}/Prowl"
+          APP="./publish/${{ matrix.runtime }}/Prowl.app"
+          mkdir -p "$APP/Contents/MacOS"
+          mv "$PUB"/* "$APP/Contents/MacOS/"
+          rmdir "$PUB"
+          chmod +x "$APP/Contents/MacOS/Prowl.Editor"
+          cat > "$APP/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key><string>Prowl</string>
+              <key>CFBundleDisplayName</key><string>Prowl Editor</string>
+              <key>CFBundleExecutable</key><string>Prowl.Editor</string>
+              <key>CFBundleIdentifier</key><string>com.prowlengine.editor</string>
+              <key>CFBundlePackageType</key><string>APPL</string>
+              <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+              <key>CFBundleVersion</key><string>${{ github.ref_name }}</string>
+              <key>CFBundleShortVersionString</key><string>${{ github.ref_name }}</string>
+              <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          PLIST
+
       - name: Zip
         run: |
           cd ./publish/${{ matrix.runtime }}
-          zip -r "../../Prowl-${{ github.ref_name }}-${{ matrix.runtime }}.zip" Prowl
+          if [ -d "Prowl.app" ]; then
+            zip -r "../../Prowl-${{ github.ref_name }}-${{ matrix.runtime }}.zip" Prowl.app
+          else
+            zip -r "../../Prowl-${{ github.ref_name }}-${{ matrix.runtime }}.zip" Prowl
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
