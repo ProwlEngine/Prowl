@@ -614,7 +614,13 @@ public class EditorAssetDatabase : IAssetDatabase
 
                     sub.AssetPath = $"{entry.Path}#{sub.Name}";
 
-                    SerializeToCache(sub.AssetID, sub);
+                    // Sub-assets (e.g. a Sprite cut from a texture) can hold their own AssetRef fields
+                    // (Sprite.Texture) pointing at assets other than their parent - those need their own
+                    // dependency-graph entry, keyed by the sub-asset's own GUID, or a DependenciesOnly
+                    // build's transitive walk stops at the sub-asset and never reaches what it references.
+                    var subCtx = new DependencySerializationContext();
+                    SerializeToCache(sub.AssetID, sub, subCtx);
+                    _dependencies.SetDependencies(sub.AssetID, subCtx.Dependencies);
                     _loadedAssets[sub.AssetID] = sub;
 
                     subEntries.Add(new SubAssetEntry
@@ -678,7 +684,7 @@ public class EditorAssetDatabase : IAssetDatabase
         }
     }
 
-    private void SerializeToCache(Guid guid, EngineObject obj)
+    private void SerializeToCache(Guid guid, EngineObject obj, SerializationContext? context = null)
     {
         string cachePath = GetCachePath(guid);
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -691,7 +697,9 @@ public class EditorAssetDatabase : IAssetDatabase
             obj.AssetID = Guid.Empty;
 
             // Force serialize with Base Type info, Required for Builds since they dont know the Type of the Asset
-            var echo = Serializer.Serialize(typeof(object), obj);
+            var echo = context != null
+                ? Serializer.Serialize(typeof(object), obj, context)
+                : Serializer.Serialize(typeof(object), obj);
             obj.AssetID = savedId;
 
             if (echo != null)

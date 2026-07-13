@@ -1325,7 +1325,7 @@ public static class GameObjectInspector
         _addComponentTarget = null;
     }
 
-    // Fullscreen, invisible click-catcher so clicking anywhere outside the popover closes it —
+    // Fullscreen, invisible click-catcher so clicking anywhere outside the popover closes it -
     // the same click-outside behaviour Origami's dropdowns use (see DropdownInternal.RenderBackdrop).
     private static void RenderAddComponentBackdrop(Paper paper)
     {

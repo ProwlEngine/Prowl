@@ -129,7 +129,7 @@ public static class Program
 
     /// <summary>
     /// "miniaudioex" is the only native audio library that isn't a real NuGet native-asset package
-    /// (it's manually vendored via Prowl.Runtime.csproj's CopyLibraries target into runtimes/&lt;rid&gt;/native/),
+    /// (it's manually vendored via Prowl.Runtime.csproj's CopyLibraries target into a runtimes/RID/native/ folder),
     /// so a self-contained Editor publish never flattens it to the app root and the default probing
     /// doesn't find it there either - it must be resolved explicitly.
     /// This is registered here (Editor-only), not inside Prowl.Runtime.dll: exported Player builds
