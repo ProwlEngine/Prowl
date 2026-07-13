@@ -202,24 +202,27 @@ public class DockSpace
             .Cursor(horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical)
             .Enter())
         {
-            // A hairline divider spans the length of the splitter at all times, inset a few
-            // pixels at each end with rounded caps.
-            const float lineThickness = 3f;
-            const float lineInset = 4f;
-            float lineW = horiz ? lineThickness : w - lineInset * 2f;
-            float lineH = horiz ? h - lineInset * 2f : lineThickness;
-            paper.Box($"spl_line_{node.GetHashCode()}")
-                .PositionType(PositionType.SelfDirected)
-                .Position((w - lineW) / 2f, (h - lineH) / 2f).Size(lineW, lineH)
-                .Rounded(lineThickness / 2f)
-                .IsNotInteractable()
-                .BackgroundColor(theme.BorderSoft);
+            bool hovered = paper.IsParentHovered || active;
+            Float2 pointer = paper.PointerPos;
 
-            // The grip is nested below the splitter so it can stay invisible (no hit-test, no
-            // background) until the splitter itself is hovered or being dragged.
-            if (paper.IsParentHovered || active)
+            // Everything below is plain canvas drawing (no child Boxes) since this repaints every
+            // frame regardless and Box elements carry real layout overhead we don't need here.
+            paper.Draw((canvas, rect) =>
             {
-                float thickness = MathF.Min(w, h);
+                // A hairline divider spans the length of the splitter at all times, inset a few
+                // pixels at each end with rounded caps.
+                const float lineThickness = 1f;
+                const float lineInset = 4f;
+                float lineW = horiz ? lineThickness : w - lineInset * 2f;
+                float lineH = horiz ? h - lineInset * 2f : lineThickness;
+                float lx = rect.Min.X + (w - lineW) / 2f;
+                float ly = rect.Min.Y + (h - lineH) / 2f;
+                canvas.RectFilled(lx, ly, lineW, lineH, theme.BorderSoft);
+
+                // The grip only appears while the splitter is hovered or being dragged.
+                if (!hovered) return;
+
+                float thickness = MathF.Min(w, h) / 2f;
                 float gripW = horiz ? thickness : SplitterGripLength;
                 float gripH = horiz ? SplitterGripLength : thickness;
 
@@ -227,22 +230,20 @@ public class DockSpace
                 // it stays fully inside the (inset) hairline.
                 float axisLen = horiz ? h : w;
                 float gripLenAlong = horiz ? gripH : gripW;
-                float localPointer = horiz ? paper.PointerPos.Y - y : paper.PointerPos.X - x;
+                float localPointer = horiz ? pointer.Y - rect.Min.Y : pointer.X - rect.Min.X;
                 float alongPos = Math.Clamp(localPointer - gripLenAlong / 2f,
                     lineInset, axisLen - lineInset - gripLenAlong);
 
-                float gx = horiz ? (w - gripW) / 2f : alongPos;
-                float gy = horiz ? alongPos : (h - gripH) / 2f;
+                float gx = rect.Min.X + (horiz ? (w - gripW) / 2f : alongPos);
+                float gy = rect.Min.Y + (horiz ? alongPos : (h - gripH) / 2f);
+
+                var gripColor = active ? theme.Primary.C400 : theme.Primary.C500;
+                canvas.RoundedRectFilled(gx, gy, gripW, gripH, thickness / 2f, gripColor);
 
                 var grip = horiz ? icons.GripVertical : icons.GripHorizontal;
-                paper.Box($"spl_grip_{node.GetHashCode()}")
-                    .PositionType(PositionType.SelfDirected)
-                    .Position(gx, gy).Size(gripW, gripH)
-                    .Rounded(thickness / 2f)
-                    .IsNotInteractable()
-                    .BackgroundColor(active ? theme.Primary.C400 : theme.Primary.C500)
-                    .Icon(paper, grip, theme.Ink.C300, size: thickness);
-            }
+                var gripRect = new Rect(new Float2(gx, gy), new Float2(gx + gripW, gy + gripH));
+                grip?.Draw(canvas, gripRect, theme.Ink.C300);
+            });
         }
     }
 
