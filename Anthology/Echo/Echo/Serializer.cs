@@ -185,10 +185,20 @@ public static class Serializer
     {
         if (value is null || value.TagType == EchoType.Null || target is null) return;
 
-        var envelope = ExtractTypeEnvelope(value, target.GetType());
-        var format = GetFormatForType(target.GetType());
-        if (format is Formatters.AnyObjectFormat anyFormat)
-            anyFormat.DeserializeInto(envelope.Data, target, context);
+        // Hold deserialize depth across the whole populate so its per-field deserializes don't fire the
+        // context's deferred actions prematurely (and so deferred actions can themselves call DeserializeInto).
+        context.EnterDeserialize();
+        try
+        {
+            var envelope = ExtractTypeEnvelope(value, target.GetType());
+            var format = GetFormatForType(target.GetType());
+            if (format is Formatters.AnyObjectFormat anyFormat)
+                anyFormat.DeserializeInto(envelope.Data, target, context);
+        }
+        finally
+        {
+            context.ExitDeserialize();
+        }
     }
 
     public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
@@ -196,6 +206,22 @@ public static class Serializer
     public static T? Deserialize<T>(EchoObject? value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
 
     public static object? Deserialize(EchoObject? value, Type targetType, SerializationContext context)
+    {
+        // Every deserialize call (top-level or nested field) funnels through here, so depth tracking lets
+        // the context fire its deferred back-patches exactly when the OUTERMOST call unwinds - regardless of
+        // which entry overload or context (e.g. the editor's asset-dependency-tracking context) was used.
+        context.EnterDeserialize();
+        try
+        {
+            return DeserializeCore(value, targetType, context);
+        }
+        finally
+        {
+            context.ExitDeserialize();
+        }
+    }
+
+    private static object? DeserializeCore(EchoObject? value, Type targetType, SerializationContext context)
     {
         if (value?.TagType == EchoType.Null || value is null) return null;
 
