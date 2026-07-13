@@ -164,7 +164,7 @@ public class DockSpace
             float aw = (w - sp) * node.SplitRatio;
             float bw = w - aw - sp;
             DrawNodeTree(paper, node.ChildA!, node, x, y, aw, h, fw, theme, m, icons, font);
-            DrawSplitter(paper, node, x + aw, y, sp, h, true, theme);
+            DrawSplitter(paper, node, x + aw, y, sp, h, true, theme, icons);
             DrawNodeTree(paper, node.ChildB!, node, x + aw + sp, y, bw, h, fw, theme, m, icons, font);
         }
         else
@@ -172,7 +172,7 @@ public class DockSpace
             float ah = (h - sp) * node.SplitRatio;
             float bh = h - ah - sp;
             DrawNodeTree(paper, node.ChildA!, node, x, y, w, ah, fw, theme, m, icons, font);
-            DrawSplitter(paper, node, x, y + ah, w, sp, false, theme);
+            DrawSplitter(paper, node, x, y + ah, w, sp, false, theme, icons);
             DrawNodeTree(paper, node.ChildB!, node, x, y + ah + sp, w, bh, fw, theme, m, icons, font);
         }
     }
@@ -181,14 +181,15 @@ public class DockSpace
     //  SPLITTER
     // ================================================================
 
+    private const float SplitterGripLength = 28f;
+
     private void DrawSplitter(Paper paper, DockNode node, float x, float y, float w, float h, bool horiz,
-                               OrigamiTheme theme)
+                               OrigamiTheme theme, OrigamiIcons icons)
     {
         bool active = _splitterDragNode == node;
-        paper.Box($"spl_{node.GetHashCode()}")
+
+        using (paper.Box($"spl_{node.GetHashCode()}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
-            .Hovered.BackgroundColor(theme.Primary.C500).End()
-            .Active.BackgroundColor(theme.Primary.C400).End()
             .OnDragStart(node, (n, e) => _splitterDragNode = n)
             .OnDragging(node, (n, e) =>
             {
@@ -198,7 +199,52 @@ public class DockSpace
                     n.SplitRatio = Math.Clamp(n.SplitRatio + (horiz ? e.Delta.X : e.Delta.Y) / total, 0.1f, 0.9f);
             })
             .OnDragEnd(e => _splitterDragNode = null)
-            .Cursor(horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical);
+            .Cursor(horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical)
+            .Enter())
+        {
+            bool hovered = paper.IsParentHovered || active;
+            Float2 pointer = paper.PointerPos;
+
+            // Everything below is plain canvas drawing (no child Boxes) since this repaints every
+            // frame regardless and Box elements carry real layout overhead we don't need here.
+            paper.Draw((canvas, rect) =>
+            {
+                // A hairline divider spans the length of the splitter at all times, inset a few
+                // pixels at each end with rounded caps.
+                const float lineThickness = 1f;
+                const float lineInset = 4f;
+                float lineW = horiz ? lineThickness : w - lineInset * 2f;
+                float lineH = horiz ? h - lineInset * 2f : lineThickness;
+                float lx = rect.Min.X + (w - lineW) / 2f;
+                float ly = rect.Min.Y + (h - lineH) / 2f;
+                canvas.RectFilled(lx, ly, lineW, lineH, theme.BorderSoft);
+
+                // The grip only appears while the splitter is hovered or being dragged.
+                if (!hovered) return;
+
+                float thickness = MathF.Min(w, h) / 2f;
+                float gripW = horiz ? thickness : SplitterGripLength;
+                float gripH = horiz ? SplitterGripLength : thickness;
+
+                // Slide the grip along the splitter's long axis to track the pointer, clamped so
+                // it stays fully inside the (inset) hairline.
+                float axisLen = horiz ? h : w;
+                float gripLenAlong = horiz ? gripH : gripW;
+                float localPointer = horiz ? pointer.Y - rect.Min.Y : pointer.X - rect.Min.X;
+                float alongPos = Math.Clamp(localPointer - gripLenAlong / 2f,
+                    lineInset, axisLen - lineInset - gripLenAlong);
+
+                float gx = rect.Min.X + (horiz ? (w - gripW) / 2f : alongPos);
+                float gy = rect.Min.Y + (horiz ? alongPos : (h - gripH) / 2f);
+
+                var gripColor = active ? theme.Primary.C400 : theme.Primary.C500;
+                canvas.RoundedRectFilled(gx, gy, gripW, gripH, thickness / 2f, gripColor);
+
+                var grip = horiz ? icons.GripVertical : icons.GripHorizontal;
+                var gripRect = new Rect(new Float2(gx, gy), new Float2(gx + gripW, gy + gripH));
+                grip?.Draw(canvas, gripRect, theme.Ink.C300);
+            });
+        }
     }
 
     private float EstimateSplitSize(DockNode n, bool horiz)
