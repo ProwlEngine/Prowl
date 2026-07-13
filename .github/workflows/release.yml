@@ -1,0 +1,68 @@
+# Builds self-contained Editor binaries for every supported platform and publishes them as a
+# GitHub Release, triggered by pushing a version tag (e.g. `v1.0-preview`, `v1.2.3`).
+
+name: Release
+
+"on":
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [win-x64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish (${{ matrix.runtime }})
+        run: >
+          dotnet publish ./Prowl.Editor/Prowl.Editor.csproj
+          --configuration Release
+          --runtime ${{ matrix.runtime }}
+          --self-contained true
+          --output ./publish/${{ matrix.runtime }}/Prowl
+
+      - name: Zip
+        run: |
+          cd ./publish/${{ matrix.runtime }}
+          zip -r "../../Prowl-${{ github.ref_name }}-${{ matrix.runtime }}.zip" Prowl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Prowl-${{ matrix.runtime }}
+          path: Prowl-${{ github.ref_name }}-${{ matrix.runtime }}.zip
+          retention-days: 5
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/*.zip
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, 'preview') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
