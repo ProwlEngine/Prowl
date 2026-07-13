@@ -516,14 +516,10 @@ namespace Prowl.PaperUI
             var borderWidth = data._elementStyle.GetBorderWidth();
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
-                _canvas.BeginPath();
-                if(hasRounding)
-                    _canvas.RoundedRect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W);
+                if (hasRounding)
+                    _canvas.RoundedRectBorder(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W, borderWidth, borderColor);
                 else
-                    _canvas.Rect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
-                _canvas.SetStrokeColor(borderColor);
-                _canvas.SetStrokeWidth(borderWidth);
-                _canvas.Stroke();
+                    _canvas.RectBorder(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, borderWidth, borderColor);
             }
 
             // Apply scissor if enabled
