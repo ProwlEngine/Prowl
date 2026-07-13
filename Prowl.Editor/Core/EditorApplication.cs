@@ -862,7 +862,7 @@ public class EditorApplication : Game
             .BackgroundColor(EditorTheme.Neutral200).Enter())
         {
             // ---------- Column 1: console (last log on the left, counters on the right) ----------
-            using (paper.Row("sb_console").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
+            using (paper.Row("sb_console").Width(UnitValue.StretchOne).Height(sh).Padding(pad, pad, 0, 0).Enter())
             {
                 var last = ConsolePanel.LastLog();
                 if (last.HasValue)
@@ -871,8 +871,8 @@ public class EditorApplication : Game
                     var (icon, color) = ConsolePanel.SeverityStyle(sev);
                     paper.Box("sb_log_i").Width(16).Height(sh).Margin(0, 5, ST, ST).IsNotInteractable()
                         .Icon(paper, icon, color, size: 13f);
-                    paper.Box("sb_log_m").Width(UnitValue.Auto).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
-                        .Text(msg, font).TextColor(EditorTheme.Ink400).FontSize(fs)
+                    paper.Box("sb_log_m").Width(UnitValue.StretchOne).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
+                        .Text(msg, font).TextTruncate().TextColor(EditorTheme.Ink400).FontSize(fs)
                         .Alignment(PaperUI.TextAlignment.MiddleLeft).TextTruncate();
                     if (!string.IsNullOrEmpty(src))
                         paper.Box("sb_log_s").Width(UnitValue.Auto).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
@@ -884,7 +884,7 @@ public class EditorApplication : Game
                             .Alignment(PaperUI.TextAlignment.MiddleLeft);
                 }
 
-                paper.Box("sb_console_spacer").Width(ST);
+                //paper.Box("sb_console_spacer").Width(ST);
 
                 var (info, warn, err) = ConsolePanel.LogCounts();
                 CounterCell("sb_cnt_info", LogSeverity.Normal, info);
