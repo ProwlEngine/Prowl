@@ -6,7 +6,6 @@ using Prowl.Editor.Importers;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Core;
@@ -156,21 +155,6 @@ public static class EditorSceneManager
     {
         PrefabEditingMode.Enter(guid);
         return true;
-    }
-
-    [AssetDoubleClickHandler(".shadergraph")]
-    private static bool OpenShaderGraphHandler(string relativePath, Guid guid)
-    {
-        // Resolve via AssetRef so the asset loads through the standard pipeline (importer
-        // runs, sub-assets register). Main asset is the ShaderGraph itself; the compiled
-        // Shader is its sub-asset.
-        var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
-        if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
-        {
-            ShaderGraphEditorWindow.OpenFor(sg);
-            return true;
-        }
-        return false;
     }
 
     private static bool SaveTo(string relativePath)

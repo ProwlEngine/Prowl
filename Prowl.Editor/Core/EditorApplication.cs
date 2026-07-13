@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 
 using Prowl.Editor.Thumbnails;
 using Prowl.OrigamiUI;
-using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -124,13 +123,10 @@ public class EditorApplication : Game
         InitializeOnLoadRegistry.Initialize();
         PropertyEditorRegistry.Initialize();
         CustomEditorRegistry.Initialize();
-        GraphTools.NodeRendererRegistry.Initialize();
-        GraphTools.NodePreviewRegistry.Initialize();
         Runtime.GraphTools.GraphValidatorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
-        ShaderTypeCreateMenu.Register();
         ThumbnailGeneratorRegistry.Initialize();
         SceneDropHandlerRegistry.Initialize();
         CreateGameObjectMenuRegistry.Initialize();
