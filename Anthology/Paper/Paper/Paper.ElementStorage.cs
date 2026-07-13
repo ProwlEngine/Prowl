@@ -11,6 +11,11 @@ namespace Prowl.PaperUI
         private Stack<int> _freeIndices = new Stack<int>();
         private int _rootElementIndex = -1;
 
+        // O(1) id -> index lookup, kept in sync with CreateElement/DestroyElement/ClearElements.
+        // Replaces the per-frame O(N) linear scan FindElementHandleByID used to do (it runs many
+        // times per frame across the interaction/hover/focus/hit-test paths).
+        private readonly Dictionary<int, int> _idToIndex = new Dictionary<int, int>();
+
         public int ElementCount => _elementCount;
 
         public ref ElementData GetElementData(int index)
@@ -24,6 +29,11 @@ namespace Prowl.PaperUI
         {
             int index;
             ElementData elementData = ElementData.Create(id);
+            // Share the one persistent per-id style and reset it for this frame: current values revert
+            // to defaults, and the builder's declarations below define the element (anything omitted
+            // reverts). Persistent animation state survives the reset (it lives out-of-line).
+            elementData._elementStyle = GetOrCreateStyle(id);
+            elementData._elementStyle.BeginFrame();
 
             if (_freeIndices.Count > 0)
             {
@@ -44,6 +54,8 @@ namespace Prowl.PaperUI
                 _elementCount++;
             }
 
+            // First writer wins, matching the old linear scan's "return first match" for duplicate ids.
+            _idToIndex.TryAdd(id, index);
             return new ElementHandle(this, index);
         }
 
@@ -69,8 +81,11 @@ namespace Prowl.PaperUI
                 DestroyElement(childHandle);
             }
 
-            // Clear the element data
+            // Clear the element data (capture the id first so we can drop it from the lookup)
+            int destroyedId = elementData.ID;
             elementData = default;
+            if (_idToIndex.TryGetValue(destroyedId, out int mappedIdx) && mappedIdx == handle.Index)
+                _idToIndex.Remove(destroyedId);
             _freeIndices.Push(handle.Index);
         }
 
@@ -96,16 +111,15 @@ namespace Prowl.PaperUI
             _elementCount = 0;
             _freeIndices.Clear();
             _rootElementIndex = -1;
+            _idToIndex.Clear();
         }
 
-        // Helper method to find element by ID
+        // Helper method to find element by ID. O(1) via _idToIndex, with an ID re-check so a stale/reused
+        // slot can never resolve to the wrong element.
         public ElementHandle FindElementHandleByID(int id)
         {
-            for (int i = 0; i < _elementCount; i++)
-            {
-                if (_elements[i].ID == id)
-                    return new ElementHandle(this, i);
-            }
+            if (_idToIndex.TryGetValue(id, out int index) && index >= 0 && index < _elementCount && _elements[index].ID == id)
+                return new ElementHandle(this, index);
             return default;
         }
 

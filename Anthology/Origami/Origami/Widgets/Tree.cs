@@ -595,9 +595,12 @@ public sealed class TreeBuilder
 
                 var caret = _paper.Box($"{rowId}_arr")
                     .Width(12).Height(_rowHeight)
-                    .StopEventPropagation()
-                    .OnClick(_ =>
+                    .OnClick(e =>
                     {
+                        // Stop the click from bubbling to the row's select handler, but per-event
+                        // (not blanket .StopEventPropagation()) so wheel scroll still bubbles to a
+                        // parent ScrollView while the pointer is parked over the caret.
+                        e.StopPropagation();
                         bool newState = !isExpanded;
                         bool alt = _paper.IsKeyDown(PaperKey.LeftAlt) || _paper.IsKeyDown(PaperKey.RightAlt);
 
@@ -775,11 +778,12 @@ public sealed class TreeBuilder
                 .Margin(6, 0, 0, 0)
                 .Text(node.TrailingIcon, font)
                 .TextColor(trailColor)
-                .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                .StopEventPropagation();
+                .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
 
+            // Per-event stop (not blanket .StopEventPropagation()) so the click doesn't select the
+            // row but the wheel still bubbles to a parent ScrollView while hovering the icon.
             if (_onTrailingIconClick != null && !disabled)
-                trailBox.OnClick(_ => _onTrailingIconClick(node)).Cursor(PaperCursor.Pointer);
+                trailBox.OnClick(e => { e.StopPropagation(); _onTrailingIconClick(node); }).Cursor(PaperCursor.Pointer);
         }
     }
 }

@@ -1569,12 +1569,12 @@ namespace Prowl.PaperUI
 
         private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, float maxWidth = float.MaxValue)
         {
-            var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-            var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+            var fontSize = _handle.Data._elementStyle.GetFontSize();
+            var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
 
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = (float)fontSize;
-            settings.Quality = (FontQuality)_handle.Data._elementStyle.GetValue(GuiProp.TextQuality);
+            settings.Quality = _handle.Data._elementStyle.GetTextQuality();
             settings.Font = inputSettings.Font;
             settings.LetterSpacing = (float)letterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;
@@ -2271,7 +2271,7 @@ namespace Prowl.PaperUI
                     // at logical × FramebufferScale for HiDPI crispness); divide by FramebufferScale
                     // to reach logical space, matching the widget's own coordinate system.
                     float invFb = 1.0f / canvas.FramebufferScale;
-                    var fontSize = (float)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                    var fontSize = elHandle.Data._elementStyle.GetFontSize();
 
                     // Draw text or placeholder. Mask the visible text when MaskChar is set; the
                     // underlying renderState.Value stays untouched so cursor / selection /
@@ -2437,8 +2437,8 @@ namespace Prowl.PaperUI
             {
                 // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
                 // pixel-space; convert to logical.
-                var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-                var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+                var fontSize = _handle.Data._elementStyle.GetFontSize();
+                var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
                 var displayValue = GetDisplayValue(state.Value, settings);
                 var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
 

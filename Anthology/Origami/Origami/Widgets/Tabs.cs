@@ -181,8 +181,9 @@ public sealed class TabsBuilder
                     .Position(tabW - closeSize - padX + 4f, (th - closeSize) * 0.5f)
                     .Size(closeSize, closeSize).Rounded(closeSize * 0.5f)
                     .Hovered.BackgroundColor(Color.FromArgb(60, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
-                    .StopEventPropagation()
-                    .OnClick(_ => onClose(idx))
+                    // Per-event stop (not blanket .StopEventPropagation()) so closing a tab doesn't
+                    // also select it, while the wheel still bubbles to a parent ScrollView.
+                    .OnClick(e => { e.StopPropagation(); onClose(idx); })
                     .Cursor(PaperCursor.Pointer)
                     .OnPostLayout((h2, r) => _paper.Draw(ref h2, (canvas, rr) =>
                     {

@@ -19,6 +19,22 @@ namespace Prowl.PaperUI
         private const string StableForKey = "_pp_sf_";
         private const string ShakeKey = "_pp_sh_";
 
+        // Composed animation keys are the same string every frame for a given call site, so memoize them
+        // instead of rebuilding "prefix + callerLine.ToString()" (two string allocations) every call.
+        private readonly System.Collections.Generic.Dictionary<(string prefix, int line), string> _animKeyCache = new();
+
+        private string AnimKey(string prefix, string? id, int callerLine)
+        {
+            if (id != null) return prefix + id; // explicit id (loops/wrappers) - not cacheable by line
+            var k = (prefix, callerLine);
+            if (!_animKeyCache.TryGetValue(k, out var key))
+            {
+                key = prefix + callerLine.ToString();
+                _animKeyCache[k] = key;
+            }
+            return key;
+        }
+
         /// <summary>
         /// Smoothly animates a 0..1 progress value toward 1 when <paramref name="target"/> is true and
         /// toward 0 when it is false, returning the eased value. State is stored on
@@ -48,7 +64,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateBoolKey + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateBoolKey, id, callerLine);
             float dir = target ? 1f : 0f;
             float progress = GetElementStorage<float>(key, dir);
 
@@ -83,7 +99,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateFloatKey + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateFloatKey, id, callerLine);
             float current = GetElementStorage<float>(key, target);
             if (DeltaTime > 0f && speed > 0f)
             {
@@ -109,7 +125,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateSpringKey + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateSpringKey, id, callerLine);
             var state = GetElementStorage<(float pos, float vel)>(key, (target, 0f));
 
             if (DeltaTime > 0f && frequency > 0f)
@@ -136,7 +152,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = OneShotKey + (id ?? callerLine.ToString());
+            string key = AnimKey(OneShotKey, id, callerLine);
             var state = GetElementStorage<(bool prev, float t)>(key, (false, 0f));
 
             if (trigger && !state.prev) state.t = 0f;          // (re)start on rising edge
@@ -171,7 +187,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateColorKey + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateColorKey, id, callerLine);
             Color current = GetElementStorage<Color>(key, target);
             if (DeltaTime > 0f && speed > 0f)
             {
@@ -196,7 +212,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateVec2Key + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateVec2Key, id, callerLine);
             Float2 current = GetElementStorage<Float2>(key, target);
             if (DeltaTime > 0f && speed > 0f)
             {
@@ -219,7 +235,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = AnimateAngleKey + (id ?? callerLine.ToString());
+            string key = AnimKey(AnimateAngleKey, id, callerLine);
             float current = GetElementStorage<float>(key, targetDegrees);
             if (DeltaTime > 0f && speed > 0f)
             {
@@ -255,7 +271,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = StableForKey + (id ?? callerLine.ToString());
+            string key = AnimKey(StableForKey, id, callerLine);
             var state = GetElementStorage<(bool last, float t)>(key, (current, 0f));
             if (state.last == current)
                 state.t += DeltaTime;
@@ -283,7 +299,7 @@ namespace Prowl.PaperUI
             string? id = null,
             [CallerLineNumber] int callerLine = 0)
         {
-            string key = ShakeKey + (id ?? callerLine.ToString());
+            string key = AnimKey(ShakeKey, id, callerLine);
             var state = GetElementStorage<(bool prev, float amp)>(key, (false, 0f));
 
             if (trigger && !state.prev) state.amp = 1f;

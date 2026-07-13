@@ -202,6 +202,8 @@ namespace Prowl.PaperUI
         private Dictionary<int, Float2> _dragStartPos = new Dictionary<int, Float2>();
         private HashSet<int> _elementsInBubblePath = new HashSet<int>();
         private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
+        // Reused each frame by HandleHoverEvents so it doesn't allocate a HashSet every frame.
+        private readonly HashSet<int> _leftElementsScratch = new HashSet<int>();
 
         // Layered elements collected after layout for independent hit testing.
         // Each entry stores the element handle and the accumulated parent transform
@@ -341,7 +343,6 @@ namespace Prowl.PaperUI
                 // Store the PARENT's accumulated transform (not this element's).
                 // HitTestElementTree will apply this element's own transform when testing.
                 _layeredElements.Add((handle, parentTransform));
-                return;
             }
 
             // Accumulate this element's transform for children
@@ -349,12 +350,10 @@ namespace Prowl.PaperUI
             Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
             Transform2D combinedTransform = styleTransform * parentTransform;
 
-            Transform2D childTransform = combinedTransform;
-
             foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
-                CollectLayeredElements(child, childTransform);
+                CollectLayeredElements(child, combinedTransform);
             }
         }
 
@@ -653,7 +652,9 @@ namespace Prowl.PaperUI
         private void HandleHoverEvents(int previousHoveredElementId)
         {
             // Find elements that were previously hovered but are no longer in bubble path
-            var leftElements = new HashSet<int>(_wasHoveredState.Keys);
+            var leftElements = _leftElementsScratch;
+            leftElements.Clear();
+            foreach (var k in _wasHoveredState.Keys) leftElements.Add(k);
             leftElements.ExceptWith(_elementsInBubblePath);
 
             // Trigger leave events

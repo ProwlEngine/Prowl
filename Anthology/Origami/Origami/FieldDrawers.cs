@@ -55,6 +55,42 @@ public class LongDrawer : FieldDrawer
         => Origami.NumericField<long>(paper, id, (long)(value ?? 0L), v => onChange(v)).Show();
 }
 
+public class SByteDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<sbyte>(paper, id, (sbyte)(value ?? (sbyte)0), v => onChange(v)).Show();
+}
+
+public class ShortDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<short>(paper, id, (short)(value ?? (short)0), v => onChange(v)).Show();
+}
+
+public class UShortDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<ushort>(paper, id, (ushort)(value ?? (ushort)0), v => onChange(v)).Show();
+}
+
+public class UIntDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<uint>(paper, id, (uint)(value ?? 0u), v => onChange(v)).Show();
+}
+
+public class ULongDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<ulong>(paper, id, (ulong)(value ?? 0ul), v => onChange(v)).Show();
+}
+
+public class DecimalDrawer : FieldDrawer
+{
+    public override void Draw(Paper paper, string id, object? value, Type fieldType, Action<object?> onChange, int depth)
+        => Origami.NumericField<decimal>(paper, id, (decimal)(value ?? 0m), v => onChange(v)).Show();
+}
+
 // ── Vectors ─────────────────────────────────────────────────
 
 public class Float2Drawer : FieldDrawer
@@ -133,6 +169,12 @@ public static class BuiltInFieldDrawers
         registry.Register<string>(new StringDrawer());
         registry.Register<byte>(new ByteDrawer());
         registry.Register<long>(new LongDrawer());
+        registry.Register<sbyte>(new SByteDrawer());
+        registry.Register<short>(new ShortDrawer());
+        registry.Register<ushort>(new UShortDrawer());
+        registry.Register<uint>(new UIntDrawer());
+        registry.Register<ulong>(new ULongDrawer());
+        registry.Register<decimal>(new DecimalDrawer());
 
         registry.Register<Float2>(new Float2Drawer());
         registry.Register<Float3>(new Float3Drawer());

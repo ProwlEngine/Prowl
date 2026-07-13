@@ -107,10 +107,25 @@ public sealed class CustomObjectEditorRegistry
 {
     private readonly Dictionary<Type, CustomObjectEditor> _editors = new();
 
-    public void Register<T>(CustomObjectEditor editor) => _editors[typeof(T)] = editor;
-    public void Register(Type type, CustomObjectEditor editor) => _editors[type] = editor;
+    // Caches the resolved editor (or null) per queried type so the base-chain + interface walk
+    // (which allocates via GetInterfaces) doesn't run every frame. Weakly keyed so hot-reloaded
+    // script types evict with their AssemblyLoadContext; reset when registrations change.
+    private sealed class Resolved { public CustomObjectEditor? Editor; }
+    private System.Runtime.CompilerServices.ConditionalWeakTable<Type, Resolved> _resolveCache = new();
+
+    public void Register<T>(CustomObjectEditor editor) { _editors[typeof(T)] = editor; _resolveCache = new(); }
+    public void Register(Type type, CustomObjectEditor editor) { _editors[type] = editor; _resolveCache = new(); }
 
     public CustomObjectEditor? GetEditor(Type type)
+    {
+        // TryGetValue first so cache hits allocate nothing (a factory lambda would capture `this`).
+        if (_resolveCache.TryGetValue(type, out var cached)) return cached.Editor;
+        var resolved = new Resolved { Editor = ResolveEditor(type) };
+        _resolveCache.Add(type, resolved);
+        return resolved.Editor;
+    }
+
+    private CustomObjectEditor? ResolveEditor(Type type)
     {
         if (_editors.TryGetValue(type, out var editor)) return editor;
         var current = type.BaseType;
@@ -124,7 +139,7 @@ public sealed class CustomObjectEditorRegistry
         return null;
     }
 
-    public void Clear() => _editors.Clear();
+    public void Clear() { _editors.Clear(); _resolveCache = new(); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -298,16 +313,15 @@ public static class PropertyGridRenderer
             var type = representative.GetType();
             var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
 
-            var buttonMethods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                .Where(m2 => m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute") && m2.GetParameters().Length == 0)
-                .ToArray();
+            var buttonMethods = GetButtonMethods(type);
 
             for (int i = 0; i < fields.Length; i++)
             {
                 var field = fields[i];
                 string fieldId = $"{id}_{field.Name}";
 
-                var attrs = field.GetCustomAttributes(true).OfType<Attribute>().ToArray();
+                var meta = GetFieldMeta(field);
+                var attrs = meta.Attributes;
                 bool skip = false;
                 bool handled = false;
 
@@ -332,7 +346,7 @@ public static class PropertyGridRenderer
                     var handler = config.Handlers.GetHandler(attr.GetType());
                     if (handler != null)
                     {
-                        string label = FormatFieldName(field.Name);
+                        string label = meta.Label;
                         IsMixedField = isMixed;
                         bool h = handler.OnDraw(paper, fieldId, label, attr, field, representative, applyAll, depth);
                         IsMixedField = false;
@@ -344,7 +358,7 @@ public static class PropertyGridRenderer
                 {
                     var value = field.GetValue(representative);
                     var fieldType = field.FieldType;
-                    string label = FormatFieldName(field.Name);
+                    string label = meta.Label;
                     bool isOverridden = overrides?.Contains(field.Name) ?? false;
 
                     DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isOverridden, isMixed);
@@ -359,12 +373,10 @@ public static class PropertyGridRenderer
             }
 
             // [Button] methods (invoked on every target)
-            foreach (var method in buttonMethods)
+            foreach (var button in buttonMethods)
             {
-                var btnAttr = method.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
-                var labelProp = btnAttr.GetType().GetProperty("Label");
-                string label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(method.Name);
-                Origami.Button(paper, $"{id}_btn_{method.Name}", label, () =>
+                var method = button.Method;
+                Origami.Button(paper, $"{id}_btn_{method.Name}", button.Label, () =>
                 {
                     for (int t = 0; t < targets.Count; t++)
                     {
@@ -404,10 +416,10 @@ public static class PropertyGridRenderer
         var font = theme.Font;
         var ink = theme.Ink;
 
-        // Complex collections (element type has its own fields) and dictionaries span the full section
-        // width with a self-labelled header. Simple collections (leaf element types like Material refs,
-        // colors, primitives) keep the normal label gutter and draw their compact card in the control
-        // column - matching Nebula's `.i2field > .i2label + .coll` vs full-width `.i2field.full > .nl`.
+        // Complex collections (element type has its own fields) span the full section width with a
+        // self-labelled header. Simple collections (leaf element types like Material refs, colors,
+        // primitives) keep the normal label gutter and draw their compact card in the control column -
+        // matching Nebula's `.i2field > .i2label + .coll` vs full-width `.i2field.full > .nl`.
         bool isLeafCollection = false;
         if (drawer == null && fieldType != typeof(string))
         {
@@ -423,12 +435,6 @@ public static class PropertyGridRenderer
                         DrawCollection(paper, id, fieldType, value as IList, config, onChange, depth, label);
                     return;
                 }
-            }
-            else if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-            {
-                using (paper.Row($"{id}_fw").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).Enter())
-                    DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth, label);
-                return;
             }
         }
 
@@ -530,14 +536,11 @@ public static class PropertyGridRenderer
             return;
         }
 
-        // 4. Dictionary<K,V>
-        if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
-        {
-            DrawDictionary(paper, id, fieldType, value as IDictionary, config, onChange, depth);
-            return;
-        }
+        // Dictionaries and other unsupported types (Nullable&lt;T&gt;, Guid/DateTime, non-IList collections,
+        // ...) are intentionally not editable in the property grid - they fall through to the read-only
+        // "unsupported" note below.
 
-        // 5. Nested object
+        // 4. Nested object
         if (value != null)
         {
             var customEditor = config.CustomEditors.GetEditor(value.GetType());
@@ -555,22 +558,25 @@ public static class PropertyGridRenderer
             }
         }
 
-        // 6. Null reference-type with "Create" button
+        // 5. Null reference-type with "Create" button
         if (value == null && !fieldType.IsValueType)
         {
             DrawNullObject(paper, id, fieldType, config, onChange);
             return;
         }
 
-        // 7. Fallback: read-only label
+        // 6. Fallback: read-only "unsupported type" note.
         {
             var font = Origami.Current.Font;
             var met = Origami.Current.Metrics;
             if (font != null)
-                paper.Box($"{id}_fb").Height(met.RowHeight)
-                    .Text(value?.ToString() ?? "(null)", font).TextColor(Origami.Current.Ink.C400)
+            {
+                string typeName = fieldType.Name.Split('`')[0]; // strip generic arity (Dictionary`2 -> Dictionary)
+                paper.Box($"{id}_fb").Height(met.RowHeight).IsNotInteractable()
+                    .Text($"({typeName} - unsupported)", font).TextColor(Origami.Current.Ink.C300)
                     .FontSize(met.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
+            }
         }
     }
 
@@ -578,12 +584,45 @@ public static class PropertyGridRenderer
 
     private static void DrawEnum(Paper paper, string id, Type enumType, object? value, Action<object?> onChange)
     {
+        // [Flags] enums hold a combination of bits, so a single-select dropdown can neither show nor set
+        // combinations - use a multi-select of the individual flags instead.
+        if (enumType.IsDefined(typeof(FlagsAttribute), false))
+        {
+            DrawFlagsEnum(paper, id, enumType, value, onChange);
+            return;
+        }
+
         var names = Enum.GetNames(enumType);
         var values = Enum.GetValues(enumType);
         int currentIdx = value != null ? Array.IndexOf(values, value) : 0;
         if (currentIdx < 0) currentIdx = 0;
 
         Origami.Dropdown(paper, id, currentIdx, idx => onChange(values.GetValue(idx)), names).Show();
+    }
+
+    private static void DrawFlagsEnum(Paper paper, string id, Type enumType, object? value, Action<object?> onChange)
+    {
+        ulong valueU = value != null ? Convert.ToUInt64(value) : 0;
+
+        var nonZero = new List<object>();
+        var current = new List<object>();
+        foreach (var v in Enum.GetValues(enumType))
+        {
+            ulong u = Convert.ToUInt64(v);
+            if (u == 0) continue;              // skip the None/0 entry - clearing all boxes = no bits
+            nonZero.Add(v!);
+            if ((valueU & u) == u) current.Add(v!);
+        }
+
+        Origami.MultiDropdown<object>(paper, id, current,
+            selected =>
+            {
+                ulong combined = 0;
+                foreach (var f in selected) combined |= Convert.ToUInt64(f);
+                onChange(Enum.ToObject(enumType, combined));
+            }, nonZero)
+            .Display(o => Enum.GetName(enumType, o) ?? o.ToString() ?? "")
+            .Show();
     }
 
     // ── Collection ───────────────────────────────────────────
@@ -814,7 +853,11 @@ public static class PropertyGridRenderer
                 if (exp) nh.RoundedTop(8); else nh.Rounded(8);   // hover fill follows the card corners
                 using (nh.Enter())
                 {
-                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).StopEventPropagation().Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
+                    // Absorb the click (so the grip doesn't toggle the card header's expand) per-event
+                    // rather than blanket .StopEventPropagation(), so the wheel still bubbles to a
+                    // parent ScrollView. The reorder drag (GripDrag) bubbles harmlessly - the header
+                    // has no drag handler.
+                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, OrigamiIconSet.Grip, tDim, size: 12f);
                     GripDrag(sk, grip);
 
                     paper.Box($"{id}_nc_{sk}").Width(11).Height(rowH).IsNotInteractable()
@@ -827,10 +870,10 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_nt_{sk}").Width(ST).Height(rowH).IsNotInteractable()
                         .Text(list[i]?.GetType().Name ?? elementType.Name, semi).TextColor(tHi).FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST).StopEventPropagation()
+                    paper.Box($"{id}_nx_{sk}").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
                         .Hovered.BackgroundColor(redBg).End()
                         .Icon(paper, OrigamiIconSet.Close, tLo, size: 11f)
-                        .OnClick(i, (j, _) => RemoveAt(j)).Cursor(PaperCursor.Pointer);
+                        .OnClick(i, (j, e) => { e.StopPropagation(); RemoveAt(j); }).Cursor(PaperCursor.Pointer);
                 }
 
                 if (exp)
@@ -907,107 +950,6 @@ public static class PropertyGridRenderer
             DrawSimple();
         else
             DrawNested();
-    }
-
-    // ── Dictionary ───────────────────────────────────────────
-
-    private static void DrawDictionary(Paper paper, string id, Type dictType,
-        IDictionary? dict, PropertyGridConfig config, Action<object?> onChange, int depth, string label = "")
-    {
-        var typeArgs = dictType.GetGenericArguments();
-        Type keyType = typeArgs[0];
-        Type valueType = typeArgs[1];
-
-        int count = dict?.Count ?? 0;
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-
-        Origami.Foldout(paper, $"{id}_fold", string.IsNullOrEmpty(label) ? $"({count})" : label)
-            .Badge(string.IsNullOrEmpty(label) ? null : count.ToString())
-            .Body(() =>
-        {
-            if (dict == null)
-            {
-                Origami.Button(paper, $"{id}_create", "Create", () =>
-                {
-                    onChange(Activator.CreateInstance(dictType));
-                }).Show();
-                return;
-            }
-
-            using (paper.Column($"{id}_items").Height(UnitValue.Auto).Padding(m.IndentWidth, 0, 0, 0).ColBetween(m.Spacing).Enter())
-            {
-                // Gather keys into a list for indexed access
-                var keys = new List<object>();
-                foreach (var key in dict.Keys) keys.Add(key);
-
-                for (int i = 0; i < keys.Count; i++)
-                {
-                    int localIdx = i;
-                    var keyObj = keys[i];
-
-                    using (paper.Row($"{id}_entry_{localIdx}").Height(UnitValue.Auto).RowBetween(m.Spacing).Enter())
-                    {
-                        // Key display (read-only)
-                        var font = theme.Font;
-                        if (font != null)
-                        {
-                            paper.Box($"{id}_key_{localIdx}")
-                                .Width(m.LabelWidth).Height(m.RowHeight)
-                                .Padding(m.PaddingSmall, 0, 0, 0)
-                                .IsNotInteractable()
-                                .Text($"[{keyObj}]", font).TextColor(theme.Ink.C500)
-                                .FontSize(m.FontSize);
-                        }
-
-                        // Value (editable)
-                        using (paper.Column($"{id}_val_{localIdx}").Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
-                        {
-                            var capturedKey = keyObj;
-                            DrawFieldControl(paper, $"{id}_vv_{localIdx}", valueType, dict[keyObj], config,
-                                v => { dict[capturedKey] = v; onChange(dict); }, depth + 1);
-                        }
-
-                        // Remove button
-                        var keyToRemove = keyObj;
-                        Origami.IconButton(paper, $"{id}_rm_{localIdx}", theme.Icons.Close, () =>
-                        {
-                            dict.Remove(keyToRemove);
-                            onChange(dict);
-                        }).Show();
-                    }
-                }
-
-                // Add entry row with key input
-                using (paper.Row($"{id}_addrow").Height(m.RowHeight).RowBetween(m.Spacing).Enter())
-                {
-                    var addRowEl = paper.CurrentParent;
-                    string pendingKey = paper.GetElementStorage(addRowEl, "pendingKey", "");
-
-                    Origami.TextField(paper, $"{id}_newkey", pendingKey,
-                            v => paper.SetElementStorage(addRowEl, "pendingKey", v))
-                        .Placeholder("Key...").Width(UnitValue.Stretch()).SubmitOnEnter().Show();
-
-                    Origami.Button(paper, $"{id}_addentry", "+ Add", () =>
-                    {
-                        string pk = paper.GetElementStorage(addRowEl, "pendingKey", "");
-                        if (string.IsNullOrWhiteSpace(pk)) return;
-                        try
-                        {
-                            object? typedKey = keyType == typeof(string) ? pk
-                                : Convert.ChangeType(pk, keyType, System.Globalization.CultureInfo.InvariantCulture);
-                            if (typedKey == null || dict.Contains(typedKey)) return;
-                            object? newVal = valueType.IsValueType ? Activator.CreateInstance(valueType)
-                                : valueType == typeof(string) ? "" : null;
-                            dict.Add(typedKey, newVal);
-                            onChange(dict);
-                            paper.SetElementStorage(addRowEl, "pendingKey", "");
-                        }
-                        catch { }
-                    }).Show();
-                }
-            }
-        });
     }
 
     // ── Nested Object ────────────────────────────────────────
@@ -1202,8 +1144,54 @@ public static class PropertyGridRenderer
         catch { return null; }
     }
 
-    /// <summary>Get serializable fields for a type (matches Echo's logic).</summary>
+    // Reflection results are invariant per type/field, but the inspector rebuilds every frame
+    // (immediate mode), so cache them. Keyed weakly so hot-reloaded script types don't pin their
+    // (collectible) AssemblyLoadContext - entries evict when the type is unloaded.
+    private sealed class FieldMeta
+    {
+        public Attribute[] Attributes = Array.Empty<Attribute>();
+        public string Label = "";
+    }
+    private sealed class ButtonMethod
+    {
+        public MethodInfo Method = null!;
+        public string Label = "";
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, FieldInfo[]> s_fieldCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FieldInfo, FieldMeta> s_fieldMeta = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, ButtonMethod[]> s_buttonCache = new();
+
+    /// <summary>Cached attributes + display label for a field.</summary>
+    private static FieldMeta GetFieldMeta(FieldInfo field)
+        => s_fieldMeta.GetValue(field, static f => new FieldMeta
+        {
+            Attributes = f.GetCustomAttributes(true).OfType<Attribute>().ToArray(),
+            Label = FormatFieldName(f.Name),
+        });
+
+    /// <summary>Cached parameterless [Button] methods (with resolved labels) for a type.</summary>
+    private static ButtonMethod[] GetButtonMethods(Type type)
+        => s_buttonCache.GetValue(type, static t =>
+            t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+             .Where(m2 => m2.GetParameters().Length == 0
+                       && m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute"))
+             .Select(m2 =>
+             {
+                 var btnAttr = m2.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
+                 var labelProp = btnAttr.GetType().GetProperty("Label");
+                 return new ButtonMethod
+                 {
+                     Method = m2,
+                     Label = (labelProp?.GetValue(btnAttr) as string) ?? FormatFieldName(m2.Name),
+                 };
+             })
+             .ToArray());
+
+    /// <summary>Get serializable fields for a type (matches Echo's logic). Cached per type.</summary>
     public static FieldInfo[] GetSerializableFields(Type type)
+        => s_fieldCache.GetValue(type, static t => ComputeSerializableFields(t));
+
+    private static FieldInfo[] ComputeSerializableFields(Type type)
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         var fields = new List<FieldInfo>();

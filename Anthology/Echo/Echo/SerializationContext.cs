@@ -38,6 +38,13 @@ public class SerializationContext
     public int nextId = 1;
 
     /// <summary>
+    /// Reference ids whose full definition has already been deserialized. Lets the deserializer tell a
+    /// forward-reference placeholder (still awaiting its definition) apart from an already-populated
+    /// instance, and detect a duplicate definition for the same id.
+    /// </summary>
+    public HashSet<int> fullyDefinedIds = new();
+
+    /// <summary>
     /// Optional override for serialization. When set, this is called before normal serialization.
     /// If it returns a non-null EchoObject, that is used as the serialized data (type wrapping still applies).
     /// If it returns null, normal serialization proceeds.

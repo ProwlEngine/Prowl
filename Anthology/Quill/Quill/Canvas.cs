@@ -357,6 +357,17 @@ namespace Prowl.Quill
     {
         internal Transform2D transform;
 
+        // Cached alongside transform so TransformPoint can take the cheap translate-only path with a
+        // single flag read instead of recomputing IsIdentityOrTranslation per point. Kept in sync by
+        // SetTransform, which is the only route that writes transform.
+        internal bool transformIsTranslationOnly;
+
+        internal void SetTransform(Transform2D t)
+        {
+            transform = t;
+            transformIsTranslationOnly = t.IsIdentityOrTranslation;
+        }
+
         internal Color32 strokeColor;
         internal JointStyle strokeJoint;
         internal EndCapStyle strokeStartCap;
@@ -377,7 +388,7 @@ namespace Prowl.Quill
 
         internal void Reset()
         {
-            transform = Transform2D.Identity;
+            SetTransform(Transform2D.Identity);
             strokeColor = Color32.FromArgb(255, 0, 0, 0); // Default stroke color (black)
             strokeJoint = JointStyle.Bevel; // Default joint style
             strokeStartCap = EndCapStyle.Butt; // Default start cap style
@@ -1107,18 +1118,18 @@ namespace Prowl.Quill
         /// Multiplies the current transformation matrix by the specified transform.
         /// </summary>
         /// <param name="t">The transformation to apply.</param>
-        public void TransformBy(Transform2D t) => _state.transform = _state.transform * t;
+        public void TransformBy(Transform2D t) => _state.SetTransform(_state.transform * t);
 
         /// <summary>
         /// Resets the current transformation to the identity matrix.
         /// </summary>
-        public void ResetTransform() => _state.transform = Transform2D.Identity;
+        public void ResetTransform() => _state.SetTransform(Transform2D.Identity);
 
         /// <summary>
         /// Sets the current transformation matrix directly.
         /// </summary>
         /// <param name="xform">The transformation matrix to set.</param>
-        public void CurrentTransform(Transform2D xform) => _state.transform = xform;
+        public void CurrentTransform(Transform2D xform) => _state.SetTransform(xform);
 
         /// <summary>
         /// Transforms a point from logical units to pixel coordinates, applying the current transformation.
@@ -1127,6 +1138,12 @@ namespace Prowl.Quill
         /// <returns>The transformed point in pixel coordinates.</returns>
         public Float2 TransformPoint(in Float2 unitPoint)
         {
+            // Cheap path when there's no rotation/scale/skew (the common UI case): the affine reduces
+            // to a translate, so skip the full matrix evaluation. The flag is cached on the state, so
+            // this is a single read rather than a per-point IsIdentityOrTranslation check.
+            if (_state.transformIsTranslationOnly)
+                return new Float2((unitPoint.X + _state.transform.E) * _framebufferScale, (unitPoint.Y + _state.transform.F) * _framebufferScale);
+
             // Apply transform in logical space, then convert to pixels
             Float2 transformedUnitPoint = _state.transform.TransformPoint(unitPoint);
             return transformedUnitPoint * _framebufferScale;
@@ -1241,6 +1258,24 @@ namespace Prowl.Quill
             _indices.Add(v3);
 
             AddTriangleCount(1);
+        }
+
+        /// <summary>
+        /// Appends a batch of triangle indices in one go, updating the draw call once for the whole
+        /// batch. Pair with <see cref="AddVertices"/> so external mesh producers (glyph runs, custom
+        /// geometry) batch into a single draw-state check instead of one per triangle.
+        /// The index count must be a multiple of three.
+        /// </summary>
+        public void AddTriangles(List<uint> indices)
+        {
+            if (indices.Count == 0)
+                return;
+
+            Reserve(_indices, indices.Count);
+            for (int i = 0; i < indices.Count; i++)
+                _indices.Add(indices[i]);
+
+            AddTriangleCount(indices.Count / 3);
         }
 
         private void AddTriangleCount(int count)

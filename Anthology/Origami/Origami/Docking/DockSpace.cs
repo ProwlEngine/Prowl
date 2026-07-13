@@ -314,10 +314,15 @@ public class DockSpace
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
                     .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
                     .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
-                    .StopEventPropagation()
-                    .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
+                    // Per-event stops (not blanket .StopEventPropagation()) isolate the tab's click and
+                    // drag from the tab-bar/window underneath, while letting the wheel bubble to a
+                    // parent ScrollView. The drag-start frame also fires a dragging event, so stop that
+                    // too or it would reach the floating tab-bar's OnDragging and move the window.
+                    .OnClick(ci, (idx, e) => { e.StopPropagation(); if (!_isDragging) node.ActiveTabIndex = idx; })
+                    .OnDragging(e => e.StopPropagation())
                     .OnDragStart((node, ci, fw), (cap, e) =>
                     {
+                        e.StopPropagation();
                         var srcNode = cap.Item1;
                         var srcIdx = cap.Item2;
                         var srcFw = cap.Item3;
@@ -390,8 +395,8 @@ public class DockSpace
                         .Size(closeSz, closeSz)
                         .Rounded(closeSz / 2)
                         .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
-                        .StopEventPropagation()
-                        .OnClick((node, ci, fw), (cap, e) => cap.Item1.RemoveTab(cap.Item2))
+                        // Per-event stop so closing a tab doesn't select/drag it, while the wheel bubbles.
+                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.Item1.RemoveTab(cap.Item2)?.OnClosed(); })
                         .Cursor(PaperCursor.Pointer)
                         .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
                         {

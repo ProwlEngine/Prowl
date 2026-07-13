@@ -26,6 +26,13 @@ namespace Prowl.PaperUI
 
         private readonly Dictionary<int, Hashtable> _storage = new Dictionary<int, Hashtable>();
 
+        // Reused across frames so the deferred-layer render doesn't allocate a dictionary + buckets
+        // every frame. Buckets are pooled and returned as each layer drains.
+        private readonly SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>> _deferredRender = new();
+        private readonly Stack<List<(ElementHandle handle, Transform2D transform)>> _deferredBucketPool = new();
+        // Scratch list reused by EndOfFrameCleanupStorage (avoids _storage.Keys.ToArray() each frame).
+        private readonly List<int> _storageCleanupScratch = new List<int>();
+
         // Rendering context
         private Canvas _canvas;
         private ICanvasRenderer _renderer;
@@ -250,12 +257,16 @@ namespace Prowl.PaperUI
             // at the correct position even though they draw later. We bucket by layer value so
             // any int Layer works, not just the three named tiers; a child at layer 250 inside
             // a parent at layer 150 ends up in its own bucket and gets drained after layer 150.
-            var deferred = new SortedDictionary<int, List<(ElementHandle handle, Transform2D transform)>>();
+            var deferred = _deferredRender;
+            deferred.Clear();
             RenderElement(_rootElementHandle, Layer.Base, deferred);
 
             while (deferred.Count > 0)
             {
-                int nextLayer = deferred.Keys.First();
+                // SortedDictionary keeps keys ascending, so the first is the lowest layer. foreach uses the
+                // struct enumerator (no allocation), unlike LINQ .Keys.First().
+                int nextLayer = 0;
+                foreach (var k in deferred.Keys) { nextLayer = k; break; }
                 var list = deferred[nextLayer];
                 deferred.Remove(nextLayer);
 
@@ -266,6 +277,9 @@ namespace Prowl.PaperUI
                     RenderElement(handle, nextLayer, deferred);
                     _canvas.RestoreState();
                 }
+
+                list.Clear();
+                _deferredBucketPool.Push(list);
             }
             __t = _devTools.Phase("Render", __t);
 
@@ -353,7 +367,7 @@ namespace Prowl.PaperUI
             {
                 if (!deferred.TryGetValue(data.Layer, out var bucket))
                 {
-                    bucket = new List<(ElementHandle handle, Transform2D transform)>();
+                    bucket = _deferredBucketPool.Count > 0 ? _deferredBucketPool.Pop() : new List<(ElementHandle handle, Transform2D transform)>();
                     deferred[data.Layer] = bucket;
                 }
                 bucket.Add((handle, _canvas.GetTransform()));
@@ -378,9 +392,9 @@ namespace Prowl.PaperUI
             }
 
             // Draw box shadow before background
-            var rounded = (Float4)data._elementStyle.GetValue(GuiProp.Rounded);
+            var rounded = data._elementStyle.GetRounded();
             bool hasRounding = rounded.X > 0 || rounded.Y > 0 || rounded.Z > 0 || rounded.W > 0;
-            var boxShadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
+            var boxShadow = data._elementStyle.GetBoxShadow();
             if (boxShadow.IsVisible)
             {
                 // Soft falloff: the lit "core" of the brush box is the element box itself (no outward
@@ -427,7 +441,7 @@ namespace Prowl.PaperUI
 
             // Draw backdrop blur (frosted glass) behind the background. The blurred backdrop is laid
             // down with a transparent fill so the element's own background color acts as the glass tint.
-            var backdropBlur = (float)data._elementStyle.GetValue(GuiProp.BackdropBlur);
+            var backdropBlur = data._elementStyle.GetBackdropBlur();
             if (backdropBlur > 0f)
             {
                 _canvas.SetBackdropBlur(backdropBlur);
@@ -439,7 +453,7 @@ namespace Prowl.PaperUI
             }
 
             // Draw background (gradient overrides background color)
-            var gradient = (Gradient)data._elementStyle.GetValue(GuiProp.BackgroundGradient);
+            var gradient = data._elementStyle.GetBackgroundGradient();
             if (gradient.Type != GradientType.None)
             {
                 switch (gradient.Type)
@@ -480,7 +494,7 @@ namespace Prowl.PaperUI
             }
             else
             {
-                var backgroundColor = (Color)data._elementStyle.GetValue(GuiProp.BackgroundColor);
+                var backgroundColor = data._elementStyle.GetBackgroundColor();
                 if (backgroundColor.A > 0)
                 {
                     if (hasRounding)
@@ -491,25 +505,21 @@ namespace Prowl.PaperUI
             }
 
             // Draw background image if set (rendered on top of background color/gradient)
-            var bgImage = data._elementStyle.GetValue(GuiProp.BackgroundImage);
+            var bgImage = data._elementStyle.GetBackgroundImage();
             if (bgImage != null)
             {
                 _canvas.DrawImage(bgImage, rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
             }
 
             // Draw border if needed
-            var borderColor = (Color)data._elementStyle.GetValue(GuiProp.BorderColor);
-            var borderWidth = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            var borderColor = data._elementStyle.GetBorderColor();
+            var borderWidth = data._elementStyle.GetBorderWidth();
             if (borderWidth > 0.0f && borderColor.A > 0)
             {
-                _canvas.BeginPath();
-                if(hasRounding)
-                    _canvas.RoundedRect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W);
+                if (hasRounding)
+                    _canvas.RoundedRectBorder(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, rounded.X, rounded.Y, rounded.Z, rounded.W, borderWidth, borderColor);
                 else
-                    _canvas.Rect(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y);
-                _canvas.SetStrokeColor(borderColor);
-                _canvas.SetStrokeWidth(borderWidth);
-                _canvas.Stroke();
+                    _canvas.RectBorder(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, borderWidth, borderColor);
             }
 
             // Apply scissor if enabled
@@ -588,13 +598,13 @@ namespace Prowl.PaperUI
             var rect = data.LayoutRect;
             float minX = rect.Min.X, minY = rect.Min.Y, maxX = rect.Max.X, maxY = rect.Max.Y;
 
-            float border = (float)data._elementStyle.GetValue(GuiProp.BorderWidth);
+            float border = data._elementStyle.GetBorderWidth();
             if (border > 0f)
             {
                 minX -= border; minY -= border; maxX += border; maxY += border;
             }
 
-            var shadow = (BoxShadow)data._elementStyle.GetValue(GuiProp.BoxShadow);
+            var shadow = data._elementStyle.GetBoxShadow();
             if (shadow.IsVisible)
             {
                 float reach = shadow.Spread + shadow.Blur;
@@ -679,7 +689,7 @@ namespace Prowl.PaperUI
 
             Canvas canvas = handle.Owner?.Canvas ?? throw new InvalidOperationException("Owner paper or canvas is not set.");
 
-            var color = (Color32)(Color)handle.Data._elementStyle.GetValue(GuiProp.TextColor);
+            var color = (Color32)handle.Data._elementStyle.GetTextColor();
 
             // Calculate vertical alignment offset
             float yOffset = 0;
@@ -1000,15 +1010,18 @@ namespace Prowl.PaperUI
 
         private void EndOfFrameCleanupStorage()
         {
-            var keys = _storage.Keys.ToArray();
-            foreach (var storedID in keys)
+            // Collect stale ids into a reused scratch list (can't Remove while enumerating _storage.Keys),
+            // avoiding the per-frame _storage.Keys.ToArray() allocation.
+            _storageCleanupScratch.Clear();
+            foreach (var storedID in _storage.Keys)
             {
-                if (_createdElements.Contains(storedID))
-                    continue;
-
                 // We didnt create this element this frame, so it no longer exists, delete any storage for it.
-                _storage.Remove(storedID);
+                if (!_createdElements.Contains(storedID))
+                    _storageCleanupScratch.Add(storedID);
             }
+
+            for (int i = 0; i < _storageCleanupScratch.Count; i++)
+                _storage.Remove(_storageCleanupScratch[i]);
         }
 
         #endregion
