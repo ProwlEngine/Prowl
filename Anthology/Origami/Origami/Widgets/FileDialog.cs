@@ -366,7 +366,7 @@ public static class FileDialog
             var r = paper.Row(sid).Height(m.RowHeight)
                 .BackgroundColor(sel ? Selection : Color.Transparent)
                 .Hovered.BackgroundColor(sel ? Selection : theme.Hover).End()
-                .Rounded(6).ChildLeft(7).RowBetween(6);
+                .Rounded(6).ChildLeft(7).RowBetween(6).Clip();
             r.OnClick(0, (_, _) => NavigateTo(path, true));
             using (r.Enter())
             {
