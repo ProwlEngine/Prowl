@@ -5,23 +5,23 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-using Prowl.Editor.Thumbnails;
-using Prowl.OrigamiUI;
+using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
+using Prowl.Editor.GUI.Registries;
+using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Projects.Scripting;
+using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Vector;
-using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.Registries;
-using Prowl.Editor.Projects.Settings;
-using Prowl.Editor.Utils;
-using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Projects;
-using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.Core;
 
@@ -124,7 +124,6 @@ public class EditorApplication : Game
         InitializeOnLoadRegistry.Initialize();
         PropertyEditorRegistry.Initialize();
         CustomEditorRegistry.Initialize();
-        Runtime.GraphTools.GraphValidatorRegistry.Initialize();
         Inspector.AssetImporterEditorRegistry.Initialize();
         ProjectSettingsRegistry.Initialize();
         CreateAssetMenuRegistry.Initialize();
