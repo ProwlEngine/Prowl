@@ -349,6 +349,34 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Contains(sceneGuid, entry!.Dependencies);
     }
 
+    // PrefabUtility.CompareField builds each override's Value via Serializer.Serialize(fieldType, val)
+    // with no tracking context, so an AssetRef GUID living only inside an override blob (not mirrored
+    // in the live component field) never reaches ctx.Dependencies during serialize. PrefabImporter's
+    // raw-echo walk catches it anyway by also checking "AssetID", but SceneImporter's walk only checks
+    // "PrefabAssetId".
+    [Fact]
+    public void Scene_TracksAssetRefInsidePrefabOverride()
+    {
+        Guid orphanGuid = CreateScene("Orphaned.scene");
+
+        var go = new GameObject("Holder");
+        go.AddComponent<AssetRefComponent>(); // live Ref field stays Guid.Empty
+        go.PrefabAssetId = Guid.NewGuid();
+        go.PrefabOverrides.Add(new PropertyOverride
+        {
+            Path = "AssetRefComponent.Ref",
+            Value = Serializer.Serialize(typeof(AssetRef<Scene>), new AssetRef<Scene>(orphanGuid))
+        });
+
+        var scene = new Scene();
+        scene.Add(go);
+        Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
+
+        var entry = Assets.GetEntry(sceneGuid);
+        Assert.NotNull(entry);
+        Assert.Contains(orphanGuid, entry!.Dependencies);
+    }
+
     // ---------------------------------------------------------------------
     // Edge cases
     // ---------------------------------------------------------------------
