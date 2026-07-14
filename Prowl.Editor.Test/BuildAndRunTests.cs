@@ -20,14 +20,10 @@ namespace Prowl.Editor.Test;
 
 /// <summary>
 /// One full end-to-end pipeline test: author a project with a game script and a scene that uses it,
-/// compile the script, build a standalone (framework-dependent, Windows), then run the produced player
-/// headlessly and confirm the compiled game code actually executed - including a custom texture and a
-/// Sprite sub-asset referenced from the same component, so a DependenciesOnly build (the default) is
-/// proven to carry a Sprite's own Texture2D dependency all the way to the Player, not just the Sprite
-/// itself. See EditorAssetDatabase.SerializeToCache: a sub-asset used to serialize without a
-/// DependencySerializationContext, so a Sprite's own AssetRef to its Texture2D was never recorded in
-/// the dependency graph under the Sprite's own GUID - a DependenciesOnly build would walk Scene-to-Sprite
-/// fine but never continue on to the Texture2D, silently dropping it from the package.
+/// compile the script, build a standalone player, then run it headlessly and confirm the compiled
+/// game code executed - including a custom texture referenced via a Sprite sub-asset, so a
+/// DependenciesOnly build (the default) is proven to carry the Sprite's own Texture2D dependency
+/// through to the Player, not just the Sprite itself.
 ///
 /// This is slow (it shells out to `dotnet build` + `dotnet publish`) and needs the .NET SDK, so it is
 /// kept as a single opt-in test under the "Build" category.
@@ -46,9 +42,8 @@ public class BuildAndRunTests : EditorTestHarness
         ProjectSettingsRegistry.Initialize();
         ProjectSettingsRegistry.OnProjectOpened();
 
-        // 1. Author a real, tiny PNG with a known, distinctive color, then flip it to Sprite mode
-        //    (the same thing a user does in the Inspector: Texture Type -> Sprite) so the importer
-        //    also emits a Sprite sub-asset wrapping it - the exact chain UIImage/SpriteRenderer use.
+        // 1. Author a real, tiny PNG, then flip it to Sprite mode (Texture Type -> Sprite in the
+        //    Inspector) so the importer also emits a Sprite sub-asset wrapping it.
         string pngPath = AssetAbsolutePath("BuildTestTexture.png");
         var color = new MagickColor(TexR, TexG, TexB, TexA);
         using (var image = new MagickImage(color, TexSize, TexSize))
@@ -113,9 +108,8 @@ public class BuildAndRunTests : EditorTestHarness
         Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
         Assert.NotEqual(Guid.Empty, sceneGuid);
 
-        // 6. Configure the build: ship the scene, loose-file assets, framework-dependent (profile default).
-        //    AssetMode is left at its default (DependenciesOnly) - that's the mode the Sprite sub-asset
-        //    dependency bug only reproduces under.
+        // 6. Configure the build. AssetMode stays at its default (DependenciesOnly) - the mode the
+        //    Sprite sub-asset dependency bug only reproduces under.
         var build = ProjectSettingsRegistry.Get<BuildSettings>();
         build.Scenes.Clear();
         build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
