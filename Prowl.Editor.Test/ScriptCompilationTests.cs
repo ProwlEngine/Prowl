@@ -100,6 +100,7 @@ public class ScriptCompilationTests : EditorTestHarness
     {
         WriteScript(Path.Combine("Editor", "MyTestWindow.cs"), """
             using Prowl.Editor;
+            using Prowl.Editor.Core;
             using Prowl.Editor.GUI;
             using Prowl.OrigamiUI;
             using Prowl.PaperUI;
