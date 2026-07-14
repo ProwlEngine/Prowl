@@ -5,8 +5,9 @@
 // verbatim from the "SMAA Presets" section onward and consumed as a Prowl GLSL
 // shader include. Each pass in SMAA.shader configures SMAA_RT_METRICS, selects
 // the SMAA_GLSL_4 backend, sets the quality defines and SMAA_INCLUDE_VS/PS, then
-// does `#include "SMAA"`. The AreaTex/SearchTex lookup textures are uploaded
-// row-flipped for OpenGL by SMAALookupTextures (see turol/smaaDemo flipSMAATextures).
+// does `#include "SMAA"`. The AreaTex/SearchTex lookup textures are uploaded by
+// SMAALookupTextures in upstream orientation (Prowl must NOT apply turol/smaaDemo's
+// OpenGL row-flip; flipping blends diagonals on the wrong side — see that class).
 //
 // Copyright (C) 2013 Jorge Jimenez   (jorge@iryoku.com)
 // Copyright (C) 2013 Jose I. Echevarria (joseignacioechevarria@gmail.com)

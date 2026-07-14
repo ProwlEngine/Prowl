@@ -12,11 +12,15 @@ namespace Prowl.Runtime.Rendering;
 /// embedded resources, caching one shared GPU texture each.
 ///
 /// Both are stored as raw RGBA8 (the reference RG8/R8 data expanded into the R/G
-/// channels) and, per the OpenGL convention, row-flipped vertically relative to the
-/// upstream headers. The reference data comes from https://github.com/iryoku/smaa
-/// (Textures/AreaTex.h, Textures/SearchTex.h), MIT licensed. The .bin files were
-/// produced offline by expanding each pixel to RGBA8 ([R,G,0,255] / [R,0,0,255]) and
-/// reversing the row order for OpenGL (see turol/smaaDemo's flipSMAATextures).
+/// channels: AreaTex = [R,G,0,255], SearchTex = [R,0,0,255]) in the <b>upstream</b>
+/// row order. The reference data comes from https://github.com/iryoku/smaa
+/// (Textures/AreaTex.h, Textures/SearchTex.h), MIT licensed.
+///
+/// Note: unlike turol/smaaDemo's raw-GL path (which vertically flips these textures
+/// under RENDERER_OPENGL via flipSMAATextures), Prowl must NOT flip them - its blit /
+/// render-target sampling already presents them in the upstream orientation. Flipping
+/// them blends diagonals on the wrong side (verified against a diagonal line in
+/// ProwlMapDemo: the flipped orientation produces dark fringing along diagonals).
 ///
 /// Loaded raw rather than as PNG because <see cref="Texture2D.FromImage"/> forces
 /// sRGB + a vertical flip, which would corrupt these data textures - the same
