@@ -683,6 +683,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 if (newSubGuids.Contains(oldGuid)) continue;
                 _subAssetIndex.TryRemove(oldGuid, out _);
                 if (_loadedAssets.TryRemove(oldGuid, out var oldObj)) oldObj?.Dispose();
+                _dependencies.RemoveAsset(oldGuid);
                 ThumbnailGenerator.DeleteThumbnail(oldGuid, _project.ThumbnailsPath);
                 InvalidateThumbnailTexture(oldGuid);
                 string oldCache = GetCachePath(oldGuid);
