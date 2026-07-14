@@ -378,6 +378,14 @@ public class EditorAssetDatabase : IAssetDatabase
                 // Update GUID if meta was regenerated with different GUID
                 if (meta.Guid != existingGuid)
                 {
+                    // Every existing reference to this asset (and any of its sub-assets) by the old
+                    // GUID now silently resolves to null - warn so a lost/corrupted .meta doesn't
+                    // look like an unrelated mystery bug later.
+                    Runtime.Debug.LogWarning(
+                        $"Asset '{relativePath}' has a new GUID ({existingGuid} -> {meta.Guid}), " +
+                        "likely from a regenerated .meta file. Any existing references to the old " +
+                        "GUID (including its sub-assets, if any) are now broken.");
+
                     // Clean up old GUID references
                     _guidToEntry.TryRemove(existingGuid, out _);
                     _pathToGuid.Remove(relativePath);
