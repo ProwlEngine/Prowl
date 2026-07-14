@@ -12,27 +12,25 @@ using Shader = Prowl.Runtime.Resources.Shader;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// Temporal Anti-Aliasing image effect.
-/// Jitters the camera projection matrix each frame using a Halton sequence and
-/// accumulates samples over time, using motion vectors to reproject the previous
-/// frame's result.
-///
-/// Usage:
-///   1. Add TAAEffect to Camera.Effects.
-///   2. Motion vectors are always produced by the unified prepass.
-///   3. OnPreCull applies the sub-pixel jitter to the camera's ProjectionMatrix
-///      while NonJitteredProjectionMatrix stays clean.
-///   4. OnRenderEffect resolves the jittered frame against the reprojected history.
+/// Temporal Anti-Aliasing (TAA) image effect.
+/// Ported from Draconic's TAA resolve. Blends the current jittered
+/// HDR frame with the reprojected history using: closest-depth motion vector selection,
+/// a statistical YCoCg variance clip, a 5-tap Catmull-Rom history filter, motion-adaptive
+/// blending, and high-precision depth-disocclusion rejection.
 /// </summary>
 public sealed class TAAEffect : ImageEffect
 {
     public override RenderStage Stage => RenderStage.PostProcess;
 
-    /// <summary>How much of the history to keep (0..0.99). Higher = smoother but ghosts more.</summary>
-    public float BlendFactor = 0.95f;
+    [Header("TAA Resolve Parameters")]
+    /// <summary>Maximum history weight on stable pixels (0..0.99). Higher = smoother but potential slight latency.</summary>
+    public float BlendFactor = 0.97f;
 
-    /// <summary>Scale for motion-based neighborhood tightening. Higher = more aggressive ghosting rejection.</summary>
-    public float MotionScale = 2.0f;
+    /// <summary>Neighborhood clip box half-width in standard deviations (~1.25; larger = softer/steadier).</summary>
+    public float VarianceGamma = 1.25f;
+
+    /// <summary>How fast history is dropped as motion grows (0 = ignore motion). Scaled for UV space.</summary>
+    public float MotionScale = 32.0f;
 
     /// <summary>Post-resolve sharpening amount (0 = none, 1 = strong).</summary>
     public float Sharpness = 0.025f;
@@ -104,6 +102,8 @@ public sealed class TAAEffect : ImageEffect
 
         int w = context.Width;
         int h = context.Height;
+        
+        // Use high-precision floating point format (typically RGBA16F) to keep depth precision in alpha channel
         var format = context.SceneColor.MainTexture.ImageFormat;
 
         // Invalidate history if resolution changed
@@ -116,12 +116,15 @@ public sealed class TAAEffect : ImageEffect
 
         _history ??= new RenderTexture(w, h, false, [format]);
 
-        // Set uniforms
+        // Set parameters
         _mat.SetVector("_Resolution", new Float2(w, h));
         _mat.SetVector("_Jitter", _jitter);
         _mat.SetFloat("_HistoryValid", _historyValid ? 1.0f : 0.0f);
         _mat.SetFloat("_BlendFactor", Maths.Clamp(BlendFactor, 0.0f, 0.99f));
+        _mat.SetFloat("_VarianceGamma", Math.Max(0.0f, VarianceGamma));
         _mat.SetFloat("_MotionScale", Math.Max(0.0f, MotionScale));
+        _mat.SetFloat("_NearPlane", context.Camera.NearClipPlane);
+        _mat.SetFloat("_FarPlane", context.Camera.FarClipPlane);
         _mat.SetFloat("_Sharpness", Maths.Clamp(Sharpness, 0.0f, 1.0f));
         _mat.SetTexture("_HistoryTex", _history.MainTexture);
 
@@ -137,7 +140,7 @@ public sealed class TAAEffect : ImageEffect
         var resolved = RenderTexture.GetTemporaryRT(w, h, false, [format]);
         cmd.Blit(context.SceneColor, resolved, _mat, 0);
 
-        // Store resolved result as history for next frame
+        // Store resolved result (with depth packed in the alpha channel) as history for next frame
         cmd.Blit(resolved, _history, null, 0);
         _historyValid = true;
 
