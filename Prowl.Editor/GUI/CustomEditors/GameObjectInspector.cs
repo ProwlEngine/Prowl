@@ -1339,9 +1339,7 @@ public static class GameObjectInspector
     }
 
     // Popover anchored directly below the Add Component button, styled like Origami's dropdown
-    // popovers (Widgets/Dropdown.cs / DropdownTypes.cs): same background, border, shadow, rounding
-    // and row hover treatment, all sourced from EditorTheme so it stays in sync with the rest of
-    // the editor's theme.
+    // popovers - same background, border, shadow, rounding and row hover, sourced from EditorTheme.
     private static void RenderAddComponentPopover(Paper paper, ElementHandle trigHandle)
     {
         var font = EditorTheme.DefaultFont;

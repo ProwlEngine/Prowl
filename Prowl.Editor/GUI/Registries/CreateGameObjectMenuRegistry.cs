@@ -119,13 +119,10 @@ public static class CreateGameObjectMenuRegistry
     }
 
     /// <summary>
-    /// Renders one menu level: entries whose path (past <paramref name="consumedLength"/>) has no
-    /// further "/" become items here, entries that do get grouped into a submenu per next segment
-    /// and rendered recursively. A separator flag is resolved once, at the shallowest level where
-    /// its entry is distinguishable as its group's first item (so it lands right before the
-    /// submenu that entry lives in, not inside every level of that submenu chain too); deeper
-    /// recursion for that same leading entry is told to suppress the flag via
-    /// <paramref name="suppressLeadingSeparator"/> so it isn't rendered again lower down.
+    /// Renders one menu level: entries with no further "/" past <paramref name="consumedLength"/>
+    /// become items here; the rest group into a submenu per next segment and recurse. A separator
+    /// flag fires once, at the shallowest level where its entry is the group's first item;
+    /// <paramref name="suppressLeadingSeparator"/> stops deeper recursion firing it again.
     /// </summary>
     private static void BuildLevel(ContextBuilder builder, GameObject? parent, List<MenuEntry> levelEntries, int consumedLength, bool suppressLeadingSeparator)
     {

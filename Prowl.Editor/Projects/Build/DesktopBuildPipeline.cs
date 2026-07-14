@@ -823,13 +823,10 @@ public class DesktopBuildPipeline : BuildPipeline
     }
 
     /// <summary>
-    /// Wraps a finished publish output (executable + Content/ + runtimes/, all sitting flat in
-    /// <paramref name="outputDir"/>) into a real "ProductName.app" bundle: everything moves under
-    /// Contents/MacOS unchanged (so AppContext.BaseDirectory-relative lookups like "Content/Settings"
-    /// keep working with no engine-side path changes), plus a minimal Contents/Info.plist.
-    /// Does NOT code-sign or notarize - Gatekeeper will still show an "unidentified developer"
-    /// warning on a machine that downloaded the .app until the user right-clicks Open (or runs
-    /// `xattr -cr`). That needs an Apple Developer account and is out of scope here.
+    /// Wraps a finished publish output into a real "ProductName.app" bundle: everything moves under
+    /// Contents/MacOS unchanged (so relative lookups like "Content/Settings" keep working), plus a
+    /// minimal Contents/Info.plist. Does NOT code-sign or notarize - Gatekeeper will still show an
+    /// "unidentified developer" warning until the user right-clicks Open (or runs `xattr -cr`).
     /// </summary>
     private static void BundleMacApp(string outputDir, string executableName, string productName, string companyName, string version)
     {
@@ -849,9 +846,8 @@ public class DesktopBuildPipeline : BuildPipeline
                 File.Move(entry, dest);
         }
 
-        // Only meaningful when building ON macOS/Linux - Windows can't hold POSIX exec bits, so a
-        // .app built for macOS while cross-publishing from Windows will need `chmod +x` after the
-        // bundle reaches an actual Mac (e.g. as part of however it's unzipped/transferred there).
+        // Windows can't hold POSIX exec bits - a .app built there will need `chmod +x` once it
+        // actually reaches a Mac.
         string exePath = Path.Combine(macOsDir, executableName);
         if (!OperatingSystem.IsWindows() && File.Exists(exePath))
         {

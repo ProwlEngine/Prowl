@@ -75,15 +75,27 @@ public static class AssetCollector
         if (dependenciesOnly && resourceGuids.Count > 0)
             allAssets.UnionWith(db.Dependencies.GetTransitiveDependencies(resourceGuids));
 
-        // Ensure sub-assets of all collected parents are included
-        foreach (var entry in db.GetAllEntries())
+        // Ensure sub-assets of all collected parents are included, and walk what those sub-assets
+        // themselves reference too - not just their GUID. Repeats until nothing new turns up, since
+        // a newly pulled-in dependency can itself be a parent with its own sub-assets.
+        int previousCount;
+        do
         {
-            if (allAssets.Contains(entry.Guid) && entry.SubAssets != null)
+            previousCount = allAssets.Count;
+
+            var newSubAssetGuids = new List<Guid>();
+            foreach (var entry in db.GetAllEntries())
             {
+                if (!allAssets.Contains(entry.Guid) || entry.SubAssets == null) continue;
                 foreach (var sub in entry.SubAssets)
-                    allAssets.Add(sub.Guid);
+                    if (allAssets.Add(sub.Guid))
+                        newSubAssetGuids.Add(sub.Guid);
             }
-        }
+
+            if (newSubAssetGuids.Count > 0)
+                allAssets.UnionWith(db.Dependencies.GetTransitiveDependencies(newSubAssetGuids));
+
+        } while (allAssets.Count > previousCount);
 
         // Exclude editor-only files (importers flag non-shippable types; plus anything in an Editor/ folder).
         var editorOnlyImporters = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);

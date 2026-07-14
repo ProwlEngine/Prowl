@@ -71,10 +71,17 @@ public class EditorModelImporter : AssetImporter
             // 3. Resolve inline textures to asset DB references
             ResolveTextures(data, ctx);
 
-            // 4. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs
+            // 4. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
+            //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
+            //    reflects what its GameObject hierarchy actually references.
             var model = new Model(Path.GetFileNameWithoutExtension(ctx.AbsolutePath));
             if (data.RootGO != null)
-                model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO);
+            {
+                var goSerCtx = ImportHelper.CreateTrackingContext(out var goDependencies);
+                model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
+                foreach (var dep in goDependencies)
+                    ctx.AddDependency(dep);
+            }
 
             ctx.SetMainAsset(model);
             return true;

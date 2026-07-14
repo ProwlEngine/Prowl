@@ -92,6 +92,15 @@ public class EditorAssetDatabase : IAssetDatabase
                 // GetDependents/GetDependencies return empty until something is reimported.
                 if (entry.Dependencies is { Length: > 0 })
                     _dependencies.SetDependencies(guid, entry.Dependencies);
+
+                // Sub-assets have their own dependency-graph entry too (see RunImport) - needs the
+                // same seeding or a later DependenciesOnly build silently drops what they reference.
+                if (entry.SubAssets is { Length: > 0 })
+                {
+                    foreach (var sub in entry.SubAssets)
+                        if (sub.Dependencies is { Length: > 0 })
+                            _dependencies.SetDependencies(sub.Guid, sub.Dependencies);
+                }
             }
             Runtime.Debug.Log($"Loaded {cached.Count} entries from metadata cache.");
         }
@@ -382,6 +391,7 @@ public class EditorAssetDatabase : IAssetDatabase
                         {
                             _subAssetIndex.TryRemove(sub.Guid, out _);
                             _loadedAssets.TryRemove(sub.Guid, out _);
+                            _dependencies.RemoveAsset(sub.Guid);
                         }
                     }
 
@@ -472,6 +482,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.TryRemove(sub.Guid, out _);
+                    _dependencies.RemoveAsset(sub.Guid);
 
                     // Clean sub-asset cache file
                     string subCachePath = GetCachePath(sub.Guid);
@@ -614,10 +625,8 @@ public class EditorAssetDatabase : IAssetDatabase
 
                     sub.AssetPath = $"{entry.Path}#{sub.Name}";
 
-                    // Sub-assets (e.g. a Sprite cut from a texture) can hold their own AssetRef fields
-                    // (Sprite.Texture) pointing at assets other than their parent - those need their own
-                    // dependency-graph entry, keyed by the sub-asset's own GUID, or a DependenciesOnly
-                    // build's transitive walk stops at the sub-asset and never reaches what it references.
+                    // A sub-asset (e.g. a Sprite) can hold AssetRef fields of its own - track those
+                    // under its own GUID, or a DependenciesOnly build's walk stops at the sub-asset.
                     var subCtx = new DependencySerializationContext();
                     SerializeToCache(sub.AssetID, sub, subCtx);
                     _dependencies.SetDependencies(sub.AssetID, subCtx.Dependencies);
@@ -627,7 +636,9 @@ public class EditorAssetDatabase : IAssetDatabase
                     {
                         Guid = sub.AssetID,
                         Name = sub.Name,
-                        Type = sub.GetType()
+                        Type = sub.GetType(),
+                        // Persisted so the graph can be re-seeded on next startup (see Initialize()).
+                        Dependencies = subCtx.Dependencies.ToArray()
                     });
 
                     _subAssetIndex[sub.AssetID] = (entry.Guid, i);
@@ -1131,6 +1142,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     DisposeAndRemove(sub.Guid);
                     _subAssetIndex.TryRemove(sub.Guid, out _);
+                    _dependencies.RemoveAsset(sub.Guid);
                     ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
                     InvalidateThumbnailTexture(sub.Guid);
 
@@ -1489,6 +1501,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             {
                                 DisposeAndRemove(sub.Guid);
                                 _subAssetIndex.TryRemove(sub.Guid, out _);
+                                _dependencies.RemoveAsset(sub.Guid);
 
                                 // Clean sub-asset cache file
                                 string subCachePath = GetCachePath(sub.Guid);

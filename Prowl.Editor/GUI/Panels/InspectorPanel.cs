@@ -540,6 +540,30 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             }
         }
 
+        // Dependencies (what this sub-asset itself references, e.g. a Sprite's own Texture)
+        if (subEntry?.Dependencies.Length > 0)
+        {
+            Origami.Separator(paper, "insp_sub_sep_deps").Show();
+            Origami.Header(paper, "insp_sub_h_deps", $"{Loc.Get("inspector.dependencies")} ({subEntry.Dependencies.Length})").Show();
+            for (int i = 0; i < subEntry.Dependencies.Length && i < 20; i++)
+                DrawAssetLink(paper, font, $"insp_sub_dep_{i}", subEntry.Dependencies[i], db);
+        }
+
+        // Dependents (who references this sub-asset directly, e.g. a UIImage pointing at this Sprite)
+        var subDependents = db.Dependencies.GetDependents(item.Guid);
+        if (subDependents.Count > 0)
+        {
+            Origami.Separator(paper, "insp_sub_sep_refs").Show();
+            Origami.Header(paper, "insp_sub_h_refs", $"{Loc.Get("inspector.used_by")} ({subDependents.Count})").Show();
+            int refCount = 0;
+            foreach (var depGuid in subDependents)
+            {
+                if (refCount >= 20) break;
+                DrawAssetLink(paper, font, $"insp_sub_ref_{refCount}", depGuid, db);
+                refCount++;
+            }
+        }
+
         Origami.Separator(paper, "insp_sub_sep3").Show();
 
         // Extract button clone sub-asset to a standalone file

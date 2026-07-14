@@ -15,6 +15,7 @@ public class SubAssetEntry
     [SerializeField] public Guid Guid;
     [SerializeField] public string Name = "";
     [SerializeField] public string TypeName = "";  // Assembly-qualified type name
+    [SerializeField] public Guid[] Dependencies = Array.Empty<Guid>();
 
     public Type? Type
     {
