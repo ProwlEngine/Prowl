@@ -4,13 +4,10 @@ using System.Linq;
 
 namespace Prowl.Editor.Core;
 
-/// <summary>
-/// A node in the editor's menu tree: a clickable item, a submenu (when it has children) or a
-/// separator. The menu bar walks this tree and translates it into Origami's ContextBuilder API.
-/// </summary>
 public sealed class AppMenuItem
 {
     public string Label;
+    public string Icon = "";
     public Action? OnClick;
     public bool IsEnabled = true;
     public Func<bool>? IsCheckedFunc;
@@ -30,22 +27,14 @@ public sealed class AppMenuItem
     public static AppMenuItem Separator() => new() { IsSeparator = true };
 }
 
-/// <summary>
-/// Central menu registry. Items are registered by path (e.g. "File/Save Scene").
-/// The menu bar reads from this to build dropdowns.
-/// </summary>
 public static class MenuRegistry
 {
     private static readonly List<AppMenuItem> _rootMenus = new();
 
     public static IReadOnlyList<AppMenuItem> RootMenus => _rootMenus;
 
-    /// <summary>
-    /// Register a menu item at the given path.
-    /// Path segments are separated by "/", e.g. "File/Save Scene" or "Window/General/Scene".
-    /// </summary>
     public static void Register(string path, Action onClick, bool enabled = true, Func<bool>? isChecked = null,
-        Func<bool>? isEnabled = null, Func<string>? dynamicLabel = null)
+        Func<bool>? isEnabled = null, Func<string>? dynamicLabel = null, string icon = "")
     {
         var segments = path.Split('/');
         var current = _rootMenus;
@@ -66,6 +55,7 @@ public static class MenuRegistry
                     existing.IsCheckedFunc = isChecked;
                     existing.IsEnabledFunc = isEnabled;
                     existing.DynamicLabelFunc = dynamicLabel;
+                    existing.Icon = icon;
                 }
                 else
                 {
@@ -75,6 +65,7 @@ public static class MenuRegistry
                         IsCheckedFunc = isChecked,
                         IsEnabledFunc = isEnabled,
                         DynamicLabelFunc = dynamicLabel,
+                        Icon = icon,
                     });
                 }
             }
@@ -90,9 +81,6 @@ public static class MenuRegistry
         }
     }
 
-    /// <summary>
-    /// Register a separator after the last item in the given parent path.
-    /// </summary>
     public static void RegisterSeparator(string parentPath)
     {
         var segments = parentPath.Split('/');
@@ -106,6 +94,23 @@ public static class MenuRegistry
         }
 
         current.Add(AppMenuItem.Separator());
+    }
+
+    public static void RegisterBranchIcon(string path, string icon)
+    {
+        if (string.IsNullOrEmpty(icon)) return;
+        var segments = path.Split('/');
+        var current = _rootMenus;
+
+        for (int i = 0; i < segments.Length - 1; i++)
+        {
+            var node = current.FirstOrDefault(m => m.Label == segments[i] && !m.IsSeparator);
+            if (node == null) return;
+            current = node.SubItems;
+        }
+
+        var target = current.FirstOrDefault(m => m.Label == segments[segments.Length - 1] && !m.IsSeparator);
+        if (target != null) target.Icon = icon;
     }
 
     public static void Clear() => _rootMenus.Clear();

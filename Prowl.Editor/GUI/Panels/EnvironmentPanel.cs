@@ -23,9 +23,11 @@ using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Environment")]
 public class EnvironmentPanel : DockPanel
 {
+    [MenuItem("Window/General/Environment", priority: 6)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(EnvironmentPanel));
+
     public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;
 

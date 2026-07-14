@@ -767,11 +767,11 @@ public class EditorApplication : Game
             if (item.HasSubItems)
             {
                 List<AppMenuItem> sub = item.SubItems;
-                ctx.Submenu(label, c => BuildMenu(c, sub));
+                ctx.Submenu(label, c => BuildMenu(c, sub), item.Icon);
             }
             else
             {
-                ctx.Item(label, item.OnClick ?? (() => { }), enabled, on: item.IsCheckedFunc?.Invoke() ?? false);
+                ctx.Item(label, item.OnClick ?? (() => { }), enabled, icon: item.Icon, on: item.IsCheckedFunc?.Invoke() ?? false);
             }
         }
     }
@@ -1329,9 +1329,28 @@ public class EditorApplication : Game
         MenuRegistry.RegisterSeparator(edit);
         MenuRegistry.Register($"{edit}/{Loc.Get("menu.edit.preferences")}", () => OpenPanel(typeof(PreferencesPanel)));
 
-        // Assets menu
+        // All [MenuItem] methods: populates Assets/Create/*, Window/*, GameObject/*, and any custom roots
+        MenuItemAttribute.PopulateMenuRegistry();
+
+        // Remaining Assets menu items that live here due to needing OpenFileDialog or db access
         string assets = Loc.Get("menu.assets");
-        AssetCreateMenu.RegisterMenus();
+        MenuRegistry.RegisterSeparator(assets);
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.refresh")}", () =>
+        {
+            if (Project.Current != null)
+            {
+                var db = new EditorAssetDatabase(Project.Current);
+                db.Initialize();
+            }
+        });
+        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.reimport_all")}", () =>
+        {
+            var db = EditorAssetDatabase.Instance;
+            if (db == null) return;
+            foreach (var entry in db.GetAllEntries().ToList())
+                db.Reimport(entry.Guid);
+            Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
+        });
         MenuRegistry.RegisterSeparator(assets);
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.import_package")}", () =>
         {
@@ -1344,17 +1363,6 @@ public class EditorApplication : Game
             filters: new[] { "*.prowlpackage" },
             filterLabels: new[] { Loc.Get("editor.filter_package") });
         });
-
-        // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
-        EditorRegistries.RegisterGameObjectMenuBarItems();
-
-        // Window menu auto-populated from [EditorWindow] attributes
-        foreach (var (type, path) in EditorRegistries.RegisteredPanels)
-        {
-            var capturedType = type;
-            MenuRegistry.Register($"{Loc.Get("menu.window")}/{path}", () => OpenPanel(capturedType),
-                isChecked: () => IsPanelOpen(capturedType));
-        }
     }
 
     // ================================================================

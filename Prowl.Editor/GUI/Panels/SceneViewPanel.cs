@@ -19,9 +19,11 @@ using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Scene")]
 public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 {
+    [MenuItem("Window/General/Scene", priority: 5)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SceneViewPanel));
+
     public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Shapes;
 

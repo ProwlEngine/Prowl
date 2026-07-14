@@ -9,9 +9,11 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("Debug/Widget Playground")]
 public class WidgetPlaygroundPanel : DockPanel
 {
+    [MenuItem("Window/Debug/Widget Playground", priority: 100)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(WidgetPlaygroundPanel));
+
     public override string Title => "Widget Playground";
     public override string Icon => EditorIcons.Flask;
 

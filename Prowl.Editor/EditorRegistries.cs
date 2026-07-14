@@ -6,8 +6,8 @@ using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.Panels;
+using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Importers;
@@ -64,15 +64,6 @@ public static class EditorRegistries
         public ISceneDropHandler Handler;
     }
 
-    private struct GameObjectMenuEntry
-    {
-        public string Path;
-        public string Icon;
-        public int Order;
-        public bool Separator;
-        public MethodInfo Method;
-    }
-
     #endregion
 
     #region Data
@@ -100,11 +91,6 @@ public static class EditorRegistries
     private static readonly List<SettingsEntry> _settingsEntries = [];
     public static IReadOnlyList<SettingsEntry> SettingsEntries => _settingsEntries;
 
-    private static readonly List<AssetMenuEntry> _assetMenuEntries = [];
-    public static IReadOnlyList<AssetMenuEntry> AssetMenuEntries => _assetMenuEntries;
-
-    private static readonly List<GameObjectMenuEntry> _goMenuEntries = [];
-
     private static readonly List<ScriptTemplate> _scriptTemplates = [];
     public static IReadOnlyList<ScriptTemplate> ScriptTemplates => _scriptTemplates;
 
@@ -117,9 +103,6 @@ public static class EditorRegistries
     private static readonly List<Action> _undoRedoCallbacks = [];
 
     private static readonly List<MethodInfo> _initOnLoadMethods = [];
-
-    private static readonly List<(Type PanelType, string Path)> _editorWindows = [];
-    public static IReadOnlyList<(Type PanelType, string Path)> RegisteredPanels => _editorWindows;
 
     #endregion
 
@@ -152,8 +135,7 @@ public static class EditorRegistries
 
         _settingsEntries.Clear();
 
-        _assetMenuEntries.RemoveAll(e => e.Factory == null);
-        _goMenuEntries.Clear();
+        MenuItemAttribute.Clear();
         _scriptTemplates.Clear();
 
         _fileIcons.Clear();
@@ -166,7 +148,6 @@ public static class EditorRegistries
         _undoRedoCallbacks.Clear();
 
         _initOnLoadMethods.Clear();
-        _editorWindows.Clear();
     }
 
     public static void Initialize()
@@ -190,11 +171,10 @@ public static class EditorRegistries
             ScanSceneDropHandler(type);
             ScanProjectSettings(type);
             ScanAssetMenuEntry(type);
-            ScanEditorWindow(type);
 
             foreach (var method in type.GetMethods(methodFlags))
             {
-                ScanGameObjectMenu(method);
+                MenuItemAttribute.Scan(method);
                 ScanScriptTemplate(method);
                 ScanFileIconMethod(method);
                 ScanDoubleClickHandler(method);
@@ -203,8 +183,6 @@ public static class EditorRegistries
             }
         }
 
-        _assetMenuEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
-        _goMenuEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
         _scriptTemplates.Sort((a, b) =>
         {
             int c = a.Order.CompareTo(b.Order);
@@ -225,8 +203,7 @@ public static class EditorRegistries
 
         Debug.Log($"EditorRegistries: {_customEditorTypes.Count} custom editors, {_propertyEditorTypes.Count} property editors, " +
                   $"{_assetEditorTypes.Count} asset editors, {_importersByName.Count} importers, " +
-                  $"{_thumbnailGenerators.Count} thumbnail generators, {_settingsEntries.Count} settings, " +
-                  $"{_assetMenuEntries.Count} asset menu entries, {_goMenuEntries.Count} GO menu entries.");
+                  $"{_thumbnailGenerators.Count} thumbnail generators, {_settingsEntries.Count} settings.");
     }
 
     #endregion
@@ -328,35 +305,20 @@ public static class EditorRegistries
         if (type.IsAbstract || !typeof(EngineObject).IsAssignableFrom(type)) return;
         var attr = type.GetCustomAttribute<CreateAssetMenuAttribute>();
         if (attr == null) return;
-        _assetMenuEntries.Add(new AssetMenuEntry
+        var entry = new AssetMenuEntry
         {
             Type = type,
             Name = attr.Name,
             Extension = attr.Extension,
             Icon = attr.Icon,
             Order = attr.Order,
-        });
-    }
-
-    private static void ScanEditorWindow(Type type)
-    {
-        if (!typeof(DockPanel).IsAssignableFrom(type) || type.IsAbstract) return;
-        var attr = type.GetCustomAttribute<EditorWindowAttribute>();
-        if (attr == null) return;
-        _editorWindows.Add((type, attr.Path));
-    }
-
-    private static void ScanGameObjectMenu(MethodInfo method)
-    {
-        var attr = method.GetCustomAttribute<CreateGameObjectMenuAttribute>();
-        if (attr == null) return;
-        var parms = method.GetParameters();
-        if (parms.Length != 1 || parms[0].ParameterType != typeof(GameObject)) return;
-        _goMenuEntries.Add(new GameObjectMenuEntry
+        };
+        MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
         {
-            Path = attr.Path, Icon = attr.Icon, Order = attr.Order,
-            Separator = attr.Separator, Method = method,
-        });
+            var task = new Core.Tasks.CreateAssetTask();
+            task.TaskType = Core.Tasks.CreateAssetTask.AssetType.Asset;
+            task.BeginCreateTask(entry, AssetCreateMenu.GetCurrentFolder());
+        }, attr.Order, attr.Icon);
     }
 
     private static void ScanScriptTemplate(MethodInfo method)
@@ -596,81 +558,6 @@ public static class EditorRegistries
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             if (prop.CanRead && prop.CanWrite)
                 prop.SetValue(target, prop.GetValue(source));
-    }
-
-    #endregion
-
-    #region Asset Menu
-
-    public static void AddManualAssetEntry(string name, string extension, string icon, int order, Type type, Func<EngineObject> factory)
-    {
-        _assetMenuEntries.Add(new AssetMenuEntry { Type = type, Name = name, Extension = extension, Icon = icon, Order = order, Factory = factory });
-        _assetMenuEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
-    }
-
-    public static void RemoveManualAssetEntries(string prefix)
-        => _assetMenuEntries.RemoveAll(e => e.Factory != null && e.Name.StartsWith(prefix));
-
-    #endregion
-
-    #region GameObject Menu
-
-    public static void BuildGameObjectMenu(ContextBuilder builder, GameObject? parent)
-        => BuildGoMenuLevel(builder, parent, _goMenuEntries, 0, suppressLeadingSeparator: false);
-
-    private static void BuildGoMenuLevel(ContextBuilder builder, GameObject? parent,
-        List<GameObjectMenuEntry> levelEntries, int consumedLength, bool suppressLeadingSeparator)
-    {
-        var leaves = new List<GameObjectMenuEntry>();
-        var categoryOrder = new List<string>();
-        var categories = new Dictionary<string, List<GameObjectMenuEntry>>(StringComparer.Ordinal);
-
-        foreach (var entry in levelEntries)
-        {
-            string rel = entry.Path[consumedLength..];
-            int slash = rel.IndexOf('/');
-            if (slash < 0) { leaves.Add(entry); continue; }
-            string cat = rel[..slash];
-            if (!categories.TryGetValue(cat, out var list)) { list = []; categories[cat] = list; categoryOrder.Add(cat); }
-            list.Add(entry);
-        }
-
-        var items = new List<(int order, GameObjectMenuEntry? leaf, string? category)>();
-        foreach (var leaf in leaves) items.Add((leaf.Order, leaf, null));
-        foreach (var cat in categoryOrder) items.Add((categories[cat][0].Order, null, cat));
-
-        bool isFirst = true;
-        foreach (var (_, leaf, category) in items.OrderBy(i => i.order))
-        {
-            bool skipSep = isFirst && suppressLeadingSeparator;
-            isFirst = false;
-            if (leaf.HasValue)
-            {
-                var e = leaf.Value;
-                if (!skipSep && e.Separator) builder.Separator();
-                string itemName = e.Path[consumedLength..];
-                string icon = !string.IsNullOrEmpty(e.Icon) ? e.Icon : "";
-                builder.Item(itemName, () => e.Method.Invoke(null, [parent]), icon: icon);
-            }
-            else if (category != null)
-            {
-                var list = categories[category];
-                bool hoistSep = !skipSep && list[0].Separator;
-                if (hoistSep) builder.Separator();
-                string icon = !string.IsNullOrEmpty(list[0].Icon) ? list[0].Icon : "";
-                int nextConsumed = consumedLength + category.Length + 1;
-                builder.Submenu(category, sub => BuildGoMenuLevel(sub, parent, list, nextConsumed, skipSep || hoistSep), icon);
-            }
-        }
-    }
-
-    public static void RegisterGameObjectMenuBarItems()
-    {
-        foreach (var entry in _goMenuEntries)
-        {
-            var captured = entry;
-            MenuRegistry.Register($"GameObject/{captured.Path}", () => captured.Method.Invoke(null, [null]));
-        }
     }
 
     #endregion

@@ -23,9 +23,11 @@ using Prowl.Editor.Projects;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Project")]
 public class ProjectPanel : DockPanel
 {
+    [MenuItem("Window/General/Project", priority: 4)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ProjectPanel));
+
     public static ProjectPanel Instance;
     public override string Title => Loc.Get("panel.project");
     public override string Icon => EditorIcons.Folder;
@@ -911,7 +913,7 @@ public class ProjectPanel : DockPanel
 
             builder.Separator();
 
-            builder.Submenu(Loc.Get("project.create"), sub => AssetCreateMenu.Build(sub, folder, OnCreated), icon: EditorIcons.FileCirclePlus);
+            builder.Submenu(Loc.Get("project.create"), sub => MenuItemAttribute.BuildContextMenu(sub, "Assets/Create"), icon: EditorIcons.FileCirclePlus);
 
             builder.Separator();
 
@@ -974,7 +976,7 @@ public class ProjectPanel : DockPanel
         {
             string folder = _currentFolder;
 
-            builder.Submenu(Loc.Get("project.create"), sub => AssetCreateMenu.Build(sub, folder, OnCreated), icon: EditorIcons.FileCirclePlus);
+            builder.Submenu(Loc.Get("project.create"), sub => MenuItemAttribute.BuildContextMenu(sub, "Assets/Create"), icon: EditorIcons.FileCirclePlus);
             builder.Separator();
 
             builder.Item(Loc.Get("project.show_in_explorer"), () =>

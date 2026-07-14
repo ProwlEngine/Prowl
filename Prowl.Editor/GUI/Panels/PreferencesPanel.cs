@@ -20,9 +20,11 @@ using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Preferences")]
 public class PreferencesPanel : DockPanel
 {
+    [MenuItem("Window/General/Preferences", priority: 7)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(PreferencesPanel));
+
     public override string Title => Loc.Get("panel.preferences");
     public override string Icon => EditorIcons.Sliders;
 

@@ -26,9 +26,11 @@ namespace Prowl.Editor.Inspector;
 /// the border + pivot are editable. Rects use corner + whole-edge resize handles, green border handles, and
 /// a draggable pivot. All edits are undoable; Save writes the meta and reimports.
 /// </summary>
-[EditorWindow("Tools/Sprite Editor")]
 public class SpriteEditorWindow : DockPanel
 {
+    [MenuItem("Window/Tools/Sprite Editor", priority: 200)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SpriteEditorWindow));
+
     private enum DragMode { None, Create, Move, ResizeRect, MovePivot, MoveBorder }
 
     private const float HandleDraw = 7f;

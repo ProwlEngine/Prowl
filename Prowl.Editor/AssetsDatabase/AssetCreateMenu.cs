@@ -4,139 +4,35 @@ using System.Linq;
 
 using Prowl.Echo;
 
-using Prowl.OrigamiUI;
+using Prowl.Editor.Core;
+using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.Popups;
-using Prowl.Rosetta;
+using Prowl.Editor.Theming;
+using Prowl.Editor.Projects;
+using Prowl.Editor.Core.Tasks;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.Core;
-using Prowl.Editor.Theming;
-using Prowl.Editor.Core.Tasks;
-using Prowl.Editor.Projects;
 
 namespace Prowl.Editor;
 
-/// <summary>
-/// Shared asset creation menu items used by both the Project panel Add button
-/// and the Assets menu bar. All creation happens in the current folder.
-/// </summary>
 public static class AssetCreateMenu
 {
-    /// <summary>
-    /// Populates a context menu builder with asset creation options.
-    /// </summary>
-    public static void Build(ContextBuilder builder, string currentFolder, Action<string>? onCreated = null)
+    [MenuItem("Assets/Create/Folder", priority: 0, Icon = EditorIcons.Folder)]
+    static void CreateFolderItem()
     {
-        builder.Item($"{EditorIcons.Folder}  Folder", () => {
-
-            var task = new Core.Tasks.CreateAssetTask();
-
-            task.TaskType = CreateAssetTask.AssetType.Folder;
-            task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, currentFolder);
-
-        });
-        builder.Separator();
-
-        BuildRegisteredEntries(builder, EditorRegistries.AssetMenuEntries, "", currentFolder, onCreated);
-
-        builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
-
-            var task = new Core.Tasks.CreateAssetTask();
-
-            task.TaskType = CreateAssetTask.AssetType.Shader;
-            task.BeginCreateTask(new AssetMenuEntry { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = EditorRegistries.GetFileIconForExtension(".shader") }, currentFolder);
-
-        });
-        builder.Separator();
-        builder.Item($"{EditorIcons.FileCode}  C# Script", () =>
-        {
-            NewScriptDialog.Open(GetCurrentFolder());
-
-            /*var task = new Tasks.CreateAssetTask();
-            task.TaskType = Tasks.CreateAssetTask.AssetType.Script;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Script", Extension = ".cs", Type = typeof(MonoBehaviour), Icon = FileIconRegistry.GetIconForExtension(".cs") }, currentFolder);*/
-
-        });
-        builder.Item($"{EditorIcons.FileLines}  Assembly Definition", () =>
-        {
-            string? created = CreateAssemblyDefinition(currentFolder);
-            if (created != null) onCreated?.Invoke(created);
-        });
+        var task = new CreateAssetTask();
+        task.TaskType = CreateAssetTask.AssetType.Folder;
+        task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, GetCurrentFolder());
     }
 
-    /// <summary>
-    /// Register the Assets top-level menu with the MenuRegistry.
-    /// </summary>
-    public static void RegisterMenus()
-    {
-        string assets = Loc.Get("menu.assets");
+    [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
+    static void CreateShaderItem() => CreateShader(GetCurrentFolder());
 
-        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_folder")}", () => CreateFolder(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator(assets);
+    [MenuItem("Assets/Create/C# Script", priority: 1010, Icon = EditorIcons.FileCode, Separator = true)]
+    static void CreateScriptItem() => NewScriptDialog.Open(GetCurrentFolder());
 
-        foreach (var entry in EditorRegistries.AssetMenuEntries)
-        {
-            var captured = entry;
-            MenuRegistry.Register($"{assets}/Create {captured.Name}", () => CreateAsset(captured, GetCurrentFolder()));
-        }
-
-        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_shader")}", () => CreateShader(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator(assets);
-        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_script")}", () => NewScriptDialog.Open(GetCurrentFolder()));
-        MenuRegistry.Register($"{assets}/Assembly Definition", () => CreateAssemblyDefinition(GetCurrentFolder()));
-        MenuRegistry.RegisterSeparator(assets);
-        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.refresh")}", () =>
-        {
-            if (Project.Current != null)
-            {
-                var db = new EditorAssetDatabase(Project.Current);
-                db.Initialize();
-            }
-        });
-        MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.reimport_all")}", () =>
-        {
-            var db = EditorAssetDatabase.Instance;
-            if (db == null) return;
-            foreach (var entry in db.GetAllEntries().ToList())
-                db.Reimport(entry.Guid);
-            Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
-        });
-    }
-
-    private static void BuildRegisteredEntries(ContextBuilder builder, System.Collections.Generic.IReadOnlyList<AssetMenuEntry> entries,
-        string prefix, string currentFolder, Action<string>? onCreated)
-    {
-        var leaves = new System.Collections.Generic.List<AssetMenuEntry>();
-        var branches = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<AssetMenuEntry>>();
-        foreach (var e in entries)
-        {
-            var rest = e.Name.Substring(prefix.Length);
-            int slash = rest.IndexOf('/');
-            if (slash < 0) { leaves.Add(e); continue; }
-            var head = rest.Substring(0, slash);
-            if (!branches.TryGetValue(head, out var list)) branches[head] = list = [];
-            list.Add(e);
-        }
-        foreach (var leaf in leaves)
-        {
-            var captured = leaf;
-            string display = captured.Name.Substring(prefix.Length);
-            string icon = !string.IsNullOrEmpty(captured.Icon) ? captured.Icon : EditorIcons.FileCirclePlus;
-            builder.Item($"{icon}  {display}", () =>
-            {
-                var task = new Core.Tasks.CreateAssetTask();
-                task.TaskType = Core.Tasks.CreateAssetTask.AssetType.Asset;
-                task.BeginCreateTask(captured, currentFolder);
-            });
-        }
-        foreach (var (head, list) in branches)
-        {
-            var subPrefix = prefix + head + "/";
-            var subList = list;
-            builder.Submenu(head, sub => BuildRegisteredEntries(sub, subList, subPrefix, currentFolder, onCreated));
-        }
-    }
+    [MenuItem("Assets/Create/Assembly Definition", priority: 1011, Icon = EditorIcons.FileLines)]
+    static void CreateAsmDefItem() => CreateAssemblyDefinition(GetCurrentFolder());
 
     public static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
     {
@@ -162,7 +58,6 @@ public static class AssetCreateMenu
 
     public static string GetCurrentFolder()
     {
-        // Try to get the current folder from the active selection
         var selected = Selection.GetActiveAs<ContentItem>();
         if (selected != null && selected.IsFolder)
             return selected.RelativePath;
@@ -177,7 +72,6 @@ public static class AssetCreateMenu
             : Path.Combine(Project.Current.AssetsPath, relativeFolder);
     }
 
-    /// <inheritdoc cref="Utils.UniqueNames.ForFile" />
     public static string FindUniqueName(string folder, string baseName, string ext)
         => Utils.UniqueNames.ForFile(folder, baseName, ext);
 

@@ -15,9 +15,11 @@ using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Inspector")]
 public class InspectorPanel : DockPanel, IScriptReloadCleanup
 {
+    [MenuItem("Window/General/Inspector", priority: 3)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(InspectorPanel));
+
     public override string Title => Loc.Get("panel.inspector");
     public override string Icon => EditorIcons.Sliders;
 

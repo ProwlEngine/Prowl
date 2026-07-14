@@ -19,9 +19,11 @@ using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Hierarchy")]
 public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 {
+    [MenuItem("Window/General/Hierarchy", priority: 2)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(HierarchyPanel));
+
     public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
 
@@ -852,7 +854,8 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
     private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
     {
-        EditorRegistries.BuildGameObjectMenu(builder, parent);
+        MenuContext.Set(parent);
+        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
     }
 
     /// <summary>

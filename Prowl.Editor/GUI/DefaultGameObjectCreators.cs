@@ -1,6 +1,3 @@
-// This file is part of the Prowl Game Engine
-// Licensed under the MIT License. See the LICENSE file in the project root for details.
-
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -14,152 +11,124 @@ using Prowl.Vector;
 
 namespace Prowl.Editor.GUI;
 
-/// <summary>
-/// Built-in GameObject creation entries registered via <see cref="CreateGameObjectMenuAttribute"/>.
-/// These populate the Hierarchy create menu and the GameObject menu bar.
-/// </summary>
 internal static class DefaultGameObjectCreators
 {
-    [CreateGameObjectMenu("Empty Object", Icon = EditorIcons.Cube, Order = 0)]
-    static void CreateEmpty(GameObject? parent)
+    [MenuItem("GameObject/Empty Object", priority: 0, Icon = EditorIcons.Cube)]
+    static void CreateEmpty()
     {
-        HierarchyPanel.CreateGameObject("GameObject", parent);
+        HierarchyPanel.CreateGameObject("GameObject", MenuContext.ActiveGameObject);
     }
 
-    // ---- 3D Objects ----
+    [MenuItem("GameObject/3D Object/Cube", priority: 10, Icon = EditorIcons.Cube, Separator = true)]
+    static void CreateCube() => CreatePrimitive("Cube", DefaultModel.Cube);
 
-    [CreateGameObjectMenu("3D Object/Cube", Icon = EditorIcons.Cube, Order = 10, Separator = true)]
-    static void CreateCube(GameObject? parent)
-    {
-        CreatePrimitive("Cube", DefaultModel.Cube, parent);
-    }
+    [MenuItem("GameObject/3D Object/Sphere", priority: 11, Icon = EditorIcons.CircleDot)]
+    static void CreateSphere() => CreatePrimitive("Sphere", DefaultModel.Sphere);
 
-    [CreateGameObjectMenu("3D Object/Sphere", Icon = EditorIcons.CircleDot, Order = 11)]
-    static void CreateSphere(GameObject? parent)
-    {
-        CreatePrimitive("Sphere", DefaultModel.Sphere, parent);
-    }
+    [MenuItem("GameObject/3D Object/Cylinder", priority: 12, Icon = EditorIcons.Circle)]
+    static void CreateCylinder() => CreatePrimitive("Cylinder", DefaultModel.Cylinder);
 
-    [CreateGameObjectMenu("3D Object/Cylinder", Icon = EditorIcons.Circle, Order = 12)]
-    static void CreateCylinder(GameObject? parent)
-    {
-        CreatePrimitive("Cylinder", DefaultModel.Cylinder, parent);
-    }
+    [MenuItem("GameObject/3D Object/Plane", priority: 13, Icon = EditorIcons.Square)]
+    static void CreatePlane() => CreatePrimitive("Plane", DefaultModel.Plane);
 
-    [CreateGameObjectMenu("3D Object/Plane", Icon = EditorIcons.Square, Order = 13)]
-    static void CreatePlane(GameObject? parent)
+    [MenuItem("GameObject/3D Object/Text Mesh", priority: 24, Icon = EditorIcons.Font, Separator = true)]
+    static void CreateTextMesh()
     {
-        CreatePrimitive("Plane", DefaultModel.Plane, parent);
-    }
-
-    [CreateGameObjectMenu("3D Object/Text Mesh", Icon = EditorIcons.Font, Order = 14, Separator = true)]
-    static void CreateTextMesh(GameObject? parent)
-    {
-        var go = HierarchyPanel.CreateGameObject("Text Mesh", parent);
+        var go = HierarchyPanel.CreateGameObject("Text Mesh", MenuContext.ActiveGameObject);
         var text = go.AddComponent<TextMeshComponent>();
         text.Text = "New Text";
     }
 
-    [CreateGameObjectMenu("3D Object/Terrain", Icon = EditorIcons.Mountain, Order = 15)]
-    static void CreateTerrain(GameObject? parent)
+    [MenuItem("GameObject/3D Object/Terrain", priority: 25, Icon = EditorIcons.Mountain)]
+    static void CreateTerrain()
     {
-        var go = HierarchyPanel.CreateGameObject("Terrain", parent);
+        var go = HierarchyPanel.CreateGameObject("Terrain", MenuContext.ActiveGameObject);
         var terrain = go.AddComponent<TerrainComponent>();
         terrain.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Terrain));
         go.AddComponent<TerrainCollider>();
 
-        // Create TerrainData instance, assign it, then persist as an asset
         var terrainData = new TerrainData();
         terrain.Data = new AssetRef<TerrainData>(terrainData);
 
-        // Save as asset file this assigns a GUID to the instance,
-        // which the AssetRef picks up automatically
         var db = EditorAssetDatabase.Instance;
         if (db != null)
         {
-            string name = AssetCreateMenu.FindUniqueName(
-                Project.Current.AssetsPath, "New Terrain Data", ".terraindata");
+            string name = AssetCreateMenu.FindUniqueName(Project.Current.AssetsPath, "New Terrain Data", ".terraindata");
             db.CreateAsset(terrainData, name);
         }
     }
 
-    // ---- Lights ----
-
-    [CreateGameObjectMenu("Light/Directional Light", Icon = EditorIcons.Sun)]
-    static void CreateDirectionalLight(GameObject? parent)
+    [MenuItem("GameObject/Light/Directional Light", priority: 30, Icon = EditorIcons.Sun)]
+    static void CreateDirectionalLight()
     {
-        var go = HierarchyPanel.CreateGameObject("Directional Light", parent);
+        var go = HierarchyPanel.CreateGameObject("Directional Light", MenuContext.ActiveGameObject);
         go.Transform.Rotation = Quaternion.FromEuler(new Float3(-50, 30, 0));
         go.AddComponent<DirectionalLight>();
     }
 
-    [CreateGameObjectMenu("Light/Point Light", Icon = EditorIcons.Lightbulb, Order = 21)]
-    static void CreatePointLight(GameObject? parent)
+    [MenuItem("GameObject/Light/Point Light", priority: 31, Icon = EditorIcons.Lightbulb)]
+    static void CreatePointLight()
     {
-        var go = HierarchyPanel.CreateGameObject("Point Light", parent);
+        var go = HierarchyPanel.CreateGameObject("Point Light", MenuContext.ActiveGameObject);
         go.AddComponent<PointLight>();
     }
 
-    [CreateGameObjectMenu("Light/Spot Light", Icon = EditorIcons.Bullseye, Order = 22)]
-    static void CreateSpotLight(GameObject? parent)
+    [MenuItem("GameObject/Light/Spot Light", priority: 32, Icon = EditorIcons.Bullseye)]
+    static void CreateSpotLight()
     {
-        var go = HierarchyPanel.CreateGameObject("Spot Light", parent);
+        var go = HierarchyPanel.CreateGameObject("Spot Light", MenuContext.ActiveGameObject);
         go.Transform.Rotation = Quaternion.FromEuler(new Float3(90, 0, 0));
         go.AddComponent<SpotLight>();
     }
 
-    // ---- Fog Volumes ----
-
-    [CreateGameObjectMenu("Effects/Fog/Global", Icon = EditorIcons.Cloud, Order = 25)]
-    static void CreateGlobalFogVolume(GameObject? parent)
+    [MenuItem("GameObject/Effects/Fog/Global", priority: 40, Icon = EditorIcons.Cloud)]
+    static void CreateGlobalFogVolume()
     {
-        var go = HierarchyPanel.CreateGameObject("Global Fog Volume", parent);
+        var go = HierarchyPanel.CreateGameObject("Global Fog Volume", MenuContext.ActiveGameObject);
         var v = go.AddComponent<FogVolume>();
         v.Shape = FogVolumeShape.Global;
     }
 
-    [CreateGameObjectMenu("Effects/Fog/Box", Icon = EditorIcons.Cube, Order = 26)]
-    static void CreateBoxFogVolume(GameObject? parent)
+    [MenuItem("GameObject/Effects/Fog/Box", priority: 41, Icon = EditorIcons.Cube)]
+    static void CreateBoxFogVolume()
     {
-        var go = HierarchyPanel.CreateGameObject("Box Fog Volume", parent);
+        var go = HierarchyPanel.CreateGameObject("Box Fog Volume", MenuContext.ActiveGameObject);
         go.Transform.LocalScale = new Float3(2, 2, 2);
         var v = go.AddComponent<FogVolume>();
         v.Shape = FogVolumeShape.Box;
     }
 
-    [CreateGameObjectMenu("Effects/Fog/Sphere", Icon = EditorIcons.CircleDot, Order = 27)]
-    static void CreateSphereFogVolume(GameObject? parent)
+    [MenuItem("GameObject/Effects/Fog/Sphere", priority: 42, Icon = EditorIcons.CircleDot)]
+    static void CreateSphereFogVolume()
     {
-        var go = HierarchyPanel.CreateGameObject("Sphere Fog Volume", parent);
+        var go = HierarchyPanel.CreateGameObject("Sphere Fog Volume", MenuContext.ActiveGameObject);
         go.Transform.LocalScale = new Float3(3, 3, 3);
         var v = go.AddComponent<FogVolume>();
         v.Shape = FogVolumeShape.Sphere;
     }
 
-    [CreateGameObjectMenu("Effects/Fog/Cylinder", Icon = EditorIcons.Circle, Order = 28)]
-    static void CreateCylinderFogVolume(GameObject? parent)
+    [MenuItem("GameObject/Effects/Fog/Cylinder", priority: 43, Icon = EditorIcons.Circle)]
+    static void CreateCylinderFogVolume()
     {
-        var go = HierarchyPanel.CreateGameObject("Cylinder Fog Volume", parent);
+        var go = HierarchyPanel.CreateGameObject("Cylinder Fog Volume", MenuContext.ActiveGameObject);
         go.Transform.LocalScale = new Float3(2, 3, 2);
         var v = go.AddComponent<FogVolume>();
         v.Shape = FogVolumeShape.Cylinder;
     }
 
-    [CreateGameObjectMenu("Effects/Fog/Cone", Icon = EditorIcons.Bullseye, Order = 29)]
-    static void CreateConeFogVolume(GameObject? parent)
+    [MenuItem("GameObject/Effects/Fog/Cone", priority: 44, Icon = EditorIcons.Bullseye)]
+    static void CreateConeFogVolume()
     {
-        var go = HierarchyPanel.CreateGameObject("Cone Fog Volume", parent);
+        var go = HierarchyPanel.CreateGameObject("Cone Fog Volume", MenuContext.ActiveGameObject);
         go.Transform.LocalScale = new Float3(1, 4, 1);
         var v = go.AddComponent<FogVolume>();
         v.Shape = FogVolumeShape.Cone;
     }
 
-    // ---- Particle System ----
-
-    [CreateGameObjectMenu("Effects/Particle System", Icon = EditorIcons.SprayCanSparkles, Order = 60)]
-    static void CreateParticleSystem(GameObject? parent)
+    [MenuItem("GameObject/Effects/Particle System", priority: 55, Icon = EditorIcons.SprayCanSparkles, Separator = true)]
+    static void CreateParticleSystem()
     {
-        var go = HierarchyPanel.CreateGameObject("Particle System", parent);
+        var go = HierarchyPanel.CreateGameObject("Particle System", MenuContext.ActiveGameObject);
         var ps = go.AddComponent<ParticleSystemComponent>();
         ps.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Particle));
         ps.Emission.Enabled = true;
@@ -171,84 +140,83 @@ internal static class DefaultGameObjectCreators
         ps.Initial.StartSize = new MinMaxCurve(0.2f);
     }
 
-    // ---- Audio ----
-
-    [CreateGameObjectMenu("Audio/Audio Source", Icon = EditorIcons.VolumeHigh, Order = 30)]
-    static void CreateAudioSource(GameObject? parent)
+    [MenuItem("GameObject/Audio/Audio Source", priority: 60, Icon = EditorIcons.VolumeHigh)]
+    static void CreateAudioSource()
     {
-        var go = HierarchyPanel.CreateGameObject("Audio Source", parent);
+        var go = HierarchyPanel.CreateGameObject("Audio Source", MenuContext.ActiveGameObject);
         go.AddComponent<AudioSource>();
     }
 
-    [CreateGameObjectMenu("Audio/Audio Listener", Icon = EditorIcons.Headphones, Order = 31)]
-    static void CreateAudioListener(GameObject? parent)
+    [MenuItem("GameObject/Audio/Audio Listener", priority: 61, Icon = EditorIcons.Headphones)]
+    static void CreateAudioListener()
     {
-        var go = HierarchyPanel.CreateGameObject("Audio Listener", parent);
+        var go = HierarchyPanel.CreateGameObject("Audio Listener", MenuContext.ActiveGameObject);
         go.AddComponent<AudioListener>();
     }
 
-    // ---- UI ----
-
-    [CreateGameObjectMenu("UI/Canvas", Icon = EditorIcons.BorderAll, Order = 50)]
-    static void CreateCanvas(GameObject? parent)
+    [MenuItem("GameObject/UI/Canvas", priority: 70, Icon = EditorIcons.BorderAll)]
+    static void CreateCanvas()
     {
-        var go = HierarchyPanel.CreateGameObject("Canvas", parent);
+        var go = HierarchyPanel.CreateGameObject("Canvas", MenuContext.ActiveGameObject);
         go.EnsureRectTransform();
         go.AddComponent<GameCanvas>();
     }
 
-    [CreateGameObjectMenu("UI/Event System", Icon = EditorIcons.ArrowPointer, Order = 61)]
-    static void CreateEventSystem(GameObject? parent)
+    [MenuItem("GameObject/UI/Text", priority: 71, Icon = EditorIcons.Font)]
+    static void CreateUIText()
     {
-        var go = HierarchyPanel.CreateGameObject("Event System", parent);
-        go.AddComponent<EventSystem>();
-    }
-
-    [CreateGameObjectMenu("UI/Text", Icon = EditorIcons.Font, Order = 51)]
-    static void CreateUIText(GameObject? parent)
-    {
-        var go = NewUIElement("Text", parent);
+        var go = NewUIElement("Text", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(200f, 50f);
         var text = go.AddComponent<TextComponent>();
         text.Text = "New Text";
     }
 
-    [CreateGameObjectMenu("UI/Image", Icon = EditorIcons.Image, Order = 52)]
-    static void CreateUIImage(GameObject? parent)
+    [MenuItem("GameObject/UI/Image", priority: 72, Icon = EditorIcons.Image)]
+    static void CreateUIImage()
     {
-        var go = NewUIElement("Image", parent);
+        var go = NewUIElement("Image", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(100f, 100f);
         go.AddComponent<UIImage>();
     }
 
-
-    [CreateGameObjectMenu("UI/Button", Icon = EditorIcons.MobileButton, Order = 53)]
-    static void CreateUIButton(GameObject? parent)
+    [MenuItem("GameObject/UI/Button", priority: 73, Icon = EditorIcons.MobileButton)]
+    static void CreateUIButton()
     {
-        var go = NewUIElement("Button", parent);
+        var go = NewUIElement("Button", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(100f, 100f);
         var image = go.AddComponent<UIImage>();
         var button = go.AddComponent<UIButton>();
         button.TargetGraphic = image;
     }
 
-    [CreateGameObjectMenu("UI/Slider", Icon = EditorIcons.Sliders, Order = 55)]
-    static void CreateUISlider(GameObject? parent)
+    [MenuItem("GameObject/UI/Panel", priority: 74, Icon = EditorIcons.WindowMaximize)]
+    static void CreateUIPanel()
     {
-        var go = NewUIElement("Slider", parent);
+        var go = NewUIElement("Panel", MenuContext.ActiveGameObject);
+        var rt = go.RectTransform!;
+        rt.AnchorMin = Float2.Zero;
+        rt.AnchorMax = Float2.One;
+        rt.SizeDelta = Float2.Zero;
+        rt.AnchoredPosition = Float2.Zero;
+        var img = go.AddComponent<UIImage>();
+        img.Color = new Color(1f, 1f, 1f, 0.4f);
+    }
+
+    [MenuItem("GameObject/UI/Slider", priority: 75, Icon = EditorIcons.Sliders)]
+    static void CreateUISlider()
+    {
+        var go = NewUIElement("Slider", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(200f, 24f);
         var bg = go.AddComponent<UIImage>();
         bg.Color = new Color(0.20f, 0.20f, 0.24f, 1f);
         var slider = go.AddComponent<UISlider>();
 
-        // Fill bar - the slider drives its anchors from the value.
         var fillGo = HierarchyPanel.CreateGameObject("Fill", go, select: false, beginRename: false);
         fillGo.EnsureRectTransform();
         var fill = fillGo.AddComponent<UIImage>();
         fill.Color = new Color(0.38f, 0.55f, 0.95f, 1f);
-        fill.RaycastTarget = false; // the slider (background) receives the drag for the whole track
+        fill.RaycastTarget = false;
 
-        // Handle / knob.
         var handleGo = HierarchyPanel.CreateGameObject("Handle", go, select: false, beginRename: false);
         handleGo.EnsureRectTransform();
         handleGo.RectTransform!.SizeDelta = new Float2(20f, 0f);
@@ -261,28 +229,25 @@ internal static class DefaultGameObjectCreators
         slider.Value = 0.5f;
     }
 
-    [CreateGameObjectMenu("UI/Scroll View", Icon = EditorIcons.RectangleList, Order = 56)]
-    static void CreateUIScrollView(GameObject? parent)
+    [MenuItem("GameObject/UI/Scroll View", priority: 76, Icon = EditorIcons.RectangleList)]
+    static void CreateUIScrollView()
     {
-        const float bar = 12f; // scrollbar thickness / gutter
+        const float bar = 12f;
 
-        var go = NewUIElement("Scroll View", parent);
+        var go = NewUIElement("Scroll View", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(240f, 180f);
         var bg = go.AddComponent<UIImage>();
         bg.Color = new Color(0.14f, 0.14f, 0.17f, 1f);
         var scroll = go.AddComponent<UIScrollRect>();
 
-        // Viewport: fills the view minus the right/bottom scrollbar gutters, and clips (RectMask) the content.
         var vpGo = HierarchyPanel.CreateGameObject("Viewport", go, select: false, beginRename: false);
         vpGo.EnsureRectTransform();
         var vpRt = vpGo.RectTransform!;
         vpRt.AnchorMin = Float2.Zero; vpRt.AnchorMax = Float2.One;
         vpRt.SizeDelta = new Float2(-bar, -bar);
-        vpRt.AnchoredPosition = new Float2(-bar * 0.5f, bar * 0.5f); // gutter on the right and bottom
+        vpRt.AnchoredPosition = new Float2(-bar * 0.5f, bar * 0.5f);
         vpGo.AddComponent<RectMask>();
 
-        // Content: a fixed-size box anchored to the viewport's top-left corner, larger than the viewport on
-        // both axes so it scrolls horizontally and vertically. Add children under here (or a size fitter).
         var contentGo = HierarchyPanel.CreateGameObject("Content", vpGo, select: false, beginRename: false);
         contentGo.EnsureRectTransform();
         var cRt = contentGo.RectTransform!;
@@ -290,14 +255,12 @@ internal static class DefaultGameObjectCreators
         cRt.Pivot = new Float2(0f, 1f);
         cRt.SizeDelta = new Float2(400f, 400f); cRt.AnchoredPosition = Float2.Zero;
 
-        // Vertical scrollbar down the right edge (leaving the bottom-right corner for the horizontal one).
         var vBar = BuildScrollbar("Scrollbar Vertical", go, UIScrollbar.ScrollbarDirection.TopToBottom);
         var vRt = vBar.GameObject.RectTransform!;
         vRt.AnchorMin = new Float2(1f, 0f); vRt.AnchorMax = new Float2(1f, 1f);
         vRt.Pivot = new Float2(1f, 0.5f);
         vRt.SizeDelta = new Float2(bar, -bar); vRt.AnchoredPosition = new Float2(0f, bar * 0.5f);
 
-        // Horizontal scrollbar along the bottom edge.
         var hBar = BuildScrollbar("Scrollbar Horizontal", go, UIScrollbar.ScrollbarDirection.LeftToRight);
         var hRt = hBar.GameObject.RectTransform!;
         hRt.AnchorMin = new Float2(0f, 0f); hRt.AnchorMax = new Float2(1f, 0f);
@@ -310,41 +273,23 @@ internal static class DefaultGameObjectCreators
         scroll.VerticalScrollbar = vBar;
     }
 
-    // Scrollbars are not a standalone widget - they exist only inside a Scroll View, which builds and
-    // manages them (use a UI/Slider for a general-purpose bar). Creates a scrollbar (track + handle) as a
-    // child of `parent` and returns the component.
-    static UIScrollbar BuildScrollbar(string name, GameObject parent, UIScrollbar.ScrollbarDirection dir)
+    [MenuItem("GameObject/UI/Rect Mask", priority: 77, Icon = EditorIcons.Square)]
+    static void CreateUIRectMask()
     {
-        var go = HierarchyPanel.CreateGameObject(name, parent, select: false, beginRename: false);
-        go.EnsureRectTransform();
-
-        var track = go.AddComponent<UIImage>();
-        track.Color = new Color(0.10f, 0.10f, 0.13f, 1f);
-        var bar = go.AddComponent<UIScrollbar>();
-        bar.Direction = dir;
-
-        var handleGo = HierarchyPanel.CreateGameObject("Handle", go, select: false, beginRename: false);
-        handleGo.EnsureRectTransform();
-        var handle = handleGo.AddComponent<UIImage>();
-        handle.Color = new Color(0.42f, 0.42f, 0.48f, 1f);
-        handle.RaycastTarget = false; // the track receives clicks/drags across its whole length
-
-        bar.HandleRect = handleGo.RectTransform;
-        bar.TargetGraphic = handle;
-        bar.Size = 0.3f;
-        return bar;
+        var go = NewUIElement("Rect Mask", MenuContext.ActiveGameObject);
+        go.RectTransform!.SizeDelta = new Float2(200f, 200f);
+        go.AddComponent<RectMask>();
     }
 
-    [CreateGameObjectMenu("UI/Input Field", Icon = EditorIcons.Keyboard, Order = 58)]
-    static void CreateUIInputField(GameObject? parent)
+    [MenuItem("GameObject/UI/Input Field", priority: 78, Icon = EditorIcons.Keyboard)]
+    static void CreateUIInputField()
     {
-        var go = NewUIElement("Input Field", parent);
+        var go = NewUIElement("Input Field", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(200f, 32f);
         var bg = go.AddComponent<UIImage>();
         bg.Color = new Color(0.12f, 0.12f, 0.15f, 1f);
         var field = go.AddComponent<UIInputField>();
 
-        // Text area: inset from the box and clipping (RectMask) the scrolled text.
         var areaGo = HierarchyPanel.CreateGameObject("Text Area", go, select: false, beginRename: false);
         areaGo.EnsureRectTransform();
         var areaRt = areaGo.RectTransform!;
@@ -352,7 +297,6 @@ internal static class DefaultGameObjectCreators
         areaRt.SizeDelta = new Float2(-16f, -8f); areaRt.AnchoredPosition = Float2.Zero;
         areaGo.AddComponent<RectMask>();
 
-        // Selection highlight (behind the text), then placeholder, text, and caret on top.
         var selGo = HierarchyPanel.CreateGameObject("Selection", areaGo, select: false, beginRename: false);
         selGo.EnsureRectTransform();
         var selRt = selGo.RectTransform!;
@@ -396,16 +340,15 @@ internal static class DefaultGameObjectCreators
         field.Caret = caretRt;
     }
 
-    [CreateGameObjectMenu("UI/Dropdown", Icon = EditorIcons.ChevronDown, Order = 59)]
-    static void CreateUIDropdown(GameObject? parent)
+    [MenuItem("GameObject/UI/Dropdown", priority: 79, Icon = EditorIcons.ChevronDown)]
+    static void CreateUIDropdown()
     {
-        var go = NewUIElement("Dropdown", parent);
+        var go = NewUIElement("Dropdown", MenuContext.ActiveGameObject);
         go.RectTransform!.SizeDelta = new Float2(200f, 32f);
         var bg = go.AddComponent<UIImage>();
         bg.Color = new Color(0.18f, 0.18f, 0.22f, 1f);
         var dropdown = go.AddComponent<UIDropdown>();
 
-        // Caption showing the current selection.
         var labelGo = HierarchyPanel.CreateGameObject("Label", go, select: false, beginRename: false);
         labelGo.EnsureRectTransform();
         var lrt = labelGo.RectTransform!;
@@ -416,7 +359,6 @@ internal static class DefaultGameObjectCreators
         label.Size = 16;
         label.TextColor = new Color(0.90f, 0.90f, 0.92f, 1f);
 
-        // Options panel: hangs below the box, disabled until the dropdown opens.
         var optionsGo = HierarchyPanel.CreateGameObject("Options", go, select: false, beginRename: false);
         optionsGo.EnsureRectTransform();
         var ort = optionsGo.RectTransform!;
@@ -431,49 +373,32 @@ internal static class DefaultGameObjectCreators
         dropdown.Options.Add("Option B");
         dropdown.Options.Add("Option C");
         dropdown.OptionsRoot = ort;
-        dropdown.CaptionText = label; // setter refreshes the caption from the options
+        dropdown.CaptionText = label;
         dropdown.TargetGraphic = bg;
     }
 
-    // Stretches a RectTransform to fill its parent with no offset.
-    static void Stretch(RectTransform rt)
+    [MenuItem("GameObject/UI/Event System", priority: 90, Icon = EditorIcons.ArrowPointer, Separator = true)]
+    static void CreateEventSystem()
     {
-        rt.AnchorMin = Float2.Zero;
-        rt.AnchorMax = Float2.One;
-        rt.SizeDelta = Float2.Zero;
-        rt.AnchoredPosition = Float2.Zero;
+        var go = HierarchyPanel.CreateGameObject("Event System", MenuContext.ActiveGameObject);
+        go.AddComponent<EventSystem>();
     }
 
-    [CreateGameObjectMenu("UI/Panel", Icon = EditorIcons.WindowMaximize, Order = 54)]
-    static void CreateUIPanel(GameObject? parent)
+    [MenuItem("GameObject/Camera", priority: 100, Icon = EditorIcons.Camera, Separator = true)]
+    static void CreateCamera()
     {
-        var go = NewUIElement("Panel", parent);
-
-        // Panels stretch to fill their parent rect (anchors at the corners, zero size delta).
-        var rt = go.RectTransform!;
-        rt.AnchorMin = Float2.Zero;
-        rt.AnchorMax = Float2.One;
-        rt.SizeDelta = Float2.Zero;
-        rt.AnchoredPosition = Float2.Zero;
-
-        var img = go.AddComponent<UIImage>();
-        img.Color = new Color(1f, 1f, 1f, 0.4f);
+        var go = HierarchyPanel.CreateGameObject("Camera", MenuContext.ActiveGameObject);
+        go.AddComponent<Camera>();
     }
 
-    [CreateGameObjectMenu("UI/Rect Mask", Icon = EditorIcons.Square, Order = 57)]
-    static void CreateUIRectMask(GameObject? parent)
+    private static void CreatePrimitive(string name, DefaultModel model)
     {
-        var go = NewUIElement("Rect Mask", parent);
-        go.RectTransform!.SizeDelta = new Float2(200f, 200f);
-        go.AddComponent<RectMask>();
+        var go = HierarchyPanel.CreateGameObject(name, MenuContext.ActiveGameObject);
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.Mesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(model));
+        renderer.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
     }
 
-    /// <summary>
-    /// Creates a UI element GameObject parented under a Canvas with a RectTransform ready.
-    /// If <paramref name="parent"/> already lives under a <see cref="GameCanvas"/> the element
-    /// is nested there; otherwise the first canvas in the scene is reused, or a new one is
-    /// spawned at the root.
-    /// </summary>
     private static GameObject NewUIElement(string name, GameObject? parent)
     {
         GameObject uiParent = ResolveCanvasParent(parent);
@@ -483,16 +408,12 @@ internal static class DefaultGameObjectCreators
         return go;
     }
 
-    // Interactive UI needs a scene EventSystem to receive input; create one if the scene has none. Done
-    // when a UI widget is created (not by the Canvas itself), so a bare canvas stays dependency-free.
     private static void EnsureEventSystem(Scene? scene)
     {
         scene ??= Scene.Current;
         if (scene == null) return;
-
         foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
             if (es != null) return;
-
         var esGo = HierarchyPanel.CreateGameObject("Event System", null, select: false, beginRename: false);
         esGo.AddComponent<EventSystem>();
     }
@@ -500,39 +421,44 @@ internal static class DefaultGameObjectCreators
     private static GameObject ResolveCanvasParent(GameObject? parent)
     {
         GameCanvas? canvas = parent?.GetComponentInParent<GameCanvas>(includeSelf: true);
-        if (canvas != null)
-            return parent!;
+        if (canvas != null) return parent!;
 
         var scene = Scene.Current;
         if (scene != null)
         {
             foreach (GameCanvas? c in scene.FindObjectsOfType<GameCanvas>())
-                if (c != null)
-                    return c.GameObject;
+                if (c != null) return c.GameObject;
         }
 
-        // None exists create one at the root (not selected / no rename, it's a side effect).
         var canvasGo = HierarchyPanel.CreateGameObject("Canvas", null, select: false, beginRename: false);
         canvasGo.AddComponent<GameCanvas>();
         return canvasGo;
     }
 
-    // ---- Camera ----
-
-    [CreateGameObjectMenu("Camera", Icon = EditorIcons.Camera, Order = 80)]
-    static void CreateCamera(GameObject? parent)
+    static void Stretch(RectTransform rt)
     {
-        var go = HierarchyPanel.CreateGameObject("Camera", parent);
-        go.AddComponent<Camera>();
+        rt.AnchorMin = Float2.Zero;
+        rt.AnchorMax = Float2.One;
+        rt.SizeDelta = Float2.Zero;
+        rt.AnchoredPosition = Float2.Zero;
     }
 
-    // ---- Helper ----
-
-    private static void CreatePrimitive(string name, DefaultModel model, GameObject? parent)
+    static UIScrollbar BuildScrollbar(string name, GameObject parent, UIScrollbar.ScrollbarDirection dir)
     {
-        var go = HierarchyPanel.CreateGameObject(name, parent);
-        var renderer = go.AddComponent<MeshRenderer>();
-        renderer.Mesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(model));
-        renderer.Material = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+        var go = HierarchyPanel.CreateGameObject(name, parent, select: false, beginRename: false);
+        go.EnsureRectTransform();
+        var track = go.AddComponent<UIImage>();
+        track.Color = new Color(0.10f, 0.10f, 0.13f, 1f);
+        var bar = go.AddComponent<UIScrollbar>();
+        bar.Direction = dir;
+        var handleGo = HierarchyPanel.CreateGameObject("Handle", go, select: false, beginRename: false);
+        handleGo.EnsureRectTransform();
+        var handle = handleGo.AddComponent<UIImage>();
+        handle.Color = new Color(0.42f, 0.42f, 0.48f, 1f);
+        handle.RaycastTarget = false;
+        bar.HandleRect = handleGo.RectTransform;
+        bar.TargetGraphic = handle;
+        bar.Size = 0.3f;
+        return bar;
     }
 }

@@ -21,9 +21,11 @@ using RuntimeEventSystem = Prowl.Runtime.UI.EventSystem;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Game")]
 public class GameViewPanel : DockPanel
 {
+    [MenuItem("Window/General/Game", priority: 1)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(GameViewPanel));
+
     public override string Title => Loc.Get("panel.game");
     public override string Icon => EditorIcons.Gamepad;
 

@@ -19,9 +19,11 @@ using TextAlignment = Prowl.PaperUI.TextAlignment;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Console")]
 public class ConsolePanel : DockPanel
 {
+    [MenuItem("Window/General/Console", priority: 0)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ConsolePanel));
+
     public override string Title => Loc.Get("panel.console");
     public override string Icon => EditorIcons.Terminal;
 
