@@ -212,4 +212,10 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         for (int i = 0; i < _passes.Length; i++)
             RegisterPass(_passes[i], i);
     }
+
+    public override void OnDispose()
+    {
+        foreach (var pass in _passes)
+            pass.Dispose();
+    }
 }

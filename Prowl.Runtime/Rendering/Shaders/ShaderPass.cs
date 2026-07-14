@@ -171,4 +171,13 @@ public sealed class ShaderPass
     {
         return _tagSortOffsets.TryGetValue(tag, out int offset) ? offset : 0;
     }
+
+    /// <summary>Disposes every compiled variant program. The pass itself keeps its source/tags so it
+    /// can still recompile fresh variants on next use if the owning Shader isn't actually disposed.</summary>
+    public void Dispose()
+    {
+        foreach (var variant in _variants.Values)
+            variant.Dispose();
+        _variants.Clear();
+    }
 }
