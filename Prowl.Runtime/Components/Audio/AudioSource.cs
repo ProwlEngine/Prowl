@@ -670,9 +670,7 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
-        // Serialize audio clip - TODO: Needs to serialize some kind of Asset Reference not the raw clip
-        if(Clip != null)
-            compound.Add("Clip", Serializer.Serialize(Clip, ctx));
+        compound.Add("Clip", Serializer.Serialize(typeof(AssetRef<AudioClip>), _clip, ctx));
 
         // Serialize playback settings
         compound.Add("PlayOnStart", new EchoObject(_playOnStart));
@@ -705,8 +703,8 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         // Deserialize audio clip reference
-        if (value.Contains("Clip"))
-            _clip = Serializer.Deserialize<AudioClip>(value["Clip"], ctx);
+        if (value.TryGet("Clip", out var clipTag))
+            _clip = Serializer.Deserialize<AssetRef<AudioClip>>(clipTag, ctx);
 
         // Deserialize playback settings
         _playOnStart = value["PlayOnStart"].BoolValue;
