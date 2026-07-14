@@ -722,7 +722,13 @@ public class EditorAssetDatabase : IAssetDatabase
             obj.AssetID = savedId;
 
             if (echo != null)
-                echo.WriteToBinary(new FileInfo(cachePath));
+            {
+                // Write to a temp file and rename into place (matching MetaFile.Write) so a
+                // crash/power-loss mid-write can't leave a truncated cache file behind.
+                string tempPath = cachePath + ".tmp";
+                echo.WriteToBinary(new FileInfo(tempPath));
+                File.Move(tempPath, cachePath, overwrite: true);
+            }
         }
         catch (Exception ex)
         {
