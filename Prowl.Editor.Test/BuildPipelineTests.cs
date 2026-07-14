@@ -163,4 +163,99 @@ public class BuildPipelineTests : EditorTestHarness
         Assert.Contains(spriteGuid, collected.AllAssets); // sub-asset itself, via parent backfill
         Assert.Contains(texGuidB, collected.AllAssets);   // what the sub-asset ITSELF depends on
     }
+
+    // RunImport's orphaned-sub-asset cleanup (a sub-asset removed on reimport, e.g. turning Sprite
+    // mode off) must also drop the dependency graph entry, or a removed sprite's GUID lingers forever.
+    [Fact]
+    public void ReimportRemovingSubAsset_RemovesSubAssetDependencyGraphEntries()
+    {
+        string pngPath = AssetAbsolutePath("ReimportTexture.png");
+        using (var image = new MagickImage(new MagickColor(1, 2, 3, 255), 4, 4))
+        {
+            image.Format = MagickFormat.Png;
+            image.Write(pngPath);
+        }
+        Guid texGuid = Assets.ImportFile("ReimportTexture.png");
+        Assert.NotEqual(Guid.Empty, texGuid);
+
+        TextureSpriteMeta.Save(texGuid, new SpriteImportSettings { Mode = SpriteMode.Single });
+        var subAssets = Assets.GetSubAssets(texGuid);
+        Assert.True(subAssets.Length > 0);
+        Guid spriteGuid = subAssets[0].Guid;
+
+        // Sanity: the sprite's own dependency (on its parent texture) is really there before the sub-asset disappears.
+        Assert.NotEmpty(Assets.Dependencies.GetDependencies(spriteGuid));
+
+        // Switching away from Sprite mode makes the sprite sub-asset disappear on reimport.
+        TextureSpriteMeta.Save(texGuid, new SpriteImportSettings { Mode = SpriteMode.None });
+
+        Assert.Empty(Assets.Dependencies.GetDependencies(spriteGuid));
+        Assert.Empty(Assets.Dependencies.GetDependents(spriteGuid));
+    }
+
+    // Editor/-folder assets are excluded from a build by default, but a texture under Editor/ is
+    // still a real runtime asset if a scene/component genuinely references it - the dependency must
+    // still ship rather than leaving a silently dangling AssetRef.
+    [Fact]
+    public void Collect_IncludesRuntimeDependencyLivingUnderEditorFolder()
+    {
+        string pngPath = AssetAbsolutePath("Editor/Icon.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(pngPath)!);
+        using (var image = new MagickImage(new MagickColor(5, 6, 7, 255), 4, 4))
+        {
+            image.Format = MagickFormat.Png;
+            image.Write(pngPath);
+        }
+        Guid texGuid = Assets.ImportFile("Editor/Icon.png");
+        Assert.NotEqual(Guid.Empty, texGuid);
+
+        File.WriteAllText(AssetAbsolutePath("EditorTexRefComponent.cs"), """
+            using Prowl.Runtime;
+            using Prowl.Runtime.Resources;
+
+            public class EditorTexRefComponent : MonoBehaviour
+            {
+                public AssetRef<Texture2D> MyTexture;
+            }
+            """);
+        var compile = ScriptCompiler.CompileAll(Project);
+        Assert.True(compile.Success, $"Script compile failed:\n{compile.Errors}\n{compile.Output}");
+
+        var gameAsm = Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
+        var compType = gameAsm.GetType("EditorTexRefComponent");
+        Assert.NotNull(compType);
+
+        var scene = new Scene();
+        var go = new GameObject("Root");
+        var comp = go.AddComponent(compType!);
+        compType!.GetField("MyTexture")!.SetValue(comp, new AssetRef<Texture2D>(texGuid));
+        scene.Add(go);
+        Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
+
+        var collected = AssetCollector.Collect([sceneGuid], dependenciesOnly: true);
+
+        Assert.Contains(texGuid, collected.AllAssets);
+    }
+
+    // The default: an Editor/-folder asset with nothing depending on it must NOT ship, even in
+    // AllAssets mode (which otherwise dumps every tracked entry into the build).
+    [Fact]
+    public void Collect_ExcludesUnreferencedEditorFolderAsset()
+    {
+        string pngPath = AssetAbsolutePath("Editor/Unused.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(pngPath)!);
+        using (var image = new MagickImage(new MagickColor(8, 9, 10, 255), 4, 4))
+        {
+            image.Format = MagickFormat.Png;
+            image.Write(pngPath);
+        }
+        Guid texGuid = Assets.ImportFile("Editor/Unused.png");
+        Assert.NotEqual(Guid.Empty, texGuid);
+
+        Guid sceneGuid = AuthorEmptyScene("Main.scene");
+
+        var collected = AssetCollector.Collect([sceneGuid], dependenciesOnly: false);
+
+        Assert.DoesNotContain(texGuid, collected.AllAssets);
+    }
 }
