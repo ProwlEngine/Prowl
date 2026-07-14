@@ -270,7 +270,7 @@ public class DesktopBuildPipeline : BuildPipeline
             if (desktopProfile.Platform == BuildTarget.MacOS)
             {
                 progress?.Log("Bundling macOS .app...", 0.92f);
-                var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+                var general = EditorRegistries.GetSettings<GeneralSettings>();
                 BundleMacApp(outputDirectory, project.Name, general.ProductName, general.CompanyName, general.Version);
             }
 
@@ -307,7 +307,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private void GeneratePlayerSource(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, Guid defaultSceneGuid, string outputDir, List<string> gameAssemblyNames)
     {
         string productName = "Prowl Game";
-        try { productName = ProjectSettingsRegistry.Get<GeneralSettings>().ProductName; } catch { }
+        try { productName = EditorRegistries.GetSettings<GeneralSettings>().ProductName; } catch { }
 
         // C# array literal of user game assemblies to load at startup (dependency order).
         string gameAssembliesLiteral = string.Join(", ", gameAssemblyNames.Select(n => $"\"{n}\""));

@@ -36,6 +36,37 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
+
+    public static ISceneViewEditor? ActiveSceneViewEditor { get; private set; }
+    public static GameObject? ActiveSceneViewTarget { get; private set; }
+
+    public static void UpdateSceneViewEditor()
+    {
+        var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
+        if (selectedGO == null || selectedGO == ActiveSceneViewTarget)
+        {
+            if (selectedGO == null && ActiveSceneViewEditor != null) DeactivateSceneViewEditor();
+            return;
+        }
+        var editor = EditorRegistries.FindSceneViewEditor(selectedGO);
+        if (editor != null)
+        {
+            if (ActiveSceneViewEditor?.GetType() == editor.GetType() && ActiveSceneViewTarget == selectedGO) return;
+            DeactivateSceneViewEditor();
+            ActiveSceneViewEditor = editor;
+            ActiveSceneViewTarget = selectedGO;
+            ActiveSceneViewEditor.OnActivate(selectedGO);
+        }
+        else if (ActiveSceneViewEditor != null)
+            DeactivateSceneViewEditor();
+    }
+
+    public static void DeactivateSceneViewEditor()
+    {
+        ActiveSceneViewEditor?.OnDeactivate();
+        ActiveSceneViewEditor = null;
+        ActiveSceneViewTarget = null;
+    }
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
@@ -100,7 +131,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            var sceneEditor = SceneViewEditorRegistry.ActiveEditor;
+            var sceneEditor = ActiveSceneViewEditor;
             bool suppressDefault = sceneEditor != null && sceneEditor.DrawToolbar(paper, "sv_sce", font);
             if (!suppressDefault)
                 DrawDefaultToolbar(paper, font);
@@ -190,7 +221,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         }
 
         // Update scene view editor registry based on selection
-        SceneViewEditorRegistry.UpdateFromSelection();
+        UpdateSceneViewEditor();
 
         // The scene view always presents and edits UI in world space (each canvas's ReferenceResolution
         // + GameObject transform) regardless of its RenderMode, so screen-space UI can be manipulated
@@ -202,7 +233,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         try
         {
             // Let active scene editor handle input before gizmo
-            var activeSceneEditor = SceneViewEditorRegistry.ActiveEditor;
+            var activeSceneEditor = ActiveSceneViewEditor;
             if (activeSceneEditor != null && _editorCamera != null)
             {
                 var cam = _editorCamera.Camera;
@@ -279,7 +310,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     }
 
                     // Draw scene view editor overlay
-                    var sceneEditorOverlay = SceneViewEditorRegistry.ActiveEditor;
+                    var sceneEditorOverlay = ActiveSceneViewEditor;
                     if (sceneEditorOverlay != null)
                     {
                         paper.DrawForeground(ref handle, (canvas2, r2) =>
@@ -349,7 +380,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                var handler = SceneDropHandlerRegistry.FindHandler(dragPayload.AssetType);
+                var handler = EditorRegistries.FindSceneDropHandler(dragPayload.AssetType);
 
                 if (handler != null)
                 {
@@ -367,7 +398,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
-                var handler = SceneDropHandlerRegistry.FindHandler(assetDrop.AssetType);
+                var handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
                     // Convert Paper-space pointer to viewport-local using the cached viewport

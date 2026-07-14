@@ -95,7 +95,7 @@ public sealed class BuildSettings : ProjectSettingsBase
             {
                 profile = (PlatformBuildProfile)System.Activator.CreateInstance(targetType);
                 PlatformProfiles.Add(profile);
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }
         }
         return profile;
@@ -124,7 +124,7 @@ public sealed class BuildSettings : ProjectSettingsBase
 
                 // Enable toggle
                 Origami.Checkbox(paper, $"bld_se_{i}", scene.Enabled,
-                        v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); })
+                        v => { scene.Enabled = v; EditorRegistries.SaveSettings(); })
                     .NoLabel().Show();
 
                 // Scene name
@@ -148,7 +148,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                         .OnClick(idx, (ci, _) =>
                         {
                             (Scenes[ci - 1], Scenes[ci]) = (Scenes[ci], Scenes[ci - 1]);
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         });
                 }
 
@@ -161,7 +161,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                     .OnClick(idx, (ci, _) =>
                     {
                         Scenes.RemoveAt(ci);
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     });
             }
         }
@@ -178,7 +178,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                         if (entry != null && !Scenes.Any(s => s.SceneGuid == entry.Guid))
                         {
                             Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         }
                     }
                 }).Width(140).Show();
@@ -191,25 +191,25 @@ public sealed class BuildSettings : ProjectSettingsBase
 
         EditorGUI.Row(paper, "bld_config", "Configuration", () =>
             Origami.EnumDropdown(paper, "bld_config_v", Config,
-                v => { Config = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { Config = v; EditorRegistries.SaveSettings(); }).Show());
 
         EditorGUI.Row(paper, "bld_output", "Output Directory", () =>
             Origami.TextField(paper, "bld_output_v", OutputDirectory,
-                v => { OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { OutputDirectory = v; EditorRegistries.SaveSettings(); }).Show());
 
         EditorGUI.Row(paper, "bld_packaging", "Asset Packaging", () =>
             Origami.EnumDropdown(paper, "bld_packaging_v", PackagingMode,
-                v => { PackagingMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { PackagingMode = v; EditorRegistries.SaveSettings(); }).Show());
 
         EditorGUI.Row(paper, "bld_assetmode", "Asset Export", () =>
             Origami.EnumDropdown(paper, "bld_assetmode_v", AssetMode,
-                v => { AssetMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { AssetMode = v; EditorRegistries.SaveSettings(); }).Show());
 
         if (PackagingMode == AssetPackagingMode.ProwlPak)
         {
             EditorGUI.Row(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
                 Origami.IntSlider(paper, "bld_maxpak_v", MaxPakSizeMB,
-                    v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
+                    v => { MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
                     256, 4096).Show());
         }
 

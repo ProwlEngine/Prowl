@@ -28,7 +28,7 @@ public class AudioSettings : ProjectSettingsBase
 
         EditorGUI.Row(paper, "audio_vol", "Global Volume", () =>
             Origami.Slider(paper, "audio_vol_v", GlobalVolume,
-                v => { GlobalVolume = v; Apply(); ProjectSettingsRegistry.SaveAll(); },
+                v => { GlobalVolume = v; Apply(); EditorRegistries.SaveSettings(); },
                 0f, 1f).Format("F2").Show());
     }
 }

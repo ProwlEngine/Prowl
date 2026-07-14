@@ -1,7 +1,5 @@
 using System;
-using System.Reflection;
 
-using Prowl.Editor.Utils;
 using Prowl.PaperUI;
 
 namespace Prowl.Editor.GUI;
@@ -34,23 +32,3 @@ public abstract class PropertyEditor
         object? value, Action<object?> onChange, int depth);
 }
 
-/// <summary>
-/// Registry that discovers and maps PropertyEditor subclasses to their target types.
-/// </summary>
-public static class PropertyEditorRegistry
-{
-    private static readonly EditorTypeRegistry<PropertyEditor> _reg = new(
-        "PropertyEditorRegistry",
-        t => t.GetCustomAttribute<CustomPropertyEditorAttribute>()?.TargetType,
-        checkInterfaces: true);
-
-    [Runtime.OnAssemblyLoad]
-    public static void Reinitialize() => _reg.Reinitialize();
-
-    [Runtime.OnAssemblyUnload]
-    public static void ClearCache() => _reg.ClearCache();
-
-    public static void Initialize() => _reg.Initialize();
-
-    public static PropertyEditor? GetEditor(Type type) => _reg.GetEditor(type);
-}

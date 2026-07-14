@@ -121,9 +121,9 @@ public static class EditorSceneManager
         if (Scene.Current != null) return;
 
         // Try to restore last scene
-        if (ProjectSettingsRegistry.Entries.Count > 0)
+        if (EditorRegistries.SettingsEntries.Count > 0)
         {
-            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            var general = EditorRegistries.GetSettings<GeneralSettings>();
             if (!string.IsNullOrEmpty(general.LastScenePath))
             {
                 if (OpenScene(general.LastScenePath))
@@ -131,7 +131,7 @@ public static class EditorSceneManager
 
                 // Path was invalid, clear it
                 general.LastScenePath = null;
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }
         }
 
@@ -145,7 +145,7 @@ public static class EditorSceneManager
     /// asset was handled.
     /// </summary>
     public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
-        => AssetDoubleClickRegistry.Dispatch(relativePath, guid);
+        => EditorRegistries.DispatchDoubleClick(relativePath, guid);
 
     [AssetDoubleClickHandler(".scene")]
     private static bool OpenSceneHandler(string relativePath, Guid guid) => OpenScene(relativePath);
@@ -197,12 +197,12 @@ public static class EditorSceneManager
 
     private static void SaveLastScenePath(string? path)
     {
-        if (ProjectSettingsRegistry.Entries.Count == 0) return;
+        if (EditorRegistries.SettingsEntries.Count == 0) return;
         try
         {
-            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            var general = EditorRegistries.GetSettings<GeneralSettings>();
             general.LastScenePath = path;
-            ProjectSettingsRegistry.SaveAll();
+            EditorRegistries.SaveSettings();
         }
         catch { }
     }

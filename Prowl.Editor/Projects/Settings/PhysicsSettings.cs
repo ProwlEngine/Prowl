@@ -58,7 +58,7 @@ public class PhysicsSettings : ProjectSettingsBase
             s_sceneHookRegistered = true;
             Runtime.Resources.Scene.OnSceneLoaded += () =>
             {
-                var s = ProjectSettingsRegistry.Get<PhysicsSettings>();
+                var s = EditorRegistries.GetSettings<PhysicsSettings>();
                 s.ApplyToScene(Runtime.Resources.Scene.Current);
             };
         }
@@ -115,7 +115,7 @@ public class PhysicsSettings : ProjectSettingsBase
 
         EditorGUI.Row(paper, "phys_gravity", "Gravity", () =>
             Origami.Float3Field(paper, "phys_gravity_vf", new Float3(GravityX, GravityY, GravityZ),
-                v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { GravityX = v.X; GravityY = v.Y; GravityZ = v.Z; EditorRegistries.SaveSettings(); }).Show());
 
         paper.Box("phys_sp1").Height(8);
 
@@ -124,15 +124,15 @@ public class PhysicsSettings : ProjectSettingsBase
 
         EditorGUI.Row(paper, "phys_solver_iter", "Solver Iterations", () =>
             Origami.IntSlider(paper, "phys_solver_iter_v", SolverIterations,
-                v => { SolverIterations = v; ProjectSettingsRegistry.SaveAll(); }, 1, 32).Show());
+                v => { SolverIterations = v; EditorRegistries.SaveSettings(); }, 1, 32).Show());
 
         EditorGUI.Row(paper, "phys_relax_iter", "Relaxation Iterations", () =>
             Origami.IntSlider(paper, "phys_relax_iter_v", RelaxIterations,
-                v => { RelaxIterations = v; ProjectSettingsRegistry.SaveAll(); }, 1, 16).Show());
+                v => { RelaxIterations = v; EditorRegistries.SaveSettings(); }, 1, 16).Show());
 
         EditorGUI.Row(paper, "phys_substeps", "Sub-Steps", () =>
             Origami.IntSlider(paper, "phys_substeps_v", SubSteps,
-                v => { SubSteps = v; ProjectSettingsRegistry.SaveAll(); }, 1, 16).Show());
+                v => { SubSteps = v; EditorRegistries.SaveSettings(); }, 1, 16).Show());
 
         paper.Box("phys_sp2").Height(8);
 
@@ -140,15 +140,15 @@ public class PhysicsSettings : ProjectSettingsBase
         Origami.Header(paper, "phys_h_behavior", "Behavior").Underline().Show();
 
         Origami.Checkbox(paper, "phys_sleep", AllowSleep,
-                v => { AllowSleep = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { AllowSleep = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Allow Sleep").Show();
 
         Origami.Checkbox(paper, "phys_mt", UseMultithreading,
-                v => { UseMultithreading = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { UseMultithreading = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Use Multithreading").Show();
 
         Origami.Checkbox(paper, "phys_sync", AutoSyncTransforms,
-                v => { AutoSyncTransforms = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { AutoSyncTransforms = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Auto Sync Transforms").Show();
 
         paper.Box("phys_sp_adv").Height(8);
@@ -157,24 +157,24 @@ public class PhysicsSettings : ProjectSettingsBase
         Origami.Header(paper, "phys_h_adv", "Advanced").Underline().Show();
 
         Origami.Checkbox(paper, "phys_determ", EnhancedDeterminism,
-                v => { EnhancedDeterminism = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { EnhancedDeterminism = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Enhanced Determinism").Show();
 
         Origami.Checkbox(paper, "phys_thread", ThreadModel == PhysicsThreadModel.Persistent,
-                v => { ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular; ProjectSettingsRegistry.SaveAll(); })
+                v => { ThreadModel = v ? PhysicsThreadModel.Persistent : PhysicsThreadModel.Regular; EditorRegistries.SaveSettings(); })
             .LabelRight("Persistent Thread Model").Show();
 
         Origami.Checkbox(paper, "phys_auxcp", EnableAuxiliaryContactPoints,
-                v => { EnableAuxiliaryContactPoints = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { EnableAuxiliaryContactPoints = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Auxiliary Contact Points").Show();
 
         Origami.Checkbox(paper, "phys_persist", PersistentContactManifold,
-                v => { PersistentContactManifold = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { PersistentContactManifold = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Persistent Contact Manifold").Show();
 
         EditorGUI.Row(paper, "phys_specrelax", "Speculative Relaxation Factor", () =>
             Origami.Slider(paper, "phys_specrelax_v", SpeculativeRelaxationFactor,
-                v => { SpeculativeRelaxationFactor = v; ProjectSettingsRegistry.SaveAll(); },
+                v => { SpeculativeRelaxationFactor = v; EditorRegistries.SaveSettings(); },
                 0f, 1f).Format("F2").Show());
 
         paper.Box("phys_sp3").Height(8);
@@ -254,7 +254,7 @@ public class PhysicsSettings : ProjectSettingsBase
                                 CollisionMatrixRows[pair.ci] &= ~(1u << pair.cj);
                                 CollisionMatrixRows[pair.cj] &= ~(1u << pair.ci);
                             }
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         });
                 }
             }

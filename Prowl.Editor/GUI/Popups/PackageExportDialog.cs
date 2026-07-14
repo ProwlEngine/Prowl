@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -321,7 +320,7 @@ public static class PackageExportDialog
                     {
                         Id = "a_" + filePath,
                         Label = Path.GetFileName(filePath),
-                        Icon = FileIconRegistry.GetIconForFile(filePath),
+                        Icon = EditorRegistries.GetFileIcon(filePath),
                         IconColor = iconColor,
                         LabelColor = labelColor,
                         Badge = isDep ? "(dependency)" : null,

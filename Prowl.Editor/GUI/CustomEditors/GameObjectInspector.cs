@@ -900,7 +900,7 @@ public static class GameObjectInspector
                 }
 
                 // Component body use custom editor or default PropertyGrid
-                var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
+                var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
                 if (customEditor != null)
                     customEditor.OnGUI(paper, compId, comp);
                 else
@@ -1192,7 +1192,7 @@ public static class GameObjectInspector
     //  Helpers
     // ================================================================
 
-    private static string GetComponentIcon(MonoBehaviour comp) => ComponentIconRegistry.GetIcon(comp);
+    private static string GetComponentIcon(MonoBehaviour comp) => EditorRegistries.GetComponentIcon(comp);
 
     // ================================================================
     //  Anchor editing that preserves screen position

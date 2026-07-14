@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
@@ -52,8 +51,6 @@ public class EditorApplication : Game
     private DockNode? _savedActiveTabNode;
     private TimeData? _savedEditorTime;
 
-    // All registered panel types (from [EditorWindow] attribute scan)
-    private readonly List<(Type type, string path)> _registeredPanels = new();
 
     public override void InitializeWindow(string title, int width, int height)
     {
@@ -120,20 +117,7 @@ public class EditorApplication : Game
             .OnMissingKey(Prowl.Rosetta.MissingKeyBehavior.ReturnKey)
         );
 
-        // Initialize editor registries (now sees user types if assemblies loaded above)
-        InitializeOnLoadRegistry.Initialize();
-        PropertyEditorRegistry.Initialize();
-        CustomEditorRegistry.Initialize();
-        Inspector.AssetImporterEditorRegistry.Initialize();
-        ProjectSettingsRegistry.Initialize();
-        CreateAssetMenuRegistry.Initialize();
-        ThumbnailGeneratorRegistry.Initialize();
-        SceneDropHandlerRegistry.Initialize();
-        CreateGameObjectMenuRegistry.Initialize();
-        FileIconRegistry.Initialize();
-        AssetDoubleClickRegistry.Initialize();
-        ScriptTemplateRegistry.Initialize();
-        EditorCallbacks.Initialize();
+        EditorRegistries.Initialize();
 
         // Cursor lock toasts
         Input.OnCursorLocked += () =>
@@ -141,8 +125,6 @@ public class EditorApplication : Game
         Input.OnCursorLockFailed += () =>
             Toasts.Show(Loc.Get("toast.cursor_lock_failed"), Loc.Get("toast.cursor_lock_failed_msg"), ToastType.Warning, 3f);
 
-        // Menus depend on registries above, so register after initialization
-        ScanAndRegisterPanels();
         RegisterMenus();
 
         if (projectAlreadyInitialized)
@@ -152,7 +134,7 @@ public class EditorApplication : Game
             db.Initialize();
 
             // Load project settings
-            ProjectSettingsRegistry.OnProjectOpened();
+            EditorRegistries.OnProjectOpened();
 
             // Restore layout
             var savedLayout = LoadDockLayout();
@@ -218,7 +200,7 @@ public class EditorApplication : Game
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
                 EngineObjectPropertyEditor.SetFieldType(fieldType);
-            var editor = PropertyEditorRegistry.GetEditor(fieldType);
+            var editor = EditorRegistries.GetPropertyEditor(fieldType);
             if (editor != null)
             {
                 editor.OnGUI(paper, id, label, value, onChange, depth);
@@ -230,7 +212,7 @@ public class EditorApplication : Game
         // per-element foldout when the host has a single-control editor for it - the same set the
         // FallbackFieldDrawer above handles: EngineObject-derived types (GameObject, Material, ...) and
         // AssetRef<T>. Without this, e.g. GameObject[] renders each element's internal fields instead.
-        PropertyGridConfig.IsSimpleFieldType = fieldType => PropertyEditorRegistry.GetEditor(fieldType) != null;
+        PropertyGridConfig.IsSimpleFieldType = fieldType => EditorRegistries.GetPropertyEditor(fieldType) != null;
 
         // Register save handlers
         SaveManager.OnSave += () =>
@@ -958,7 +940,7 @@ public class EditorApplication : Game
         {
             s_fileDialogConfig ??= new OrigamiUI.FileDialogConfig
             {
-                GetIcon = (ext, isDir) => isDir ? EditorIcons.Folder : FileIconRegistry.GetIconForFile("file" + ext),
+                GetIcon = (ext, isDir) => isDir ? EditorIcons.Folder : EditorRegistries.GetFileIcon("file" + ext),
                 QuickAccess =
                 [
                     (Loc.Get("editor.dir_desktop"), EditorIcons.Desktop, Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
@@ -1205,21 +1187,6 @@ public class EditorApplication : Game
             Runtime.Debug.Log($"Loaded {loaded} system fallback font(s) for international text.");
     }
 
-    // ================================================================
-    //  Panel Registration
-    // ================================================================
-
-    private void ScanAndRegisterPanels()
-    {
-        foreach (var type in EditorUtils.GetAllTypes())
-        {
-            if (!typeof(DockPanel).IsAssignableFrom(type) || type.IsAbstract) continue;
-            var attr = type.GetCustomAttribute<EditorWindowAttribute>();
-            if (attr == null) continue;
-            _registeredPanels.Add((type, attr.Path));
-        }
-    }
-
     /// <summary>
     /// Find an open panel of the given type across all docked and floating nodes.
     /// </summary>
@@ -1379,10 +1346,10 @@ public class EditorApplication : Game
         });
 
         // GameObject menu auto-populated from [CreateGameObjectMenu] attributes
-        CreateGameObjectMenuRegistry.RegisterMenuBarItems();
+        EditorRegistries.RegisterGameObjectMenuBarItems();
 
         // Window menu auto-populated from [EditorWindow] attributes
-        foreach (var (type, path) in _registeredPanels)
+        foreach (var (type, path) in EditorRegistries.RegisteredPanels)
         {
             var capturedType = type;
             MenuRegistry.Register($"{Loc.Get("menu.window")}/{path}", () => OpenPanel(capturedType),
@@ -1432,14 +1399,11 @@ public class EditorApplication : Game
         // Release Paper callbacks as they might otherwise pin ALC types across a reload.
         ReleasePaperRetainedCallbacks();
 
-        // 1c. Drop [OnSceneSaved]/[OnUndoRedo] delegates bound to user-script MethodInfos.
-        EditorCallbacks.Clear();
 
         // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
         _savedEditorScene = null;
         _savedEditorTime = null;
         MenuRegistry.Clear();
-        _registeredPanels.Clear();
 
         // 3. The Echo serializer cache lives in an external package so we can't call OnAssemblyUnload there.
         Echo.Serializer.ClearCache();
@@ -1581,16 +1545,7 @@ public class EditorApplication : Game
 
     private void ReinitializeRegistries()
     {
-        // Panel scan is an editor-instance step (needed before the menu rebuild reads the panel list).
-        _registeredPanels.Clear();
-        ScanAndRegisterPanels();
-
-        // Run every [OnAssemblyLoad] hook
         ScriptReloadCallbacks.InvokeAssemblyLoad();
-
-        // Re-scan for [OnSceneSaved]/[OnUndoRedo] methods (Clear() reset _initialized in ReleaseScriptReferences).
-        EditorCallbacks.Initialize();
-
         MenuRegistry.Clear();
         RegisterMenus();
     }
@@ -1725,7 +1680,7 @@ public class EditorApplication : Game
         if (!Application.IsPlaying)
             SaveDockLayout();
 
-        ProjectSettingsRegistry.SaveAll();
+        EditorRegistries.SaveSettings();
     }
 
     public void ReturnToLauncher()
@@ -1804,7 +1759,7 @@ public class EditorApplication : Game
         Undo.Clear();
 
         // Apply physics settings to the new scene
-        try { ProjectSettingsRegistry.Get<PhysicsSettings>().Apply(); } catch { }
+        try { EditorRegistries.GetSettings<PhysicsSettings>().Apply(); } catch { }
 
         // Focus the Game View tab
         FocusPanel(typeof(GameViewPanel));

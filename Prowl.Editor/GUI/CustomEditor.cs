@@ -1,7 +1,5 @@
 using System;
-using System.Reflection;
 
-using Prowl.Editor.Utils;
 using Prowl.PaperUI;
 
 namespace Prowl.Editor.GUI;
@@ -43,23 +41,3 @@ public abstract class CustomEditor
     }
 }
 
-/// <summary>
-/// Registry that discovers and maps CustomEditor subclasses to their target types.
-/// Scans all loaded assemblies for classes with [CustomEditor] attributes.
-/// </summary>
-public static class CustomEditorRegistry
-{
-    private static readonly EditorTypeRegistry<CustomEditor> _reg = new(
-        "CustomEditorRegistry",
-        t => t.GetCustomAttribute<CustomEditorAttribute>()?.TargetType);
-
-    [Runtime.OnAssemblyLoad]
-    public static void Reinitialize() => _reg.Reinitialize();
-
-    [Runtime.OnAssemblyUnload]
-    public static void ClearCache() => _reg.ClearCache();
-
-    public static void Initialize() => _reg.Initialize();
-
-    public static CustomEditor? GetEditor(Type targetType) => _reg.GetEditor(targetType);
-}

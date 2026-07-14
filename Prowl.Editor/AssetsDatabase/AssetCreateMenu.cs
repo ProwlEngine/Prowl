@@ -2,13 +2,14 @@ using System;
 using System.IO;
 using System.Linq;
 
+using Prowl.Echo;
+
 using Prowl.OrigamiUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Core.Tasks;
@@ -32,20 +33,19 @@ public static class AssetCreateMenu
             var task = new Core.Tasks.CreateAssetTask();
 
             task.TaskType = CreateAssetTask.AssetType.Folder;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Folder", Extension = "", Icon = FileIconRegistry.GetIconForExtension("") }, currentFolder);
+            task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, currentFolder);
 
         });
         builder.Separator();
 
-        // Registry-discovered asset types (Scene, Material, InputActions, user-defined, etc.)
-        CreateAssetMenuRegistry.BuildMenu(builder, currentFolder, onCreated);
+        BuildRegisteredEntries(builder, EditorRegistries.AssetMenuEntries, "", currentFolder, onCreated);
 
         builder.Item($"{EditorIcons.WandMagicSparkles}  Shader", () => {
 
             var task = new Core.Tasks.CreateAssetTask();
 
             task.TaskType = CreateAssetTask.AssetType.Shader;
-            task.BeginCreateTask(new CreateAssetMenuRegistry.Entry() { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = FileIconRegistry.GetIconForExtension(".shader") }, currentFolder);
+            task.BeginCreateTask(new AssetMenuEntry { Name = "New Shader", Extension = ".shader", Type = typeof(Shader), Icon = EditorRegistries.GetFileIconForExtension(".shader") }, currentFolder);
 
         });
         builder.Separator();
@@ -75,8 +75,11 @@ public static class AssetCreateMenu
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_folder")}", () => CreateFolder(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator(assets);
 
-        // Registry-discovered asset types
-        CreateAssetMenuRegistry.RegisterMenuBarItems();
+        foreach (var entry in EditorRegistries.AssetMenuEntries)
+        {
+            var captured = entry;
+            MenuRegistry.Register($"{assets}/Create {captured.Name}", () => CreateAsset(captured, GetCurrentFolder()));
+        }
 
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.create_shader")}", () => CreateShader(GetCurrentFolder()));
         MenuRegistry.RegisterSeparator(assets);
@@ -99,6 +102,62 @@ public static class AssetCreateMenu
                 db.Reimport(entry.Guid);
             Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
         });
+    }
+
+    private static void BuildRegisteredEntries(ContextBuilder builder, System.Collections.Generic.IReadOnlyList<AssetMenuEntry> entries,
+        string prefix, string currentFolder, Action<string>? onCreated)
+    {
+        var leaves = new System.Collections.Generic.List<AssetMenuEntry>();
+        var branches = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<AssetMenuEntry>>();
+        foreach (var e in entries)
+        {
+            var rest = e.Name.Substring(prefix.Length);
+            int slash = rest.IndexOf('/');
+            if (slash < 0) { leaves.Add(e); continue; }
+            var head = rest.Substring(0, slash);
+            if (!branches.TryGetValue(head, out var list)) branches[head] = list = [];
+            list.Add(e);
+        }
+        foreach (var leaf in leaves)
+        {
+            var captured = leaf;
+            string display = captured.Name.Substring(prefix.Length);
+            string icon = !string.IsNullOrEmpty(captured.Icon) ? captured.Icon : EditorIcons.FileCirclePlus;
+            builder.Item($"{icon}  {display}", () =>
+            {
+                var task = new Core.Tasks.CreateAssetTask();
+                task.TaskType = Core.Tasks.CreateAssetTask.AssetType.Asset;
+                task.BeginCreateTask(captured, currentFolder);
+            });
+        }
+        foreach (var (head, list) in branches)
+        {
+            var subPrefix = prefix + head + "/";
+            var subList = list;
+            builder.Submenu(head, sub => BuildRegisteredEntries(sub, subList, subPrefix, currentFolder, onCreated));
+        }
+    }
+
+    public static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
+    {
+        string absFolder = GetAbsoluteFolder(relativeFolder);
+        if (!Directory.Exists(absFolder)) return null;
+
+        int lastSlash = entry.Name.LastIndexOf('/');
+        string baseName = lastSlash >= 0 ? entry.Name.Substring(lastSlash + 1) : entry.Name;
+        string name = filename ?? FindUniqueName(absFolder, $"New {baseName}", entry.Extension);
+        string filePath = Path.Combine(absFolder, name);
+
+        try
+        {
+            object? instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
+            var echo = Prowl.Echo.Serializer.Serialize(typeof(object), instance);
+            if (echo != null) File.WriteAllText(filePath, echo.WriteToString());
+            EditorAssetDatabase.Instance?.InvalidateFolderIndex();
+            Debug.Log($"Created {entry.Name}: {name}");
+            return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
+        }
+        catch (Exception ex) { Debug.LogError($"Failed to create {entry.Name}: {ex.Message}"); return null; }
     }
 
     public static string GetCurrentFolder()

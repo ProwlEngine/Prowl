@@ -852,7 +852,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
     private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
     {
-        CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
+        EditorRegistries.BuildGameObjectMenu(builder, parent);
     }
 
     /// <summary>

@@ -44,24 +44,24 @@ public class DesktopBuildProfile : PlatformBuildProfile
     {
         EditorGUI.SettingsRow(paper, "bld_platform", "Platform", () =>
             Origami.EnumDropdown(paper, "bld_platform_v", Platform,
-                v => { Platform = v; ProjectSettingsRegistry.SaveAll(); }).Show(), separator: false);
+                v => { Platform = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
         EditorGUI.SettingsToggle(paper, "bld_selfcontained", "Self-Contained", SelfContained,
-            v => { SelfContained = v; ProjectSettingsRegistry.SaveAll(); }, separator: false);
+            v => { SelfContained = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SettingsToggle(paper, "bld_trimmed", "Publish Trimmed", PublishTrimmed,
-            v => { PublishTrimmed = v; ProjectSettingsRegistry.SaveAll(); }, separator: false);
+            v => { PublishTrimmed = v; EditorRegistries.SaveSettings(); }, separator: false);
 
         EditorGUI.SectionHeader(paper, "bld_window_h", "Window");
 
         EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
             Origami.NumericField<int>(paper, "bld_width_v", WindowWidth,
-                v => { WindowWidth = Math.Max(320, v); ProjectSettingsRegistry.SaveAll(); })
+                v => { WindowWidth = Math.Max(320, v); EditorRegistries.SaveSettings(); })
                 .Min(320).Show(), separator: false);
 
         EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
             Origami.NumericField<int>(paper, "bld_height_v", WindowHeight,
-                v => { WindowHeight = Math.Max(240, v); ProjectSettingsRegistry.SaveAll(); })
+                v => { WindowHeight = Math.Max(240, v); EditorRegistries.SaveSettings(); })
                 .Min(240).Show(), separator: false);
     }
 

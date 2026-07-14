@@ -1,7 +1,5 @@
 using System;
-using System.Reflection;
 
-using Prowl.Editor.Utils;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 
@@ -26,22 +24,3 @@ public abstract class AssetImporterEditor
     public abstract void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset);
 }
 
-/// <summary>
-/// Registry for AssetImporterEditor subclasses.
-/// </summary>
-public static class AssetImporterEditorRegistry
-{
-    private static readonly EditorTypeRegistry<AssetImporterEditor> _reg = new(
-        "AssetImporterEditorRegistry",
-        t => t.GetCustomAttribute<CustomAssetEditorAttribute>()?.TargetType);
-
-    [OnAssemblyLoad]
-    public static void Reinitialize() => _reg.Reinitialize();
-
-    [OnAssemblyUnload]
-    public static void ClearCache() => _reg.ClearCache();
-
-    public static void Initialize() => _reg.Initialize();
-
-    public static AssetImporterEditor? GetEditor(Type assetType) => _reg.GetEditor(assetType);
-}

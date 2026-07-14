@@ -38,7 +38,7 @@ public class TimeSettings : ProjectSettingsBase
             {
                 FixedTimestep = MathF.Max(0.0001f, v);
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }).Min(0.0001f).Show());
 
         Origami.Label(paper, "time_fixed_info",
@@ -49,7 +49,7 @@ public class TimeSettings : ProjectSettingsBase
             {
                 MaxFixedIterations = v;
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }, 1, 15).Show());
 
         EditorGUI.Row(paper, "time_scale", "Default Time Scale", () =>
@@ -57,7 +57,7 @@ public class TimeSettings : ProjectSettingsBase
             {
                 DefaultTimeScale = v;
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }, 0f, 10f).Format("F2").Show());
     }
 }

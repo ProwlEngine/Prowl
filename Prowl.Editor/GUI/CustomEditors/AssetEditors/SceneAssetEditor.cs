@@ -2,8 +2,8 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Registries;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;

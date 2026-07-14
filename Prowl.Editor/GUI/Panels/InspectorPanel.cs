@@ -10,7 +10,6 @@ using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
@@ -303,7 +302,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         // Check for custom asset editor
         if (entry?.MainAssetType != null)
         {
-            var assetEditor = AssetImporterEditorRegistry.GetEditor(entry.MainAssetType);
+            var assetEditor = EditorRegistries.GetAssetEditor(entry.MainAssetType);
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
@@ -366,7 +365,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             if (File.Exists(metaPath))
             {
                 var meta = MetaFile.Read(metaPath);
-                var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
+                var importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
 
                 if (importer != null)
                 {
@@ -506,7 +505,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         var asset = Runtime.AssetDatabase.Get(item.Guid);
         if (asset != null)
         {
-            var subEditor = parentEntry != null ? AssetImporterEditorRegistry.GetEditor(asset.GetType()) : null;
+            var subEditor = parentEntry != null ? EditorRegistries.GetAssetEditor(asset.GetType()) : null;
             if (subEditor != null)
             {
                 Origami.BeginReadOnly();
@@ -695,7 +694,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         PropertyGridUtils.Draw(paper, "insp_gpg", obj);
     }
 
-    private static string GetExtensionIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
+    private static string GetExtensionIcon(string ext) => EditorRegistries.GetFileIconForExtension(ext);
 
     private static void DrawAssetLink(Paper paper, Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
     {

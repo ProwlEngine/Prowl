@@ -190,7 +190,7 @@ public abstract class BuildPipeline
         // Serialize the live (in-memory) settings instances. The in-memory registry is the source
         // of truth at build time. TypeMode.None keeps the output a flat compound keyed by field name
         // so the player (PlayerSettingsLoader) can read it without referencing the settings types.
-        foreach (var entry in ProjectSettingsRegistry.Entries)
+        foreach (var entry in EditorRegistries.SettingsEntries)
         {
             if (!entry.ExportToBuild) continue;
 

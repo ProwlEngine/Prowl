@@ -4,7 +4,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -235,7 +234,7 @@ public static class PackageImportDialog
                     {
                         Id = fullPath,
                         Label = name,
-                        Icon = FileIconRegistry.GetIconForFile(name),
+                        Icon = EditorRegistries.GetFileIcon(name),
                         IconColor = color,
                         LabelColor = enabled ? color : EditorTheme.Ink300,
                         IsLeaf = true,

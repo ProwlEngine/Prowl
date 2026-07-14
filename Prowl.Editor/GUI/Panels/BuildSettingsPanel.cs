@@ -77,7 +77,7 @@ public class BuildSettingsPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        _buildSettings ??= ProjectSettingsRegistry.Get<BuildSettings>();
+        _buildSettings ??= EditorRegistries.GetSettings<BuildSettings>();
         _buildPlatforms ??= GetBuildPlatforms();
         Instance ??= this;
 
@@ -210,7 +210,7 @@ public class BuildSettingsPanel : DockPanel
                 .OnDragEnd(_ =>
                 {
                     paper.SetElementStorage(listEl, "dragSk", (string?)null);
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 });
 
             paper.Box($"bp_sc_{sk}_idx").Width(20).IsNotInteractable()
@@ -222,7 +222,7 @@ public class BuildSettingsPanel : DockPanel
                 Origami.Switch(paper, $"bp_sc_{sk}_sw", scene.Enabled, v =>
                 {
                     scene.Enabled = v;
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 }).NoLabel().Show();
 
             paper.Box($"bp_sc_{sk}_nm").IsNotInteractable()
@@ -237,7 +237,7 @@ public class BuildSettingsPanel : DockPanel
                 .OnClick(idx, (ci, _) =>
                 {
                     scenes.RemoveAt(ci);
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 });
         }
     }
@@ -268,7 +268,7 @@ public class BuildSettingsPanel : DockPanel
         }
 
         _buildSettings.Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
-        ProjectSettingsRegistry.SaveAll();
+        EditorRegistries.SaveSettings();
     }
 
     private void TryStartBuild(bool andRun)
@@ -317,24 +317,24 @@ public class BuildSettingsPanel : DockPanel
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_config", Loc.Get("build.configuration"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_config_v", _buildSettings.Config,
-                        v => { _buildSettings.Config = v; ProjectSettingsRegistry.SaveAll(); }).Show(), separator: false);
+                        v => { _buildSettings.Config = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_out", Loc.Get("build.output_dir"), () =>
                     Origami.TextField(paper, "bp_cfg_out_v", _buildSettings.OutputDirectory,
-                        v => { _buildSettings.OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); }).Show(), separator: false);
+                        v => { _buildSettings.OutputDirectory = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_pkg", Loc.Get("build.asset_packaging"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_pkg_v", _buildSettings.PackagingMode,
-                        v => { _buildSettings.PackagingMode = v; ProjectSettingsRegistry.SaveAll(); }).Show(), separator: false);
+                        v => { _buildSettings.PackagingMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 EditorGUI.SettingsRow(paper, "bp_cfg_asset", Loc.Get("build.asset_export"), () =>
                     Origami.EnumDropdown(paper, "bp_cfg_asset_v", _buildSettings.AssetMode,
-                        v => { _buildSettings.AssetMode = v; ProjectSettingsRegistry.SaveAll(); }).Show(), separator: false);
+                        v => { _buildSettings.AssetMode = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
                 if (_buildSettings.PackagingMode == AssetPackagingMode.ProwlPak)
                     EditorGUI.SettingsRow(paper, "bp_cfg_pak", Loc.Get("build.max_pak_size"), () =>
                         Origami.IntSlider(paper, "bp_cfg_pak_v", _buildSettings.MaxPakSizeMB,
-                            v => { _buildSettings.MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
+                            v => { _buildSettings.MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
                             256, 4096).Show(), separator: false);
 
                 paper.Box("bp_plat_pad").Height(12);

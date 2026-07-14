@@ -5,6 +5,7 @@ using System.Linq;
 
 using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.Registries;
 using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
@@ -16,7 +17,6 @@ using Prowl.Vector;
 using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Utils;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Projects;
@@ -1512,7 +1512,7 @@ public class ProjectPanel : DockPanel
         return $"{(i == 0 ? s.ToString("0") : s.ToString("0.#"))} {u[i]}";
     }
 
-    private static string GetFileIcon(string ext) => FileIconRegistry.GetIconForExtension(ext);
+    private static string GetFileIcon(string ext) => EditorRegistries.GetFileIconForExtension(ext);
 
     private static string GetSubAssetIcon(Type? type)
     {

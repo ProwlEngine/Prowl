@@ -102,7 +102,7 @@ public class ComponentPopoutPanel : DockPanel
 
             // Draw the component editor
             string compId = $"cpop_{comp.Identifier}";
-            var customEditor = CustomEditorRegistry.GetEditor(comp.GetType());
+            var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
             if (customEditor != null)
             {
                 customEditor.OnGUI(paper, compId, comp);

@@ -23,7 +23,7 @@ public class ProjectSettingsPanel : DockPanel
 
     private int _selectedIndex;
 
-    // Shared with ProjectSettingsRegistry.Save keeping the serializer options identical
+    // Shared with EditorRegistries.SaveSettings keeping the serializer options identical
     // means the before/after JSON comparison is stable field-by-field.
     private static readonly JsonSerializerOptions s_jsonOpts = new()
     {
@@ -38,7 +38,7 @@ public class ProjectSettingsPanel : DockPanel
     /// widget mutation becomes undoable without each settings class needing to know
     /// about Undo.
     /// </summary>
-    private static void DiffAndRegisterUndo(ProjectSettingsRegistry.SettingsEntry entry, string beforeJson)
+    private static void DiffAndRegisterUndo(EditorRegistries.SettingsEntry entry, string beforeJson)
     {
         if (Application.IsPlaying) return;
 
@@ -54,15 +54,15 @@ public class ProjectSettingsPanel : DockPanel
             redo: () => ApplyJsonToEntry(capturedEntry, afterJson));
     }
 
-    private static void ApplyJsonToEntry(ProjectSettingsRegistry.SettingsEntry entry, string json)
+    private static void ApplyJsonToEntry(EditorRegistries.SettingsEntry entry, string json)
     {
         try
         {
             var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type, s_jsonOpts);
             if (loaded == null) return;
-            ProjectSettingsRegistry.CopyFields(loaded, entry.Instance);
+            EditorRegistries.CopySettingsFields(loaded, entry.Instance);
             entry.Instance.Apply();
-            ProjectSettingsRegistry.Save(entry);
+            EditorRegistries.SaveSettings(entry);
         }
         catch (Exception ex)
         {
@@ -75,7 +75,7 @@ public class ProjectSettingsPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        var entries = ProjectSettingsRegistry.Entries;
+        var entries = EditorRegistries.SettingsEntries;
         if (entries.Count == 0)
         {
             paper.Box("ps_empty").Size(width, height)

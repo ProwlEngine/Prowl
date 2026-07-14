@@ -63,7 +63,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                         {
                             Tags.RemoveAt(id);
                             Apply();
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         });
                 }
             }
@@ -76,7 +76,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                 {
                     Tags.Add(v);
                     Apply();
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 }
             }).Placeholder("Add new tag...").Width(UnitValue.Stretch()).Show();
 
@@ -114,7 +114,7 @@ public class TagsAndLayersSettings : ProjectSettingsBase
                     {
                         Layers[idx] = v;
                         Apply();
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     }).Show());
             }
         }

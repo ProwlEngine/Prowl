@@ -8,7 +8,6 @@ using Prowl.Echo;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Runtime;
 using Prowl.Editor.GUI.Panels;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.Core.Tasks;
@@ -41,7 +40,7 @@ public class CreateAssetTask : EditorTask
         }, onCancel);
     }
 
-    public async void BeginCreateTask(CreateAssetMenuRegistry.Entry entry, string relativeFolder)
+    public async void BeginCreateTask(AssetMenuEntry entry, string relativeFolder)
     {
         var panel = ProjectPanel.Instance;
         if (panel != null)
@@ -54,8 +53,8 @@ public class CreateAssetTask : EditorTask
                 Name = newName,
                 Icon = TaskType switch
                 {
-                    AssetType.Asset => FileIconRegistry.GetIconForExtension(".asset"),
-                    AssetType.Shader => FileIconRegistry.GetIconForExtension(".shader"),
+                    AssetType.Asset => EditorRegistries.GetFileIconForExtension(".asset"),
+                    AssetType.Shader => EditorRegistries.GetFileIconForExtension(".shader"),
                     AssetType.Folder => EditorIcons.Folder,
                     _ => null
                 }
@@ -129,7 +128,7 @@ public class CreateAssetTask : EditorTask
     /// Create an asset file on disk for the given registry entry.
     /// Returns the relative path on success, null on failure.
     /// </summary>
-    private static string? CreateAsset(CreateAssetMenuRegistry.Entry entry, string relativeFolder, string? filename = null)
+    private static string? CreateAsset(AssetMenuEntry entry, string relativeFolder, string? filename = null)
     {
         string absFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
         if (!Directory.Exists(absFolder)) return null;

@@ -89,7 +89,8 @@ public static class ThumbnailGenerator
         byte[]? pixels = null;
         try
         {
-            ThumbnailGeneratorRegistry.TryGenerate(job.Asset, job.SourceFilePath, out pixels);
+            var gen = EditorRegistries.GetThumbnailGenerator(job.Asset.GetType());
+            if (gen != null) pixels = gen.Generate(job.Asset, job.SourceFilePath);
         }
         catch (Exception ex)
         {

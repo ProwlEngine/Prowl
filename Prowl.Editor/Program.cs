@@ -1,7 +1,6 @@
 using Prowl.Editor.Core;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 
 using System;
@@ -102,7 +101,7 @@ public static class Program
 
         if (BuildMode)
         {
-            ProjectSettingsRegistry.Initialize();
+            EditorRegistries.Initialize();
 
             var project = Project.Open(StartupProjectPath);
             project.SetActive();
@@ -115,7 +114,7 @@ public static class Program
             db.Initialize();
 
             // Load project settings
-            ProjectSettingsRegistry.OnProjectOpened();
+            EditorRegistries.OnProjectOpened();
 
             Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
             return;

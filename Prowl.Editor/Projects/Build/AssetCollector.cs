@@ -158,7 +158,7 @@ public static class AssetCollector
 
         if (!importerCache.TryGetValue(entry.ImporterType, out bool editorOnly))
         {
-            editorOnly = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
+            editorOnly = EditorRegistries.CreateImporterByName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
             importerCache[entry.ImporterType] = editorOnly;
         }
         return editorOnly;

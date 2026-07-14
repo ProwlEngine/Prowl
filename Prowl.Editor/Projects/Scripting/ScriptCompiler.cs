@@ -452,7 +452,7 @@ public static class ScriptCompiler
     {
         try
         {
-            var pkgSettings = ProjectSettingsRegistry.Get<PackageSettings>();
+            var pkgSettings = EditorRegistries.GetSettings<PackageSettings>();
             if (pkgSettings.Packages.Count == 0) return;
 
             var filtered = pkgSettings.Packages.Where(p => p.EditorOnly == isEditorAssembly).ToList();

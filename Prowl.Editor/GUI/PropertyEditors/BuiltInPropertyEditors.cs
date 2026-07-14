@@ -260,7 +260,7 @@ public class ColorPropertyEditor : PropertyEditor
     {
         if (s_palette != null) return s_palette;
 
-        var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+        var settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
         // Convert hex strings to Color list, keep in sync
         var colors = new List<Color>();
         foreach (var hex in settings.ColorPalette)
@@ -281,7 +281,7 @@ public class ColorPropertyEditor : PropertyEditor
                 if (idx >= 0 && idx < settings.ColorPalette.Count)
                 {
                     settings.ColorPalette.RemoveAt(idx);
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 }
             },
         };
@@ -297,7 +297,7 @@ public class ColorPropertyEditor : PropertyEditor
         var capturedColor = color;
         palette.OnAdd = () =>
         {
-            var settings = ProjectSettingsRegistry.Get<ProjectsEditorSettings>();
+            var settings = EditorRegistries.GetSettings<ProjectsEditorSettings>();
             int r = Math.Clamp((int)(capturedColor.R * 255), 0, 255);
             int g = Math.Clamp((int)(capturedColor.G * 255), 0, 255);
             int b = Math.Clamp((int)(capturedColor.B * 255), 0, 255);
@@ -306,7 +306,7 @@ public class ColorPropertyEditor : PropertyEditor
             {
                 settings.ColorPalette.Add(hex);
                 palette.Colors.Add(new Color(capturedColor.R, capturedColor.G, capturedColor.B, 1f));
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }
             return null; // Already added manually
         };

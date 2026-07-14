@@ -72,8 +72,6 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
-        ImporterRegistry.Initialize();
-
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
         CleanupOrphanedMetaTempFiles();
@@ -242,7 +240,7 @@ public class EditorAssetDatabase : IAssetDatabase
         // Validate cache check importer version matches current importer
         if (onMainThread && entry != null && !string.IsNullOrEmpty(entry.ImporterType))
         {
-            var importer = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType);
+            var importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
             if (importer != null && importer.Version != entry.ImporterVersion)
             {
                 // Cache is stale importer was updated since last import
@@ -418,10 +416,10 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         // Determine importer
         string ext = Path.GetExtension(file);
-        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+        string importerName = EditorRegistries.GetImporterTypeName(ext);
 
         // Get default settings from the importer (for new meta files)
-        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var importer = EditorRegistries.CreateImporterByName(importerName);
         var defaultSettings = importer?.DefaultSettings();
 
         // Ensure .meta exists (with default settings if creating new)
@@ -571,16 +569,16 @@ public class EditorAssetDatabase : IAssetDatabase
             // If the entry's ImporterType doesn't resolve (stale entry from before an
             // importer was registered), retry with the extension-based lookup. Common
             // case: asset created before its importer existed -> stuck on DefaultImporter.
-            var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
+            var resolved = EditorRegistries.CreateImporterByName(entry.ImporterType);
             if (resolved == null)
             {
                 string ext = Path.GetExtension(entry.Path);
-                string freshName = ImporterRegistry.GetImporterTypeName(ext);
+                string freshName = EditorRegistries.GetImporterTypeName(ext);
                 if (freshName != entry.ImporterType)
                 {
                     Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' -> '{freshName}'");
                     entry.ImporterType = freshName;
-                    resolved = ImporterRegistry.CreateByTypeName(freshName);
+                    resolved = EditorRegistries.CreateImporterByName(freshName);
                 }
             }
 
@@ -1036,8 +1034,8 @@ public class EditorAssetDatabase : IAssetDatabase
 
         // Create meta with correct importer version
         string ext = Path.GetExtension(relativePath);
-        string importerName = ImporterRegistry.GetImporterTypeName(ext);
-        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        string importerName = EditorRegistries.GetImporterTypeName(ext);
+        var importer = EditorRegistries.CreateImporterByName(importerName);
         var meta = MetaFile.CreateNew(importerName, importer?.Version ?? 1);
         MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
 
@@ -1074,8 +1072,8 @@ public class EditorAssetDatabase : IAssetDatabase
         if (!File.Exists(absolutePath)) return Guid.Empty;
 
         string ext = Path.GetExtension(relativePath);
-        string importerName = ImporterRegistry.GetImporterTypeName(ext);
-        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        string importerName = EditorRegistries.GetImporterTypeName(ext);
+        var importer = EditorRegistries.CreateImporterByName(importerName);
         var meta = MetaFile.EnsureMeta(absolutePath, importerName, importer?.Version ?? 1, importer?.DefaultSettings());
 
         // If we still track this path under a guid that no longer matches the on-disk .meta, the file
@@ -1456,7 +1454,7 @@ public class EditorAssetDatabase : IAssetDatabase
     private void ImportFileChange(string absolutePath, string relativePath, List<string> imported)
     {
         string ext = Path.GetExtension(absolutePath);
-        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+        string importerName = EditorRegistries.GetImporterTypeName(ext);
         var meta = MetaFile.EnsureMeta(absolutePath, importerName);
 
         if (!_guidToEntry.ContainsKey(meta.Guid))
@@ -1611,7 +1609,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             string newExt = Path.GetExtension(evt.Path);
                             if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
                             {
-                                string newImporterName = ImporterRegistry.GetImporterTypeName(newExt);
+                                string newImporterName = EditorRegistries.GetImporterTypeName(newExt);
                                 renamedEntry.ImporterType = newImporterName;
                                 renamedEntry.NeedsReimport = true;
 

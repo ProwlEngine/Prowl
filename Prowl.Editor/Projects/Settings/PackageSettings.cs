@@ -66,7 +66,7 @@ public class PackageSettings : ProjectSettingsBase
                     {
                         Packages[idx].EditorOnly = v;
                         Apply();
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     })
                     .LabelRight("Editor Only").Show();
 
@@ -85,7 +85,7 @@ public class PackageSettings : ProjectSettingsBase
                     {
                         Packages.RemoveAt(ci);
                         Apply();
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     });
             }
         }
@@ -121,7 +121,7 @@ public class PackageSettings : ProjectSettingsBase
                     _newVersion = "";
                     _newEditorOnly = false;
                     Apply();
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 }
             }).Width(140).Show();
 

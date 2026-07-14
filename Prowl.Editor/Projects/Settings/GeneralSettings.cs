@@ -22,14 +22,14 @@ public class GeneralSettings : ProjectSettingsBase
 
         EditorGUI.Row(paper, "gen_company", "Company Name", () =>
             Origami.TextField(paper, "gen_company_v", CompanyName,
-                v => { CompanyName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { CompanyName = v; EditorRegistries.SaveSettings(); }).Show());
 
         EditorGUI.Row(paper, "gen_product", "Product Name", () =>
             Origami.TextField(paper, "gen_product_v", ProductName,
-                v => { ProductName = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { ProductName = v; EditorRegistries.SaveSettings(); }).Show());
 
         EditorGUI.Row(paper, "gen_version", "Version", () =>
             Origami.TextField(paper, "gen_version_v", Version,
-                v => { Version = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { Version = v; EditorRegistries.SaveSettings(); }).Show());
     }
 }
