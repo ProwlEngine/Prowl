@@ -468,6 +468,26 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.Contains(orphanGuid, entry!.Dependencies);
     }
 
+    // AudioSource used to serialize the resolved AudioClip inline (Serializer.Serialize(Clip, ctx))
+    // instead of its AssetRef<AudioClip> field, so the clip's GUID never reached ctx.Dependencies and
+    // a DependenciesOnly build would ship a scene with no audio.
+    [Fact]
+    public void Scene_TracksAudioSourceClipDependency()
+    {
+        var clip = new AudioClip([1, 2, 3, 4]) { AssetID = Guid.NewGuid() };
+
+        var go = new GameObject("Holder");
+        go.AddComponent<AudioSource>().Clip = clip;
+
+        var scene = new Scene();
+        scene.Add(go);
+        Guid sceneGuid = CreateSceneAsset(scene, "Main.scene");
+
+        var entry = Assets.GetEntry(sceneGuid);
+        Assert.NotNull(entry);
+        Assert.Contains(clip.AssetID, entry!.Dependencies);
+    }
+
     // ---------------------------------------------------------------------
     // Edge cases
     // ---------------------------------------------------------------------
