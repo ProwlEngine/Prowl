@@ -3,6 +3,7 @@ using System.IO;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -36,8 +37,6 @@ public class ModelAssetEditor : AssetImporterEditor
     private bool _settingsLoaded;
     private bool _settingsDirty;
     private Guid _currentGuid;
-
-    private static UnitValue ST => UnitValue.StretchOne;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -74,7 +73,7 @@ public class ModelAssetEditor : AssetImporterEditor
             }
 
             // Preview hero card wraps the 3D orbit preview in themed chrome.
-            using (paper.Box($"{id}_previewCard").Width(ST).Height(200)
+            using (paper.Box($"{id}_previewCard").Height(200)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
                 .Rounded(8).Clip()
                 .BackgroundColor(EditorTheme.Neutral300)
@@ -95,7 +94,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 else if (typeof(AnimationClip).IsAssignableFrom(t)) animCount++;
             }
 
-            using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
+            using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
                 EditorGUI.StatChip(paper, $"{id}_st_meshes", $"{meshCount} {(meshCount == 1 ? "Mesh" : "Meshes")}", font);
@@ -103,7 +102,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 if (animCount > 0)
                     EditorGUI.StatChip(paper, $"{id}_st_anims", $"{animCount} {(animCount == 1 ? "Animation" : "Animations")}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_subs", $"{entry.SubAssets.Length} Sub-Assets", font);
-                paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
+                paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
             }
         }
 
@@ -117,7 +116,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 var sub = entry.SubAssets[i];
                 string typeName = sub.Type?.Name ?? "Unknown";
                 EditorGUI.Row(paper, $"{id}_sub_{i}", sub.Name, () =>
-                    paper.Box($"{id}_sub_{i}_v").Width(ST).Height(m.RowHeight).IsNotInteractable()
+                    paper.Box($"{id}_sub_{i}_v").Height(m.RowHeight).IsNotInteractable()
                         .Text(typeName, font).TextColor(EditorTheme.Ink400)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft));
             }
@@ -178,11 +177,11 @@ public class ModelAssetEditor : AssetImporterEditor
         // Save / Reimport CTA
         if (_settingsDirty)
         {
-            using (paper.Row($"{id}_btns").Width(ST).Height(UnitValue.Auto)
+            using (paper.Row($"{id}_btns").Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
                 .RowBetween(m.SpacingMedium).Enter())
             {
-                paper.Box($"{id}_btn_spacer").Width(ST).Height(1).IsNotInteractable();
+                paper.Box($"{id}_btn_spacer").Height(1).IsNotInteractable();
 
                 paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
                     .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)

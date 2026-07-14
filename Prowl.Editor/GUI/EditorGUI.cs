@@ -8,7 +8,6 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
-using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
@@ -20,9 +19,6 @@ namespace Prowl.Editor.GUI;
 /// </summary>
 public static class EditorGUI
 {
-    private static UnitValue ST => UnitValue.StretchOne;
-    private static UnitValue STV => UnitValue.Stretch();
-
     // =====================================================================
     //  Rows
     // =====================================================================
@@ -49,11 +45,11 @@ public static class EditorGUI
         }
 
         // A Spacing-driven gap after the divider, so between-setting spacing tracks the theme's Spacing.
-        using (paper.Column(id).Width(ST).Height(UnitValue.Auto).Margin(0, 0, 0, m.Spacing).Enter())
+        using (paper.Column(id).Height(UnitValue.Auto).Margin(0, 0, 0, m.Spacing).Enter())
         {
             DrawRowLine(paper, $"{id}_r", label, drawControl, m, labelWidth, compact, minHeight,
                 vpad: m.PaddingSmall, bottomMargin: 0);
-            paper.Box($"{id}_d").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box($"{id}_d").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         }
     }
 
@@ -67,19 +63,19 @@ public static class EditorGUI
         float hpad = compact ? 0f : m.PaddingLarge;
         var labelColor = compact ? EditorTheme.Ink500 : Origami.Current.Ink.C300;
         float labelSize = compact ? EditorTheme.FontSizeSmall : m.FontSize;
-        using (paper.Row(id).Width(ST).Height(UnitValue.Auto).MinHeight(rh)
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh)
             .Padding(hpad, hpad, vpad, vpad).RowBetween(m.Padding)
             .Margin(0, 0, 0, bottomMargin).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
                 paper.Box($"{id}_l").Width(labelWidth ?? m.LabelWidth).Height(rh)
-                    .Margin(0, 0, ST, ST).IsNotInteractable()
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(label, font).TextColor(labelColor).FontSize(labelSize)
                     .Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
             // The control sizes to its widget and centers via stretch margins. (A forced MinHeight here
             // used to top-align the widget while the label stayed centered, so they didn't line up.)
-            using (paper.Box($"{id}_c").Width(ST).Height(UnitValue.Auto).Margin(0, 0, ST, ST).Enter())
+            using (paper.Box($"{id}_c").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 drawControl();
         }
     }
@@ -94,8 +90,8 @@ public static class EditorGUI
         Action<bool> setter, bool separator = true, bool compact = false)
         => SettingsRow(paper, id, label, () =>
         {
-            using (paper.Row($"{id}_tw").Width(ST).Height(Origami.Current.Metrics.RowHeight)
-                .Margin(0, 0, ST, ST).Enter())
+            using (paper.Row($"{id}_tw").Height(Origami.Current.Metrics.RowHeight)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Switch(paper, $"{id}_sw", value, setter).NoLabel().Show();
         }, separator, compact: compact);
 
@@ -119,35 +115,36 @@ public static class EditorGUI
     // =====================================================================
 
     /// <summary>Left category rail. Each entry is (id, label, icon glyph). Returns the sidebar width
-    /// so the caller can size its content area.</summary>
+    /// so the caller can size its content area. <paramref name="footer"/> is called at the bottom of the
+    /// item list, inside the same centered group, for adding a note card or other trailing widget.</summary>
     public static float Sidebar(Paper paper, string id, (string id, string label, string icon)[] cats,
-        string active, Action<string> onSelect, float width = 148f)
+        string active, Action<string> onSelect, float width = 148f, float rowHeight = 30f, Action? footer = null)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return width;
 
-        // Dark sidebar; the centered band re-uses the same colour so its overlap reads a touch darker.
-        using (paper.Column(id).Width(width).Height(ST).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
-        using (paper.Column($"{id}_grp").Width(ST).Height(UnitValue.Auto).Margin(0, 0, STV, STV)
+        using (paper.Column(id).Width(width).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
+        using (paper.Column($"{id}_grp").Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .Padding(8, 8, 10, 10).ColBetween(2).BackgroundColor(Color.FromArgb(36, 0, 0, 0)).Enter())
         {
             foreach (var (cid, label, icon) in cats)
             {
                 bool on = cid == active;
-                using (paper.Row($"{id}_{cid}").Width(ST).Height(30).Rounded(8).Padding(10, 10, 0, 0)
+                using (paper.Row($"{id}_{cid}").Height(rowHeight).Rounded(8).Padding(10, 10, 0, 0)
                     .BackgroundColor(on ? EditorTheme.Selected : Color.Transparent)
                     .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End()
                     .OnClick(cid, (c, _) => onSelect(c))
                     .Enter())
                 {
-                    paper.Box($"{id}_{cid}_i").Width(16).Height(30).IsNotInteractable()
+                    paper.Box($"{id}_{cid}_i").Width(16).Height(rowHeight).IsNotInteractable()
                         .Text(icon, font).TextColor(on ? EditorTheme.Ink500 : EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-                    paper.Box($"{id}_{cid}_l").Width(ST).Height(30).Margin(9, 0, 0, 0).IsNotInteractable()
+                    paper.Box($"{id}_{cid}_l").Height(rowHeight).Margin(9, 0, 0, 0).IsNotInteractable()
                         .Text(label, font).TextColor(on ? EditorTheme.Ink500 : EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
             }
+            footer?.Invoke();
         }
         return width;
     }
@@ -163,14 +160,17 @@ public static class EditorGUI
         float leftPad = compact ? 0f : m.PaddingLarge;
         float topGap = compact ? (first ? 0f : EditorTheme.Spacing * 2f) : (first ? 2f : 14f);
         float botGap = compact ? EditorTheme.Spacing : 4f;
-        paper.Box(id).Width(ST).Height(h).Margin(leftPad, 0, topGap, botGap).IsNotInteractable()
+        paper.Box(id).Height(h).Margin(leftPad, 0, topGap, botGap).IsNotInteractable()
             .Text(text.ToUpperInvariant(), font).TextColor(EditorTheme.AccentText)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
     }
 
-    /// <summary>Full-width 1px separator (for rows a caller draws itself, e.g. color fields).</summary>
-    public static void Divider(Paper paper, string id)
-        => paper.Box(id).Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+    /// <summary>Full-width 1px separator. <paramref name="verticalMargin"/> adds equal top and bottom gap.</summary>
+    public static void Divider(Paper paper, string id, float verticalMargin = 0f)
+    {
+        var b = paper.Box(id).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+        if (verticalMargin > 0f) b.Margin(0, 0, verticalMargin, verticalMargin);
+    }
 
     /// <summary>
     /// A grouped section panel that visually nests its content: a soft rounded inset card with a clean
@@ -179,7 +179,7 @@ public static class EditorGUI
     public static void Group(Paper paper, string id, string? title, Action body, string? icon = null)
     {
         var m = Origami.Current.Metrics;
-        using (paper.Column(id).Width(ST).Height(UnitValue.Auto)
+        using (paper.Column(id).Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge)
             .Rounded(10).Clip()
             .BackgroundColor(Color.FromArgb(38, 0, 0, 0)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
@@ -187,21 +187,21 @@ public static class EditorGUI
             var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
             if (!string.IsNullOrEmpty(title) && font != null)
             {
-                using (paper.Row($"{id}_gh").Width(ST).Height(32).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0)
+                using (paper.Row($"{id}_gh").Height(32).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0)
                     .RowBetween(m.SpacingMedium).IsNotInteractable().Enter())
                 {
                     if (!string.IsNullOrEmpty(icon))
-                        paper.Box($"{id}_gi").Width(16).Height(ST).Margin(0, 0, STV, STV).IsNotInteractable()
+                        paper.Box($"{id}_gi").Width(16).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                             .Text(icon, EditorTheme.DefaultFont).TextColor(EditorTheme.AccentText)
                             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-                    paper.Box($"{id}_gt").Width(ST).Height(ST).Margin(0, 0, STV, STV).IsNotInteractable()
+                    paper.Box($"{id}_gt").Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(title, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
-                paper.Box($"{id}_gd").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+                paper.Box($"{id}_gd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
             }
 
-            using (paper.Column($"{id}_gb").Width(ST).Height(UnitValue.Auto)
+            using (paper.Column($"{id}_gb").Height(UnitValue.Auto)
                 .Padding(m.SpacingSmall, m.SpacingSmall, m.SpacingMedium, m.SpacingMedium).Enter())
                 body();
         }
@@ -212,7 +212,7 @@ public static class EditorGUI
     public static void Chip(Paper paper, string id, string label, Action onClick, float leftGap = 0f)
     {
         var font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, ST, ST).Rounded(8).Padding(11, 11, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(leftGap, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(11, 11, 0, 0)
             .BackgroundColor(EditorTheme.Neutral400).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Hovered.BorderColor(EditorTheme.BorderStrong).End()
             .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
@@ -224,7 +224,7 @@ public static class EditorGUI
     public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
     {
         var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        paper.Box(id).Width(grow ? ST : UnitValue.Auto).Height(height).Margin(0, 0, ST, ST).Rounded(8).Padding(16, 16, 0, 0)
+        paper.Box(id).Width(grow ? UnitValue.StretchOne : UnitValue.Auto).Height(height).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(8).Padding(16, 16, 0, 0)
             .BackgroundColor(bg)
             .Hovered.BackgroundColor(Color.FromArgb(230, bg.R, bg.G, bg.B)).End()
             .Text(label, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
@@ -237,28 +237,54 @@ public static class EditorGUI
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
-        paper.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, STV, STV)
+        paper.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(icon, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(_ => onClick());
     }
 
-    /// <summary>A centered "nothing here" placeholder for empty lists and panels.</summary>
-    public static void EmptyState(Paper paper, string id, string message, FontFile font)
+    /// <summary>A 26x26 icon button used in panel toolbars. Highlights with accent when active.</summary>
+    public static void ToolbarIconBtn(Paper paper, string id, string glyph, bool active, Action onClick)
     {
-        paper.Box(id).Width(ST).Height(60)
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+        paper.Box(id).Width(26).Height(26).Rounded(7).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .BackgroundColor(active ? EditorTheme.Selected : Color.Transparent)
+            .Transition(GuiProp.BackgroundColor, 0.15f)
+            .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
+            .Text(glyph, font).TextColor(active ? EditorTheme.Accent : EditorTheme.Ink300).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(_ => onClick());
+    }
+
+    /// <summary>A centered "nothing here" placeholder for empty lists and panels.</summary>
+    public static void EmptyState(Paper paper, string id, string message, Scribe.FontFile font)
+    {
+        paper.Box(id).Height(60)
             .Text(message, font).TextColor(EditorTheme.Ink300)
             .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
             .IsNotInteractable();
     }
 
     /// <summary>A read-only info chip for displaying asset statistics inline.</summary>
-    public static void StatChip(Paper paper, string id, string text, FontFile font)
+    public static void StatChip(Paper paper, string id, string text, Scribe.FontFile font)
     {
-        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
+        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(6).Padding(9, 9, 0, 0)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable()
             .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
+
+    /// <summary>A purple-tinted banner shown when a drag payload can be dropped in the current area.</summary>
+    public static void DropBanner(Paper paper, string id, string text)
+    {
+        var font = EditorTheme.DefaultFont;
+        paper.Box(id).Height(24)
+            .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
+            .Rounded(3)
+            .Text(text, font)
+            .TextColor(EditorTheme.Purple400)
+            .FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter);
     }
 
@@ -301,7 +327,7 @@ public static class EditorGUI
         {
             var col = ColorRamp.ParseHex(hex);
             bool on = string.Equals(ramp.Primary, hex, StringComparison.OrdinalIgnoreCase);
-            paper.Box($"{id}_p_{hex}").Width(28).Height(28).Margin(0, sp * 2, ST, ST)
+            paper.Box($"{id}_p_{hex}").Width(28).Height(28).Margin(0, sp * 2, UnitValue.StretchOne, UnitValue.StretchOne)
                 .OnClick(hex, (h, _) => { ramp.Primary = h; ramp.OverrideAll = false; s.ApplyTheme(); s.Save(); })
                 .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                 {
@@ -330,19 +356,19 @@ public static class EditorGUI
         Row(paper, id, label, () =>
         {
             if (inline)
-                using (paper.Row($"{id}_r").Width(ST).Height(UnitValue.Auto).MinHeight(30).Enter())
+                using (paper.Row($"{id}_r").Height(UnitValue.Auto).MinHeight(30).Enter())
                 {
-                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, pad * 2, ST, ST).Enter())
+                    using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, pad * 2, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                         ColorBox();
-                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Margin(0, 0, ST, ST).Enter())
+                    using (paper.Row($"{id}_pal").Height(28).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                         Palette();
                 }
             else
-                using (paper.Column($"{id}_r").Width(ST).Height(UnitValue.Auto).Enter())
+                using (paper.Column($"{id}_r").Height(UnitValue.Auto).Enter())
                 {
                     using (paper.Box($"{id}_cb").Width(130).Height(28).Margin(0, 0, 0, sp * 2).Enter())
                         ColorBox();
-                    using (paper.Row($"{id}_pal").Width(ST).Height(28).Enter())
+                    using (paper.Row($"{id}_pal").Height(28).Enter())
                         Palette();
                 }
         }, compact: true, minHeight: inline ? 36f : 68f);

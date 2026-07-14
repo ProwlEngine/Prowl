@@ -611,7 +611,6 @@ public class EditorApplication : Game
     {
         float clH = HeaderChipHeight;
         float pad = EditorTheme.DockPadding;
-        var ST = UnitValue.Stretch();
         float blur = Origami.Current.Metrics.WindowBackdropBlur;
         float rectPadX = 10f, dot = 8f;
 
@@ -632,7 +631,7 @@ public class EditorApplication : Game
         // its text, so there's no width math or MeasureText.
         using (paper.Row("hdr_status").PositionType(PositionType.SelfDirected)
             .Width(UnitValue.Auto).Height(clH)
-            .Margin(ST, UnitValue.Pixels(pad), ST, ST).RowBetween(6).Enter())
+            .Margin(UnitValue.StretchOne, UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne).RowBetween(6).Enter())
         {
             // FPS chip: [glowing dot + count] left-anchored, [FPS + X.Xms] right-anchored, spacer between.
             // Auto width with a 120px floor lets the count grow into the spacer without moving anything.
@@ -640,16 +639,16 @@ public class EditorApplication : Game
                 .Padding(rectPadX, rectPadX, 0, 0).BackdropBlur(blur)
                 .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
-                paper.Box("hs_fps_dot").Width(dot).Height(dot).Margin(0, 7, ST, ST).Rounded(dot / 2f)
+                paper.Box("hs_fps_dot").Width(dot).Height(dot).Margin(0, 7, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(dot / 2f)
                     .BackgroundColor(dotColor).Glow(0, 0, 8, 0, dotColor).IsNotInteractable();
-                paper.Box("hs_fps_num").Width(UnitValue.Auto).Height(clH).Margin(0, 0, ST, ST).IsNotInteractable()
+                paper.Box("hs_fps_num").Width(UnitValue.Auto).Height(clH).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(fpsNum, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleLeft);
-                paper.Box("hs_fps_sp").Width(ST).Height(1).IsNotInteractable();
-                paper.Box("hs_fps_lbl").Width(UnitValue.Auto).Height(clH).Margin(0, 4, ST, ST).IsNotInteractable()
+                paper.Box("hs_fps_sp").Height(1).IsNotInteractable();
+                paper.Box("hs_fps_lbl").Width(UnitValue.Auto).Height(clH).Margin(0, 4, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text("FPS", font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleRight);
-                paper.Box("hs_fps_ms").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(33)).Height(clH).Margin(0, 0, ST, ST).IsNotInteractable()
+                paper.Box("hs_fps_ms").Width(UnitValue.Auto).MinWidth(UnitValue.Pixels(33)).Height(clH).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(msText, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleRight);
             }
@@ -669,13 +668,12 @@ public class EditorApplication : Game
     // A themed glass chip that auto-sizes to its text (horizontal padding + Auto width, no MeasureText).
     private static void StatusChip(Paper paper, string id, float hRect, string text, Prowl.Scribe.FontFile font)
     {
-        var ST = UnitValue.Stretch();
         using (paper.Row(id).Width(UnitValue.Auto).Height(hRect).Padding(10, 10, 0, 0).Rounded(7)
             .BackdropBlur(Origami.Current.Metrics.WindowBackdropBlur)
             .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable().Enter())
         {
-            paper.Box(id + "_t").Width(UnitValue.Auto).Height(hRect).Margin(0, 0, ST, ST).IsNotInteractable()
+            paper.Box(id + "_t").Width(UnitValue.Auto).Height(hRect).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleCenter);
         }
@@ -737,12 +735,11 @@ public class EditorApplication : Game
         float pad = EditorTheme.DockPadding;
         float barH = HeaderChipHeight;
         var font = EditorTheme.DefaultFont;
-        var ST = UnitValue.Stretch();
         // Menu labels + a Theme quick-access button, pinned to the left edge and vertically centered by
         // margins; auto width hugs the menus.
         using (paper.Row("menubar_host").PositionType(PositionType.SelfDirected)
             .Width(UnitValue.Auto).Height(barH)
-            .Margin(UnitValue.Pixels(pad), ST, ST, ST).RowBetween(4).Enter())
+            .Margin(UnitValue.Pixels(pad), UnitValue.StretchOne, UnitValue.StretchOne, UnitValue.StretchOne).RowBetween(4).Enter())
         {
             var bar = Origami.MenuBar(paper, "menubar").Height(barH);
             foreach (var root in MenuRegistry.RootMenus)
@@ -815,7 +812,6 @@ public class EditorApplication : Game
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        UnitValue ST = UnitValue.StretchOne;
         float sh = EditorTheme.StatusBarHeight;
         float fs = EditorTheme.FontSizeSmall;
         var dim = EditorTheme.Ink300;
@@ -825,11 +821,11 @@ public class EditorApplication : Game
         void GlyphCell(string id, string glyph, System.Drawing.Color glyphColor, string text,
             System.Drawing.Color textColor, string? tooltip = null)
         {
-            var row = paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, ST, ST);
+            var row = paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, UnitValue.StretchOne, UnitValue.StretchOne);
             if (tooltip != null) row.Tooltip(tooltip);
             using (row.Enter())
             {
-                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 4, ST, ST).IsNotInteractable()
+                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 4, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Text(glyph, font).TextColor(glyphColor).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleCenter);
                 paper.Box(id + "_t").Width(UnitValue.Auto).Height(sh).IsNotInteractable()
                     .Text(text, font).TextColor(textColor).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleLeft);
@@ -840,9 +836,9 @@ public class EditorApplication : Game
         void CounterCell(string id, LogSeverity sev, int n)
         {
             var (icon, color) = ConsolePanel.SeverityStyle(sev);
-            using (paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, ST, ST).Enter())
+            using (paper.Row(id).Width(UnitValue.Auto).Height(sh).Margin(0, 8, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             {
-                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 3, ST, ST).IsNotInteractable()
+                paper.Box(id + "_i").Width(14).Height(sh).Margin(0, 3, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Icon(paper, icon, color, size: 12f);
                 paper.Box(id + "_t").Width(UnitValue.Auto).Height(sh).IsNotInteractable()
                     .Text(n.ToString(), font).TextColor(dim).FontSize(fs).Alignment(PaperUI.TextAlignment.MiddleLeft);
@@ -868,13 +864,13 @@ public class EditorApplication : Game
                 {
                     var (sev, msg, src, cnt) = last.Value;
                     var (icon, color) = ConsolePanel.SeverityStyle(sev);
-                    paper.Box("sb_log_i").Width(16).Height(sh).Margin(0, 5, ST, ST).IsNotInteractable()
+                    paper.Box("sb_log_i").Width(16).Height(sh).Margin(0, 5, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Icon(paper, icon, color, size: 13f);
-                    paper.Box("sb_log_m").Width(UnitValue.StretchOne).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
+                    paper.Box("sb_log_m").Width(UnitValue.StretchOne).Height(sh).Margin(0, 6, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(msg, font).TextTruncate().TextColor(EditorTheme.Ink400).FontSize(fs)
                         .Alignment(PaperUI.TextAlignment.MiddleLeft).TextTruncate();
                     if (!string.IsNullOrEmpty(src))
-                        paper.Box("sb_log_s").Width(UnitValue.Auto).Height(sh).Margin(0, 6, ST, ST).IsNotInteractable()
+                        paper.Box("sb_log_s").Width(UnitValue.Auto).Height(sh).Margin(0, 6, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                             .Text($"[{src}]", mono).TextColor(EditorTheme.InkDim).FontSize(fs - 1)
                             .Alignment(PaperUI.TextAlignment.MiddleLeft);
                     if (cnt > 1)
@@ -883,7 +879,7 @@ public class EditorApplication : Game
                             .Alignment(PaperUI.TextAlignment.MiddleLeft);
                 }
 
-                //paper.Box("sb_console_spacer").Width(ST);
+                //paper.Box("sb_console_spacer");
 
                 var (info, warn, err) = ConsolePanel.LogCounts();
                 CounterCell("sb_cnt_info", LogSeverity.Normal, info);
@@ -904,13 +900,13 @@ public class EditorApplication : Game
             Divider("sb_div2");
 
             // ---------- Column 3: editor stats on the left, graphics backend + Git on the right ----------
-            using (paper.Row("sb_stats").Width(ST).Height(sh).Padding(pad, pad, 0, 0).Enter())
+            using (paper.Row("sb_stats").Height(sh).Padding(pad, pad, 0, 0).Enter())
             {
                 long memMb = _dispMemMb;
                 GlyphCell("sb_sel", EditorIcons.ArrowPointer, EditorTheme.Ink300, Selection.Count.ToString(), dim, Loc.Get("editor.stat_selected"));
                 GlyphCell("sb_mem", EditorIcons.Microchip, EditorTheme.Ink300, $"{memMb} MB", dim, Loc.Get("editor.stat_memory"));
 
-                paper.Box("sb_stats_spacer").Width(ST);
+                paper.Box("sb_stats_spacer");
 
                 GlyphCell("sb_gfx", EditorIcons.Display, EditorTheme.Ink300, GraphicsBackend, EditorTheme.Ink400);
 

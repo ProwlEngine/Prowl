@@ -5,6 +5,7 @@ using System.Linq;
 
 using Prowl.OrigamiUI;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -88,23 +89,6 @@ public class ProjectPanel : DockPanel
     private readonly Stack<string> _navBack = new();
     private readonly Stack<string> _navForward = new();
 
-    // -- palette helpers (accent/borders pull from EditorTheme so a retheme flows) --
-    private static Color Col(int r, int g, int b, int a = 255) => Color.FromArgb(a, r, g, b);
-    private static Color Amber => EditorTheme.Amber400;
-    private static Color Green => EditorTheme.Green400;
-    private static Color THi => EditorTheme.Ink500;
-    private static Color TBody => EditorTheme.Ink400;
-    private static Color TMid => EditorTheme.Ink300;
-    private static Color TLo => EditorTheme.InkDim;
-    private static Color TDim => EditorTheme.InkFaint;
-    private static Color Raised => EditorTheme.Neutral400;
-    private static Color GlassIn => EditorTheme.Glass;
-    private static Color Popover => EditorTheme.Popover;
-    private static Color BdSoft => EditorTheme.BorderSoft;
-    private static Color BdStrong => EditorTheme.BorderStrong;
-    private static Color Acc => EditorTheme.Accent;
-
-    private static UnitValue ST => UnitValue.StretchOne;
     private bool IsListView => _thumbnailSize < ListThreshold;
 
     private void NavigateTo(string folder)
@@ -269,18 +253,18 @@ public class ProjectPanel : DockPanel
 
                 DrawCrumbs(paper, font);
 
-                paper.Box("proj_tb_spacer").Width(ST);
+                paper.Box("proj_tb_spacer");
 
-                IconBtn(paper, font, "proj_view", IsListView ? EditorIcons.TableCellsLarge : EditorIcons.List,
+                ToolbarIconBtn(paper, "proj_view", IsListView ? EditorIcons.TableCellsLarge : EditorIcons.List,
                     false, () => _thumbnailSize = IsListView ? 64f : 24f);
 
-                using (paper.Row("proj_search_wrap").Width(150).Height(25).Margin(0, 0, ST, ST).Enter())
+                using (paper.Row("proj_search_wrap").Width(150).Height(25).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "proj_search", _searchText, v => _searchText = v, Loc.Get("project.search")).Width(150).Height(25).Show();
 
-                IconBtn(paper, font, "proj_opts", EditorIcons.EllipsisVertical, false,
+                ToolbarIconBtn(paper, "proj_opts", EditorIcons.EllipsisVertical, false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
-            paper.Box("proj_tb_div").Height(1).BackgroundColor(BdSoft).IsNotInteractable();
+            paper.Box("proj_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         }
     }
 
@@ -303,20 +287,10 @@ public class ProjectPanel : DockPanel
         b.Toggle(Loc.Get("project.group_by_type"), () => _groupByType = !_groupByType, () => _groupByType);
     }
 
-    // a2 "ib" icon button: hover glass, optional accent 'on' state.
-    private void IconBtn(Paper p, Scribe.FontFile font, string id, string glyph, bool on, Action onClick)
-    {
-        p.Box(id).Width(27).Height(27).Rounded(7).Margin(0, 0, ST, ST)
-            .BackgroundColor(on ? EditorTheme.Selected : Color.Transparent)
-            .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .Text(glyph, font).TextColor(on ? Acc : TMid).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(_ => onClick());
-    }
-
     private void NavBtn(Paper p, Scribe.FontFile font, string id, string glyph, bool enabled, Action onClick)
     {
-        var b = p.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, ST, ST)
-            .Text(glyph, font).TextColor(enabled ? TMid : TDim).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
+        var b = p.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+            .Text(glyph, font).TextColor(enabled ? EditorTheme.Ink300 : EditorTheme.InkFaint).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
         if (enabled) { b.Hovered.BackgroundColor(EditorTheme.Hover).End(); b.OnClick(_ => onClick()); }
         else b.IsNotInteractable();
     }
@@ -335,7 +309,7 @@ public class ProjectPanel : DockPanel
             }
         }
 
-        using (p.Row("proj_crumbs").Width(UnitValue.Auto).Height(24).Clip().Margin(4, 0, ST, ST).Enter())
+        using (p.Row("proj_crumbs").Width(UnitValue.Auto).Height(24).Clip().Margin(4, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             Origami.Breadcrumb(p, "proj_crumbs_bc", items, it => NavigateTo((string)it.UserData!))
                 .Width(UnitValue.Auto).Height(24).Show();
     }
@@ -351,27 +325,27 @@ public class ProjectPanel : DockPanel
 
         using (paper.Row("proj_footer").Height(FooterHeight)
             .Padding(11, 11, 0, 0)
-            .BackgroundColor(Col(0, 0, 0, 36))
+            .BackgroundColor(Color.FromArgb(36, 0, 0, 0))
             .Enter())
         {
             paper.Box("proj_foot_div").PositionType(PositionType.SelfDirected).Position(0, 0).Size(width, 1)
-                .BackgroundColor(BdSoft).IsNotInteractable();
+                .BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-            paper.Box("proj_foot_count").Width(UnitValue.Auto).Height(FooterHeight).Margin(0, 0, ST, ST)
-                .Text(Loc.Get("project.item_count", new { count = entries.Count }), mono).TextColor(TLo).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+            paper.Box("proj_foot_count").Width(UnitValue.Auto).Height(FooterHeight).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Text(Loc.Get("project.item_count", new { count = entries.Count }), mono).TextColor(EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             if (selCount > 0)
-                paper.Box("proj_foot_sel").Width(UnitValue.Auto).Height(FooterHeight).Margin(6, 0, ST, ST)
+                paper.Box("proj_foot_sel").Width(UnitValue.Auto).Height(FooterHeight).Margin(6, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Text("- " + Loc.Get("project.selected_count", new { count = selCount }), mono).TextColor(EditorTheme.AccentText).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-            paper.Box("proj_foot_spacer").Width(ST);
+            paper.Box("proj_foot_spacer");
 
-            paper.Box("proj_foot_ico1").Width(14).Height(FooterHeight).Margin(0, 0, ST, ST).IsNotInteractable()
-                .Text(EditorIcons.Image, font).TextColor(TDim).FontSize(11f).Alignment(TextAlignment.MiddleCenter);
-            using (paper.Row("proj_foot_sld_wrap").Width(90).Height(FooterHeight).ChildTop(ST).ChildBottom(ST).Margin(7, 0, ST, ST).Enter())
+            paper.Box("proj_foot_ico1").Width(14).Height(FooterHeight).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                .Text(EditorIcons.Image, font).TextColor(EditorTheme.InkFaint).FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+            using (paper.Row("proj_foot_sld_wrap").Width(90).Height(FooterHeight).ChildTop(UnitValue.StretchOne).ChildBottom(UnitValue.StretchOne).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Slider(paper, "proj_thumb_slider", _thumbnailSize, v => _thumbnailSize = v, MinThumbSize, MaxThumbSize)
                     .ShowValue(false).Width(90f).TrackThickness(4).ThumbSize(12).Height(18).Show();
-            paper.Box("proj_foot_ico2").Width(16).Height(FooterHeight).Margin(7, 0, ST, ST).IsNotInteractable()
-                .Text(EditorIcons.Image, font).TextColor(TLo).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
+            paper.Box("proj_foot_ico2").Width(16).Height(FooterHeight).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                .Text(EditorIcons.Image, font).TextColor(EditorTheme.InkDim).FontSize(13f).Alignment(TextAlignment.MiddleCenter);
         }
     }
 
@@ -539,13 +513,13 @@ public class ProjectPanel : DockPanel
     {
         using (paper.Box("proj_tree_bg")
             .Size(FolderTreeWidth, height)
-            .BackgroundColor(Col(0, 0, 0, 26))
+            .BackgroundColor(Color.FromArgb(26, 0, 0, 0))
             .OnClick(0, (_, _) => Selection.Clear())
             .Enter())
         {
             // Right-edge divider (a2 tree border-right).
             paper.Box("proj_tree_div").PositionType(PositionType.SelfDirected).Position(FolderTreeWidth - 1, 0)
-                .Size(1, height).BackgroundColor(BdSoft).IsNotInteractable();
+                .Size(1, height).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             // Right-click background show create/explorer menu
             BuildBackgroundContextMenu(paper, "proj_tree_bg_ctx");
@@ -713,26 +687,14 @@ public class ProjectPanel : DockPanel
             // drop targets (folders in the grid) can win before the background fallback.
             if (DragDrop.IsDraggingType<GameObjectDragPayload>() && paper.IsParentHovered)
             {
-                paper.Box("proj_prefab_drop")
-                    .Height(24)
-                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                    .Rounded(3)
-                    .Text(Loc.Get("project.drop_create_prefab", new { folder = string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder }), EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Purple400)
-                    .FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleCenter);
+                DropBanner(paper, "proj_prefab_drop",
+                    Loc.Get("project.drop_create_prefab", new { folder = string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder }));
             }
             else if (DragDrop.IsDraggingType<AssetDragPayload>() && paper.IsParentHovered
                 && CanAcceptAssetDropInto(_currentFolder))
             {
-                paper.Box("proj_asset_drop_hint")
-                    .Height(24)
-                    .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                    .Rounded(3)
-                    .Text(Loc.Get("project.drop_move", new { folder = string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder }), EditorTheme.DefaultFont)
-                    .TextColor(EditorTheme.Purple400)
-                    .FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleCenter);
+                DropBanner(paper, "proj_asset_drop_hint",
+                    Loc.Get("project.drop_move", new { folder = string.IsNullOrEmpty(_currentFolder) ? "Assets" : _currentFolder }));
             }
 
             if (isList)
@@ -755,7 +717,7 @@ public class ProjectPanel : DockPanel
                             paper.Box("proj_empty")
                                 .Height(60)
                                 .Text(Loc.Get("project.folder_empty"), font)
-                                .TextColor(TMid)
+                                .TextColor(EditorTheme.Ink300)
                                 .FontSize(EditorTheme.FontSizeSmall)
                                 .Alignment(TextAlignment.MiddleCenter);
                         }
@@ -871,7 +833,7 @@ public class ProjectPanel : DockPanel
                         if (_expandedAssets.Contains(g)) _expandedAssets.Remove(g);
                         else _expandedAssets.Add(g);
                     })
-                    .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.ChevronRight_I, TLo, size: 11f);
+                    .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.ChevronRight_I, EditorTheme.InkDim, size: 11f);
             else
                 paper.Box($"proj_tcsp_{id}").Width(15).Height(TableRowH).IsNotInteractable();
 
@@ -890,34 +852,34 @@ public class ProjectPanel : DockPanel
                 // Name hugs its text so the sub-count tag sits right beside it; a trailing spacer fills the rest.
                 paper.Box($"proj_tclbl_{id}").Width(UnitValue.Auto).Height(TableRowH).Margin(6, 0, 0, 0).Clip()
                     .Text(DisplayName(item), font)
-                    .TextColor(isSub ? TBody : THi)
+                    .TextColor(isSub ? EditorTheme.Ink400 : EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 if (hasSubs)
-                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, ST, ST)
+                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text(item.Subs.Count.ToString(), semi).TextColor(EditorTheme.AccentText)
                         .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
                 else if (isSub)
-                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, ST, ST)
+                    paper.Box($"proj_tctag_{id}").Width(UnitValue.Auto).Height(17).Rounded(5).Padding(6, 6, 0, 0).Margin(7, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .BackgroundColor(EditorTheme.Selected).BorderColor(Color.FromArgb(77, EditorTheme.Purple400)).BorderWidth(1)
                         .Text("sub", semi).TextColor(EditorTheme.AccentText)
                         .FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-                paper.Box($"proj_tcnsp_{id}").Width(ST).Height(TableRowH).IsNotInteractable();
+                paper.Box($"proj_tcnsp_{id}").Height(TableRowH).IsNotInteractable();
             }
         }
         else if (col == 1)
         {
-            paper.Box($"proj_tctype_{id}").Width(ST).Height(TableRowH).IsNotInteractable()
-                .Text(item.IsFolder ? Loc.Get("inspector.folder") : item.TypeLabel, font).TextColor(TMid)
+            paper.Box($"proj_tctype_{id}").Height(TableRowH).IsNotInteractable()
+                .Text(item.IsFolder ? Loc.Get("inspector.folder") : item.TypeLabel, font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
         else
         {
-            paper.Box($"proj_tcsize_{id}").Width(ST).Height(TableRowH).IsNotInteractable()
+            paper.Box($"proj_tcsize_{id}").Height(TableRowH).IsNotInteractable()
                 .Text(item.IsFolder || isSub ? "-" : FormatSize(item.Size), mono)
-                .TextColor(isSub ? TDim : TLo).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
+                .TextColor(isSub ? EditorTheme.InkFaint : EditorTheme.InkDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleRight);
         }
     }
 
@@ -1185,18 +1147,18 @@ public class ProjectPanel : DockPanel
         string pid = parent.Guid.ToString();
         using (paper.Column($"proj_drawer_{pid}").Width(UnitValue.Percentage(100)).Height(UnitValue.Auto)
             .Margin(0, 0, 3, 7).Padding(11, 11, 10, 10).Rounded(10)
-            .BackgroundColor(Col(0, 0, 0, 61)).BorderColor(BdSoft).BorderWidth(1)
+            .BackgroundColor(Color.FromArgb(61, 0, 0, 0)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
             using (paper.Row($"proj_drawerlbl_{pid}").Height(18).Margin(0, 0, 0, 9).Enter())
             {
-                paper.Box($"proj_drawerico_{pid}").Width(14).Height(18).Margin(0, 6, ST, ST).IsNotInteractable()
+                paper.Box($"proj_drawerico_{pid}").Width(14).Height(18).Margin(0, 6, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                     .Icon(paper, EditorIcons.LayerGroup_I, EditorTheme.AccentText, size: 12f);
-                paper.Box($"proj_drawernm_{pid}").Width(UnitValue.Auto).Height(18).Margin(0, 6, ST, ST)
+                paper.Box($"proj_drawernm_{pid}").Width(UnitValue.Auto).Height(18).Margin(0, 6, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Text(parent.Name, EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.AccentText)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                paper.Box($"proj_drawercnt_{pid}").Width(UnitValue.Auto).Height(18).Margin(0, 0, ST, ST)
-                    .Text("- " + Loc.Get("project.sub_asset_count", new { count = parent.Subs.Count }), font).TextColor(TLo)
+                paper.Box($"proj_drawercnt_{pid}").Width(UnitValue.Auto).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Text("- " + Loc.Get("project.sub_asset_count", new { count = parent.Subs.Count }), font).TextColor(EditorTheme.InkDim)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             }
 
@@ -1237,12 +1199,12 @@ public class ProjectPanel : DockPanel
             var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(sub.Guid);
             if (thumbTex != null)
             {
-                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0)
+                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0)
                     .OnPostLayout((handle, rect) => paper.Draw(ref handle, (canvas, r) =>
                     {
                         float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
                         canvas.DrawImageRounded(thumbTex, x, y, w, h, 8f);
-                        var bd = Prowl.Vector.Color32.FromArgb(BdSoft.A, BdSoft.R, BdSoft.G, BdSoft.B);
+                        var bd = Prowl.Vector.Color32.FromArgb(EditorTheme.BorderSoft.A, EditorTheme.BorderSoft.R, EditorTheme.BorderSoft.G, EditorTheme.BorderSoft.B);
                         canvas.SaveState();
                         canvas.SetStrokeColor(bd);
                         canvas.SetStrokeWidth(1f);
@@ -1254,14 +1216,14 @@ public class ProjectPanel : DockPanel
             }
             else
             {
-                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(ST, ST, 0, 0).Rounded(8)
+                paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0).Rounded(8)
                     .BackgroundLinearGradient(0, 0, 1, 1, Color.FromArgb(58, style.Color), Color.FromArgb(16, style.Color))
                     .BorderColor(Color.FromArgb(68, style.Color)).BorderWidth(1)
                     .Icon(paper, style.Icon, style.Color, size: 20f);
             }
 
             paper.Box($"proj_subnm_{sub.Guid}").Width(UnitValue.Stretch()).Height(14).Clip()
-                .Text(sub.Name, font).TextColor(TMid).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                .Text(sub.Name, font).TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
             BuildItemContextMenu(paper, $"proj_sub_ctx_{sub.Guid}", sub);
         }
@@ -1276,7 +1238,7 @@ public class ProjectPanel : DockPanel
 
         using (paper.Column(id)
             .Width(cellSize).Height(UnitValue.Auto)
-            .BackgroundColor(isSelected ? EditorTheme.Selected : (isSubAsset ? Color.FromArgb(20, Acc) : Color.Transparent))
+            .BackgroundColor(isSelected ? EditorTheme.Selected : (isSubAsset ? Color.FromArgb(20, EditorTheme.Accent) : Color.Transparent))
             .BorderColor(isSelected ? Color.FromArgb(102, EditorTheme.Purple400) : Color.Transparent).BorderWidth(1)
             .Hovered.BackgroundColor(isSelected ? EditorTheme.Selected : EditorTheme.Hover).End()
             .Rounded(9)
@@ -1348,9 +1310,9 @@ public class ProjectPanel : DockPanel
             {
                 float ts = cellSize - 8;
                 paper.Box($"{id}_stk2").PositionType(PositionType.SelfDirected).Position(10, 10).Size(ts, ts)
-                    .Rounded(10).BackgroundColor(Col(30, 24, 44, 130)).BorderColor(BdSoft).BorderWidth(1).IsNotInteractable();
+                    .Rounded(10).BackgroundColor(Color.FromArgb(130, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
                 paper.Box($"{id}_stk1").PositionType(PositionType.SelfDirected).Position(7, 7).Size(ts, ts)
-                    .Rounded(10).BackgroundColor(Col(30, 24, 44, 235)).BorderColor(BdSoft).BorderWidth(1).IsNotInteractable();
+                    .Rounded(10).BackgroundColor(Color.FromArgb(235, 30, 24, 44)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).IsNotInteractable();
             }
 
             // Thumbnail area
@@ -1365,7 +1327,7 @@ public class ProjectPanel : DockPanel
                     {
                         float x = (float)r.Min.X, y = (float)r.Min.Y, w = (float)r.Size.X, h = (float)r.Size.Y;
                         canvas.DrawImageRounded(thumbTex, x, y, w, h, 10f);
-                        var bd = Prowl.Vector.Color32.FromArgb(BdSoft.A, BdSoft.R, BdSoft.G, BdSoft.B);
+                        var bd = Prowl.Vector.Color32.FromArgb(EditorTheme.BorderSoft.A, EditorTheme.BorderSoft.R, EditorTheme.BorderSoft.G, EditorTheme.BorderSoft.B);
                         canvas.SaveState();
                         canvas.SetStrokeColor(bd);
                         canvas.SetStrokeWidth(1f);
@@ -1409,7 +1371,7 @@ public class ProjectPanel : DockPanel
                 bool expanded = _expandedAssets.Contains(item.Guid);
                 using (paper.Row($"{id}_sb").PositionType(PositionType.SelfDirected).Position(cellSize - 34, -2)
                     .Width(UnitValue.Auto).Height(17).Rounded(9).Padding(6, 6, 0, 0).RowBetween(3)
-                    .BackgroundColor(Acc).DropShadow(0, 2, 8, 0, Col(0, 0, 0, 128))
+                    .BackgroundColor(EditorTheme.Accent).DropShadow(0, 2, 8, 0, Color.FromArgb(128, 0, 0, 0))
                     .StopEventPropagation()
                     .OnClick(item.Guid, (guid, _) =>
                     {
@@ -1418,9 +1380,9 @@ public class ProjectPanel : DockPanel
                     })
                     .Enter())
                 {
-                    paper.Box($"{id}_sbico").Width(11).Height(17).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box($"{id}_sbico").Width(11).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Icon(paper, expanded ? EditorIcons.ChevronDown_I : EditorIcons.LayerGroup_I, Color.White, size: 10f);
-                    paper.Box($"{id}_sbn").Width(UnitValue.Auto).Height(17).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box($"{id}_sbn").Width(UnitValue.Auto).Height(17).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(item.Subs.Count.ToString(), EditorTheme.FontBold ?? font).TextColor(Color.White)
                         .FontSize(9.5f).Alignment(TextAlignment.MiddleCenter);
                 }
@@ -1438,7 +1400,7 @@ public class ProjectPanel : DockPanel
                     .Margin(3, 3, 4, 6)
                     .Wrap(Prowl.Scribe.TextWrapMode.Wrap)
                     .Text(DisplayName(item), EditorTheme.FontMedium ?? font)
-                    .TextColor(isSubAsset ? EditorTheme.AccentText : (isSelected ? THi : TBody))
+                    .TextColor(isSubAsset ? EditorTheme.AccentText : (isSelected ? EditorTheme.Ink500 : EditorTheme.Ink400))
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.Center);
             }
 

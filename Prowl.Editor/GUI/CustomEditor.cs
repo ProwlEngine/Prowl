@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Editor.Utils;
@@ -50,80 +49,17 @@ public abstract class CustomEditor
 /// </summary>
 public static class CustomEditorRegistry
 {
-    private static readonly Dictionary<Type, Type> _typeToEditor = new();
-    private static readonly Dictionary<Type, CustomEditor> _editorCache = new();
-    private static bool _initialized;
+    private static readonly EditorTypeRegistry<CustomEditor> _reg = new(
+        "CustomEditorRegistry",
+        t => t.GetCustomAttribute<CustomEditorAttribute>()?.TargetType);
 
     [Runtime.OnAssemblyLoad]
-    public static void Reinitialize()
-    {
-        _initialized = false;
-        _editorCache.Clear();
-        Initialize();
-    }
+    public static void Reinitialize() => _reg.Reinitialize();
 
-    /// <summary>
-    /// Drop all cached <see cref="Type"/> references and editor instances so the script
-    /// AssemblyLoadContext can be collected. Caches rebuild on the next <see cref="Initialize"/>.
-    /// </summary>
     [Runtime.OnAssemblyUnload]
-    public static void ClearCache()
-    {
-        _initialized = false;
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-    }
+    public static void ClearCache() => _reg.ClearCache();
 
-    public static void Initialize()
-    {
-        if (_initialized) return;
-        _initialized = true;
+    public static void Initialize() => _reg.Initialize();
 
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-
-        foreach (var type in EditorUtils.GetAllTypes())
-        {
-            if (!typeof(CustomEditor).IsAssignableFrom(type) || type.IsAbstract) continue;
-            var attr = type.GetCustomAttribute<CustomEditorAttribute>();
-            if (attr == null) continue;
-            _typeToEditor[attr.TargetType] = type;
-        }
-
-        Runtime.Debug.Log($"CustomEditorRegistry: {_typeToEditor.Count} custom editors registered.");
-    }
-
-    /// <summary>
-    /// Gets a custom editor for the given type, checking the type itself and its base types.
-    /// Returns null if no custom editor is registered.
-    /// </summary>
-    public static CustomEditor? GetEditor(Type targetType)
-    {
-        if (!_initialized) Initialize();
-
-        if (_editorCache.TryGetValue(targetType, out var cached))
-            return cached;
-
-        // Direct match
-        if (_typeToEditor.TryGetValue(targetType, out var editorType))
-            return CacheEditor(targetType, editorType);
-
-        // Walk base types
-        Type? baseType = targetType.BaseType;
-        while (baseType != null && baseType != typeof(object))
-        {
-            if (_typeToEditor.TryGetValue(baseType, out editorType))
-                return CacheEditor(targetType, editorType);
-            baseType = baseType.BaseType;
-        }
-
-        return null;
-    }
-
-    private static CustomEditor CacheEditor(Type targetType, Type editorType)
-    {
-        var editor = (CustomEditor)Activator.CreateInstance(editorType)!;
-        _editorCache[targetType] = editor;
-        return editor;
-    }
+    public static CustomEditor? GetEditor(Type targetType) => _reg.GetEditor(targetType);
 }

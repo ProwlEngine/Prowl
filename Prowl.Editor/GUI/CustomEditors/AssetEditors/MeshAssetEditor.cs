@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -35,8 +36,6 @@ public class MeshAssetEditor : AssetImporterEditor
 
     private static readonly Dictionary<Guid, State> _subAssetStates = new();
 
-    private static UnitValue ST => UnitValue.StretchOne;
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         Draw(paper, id, entry, subEntry: null, asset as Mesh, _ownState);
@@ -65,7 +64,7 @@ public class MeshAssetEditor : AssetImporterEditor
         if (mesh == null)
         {
             EditorGUI.SectionHeader(paper, $"{id}_h_info", "Mesh", first: true);
-            paper.Box($"{id}_noasset").Width(ST).Height(m.RowHeight)
+            paper.Box($"{id}_noasset").Height(m.RowHeight)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, 0).IsNotInteractable()
                 .Text("Mesh asset failed to load.", font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
@@ -90,7 +89,7 @@ public class MeshAssetEditor : AssetImporterEditor
         }
 
         // Preview hero card wraps the 3D orbit preview in themed chrome.
-        using (paper.Box($"{id}_previewCard").Width(ST).Height(200)
+        using (paper.Box($"{id}_previewCard").Height(200)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
             .Rounded(8).Clip()
             .BackgroundColor(EditorTheme.Neutral300)
@@ -107,14 +106,14 @@ public class MeshAssetEditor : AssetImporterEditor
         int tris = (mesh.Indices?.Length ?? 0) / 3;
         var size = mesh.bounds.Max - mesh.bounds.Min;
 
-        using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
+        using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
             EditorGUI.StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);
             EditorGUI.StatChip(paper, $"{id}_st_sub", $"{mesh.SubMeshCount} Sub-Meshes", font);
             EditorGUI.StatChip(paper, $"{id}_st_bounds", $"{size.X:F2} x {size.Y:F2} x {size.Z:F2}", font);
-            paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
+            paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
         }
     }
 
@@ -149,7 +148,7 @@ public class MeshAssetEditor : AssetImporterEditor
     private static void ValueRow(Paper paper, string id, string key, string label, string value, Prowl.Scribe.FontFile font, OrigamiMetrics m)
     {
         EditorGUI.Row(paper, $"{id}{key}", label, () =>
-            paper.Box($"{id}{key}_v").Width(ST).Height(m.RowHeight).IsNotInteractable()
+            paper.Box($"{id}{key}_v").Height(m.RowHeight).IsNotInteractable()
                 .Text(value, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate());
     }

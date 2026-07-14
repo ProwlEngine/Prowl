@@ -6,6 +6,7 @@ using System.Linq;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Lightmapping;
@@ -30,8 +31,6 @@ public class EnvironmentPanel : DockPanel
 
     private readonly LightmapBakeService _bake = new();
     private string _cat = "sky";
-
-    private static UnitValue ST => UnitValue.StretchOne;
 
     // label holds a localization key, resolved via Loc.Get at render (see the Sidebar call).
     private static readonly (string id, string label, string icon)[] Cats =
@@ -65,11 +64,11 @@ public class EnvironmentPanel : DockPanel
         {
             var cats = Cats.Select(c => (c.id, Loc.Get(c.label), c.icon)).ToArray();
             float side = EditorGUI.Sidebar(paper, "env_side", cats, _cat, c => _cat = c);
-            paper.Box("env_vdiv").Width(1).Height(ST).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box("env_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             Origami.ScrollView(paper, "env_scroll", width - side - 1, height).Body(() =>
             {
-                using (paper.Column("env_content").Width(ST).Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
+                using (paper.Column("env_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
                 {
                     switch (_cat)
                     {
@@ -229,32 +228,32 @@ public class EnvironmentPanel : DockPanel
         var semi = EditorTheme.FontSemiBold ?? font;
         bool hasBaked = LightmapBakeService.HasBakedData(scene);
 
-        using (paper.Column($"{id}_card").Width(ST).Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
+        using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
             .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).ColBetween(10).Enter())
         {
             if (baking)
             {
                 Origami.ProgressBar(paper, $"{id}_pb", _bake.Progress).Show();
-                paper.Box($"{id}_status").Width(ST).Height(18)
+                paper.Box($"{id}_status").Height(18)
                     .Text($"{_bake.Status}  ({_bake.Progress * 100f:F0}%)", font)
                     .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 EditorGUI.CtaButton(paper, $"{id}_cancel", $"{EditorIcons.Xmark}  {Loc.Get("common.cancel")}", EditorTheme.Red400, () => _bake.Cancel(), height: 34f);
             }
             else
             {
-                using (paper.Row($"{id}_info").Width(ST).Height(UnitValue.Auto).MinHeight(18).RowBetween(8).Enter())
+                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).RowBetween(8).Enter())
                 {
-                    paper.Box($"{id}_info_i").Width(14).Height(18).Margin(0, 0, ST, ST).IsNotInteractable()
+                    paper.Box($"{id}_info_i").Width(14).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                         .Text(hasBaked ? EditorIcons.Check : EditorIcons.Sun, font)
                         .TextColor(hasBaked ? EditorTheme.Green400 : EditorTheme.Ink300)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
-                    paper.Box($"{id}_info_t").Width(ST).Height(18).IsNotInteractable()
+                    paper.Box($"{id}_info_t").Height(18).IsNotInteractable()
                         .Text($"{s.AtlasSize}px atlas  ·  {s.Bounces} bounce{(s.Bounces == 1 ? "" : "s")}  ·  {s.TexelsPerUnit:F0} texels/unit", font)
                         .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
 
-                using (paper.Row($"{id}_btns").Width(ST).Height(34).RowBetween(8).Enter())
+                using (paper.Row($"{id}_btns").Height(34).RowBetween(8).Enter())
                 {
                     EditorGUI.CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent,
                         () =>

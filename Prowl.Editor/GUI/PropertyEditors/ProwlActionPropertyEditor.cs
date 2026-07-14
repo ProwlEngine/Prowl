@@ -52,29 +52,28 @@ public class ProwlActionPropertyEditor : PropertyEditor
         if (font == null) return;
         Prowl.Scribe.FontFile semi = EditorTheme.FontSemiBold ?? font;
         Prowl.Scribe.FontFile mono = EditorTheme.FontMono ?? font;
-        UnitValue ST = UnitValue.Stretch();
-
+        
         List<ProwlCall> calls = action.Calls;
         string title = string.IsNullOrEmpty(label) ? "Actions" : label;
 
         // Outer card - mirrors the PropertyGrid collection editor: rounded bordered container with a
         // titled header, a padded body of per-element cards, and an accent "add" footer.
-        using (paper.Column($"{id}_box").Width(ST).Height(UnitValue.Auto)
+        using (paper.Column($"{id}_box").Height(UnitValue.Auto)
             .Rounded(8).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Clip().Enter())
         {
-            using (paper.Row($"{id}_hdr").Width(ST).Height(28).RoundedTop(8).Padding(10, 10, 0, 0)
+            using (paper.Row($"{id}_hdr").Height(28).RoundedTop(8).Padding(10, 10, 0, 0)
                 .BackgroundColor(EditorTheme.Glass).Enter())
             {
-                paper.Box($"{id}_hl").Width(ST).Height(28).IsNotInteractable()
+                paper.Box($"{id}_hl").Height(28).IsNotInteractable()
                     .Text($"{title}   ({calls.Count})", semi).TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
             }
-            paper.Box($"{id}_hd").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box($"{id}_hd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-            using (paper.Column($"{id}_body").Width(ST).Height(UnitValue.Auto).Padding(6, 6, 6, 6).ColBetween(6).Enter())
+            using (paper.Column($"{id}_body").Height(UnitValue.Auto).Padding(6, 6, 6, 6).ColBetween(6).Enter())
             {
                 if (calls.Count == 0)
-                    paper.Box($"{id}_empty").Width(ST).Height(24).IsNotInteractable()
+                    paper.Box($"{id}_empty").Height(24).IsNotInteractable()
                         .Text("No calls - add one below", font).TextColor(EditorTheme.InkFaint)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
@@ -86,7 +85,7 @@ public class ProwlActionPropertyEditor : PropertyEditor
                         remove: () => { calls.RemoveAt(idx); onChange(action); });
                 }
 
-                paper.Box($"{id}_add").Width(ST).Height(26).Rounded(6)
+                paper.Box($"{id}_add").Height(26).Rounded(6)
                     .Hovered.BackgroundColor(EditorTheme.Hover).End()
                     .Text("+ Add Call", semi).TextColor(EditorTheme.AccentText)
                     .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter)
@@ -98,32 +97,31 @@ public class ProwlActionPropertyEditor : PropertyEditor
     private static void DrawCallCard(Paper paper, string id, int index, ProwlCall call,
         Prowl.Scribe.FontFile mono, Prowl.Scribe.FontFile font, Action changed, Action remove)
     {
-        UnitValue ST = UnitValue.Stretch();
-
+        
         // The stored Target is the exact object the call runs on (a GameObject or one of its
         // Components); the picker edits the owning GameObject, which we recover from either.
         GameObject? owner = call.Target as GameObject ?? (call.Target as MonoBehaviour)?.GameObject;
 
-        using (paper.Column(id).Width(ST).Height(UnitValue.Auto)
+        using (paper.Column(id).Height(UnitValue.Auto)
             .Rounded(6).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .BackgroundColor(Color.FromArgb(8, 255, 255, 255)).Clip().Enter())
         {
             // Card header: index label + delete button.
-            using (paper.Row($"{id}_ch").Width(ST).Height(26).Padding(8, 6, 0, 0).RowBetween(6).Enter())
+            using (paper.Row($"{id}_ch").Height(26).Padding(8, 6, 0, 0).RowBetween(6).Enter())
             {
-                paper.Box($"{id}_ct").Width(ST).Height(26).IsNotInteractable()
+                paper.Box($"{id}_ct").Height(26).IsNotInteractable()
                     .Text($"Call {index}", mono).TextColor(EditorTheme.InkDim)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                paper.Box($"{id}_cx").Width(18).Height(18).Rounded(4).Margin(0, 0, ST, ST)
+                paper.Box($"{id}_cx").Width(18).Height(18).Rounded(4).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Hovered.BackgroundColor(Color.FromArgb(40, EditorTheme.Red400)).End()
                     .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                     .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
                     .OnClick(0, (_, _) => remove());
             }
-            paper.Box($"{id}_cd").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box($"{id}_cd").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             // Card body: target, function, argument.
-            using (paper.Column($"{id}_cb").Width(ST).Height(UnitValue.Auto).Padding(2, 2, 4, 4).Enter())
+            using (paper.Column($"{id}_cb").Height(UnitValue.Auto).Padding(2, 2, 4, 4).Enter())
             {
                 PropertyGridUtils.DrawField(paper, $"{id}_tgt", "Target", typeof(GameObject), owner, v =>
                 {

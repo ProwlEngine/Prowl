@@ -23,8 +23,6 @@ public class ProjectSettingsPanel : DockPanel
 
     private int _selectedIndex;
 
-    private static UnitValue ST => UnitValue.StretchOne;
-
     // Shared with ProjectSettingsRegistry.Save keeping the serializer options identical
     // means the before/after JSON comparison is stable field-by-field.
     private static readonly JsonSerializerOptions s_jsonOpts = new()
@@ -104,7 +102,7 @@ public class ProjectSettingsPanel : DockPanel
         {
             float side = EditorGUI.Sidebar(paper, "ps_side", cats.ToArray(), _selectedIndex.ToString(),
                 c => { if (int.TryParse(c, out int idx)) _selectedIndex = idx; });
-            paper.Box("ps_vdiv").Width(1).Height(ST).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+            paper.Box("ps_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
             // TODO: Port to using Echo to serialize to match how Project Settings serialize
             float contentW = width - side - 1;
@@ -118,7 +116,7 @@ public class ProjectSettingsPanel : DockPanel
 
             Origami.ScrollView(paper, "ps_scroll", contentW, height).Body(() =>
             {
-                using (paper.Column("ps_content").Width(ST).Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
+                using (paper.Column("ps_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
                 {
                     EditorGUI.SectionHeader(paper, "ps_content_h", currentEntry.Name, first: true);
                     currentEntry.Instance.OnGUI(paper, contentW);

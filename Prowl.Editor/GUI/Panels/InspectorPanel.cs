@@ -386,23 +386,23 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
                                 case Echo.EchoType.Bool:
                                     Origami.Checkbox(paper, $"insp_set_{key}", val.BoolValue,
                                             v => { settings[key] = new Echo.EchoObject(v); })
-                                        .LabelRight(NicifySettingName(key)).Show();
+                                        .LabelRight(PropertyGridUtils.NicifyName(key)).Show();
                                     break;
 
                                 case Echo.EchoType.Int:
-                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<int>(paper, $"insp_set_{key}_v", val.IntValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.Float:
-                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.NumericField<float>(paper, $"insp_set_{key}_v", val.FloatValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
 
                                 case Echo.EchoType.String:
-                                    EditorGUI.Row(paper, $"insp_set_{key}", NicifySettingName(key), () =>
+                                    EditorGUI.Row(paper, $"insp_set_{key}", PropertyGridUtils.NicifyName(key), () =>
                                         Origami.TextField(paper, $"insp_set_{key}_v", val.StringValue,
                                             v => { settings[key] = new Echo.EchoObject(v); }).Show());
                                     break;
@@ -430,20 +430,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         }
     }
 
-    private static string NicifySettingName(string name)
-    {
-        // "generateMipmaps" -> "Generate Mipmaps"
-        if (string.IsNullOrEmpty(name)) return name;
-        var sb = new System.Text.StringBuilder();
-        sb.Append(char.ToUpper(name[0]));
-        for (int i = 1; i < name.Length; i++)
-        {
-            if (char.IsUpper(name[i]) && !char.IsUpper(name[i - 1]))
-                sb.Append(' ');
-            sb.Append(name[i]);
-        }
-        return sb.ToString();
-    }
+
 
     private void DrawFolderInfo(Paper paper, Scribe.FontFile font, ContentItem item)
     {

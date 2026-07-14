@@ -22,8 +22,6 @@ public class TextureAssetEditor : AssetImporterEditor
     private bool _dirty;
     private Guid _cachedForGuid;
 
-    private static UnitValue ST => UnitValue.StretchOne;
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         var font = EditorTheme.DefaultFont;
@@ -35,7 +33,7 @@ public class TextureAssetEditor : AssetImporterEditor
         {
             // Preview card: checkerboard behind the image so alpha reads clearly.
             paper.Box($"{id}_preview")
-                .Width(ST).Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
+                .Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
                 .Rounded(8).Clip()
                 .BackgroundColor(EditorTheme.Neutral300)
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
@@ -72,13 +70,13 @@ public class TextureAssetEditor : AssetImporterEditor
                 }));
 
             // Quick-facts chip strip.
-            using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
+            using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
                 EditorGUI.StatChip(paper, $"{id}_st_size", $"{texture.Width} x {texture.Height}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_fmt", texture.ImageFormat.ToString(), font);
                 EditorGUI.StatChip(paper, $"{id}_st_mip", texture.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
-                paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
+                paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
             }
         }
 

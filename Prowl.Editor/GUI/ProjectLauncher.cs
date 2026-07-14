@@ -15,6 +15,8 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
+using static Prowl.Editor.GUI.EditorGUI;
+
 namespace Prowl.Editor.GUI;
 
 /// <summary>
@@ -39,24 +41,12 @@ public static class ProjectLauncher
 
     private const float TS = 1.4f;
 
-    private static UnitValue ST => UnitValue.StretchOne;
-
     private static Color Col(int r, int g, int b, float a = 1f) => Color.FromArgb((int)Math.Round(a * 255), r, g, b);
-    private static Color WinGlass => EditorTheme.WithAlpha(EditorTheme.Neutral300, 184); // panel glass, tracks theme
-    private static Color GlassIn => EditorTheme.Glass;
-    private static Color Raised => EditorTheme.WithAlpha(EditorTheme.Neutral400, 204); // raised surface, tracks theme
+    private static Color WinGlass => EditorTheme.WithAlpha(EditorTheme.Neutral300, 184);
+    private static Color Raised => EditorTheme.WithAlpha(EditorTheme.Neutral400, 204);
     private static Color Bd => Color.FromArgb(33, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B);
-    private static Color BdSoft => EditorTheme.BorderSoft;
-    private static Color BdStrong => EditorTheme.BorderStrong;
     private static Color InputBd => Color.FromArgb(41, EditorTheme.Accent.R, EditorTheme.Accent.G, EditorTheme.Accent.B);
     private static Color CardBg => Col(255, 255, 255, 0.025f);
-    private static Color Acc => EditorTheme.Accent;
-    private static Color AccBright => EditorTheme.AccentBright;
-    private static Color Acc300 => EditorTheme.AccentText;
-    private static Color THi => EditorTheme.Ink500;
-    private static Color TBody => EditorTheme.Ink400;
-    private static Color TMid => EditorTheme.Ink300;
-    private static Color TLo => EditorTheme.InkDim;
 
     // Cycled tip strip drawn at the bottom of the launcher background.
     private static readonly string[] _tipKeys =
@@ -131,7 +121,7 @@ public static class ProjectLauncher
         using (paper.Box("pl_container").PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, h).Enter())
         using (paper.Column("pl_window")
             .Width(940).Height(620)
-            .Margin(ST, ST, ST, ST)
+            .Margin(UnitValue.StretchOne, UnitValue.StretchOne, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(WinGlass)
             .BackdropBlur(22)
             .BorderColor(Bd).BorderWidth(1)
@@ -141,7 +131,7 @@ public static class ProjectLauncher
             .Enter())
         {
             Header(paper, font);
-            paper.Box("pl_head_div").Height(1).BackgroundColor(BdSoft);
+            paper.Box("pl_head_div").Height(1).BackgroundColor(EditorTheme.BorderSoft);
             if (_tab == 0) RecentBody(paper, font);
             else NewProjectBody(paper, font);
         }
@@ -164,20 +154,20 @@ public static class ProjectLauncher
 
         using (P.Row("pl_header").Height(64).Padding(26, 26, 0, 0).Enter())
         {
-            using (P.Box("pl_logo").Width(60).Height(60).Margin(0, 0, ST, ST).Enter())
-                P.Draw((vg, r) => EditorIcons.ProwlLogo.Draw(vg, r, THi, 1f));
+            using (P.Box("pl_logo").Width(60).Height(60).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
+                P.Draw((vg, r) => EditorIcons.ProwlLogo.Draw(vg, r, EditorTheme.Ink500, 1f));
 
             // Wordmark scaled up to fill the header height (version line removed), vertically centered.
-            P.Box("pl_prowl").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(13, 0, ST, ST)
-                .Text("PROWL", EditorTheme.FontLogo ?? display).FontSize(30f * TS).LetterSpacing(6f).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
+            P.Box("pl_prowl").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(13, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Text("PROWL", EditorTheme.FontLogo ?? display).FontSize(30f * TS).LetterSpacing(6f).TextColor(EditorTheme.Ink500).Alignment(TextAlignment.MiddleLeft);
 
-            P.Box("pl_hspacer").Width(ST);
+            P.Box("pl_hspacer");
 
-            using (P.Row("pl_lang_wrap").Width(UnitValue.Auto).Height(34).Margin(0, 10, ST, ST).Enter())
+            using (P.Row("pl_lang_wrap").Width(UnitValue.Auto).Height(34).Margin(0, 10, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 LanguageDropdown(P, font);
 
-            using (P.Row("pl_tabs").Width(UnitValue.Auto).Height(34).Margin(0, 0, ST, ST)
-                .BackgroundColor(GlassIn).BorderColor(InputBd).BorderWidth(1).Rounded(9).Enter())
+            using (P.Row("pl_tabs").Width(UnitValue.Auto).Height(34).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .BackgroundColor(EditorTheme.Glass).BorderColor(InputBd).BorderWidth(1).Rounded(9).Enter())
             {
                 TabChip(P, Loc.Get("launcher.tab_recent"), 0);
                 TabChip(P, Loc.Get("launcher.new_project"), 1);
@@ -200,23 +190,23 @@ public static class ProjectLauncher
             .PopoverWidth(210).ItemHeight(30)
             .CustomTrigger(ctx =>
             {
-                P.Box("pl_lang_ic").Width(20).Height(ST).Margin(12, 8, ST, ST).IsNotInteractable()
-                    .Icon(P, globe, TMid, size: 15f);
-                P.Box("pl_lang_nm").Width(UnitValue.Auto).Height(ST).Margin(0, 8, ST, ST).IsNotInteractable()
-                    .Text(LocaleHelper.Names[cur], font).FontSize(13f * TS).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
+                P.Box("pl_lang_ic").Width(20).Margin(12, 8, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                    .Icon(P, globe, EditorTheme.Ink300, size: 15f);
+                P.Box("pl_lang_nm").Width(UnitValue.Auto).Margin(0, 8, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                    .Text(LocaleHelper.Names[cur], font).FontSize(13f * TS).TextColor(EditorTheme.Ink500).Alignment(TextAlignment.MiddleLeft);
                 LangChip(P, "pl_lang_tag", LocaleHelper.Tags[cur], font);
-                P.Box("pl_lang_chev").Width(16).Height(ST).Margin(6, 12, ST, ST).IsNotInteractable()
-                    .Icon(P, new FontIcon(font, ctx.IsOpen ? EditorIcons.ChevronUp : EditorIcons.ChevronDown), TMid, size: 10f);
+                P.Box("pl_lang_chev").Width(16).Margin(6, 12, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                    .Icon(P, new FontIcon(font, ctx.IsOpen ? EditorIcons.ChevronUp : EditorIcons.ChevronDown), EditorTheme.Ink300, size: 10f);
             })
             .ItemRender((i, ctx) =>
             {
                 LangChip(P, $"pl_lang_r{i}_tag", LocaleHelper.Tags[i], font);
-                P.Box($"pl_lang_r{i}_nm").Width(ST).Height(ST).IsNotInteractable()
+                P.Box($"pl_lang_r{i}_nm").IsNotInteractable()
                     .Text(LocaleHelper.Names[i], font).FontSize(12.5f * TS)
-                    .TextColor(ctx.IsSelected ? THi : TMid).Alignment(TextAlignment.MiddleLeft);
+                    .TextColor(ctx.IsSelected ? EditorTheme.Ink500 : EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
                 if (ctx.IsSelected)
-                    P.Box($"pl_lang_r{i}_ck").Width(16).Height(ST).IsNotInteractable()
-                        .Icon(P, new FontIcon(font, EditorIcons.Check), Acc, size: 11f);
+                    P.Box($"pl_lang_r{i}_ck").Width(16).IsNotInteractable()
+                        .Icon(P, new FontIcon(font, EditorIcons.Check), EditorTheme.Accent, size: 11f);
             })
             .Show();
     }
@@ -224,10 +214,10 @@ public static class ProjectLauncher
     // Small pill showing a language's region tag (e.g. "US"), sized to its text.
     private static void LangChip(Paper P, string id, string text, Scribe.FontFile font)
     {
-        P.Box(id).Width(UnitValue.Auto).Height(17).Rounded(5).Margin(5, 5, ST, ST).Padding(6, 6, 0, 0)
-            .BackgroundColor(Col(255, 255, 255, 0.06f)).BorderColor(BdSoft).BorderWidth(1)
+        P.Box(id).Width(UnitValue.Auto).Height(17).Rounded(5).Margin(5, 5, UnitValue.StretchOne, UnitValue.StretchOne).Padding(6, 6, 0, 0)
+            .BackgroundColor(Col(255, 255, 255, 0.06f)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .IsNotInteractable()
-            .Text(text, font).FontSize(9.5f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleCenter);
+            .Text(text, font).FontSize(9.5f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
     }
 
     private static void TabChip(Paper P, string label, int index)
@@ -236,10 +226,10 @@ public static class ProjectLauncher
         float leftM = index == 0 ? 3 : 4;
         float rightM = index == 1 ? 3 : 0;
         P.Box("pl_tab" + index).Width(UnitValue.Auto).Height(28).Rounded(8)
-            .Margin(leftM, rightM, ST, ST).Padding(14, 14, 0, 0)
-            .BackgroundColor(on ? Acc : Color.Transparent)
+            .Margin(leftM, rightM, UnitValue.StretchOne, UnitValue.StretchOne).Padding(14, 14, 0, 0)
+            .BackgroundColor(on ? EditorTheme.Accent : Color.Transparent)
             .Text(label, EditorTheme.FontMedium ?? EditorTheme.DefaultFont)
-            .FontSize(13f * TS).TextColor(on ? EditorTheme.Ink700 : TMid).Alignment(TextAlignment.MiddleCenter)
+            .FontSize(13f * TS).TextColor(on ? EditorTheme.Ink700 : EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter)
             .OnClick(_ => _tab = index);
     }
 
@@ -250,23 +240,23 @@ public static class ProjectLauncher
         {
             using (P.Row("pl_rbar").Height(58).Enter())
             {
-                P.Box("pl_rtitle").Width(ST).Height(UnitValue.Auto).Margin(26, 0, ST, ST)
-                    .Text(Loc.Get("launcher.recent_projects"), EditorTheme.FontSemiBold ?? font).FontSize(18f * TS).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
+                P.Box("pl_rtitle").Height(UnitValue.Auto).Margin(26, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Text(Loc.Get("launcher.recent_projects"), EditorTheme.FontSemiBold ?? font).FontSize(18f * TS).TextColor(EditorTheme.Ink500).Alignment(TextAlignment.MiddleLeft);
 
-                using (P.Box("pl_search_wrap").Width(220).Height(34).Margin(0, 0, ST, ST).Enter())
+                using (P.Box("pl_search_wrap").Width(220).Height(34).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.TextField(P, "pl_search", _search, v => _search = v)
                         .Search(Loc.Get("launcher.search"))
-                        .Width(ST).Height(34).Show();
+                        .Height(34).Show();
 
-                using (P.Row("pl_open").Width(UnitValue.Auto).Height(34).Rounded(9).Margin(9, 26, ST, ST)
-                    .BackgroundColor(GlassIn).BorderColor(InputBd).BorderWidth(1)
-                    .Hovered.BorderColor(BdStrong).End()
+                using (P.Row("pl_open").Width(UnitValue.Auto).Height(34).Rounded(9).Margin(9, 26, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .BackgroundColor(EditorTheme.Glass).BorderColor(InputBd).BorderWidth(1)
+                    .Hovered.BorderColor(EditorTheme.BorderStrong).End()
                     .OnClick(_ => OpenProjectDialog())
                     .Enter())
                 {
-                    IconBox(P, "pl_oico", EditorIcons.FolderOpen_I, 15, TMid, 1.4f, 12);
-                    P.Box("pl_otxt").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(7, 13, ST, ST)
-                        .Text(Loc.Get("launcher.open"), font).FontSize(13 * TS).TextColor(TMid).Alignment(TextAlignment.MiddleLeft);
+                    IconBox(P, "pl_oico", EditorIcons.FolderOpen_I, 15, EditorTheme.Ink300, 1.4f, 12);
+                    P.Box("pl_otxt").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(7, 13, UnitValue.StretchOne, UnitValue.StretchOne)
+                        .Text(Loc.Get("launcher.open"), font).FontSize(13 * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
                 }
             }
 
@@ -285,7 +275,7 @@ public static class ProjectLauncher
                 if (entries.Count == 0)
                 {
                     P.Box("pl_empty").Height(120)
-                        .Text(Loc.Get(searching ? "launcher.no_results" : "launcher.no_recent"), font).FontSize(14f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleCenter);
+                        .Text(Loc.Get(searching ? "launcher.no_results" : "launcher.no_recent"), font).FontSize(14f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
                     return;
                 }
                 for (int i = 0; i < entries.Count; i++)
@@ -300,14 +290,14 @@ public static class ProjectLauncher
         var mono = EditorTheme.FontMono ?? font;
 
         using (P.Row("pl_card" + i).Height(70).Rounded(11)
-            .BackgroundColor(CardBg).BorderColor(BdSoft).BorderWidth(1)
+            .BackgroundColor(CardBg).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Transition(GuiProp.BackgroundColor, 0.15f)
             .Transition(GuiProp.BorderColor, 0.15f)
             .Transition(GuiProp.TranslateX, 0.15f)
             .Transition(GuiProp.BoxShadow, 0.2f)
             .Hovered
                 .BackgroundColor(EditorTheme.Hover)
-                .BorderColor(BdStrong)
+                .BorderColor(EditorTheme.BorderStrong)
                 .Translate(3, 0)
                 .Glow(0, 10, 26, -6, Color.FromArgb(140, EditorTheme.Purple400))
                 .End()
@@ -322,43 +312,43 @@ public static class ProjectLauncher
             // click off the card's open-project handler.
             bool fav = entry.Favorite;
             Color amber = EditorTheme.Amber400;
-            using (P.Box("pl_fav" + i).Width(44).Height(44).Rounded(12).Margin(16, 0, ST, ST)
+            using (P.Box("pl_fav" + i).Width(44).Height(44).Rounded(12).Margin(16, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Hovered.BackgroundColor(Col(255, 255, 255, 0.08f)).End()
                 .StopEventPropagation()
                 .OnClick(entry, (e, _) => RecentProjects.SetFavorite(e.Path, !e.Favorite))
                 .Enter())
                 P.Draw((vg, r) => DrawIcon(vg, r, fav ? _starSolid : _starOutline, 22, fav ? amber : Color.White, 1.5f));
 
-            using (P.Column("pl_ci" + i).Width(ST).Height(UnitValue.Auto).Margin(15, 0, ST, ST).Enter())
+            using (P.Column("pl_ci" + i).Height(UnitValue.Auto).Margin(15, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             {
-                using (P.Row("pl_cn" + i).Width(ST).Height(UnitValue.Auto).Enter())
+                using (P.Row("pl_cn" + i).Height(UnitValue.Auto).Enter())
                 {
-                    P.Box("pl_cname" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, ST, ST)
-                        .Text(entry.Name, EditorTheme.FontSemiBold ?? font).FontSize(15 * TS).TextColor(exists ? THi : TMid).Alignment(TextAlignment.MiddleLeft);
+                    P.Box("pl_cname" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                        .Text(entry.Name, EditorTheme.FontSemiBold ?? font).FontSize(15 * TS).TextColor(exists ? EditorTheme.Ink500 : EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
 
                     // Version chip (or a "missing" chip when the folder is gone).
                     if (exists)
-                        P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, ST, ST).Padding(7, 7, 3, 3)
+                        P.Box("pl_cver" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(Raised)
-                            .Text($"v{EngineVersion()}", mono).FontSize(10 * TS).TextColor(TMid).Alignment(TextAlignment.MiddleCenter);
+                            .Text($"v{EngineVersion()}", mono).FontSize(10 * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleCenter);
                     else
-                        P.Box("pl_cmiss" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, ST, ST).Padding(7, 7, 3, 3)
+                        P.Box("pl_cmiss" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(5).Margin(9, 0, UnitValue.StretchOne, UnitValue.StretchOne).Padding(7, 7, 3, 3)
                             .BackgroundColor(Color.FromArgb(128, EditorTheme.Red300))
                             .Text(Loc.Get("launcher.missing"), mono).FontSize(10 * TS).TextColor(EditorTheme.Red400).Alignment(TextAlignment.MiddleCenter);
 
-                    P.Box("pl_cnsp" + i).Width(ST);
+                    P.Box("pl_cnsp" + i);
                 }
 
-                P.Box("pl_cp" + i).Width(ST).Height(UnitValue.Auto).Margin(0, 0, 5, 0)
-                    .Text(entry.Path, mono).FontSize(11.5f * TS).TextColor(TLo).Alignment(TextAlignment.MiddleLeft);
+                P.Box("pl_cp" + i).Height(UnitValue.Auto).Margin(0, 0, 5, 0)
+                    .Text(entry.Path, mono).FontSize(11.5f * TS).TextColor(EditorTheme.InkDim).Alignment(TextAlignment.MiddleLeft);
             }
 
-            P.Box("pl_ct" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(8, 0, ST, ST)
-                .Text(FormatTimeAgo(entry.LastOpened), font).FontSize(12 * TS).TextColor(TMid).Alignment(TextAlignment.MiddleRight);
+            P.Box("pl_ct" + i).Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Text(FormatTimeAgo(entry.LastOpened), font).FontSize(12 * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleRight);
 
             // Arrow, revealed on hover
-            Color arrowCol = Color.FromArgb(P.IsParentHovered ? 255 : 0, Acc300.R, Acc300.G, Acc300.B);
-            using (P.Box("pl_carr" + i).Width(18).Height(18).Margin(10, 16, ST, ST).IsNotInteractable().Enter())
+            Color arrowCol = Color.FromArgb(P.IsParentHovered ? 255 : 0, EditorTheme.AccentText.R, EditorTheme.AccentText.G, EditorTheme.AccentText.B);
+            using (P.Box("pl_carr" + i).Width(18).Height(18).Margin(10, 16, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable().Enter())
                 P.Draw((vg, r) => DrawIcon(vg, r, EditorIcons.ArrowRight_I, 17, arrowCol, 1.6f));
         }
     }
@@ -396,10 +386,10 @@ public static class ProjectLauncher
     {
         using (P.Row("pl_new").Enter())
         {
-            using (P.Column("pl_tplcol").Width(ST).Padding(26, 26, 20, 20).Enter())
+            using (P.Column("pl_tplcol").Padding(26, 26, 20, 20).Enter())
             {
                 P.Box("pl_tplhead").Height(UnitValue.Auto).Margin(0, 0, 0, 16)
-                    .Text(Loc.Get("launcher.choose_template"), EditorTheme.FontSemiBold ?? font).FontSize(18f * TS).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
+                    .Text(Loc.Get("launcher.choose_template"), EditorTheme.FontSemiBold ?? font).FontSize(18f * TS).TextColor(EditorTheme.Ink500).Alignment(TextAlignment.MiddleLeft);
 
                 for (int r = 0; r < 2; r++)
                     using (P.Row("pl_tplrow" + r).Height(134).Margin(0, 0, r == 0 ? 0 : 12, 0).Enter())
@@ -412,43 +402,43 @@ public static class ProjectLauncher
             }
 
             using (P.Column("pl_cfg").Width(308).Padding(24, 24, 24, 24)
-                .BackgroundColor(Col(0, 0, 0, 0.18f)).BorderColor(BdSoft).BorderWidth(1).Enter())
+                .BackgroundColor(Col(0, 0, 0, 0.18f)).BorderColor(EditorTheme.BorderSoft).BorderWidth(1).Enter())
             {
                 P.Box("pl_cfghead").Height(UnitValue.Auto).Margin(0, 0, 0, 14)
-                    .Text(Loc.Get("launcher.configure"), EditorTheme.FontSemiBold ?? font).FontSize(11f * TS).LetterSpacing(1f).TextColor(TLo).Alignment(TextAlignment.MiddleLeft);
+                    .Text(Loc.Get("launcher.configure"), EditorTheme.FontSemiBold ?? font).FontSize(11f * TS).LetterSpacing(1f).TextColor(EditorTheme.InkDim).Alignment(TextAlignment.MiddleLeft);
 
                 P.Box("pl_nmlbl").Height(UnitValue.Auto).Margin(0, 0, 0, 7)
-                    .Text(Loc.Get("launcher.name"), font).FontSize(12f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleLeft);
+                    .Text(Loc.Get("launcher.name"), font).FontSize(12f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
                 Origami.TextField(P, "pl_nm", _newProjectName, v => _newProjectName = v)
-                    .Width(ST).Height(38).Show();
+                    .Height(38).Show();
 
                 P.Box("pl_loclbl").Height(UnitValue.Auto).Margin(0, 0, 16, 7)
-                    .Text(Loc.Get("launcher.path"), font).FontSize(12f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleLeft);
+                    .Text(Loc.Get("launcher.path"), font).FontSize(12f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
                 Origami.TextField(P, "pl_loc", _newProjectPath, v => _newProjectPath = v)
-                    .Width(ST).Height(38).Mono()
+                    .Height(38).Mono()
                     .TrailingContent(() =>
                     {
-                        using (P.Box("pl_locbtn").Width(24).Height(24).Margin(2, 6, ST, ST).Rounded(6)
+                        using (P.Box("pl_locbtn").Width(24).Height(24).Margin(2, 6, UnitValue.StretchOne, UnitValue.StretchOne).Rounded(6)
                             .Hovered.BackgroundColor(Col(255, 255, 255, 0.07f)).End()
                             .OnClick(_ => BrowseLocation())
                             .Enter())
-                            P.Draw((vg, r) => DrawIcon(vg, r, EditorIcons.FolderOpen_I, 14, TMid, 1.4f));
+                            P.Draw((vg, r) => DrawIcon(vg, r, EditorIcons.FolderOpen_I, 14, EditorTheme.Ink300, 1.4f));
                     })
                     .Show();
 
-                P.Box("pl_cfgsp").Height(ST);
+                P.Box("pl_cfgsp");
 
                 using (P.Row("pl_cta").Height(44).Rounded(11)
-                    .BackgroundLinearGradient(0, 0, 1, 1, Acc, AccBright)
+                    .BackgroundLinearGradient(0, 0, 1, 1, EditorTheme.Accent, EditorTheme.AccentBright)
                     .Glow(0, 8, 26, -4, Color.FromArgb(153, EditorTheme.Purple400))
                     .OnClick(_ => TryCreateProject())
                     .Enter())
                 {
-                    P.Box("pl_ctal").Width(ST);
+                    P.Box("pl_ctal");
                     IconBox(P, "pl_ctaico", EditorIcons.Bolt_I, 16, EditorTheme.Ink700, 1.4f, 0);
-                    P.Box("pl_ctatxt").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(8, 0, ST, ST)
+                    P.Box("pl_ctatxt").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(8, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                         .Text(Loc.Get("launcher.create_project"), EditorTheme.FontSemiBold ?? font).FontSize(14f * TS).TextColor(EditorTheme.Ink700).Alignment(TextAlignment.MiddleLeft);
-                    P.Box("pl_ctar").Width(ST);
+                    P.Box("pl_ctar");
                 }
             }
         }
@@ -459,10 +449,10 @@ public static class ProjectLauncher
     private static void BlankCard(Paper P, Scribe.FontFile font, int col)
     {
         (Color c1, Color c2) = GlyphColors(0.0, true);
-        using (P.Column("pl_tpl0").Width(ST).Height(ST).Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
+        using (P.Column("pl_tpl0").Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
             .Rounded(12).Padding(17, 17, 17, 17)
             .BackgroundColor(EditorTheme.Selected)
-            .BorderColor(Acc).BorderWidth(1.5f)
+            .BorderColor(EditorTheme.Accent).BorderWidth(1.5f)
             .Enter())
         {
             using (P.Box("pl_tplico0").Width(46).Height(46).Rounded(12).Margin(0, 0, 0, 11)
@@ -470,19 +460,19 @@ public static class ProjectLauncher
                 P.Draw((vg, r) => DrawIcon(vg, r, EditorIcons.FileLines_I, 24, EditorTheme.Ink700, 1.3f));
 
             P.Box("pl_tpln0").Height(UnitValue.Auto).Margin(0, 0, 0, 4)
-                .Text(Loc.Get("launcher.tpl_blank_name"), EditorTheme.FontSemiBold ?? font).FontSize(15f * TS).TextColor(THi).Alignment(TextAlignment.MiddleLeft);
+                .Text(Loc.Get("launcher.tpl_blank_name"), EditorTheme.FontSemiBold ?? font).FontSize(15f * TS).TextColor(EditorTheme.Ink500).Alignment(TextAlignment.MiddleLeft);
             P.Box("pl_tpld0").Height(UnitValue.Auto)
-                .Text(Loc.Get("launcher.tpl_blank_desc"), font).FontSize(12f * TS).TextColor(TMid).Alignment(TextAlignment.MiddleLeft);
+                .Text(Loc.Get("launcher.tpl_blank_desc"), font).FontSize(12f * TS).TextColor(EditorTheme.Ink300).Alignment(TextAlignment.MiddleLeft);
         }
     }
 
     // Placeholder for a future template: the card frame with no content inside.
     private static void EmptySlot(Paper P, int idx, int col)
     {
-        using (P.Column("pl_tpl" + idx).Width(ST).Height(ST).Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
+        using (P.Column("pl_tpl" + idx).Margin(col == 0 ? 0 : 6, col == 1 ? 0 : 6, 0, 0)
             .Rounded(12)
             .BackgroundColor(Col(255, 255, 255, 0.015f))
-            .BorderColor(BdSoft).BorderWidth(1)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         { }
     }
@@ -490,7 +480,7 @@ public static class ProjectLauncher
     // ---- helpers ----------------------------------------------------
     private static void IconBox(Paper P, string id, IOrigamiIcon icon, float size, Color color, float sw, float leftM, float rightM = 0)
     {
-        using (P.Box(id).Width(size).Height(size).Margin(leftM, rightM, ST, ST).Enter())
+        using (P.Box(id).Width(size).Height(size).Margin(leftM, rightM, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
             P.Draw((vg, r) => icon.Draw(vg, r, color, sw));
     }
 

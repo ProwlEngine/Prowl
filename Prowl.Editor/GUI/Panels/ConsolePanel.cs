@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -49,20 +50,6 @@ public class ConsolePanel : DockPanel
     private bool _lastCollapseState;
     private readonly List<int> _filteredIndices = new();
     private int _selectedFilteredIndex = -1;
-
-    // -- palette --
-    private static UnitValue ST => UnitValue.StretchOne;
-    private static Color Col(int r, int g, int b, int a = 255) => Color.FromArgb(a, r, g, b);
-    private static Color InfoC => EditorTheme.Blue400;
-    private static Color WarnC => EditorTheme.Amber400;
-    private static Color ErrC => EditorTheme.Red400;
-    private static Color THi => EditorTheme.Ink500;
-    private static Color TBody => EditorTheme.Ink400;
-    private static Color TMid => EditorTheme.Ink300;
-    private static Color TLo => EditorTheme.InkDim;
-    private static Color TDim => EditorTheme.InkFaint;
-    private static Color BdSoft => EditorTheme.BorderSoft;
-    private static Color Raised => EditorTheme.Neutral400;
 
     internal struct LogEntry
     {
@@ -187,24 +174,24 @@ public class ConsolePanel : DockPanel
             using (paper.Row("con_tb").Height(33).Padding(10, 8, 0, 0).RowBetween(4).Enter())
             {
                 LevelChip(paper, font, "con_collapse", EditorIcons.LayerGroup_I,
-                    _collapse ? EditorTheme.AccentText : TLo, Loc.Get("console.collapse"), null, _collapse, false, () => _collapse = !_collapse);
+                    _collapse ? EditorTheme.AccentText : EditorTheme.InkDim, Loc.Get("console.collapse"), null, _collapse, false, () => _collapse = !_collapse);
 
-                paper.Box("con_div1").Width(1).Height(ST).Margin(4, 4, 0, 0).BackgroundColor(BdSoft).IsNotInteractable();
+                paper.Box("con_div1").Width(1).Margin(4, 4, 0, 0).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-                LevelChip(paper, font, "con_info", EditorIcons.CircleInfo_I, InfoC, null, infoCount.ToString(), _showInfo, !_showInfo, () => _showInfo = !_showInfo);
-                LevelChip(paper, font, "con_warn", EditorIcons.TriangleExclamation_I, WarnC, null, warnCount.ToString(), _showWarnings, !_showWarnings, () => _showWarnings = !_showWarnings);
-                LevelChip(paper, font, "con_err", EditorIcons.CircleExclamation_I, ErrC, null, errCount.ToString(), _showErrors, !_showErrors, () => _showErrors = !_showErrors);
+                LevelChip(paper, font, "con_info", EditorIcons.CircleInfo_I, EditorTheme.Blue400, null, infoCount.ToString(), _showInfo, !_showInfo, () => _showInfo = !_showInfo);
+                LevelChip(paper, font, "con_warn", EditorIcons.TriangleExclamation_I, EditorTheme.Amber400, null, warnCount.ToString(), _showWarnings, !_showWarnings, () => _showWarnings = !_showWarnings);
+                LevelChip(paper, font, "con_err", EditorIcons.CircleExclamation_I, EditorTheme.Red400, null, errCount.ToString(), _showErrors, !_showErrors, () => _showErrors = !_showErrors);
 
-                paper.Box("con_sp").Width(ST);
+                paper.Box("con_sp");
 
-                using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, ST, ST).Enter())
+                using (paper.Row("con_search_wrap").Width(130).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                     Origami.SearchField(paper, "con_search", _searchText, v => _searchText = v, Loc.Get("console.filter")).Width(130).Height(24).Show();
 
-                IconBtn(paper, font, "con_clear", EditorIcons.Trash, false, () => { _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
-                IconBtn(paper, font, "con_opts", EditorIcons.EllipsisVertical, false,
+                ToolbarIconBtn(paper, "con_clear", EditorIcons.Trash, false, () => { _messages.Clear(); _filteredIndices.Clear(); _selectedFilteredIndex = -1; });
+                ToolbarIconBtn(paper, "con_opts", EditorIcons.EllipsisVertical, false,
                     () => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, BuildOptionsMenu));
             }
-            paper.Box("con_tb_div").Height(1).BackgroundColor(BdSoft).IsNotInteractable();
+            paper.Box("con_tb_div").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         }
     }
 
@@ -214,33 +201,23 @@ public class ConsolePanel : DockPanel
         var mono = EditorTheme.FontMono ?? font;
         Color ic = dim ? Color.FromArgb(115, iconColor.R, iconColor.G, iconColor.B) : iconColor;
 
-        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).RowBetween(5).Margin(0, 0, ST, ST)
+        using (p.Row(id).Width(UnitValue.Auto).Height(24).Rounded(6).Padding(8, 8, 0, 0).RowBetween(5).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
             .BackgroundColor(on ? EditorTheme.Glass : Color.Transparent)
-            .BorderColor(on ? BdSoft : Color.Transparent).BorderWidth(1)
+            .BorderColor(on ? EditorTheme.BorderSoft : Color.Transparent).BorderWidth(1)
             .Transition(GuiProp.BackgroundColor, 0.15f).Transition(GuiProp.BorderColor, 0.15f)
             .Hovered.BackgroundColor(on ? EditorTheme.Glass : EditorTheme.Hover).End()
             .OnClick(_ => onClick())
             .Enter())
         {
-            p.Box(id + "_i").Width(14).Height(24).Margin(0, 0, ST, ST).IsNotInteractable()
+            p.Box(id + "_i").Width(14).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Icon(p, icon, ic, size: 12f);
             if (!string.IsNullOrEmpty(label))
-                p.Box(id + "_l").Width(UnitValue.Auto).Height(24).Margin(0, 0, ST, ST)
-                    .Text(label, font).TextColor(on ? THi : (dim ? TDim : TLo)).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                p.Box(id + "_l").Width(UnitValue.Auto).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Text(label, font).TextColor(on ? EditorTheme.Ink500 : (dim ? EditorTheme.InkFaint : EditorTheme.InkDim)).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
             if (!string.IsNullOrEmpty(count))
-                p.Box(id + "_c").Width(UnitValue.Auto).Height(24).Margin(0, 0, ST, ST)
-                    .Text(count, mono).TextColor(dim ? TDim : TMid).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                p.Box(id + "_c").Width(UnitValue.Auto).Height(24).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Text(count, mono).TextColor(dim ? EditorTheme.InkFaint : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
         }
-    }
-
-    private void IconBtn(Paper p, FontFile font, string id, string glyph, bool active, Action onClick)
-    {
-        p.Box(id).Width(26).Height(26).Rounded(7).Margin(0, 0, ST, ST)
-            .BackgroundColor(active ? EditorTheme.Selected : Color.Transparent)
-            .Transition(GuiProp.BackgroundColor, 0.15f)
-            .Hovered.BackgroundColor(active ? EditorTheme.Selected : EditorTheme.Hover).End()
-            .Text(glyph, font).TextColor(active ? EditorTheme.Accent : TMid).FontSize(14f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(_ => onClick());
     }
 
     private void BuildOptionsMenu(ContextBuilder menu)
@@ -345,7 +322,7 @@ public class ConsolePanel : DockPanel
                 canvas.RectFilled(left, rowY, 2f, rowH, EditorTheme.Accent);
             }
             else if (vi == hoverRow)
-                canvas.RectFilled(left, rowY, w, rowH, Col(168, 85, 247, 13));
+                canvas.RectFilled(left, rowY, w, rowH, Color.FromArgb(13, 168, 85, 247));
 
             float ix = left + padL;
             icon.Draw(canvas, new Rect(ix, line1 - iconSize * 0.5f, ix + iconSize, line1 + iconSize * 0.5f), color, 1.6f);
@@ -362,7 +339,7 @@ public class ConsolePanel : DockPanel
             {
                 msg.TimeLayout ??= Make(msg.TimeString, mono, EditorTheme.FontSizeSmall);
                 float tw = LW(msg.TimeLayout);
-                DrawMid(msg.TimeLayout, rightCursor - tw, line1, TDim);
+                DrawMid(msg.TimeLayout, rightCursor - tw, line1, EditorTheme.InkFaint);
                 rightCursor -= tw + gap;
             }
 
@@ -371,7 +348,7 @@ public class ConsolePanel : DockPanel
             {
                 msg.SourceLayout ??= Make($"[{src}]", mono, EditorTheme.FontSizeSmall);
                 float sw = LW(msg.SourceLayout);
-                DrawMid(msg.SourceLayout, rightCursor - sw, line1, TLo);
+                DrawMid(msg.SourceLayout, rightCursor - sw, line1, EditorTheme.InkDim);
                 rightCursor -= sw + gap;
             }
 
@@ -380,8 +357,8 @@ public class ConsolePanel : DockPanel
                 msg.CountLayout ??= Make(msg.Count.ToString(), bold, EditorTheme.FontSizeSmall);
                 float cw = LW(msg.CountLayout), badgeW = cw + 12f, badgeH = 16f;
                 float badgeX = rightCursor - badgeW, badgeY = line1 - badgeH * 0.5f;
-                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, badgeH * 0.5f, Raised);
-                canvas.DrawLayout(msg.CountLayout, badgeX + (badgeW - cw) * 0.5f, line1 - LH(msg.CountLayout) * 0.5f, TMid);
+                canvas.RoundedRectFilled(badgeX, badgeY, badgeW, badgeH, badgeH * 0.5f, EditorTheme.Neutral400);
+                canvas.DrawLayout(msg.CountLayout, badgeX + (badgeW - cw) * 0.5f, line1 - LH(msg.CountLayout) * 0.5f, EditorTheme.Ink300);
                 rightCursor -= badgeW + gap;
             }
 
@@ -389,15 +366,15 @@ public class ConsolePanel : DockPanel
             canvas.SaveState();
             canvas.IntersectScissor(cursorX, rowY, msgLimit - cursorX, rowH);
             msg.MessageLayout ??= Make(msg.Message, mono, EditorTheme.FontSizeSmall);
-            DrawMid(msg.MessageLayout, cursorX, line1, TBody);
+            DrawMid(msg.MessageLayout, cursorX, line1, EditorTheme.Ink400);
             if (_multiLine && msg.StackTrace is { StackFrames.Length: > 0 })
             {
                 msg.StackLayout ??= Make(msg.StackTrace.StackFrames[0].ToString(), mono, EditorTheme.FontSizeSmall);
-                DrawMid(msg.StackLayout, cursorX, line2, TLo);
+                DrawMid(msg.StackLayout, cursorX, line2, EditorTheme.InkDim);
             }
             canvas.RestoreState();
 
-            canvas.RectFilled(left, rowY + rowH - 1f, w, 1f, BdSoft);
+            canvas.RectFilled(left, rowY + rowH - 1f, w, 1f, EditorTheme.BorderSoft);
 
             _messages[msgIdx] = msg;
         }
@@ -416,9 +393,9 @@ public class ConsolePanel : DockPanel
 
     private static (IOrigamiIcon, Color, string) LevelOf(LogSeverity s) => s switch
     {
-        LogSeverity.Warning => (EditorIcons.TriangleExclamation_I, WarnC, "warning"),
-        LogSeverity.Error or LogSeverity.Exception => (EditorIcons.CircleExclamation_I, ErrC, "error"),
-        _ => (EditorIcons.CircleInfo_I, InfoC, "info"),
+        LogSeverity.Warning => (EditorIcons.TriangleExclamation_I, EditorTheme.Amber400, "warning"),
+        LogSeverity.Error or LogSeverity.Exception => (EditorIcons.CircleExclamation_I, EditorTheme.Red400, "error"),
+        _ => (EditorIcons.CircleInfo_I, EditorTheme.Blue400, "info"),
     };
 
     private void RebuildFilteredList()

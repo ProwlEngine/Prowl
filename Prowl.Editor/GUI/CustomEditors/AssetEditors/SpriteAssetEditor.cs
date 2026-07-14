@@ -23,8 +23,6 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Sprite))]
 public class SpriteAssetEditor : AssetImporterEditor
 {
-    private static UnitValue ST => UnitValue.StretchOne;
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         if (asset is Sprite sprite)
@@ -43,7 +41,7 @@ public class SpriteAssetEditor : AssetImporterEditor
         Texture2D? tex = sprite.Texture.Res;
 
         paper.Box($"{id}_preview")
-            .Width(ST).Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
+            .Height(200).Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
             .Rounded(8).Clip()
             .BackgroundColor(EditorTheme.Neutral300)
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)

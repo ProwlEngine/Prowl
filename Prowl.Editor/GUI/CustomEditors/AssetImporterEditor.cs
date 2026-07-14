@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Editor.Utils;
@@ -32,66 +31,17 @@ public abstract class AssetImporterEditor
 /// </summary>
 public static class AssetImporterEditorRegistry
 {
-    private static readonly Dictionary<Type, Type> _typeToEditor = new();
-    private static readonly Dictionary<Type, AssetImporterEditor> _editorCache = new();
-    private static bool _initialized;
+    private static readonly EditorTypeRegistry<AssetImporterEditor> _reg = new(
+        "AssetImporterEditorRegistry",
+        t => t.GetCustomAttribute<CustomAssetEditorAttribute>()?.TargetType);
 
-    [Runtime.OnAssemblyLoad]
-    public static void Reinitialize() { _initialized = false; Initialize(); }
+    [OnAssemblyLoad]
+    public static void Reinitialize() => _reg.Reinitialize();
 
-    /// <summary>Drop cached type maps and editor instances so the script AssemblyLoadContext can be collected.</summary>
-    [Runtime.OnAssemblyUnload]
-    public static void ClearCache()
-    {
-        _initialized = false;
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-    }
+    [OnAssemblyUnload]
+    public static void ClearCache() => _reg.ClearCache();
 
-    public static void Initialize()
-    {
-        if (_initialized) return;
-        _initialized = true;
+    public static void Initialize() => _reg.Initialize();
 
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-
-        foreach (var type in EditorUtils.GetAllTypes())
-        {
-            if (!typeof(AssetImporterEditor).IsAssignableFrom(type) || type.IsAbstract) continue;
-            var attr = type.GetCustomAttribute<CustomAssetEditorAttribute>();
-            if (attr == null) continue;
-            _typeToEditor[attr.TargetType] = type;
-        }
-
-        Runtime.Debug.Log($"AssetImporterEditorRegistry: {_typeToEditor.Count} asset editors registered.");
-    }
-
-    public static AssetImporterEditor? GetEditor(Type assetType)
-    {
-        if (_editorCache.TryGetValue(assetType, out var cached))
-            return cached;
-
-        // Exact match
-        if (_typeToEditor.TryGetValue(assetType, out var editorType))
-            return CacheAndReturn(assetType, editorType);
-
-        // Walk base types
-        Type? baseType = assetType.BaseType;
-        while (baseType != null)
-        {
-            if (_typeToEditor.TryGetValue(baseType, out editorType))
-                return CacheAndReturn(assetType, editorType);
-            baseType = baseType.BaseType;
-        }
-
-        return null;
-    }
-
-    private static AssetImporterEditor CacheAndReturn(Type assetType, Type editorType)
-    {
-        var editor = (AssetImporterEditor)Activator.CreateInstance(editorType)!;
-        _editorCache[assetType] = editor;
-        return editor;
-    }
+    public static AssetImporterEditor? GetEditor(Type assetType) => _reg.GetEditor(assetType);
 }

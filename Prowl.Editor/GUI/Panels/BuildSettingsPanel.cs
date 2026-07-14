@@ -9,6 +9,7 @@ using System.Linq;
 using Prowl.Editor.Build;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -67,8 +68,6 @@ public class BuildSettingsPanel : DockPanel
 
     private List<BuildPipelineInfo> _buildPlatforms;
 
-    private static UnitValue ST => UnitValue.StretchOne;
-
     private const float HeaderH = 44f;
     private const float FooterH = 56f;
     private const float PlatformW = 400f;
@@ -112,7 +111,7 @@ public class BuildSettingsPanel : DockPanel
             using (paper.Row("bp_body").Width(width).Height(bodyH).Clip().Enter())
             {
                 DrawScenesColumn(paper, font, scenesW, bodyH);
-                paper.Box("bp_vdiv").Width(1).Height(ST).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+                paper.Box("bp_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
                 DrawPlatformColumn(paper, font, PlatformW, bodyH);
             }
 
@@ -138,7 +137,7 @@ public class BuildSettingsPanel : DockPanel
                     var scenes = _buildSettings.Scenes;
                     if (scenes.Count == 0)
                     {
-                        paper.Box("bp_scenes_empty").Width(ST).Height(40).Margin(6, 6, 6, 0).IsNotInteractable()
+                        paper.Box("bp_scenes_empty").Height(40).Margin(6, 6, 6, 0).IsNotInteractable()
                             .Text(Loc.Get("build.no_scenes"), font)
                             .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
                             .Alignment(TextAlignment.MiddleCenter);
@@ -172,7 +171,7 @@ public class BuildSettingsPanel : DockPanel
 
         const float rowH = 28f;
 
-        var rowB = paper.Row($"bp_sc_{sk}").Width(ST).Height(rowH).Rounded(7).Margin(0, 0, 0, 3)
+        var rowB = paper.Row($"bp_sc_{sk}").Height(rowH).Rounded(7).Margin(0, 0, 0, 3)
             .Padding(8, 4, 0, 0).RowBetween(8)
             .BackgroundColor(beingDragged || on ? EditorTheme.Selected : Color.Transparent)
             .Hovered.BackgroundColor(on ? EditorTheme.Selected : EditorTheme.Hover).End();
@@ -188,8 +187,7 @@ public class BuildSettingsPanel : DockPanel
 
         using (rowB.Enter())
         {
-            var grip = paper.Box($"bp_sc_{sk}_grip").Width(12).Height(ST)
-                .Text(EditorIcons.Grip, font).TextColor(beingDragged ? EditorTheme.Ink500 : EditorTheme.Ink300)
+            var grip = paper.Box($"bp_sc_{sk}_grip").Width(12)                .Text(EditorIcons.Grip, font).TextColor(beingDragged ? EditorTheme.Ink500 : EditorTheme.Ink300)
                 .Hovered.TextColor(EditorTheme.Ink500).End()
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
@@ -215,23 +213,23 @@ public class BuildSettingsPanel : DockPanel
                     ProjectSettingsRegistry.SaveAll();
                 });
 
-            paper.Box($"bp_sc_{sk}_idx").Width(20).Height(ST).IsNotInteractable()
+            paper.Box($"bp_sc_{sk}_idx").Width(20).IsNotInteractable()
                 .Text(buildIndex >= 0 ? buildIndex.ToString() : "-", mono)
                 .TextColor(on ? EditorTheme.Ink400 : EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
-            using (paper.Row($"bp_sc_{sk}_sww").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(4, 4, ST, ST).Enter())
+            using (paper.Row($"bp_sc_{sk}_sww").Width(UnitValue.Auto).Height(UnitValue.Auto).Margin(4, 4, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Switch(paper, $"bp_sc_{sk}_sw", scene.Enabled, v =>
                 {
                     scene.Enabled = v;
                     ProjectSettingsRegistry.SaveAll();
                 }).NoLabel().Show();
 
-            paper.Box($"bp_sc_{sk}_nm").Width(ST).Height(ST).IsNotInteractable()
+            paper.Box($"bp_sc_{sk}_nm").IsNotInteractable()
                 .Text(displayName, font).TextColor(on ? EditorTheme.Ink500 : EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            paper.Box($"bp_sc_{sk}_rm").Width(rowH).Height(ST).Rounded(6)
+            paper.Box($"bp_sc_{sk}_rm").Width(rowH).Rounded(6)
                 .Hovered.BackgroundColor(EditorTheme.Hover).End()
                 .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink300)
                 .Hovered.TextColor(EditorTheme.Red400).End()
@@ -355,11 +353,11 @@ public class BuildSettingsPanel : DockPanel
         while (slots.Count < 4 || slots.Count % 2 != 0)
             slots.Add((null, null, -1));
 
-        using (paper.Column("bp_grid").Width(ST).Height(UnitValue.Auto)
+        using (paper.Column("bp_grid").Height(UnitValue.Auto)
             .Padding(10, 10, 10, 10).ColBetween(CardGap).Enter())
         {
             for (int r = 0; r < slots.Count; r += 2)
-                using (paper.Row($"bp_grow_{r}").Width(ST).Height(UnitValue.Auto).RowBetween(CardGap).Enter())
+                using (paper.Row($"bp_grow_{r}").Height(UnitValue.Auto).RowBetween(CardGap).Enter())
                 {
                     DrawPlatformCard(paper, font, r, slots[r]);
                     DrawPlatformCard(paper, font, r + 1, slots[r + 1]);
@@ -373,7 +371,7 @@ public class BuildSettingsPanel : DockPanel
         bool selectable = slot.realIndex >= 0;
         bool sel = selectable && _selectedIndex == slot.realIndex;
 
-        var card = paper.Column($"bp_card_{cell}").Width(ST).MinHeight(78)
+        var card = paper.Column($"bp_card_{cell}").MinHeight(78)
             .Rounded(9).Padding(6, 6, 11, 11).ColBetween(6)
             .BackgroundColor(sel ? EditorTheme.Selected : EditorTheme.Glass)
             .BorderColor(sel ? EditorTheme.Accent : EditorTheme.BorderSoft).BorderWidth(1);
@@ -391,14 +389,14 @@ public class BuildSettingsPanel : DockPanel
             // Selectable = normal ink; Android placeholder = dimmed (coming soon).
             Color fg = selectable ? (sel ? EditorTheme.Ink500 : EditorTheme.Ink400) : EditorTheme.Ink200;
 
-            using (paper.Column($"bp_card_{cell}_c").Width(ST).Height(UnitValue.Auto)
-                .Margin(0, 0, ST, ST).ColBetween(6).Enter())
+            using (paper.Column($"bp_card_{cell}_c").Height(UnitValue.Auto)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).ColBetween(6).Enter())
             {
-                paper.Box($"bp_card_{cell}_ic").Width(ST).Height(20).IsNotInteractable()
+                paper.Box($"bp_card_{cell}_ic").Height(20).IsNotInteractable()
                     .Text(slot.icon, font).TextColor(fg)
                     .FontSize(EditorTheme.FontSizeLarge).Alignment(TextAlignment.MiddleCenter);
 
-                paper.Box($"bp_card_{cell}_l").Width(ST).Height(15).IsNotInteractable()
+                paper.Box($"bp_card_{cell}_l").Height(15).IsNotInteractable()
                     .Text(slot.name, font).TextColor(fg)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter).TextTruncate();
             }
@@ -425,23 +423,22 @@ public class BuildSettingsPanel : DockPanel
 
         using (paper.Row("bp_footer").Width(width).Height(FooterH - 1).Padding(16, 16, 0, 0).Enter())
         {
-            paper.Box("bp_ftr_ic").Width(20).Height(ST).Margin(0, 0, ST, ST).IsNotInteractable()
+            paper.Box("bp_ftr_ic").Width(20).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(EditorIcons.Hammer, font)
                 .TextColor(running ? EditorTheme.Accent : EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
 
-            paper.Box("bp_ftr_sum").Width(running ? UnitValue.Pixels(180) : UnitValue.Auto).Height(ST)
-                .Margin(10, 0, ST, ST).IsNotInteractable()
+            paper.Box("bp_ftr_sum").Width(running ? UnitValue.Pixels(180) : UnitValue.Auto)                .Margin(10, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(leftText, mono).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
             // Progress bar fills the middle, between the summary and the action buttons.
-            using (paper.Row("bp_ftr_progw").Width(ST).Height(UnitValue.Auto).Margin(14, 14, ST, ST).Enter())
+            using (paper.Row("bp_ftr_progw").Height(UnitValue.Auto).Margin(14, 14, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.ProgressBar(paper, "bp_ftr_bar", BuildProgress).Thickness(8).ShowPercent("F0").Show();
 
             EditorGUI.Chip(paper, "bp_ftr_build", $"{EditorIcons.Hammer}  {Loc.Get("build.build")}", () => TryStartBuild(false));
 
-            paper.Box("bp_ftr_bgap").Width(8).Height(1).Margin(0, 0, ST, ST).IsNotInteractable();
+            paper.Box("bp_ftr_bgap").Width(8).Height(1).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable();
 
             EditorGUI.CtaButton(paper, "bp_ftr_buildrun", $"{EditorIcons.Play}  {Loc.Get("build.build_run")}", EditorTheme.Accent, () => TryStartBuild(true));
         }
@@ -455,15 +452,15 @@ public class BuildSettingsPanel : DockPanel
     {
         var semi = EditorTheme.FontSemiBold ?? font;
 
-        using (paper.Row(id).Width(ST).Height(HeaderH).Padding(14, 14, 0, 0).RowBetween(8).Enter())
+        using (paper.Row(id).Height(HeaderH).Padding(14, 14, 0, 0).RowBetween(8).Enter())
         {
-            paper.Box($"{id}_t").Width(ST).Height(ST).Margin(0, 0, ST, ST).IsNotInteractable()
+            paper.Box($"{id}_t").Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(title.ToUpperInvariant(), semi).TextColor(EditorTheme.AccentText)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
             drawAction?.Invoke();
         }
-        paper.Box($"{id}_d").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+        paper.Box($"{id}_d").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
     }
 
     public List<BuildPipelineInfo> GetBuildPlatforms()

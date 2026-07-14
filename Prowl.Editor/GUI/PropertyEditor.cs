@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Editor.Utils;
@@ -40,81 +39,18 @@ public abstract class PropertyEditor
 /// </summary>
 public static class PropertyEditorRegistry
 {
-    private static readonly Dictionary<Type, Type> _typeToEditor = new();
-    private static readonly Dictionary<Type, PropertyEditor> _editorCache = new();
-    private static bool _initialized;
+    private static readonly EditorTypeRegistry<PropertyEditor> _reg = new(
+        "PropertyEditorRegistry",
+        t => t.GetCustomAttribute<CustomPropertyEditorAttribute>()?.TargetType,
+        checkInterfaces: true);
 
     [Runtime.OnAssemblyLoad]
-    public static void Reinitialize() { _initialized = false; Initialize(); }
+    public static void Reinitialize() => _reg.Reinitialize();
 
-    /// <summary>
-    /// Drop all cached <see cref="Type"/> references and editor instances so the script
-    /// AssemblyLoadContext can be collected. Caches rebuild on the next <see cref="Initialize"/>.
-    /// </summary>
     [Runtime.OnAssemblyUnload]
-    public static void ClearCache()
-    {
-        _initialized = false;
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-    }
+    public static void ClearCache() => _reg.ClearCache();
 
-    public static void Initialize()
-    {
-        if (_initialized) return;
-        _initialized = true;
+    public static void Initialize() => _reg.Initialize();
 
-        _typeToEditor.Clear();
-        _editorCache.Clear();
-
-        foreach (var type in EditorUtils.GetAllTypes())
-        {
-            if (!typeof(PropertyEditor).IsAssignableFrom(type) || type.IsAbstract) continue;
-            var attr = type.GetCustomAttribute<CustomPropertyEditorAttribute>();
-            if (attr == null) continue;
-            _typeToEditor[attr.TargetType] = type;
-        }
-
-        Runtime.Debug.Log($"PropertyEditorRegistry: {_typeToEditor.Count} custom editors registered.");
-    }
-
-    /// <summary>
-    /// Get a PropertyEditor instance for the given type, or null if none registered.
-    /// Checks exact type first, then walks base types and interfaces.
-    /// </summary>
-    public static PropertyEditor? GetEditor(Type type)
-    {
-        // Check cache
-        if (_editorCache.TryGetValue(type, out var cached))
-            return cached;
-
-        // Exact match
-        if (_typeToEditor.TryGetValue(type, out var editorType))
-            return CacheAndReturn(type, editorType);
-
-        // Walk base types
-        Type? baseType = type.BaseType;
-        while (baseType != null)
-        {
-            if (_typeToEditor.TryGetValue(baseType, out editorType))
-                return CacheAndReturn(type, editorType);
-            baseType = baseType.BaseType;
-        }
-
-        // Check interfaces
-        foreach (var iface in type.GetInterfaces())
-        {
-            if (_typeToEditor.TryGetValue(iface, out editorType))
-                return CacheAndReturn(type, editorType);
-        }
-
-        return null;
-    }
-
-    private static PropertyEditor CacheAndReturn(Type valueType, Type editorType)
-    {
-        var editor = (PropertyEditor)Activator.CreateInstance(editorType)!;
-        _editorCache[valueType] = editor;
-        return editor;
-    }
+    public static PropertyEditor? GetEditor(Type type) => _reg.GetEditor(type);
 }

@@ -34,7 +34,7 @@ public static class GameObjectInspector
             DrawPrefabHeader(paper, font, go);
 
         DrawHeader(paper, font, go);
-        Divider(paper, "gi_sep_header");
+        EditorGUI.Divider(paper, "gi_sep_header", 6f);
         if (go.RectTransform != null)
         {
             DrawRectTransform(paper, font, go);
@@ -44,7 +44,7 @@ public static class GameObjectInspector
             DrawTransform(paper, font, go);
         }
 
-        Divider(paper, "gi_sep_transform");
+        EditorGUI.Divider(paper, "gi_sep_transform", 6f);
         DrawComponents(paper, font, go);
 
         // Only show Add Component if not a prefab instance (structure is fixed)
@@ -57,8 +57,6 @@ public static class GameObjectInspector
 
         paper.Box("gi_bottom_pad").Height(20);
     }
-
-    private static UnitValue ST => UnitValue.StretchOne;
 
     // Sections (Transform + each component) remember their collapsed state here; absent = expanded.
     private static readonly HashSet<string> _collapsedSections = new();
@@ -96,18 +94,6 @@ public static class GameObjectInspector
         return expanded;
     }
 
-    // Small ghost icon button for section-header trailing actions.
-    private static void HeaderIconBtn(Paper paper, Prowl.Scribe.FontFile font, string id, string glyph, Action onClick)
-    {
-        paper.Box(id).Width(22).Height(22).Rounded(5).Margin(0, 0, ST, ST)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Text(glyph, font).TextColor(EditorTheme.Ink300).FontSize(12f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
-    }
-
-    private static void Divider(Paper paper, string id)
-        => paper.Box(id).Width(UnitValue.Stretch()).Height(1).Margin(0, 0, 6, 6)
-            .BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
     private static void SelDropdown(Paper paper, Prowl.Scribe.FontFile font, string id,
         string? label, string value, string[] options, int current, Action<int> onSelect, bool chevron, UnitValue width)
@@ -449,8 +435,8 @@ public static class GameObjectInspector
         bool expanded = SectionHeader(paper, font, "gi_transform", EditorIcons.ArrowsUpDownLeftRight,
             Loc.Get("inspector.transform"), EditorTheme.Ink500, () =>
             {
-                HeaderIconBtn(paper, font, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
-                HeaderIconBtn(paper, font, "gi_tf_dots", EditorIcons.EllipsisVertical, () =>
+                EditorGUI.HeaderIconButton(paper, "gi_tf_reset", EditorIcons.ArrowRotateRight, () => ResetTransform(go));
+                EditorGUI.HeaderIconButton(paper, "gi_tf_dots", EditorIcons.EllipsisVertical, () =>
                     Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                         b.Item(Loc.Get("inspector.reset"), () => ResetTransform(go), icon: EditorIcons.ArrowRotateRight)));
             });
@@ -880,11 +866,11 @@ public static class GameObjectInspector
                 {
                     // Wrap the checkbox so its short toggle row centers vertically in the header.
                     using (paper.Box($"{compId}_en_wrap").Width(UnitValue.Auto).Height(UnitValue.Auto)
-                        .Margin(0, 0, ST, ST).Enter())
+                        .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                         Origami.Checkbox(paper, $"{compId}_en", comp.Enabled,
                             v => { var old = comp.Enabled; var cId = comp.Identifier; Undo.RegisterAction("Toggle Component", () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = old; c.OnValidate(); } }, () => { var c = Undo.FindComponent(cId); if (c != null) { c.Enabled = v; c.OnValidate(); } }); comp.Enabled = v; comp.OnValidate(); })
                             .NoLabel().Show();
-                    HeaderIconBtn(paper, font, $"{compId}_gear", EditorIcons.EllipsisVertical, () =>
+                    EditorGUI.HeaderIconButton(paper, $"{compId}_gear", EditorIcons.EllipsisVertical, () =>
                         Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
                             BuildComponentContextMenu(b, go, comp, capturedI)));
                 },
@@ -930,7 +916,7 @@ public static class GameObjectInspector
             if (go.IsPrefabInstance)
                 PrefabUtility.DetectComponentOverrides(go, comp);
 
-            Divider(paper, $"{compId}_sep");
+            EditorGUI.Divider(paper, $"{compId}_sep", 6f);
         }
     }
 
@@ -1028,7 +1014,7 @@ public static class GameObjectInspector
             if (btnAttr == null) continue;
             if (method.GetParameters().Length > 0) continue; // Only parameterless methods
 
-            string label = btnAttr.Label ?? NicifyName(method.Name);
+            string label = btnAttr.Label ?? PropertyGridUtils.NicifyName(method.Name);
             Origami.Button(paper, $"{id}_{btnIdx++}", label, () => { method.Invoke(comp, null); }).Show();
         }
     }
@@ -1207,20 +1193,6 @@ public static class GameObjectInspector
     // ================================================================
 
     private static string GetComponentIcon(MonoBehaviour comp) => ComponentIconRegistry.GetIcon(comp);
-
-    private static string NicifyName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return name;
-        // Insert spaces before capitals: "MyMethod" -> "My Method"
-        var result = new System.Text.StringBuilder();
-        for (int i = 0; i < name.Length; i++)
-        {
-            if (i > 0 && char.IsUpper(name[i]) && !char.IsUpper(name[i - 1]))
-                result.Append(' ');
-            result.Append(name[i]);
-        }
-        return result.ToString();
-    }
 
     // ================================================================
     //  Anchor editing that preserves screen position

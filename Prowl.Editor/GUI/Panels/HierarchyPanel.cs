@@ -381,13 +381,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
                 {
                     _assetDropTarget = true;
-                    paper.Box("hier_drop_zone").Height(24)
-                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                        .Rounded(3)
-                        .Text(Loc.Get("hierarchy.drop_to_spawn"), font)
-                        .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSizeSmall)
-                        .Alignment(TextAlignment.MiddleCenter);
+                    EditorGUI.DropBanner(paper, "hier_drop_zone", Loc.Get("hierarchy.drop_to_spawn"));
                 }
                 else if (DragDrop.IsDraggingType<AssetDragPayload>())
                 {

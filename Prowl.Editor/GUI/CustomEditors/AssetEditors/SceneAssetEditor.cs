@@ -2,6 +2,7 @@ using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -20,8 +21,6 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Scene))]
 public class SceneAssetEditor : AssetImporterEditor
 {
-    private static UnitValue ST => UnitValue.StretchOne;
-
     // Resolved, de-duplicated list of true top-level asset references (cached per scene).
     private Guid _cachedSceneGuid;
     private readonly System.Collections.Generic.List<Guid> _refs = new();
@@ -44,19 +43,19 @@ public class SceneAssetEditor : AssetImporterEditor
         EditorGUI.SectionHeader(paper, $"{id}_hdr", "Scene", first: true);
 
         // Quick-facts chips.
-        using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
+        using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
         {
             EditorGUI.StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
             EditorGUI.StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);
-            paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
+            paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
         }
 
         EditorGUI.SectionHeader(paper, $"{id}_deps_hdr", "References");
 
         if (deps.Count == 0)
         {
-            paper.Box($"{id}_deps_empty").Width(ST).Height(40).Margin(m.PaddingLarge, m.PaddingLarge, 0, 0)
+            paper.Box($"{id}_deps_empty").Height(40).Margin(m.PaddingLarge, m.PaddingLarge, 0, 0)
                 .IsNotInteractable().Text("This scene references no assets.", font)
                 .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
@@ -66,13 +65,12 @@ public class SceneAssetEditor : AssetImporterEditor
         float rowH = EditorTheme.RowHeight + 4f;
         float tableH = 26f + Math.Clamp(deps.Count, 1, 14) * rowH;
 
-        using (paper.Box($"{id}_deps_wrap").Width(ST).Height(UnitValue.Auto)
+        using (paper.Box($"{id}_deps_wrap").Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).Enter())
         {
             Origami.Table(paper, $"{id}_deps_tbl", -1, _ => { })
                 .Bordered(true)
-                .Scroll(400f, tableH).Width(ST)
-                .RowHeight(rowH)
+                .Scroll(400f, tableH).RowHeight(rowH)
                 .Virtualize()
                 .Column("Asset", 2.2f)
                 .Column("Type", 1f)
@@ -147,13 +145,13 @@ public class SceneAssetEditor : AssetImporterEditor
             else
                 ic.Icon(paper, style.Icon, style.Color, size: 15f);
 
-            paper.Box($"dep_nm_{guid}").Width(ST).Height(rowH).Margin(4, 6, 0, 0).IsNotInteractable()
+            paper.Box($"dep_nm_{guid}").Height(rowH).Margin(4, 6, 0, 0).IsNotInteractable()
                 .Text(name, font).TextColor(path == null && !builtIn ? EditorTheme.Red400 : EditorTheme.Ink500)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
         }
         else
         {
-            paper.Box($"dep_ty_{guid}").Width(ST).Height(rowH).Margin(2, 6, 0, 0).IsNotInteractable()
+            paper.Box($"dep_ty_{guid}").Height(rowH).Margin(2, 6, 0, 0).IsNotInteractable()
                 .Text(typeLabel, font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
         }
