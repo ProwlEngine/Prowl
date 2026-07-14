@@ -24,8 +24,8 @@ public class BuildPipelineTests : EditorTestHarness
 {
     public BuildPipelineTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
     }
 
     // The build never deletes files: it refuses a non-empty output directory, leaving existing data intact.
@@ -41,7 +41,7 @@ public class BuildPipelineTests : EditorTestHarness
         string sentinel = Path.Combine(outDir, "important.txt");
         File.WriteAllText(sentinel, "keep me");
 
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         build.Scenes.Clear();
         build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
         build.OutputDirectory = outDir;

@@ -12,22 +12,22 @@ public class ProjectSettingsTests : EditorTestHarness
 {
     public ProjectSettingsTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
     }
 
     // Settings persist as Echo YAML: a saved value must survive a save/load round-trip.
     [Fact]
     public void SettingsSaveLoad_RoundTripsYaml()
     {
-        ProjectSettingsRegistry.Get<GeneralSettings>().ProductName = "RoundTripped";
-        ProjectSettingsRegistry.SaveAll();
+        EditorRegistries.GetSettings<GeneralSettings>().ProductName = "RoundTripped";
+        EditorRegistries.SaveSettings();
 
         Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "General.yaml")));
 
-        ProjectSettingsRegistry.Get<GeneralSettings>().ProductName = "overwritten";
-        ProjectSettingsRegistry.LoadAll();
+        EditorRegistries.GetSettings<GeneralSettings>().ProductName = "overwritten";
+        EditorRegistries.OnProjectOpened();
 
-        Assert.Equal("RoundTripped", ProjectSettingsRegistry.Get<GeneralSettings>().ProductName);
+        Assert.Equal("RoundTripped", EditorRegistries.GetSettings<GeneralSettings>().ProductName);
     }
 }

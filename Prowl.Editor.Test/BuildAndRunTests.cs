@@ -39,8 +39,8 @@ public class BuildAndRunTests : EditorTestHarness
     public void FullPipeline_Compile_Build_RunHeadless()
     {
         // Project settings must be discovered (BuildSettings, PackageSettings, etc.) before compiling/building.
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
 
         // 1. Author a real, tiny PNG, then flip it to Sprite mode (Texture Type -> Sprite in the
         //    Inspector) so the importer also emits a Sprite sub-asset wrapping it.
@@ -110,7 +110,7 @@ public class BuildAndRunTests : EditorTestHarness
 
         // 6. Configure the build. AssetMode stays at its default (DependenciesOnly) - the mode the
         //    Sprite sub-asset dependency bug only reproduces under.
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         build.Scenes.Clear();
         build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
         build.PackagingMode = AssetPackagingMode.LooseFiles;

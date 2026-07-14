@@ -19,12 +19,12 @@ public class PackageSettingsTests : EditorTestHarness
 {
     public PackageSettingsTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
         Packages().Packages.Clear();
     }
 
-    private static PackageSettings Packages() => ProjectSettingsRegistry.Get<PackageSettings>();
+    private static PackageSettings Packages() => EditorRegistries.GetSettings<PackageSettings>();
 
     // ---- Fast: model + persistence ----
 
@@ -52,11 +52,11 @@ public class PackageSettingsTests : EditorTestHarness
         pkgs.Packages.Add(new PackageSettings.PackageEntry { Name = "Foo.Bar", Version = "3.1.4", EditorOnly = false });
         pkgs.Packages.Add(new PackageSettings.PackageEntry { Name = "Edit.Tool", Version = "9.9.9", EditorOnly = true });
 
-        ProjectSettingsRegistry.SaveAll();
+        EditorRegistries.SaveSettings();
         Assert.True(File.Exists(Path.Combine(Project.ProjectSettingsPath, "Packages.yaml")));
 
         pkgs.Packages.Clear();          // wipe memory
-        ProjectSettingsRegistry.LoadAll(); // reload from disk
+        EditorRegistries.OnProjectOpened(); // reload from disk
 
         var reloaded = Packages();
         Assert.Equal(2, reloaded.Packages.Count);

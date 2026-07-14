@@ -20,8 +20,8 @@ public class PluginTests : EditorTestHarness
 {
     public PluginTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
     }
 
     [Fact]

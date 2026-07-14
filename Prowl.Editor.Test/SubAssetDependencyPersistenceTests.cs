@@ -27,8 +27,8 @@ public class SubAssetDependencyPersistenceTests : EditorTestHarness
     [Fact]
     public void SpriteDependency_SurvivesSimulatedEditorRestart()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
 
         string pngPath = AssetAbsolutePath("PersistTexture.png");
         var color = new MagickColor(R, G, B, A);

@@ -157,9 +157,9 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Build the project to a fresh temp output directory and assert success. Returns the output path.</summary>
     protected string RunBuild(Guid sceneGuid, AssetPackagingMode packaging = AssetPackagingMode.LooseFiles)
     {
-        ProjectSettingsRegistry.Initialize(); // idempotent - ensures BuildSettings exists
+        EditorRegistries.Initialize(); // idempotent - ensures BuildSettings exists
 
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         build.Scenes.Clear();
         build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
         build.PackagingMode = packaging;
@@ -198,7 +198,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Run the built player headlessly for a few frames and return its stdout (asserts a clean exit).</summary>
     protected string RunPlayerHeadless(string outputDir, int frames = 30)
     {
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         string exe = new DesktopBuildPipeline().GetExecutablePath(outputDir, build);
         Assert.True(File.Exists(exe), $"Executable not found at {exe}");
 
