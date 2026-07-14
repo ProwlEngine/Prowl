@@ -51,19 +51,7 @@ public class AssetRefPropertyEditor : PropertyEditor
                     .Text(label, font).TextColor(Origami.Current.Ink.C300)
                     .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            // Check for compatible drags
-            bool isDragTarget = false;
-            if (DragDrop.IsDragging)
-            {
-                if (DragDrop.Payload is AssetDragPayload adp && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType))
-                    isDragTarget = true;
-                else if (DragDrop.Payload is GameObjectDragPayload && typeof(GameObject).IsAssignableFrom(fieldType))
-                    isDragTarget = true;
-                else if (DragDrop.Payload is GameObjectDragPayload && typeof(MonoBehaviour).IsAssignableFrom(fieldType))
-                    isDragTarget = true; // Will search GO for matching component
-                else if (DragDrop.Payload is ComponentDragPayload cdp && fieldType.IsAssignableFrom(cdp.Component.GetType()))
-                    isDragTarget = true;
-            }
+            bool isDragTarget = EditorGUI.IsCompatibleDragTarget(fieldType);
 
             var fieldEl = paper.Row($"{id}_field")
                 .Height(rh)
@@ -185,4 +173,5 @@ public class AssetRefPropertyEditor : PropertyEditor
     {
         SelectorModal.Open($"Select {type.Name}", type, SelectorTabs.Assets, onChange);
     }
+
 }

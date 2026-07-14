@@ -75,9 +75,9 @@ public class TextureAssetEditor : AssetImporterEditor
             using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
-                StatChip(paper, $"{id}_st_size", $"{texture.Width} x {texture.Height}", font);
-                StatChip(paper, $"{id}_st_fmt", texture.ImageFormat.ToString(), font);
-                StatChip(paper, $"{id}_st_mip", texture.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
+                EditorGUI.StatChip(paper, $"{id}_st_size", $"{texture.Width} x {texture.Height}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_fmt", texture.ImageFormat.ToString(), font);
+                EditorGUI.StatChip(paper, $"{id}_st_mip", texture.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
                 paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
             }
         }
@@ -169,12 +169,4 @@ public class TextureAssetEditor : AssetImporterEditor
             });
     }
 
-    private static void StatChip(Paper paper, string cid, string text, Prowl.Scribe.FontFile font)
-    {
-        paper.Box(cid).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter);
-    }
 }

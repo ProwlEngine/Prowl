@@ -12,6 +12,7 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
@@ -73,13 +74,8 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-        paper.Box("sv_hdr_settings").Width(24).Height(24).Rounded(6)
-            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(_ => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+        EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, () =>
+            Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.scene"));
                 b.Toggle(Loc.Get("scene.show_grid"),

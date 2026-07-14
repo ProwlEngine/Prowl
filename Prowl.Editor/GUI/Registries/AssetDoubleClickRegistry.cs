@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -52,28 +53,21 @@ public static class AssetDoubleClickRegistry
         _initialized = true;
         _handlers.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
             {
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                foreach (var attr in method.GetCustomAttributes<AssetDoubleClickHandlerAttribute>())
                 {
-                    foreach (var attr in method.GetCustomAttributes<AssetDoubleClickHandlerAttribute>())
-                    {
-                        if (method.ReturnType != typeof(bool)) continue;
-                        var pars = method.GetParameters();
-                        if (pars.Length != 2 || pars[0].ParameterType != typeof(string) || pars[1].ParameterType != typeof(Guid)) continue;
+                    if (method.ReturnType != typeof(bool)) continue;
+                    var pars = method.GetParameters();
+                    if (pars.Length != 2 || pars[0].ParameterType != typeof(string) || pars[1].ParameterType != typeof(Guid)) continue;
 
-                        Handler del;
-                        try { del = (Handler)Delegate.CreateDelegate(typeof(Handler), method); }
-                        catch (Exception ex) { Debug.LogWarning($"AssetDoubleClickRegistry: failed to bind {type.Name}.{method.Name}: {ex.Message}"); continue; }
+                    Handler del;
+                    try { del = (Handler)Delegate.CreateDelegate(typeof(Handler), method); }
+                    catch (Exception ex) { Debug.LogWarning($"AssetDoubleClickRegistry: failed to bind {type.Name}.{method.Name}: {ex.Message}"); continue; }
 
-                        foreach (var ext in attr.Extensions) Register(ext, del);
-                    }
+                    foreach (var ext in attr.Extensions) Register(ext, del);
                 }
             }
         }

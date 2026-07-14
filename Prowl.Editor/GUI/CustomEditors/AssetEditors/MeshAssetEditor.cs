@@ -110,10 +110,10 @@ public class MeshAssetEditor : AssetImporterEditor
         using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
         {
-            StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
-            StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);
-            StatChip(paper, $"{id}_st_sub", $"{mesh.SubMeshCount} Sub-Meshes", font);
-            StatChip(paper, $"{id}_st_bounds", $"{size.X:F2} x {size.Y:F2} x {size.Z:F2}", font);
+            EditorGUI.StatChip(paper, $"{id}_st_verts", $"{verts:N0} Verts", font);
+            EditorGUI.StatChip(paper, $"{id}_st_tris", $"{tris:N0} Tris", font);
+            EditorGUI.StatChip(paper, $"{id}_st_sub", $"{mesh.SubMeshCount} Sub-Meshes", font);
+            EditorGUI.StatChip(paper, $"{id}_st_bounds", $"{size.X:F2} x {size.Y:F2} x {size.Z:F2}", font);
             paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
         }
     }
@@ -154,14 +154,6 @@ public class MeshAssetEditor : AssetImporterEditor
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate());
     }
 
-    private static void StatChip(Paper paper, string cid, string text, Prowl.Scribe.FontFile font)
-    {
-        paper.Box(cid).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter);
-    }
 
     private static MeshSDF? FindSDF(AssetEntry parentEntry, SubAssetEntry? subEntry, Mesh mesh)
     {

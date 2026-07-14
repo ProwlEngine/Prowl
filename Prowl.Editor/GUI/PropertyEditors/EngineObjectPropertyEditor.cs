@@ -48,17 +48,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
                     .Text(label, font).TextColor(Origami.Current.Ink.C300)
                     .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            // Check if a compatible payload is being dragged over this field
-            bool isDragTarget = false;
-            if (DragDrop.IsDragging)
-            {
-                if (DragDrop.Payload is AssetDragPayload adp2 && adp2.AssetType != null && fieldType.IsAssignableFrom(adp2.AssetType))
-                    isDragTarget = true;
-                else if (DragDrop.Payload is GameObjectDragPayload && (typeof(GameObject).IsAssignableFrom(fieldType) || typeof(MonoBehaviour).IsAssignableFrom(fieldType)))
-                    isDragTarget = true;
-                else if (DragDrop.Payload is ComponentDragPayload cdp2 && fieldType.IsAssignableFrom(cdp2.Component.GetType()))
-                    isDragTarget = true;
-            }
+            bool isDragTarget = EditorGUI.IsCompatibleDragTarget(fieldType);
 
             // Object field row
             var iconColor = eo != null ? EditorTheme.Purple400 : EditorTheme.Ink300;

@@ -7,6 +7,7 @@ using System.IO;
 using System.Reflection;
 
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI.Registries;
@@ -57,36 +58,27 @@ public static class FileIconRegistry
         _icons.Clear();
         RegisterBuiltIns();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
             {
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                foreach (var attr in method.GetCustomAttributes<FileIconAttribute>())
                 {
-                    // [FileIcon(".ext", ...)] on a static method returning the icon string
-                    foreach (var attr in method.GetCustomAttributes<FileIconAttribute>())
+                    if (method.ReturnType != typeof(string) || method.GetParameters().Length != 0) continue;
+                    try
                     {
-                        if (method.ReturnType != typeof(string) || method.GetParameters().Length != 0) continue;
-                        try
-                        {
-                            var icon = (string?)method.Invoke(null, null);
-                            if (string.IsNullOrEmpty(icon)) continue;
-                            foreach (var ext in attr.Extensions) Register(ext, icon!);
-                        }
-                        catch (Exception ex) { Debug.LogWarning($"FileIconRegistry: {type.Name}.{method.Name} threw: {ex.Message}"); }
+                        var icon = (string?)method.Invoke(null, null);
+                        if (string.IsNullOrEmpty(icon)) continue;
+                        foreach (var ext in attr.Extensions) Register(ext, icon!);
                     }
+                    catch (Exception ex) { Debug.LogWarning($"FileIconRegistry: {type.Name}.{method.Name} threw: {ex.Message}"); }
+                }
 
-                    // [FileIconProvider] on a static void method that calls Register(...) itself
-                    if (method.GetCustomAttribute<FileIconProviderAttribute>() != null
-                        && method.ReturnType == typeof(void) && method.GetParameters().Length == 0)
-                    {
-                        try { method.Invoke(null, null); }
-                        catch (Exception ex) { Debug.LogWarning($"FileIconRegistry: {type.Name}.{method.Name} threw: {ex.Message}"); }
-                    }
+                if (method.GetCustomAttribute<FileIconProviderAttribute>() != null
+                    && method.ReturnType == typeof(void) && method.GetParameters().Length == 0)
+                {
+                    try { method.Invoke(null, null); }
+                    catch (Exception ex) { Debug.LogWarning($"FileIconRegistry: {type.Name}.{method.Name} threw: {ex.Message}"); }
                 }
             }
         }

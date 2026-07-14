@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI.SceneView;
@@ -66,30 +67,21 @@ public static class SceneViewEditorRegistry
         _initialized = true;
         _entries = [];
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
+            if (!typeof(ISceneViewEditor).IsAssignableFrom(type) || type.IsInterface || type.IsAbstract)
+                continue;
+
+            var attr = type.GetCustomAttribute<SceneViewEditorForAttribute>();
+            if (attr == null) continue;
+
             try
             {
-                foreach (var type in assembly.GetTypes())
-                {
-                    if (!typeof(ISceneViewEditor).IsAssignableFrom(type) || type.IsInterface || type.IsAbstract)
-                        continue;
-
-                    var attr = type.GetCustomAttribute<SceneViewEditorForAttribute>();
-                    if (attr == null) continue;
-
-                    var instance = (ISceneViewEditor)Activator.CreateInstance(type)!;
-                    _editorCache[type] = instance;
-
-                    _entries.Add(new Entry
-                    {
-                        ComponentType = attr.ComponentType,
-                        EditorType = type,
-                        Priority = instance.Priority,
-                    });
-                }
+                var instance = (ISceneViewEditor)Activator.CreateInstance(type)!;
+                _editorCache[type] = instance;
+                _entries.Add(new Entry { ComponentType = attr.ComponentType, EditorType = type, Priority = instance.Priority });
             }
-            catch { /* skip assemblies that can't be reflected */ }
+            catch { }
         }
 
         _entries.Sort((a, b) => a.Priority.CompareTo(b.Priority));

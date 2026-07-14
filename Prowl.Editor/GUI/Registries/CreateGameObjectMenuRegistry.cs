@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
 
@@ -73,33 +74,25 @@ public static class CreateGameObjectMenuRegistry
 
         _entries.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
-                foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                var attr = method.GetCustomAttribute<CreateGameObjectMenuAttribute>();
+                if (attr == null) continue;
+
+                var parms = method.GetParameters();
+                if (parms.Length != 1 || parms[0].ParameterType != typeof(GameObject))
+                    continue;
+
+                _entries.Add(new MenuEntry
                 {
-                    var attr = method.GetCustomAttribute<CreateGameObjectMenuAttribute>();
-                    if (attr == null) continue;
-
-                    // Validate signature: must accept (GameObject?) parameter
-                    var parms = method.GetParameters();
-                    if (parms.Length != 1 || parms[0].ParameterType != typeof(GameObject))
-                        continue;
-
-                    _entries.Add(new MenuEntry
-                    {
-                        Path = attr.Path,
-                        Icon = attr.Icon,
-                        Order = attr.Order,
-                        Separator = attr.Separator,
-                        Method = method,
-                    });
-                }
+                    Path = attr.Path,
+                    Icon = attr.Icon,
+                    Order = attr.Order,
+                    Separator = attr.Separator,
+                    Method = method,
+                });
             }
         }
 

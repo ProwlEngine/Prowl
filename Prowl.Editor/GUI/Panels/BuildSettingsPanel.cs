@@ -8,6 +8,7 @@ using System.Linq;
 
 using Prowl.Editor.Build;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -128,7 +129,7 @@ public class BuildSettingsPanel : DockPanel
         using (paper.Column("bp_scenes").Width(colW).Height(bodyH).Enter())
         {
             HeaderStrip(paper, "bp_scenes_h", Loc.Get("build.scenes_header"), font, () =>
-                ChipButton(paper, "bp_scenes_add", $"{EditorIcons.Plus}  {Loc.Get("build.add_open")}", AddOpenScene));
+                EditorGUI.Chip(paper, "bp_scenes_add", $"{EditorIcons.Plus}  {Loc.Get("build.add_open")}", AddOpenScene));
 
             Origami.ScrollView(paper, "bp_scenes_list", colW, bodyH - HeaderH - 1)
                 .Padding(8, 8, 8, 8)
@@ -438,11 +439,11 @@ public class BuildSettingsPanel : DockPanel
             using (paper.Row("bp_ftr_progw").Width(ST).Height(UnitValue.Auto).Margin(14, 14, ST, ST).Enter())
                 Origami.ProgressBar(paper, "bp_ftr_bar", BuildProgress).Thickness(8).ShowPercent("F0").Show();
 
-            ChipButton(paper, "bp_ftr_build", $"{EditorIcons.Hammer}  {Loc.Get("build.build")}", () => TryStartBuild(false));
+            EditorGUI.Chip(paper, "bp_ftr_build", $"{EditorIcons.Hammer}  {Loc.Get("build.build")}", () => TryStartBuild(false));
 
             paper.Box("bp_ftr_bgap").Width(8).Height(1).Margin(0, 0, ST, ST).IsNotInteractable();
 
-            CtaButton(paper, "bp_ftr_buildrun", $"{EditorIcons.Play}  {Loc.Get("build.build_run")}", EditorTheme.Accent, () => TryStartBuild(true));
+            EditorGUI.CtaButton(paper, "bp_ftr_buildrun", $"{EditorIcons.Play}  {Loc.Get("build.build_run")}", EditorTheme.Accent, () => TryStartBuild(true));
         }
     }
 
@@ -463,28 +464,6 @@ public class BuildSettingsPanel : DockPanel
             drawAction?.Invoke();
         }
         paper.Box($"{id}_d").Width(ST).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
-    }
-
-    private static void ChipButton(Paper paper, string id, string label, Action onClick)
-    {
-        var font = EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(0, 0, ST, ST).Rounded(8).Padding(12, 12, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
-            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
-    }
-
-    private static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick)
-    {
-        var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        paper.Box(id).Width(UnitValue.Auto).Height(28).Margin(0, 0, ST, ST).Rounded(8).Padding(16, 16, 0, 0)
-            .BackgroundColor(bg)
-            .Hovered.BackgroundColor(Color.FromArgb(230, bg.R, bg.G, bg.B)).End()
-            .Text(label, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
     }
 
     public List<BuildPipelineInfo> GetBuildPlatforms()

@@ -47,8 +47,8 @@ public class SceneAssetEditor : AssetImporterEditor
         using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
             .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
         {
-            StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
-            StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);
+            EditorGUI.StatChip(paper, $"{id}_st_name", $"{EditorIcons.Shapes}  {sceneName}", font);
+            EditorGUI.StatChip(paper, $"{id}_st_deps", $"{deps.Count} reference{(deps.Count == 1 ? "" : "s")}", font);
             paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
         }
 
@@ -159,12 +159,4 @@ public class SceneAssetEditor : AssetImporterEditor
         }
     }
 
-    private static void StatChip(Paper paper, string cid, string text, Prowl.Scribe.FontFile font)
-    {
-        paper.Box(cid).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter);
-    }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -66,13 +67,8 @@ public class GameViewPanel : DockPanel
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-        paper.Box("gv_hdr_settings").Width(24).Height(24).Rounded(6)
-            .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Text(EditorIcons.Gear, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(_ => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+        EditorGUI.HeaderIconButton(paper, "gv_hdr_settings", EditorIcons.Gear, () =>
+            Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
             {
                 b.Header(Loc.Get("panel.game"));
                 b.Submenu(Loc.Get("game.resolution"), sub =>

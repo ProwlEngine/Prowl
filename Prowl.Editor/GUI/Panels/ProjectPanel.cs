@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 
 using Prowl.OrigamiUI;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -32,20 +33,15 @@ public class ProjectPanel : DockPanel
     public override float HeaderWidth => 28f;
     public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
-        paper.Box("proj_hdr_refresh").Width(24).Height(24).Rounded(6).Margin(0, 0, ST, ST)
-            .Hovered.BackgroundColor(EditorTheme.Hover).End()
-            .Text(EditorIcons.ArrowRotateRight, font).TextColor(TMid).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(_ =>
+        EditorGUI.HeaderIconButton(paper, "proj_hdr_refresh", EditorIcons.ArrowRotateRight, () =>
+        {
+            if (EditorAssetDatabase.Instance != null)
             {
-                if (EditorAssetDatabase.Instance != null)
-                {
-                    Runtime.Debug.Log("Refreshing asset database...");
-                    var db = new EditorAssetDatabase(Project.Current!);
-                    db.Initialize();
-                }
-            });
+                Runtime.Debug.Log("Refreshing asset database...");
+                var db = new EditorAssetDatabase(Project.Current!);
+                db.Initialize();
+            }
+        });
     }
 
     // Handled Virtual (Placeholder) content to be displayed with normal objects

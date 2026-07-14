@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
+
 namespace Prowl.Editor.Importers;
 
 /// <summary>
@@ -34,27 +36,17 @@ public static class ImporterRegistry
         _extensionToImporter.Clear();
         _nameToImporter.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
+            if (!typeof(AssetImporter).IsAssignableFrom(type) || type.IsAbstract) continue;
 
-            foreach (var type in types)
-            {
-                if (!typeof(AssetImporter).IsAssignableFrom(type) || type.IsAbstract) continue;
+            var attr = type.GetCustomAttribute<ImporterForAttribute>();
+            if (attr == null) continue;
 
-                var attr = type.GetCustomAttribute<ImporterForAttribute>();
-                if (attr == null) continue;
+            _nameToImporter[type.Name] = type;
 
-                _nameToImporter[type.Name] = type;
-
-                foreach (var ext in attr.Extensions)
-                {
-                    string normalized = ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
-                    _extensionToImporter[normalized] = type;
-                }
-            }
+            foreach (var ext in attr.Extensions)
+                _extensionToImporter[NormalizeExt(ext)] = type;
         }
 
         Runtime.Debug.Log($"ImporterRegistry: Registered {_nameToImporter.Count} importers for {_extensionToImporter.Count} extensions. Extensions: {string.Join(", ", _extensionToImporter.Keys)}");
@@ -62,17 +54,13 @@ public static class ImporterRegistry
 
     public static AssetImporter? GetForExtension(string extension)
     {
-        string ext = extension.StartsWith('.') ? extension.ToLowerInvariant() : "." + extension.ToLowerInvariant();
-        if (_extensionToImporter.TryGetValue(ext, out var type))
+        if (_extensionToImporter.TryGetValue(NormalizeExt(extension), out var type))
             return (AssetImporter)Activator.CreateInstance(type)!;
         return null;
     }
 
     public static string GetImporterTypeName(string extension)
-    {
-        string ext = extension.StartsWith('.') ? extension.ToLowerInvariant() : "." + extension.ToLowerInvariant();
-        return _extensionToImporter.TryGetValue(ext, out var type) ? type.Name : "DefaultImporter";
-    }
+        => _extensionToImporter.TryGetValue(NormalizeExt(extension), out var type) ? type.Name : "DefaultImporter";
 
     public static AssetImporter? CreateByTypeName(string typeName)
     {
@@ -82,4 +70,7 @@ public static class ImporterRegistry
     }
 
     public static IEnumerable<string> RegisteredExtensions => _extensionToImporter.Keys;
+
+    private static string NormalizeExt(string ext)
+        => ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
 }

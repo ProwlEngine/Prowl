@@ -7,6 +7,7 @@ using System.Reflection;
 
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -81,26 +82,18 @@ public static class SceneDropHandlerRegistry
 
         _handlers.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
+            if (type.IsAbstract || !typeof(ISceneDropHandler).IsAssignableFrom(type)) continue;
+            var attr = type.GetCustomAttribute<SceneDropHandlerAttribute>();
+            if (attr == null) continue;
 
-            foreach (var type in types)
+            _handlers.Add(new HandlerEntry
             {
-                if (type.IsAbstract || !typeof(ISceneDropHandler).IsAssignableFrom(type)) continue;
-                var attr = type.GetCustomAttribute<SceneDropHandlerAttribute>();
-                if (attr == null) continue;
-
-                var instance = (ISceneDropHandler)Activator.CreateInstance(type)!;
-                _handlers.Add(new HandlerEntry
-                {
-                    AssetType = attr.TargetType,
-                    Order = attr.Order,
-                    Handler = instance,
-                });
-            }
+                AssetType = attr.TargetType,
+                Order = attr.Order,
+                Handler = (ISceneDropHandler)Activator.CreateInstance(type)!,
+            });
         }
 
         _handlers.Sort((a, b) => a.Order.CompareTo(b.Order));

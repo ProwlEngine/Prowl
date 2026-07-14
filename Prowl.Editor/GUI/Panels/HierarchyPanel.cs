@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.OrigamiUI;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -149,13 +150,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
             if (scene == null)
             {
-                paper.Box("hier_empty")
-                    .Height(60)
-                    .Text(Loc.Get("hierarchy.no_scene_loaded"), font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize)
-                    .Alignment(TextAlignment.MiddleCenter);
-
+                EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
                 Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }

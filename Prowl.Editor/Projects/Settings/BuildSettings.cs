@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Utils;
+
 using Prowl.Editor.Inspector;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -78,19 +80,14 @@ public sealed class BuildSettings : ProjectSettingsBase
         if (profile == null)
         {
             Type targetType = null;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var type in EditorUtils.GetAllTypes())
             {
-                foreach (var type in asm.GetTypes())
+                if (!type.IsSubclassOf(typeof(PlatformBuildProfile)) || type == typeof(PlatformBuildProfile)) continue;
+                var check = Activator.CreateInstance(type) as PlatformBuildProfile;
+                if (check?.GetPipelineType() == pipelineType)
                 {
-                    if (type.IsSubclassOf(typeof(PlatformBuildProfile)) && type != typeof(PlatformBuildProfile))
-                    {
-                        var check = Activator.CreateInstance(type) as PlatformBuildProfile;
-                        if (check.GetPipelineType() == pipelineType)
-                        {
-                            targetType = type;
-                            break;
-                        }
-                    }
+                    targetType = type;
+                    break;
                 }
             }
 

@@ -18,6 +18,7 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Utils;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -197,9 +198,7 @@ public class EditorApplication : Game
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
-            // Find all concrete types implementing the base type
-            var types = AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
+            var types = EditorUtils.GetAllTypes()
                 .Where(t => baseType.IsAssignableFrom(t) && !t.IsAbstract && !t.IsInterface)
                 .Take(20).ToArray();
 
@@ -1217,19 +1216,12 @@ public class EditorApplication : Game
 
     private void ScanAndRegisterPanels()
     {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
-            {
-                if (!typeof(DockPanel).IsAssignableFrom(type) || type.IsAbstract) continue;
-                var attr = type.GetCustomAttribute<EditorWindowAttribute>();
-                if (attr == null) continue;
-                _registeredPanels.Add((type, attr.Path));
-            }
+            if (!typeof(DockPanel).IsAssignableFrom(type) || type.IsAbstract) continue;
+            var attr = type.GetCustomAttribute<EditorWindowAttribute>();
+            if (attr == null) continue;
+            _registeredPanels.Add((type, attr.Path));
         }
     }
 

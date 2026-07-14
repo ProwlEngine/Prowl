@@ -239,7 +239,7 @@ public class EnvironmentPanel : DockPanel
                 paper.Box($"{id}_status").Width(ST).Height(18)
                     .Text($"{_bake.Status}  ({_bake.Progress * 100f:F0}%)", font)
                     .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
-                CtaButton(paper, $"{id}_cancel", $"{EditorIcons.Xmark}  {Loc.Get("common.cancel")}", EditorTheme.Red400, false, () => _bake.Cancel());
+                EditorGUI.CtaButton(paper, $"{id}_cancel", $"{EditorIcons.Xmark}  {Loc.Get("common.cancel")}", EditorTheme.Red400, () => _bake.Cancel(), height: 34f);
             }
             else
             {
@@ -256,7 +256,7 @@ public class EnvironmentPanel : DockPanel
 
                 using (paper.Row($"{id}_btns").Width(ST).Height(34).RowBetween(8).Enter())
                 {
-                    CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent, true,
+                    EditorGUI.CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent,
                         () =>
                         {
                             if (_bake.IsBaking)
@@ -265,22 +265,12 @@ public class EnvironmentPanel : DockPanel
                                 return;
                             }
                             _bake.Start(scene, scene.LightmapBake);
-                        });
+                        }, grow: true, height: 34f);
                     if (hasBaked)
                         ChipButton(paper, $"{id}_clear", Loc.Get("console.clear"), () => _bake.Clear(scene));
                 }
             }
         }
-    }
-
-    private static void CtaButton(Paper paper, string id, string label, Color bg, bool grow, Action onClick)
-    {
-        var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
-        paper.Box(id).Width(grow ? ST : UnitValue.Auto).Height(34).Rounded(9).Padding(16, 16, 0, 0)
-            .BackgroundColor(bg)
-            .Hovered.BackgroundColor(Color.FromArgb(230, bg.R, bg.G, bg.B)).End()
-            .Text(label, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => onClick());
     }
 
     private static void ChipButton(Paper paper, string id, string label, Action onClick)

@@ -98,11 +98,11 @@ public class ModelAssetEditor : AssetImporterEditor
             using (paper.Row($"{id}_stats").Width(ST).Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
-                StatChip(paper, $"{id}_st_meshes", $"{meshCount} {(meshCount == 1 ? "Mesh" : "Meshes")}", font);
-                StatChip(paper, $"{id}_st_mats", $"{matCount} {(matCount == 1 ? "Material" : "Materials")}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_meshes", $"{meshCount} {(meshCount == 1 ? "Mesh" : "Meshes")}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_mats", $"{matCount} {(matCount == 1 ? "Material" : "Materials")}", font);
                 if (animCount > 0)
-                    StatChip(paper, $"{id}_st_anims", $"{animCount} {(animCount == 1 ? "Animation" : "Animations")}", font);
-                StatChip(paper, $"{id}_st_subs", $"{entry.SubAssets.Length} Sub-Assets", font);
+                    EditorGUI.StatChip(paper, $"{id}_st_anims", $"{animCount} {(animCount == 1 ? "Animation" : "Animations")}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_subs", $"{entry.SubAssets.Length} Sub-Assets", font);
                 paper.Box($"{id}_st_pad").Width(ST).Height(1).IsNotInteractable();
             }
         }
@@ -229,14 +229,6 @@ public class ModelAssetEditor : AssetImporterEditor
         }
     }
 
-    private static void StatChip(Paper paper, string cid, string text, Prowl.Scribe.FontFile font)
-    {
-        paper.Box(cid).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
-            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-            .IsNotInteractable()
-            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter);
-    }
 
     private void LoadSettingsFromMeta(AssetEntry entry)
     {

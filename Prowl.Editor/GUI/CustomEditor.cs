@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
 using Prowl.PaperUI;
 
 namespace Prowl.Editor.GUI;
@@ -81,19 +82,12 @@ public static class CustomEditorRegistry
         _typeToEditor.Clear();
         _editorCache.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
-            {
-                if (!typeof(CustomEditor).IsAssignableFrom(type) || type.IsAbstract) continue;
-                var attr = type.GetCustomAttribute<CustomEditorAttribute>();
-                if (attr == null) continue;
-                _typeToEditor[attr.TargetType] = type;
-            }
+            if (!typeof(CustomEditor).IsAssignableFrom(type) || type.IsAbstract) continue;
+            var attr = type.GetCustomAttribute<CustomEditorAttribute>();
+            if (attr == null) continue;
+            _typeToEditor[attr.TargetType] = type;
         }
 
         Runtime.Debug.Log($"CustomEditorRegistry: {_typeToEditor.Count} custom editors registered.");

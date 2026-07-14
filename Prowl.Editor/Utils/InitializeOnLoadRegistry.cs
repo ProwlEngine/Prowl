@@ -4,6 +4,7 @@
 using System;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Core;
@@ -33,28 +34,21 @@ public static class InitializeOnLoadRegistry
 
         int count = 0;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
-                foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
-                {
-                    if (method.GetCustomAttribute<InitializeOnLoadAttribute>() == null) continue;
-                    if (method.GetParameters().Length != 0) continue;
+                if (method.GetCustomAttribute<InitializeOnLoadAttribute>() == null) continue;
+                if (method.GetParameters().Length != 0) continue;
 
-                    try
-                    {
-                        method.Invoke(null, null);
-                        count++;
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"[InitializeOnLoad] {type.Name}.{method.Name} threw: {ex.InnerException?.Message ?? ex.Message}");
-                    }
+                try
+                {
+                    method.Invoke(null, null);
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[InitializeOnLoad] {type.Name}.{method.Name} threw: {ex.InnerException?.Message ?? ex.Message}");
                 }
             }
         }

@@ -10,6 +10,7 @@ using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.Core.Tasks;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.Rosetta;
 using Prowl.Runtime;
@@ -90,27 +91,20 @@ public static class CreateAssetMenuRegistry
         _entries.Clear();
         _entries.AddRange(manuals);
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
+            if (type.IsAbstract || !typeof(EngineObject).IsAssignableFrom(type)) continue;
+            var attr = type.GetCustomAttribute<CreateAssetMenuAttribute>();
+            if (attr == null) continue;
 
-            foreach (var type in types)
+            _entries.Add(new Entry
             {
-                if (type.IsAbstract || !typeof(EngineObject).IsAssignableFrom(type)) continue;
-                var attr = type.GetCustomAttribute<CreateAssetMenuAttribute>();
-                if (attr == null) continue;
-
-                _entries.Add(new Entry
-                {
-                    Type = type,
-                    Name = attr.Name,
-                    Extension = attr.Extension,
-                    Icon = attr.Icon,
-                    Order = attr.Order,
-                });
-            }
+                Type = type,
+                Name = attr.Name,
+                Extension = attr.Extension,
+                Icon = attr.Icon,
+                Order = attr.Order,
+            });
         }
 
         _entries.Sort((a, b) => a.Order.CompareTo(b.Order));

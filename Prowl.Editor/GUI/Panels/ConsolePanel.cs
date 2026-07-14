@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -280,8 +281,7 @@ public class ConsolePanel : DockPanel
         {
             if (count == 0)
             {
-                paper.Box("con_empty").Width(ST).Height(60)
-                    .Text(Loc.Get("console.no_logs"), font).TextColor(TDim).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                EditorGUI.EmptyState(paper, "con_empty", Loc.Get("console.no_logs"), font);
                 return;
             }
 

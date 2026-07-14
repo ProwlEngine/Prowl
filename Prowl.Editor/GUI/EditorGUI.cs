@@ -7,6 +7,8 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Runtime;
+using Prowl.Scribe;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
@@ -216,6 +218,66 @@ public static class EditorGUI
             .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
             .Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => onClick());
+    }
+
+    /// <summary>A colored call-to-action button. Pass <paramref name="grow"/> = true to stretch width.</summary>
+    public static void CtaButton(Paper paper, string id, string label, Color bg, Action onClick, bool grow = false, float height = 28f)
+    {
+        var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
+        paper.Box(id).Width(grow ? ST : UnitValue.Auto).Height(height).Margin(0, 0, ST, ST).Rounded(8).Padding(16, 16, 0, 0)
+            .BackgroundColor(bg)
+            .Hovered.BackgroundColor(Color.FromArgb(230, bg.R, bg.G, bg.B)).End()
+            .Text(label, font).TextColor(Color.White).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
+    }
+
+    /// <summary>A small 24x24 icon button used in panel tab-bar headers.</summary>
+    public static void HeaderIconButton(Paper paper, string id, string icon, Action onClick)
+    {
+        var font = EditorTheme.DefaultFont;
+        if (font == null) return;
+        paper.Box(id).Width(24).Height(24).Rounded(6).Margin(0, 0, STV, STV)
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
+            .Text(icon, font).TextColor(EditorTheme.Ink300).FontSize(13f).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(_ => onClick());
+    }
+
+    /// <summary>A centered "nothing here" placeholder for empty lists and panels.</summary>
+    public static void EmptyState(Paper paper, string id, string message, FontFile font)
+    {
+        paper.Box(id).Width(ST).Height(60)
+            .Text(message, font).TextColor(EditorTheme.Ink300)
+            .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+            .IsNotInteractable();
+    }
+
+    /// <summary>A read-only info chip for displaying asset statistics inline.</summary>
+    public static void StatChip(Paper paper, string id, string text, FontFile font)
+    {
+        paper.Box(id).Width(UnitValue.Auto).Height(22).Margin(0, 0, ST, ST).Rounded(6).Padding(9, 9, 0, 0)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .IsNotInteractable()
+            .Text(text, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter);
+    }
+
+    // =====================================================================
+    //  Drag-drop utilities
+    // =====================================================================
+
+    /// <summary>Returns true when a currently active drag payload is compatible with the given field type.</summary>
+    public static bool IsCompatibleDragTarget(Type fieldType)
+    {
+        if (!DragDrop.IsDragging) return false;
+        if (DragDrop.Payload is AssetDragPayload adp && adp.AssetType != null && fieldType.IsAssignableFrom(adp.AssetType))
+            return true;
+        if (DragDrop.Payload is GameObjectDragPayload &&
+            (typeof(GameObject).IsAssignableFrom(fieldType) || typeof(MonoBehaviour).IsAssignableFrom(fieldType)))
+            return true;
+        if (DragDrop.Payload is ComponentDragPayload cdp && fieldType.IsAssignableFrom(cdp.Component.GetType()))
+            return true;
+        return false;
     }
 
     // =====================================================================

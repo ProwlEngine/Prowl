@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using Prowl.Editor.Core;
+using Prowl.Editor.Utils;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 
@@ -38,33 +39,28 @@ public static class EditorCallbacks
 
         int sceneSaved = 0, undoRedo = 0;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            try
+            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
-                foreach (var type in assembly.GetTypes())
-                {
-                    foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
-                    {
-                        if (method.GetCustomAttribute<OnSceneSavedAttribute>() != null)
-                        {
-                            var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
-                            EditorSceneManager.OnSceneSaved += del;
-                            _sceneSavedDelegates.Add(del);
-                            sceneSaved++;
-                        }
+                if (method.ReturnType != typeof(void) || method.GetParameters().Length != 0) continue;
 
-                        if (method.GetCustomAttribute<OnUndoRedoAttribute>() != null)
-                        {
-                            var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
-                            Undo.OnUndoRedo += del;
-                            _undoRedoDelegates.Add(del);
-                            undoRedo++;
-                        }
-                    }
+                if (method.GetCustomAttribute<OnSceneSavedAttribute>() != null)
+                {
+                    var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
+                    EditorSceneManager.OnSceneSaved += del;
+                    _sceneSavedDelegates.Add(del);
+                    sceneSaved++;
+                }
+
+                if (method.GetCustomAttribute<OnUndoRedoAttribute>() != null)
+                {
+                    var del = (Action)Delegate.CreateDelegate(typeof(Action), method);
+                    Undo.OnUndoRedo += del;
+                    _undoRedoDelegates.Add(del);
+                    undoRedo++;
                 }
             }
-            catch { /* skip assemblies that can't be reflected */ }
         }
 
         Debug.Log($"[EditorCallbacks] Registered {sceneSaved} OnSceneSaved, {undoRedo} OnUndoRedo callbacks.");

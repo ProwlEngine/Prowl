@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
@@ -71,33 +72,26 @@ public static class ScriptTemplateRegistry
         _initialized = true;
         _templates.Clear();
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch { continue; }
-
-            foreach (var type in types)
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
             {
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                var attr = method.GetCustomAttribute<ScriptTemplateAttribute>();
+                if (attr == null) continue;
+
+                if (method.ReturnType != typeof(string)
+                    || method.GetParameters() is not { Length: 1 } p
+                    || p[0].ParameterType != typeof(string))
                 {
-                    var attr = method.GetCustomAttribute<ScriptTemplateAttribute>();
-                    if (attr == null) continue;
-
-                    if (method.ReturnType != typeof(string)
-                        || method.GetParameters() is not { Length: 1 } p
-                        || p[0].ParameterType != typeof(string))
-                    {
-                        Debug.LogWarning($"ScriptTemplateRegistry: {type.Name}.{method.Name} must be 'string Generate(string className)'");
-                        continue;
-                    }
-
-                    Func<string, string> del;
-                    try { del = (Func<string, string>)Delegate.CreateDelegate(typeof(Func<string, string>), method); }
-                    catch (Exception ex) { Debug.LogWarning($"ScriptTemplateRegistry: failed to bind {type.Name}.{method.Name}: {ex.Message}"); continue; }
-
-                    _templates.Add(new ScriptTemplate(attr.Name, attr.Description, attr.Icon, attr.Order, del));
+                    Debug.LogWarning($"ScriptTemplateRegistry: {type.Name}.{method.Name} must be 'string Generate(string className)'");
+                    continue;
                 }
+
+                Func<string, string> del;
+                try { del = (Func<string, string>)Delegate.CreateDelegate(typeof(Func<string, string>), method); }
+                catch (Exception ex) { Debug.LogWarning($"ScriptTemplateRegistry: failed to bind {type.Name}.{method.Name}: {ex.Message}"); continue; }
+
+                _templates.Add(new ScriptTemplate(attr.Name, attr.Description, attr.Icon, attr.Order, del));
             }
         }
 

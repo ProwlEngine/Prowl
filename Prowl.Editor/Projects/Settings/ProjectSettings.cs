@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Projects.Settings;
@@ -105,28 +106,22 @@ public static class ProjectSettingsRegistry
         if (_initialized) return;
         _initialized = true;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var type in EditorUtils.GetAllTypes())
         {
-            Type[] types;
-            try { types = assembly.GetTypes(); } catch { continue; }
+            if (type.IsAbstract || !typeof(ProjectSettingsBase).IsAssignableFrom(type)) continue;
+            var attr = type.GetCustomAttribute<ProjectSettingsAttribute>();
+            if (attr == null) continue;
 
-            foreach (var type in types)
+            var instance = (ProjectSettingsBase)Activator.CreateInstance(type)!;
+            _entries.Add(new SettingsEntry
             {
-                if (type.IsAbstract || !typeof(ProjectSettingsBase).IsAssignableFrom(type)) continue;
-                var attr = type.GetCustomAttribute<ProjectSettingsAttribute>();
-                if (attr == null) continue;
-
-                var instance = (ProjectSettingsBase)Activator.CreateInstance(type)!;
-                _entries.Add(new SettingsEntry
-                {
-                    Type = type,
-                    Name = attr.Name,
-                    Icon = attr.Icon,
-                    Order = attr.Order,
-                    ExportToBuild = attr.ExportToBuild,
-                    Instance = instance,
-                });
-            }
+                Type = type,
+                Name = attr.Name,
+                Icon = attr.Icon,
+                Order = attr.Order,
+                ExportToBuild = attr.ExportToBuild,
+                Instance = instance,
+            });
         }
 
         _entries.Sort((a, b) => a.Order.CompareTo(b.Order));
