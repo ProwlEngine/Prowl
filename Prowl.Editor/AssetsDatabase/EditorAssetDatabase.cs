@@ -351,117 +351,15 @@ public class EditorAssetDatabase : IAssetDatabase
             string relativePath = NormalizePath(Path.GetRelativePath(assetsPath, file));
             foundPaths.Add(relativePath);
 
-            // Determine importer
-            string ext = Path.GetExtension(file);
-            string importerName = ImporterRegistry.GetImporterTypeName(ext);
-
-            // Get default settings from the importer (for new meta files)
-            var importer = ImporterRegistry.CreateByTypeName(importerName);
-            var defaultSettings = importer?.DefaultSettings();
-
-            // Ensure .meta exists (with default settings if creating new)
-            var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings);
-
-            if (_pathToGuid.TryGetValue(relativePath, out var existingGuid))
+            // A single broken file (bad custom importer, corrupt .meta) must not abort scanning the
+            // rest of the project - log it and move on, leaving that entry to retry on the next scan.
+            try
             {
-                // Already tracked check if needs reimport
-                var entry = _guidToEntry[existingGuid];
-                long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
-
-                // Reimport if the file changed, its cache is missing, OR the importer's version was
-                // bumped (a new editor build with changed import logic must re-run stale caches).
-                if (entry.LastModifiedTicks != currentTicks
-                    || !File.Exists(GetCachePath(existingGuid))
-                    || (importer != null && entry.ImporterVersion != importer.Version))
-                    entry.NeedsReimport = true;
-
-                // Update GUID if meta was regenerated with different GUID
-                if (meta.Guid != existingGuid)
-                {
-                    // Every existing reference to this asset (and any of its sub-assets) by the old
-                    // GUID now silently resolves to null - warn so a lost/corrupted .meta doesn't
-                    // look like an unrelated mystery bug later.
-                    Runtime.Debug.LogWarning(
-                        $"Asset '{relativePath}' has a new GUID ({existingGuid} -> {meta.Guid}), " +
-                        "likely from a regenerated .meta file. Any existing references to the old " +
-                        "GUID (including its sub-assets, if any) are now broken.");
-
-                    // Clean up old GUID references
-                    _guidToEntry.TryRemove(existingGuid, out _);
-                    _pathToGuid.Remove(relativePath);
-                    _loadedAssets.TryRemove(existingGuid, out _);
-                    _dependencies.RemoveAsset(existingGuid);
-
-                    // Remove old sub-asset index entries
-                    if (entry.SubAssets != null)
-                    {
-                        foreach (var sub in entry.SubAssets)
-                        {
-                            _subAssetIndex.TryRemove(sub.Guid, out _);
-                            _loadedAssets.TryRemove(sub.Guid, out _);
-                            _dependencies.RemoveAsset(sub.Guid);
-                        }
-                    }
-
-                    // Delete old cache file
-                    string oldCachePath = GetCachePath(existingGuid);
-                    if (File.Exists(oldCachePath))
-                        try { File.Delete(oldCachePath); } catch { }
-
-                    entry.Guid = meta.Guid;
-                    entry.SubAssets = Array.Empty<SubAssetEntry>();
-                    _guidToEntry[meta.Guid] = entry;
-                    _pathToGuid[relativePath] = meta.Guid;
-                    entry.NeedsReimport = true;
-                }
+                ScanAssetFile(assetsPath, file, relativePath);
             }
-            else if (_guidToEntry.ContainsKey(meta.Guid))
+            catch (Exception ex)
             {
-                var entry = _guidToEntry[meta.Guid];
-                string oldPath = entry.Path;
-                bool originalStillExists = File.Exists(Path.Combine(assetsPath, oldPath))
-                    && !oldPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase);
-
-                if (originalStillExists)
-                {
-                    // Two files share a GUID (the asset + its .meta were copied). A GUID must be unique,
-                    // so mint a fresh one for the copy and rewrite its .meta.
-                    var newGuid = Guid.NewGuid();
-                    meta.Guid = newGuid;
-                    MetaFile.Write(MetaFile.GetMetaPath(file), meta);
-
-                    var copyEntry = new AssetEntry
-                    {
-                        Guid = newGuid,
-                        Path = relativePath,
-                        ImporterType = importerName,
-                        ImporterVersion = meta.ImporterVersion,
-                        NeedsReimport = true
-                    };
-                    _guidToEntry[newGuid] = copyEntry;
-                    _pathToGuid[relativePath] = newGuid;
-                }
-                else
-                {
-                    // The original is gone: this is a move/rename - just repoint the entry.
-                    _pathToGuid.Remove(oldPath);
-                    entry.Path = relativePath;
-                    _pathToGuid[relativePath] = meta.Guid;
-                }
-            }
-            else
-            {
-                // New asset
-                var entry = new AssetEntry
-                {
-                    Guid = meta.Guid,
-                    Path = relativePath,
-                    ImporterType = importerName,
-                    ImporterVersion = meta.ImporterVersion,
-                    NeedsReimport = true
-                };
-                _guidToEntry[meta.Guid] = entry;
-                _pathToGuid[relativePath] = meta.Guid;
+                Runtime.Debug.LogError($"Failed to scan asset '{relativePath}': {ex.Message}");
             }
         }
 
@@ -513,6 +411,125 @@ public class EditorAssetDatabase : IAssetDatabase
             Runtime.Debug.Log($"Removed {toRemove.Count} stale entries.");
     }
 
+    /// <summary>Reconcile a single asset file against the index: register new assets, flag changed ones
+    /// for reimport, and handle GUID collisions/regeneration. Isolated per-file so ScanAssets can skip a
+    /// broken file without losing the rest of the scan.</summary>
+    private void ScanAssetFile(string assetsPath, string file, string relativePath)
+    {
+        // Determine importer
+        string ext = Path.GetExtension(file);
+        string importerName = ImporterRegistry.GetImporterTypeName(ext);
+
+        // Get default settings from the importer (for new meta files)
+        var importer = ImporterRegistry.CreateByTypeName(importerName);
+        var defaultSettings = importer?.DefaultSettings();
+
+        // Ensure .meta exists (with default settings if creating new)
+        var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings);
+
+        if (_pathToGuid.TryGetValue(relativePath, out var existingGuid))
+        {
+            // Already tracked check if needs reimport
+            var entry = _guidToEntry[existingGuid];
+            long currentTicks = File.GetLastWriteTimeUtc(file).Ticks;
+
+            // Reimport if the file changed, its cache is missing, OR the importer's version was
+            // bumped (a new editor build with changed import logic must re-run stale caches).
+            if (entry.LastModifiedTicks != currentTicks
+                || !File.Exists(GetCachePath(existingGuid))
+                || (importer != null && entry.ImporterVersion != importer.Version))
+                entry.NeedsReimport = true;
+
+            // Update GUID if meta was regenerated with different GUID
+            if (meta.Guid != existingGuid)
+            {
+                // Every existing reference to this asset (and any of its sub-assets) by the old
+                // GUID now silently resolves to null - warn so a lost/corrupted .meta doesn't
+                // look like an unrelated mystery bug later.
+                Runtime.Debug.LogWarning(
+                    $"Asset '{relativePath}' has a new GUID ({existingGuid} -> {meta.Guid}), " +
+                    "likely from a regenerated .meta file. Any existing references to the old " +
+                    "GUID (including its sub-assets, if any) are now broken.");
+
+                // Clean up old GUID references
+                _guidToEntry.TryRemove(existingGuid, out _);
+                _pathToGuid.Remove(relativePath);
+                _loadedAssets.TryRemove(existingGuid, out _);
+                _dependencies.RemoveAsset(existingGuid);
+
+                // Remove old sub-asset index entries
+                if (entry.SubAssets != null)
+                {
+                    foreach (var sub in entry.SubAssets)
+                    {
+                        _subAssetIndex.TryRemove(sub.Guid, out _);
+                        _loadedAssets.TryRemove(sub.Guid, out _);
+                        _dependencies.RemoveAsset(sub.Guid);
+                    }
+                }
+
+                // Delete old cache file
+                string oldCachePath = GetCachePath(existingGuid);
+                if (File.Exists(oldCachePath))
+                    try { File.Delete(oldCachePath); } catch { }
+
+                entry.Guid = meta.Guid;
+                entry.SubAssets = Array.Empty<SubAssetEntry>();
+                _guidToEntry[meta.Guid] = entry;
+                _pathToGuid[relativePath] = meta.Guid;
+                entry.NeedsReimport = true;
+            }
+        }
+        else if (_guidToEntry.ContainsKey(meta.Guid))
+        {
+            var entry = _guidToEntry[meta.Guid];
+            string oldPath = entry.Path;
+            bool originalStillExists = File.Exists(Path.Combine(assetsPath, oldPath))
+                && !oldPath.Equals(relativePath, StringComparison.OrdinalIgnoreCase);
+
+            if (originalStillExists)
+            {
+                // Two files share a GUID (the asset + its .meta were copied). A GUID must be unique,
+                // so mint a fresh one for the copy and rewrite its .meta.
+                var newGuid = Guid.NewGuid();
+                meta.Guid = newGuid;
+                MetaFile.Write(MetaFile.GetMetaPath(file), meta);
+
+                var copyEntry = new AssetEntry
+                {
+                    Guid = newGuid,
+                    Path = relativePath,
+                    ImporterType = importerName,
+                    ImporterVersion = meta.ImporterVersion,
+                    NeedsReimport = true
+                };
+                _guidToEntry[newGuid] = copyEntry;
+                _pathToGuid[relativePath] = newGuid;
+            }
+            else
+            {
+                // The original is gone: this is a move/rename - just repoint the entry.
+                _pathToGuid.Remove(oldPath);
+                entry.Path = relativePath;
+                _pathToGuid[relativePath] = meta.Guid;
+            }
+        }
+        else
+        {
+            // New asset
+            var entry = new AssetEntry
+            {
+                Guid = meta.Guid,
+                Path = relativePath,
+                ImporterType = importerName,
+                ImporterVersion = meta.ImporterVersion,
+                NeedsReimport = true
+            };
+            _guidToEntry[meta.Guid] = entry;
+            _pathToGuid[relativePath] = meta.Guid;
+        }
+    }
+
     // ================================================================
     //  Importing
     // ================================================================
@@ -549,55 +566,55 @@ public class EditorAssetDatabase : IAssetDatabase
             return false;
         }
 
-        // If the entry's ImporterType doesn't resolve (stale entry from before an
-        // importer was registered), retry with the extension-based lookup. Common
-        // case: asset created before its importer existed -> stuck on DefaultImporter.
-        var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
-        if (resolved == null)
-        {
-            string ext = Path.GetExtension(entry.Path);
-            string freshName = ImporterRegistry.GetImporterTypeName(ext);
-            if (freshName != entry.ImporterType)
-            {
-                Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' -> '{freshName}'");
-                entry.ImporterType = freshName;
-                resolved = ImporterRegistry.CreateByTypeName(freshName);
-            }
-        }
-
-        var importer = resolved ?? new DefaultImporter();
-        Runtime.Debug.Log($"[AssetDatabase] Importing '{entry.Path}' via {importer.GetType().Name}");
-
-        // Read settings from .meta, merge with importer defaults for any missing keys
-        EchoObject? settings = null;
-        string metaPath = MetaFile.GetMetaPath(absolutePath);
-        if (File.Exists(metaPath))
-        {
-            try
-            {
-                var meta = MetaFile.Read(metaPath);
-                settings = meta.Settings;
-            }
-            catch { }
-        }
-
-        var defaults = importer.DefaultSettings();
-        if (defaults != null)
-        {
-            if (settings == null)
-            {
-                settings = defaults.Clone();
-            }
-            else
-            {
-                foreach (var kvp in defaults.Tags)
-                    if (!settings.TryGet(kvp.Key, out _))
-                        settings[kvp.Key] = kvp.Value.Clone();
-            }
-        }
-
         try
         {
+            // If the entry's ImporterType doesn't resolve (stale entry from before an
+            // importer was registered), retry with the extension-based lookup. Common
+            // case: asset created before its importer existed -> stuck on DefaultImporter.
+            var resolved = ImporterRegistry.CreateByTypeName(entry.ImporterType);
+            if (resolved == null)
+            {
+                string ext = Path.GetExtension(entry.Path);
+                string freshName = ImporterRegistry.GetImporterTypeName(ext);
+                if (freshName != entry.ImporterType)
+                {
+                    Runtime.Debug.Log($"[AssetDatabase] '{entry.Path}': updating stale ImporterType '{entry.ImporterType}' -> '{freshName}'");
+                    entry.ImporterType = freshName;
+                    resolved = ImporterRegistry.CreateByTypeName(freshName);
+                }
+            }
+
+            var importer = resolved ?? new DefaultImporter();
+            Runtime.Debug.Log($"[AssetDatabase] Importing '{entry.Path}' via {importer.GetType().Name}");
+
+            // Read settings from .meta, merge with importer defaults for any missing keys
+            EchoObject? settings = null;
+            string metaPath = MetaFile.GetMetaPath(absolutePath);
+            if (File.Exists(metaPath))
+            {
+                try
+                {
+                    var meta = MetaFile.Read(metaPath);
+                    settings = meta.Settings;
+                }
+                catch { }
+            }
+
+            var defaults = importer.DefaultSettings();
+            if (defaults != null)
+            {
+                if (settings == null)
+                {
+                    settings = defaults.Clone();
+                }
+                else
+                {
+                    foreach (var kvp in defaults.Tags)
+                        if (!settings.TryGet(kvp.Key, out _))
+                            settings[kvp.Key] = kvp.Value.Clone();
+                }
+            }
+
             // Create context with entry GUID so sub-assets get correct deterministic IDs
             var ctx = new Importers.ImportContext(entry.Guid, absolutePath, settings);
             bool success = importer.Import(ctx);
@@ -1008,7 +1025,7 @@ public class EditorAssetDatabase : IAssetDatabase
     public void CreateAsset(EngineObject obj, string relativePath)
     {
         relativePath = NormalizePath(relativePath);
-        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+        if (!TryResolveAssetPath(relativePath, out string absolutePath)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
         // Serialize to the file (typeof(object) forces $type inclusion)
@@ -1038,6 +1055,7 @@ public class EditorAssetDatabase : IAssetDatabase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
+        _folderIndexDirty = true;
 
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1051,7 +1069,7 @@ public class EditorAssetDatabase : IAssetDatabase
     public Guid ImportFile(string relativePath)
     {
         relativePath = NormalizePath(relativePath);
-        string absolutePath = Path.Combine(_project.AssetsPath, relativePath);
+        if (!TryResolveAssetPath(relativePath, out string absolutePath)) return Guid.Empty;
         if (!File.Exists(absolutePath)) return Guid.Empty;
 
         string ext = Path.GetExtension(relativePath);
@@ -1091,6 +1109,7 @@ public class EditorAssetDatabase : IAssetDatabase
         };
         _guidToEntry[meta.Guid] = entry;
         _pathToGuid[relativePath] = meta.Guid;
+        _folderIndexDirty = true;
         RunImport(entry);
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         return meta.Guid;
@@ -1209,12 +1228,16 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         oldRelativePath = NormalizePath(oldRelativePath);
         newRelativePath = NormalizePath(newRelativePath);
-        string oldAbsolute = Path.Combine(_project.AssetsPath, oldRelativePath);
-        string newAbsolute = Path.Combine(_project.AssetsPath, newRelativePath);
+        if (!TryResolveAssetPath(oldRelativePath, out string oldAbsolute)) return false;
+        if (!TryResolveAssetPath(newRelativePath, out string newAbsolute)) return false;
 
         if (!File.Exists(oldAbsolute)) return false;
 
-        if (File.Exists(newAbsolute))
+        // On a case-insensitive filesystem, a case-only rename's target path File.Exists-matches the
+        // source file itself - that's not a collision with a different file.
+        bool isCaseOnlyRename = string.Equals(oldRelativePath, newRelativePath, StringComparison.OrdinalIgnoreCase);
+
+        if (!isCaseOnlyRename && File.Exists(newAbsolute))
         {
             Runtime.Debug.LogWarning($"Cannot rename: a file already exists at '{newRelativePath}'.");
             return false;
@@ -1281,12 +1304,12 @@ public class EditorAssetDatabase : IAssetDatabase
     /// </summary>
     public bool MoveFolder(string oldRelativeFolder, string newRelativeFolder)
     {
-        oldRelativeFolder = oldRelativeFolder.Replace('\\', '/').TrimEnd('/');
-        newRelativeFolder = newRelativeFolder.Replace('\\', '/').TrimEnd('/');
+        oldRelativeFolder = NormalizePath(oldRelativeFolder);
+        newRelativeFolder = NormalizePath(newRelativeFolder);
         if (oldRelativeFolder == newRelativeFolder) return true;
 
-        string oldAbs = Path.Combine(_project.AssetsPath, oldRelativeFolder);
-        string newAbs = Path.Combine(_project.AssetsPath, newRelativeFolder);
+        if (!TryResolveAssetPath(oldRelativeFolder, out string oldAbs)) return false;
+        if (!TryResolveAssetPath(newRelativeFolder, out string newAbs)) return false;
 
         if (!Directory.Exists(oldAbs)) return false;
         if (Directory.Exists(newAbs) || File.Exists(newAbs))
@@ -1639,9 +1662,23 @@ public class EditorAssetDatabase : IAssetDatabase
         }
     }
 
-    /// <summary>Normalize a path to use forward slashes, relative to Assets/.</summary>
+    /// <summary>Normalize a path to use forward slashes, relative to Assets/, with no trailing slash.</summary>
     public static string NormalizePath(string path)
-        => path.Replace('\\', '/');
+        => path.Replace('\\', '/').TrimEnd('/');
+
+    /// <summary>Resolve a relative path to its absolute form, rejecting any that escape the Assets
+    /// folder via ".." segments or a rooted path.</summary>
+    private bool TryResolveAssetPath(string relativePath, out string absolutePath)
+    {
+        absolutePath = Path.GetFullPath(Path.Combine(_project.AssetsPath, relativePath));
+        string assetsRoot = Path.GetFullPath(_project.AssetsPath) + Path.DirectorySeparatorChar;
+        if (!absolutePath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.Debug.LogWarning($"Rejected path '{relativePath}': it resolves outside the Assets folder.");
+            return false;
+        }
+        return true;
+    }
 
     /// <summary>Get a relative path from an absolute path, normalized.</summary>
     public string ToRelativePath(string absolutePath)

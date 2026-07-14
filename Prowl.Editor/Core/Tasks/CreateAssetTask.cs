@@ -106,6 +106,7 @@ public class CreateAssetTask : EditorTask
             File.WriteAllText(filePath, reader.ReadToEnd().Replace("{[shaderName]}", shaderName));
         }
 
+        EditorAssetDatabase.Instance?.InvalidateFolderIndex();
         return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
     }
 
@@ -118,6 +119,7 @@ public class CreateAssetTask : EditorTask
         string newPath = Path.Combine(absFolder, name);
         Directory.CreateDirectory(newPath);
         MetaFile.EnsureMeta(newPath, "DefaultImporter");
+        EditorAssetDatabase.Instance?.InvalidateFolderIndex();
         Debug.Log($"Created folder: {name}");
         string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         return relPath;
@@ -142,6 +144,7 @@ public class CreateAssetTask : EditorTask
             if (echo != null)
                 File.WriteAllText(filePath, echo.WriteToString());
 
+            EditorAssetDatabase.Instance?.InvalidateFolderIndex();
             Debug.Log($"Created {entry.Name}: {name}");
             return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         }

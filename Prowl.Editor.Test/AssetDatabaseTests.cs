@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Echo;
+using Prowl.Editor.Importers;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -13,6 +14,15 @@ namespace Prowl.Editor.Test;
 public sealed class AssetRefComponent : MonoBehaviour
 {
     public AssetRef<Scene> Ref;
+}
+
+/// <summary>An importer that always throws, to test that one bad asset can't abort a whole scan/import batch.</summary>
+[ImporterFor(".throwtest")]
+public sealed class ThrowingTestImporter : AssetImporter
+{
+    public override int Version => 1;
+    public override EchoObject? DefaultSettings() => throw new InvalidOperationException("Simulated importer failure.");
+    public override bool Import(ImportContext ctx) => throw new InvalidOperationException("Simulated importer failure.");
 }
 
 /// <summary>
@@ -254,6 +264,38 @@ public class AssetDatabaseTests : EditorTestHarness
     [Fact]
     public void MoveAsset_NonExistent_Fails() => Assert.False(Assets.MoveAsset("nope.scene", "x.scene"));
 
+    // On a case-insensitive filesystem (Windows/macOS default), a case-only rename's target path
+    // File.Exists-matches the SOURCE file itself, so it must not be treated as "already occupied by
+    // a different file" - the user is fixing casing, not colliding with something else.
+    [Fact]
+    public void MoveAsset_CaseOnlyRename_Succeeds()
+    {
+        CreateScene("Texture.scene");
+        bool ok = Assets.MoveAsset("Texture.scene", "texture.scene");
+        Assert.True(ok, "A case-only rename must be allowed, not treated as a name collision.");
+        Assert.Equal("texture.scene", Assets.GetEntry(Assets.PathToGuid("texture.scene"))?.Path);
+    }
+
+    // NormalizePath only swaps backslashes for forward slashes - it never rejects ".." segments or
+    // rooted paths, so a relative path escaping Assets/ lands wherever Path.Combine/the OS resolves it.
+    [Fact]
+    public void CreateAsset_PathTraversal_IsRejected()
+    {
+        string escapedPath = Path.GetFullPath(Path.Combine(Project.AssetsPath, "../../../Escaped.scene"));
+        try
+        {
+            Assets.CreateAsset(new Scene(), "../../../Escaped.scene");
+
+            Assert.False(File.Exists(escapedPath),
+                "CreateAsset must not be able to write outside the Assets folder via '..' segments.");
+        }
+        finally
+        {
+            File.Delete(escapedPath);
+            File.Delete(escapedPath + ".meta");
+        }
+    }
+
     [Fact]
     public void MoveFolder_PreservesGuids_RemapsPaths()
     {
@@ -329,6 +371,55 @@ public class AssetDatabaseTests : EditorTestHarness
 
         Assert.Single(scenes);
         Assert.Equal("S.scene", scenes[0].Path);
+    }
+
+    // ---------------------------------------------------------------------
+    // Import batch resilience
+    // ---------------------------------------------------------------------
+
+    // ScanAssets/ImportDirty call importer.DefaultSettings()/Import() with no try/catch around most of
+    // it, so one throwing importer aborts the entire scan - every other asset (including ones already
+    // successfully imported before restart) never finishes reconciling, and Initialize() itself throws.
+    [Fact]
+    public void OneImporterThrowing_DoesNotAbortWholeScan()
+    {
+        CreateScene("Good.scene");
+        File.WriteAllText(AssetAbsolutePath("Bad.throwtest"), "junk");
+
+        var ex = Record.Exception(() => ReopenDatabase());
+
+        Assert.Null(ex);
+    }
+
+    // ---------------------------------------------------------------------
+    // Folder index cache
+    // ---------------------------------------------------------------------
+
+    // CreateAsset never calls InvalidateFolderIndex (unlike DeleteAsset/MoveAsset/MoveFolder), so once
+    // the folder cache has been built, a newly created asset is invisible to GetFolderFiles until some
+    // other operation happens to mark it dirty again.
+    [Fact]
+    public void CreateAsset_IsVisibleInFolderIndex()
+    {
+        CreateScene("A.scene");
+        Assets.GetFolderFiles(""); // build the folder index cache
+
+        CreateScene("B.scene");
+
+        var files = Assets.GetFolderFiles("");
+        Assert.Contains(files, f => f.Name == "B.scene");
+    }
+
+    // BuildFolderIndex keys folders without a trailing slash, but GetFolderFiles/GetSubFolders only
+    // swap backslashes (NormalizePath) and never trim one - so a caller passing a trailing slash
+    // (MoveFolder does its own TrimEnd('/') before calling in, but nothing enforces that elsewhere)
+    // misses the cached entry entirely.
+    [Fact]
+    public void GetFolderFiles_TrailingSlash_StillFindsFiles()
+    {
+        CreateScene("Sub/S.scene");
+        var files = Assets.GetFolderFiles("Sub/");
+        Assert.Contains(files, f => f.Name == "S.scene");
     }
 
     // ---------------------------------------------------------------------
