@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Shaders;
@@ -281,37 +282,39 @@ internal static class PropertyApply
 
     private static void WalkAssetTextures(Dictionary<string, AssetRef<Texture2D>> d, GraphicsProgram p, CommandExecutor exec)
     {
-        foreach (var kv in d)
+        // CollectionsMarshal.GetValueRefOrNullRef: a foreach's KeyValuePair.Value is a copy of the
+        // AssetRef, so .Res on it would cache into a throwaway struct instead of the dictionary slot.
+        foreach (var key in d.Keys)
         {
-            var tex = kv.Value.Res;
+            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
             if (!tex.IsValid())
             {
-                // Asset is still streaming in (kv.Value.Res queued the load). Bind white so the
+                // Asset is still streaming in (.Res above queued the load). Bind white so the
                 // sampler reads something sane until the real texture arrives.
                 tex = s_whiteFallback ??= Texture2D.LoadDefault(DefaultTexture.White);
                 if (!tex.IsValid()) continue;
             }
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            BindTexUniform(p, key, tex.Handle, exec);
         }
     }
 
     private static void WalkAssetTextures3D(Dictionary<string, AssetRef<Texture3D>> d, GraphicsProgram p, CommandExecutor exec)
     {
-        foreach (var kv in d)
+        foreach (var key in d.Keys)
         {
-            var tex = kv.Value.Res;
+            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
             if (!tex.IsValid()) continue;
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            BindTexUniform(p, key, tex.Handle, exec);
         }
     }
 
     private static void WalkAssetTexturesCube(Dictionary<string, AssetRef<Cubemap>> d, GraphicsProgram p, CommandExecutor exec)
     {
-        foreach (var kv in d)
+        foreach (var key in d.Keys)
         {
-            var tex = kv.Value.Res;
+            var tex = CollectionsMarshal.GetValueRefOrNullRef(d, key).Res;
             if (!tex.IsValid()) continue;
-            BindTexUniform(p, kv.Key, tex.Handle, exec);
+            BindTexUniform(p, key, tex.Handle, exec);
         }
     }
 

@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -198,7 +199,7 @@ internal class TerrainGrassRenderer
                         if (proto.RenderMode == DetailRenderMode.Mesh)
                         {
                             subMat = null!;
-                            if (sub < proto.Materials.Count) subMat = proto.Materials[sub].Res!;
+                            if (sub < proto.Materials.Count) subMat = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res!;
                             subMat ??= renderMat; // default Standard
                         }
                         else

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -90,7 +91,7 @@ internal class TerrainTreeRenderer
             for (int sub = 0; sub < subMeshCount; sub++)
             {
                 Material? mat = null;
-                if (sub < proto.Materials.Count) mat = proto.Materials[sub].Res;
+                if (sub < proto.Materials.Count) mat = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res;
                 mat ??= s_defaultStandardMat;
                 if (mat == null) continue;
 

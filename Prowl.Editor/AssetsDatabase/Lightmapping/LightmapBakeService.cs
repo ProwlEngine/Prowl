@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using ImageMagick;
 
@@ -373,7 +374,8 @@ public sealed class LightmapBakeService
             // One BakeMaterial per (renderer, submesh) with the Prowl material's base colour.
             string matName = $"m{matCounter++}";
             var bmat = bake.CreateMaterial(matName);
-            var pm = (s < materials.Count ? materials[s] : (materials.Count > 0 ? materials[^1] : default)).Res;
+            var materialsSpan = CollectionsMarshal.AsSpan(materials);
+            var pm = (s < materialsSpan.Length ? materialsSpan[s] : (materialsSpan.Length > 0 ? materialsSpan[^1] : default)).Res;
             if (pm != null)
             {
                 var c = pm._properties.GetColor("_MainColor");

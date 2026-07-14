@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
@@ -169,11 +170,13 @@ public partial class PropertyState
     public float GetFloat(string name) => _floats.TryGetValue(name, out float value) ? value : 0;
     public int GetInt(string name) => _ints.TryGetValue(name, out int value) ? value : 0;
     public Float4x4 GetMatrix(string name) => _matrices.TryGetValue(name, out Float4x4 value) ? (Float4x4)value : Float4x4.Identity;
-    public Texture2D? GetTexture(string name) => _textures.TryGetValue(name, out var value) ? value.Res : null;
+    // GetValueRefOrNullRef (not TryGetValue): TryGetValue's out param is a copy of the AssetRef, so
+    // .Res on it would cache into a throwaway struct instead of the dictionary's own slot.
+    public Texture2D? GetTexture(string name) => _textures.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_textures, name).Res : null;
     public AssetRef<Texture2D> GetTextureRef(string name) => _textures.TryGetValue(name, out var value) ? value : default;
-    public Texture3D? GetTexture3D(string name) => _textures3D.TryGetValue(name, out var value) ? value.Res : null;
+    public Texture3D? GetTexture3D(string name) => _textures3D.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_textures3D, name).Res : null;
     public AssetRef<Texture3D> GetTexture3DRef(string name) => _textures3D.TryGetValue(name, out var value) ? value : default;
-    public Cubemap? GetTextureCube(string name) => _texturesCube.TryGetValue(name, out var value) ? value.Res : null;
+    public Cubemap? GetTextureCube(string name) => _texturesCube.ContainsKey(name) ? CollectionsMarshal.GetValueRefOrNullRef(_texturesCube, name).Res : null;
     public AssetRef<Cubemap> GetTextureCubeRef(string name) => _texturesCube.TryGetValue(name, out var value) ? value : default;
     public GraphicsBuffer GetBuffer(string name) => _buffers.TryGetValue(name, out GraphicsBuffer value) ? value : null;
     public uint GetBufferBinding(string name) => _bufferBindings.TryGetValue(name, out uint value) ? value : 0;

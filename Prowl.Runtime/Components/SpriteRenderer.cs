@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -70,11 +71,11 @@ public class SpriteRenderer : MonoBehaviour
         // Bind any secondary maps (e.g. "_NormalMap", "_MaskMap") so custom sprite materials can sample them.
         if (sprite.SecondaryTextures.Count > 0)
         {
-            foreach (var kv in sprite.SecondaryTextures)
+            foreach (var key in sprite.SecondaryTextures.Keys)
             {
-                Texture2D? secondary = kv.Value.Res;
+                Texture2D? secondary = CollectionsMarshal.GetValueRefOrNullRef(sprite.SecondaryTextures, key).Res;
                 if (secondary != null)
-                    _props.SetTexture(kv.Key, secondary);
+                    _props.SetTexture(key, secondary);
             }
         }
 
