@@ -23,6 +23,10 @@ public static class AudioContext
     // Ref-count per shared handle: clips with identical data share one native allocation, so it must
     // only be freed once the last clip using it is disposed (otherwise: double-free / use-after-free).
     private static Dictionary<UInt64, int> audioClipRefCounts = new Dictionary<UInt64, int>();
+    // Guards the two dictionaries above. Add/AddRef/Remove are called from the main thread during
+    // normal loading, but AudioClip getting a GC finalizer means Remove can now also run on the
+    // dedicated finalizer thread concurrently - a plain Dictionary would corrupt under that race.
+    private static readonly object clipTableLock = new();
     private static AudioBuffer outputBuffer = new AudioBuffer(8192);
 
     private static UInt32 sampleRate = 44100;
@@ -134,14 +138,17 @@ public static class AudioContext
         if (audioContext == IntPtr.Zero)
             return;
 
-        foreach (var audioClipHandle in audioClipHandles.Values)
+        lock (clipTableLock)
         {
-            if (audioClipHandle != IntPtr.Zero)
-                Marshal.FreeHGlobal(audioClipHandle);
-        }
+            foreach (var audioClipHandle in audioClipHandles.Values)
+            {
+                if (audioClipHandle != IntPtr.Zero)
+                    Marshal.FreeHGlobal(audioClipHandle);
+            }
 
-        audioClipHandles.Clear();
-        audioClipRefCounts.Clear();
+            audioClipHandles.Clear();
+            audioClipRefCounts.Clear();
+        }
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;
@@ -201,18 +208,24 @@ public static class AudioContext
         if (clip.Handle == IntPtr.Zero)
             return;
 
-        if (audioClipHandles.ContainsKey(clip.Hash))
-            return;
+        lock (clipTableLock)
+        {
+            if (audioClipHandles.ContainsKey(clip.Hash))
+                return;
 
-        audioClipHandles.Add(clip.Hash, clip.Handle);
-        audioClipRefCounts[clip.Hash] = 1;
+            audioClipHandles.Add(clip.Hash, clip.Handle);
+            audioClipRefCounts[clip.Hash] = 1;
+        }
     }
 
     /// <summary>Register another clip sharing an already-cached handle (increments its ref-count).</summary>
     internal static void AddRef(UInt64 hash)
     {
-        if (audioClipRefCounts.TryGetValue(hash, out int count))
-            audioClipRefCounts[hash] = count + 1;
+        lock (clipTableLock)
+        {
+            if (audioClipRefCounts.TryGetValue(hash, out int count))
+                audioClipRefCounts[hash] = count + 1;
+        }
     }
 
     internal static void Remove(AudioClip clip)
@@ -220,34 +233,32 @@ public static class AudioContext
         if (clip.Hash == 0)
             return;
 
-        if (!audioClipRefCounts.TryGetValue(clip.Hash, out int count))
-            return;
+        lock (clipTableLock)
+        {
+            if (!audioClipRefCounts.TryGetValue(clip.Hash, out int count))
+                return;
 
-        // Only free the shared native allocation when the last user releases it.
-        if (count <= 1)
-        {
-            if (audioClipHandles.TryGetValue(clip.Hash, out IntPtr handle) && handle != IntPtr.Zero)
-                Marshal.FreeHGlobal(handle);
-            audioClipHandles.Remove(clip.Hash);
-            audioClipRefCounts.Remove(clip.Hash);
-        }
-        else
-        {
-            audioClipRefCounts[clip.Hash] = count - 1;
+            // Only free the shared native allocation when the last user releases it.
+            if (count <= 1)
+            {
+                if (audioClipHandles.TryGetValue(clip.Hash, out IntPtr handle) && handle != IntPtr.Zero)
+                    Marshal.FreeHGlobal(handle);
+                audioClipHandles.Remove(clip.Hash);
+                audioClipRefCounts.Remove(clip.Hash);
+            }
+            else
+            {
+                audioClipRefCounts[clip.Hash] = count - 1;
+            }
         }
     }
 
     internal static bool GetAudioClipHandle(UInt64 hashcode, out IntPtr handle)
     {
-        handle = IntPtr.Zero;
-
-        if (audioClipHandles.ContainsKey(hashcode))
+        lock (clipTableLock)
         {
-            handle = audioClipHandles[hashcode];
-            return true;
+            return audioClipHandles.TryGetValue(hashcode, out handle);
         }
-
-        return false;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
