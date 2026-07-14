@@ -161,25 +161,36 @@ public static class EditorRegistries
 
         foreach (var type in EditorUtils.GetAllTypes())
         {
-            ScanCustomEditor(type);
-            ScanPropertyEditor(type);
-            ScanAssetEditor(type);
-            ScanImporter(type);
-            ScanComponentIcon(type);
-            ScanThumbnailGenerator(type);
-            ScanSceneViewEditor(type);
-            ScanSceneDropHandler(type);
-            ScanProjectSettings(type);
-            ScanAssetMenuEntry(type);
-
-            foreach (var method in type.GetMethods(methodFlags))
+            // A single type/method with unresolvable reflection metadata (e.g. an attribute referencing
+            // a mismatched assembly version - seen from test-host assemblies like
+            // Microsoft.TestPlatform.CoreUtilities, which Prowl never intended to scan in the first
+            // place) must not abort scanning every other type in the AppDomain.
+            try
             {
-                MenuItemAttribute.Scan(method);
-                ScanScriptTemplate(method);
-                ScanFileIconMethod(method);
-                ScanDoubleClickHandler(method);
-                ScanEditorCallback(method);
-                ScanInitializeOnLoad(method);
+                ScanCustomEditor(type);
+                ScanPropertyEditor(type);
+                ScanAssetEditor(type);
+                ScanImporter(type);
+                ScanComponentIcon(type);
+                ScanThumbnailGenerator(type);
+                ScanSceneViewEditor(type);
+                ScanSceneDropHandler(type);
+                ScanProjectSettings(type);
+                ScanAssetMenuEntry(type);
+
+                foreach (var method in type.GetMethods(methodFlags))
+                {
+                    MenuItemAttribute.Scan(method);
+                    ScanScriptTemplate(method);
+                    ScanFileIconMethod(method);
+                    ScanDoubleClickHandler(method);
+                    ScanEditorCallback(method);
+                    ScanInitializeOnLoad(method);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"EditorRegistries: skipped scanning '{type.FullName}': {ex.Message}");
             }
         }
 
