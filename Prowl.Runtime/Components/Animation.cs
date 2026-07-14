@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Vector;
 
@@ -72,8 +73,10 @@ public class AnimationComponent : MonoBehaviour
     private AnimationClip? ResolveAutoPlayClip()
     {
         var clip = DefaultClip.Res;
+        // CollectionsMarshal.AsSpan: List<T>'s indexer would copy the value-type element, so
+        // AssetRef.Res's internal caching would mutate a throwaway copy and never actually stick.
         if (clip == null && Clips.Count > 0)
-            clip = Clips[0].Res;
+            clip = CollectionsMarshal.AsSpan(Clips)[0].Res;
         return clip;
     }
 

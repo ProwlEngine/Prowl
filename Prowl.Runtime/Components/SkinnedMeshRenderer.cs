@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -502,15 +503,18 @@ public class SkinnedMeshRenderer : MonoBehaviour
         if (mesh.HasBlendShapes)
             PrepareBlendShapes(mesh);
 
-        // Render each submesh with its material
+        // Render each submesh with its material. CollectionsMarshal.AsSpan gives a ref to the
+        // list's real backing elements (List<T>'s indexer would copy a value-type element, so
+        // AssetRef<Material>.Res's internal caching would mutate a throwaway copy and never stick).
         int subCount = mesh.SubMeshCount;
+        var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
         {
             Material? mat = null;
-            if (s < Materials.Count)
-                mat = Materials[s].Res;
-            else if (Materials.Count > 0)
-                mat = Materials[^1].Res; // Reuse last material for extra submeshes
+            if (s < materials.Length)
+                mat = materials[s].Res;
+            else if (materials.Length > 0)
+                mat = materials[^1].Res; // Reuse last material for extra submeshes
 
             if (mat == null) continue;
 

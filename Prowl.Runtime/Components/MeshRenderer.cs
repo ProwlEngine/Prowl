@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -57,13 +58,18 @@ public class MeshRenderer : MonoBehaviour
         Float4x4 world = Transform.LocalToWorldMatrix;
         Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
 
+        // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
+        // returns value-type elements by copy, so Materials[s].Res would mutate a throwaway copy
+        // and never actually cache anything. CollectionsMarshal.AsSpan gives a ref to the real
+        // backing elements so the cache (and the async-load dedup it drives) actually sticks.
+        var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
         {
             Material? mat = null;
-            if (s < Materials.Count)
-                mat = Materials[s].Res;
-            else if (Materials.Count > 0)
-                mat = Materials[^1].Res;
+            if (s < materials.Length)
+                mat = materials[s].Res;
+            else if (materials.Length > 0)
+                mat = materials[^1].Res;
 
             if (mat == null) continue;
 
