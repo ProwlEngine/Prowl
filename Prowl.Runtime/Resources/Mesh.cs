@@ -895,6 +895,8 @@ public class Mesh : EngineObject, ISerializable
 
     public override void OnDispose() => DeleteGPUBuffers();
 
+    ~Mesh() => Dispose();
+
     private static Mesh fullScreenQuad;
     public static Mesh GetFullscreenQuad()
     {

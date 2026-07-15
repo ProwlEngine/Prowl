@@ -75,6 +75,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         frameBuffer.Dispose();
     }
 
+    ~RenderTexture() => Dispose();
+
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
         compoundTag.Add("Width", new(Width));

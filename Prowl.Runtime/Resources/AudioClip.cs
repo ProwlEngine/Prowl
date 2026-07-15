@@ -144,6 +144,8 @@ public sealed class AudioClip : EngineObject, ISerializable
         AudioContext.Remove(this);
     }
 
+    ~AudioClip() => Dispose();
+
     /// <summary>
     /// This methods creates a hash of the given data.
     /// </summary>

@@ -218,4 +218,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         foreach (var pass in _passes)
             pass.Dispose();
     }
+
+    ~Shader() => Dispose();
 }

@@ -93,6 +93,8 @@ public abstract class Texture : EngineObject
         Handle.Dispose();
     }
 
+    ~Texture() => Dispose();
+
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.
     /// </summary>
