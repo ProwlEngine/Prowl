@@ -141,32 +141,6 @@ public static class ThumbnailGenerator
         return ready;
     }
 
-    public static void EnqueueMissing()
-    {
-        var db = EditorAssetDatabase.Instance;
-        if (db == null) return;
-
-        foreach (var entry in db.GetAllEntries())
-        {
-            var asset = db.GetLoadedAsset(entry.Guid);
-            if (asset != null)
-            {
-                string? sourceFile = entry.MainAssetType == typeof(Texture2D)
-                    ? Path.Combine(Project.Current?.AssetsPath ?? "", entry.Path)
-                    : null;
-                Enqueue(entry.Guid, asset, sourceFile);
-            }
-
-            if (entry.SubAssets == null) continue;
-            foreach (var sub in entry.SubAssets)
-            {
-                var subAsset = db.GetLoadedAsset(sub.Guid);
-                if (subAsset != null)
-                    Enqueue(sub.Guid, subAsset);
-            }
-        }
-    }
-
     /// <summary>
     /// Load a thumbnail from disk. Returns (width, height, RGBA pixels) or null.
     /// The on-disk format is: [width:int32 LE][height:int32 LE][RGBA pixel data].

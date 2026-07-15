@@ -32,7 +32,6 @@ public class EditorApplication : Game
     public static OrigamiUI.PropertyGridConfig PropertyGridConfig { get; private set; } = null!;
 
     private DockSpace _dockSpace = null!;
-    private double _time;
     private GUI.NebulaBackground? _nebula;
     private double _introTime = double.MaxValue;
     private const double IntroCloseDuration = 2.0; // bars close over launcher
@@ -384,7 +383,6 @@ public class EditorApplication : Game
         float w = paper.ScreenRect.Size.X;
         float h = paper.ScreenRect.Size.Y;
 
-        _time += Time.UnscaledDeltaTime;
         TickPerfStats((float)Time.UnscaledDeltaTime);
         Selection.UpdatePing((float)Time.UnscaledDeltaTime);
         EditorTheme.TickOrigami((float)Time.UnscaledDeltaTime);
@@ -447,10 +445,6 @@ public class EditorApplication : Game
 
             // Lazy thumbnail generation one per frame
             ThumbnailGenerator.ProcessOne();
-
-            // Periodically scan for missing thumbnails (every ~120 frames)
-            if (_time % 2.0 < Time.UnscaledDeltaTime)
-                ThumbnailGenerator.EnqueueMissing();
         }
 
         // Layout auto-save is handled by SaveManager's auto-save timer.
