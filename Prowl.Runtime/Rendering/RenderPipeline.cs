@@ -635,7 +635,9 @@ public abstract class RenderPipeline : EngineObject
                 int fbWidth = currentRT.Width;
                 int fbHeight = currentRT.Height;
                 bool wantDepth = pass.HasGrabDepth;
-                grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [TextureImageFormat.Color4b]);
+                // Match the source format instead of assuming Color4b, otherwise an HDR
+                // scene color (Short4) is truncated to 8bpc on the way into the grab.
+                grabRT = RenderTexture.GetTemporaryRT(fbWidth, fbHeight, wantDepth, [currentRT.MainTexture.ImageFormat]);
 
                 cmd.SetRenderTargets(grabRT.frameBuffer, currentRT.frameBuffer);
                 cmd.BlitFramebuffer(0, 0, fbWidth, fbHeight, 0, 0, fbWidth, fbHeight, ClearFlags.Color, BlitFilter.Nearest);
