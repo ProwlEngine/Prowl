@@ -532,6 +532,8 @@ public class DesktopBuildPipeline : BuildPipeline
 
             class DesktopPlayer : Prowl.Runtime.Game
             {
+                private Prowl.Runtime.PlayerAssetDatabase? _assetDb;
+
                 public override void Initialize()
                 {
                     Prowl.Runtime.Application.IsPlaying = true;
@@ -555,6 +557,7 @@ public class DesktopBuildPipeline : BuildPipeline
                     var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
                     Prowl.Runtime.AssetDatabase.Current = db;
                     Prowl.Runtime.GameResources.Initialize(db.ResourcesMap);
+                    _assetDb = db;
 
                     // Apply the async-loading toggle before the scene loads (component OnEnable may resolve AssetRefs).
                     Prowl.Runtime.PlayerSettingsLoader.ApplyAssetConfig(Path.Combine(Prowl.Runtime.Application.DataPath, "Content", "Settings"));
@@ -571,7 +574,12 @@ public class DesktopBuildPipeline : BuildPipeline
 
                 }
 
-                public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene) => scene?.Update();
+                public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene)
+                {
+                    _assetDb?.TickIdleSweep();
+                    scene?.Update();
+                }
+
                 public override void OnRender(Prowl.Runtime.Resources.Scene? scene) => scene?.Render();
                 public override void OnGui(Prowl.Runtime.Resources.Scene? scene, Prowl.PaperUI.Paper paper) => scene?.OnGui(paper);
             }

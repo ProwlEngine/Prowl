@@ -27,8 +27,19 @@ public class EditorAssetDatabase : IAssetDatabase
     // while the main thread imports/scans. (_pathToGuid is main-thread-only the loader never touches it.)
     private readonly ConcurrentDictionary<Guid, AssetEntry> _guidToEntry = new();
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
+    // Strongly held: an asset stays loaded until something explicitly disposes it - either direct
+    // user code, or the idle-timeout sweep (see MaybeSweepIdle) collecting a GUID nothing has
+    // touched (via AssetRef.Res/.Touch, AssetDatabase.Touch, or EngineObject.EnsureNotDisposed) in
+    // a while. Always go through TryGetLoaded/SetLoaded rather than touching this directly, so every
+    // access point consistently records activity.
     private readonly ConcurrentDictionary<Guid, EngineObject> _loadedAssets = new();
     private readonly ConcurrentDictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
+    // How long a GUID can go untouched before the idle sweep disposes it, and how often the sweep
+    // runs (see TickIdleSweep, called once per frame from EditorApplication). A locked GUID is
+    // never swept regardless of idle time.
+    public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(5);
+    private long _lastIdleSweepTicks;
     // GPU-uploaded thumbnail cache. Main-thread-only (texture creation isn't thread-safe), same
     // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
     private readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailTextures = new();
@@ -71,6 +82,16 @@ public class EditorAssetDatabase : IAssetDatabase
     public void Initialize()
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        // A sub-asset never loads except as a side effect of loading its parent (see GetInternal), so
+        // resolve it to its parent's GUID for touch/idle/lock purposes too - the whole family is one
+        // atomic unit.
+        AssetDatabase.ResolveFamily = guid =>
+            _subAssetIndex.TryGetValue(guid, out var info) ? info.parentGuid : guid;
+
+        // Importers (and every other EditorRegistries scanner) must be ready before anything below
+        // tries to import a file - idempotent, so this is cheap on every call after the first.
+        EditorRegistries.Initialize();
 
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
@@ -179,12 +200,76 @@ public class EditorAssetDatabase : IAssetDatabase
     //  IAssetDatabase
     // ================================================================
 
+    /// <summary>Resolve a loaded asset by GUID if it's present and not disposed. The only valid way
+    /// to read <see cref="_loadedAssets"/> - go through this rather than the dictionary directly so
+    /// every successful resolve consistently records activity.</summary>
+    private bool TryGetLoaded(Guid guid, out EngineObject obj)
+    {
+        if (_loadedAssets.TryGetValue(guid, out var found) && found != null && !found.IsDisposed)
+        {
+            obj = found;
+            AssetDatabase.Touch(guid);
+            return true;
+        }
+        obj = null!;
+        return false;
+    }
+
+    /// <summary>Cache a freshly resolved asset instance by GUID. Strongly held until explicitly
+    /// disposed or idle-swept - see <see cref="_loadedAssets"/>.</summary>
+    private void SetLoaded(Guid guid, EngineObject obj)
+    {
+        _loadedAssets[guid] = obj;
+        AssetDatabase.Touch(guid);
+    }
+
+    /// <summary>UTC time the idle sweep last actually ran (not merely checked its gate). Diagnostic-only.</summary>
+    public DateTime LastSweepUtc => new(Interlocked.Read(ref _lastIdleSweepTicks), DateTimeKind.Utc);
+
+    /// <summary>Dispose and drop every GUID that's gone untouched for <see cref="IdleTimeout"/> and
+    /// isn't locked. Gated to run at most once per <see cref="IdleSweepInterval"/>.</summary>
+    private void MaybeSweepIdle()
+    {
+        var now = DateTime.UtcNow;
+        long last = Interlocked.Read(ref _lastIdleSweepTicks);
+        if (now.Ticks - last < IdleSweepInterval.Ticks) return;
+        if (Interlocked.CompareExchange(ref _lastIdleSweepTicks, now.Ticks, last) != last) return;
+
+        foreach (var kv in _loadedAssets)
+        {
+            Guid guid = kv.Key;
+            if (!AssetDatabase.IsIdle(guid, IdleTimeout)) continue;
+
+            if (_loadedAssets.TryRemove(guid, out var obj))
+            {
+                try { obj.Dispose(); } catch (Exception ex) { Runtime.Debug.LogWarning($"Error disposing idle asset {guid}: {ex.Message}"); }
+                AssetDatabase.Forget(guid);
+            }
+        }
+    }
+
+    /// <summary>Run an idle sweep immediately, bypassing <see cref="IdleSweepInterval"/>'s gate - used
+    /// by the Asset Database panel's manual "Sweep Now" action, and by tests via
+    /// <see cref="AssetDatabase.ForceIdle"/>.</summary>
+    public void ForceIdleSweep()
+    {
+        Interlocked.Exchange(ref _lastIdleSweepTicks, 0);
+        MaybeSweepIdle();
+    }
+
+    /// <summary>
+    /// Give the idle sweep a chance to run. Called once per frame from EditorApplication - cheap to
+    /// call that often since MaybeSweepIdle's own gate means the actual scan only happens once per
+    /// IdleSweepInterval regardless of how often this is called.
+    /// </summary>
+    public void TickIdleSweep() => MaybeSweepIdle();
+
     public EngineObject? Get(Guid assetId)
     {
         if (assetId == Guid.Empty) return null;
 
         // Check in-memory cache (covers both main assets and sub-assets). Lock-free.
-        if (_loadedAssets.TryGetValue(assetId, out var loaded) && loaded != null && !loaded.IsDisposed)
+        if (TryGetLoaded(assetId, out var loaded))
             return loaded;
 
         // Per-thread re-entrancy guard: prevents infinite recursion when deserializing
@@ -199,7 +284,7 @@ public class EditorAssetDatabase : IAssetDatabase
             // main/render thread in sync mode) don't double-load; the loser picks up the cache.
             lock (_loadLock)
             {
-                if (_loadedAssets.TryGetValue(assetId, out loaded) && loaded != null && !loaded.IsDisposed)
+                if (TryGetLoaded(assetId, out loaded))
                     return loaded;
                 return GetInternal(assetId);
             }
@@ -214,7 +299,7 @@ public class EditorAssetDatabase : IAssetDatabase
     public EngineObject? GetCached(Guid assetId)
     {
         if (assetId == Guid.Empty) return null;
-        return _loadedAssets.TryGetValue(assetId, out var c) && c != null && !c.IsDisposed ? c : null;
+        return TryGetLoaded(assetId, out var c) ? c : null;
     }
 
     private EngineObject? GetInternal(Guid assetId)
@@ -229,8 +314,18 @@ public class EditorAssetDatabase : IAssetDatabase
         {
             // Load the parent first this will also cache all sub-assets
             var parent = Get(subInfo.parentGuid);
-            // After loading parent, sub-asset should be cached now
-            return _loadedAssets.GetValueOrDefault(assetId);
+            if (TryGetLoaded(assetId, out var loadedSub))
+                return loadedSub;
+
+            // Parent was already alive (Get returned early without touching LoadSubAssetsIntoCache),
+            // but this sub-asset's own weak entry died independently of its parent - a sub-asset and
+            // its parent are no longer collected as a unit, so "parent alive" no longer implies "every
+            // sub-asset is still alive". Reload subs explicitly; already-alive ones are skipped.
+            var parentEntry = GetEntry(subInfo.parentGuid);
+            if (parentEntry?.SubAssets != null)
+                LoadSubAssetsIntoCache(parentEntry);
+
+            return TryGetLoaded(assetId, out var reloadedSub) ? reloadedSub : null;
         }
 
         // Try loading main asset from disk cache
@@ -247,7 +342,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} -> v{importer.Version}. Reimporting.");
                 entry.NeedsReimport = true;
                 RunImport(entry);
-                return _loadedAssets.GetValueOrDefault(assetId);
+                return TryGetLoaded(assetId, out var reimported) ? reimported : null;
             }
         }
 
@@ -264,7 +359,8 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     obj.AssetID = assetId;
                     if (entry != null) obj.AssetPath = entry.Path;
-                    _loadedAssets[assetId] = obj;
+                    SetLoaded(assetId, obj);
+                    if (onMainThread) EnqueueThumbnailIfMissing(assetId, obj);
 
                     // Also load and cache sub-assets
                     if (entry?.SubAssets != null)
@@ -284,7 +380,7 @@ public class EditorAssetDatabase : IAssetDatabase
         if (onMainThread && _guidToEntry.TryGetValue(assetId, out var e) && !string.IsNullOrEmpty(e.Path))
         {
             RunImport(e);
-            return _loadedAssets.GetValueOrDefault(assetId);
+            return TryGetLoaded(assetId, out var justImported) ? justImported : null;
         }
 
         return null;
@@ -292,9 +388,14 @@ public class EditorAssetDatabase : IAssetDatabase
 
     private void LoadSubAssetsIntoCache(AssetEntry parentEntry)
     {
+        bool onMainThread = Thread.CurrentThread.ManagedThreadId == _mainThreadId;
+
         foreach (var sub in parentEntry.SubAssets)
         {
-            if (_loadedAssets.ContainsKey(sub.Guid)) continue;
+            // Must be a liveness check, not a bare key-presence check: a collected sub-asset's dict
+            // entry can still exist (dead weak ref), and skipping it here would leave it permanently
+            // unresolvable even though its cache file is right there ready to reload.
+            if (TryGetLoaded(sub.Guid, out _)) continue;
 
             string subCachePath = GetCachePath(sub.Guid);
             if (!File.Exists(subCachePath))
@@ -313,7 +414,8 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     obj.AssetID = sub.Guid;
                     obj.AssetPath = $"{parentEntry.Path}#{sub.Name}";
-                    _loadedAssets[sub.Guid] = obj;
+                    SetLoaded(sub.Guid, obj);
+                    if (onMainThread) EnqueueThumbnailIfMissing(sub.Guid, obj);
                 }
                 else
                 {
@@ -325,6 +427,23 @@ public class EditorAssetDatabase : IAssetDatabase
                 Runtime.Debug.LogWarning($"Error loading sub-asset '{sub.Name}' from '{parentEntry.Path}': {ex.Message}");
             }
         }
+    }
+
+    /// <summary>Lazily backfill a thumbnail the first time an asset is actually loaded (import/reimport
+    /// already enqueue directly - this only catches the gap where a cache-file deserialize resolves an
+    /// asset whose thumbnail is missing, e.g. a fresh checkout where thumbnails aren't checked into
+    /// source control, or a manually deleted thumbnail file). Main-thread only: ThumbnailGenerator's
+    /// queue isn't thread-safe, and this runs from the same disk-deserialize path the background
+    /// loader also uses.</summary>
+    private void EnqueueThumbnailIfMissing(Guid guid, EngineObject obj)
+    {
+        if (File.Exists(ThumbnailGenerator.GetThumbnailPath(guid, _project.ThumbnailsPath)))
+            return;
+
+        string? sourceFile = obj is Runtime.Resources.Texture2D && !_subAssetIndex.ContainsKey(guid)
+            ? Path.Combine(_project.AssetsPath, obj.AssetPath)
+            : null;
+        ThumbnailGenerator.Enqueue(guid, obj, sourceFile);
     }
 
     // ================================================================
@@ -452,7 +571,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 // Clean up old GUID references
                 _guidToEntry.TryRemove(existingGuid, out _);
                 _pathToGuid.Remove(relativePath);
-                _loadedAssets.TryRemove(existingGuid, out _);
+                DisposeAndRemove(existingGuid);
                 _dependencies.RemoveAsset(existingGuid);
 
                 // Remove old sub-asset index entries
@@ -461,7 +580,7 @@ public class EditorAssetDatabase : IAssetDatabase
                     foreach (var sub in entry.SubAssets)
                     {
                         _subAssetIndex.TryRemove(sub.Guid, out _);
-                        _loadedAssets.TryRemove(sub.Guid, out _);
+                        DisposeAndRemove(sub.Guid);
                         _dependencies.RemoveAsset(sub.Guid);
                     }
                 }
@@ -629,7 +748,7 @@ public class EditorAssetDatabase : IAssetDatabase
             if (string.IsNullOrEmpty(ctx.MainAsset.Name))
                 ctx.MainAsset.Name = Path.GetFileNameWithoutExtension(entry.Path);
 
-            _loadedAssets[entry.Guid] = ctx.MainAsset;
+            SetLoaded(entry.Guid, ctx.MainAsset);
             entry.MainAssetType = ctx.MainAsset.GetType();
             entry.Dependencies = ctx.Dependencies.ToArray();
 
@@ -653,7 +772,13 @@ public class EditorAssetDatabase : IAssetDatabase
                     var subCtx = new DependencySerializationContext();
                     SerializeToCache(sub.AssetID, sub, subCtx);
                     _dependencies.SetDependencies(sub.AssetID, subCtx.Dependencies);
-                    _loadedAssets[sub.AssetID] = sub;
+
+                    // Populate the sub-asset index BEFORE SetLoaded (which touches the activity
+                    // tracker) - ResolveFamily looks this up to route the touch to the parent, so it
+                    // must already resolve correctly on this very first touch.
+                    _subAssetIndex[sub.AssetID] = (entry.Guid, i);
+                    newSubGuids.Add(sub.AssetID);
+                    SetLoaded(sub.AssetID, sub);
 
                     subEntries.Add(new SubAssetEntry
                     {
@@ -663,9 +788,6 @@ public class EditorAssetDatabase : IAssetDatabase
                         // Persisted so the graph can be re-seeded on next startup (see Initialize()).
                         Dependencies = subCtx.Dependencies.ToArray()
                     });
-
-                    _subAssetIndex[sub.AssetID] = (entry.Guid, i);
-                    newSubGuids.Add(sub.AssetID);
                 }
                 entry.SubAssets = subEntries.ToArray();
             }
@@ -681,6 +803,7 @@ public class EditorAssetDatabase : IAssetDatabase
                 if (newSubGuids.Contains(oldGuid)) continue;
                 _subAssetIndex.TryRemove(oldGuid, out _);
                 if (_loadedAssets.TryRemove(oldGuid, out var oldObj)) oldObj?.Dispose();
+                AssetDatabase.Forget(oldGuid);
                 _dependencies.RemoveAsset(oldGuid);
                 ThumbnailGenerator.DeleteThumbnail(oldGuid, _project.ThumbnailsPath);
                 InvalidateThumbnailTexture(oldGuid);
@@ -780,6 +903,19 @@ public class EditorAssetDatabase : IAssetDatabase
         if (_subAssetIndex.TryGetValue(guid, out var subInfo))
             return _guidToEntry.TryGetValue(subInfo.parentGuid, out var parentEntry) ? parentEntry.Path : null;
         return null;
+    }
+
+    /// <summary>If <paramref name="guid"/> is a sub-asset, returns its parent's GUID. False for a
+    /// main asset or an unknown GUID.</summary>
+    public bool TryGetParentGuid(Guid guid, out Guid parentGuid)
+    {
+        if (_subAssetIndex.TryGetValue(guid, out var subInfo))
+        {
+            parentGuid = subInfo.parentGuid;
+            return true;
+        }
+        parentGuid = Guid.Empty;
+        return false;
     }
 
     public IEnumerable<AssetEntry> GetAllEntries() => _guidToEntry.Values;
@@ -923,7 +1059,17 @@ public class EditorAssetDatabase : IAssetDatabase
     public string ThumbnailsPath => _project.ThumbnailsPath;
 
     /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
-    public EngineObject? GetLoadedAsset(Guid guid) => _loadedAssets.GetValueOrDefault(guid);
+    public EngineObject? GetLoadedAsset(Guid guid) => TryGetLoaded(guid, out var obj) ? obj : null;
+
+    /// <summary>Snapshot of every currently-resident (main + sub-asset) GUID and its loaded instance,
+    /// for diagnostics (e.g. the Asset Database panel) - not a live view, and reading it does not
+    /// itself count as activity (unlike Get/GetCached).</summary>
+    public IEnumerable<(Guid Guid, EngineObject Asset)> GetLoadedAssets()
+    {
+        foreach (var kv in _loadedAssets)
+            if (kv.Value != null && !kv.Value.IsDisposed)
+                yield return (kv.Key, kv.Value);
+    }
 
     /// <summary>
     /// Clear the cache for <see cref="_loadedAssets"/> on assembly reload so that scenes/prefabs that might hold
@@ -937,7 +1083,7 @@ public class EditorAssetDatabase : IAssetDatabase
 
         foreach (var kv in db._loadedAssets.ToArray())
         {
-            EngineObject? asset = kv.Value;
+            var asset = kv.Value;
             if (asset is null) continue;
 
             bool sensitive = asset is Runtime.Resources.Scene
@@ -946,11 +1092,12 @@ public class EditorAssetDatabase : IAssetDatabase
 
             if (!sensitive) continue;
 
-            if (db._loadedAssets.TryRemove(kv.Key, out var removed))
+            if (db._loadedAssets.TryRemove(kv.Key, out _))
             {
+                AssetDatabase.Forget(kv.Key);
                 try
                 {
-                    removed?.Dispose();
+                    asset.Dispose();
                 }
                 catch(Exception e)
                 {
@@ -1276,7 +1423,7 @@ public class EditorAssetDatabase : IAssetDatabase
             _pathToGuid[newRelativePath] = guid;
             _guidToEntry[guid].Path = newRelativePath;
 
-            if (_loadedAssets.TryGetValue(guid, out var obj))
+            if (TryGetLoaded(guid, out var obj))
                 obj.AssetPath = newRelativePath;
 
             // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
@@ -1285,7 +1432,7 @@ public class EditorAssetDatabase : IAssetDatabase
             {
                 foreach (var sub in movedEntry.SubAssets)
                 {
-                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                    if (TryGetLoaded(sub.Guid, out var subObj))
                         subObj.AssetPath = $"{newRelativePath}#{sub.Name}";
                 }
             }
@@ -1368,12 +1515,12 @@ public class EditorAssetDatabase : IAssetDatabase
                 {
                     foreach (var sub in entry.SubAssets)
                     {
-                        if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                        if (TryGetLoaded(sub.Guid, out var subObj))
                             subObj.AssetPath = $"{newPath}#{sub.Name}";
                     }
                 }
             }
-            if (_loadedAssets.TryGetValue(guid, out var obj))
+            if (TryGetLoaded(guid, out var obj))
                 obj.AssetPath = newPath;
 
             OnAssetMoved?.Invoke(oldPath, newPath);
@@ -1390,11 +1537,12 @@ public class EditorAssetDatabase : IAssetDatabase
     /// <summary>Dispose and remove a cached asset. Triggers AssetRef re-resolve on next access.</summary>
     private void DisposeAndRemove(Guid guid)
     {
-        if (_loadedAssets.TryGetValue(guid, out var old))
+        if (TryGetLoaded(guid, out var old))
         {
-            try { old?.Dispose(); } catch { }
-            _loadedAssets.TryRemove(guid, out _);
+            try { old.Dispose(); } catch { }
         }
+        _loadedAssets.TryRemove(guid, out _);
+        AssetDatabase.Forget(guid);
     }
 
     public void Reimport(Guid guid)
@@ -1591,7 +1739,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             if (File.Exists(oldMeta) && !File.Exists(newMeta))
                                 try { File.Move(oldMeta, newMeta); } catch { }
 
-                            if (_loadedAssets.TryGetValue(guid, out var obj))
+                            if (TryGetLoaded(guid, out var obj))
                                 obj.AssetPath = relativePath;
 
                             // Update sub-asset AssetPaths
@@ -1599,7 +1747,7 @@ public class EditorAssetDatabase : IAssetDatabase
                             {
                                 foreach (var sub in renamedEntry.SubAssets)
                                 {
-                                    if (_loadedAssets.TryGetValue(sub.Guid, out var subObj))
+                                    if (TryGetLoaded(sub.Guid, out var subObj))
                                         subObj.AssetPath = $"{relativePath}#{sub.Name}";
                                 }
                             }
@@ -1694,5 +1842,6 @@ public class EditorAssetDatabase : IAssetDatabase
         // database (e.g. between tests) doesn't leave dangling statics behind.
         if (Instance == this) Instance = null;
         if (Runtime.AssetDatabase.Current == this) Runtime.AssetDatabase.Current = null;
+        if (Instance == null) AssetDatabase.ResolveFamily = null;
     }
 }

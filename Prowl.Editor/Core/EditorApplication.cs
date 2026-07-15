@@ -447,6 +447,11 @@ public class EditorApplication : Game
             ThumbnailGenerator.ProcessOne();
         }
 
+        // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
+        // memory eviction shouldn't depend on file-reimport gating, and this is cheap to call every
+        // frame since the sweep itself is internally rate-limited (see MaybeSweepIdle's own gate).
+        EditorAssetDatabase.Instance?.TickIdleSweep();
+
         // Layout auto-save is handled by SaveManager's auto-save timer.
 
         // Show project launcher or intro close phase
