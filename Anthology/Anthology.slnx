@@ -15,8 +15,6 @@
     <Project Path="Drift/Drift/Drift.csproj" />
     <Project Path="Slang/Slang/Prowl.Slang.csproj" />
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
-    <Project Path="Graphite/ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
-    <Project Path="Graphite/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
