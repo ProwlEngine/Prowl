@@ -184,7 +184,7 @@ Getting Prowl up and running is super easy!
 
 # <span align="center">🤝 Contributing 🤝</span>
 
-Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this team.
+Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CONTRIBUTING.md) to see how to be part of this team.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -231,7 +231,7 @@ Check our [Contributing guide](//CONTRIBUTING.md) to see how to be part of this 
 
 # <span align="center">📜 License 📜</span>
 
-Distributed under the MIT License. See [LICENSE](//LICENSE) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/ProwlEngine/Prowl/blob/main/LICENSE) for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
