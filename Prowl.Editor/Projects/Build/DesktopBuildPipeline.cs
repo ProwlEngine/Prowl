@@ -100,7 +100,7 @@ public class DesktopBuildPipeline : BuildPipeline
             }
 
             // 1c. Reimport all build scenes to ensure caches are fresh
-            var db = EditorAssetDatabase.Instance;
+            var db = EditorAssetBackend.Instance;
             foreach (var sceneEntry in enabledScenes)
             {
                 if (db != null && sceneEntry.SceneGuid != Guid.Empty)

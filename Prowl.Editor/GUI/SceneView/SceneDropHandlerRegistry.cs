@@ -40,7 +40,7 @@ internal class SceneAssetDropHandler : ISceneDropHandler
     public string DropHint => $"{EditorIcons.ArrowDown}  Drop to open scene";
     public void Handle(AssetDragPayload payload, SceneDropContext context)
     {
-        var entry = EditorAssetDatabase.Instance?.GetEntry(payload.AssetGuid);
+        var entry = EditorAssetBackend.Instance?.GetEntry(payload.AssetGuid);
         if (entry != null) EditorSceneManager.OpenScene(entry.Path);
     }
 }

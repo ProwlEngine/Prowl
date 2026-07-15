@@ -13,7 +13,7 @@ namespace Prowl.Runtime;
 /// loaded-asset cache and idle-timeout eviction model - subclasses only implement how an asset is
 /// actually loaded from its source (disk cache, pak, import, ...) via <see cref="LoadFresh"/>.
 /// </summary>
-public abstract class AssetDatabaseBase
+public abstract class AssetBackendBase
 {
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(60);
     public static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(5);

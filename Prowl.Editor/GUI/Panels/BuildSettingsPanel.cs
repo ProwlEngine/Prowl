@@ -253,7 +253,7 @@ public class BuildSettingsPanel : DockPanel
 
     private void AddOpenScene()
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         var entry = EditorSceneManager.CurrentScenePath != null ? db?.GetEntry(EditorSceneManager.CurrentScenePath) : null;
         if (entry == null)
         {

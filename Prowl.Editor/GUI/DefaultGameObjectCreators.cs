@@ -50,7 +50,7 @@ internal static class DefaultGameObjectCreators
         var terrainData = new TerrainData();
         terrain.Data = new AssetRef<TerrainData>(terrainData);
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db != null)
         {
             string name = AssetCreateMenu.FindUniqueName(Project.Current.AssetsPath, "New Terrain Data", ".terraindata");

@@ -731,7 +731,7 @@ public class InputActionMapEditor : AssetImporterEditor
         if (echo != null)
         {
             File.WriteAllText(absolutePath, echo.WriteToString());
-            EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            EditorAssetBackend.Instance?.Reimport(entry.Guid);
         }
         _dirty = false;
     }

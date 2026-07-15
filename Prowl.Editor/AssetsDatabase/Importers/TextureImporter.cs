@@ -220,12 +220,12 @@ public static class TextureSpriteMeta
         meta.Settings ??= EchoObject.NewCompound();
         WriteInto(meta.Settings, s);
         MetaFile.Write(metaPath, meta);
-        EditorAssetDatabase.Instance?.Reimport(textureGuid);
+        EditorAssetBackend.Instance?.Reimport(textureGuid);
     }
 
     private static string AbsolutePath(Guid textureGuid)
     {
-        string rel = EditorAssetDatabase.Instance?.GuidToPath(textureGuid) ?? "";
+        string rel = EditorAssetBackend.Instance?.GuidToPath(textureGuid) ?? "";
         return Path.Combine(Project.Current.AssetsPath, rel);
     }
 }

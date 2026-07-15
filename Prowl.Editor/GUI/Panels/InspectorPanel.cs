@@ -289,7 +289,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             return;
         }
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         // Sub-asset: show read-only view with Extract button
@@ -453,7 +453,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
         }
     }
 
-    private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetDatabase db)
+    private void DrawSubAssetInspector(Paper paper, Scribe.FontFile font, ContentItem item, EditorAssetBackend db)
     {
         // Find the parent entry
         AssetEntry? parentEntry = null;
@@ -562,7 +562,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
     {
         if (asset == null || parentEntry == null || Project.Current == null) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         // Determine target path same folder as parent, with sub-asset name
@@ -698,7 +698,7 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
 
     private static string GetExtensionIcon(string ext) => EditorRegistries.GetFileIconForExtension(ext);
 
-    private static void DrawAssetLink(Paper paper, Scribe.FontFile font, string id, Guid guid, EditorAssetDatabase db)
+    private static void DrawAssetLink(Paper paper, Scribe.FontFile font, string id, Guid guid, EditorAssetBackend db)
     {
         string? path = db.GuidToPath(guid);
         bool isBuiltIn = Runtime.BuiltInAssets.IsBuiltIn(guid);

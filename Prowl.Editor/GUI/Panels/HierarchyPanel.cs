@@ -394,7 +394,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 {
                     if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                     {
-                        var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                        var entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                         if (entry != null)
                             EditorSceneManager.OpenScene(entry.Path);
                     }
@@ -973,7 +973,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             return go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
         // Check if the prefab asset still exists
-        var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
+        var entry = EditorAssetBackend.Instance?.GetEntry(go.PrefabAssetId);
         if (entry == null)
         {
             // Broken prefab link red text

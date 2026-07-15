@@ -66,7 +66,7 @@ public static class PrefabEditingMode
             return;
         }
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         var entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;
 
@@ -153,7 +153,7 @@ public static class PrefabEditingMode
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
             File.WriteAllText(absolutePath, echo.WriteToString());
-            EditorAssetDatabase.Instance?.Reimport(EditingPrefabGuid);
+            EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
             // Label reported via SaveManager.OnSave handler

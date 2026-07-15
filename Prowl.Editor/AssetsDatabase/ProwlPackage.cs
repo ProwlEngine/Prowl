@@ -80,7 +80,7 @@ public static class ProwlPackage
     {
         var project = Project.Current;
         if (project == null) throw new InvalidOperationException("No project is open.");
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) throw new InvalidOperationException("Asset database not initialized.");
 
         // Collect all asset paths (including dependencies if requested)
@@ -309,7 +309,7 @@ public static class ProwlPackage
         if (!System.Guid.TryParse(packageAsset.Guid, out var guid) || guid == System.Guid.Empty)
             return ImportAction.Add;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return ImportAction.Add;
 
         var existing = db.GetEntry(guid);
@@ -416,7 +416,7 @@ public static class ProwlPackage
     {
         var project = Project.Current;
         if (project == null) return new List<string>();
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return new List<string>();
 
         string prefix = string.IsNullOrEmpty(folderRelativePath) ? "" : folderRelativePath.Replace('\\', '/') + "/";

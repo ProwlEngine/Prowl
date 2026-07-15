@@ -31,7 +31,7 @@ public class SceneAssetEditor : AssetImporterEditor
         if (font == null) return;
         var mono = EditorTheme.FontMono ?? font;
         var m = Origami.Current.Metrics;
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         if (entry.Guid != _cachedSceneGuid)
@@ -83,7 +83,7 @@ public class SceneAssetEditor : AssetImporterEditor
 
     // Resolve raw dependency GUIDs to their true top-level asset (sub-assets -> parent), de-duplicated,
     // so the list shows real asset references instead of sub-asset GUIDs that read as "Missing".
-    private void RebuildRefs(AssetEntry entry, EditorAssetDatabase db)
+    private void RebuildRefs(AssetEntry entry, EditorAssetBackend db)
     {
         _cachedSceneGuid = entry.Guid;
         _refs.Clear();
@@ -107,7 +107,7 @@ public class SceneAssetEditor : AssetImporterEditor
     }
 
     private static void DrawDepCell(Paper paper, Prowl.Scribe.FontFile font, Prowl.Scribe.FontFile mono,
-        float rowH, Guid guid, int col, EditorAssetDatabase db)
+        float rowH, Guid guid, int col, EditorAssetBackend db)
     {
         string? path = db.GuidToPath(guid);
         bool builtIn = BuiltInAssets.IsBuiltIn(guid);

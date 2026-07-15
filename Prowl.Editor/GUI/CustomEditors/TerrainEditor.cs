@@ -246,7 +246,7 @@ public class TerrainEditor : CustomEditor
                         paper.Box($"{id}_l{i}_bar").Width(2).Height(UnitValue.StretchOne)
                             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(EditorTheme.Accent).IsNotInteractable();
-                    var albThumb = EditorAssetDatabase.Instance?.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
+                    var albThumb = EditorAssetBackend.Instance?.GetThumbnailTexture(data.Layers[i].Albedo.AssetID);
                     var swBox = paper.Box($"{id}_l{i}_sw").Width(16).Height(16).Rounded(4)
                         .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                         .BorderColor(EditorTheme.WithAlpha(SColor.White, 38)).BorderWidth(1).IsNotInteractable();
@@ -581,7 +581,7 @@ public class TerrainEditor : CustomEditor
                             .BorderColor(sel ? EditorTheme.WithAlpha(EditorTheme.Accent, 102) : SColor.Transparent).BorderWidth(1)
                             .OnClick(_ => onSelect(capture)).Enter())
                         {
-                            var thumb = EditorAssetDatabase.Instance?.GetThumbnailTexture(getThumbGuid(idx));
+                            var thumb = EditorAssetBackend.Instance?.GetThumbnailTexture(getThumbGuid(idx));
                             var thumbBox = paper.Box($"{id}_t{idx}_th").Width(46).Height(46).Rounded(9)
                                 .Margin(UnitValue.Stretch(), UnitValue.Stretch(), 0, 0)
                                 .BackgroundColor(EditorTheme.WithAlpha(tint, 34))
@@ -836,7 +836,7 @@ public class TerrainEditor : CustomEditor
 
     private void SaveToAsset(TerrainData data)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db != null && data.AssetID != Guid.Empty)
         {
             db.SaveAsset(data);
@@ -994,7 +994,7 @@ public class TerrainEditor : CustomEditor
     static void OnSceneSaved()
     {
         if (Scene.Current == null) return;
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         foreach (var go in Scene.Current.ActiveObjects)

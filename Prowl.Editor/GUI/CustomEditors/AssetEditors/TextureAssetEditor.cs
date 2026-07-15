@@ -163,7 +163,7 @@ public class TextureAssetEditor : AssetImporterEditor
                 _cachedSettings = null;
                 _dirty = false;
                 Importers.SpriteEditRegistry.ClearDirty(entry.Guid);
-                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                EditorAssetBackend.Instance?.Reimport(entry.Guid);
             });
     }
 

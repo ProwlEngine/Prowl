@@ -129,7 +129,7 @@ public class EditorApplication : Game
         if (projectAlreadyInitialized)
         {
             // Initialize asset database for the already-opened project
-            var db = new EditorAssetDatabase(Project.Current!);
+            var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
 
             // Load project settings
@@ -413,7 +413,7 @@ public class EditorApplication : Game
                 Window.InternalWindow.Title = $"Prowl Editor - {Project.Current.Name}";
 
                 // Initialize the asset database for the opened project
-                var db = new EditorAssetDatabase(Project.Current);
+                var db = new EditorAssetBackend(Project.Current);
                 db.Initialize();
 
                 // Load user script assemblies and re-register all types
@@ -438,7 +438,7 @@ public class EditorApplication : Game
         bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || Window.IsFocused;
         if (canProcessAssets)
         {
-            EditorAssetDatabase.Instance?.ProcessFileChanges();
+            EditorAssetBackend.Instance?.ProcessFileChanges();
 
             // Check for script recompilation
             ScriptAssemblyManager.Update();
@@ -450,7 +450,7 @@ public class EditorApplication : Game
         // Give idle assets a chance to be evicted. Not gated behind canProcessAssets/window focus -
         // memory eviction shouldn't depend on file-reimport gating, and this is cheap to call every
         // frame since the sweep itself is internally rate-limited (see MaybeSweepIdle's own gate).
-        EditorAssetDatabase.Instance?.TickIdleSweep();
+        EditorAssetBackend.Instance?.TickIdleSweep();
 
         // Layout auto-save is handled by SaveManager's auto-save timer.
 
@@ -1268,7 +1268,7 @@ public class EditorApplication : Game
         EditorApplication.OpenFileDialog(FileDialogMode.Save, path =>
         {
             if (path == null || Project.Current == null) return;
-            string rel = EditorAssetDatabase.NormalizePath(
+            string rel = EditorAssetBackend.NormalizePath(
                 System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
             if (!rel.EndsWith(".scene")) rel += ".scene";
 
@@ -1295,7 +1295,7 @@ public class EditorApplication : Game
             EditorApplication.OpenFileDialog(FileDialogMode.Open, path =>
             {
                 if (path == null || Project.Current == null) return;
-                string rel = EditorAssetDatabase.NormalizePath(
+                string rel = EditorAssetBackend.NormalizePath(
                     System.IO.Path.GetRelativePath(Project.Current.AssetsPath, path));
                 EditorSceneManager.OpenScene(rel);
             }, Project.Current?.AssetsPath,
@@ -1338,13 +1338,13 @@ public class EditorApplication : Game
         {
             if (Project.Current != null)
             {
-                var db = new EditorAssetDatabase(Project.Current);
+                var db = new EditorAssetBackend(Project.Current);
                 db.Initialize();
             }
         });
         MenuRegistry.Register($"{assets}/{Loc.Get("menu.assets.reimport_all")}", () =>
         {
-            var db = EditorAssetDatabase.Instance;
+            var db = EditorAssetBackend.Instance;
             if (db == null) return;
             foreach (var entry in db.GetAllEntries().ToList())
                 db.Reimport(entry.Guid);
@@ -1620,7 +1620,7 @@ public class EditorApplication : Game
     public void ClearEditorCache()
     {
         try { Thumbnails.ThumbnailGenerator.DeleteAll(); } catch { }
-        EditorAssetDatabase.Instance?.ClearThumbnailTextureCache();
+        EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
         try
         {
             if (Project.Current != null && System.IO.File.Exists(Project.Current.EditorStatePath))
@@ -1696,7 +1696,7 @@ public class EditorApplication : Game
         SaveProjectState();
 
         // Clean up current project
-        EditorAssetDatabase.Instance?.Dispose();
+        EditorAssetBackend.Instance?.Dispose();
         Runtime.AssetDatabase.Current = null;
 
         // Reset state

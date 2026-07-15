@@ -49,7 +49,7 @@ public static class AssetCreateMenu
             object? instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Prowl.Echo.Serializer.Serialize(typeof(object), instance);
             if (echo != null) File.WriteAllText(filePath, echo.WriteToString());
-            EditorAssetDatabase.Instance?.InvalidateFolderIndex();
+            EditorAssetBackend.Instance?.InvalidateFolderIndex();
             Debug.Log($"Created {entry.Name}: {name}");
             return string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         }
@@ -84,7 +84,7 @@ public static class AssetCreateMenu
         string newPath = Path.Combine(absFolder, name);
         Directory.CreateDirectory(newPath);
         MetaFile.EnsureMeta(newPath, "DefaultImporter");
-        EditorAssetDatabase.Instance?.InvalidateFolderIndex();
+        EditorAssetBackend.Instance?.InvalidateFolderIndex();
         Debug.Log($"Created folder: {name}");
         string relPath = string.IsNullOrEmpty(relativeFolder) ? name : relativeFolder + "/" + name;
         return relPath;

@@ -102,7 +102,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         {
             def.WriteToFile(absPath);
             _def = null;
-            EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            EditorAssetBackend.Instance?.Reimport(entry.Guid);
             ScriptAssemblyManager.RequestRecompile();
         }).Width(170).Show();
     }

@@ -132,7 +132,7 @@ public class PreferencesPanel : DockPanel
                     s.ThumbnailSize = v switch { 1 => 64, 2 => 128, _ => 32 };
                     s.Save();
                     ThumbnailGenerator.DeleteAll();
-                    EditorAssetDatabase.Instance?.ClearThumbnailTextureCache();
+                    EditorAssetBackend.Instance?.ClearThumbnailTextureCache();
                 }, thumbOptions).Show());
 
         EditorGUI.SectionHeader(paper, "pref_gen_maint", Loc.Get("pref.maintenance"));

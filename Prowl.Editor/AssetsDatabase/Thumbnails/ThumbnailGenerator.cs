@@ -43,7 +43,7 @@ public static class ThumbnailGenerator
         if (guid == Guid.Empty || asset == null) return;
         if (_queued.Contains(guid)) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         if (File.Exists(GetThumbnailPath(guid, db.ThumbnailsPath))) return;
@@ -56,7 +56,7 @@ public static class ThumbnailGenerator
     {
         if (_queue.Count == 0) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         var job = _queue.Dequeue();
@@ -120,7 +120,7 @@ public static class ThumbnailGenerator
     /// Returns true when every asset in the thumbnail subject's forward dependency closure is
     /// already loaded. For any that aren't, kicks off a background load. Non-blocking.
     /// </summary>
-    private static bool RequestDependencies(EditorAssetDatabase db, Guid guid)
+    private static bool RequestDependencies(EditorAssetBackend db, Guid guid)
     {
         bool ready = true;
         try

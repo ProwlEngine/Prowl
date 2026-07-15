@@ -173,7 +173,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                 {
                     if (EditorSceneManager.CurrentScenePath != null)
                     {
-                        var db = EditorAssetDatabase.Instance;
+                        var db = EditorAssetBackend.Instance;
                         var entry = db?.GetEntry(EditorSceneManager.CurrentScenePath);
                         if (entry != null && !Scenes.Any(s => s.SceneGuid == entry.Guid))
                         {

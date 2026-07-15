@@ -206,7 +206,7 @@ public class ModelAssetEditor : AssetImporterEditor
                         _settingsDirty = false;
                         _lastPreviewAsset = null; // Force preview refresh
                         _settingsLoaded = false;
-                        EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                        EditorAssetBackend.Instance?.Reimport(entry.Guid);
                         MeshAssetEditor.InvalidateCachedPreviews();
                     });
             }
@@ -223,7 +223,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 .OnClick(0, (_, _) =>
                 {
                     _lastPreviewAsset = null;
-                    EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                    EditorAssetBackend.Instance?.Reimport(entry.Guid);
                 });
         }
     }

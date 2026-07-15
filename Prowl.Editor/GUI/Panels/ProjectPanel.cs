@@ -38,10 +38,10 @@ public class ProjectPanel : DockPanel
     {
         EditorGUI.HeaderIconButton(paper, "proj_hdr_refresh", EditorIcons.ArrowRotateRight, () =>
         {
-            if (EditorAssetDatabase.Instance != null)
+            if (EditorAssetBackend.Instance != null)
             {
                 Runtime.Debug.Log("Refreshing asset database...");
-                var db = new EditorAssetDatabase(Project.Current!);
+                var db = new EditorAssetBackend(Project.Current!);
                 db.Initialize();
             }
         });
@@ -137,7 +137,7 @@ public class ProjectPanel : DockPanel
         {
             var pingGuid = _pendingPingNavigate;
             _pendingPingNavigate = Guid.Empty;
-            var db = EditorAssetDatabase.Instance;
+            var db = EditorAssetBackend.Instance;
             if (db != null)
             {
                 string? path = db.GuidToPath(pingGuid);
@@ -193,7 +193,7 @@ public class ProjectPanel : DockPanel
             _dragDwellTimer = 0f;
         }
 
-        var assetDb = EditorAssetDatabase.Instance;
+        var assetDb = EditorAssetBackend.Instance;
         var entries = assetDb != null ? GetContentEntries(assetDb) : new List<ContentItem>();
 
         using (paper.Row("proj_root").Size(width, height).Enter())
@@ -368,7 +368,7 @@ public class ProjectPanel : DockPanel
         // Primary lookup the item the user actually grabbed.
         Type? primaryType = null;
         if (!item.IsFolder && item.Guid != Guid.Empty)
-            primaryType = EditorAssetDatabase.Instance?.GetEntry(item.RelativePath)?.MainAssetType;
+            primaryType = EditorAssetBackend.Instance?.GetEntry(item.RelativePath)?.MainAssetType;
 
         // Expand to the full selection ONLY if the grabbed item is inside it. That matches
         // how Explorer / Finder behave: clicking-and-dragging an unselected item drags just
@@ -399,7 +399,7 @@ public class ProjectPanel : DockPanel
     /// </summary>
     private void PerformAssetMove(AssetDragPayload payload, string destRelFolder)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
         destRelFolder = (destRelFolder ?? "").Replace('\\', '/').TrimEnd('/');
@@ -624,13 +624,13 @@ public class ProjectPanel : DockPanel
     {
         // Read the folder structure from the asset database's cached index instead of walking the
         // filesystem every frame.
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         var subDirs = db != null
             ? db.GetSubFolders(relativePath)
                 .Where(f => !f.Name.StartsWith('.'))
                 .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList()
-            : new List<EditorAssetDatabase.FolderRecord>();
+            : new List<EditorAssetBackend.FolderRecord>();
 
         nodes.Add(new OrigamiUI.TreeNode
         {
@@ -791,7 +791,7 @@ public class ProjectPanel : DockPanel
                 var it = visible[i].item;
                 if (it.IsSubAsset && it.Guid != Guid.Empty)
                 {
-                    var db = EditorAssetDatabase.Instance;
+                    var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
                     DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
                 }
@@ -924,7 +924,7 @@ public class ProjectPanel : DockPanel
             if (!item.IsFolder)
                 builder.Item(Loc.Get("project.reimport"), () =>
                 {
-                    var db = EditorAssetDatabase.Instance;
+                    var db = EditorAssetBackend.Instance;
                     if (db == null) return;
                     foreach (var sel in Selection.GetSelected<ContentItem>())
                         if (sel.Guid != Guid.Empty) db.Reimport(sel.Guid);
@@ -989,7 +989,7 @@ public class ProjectPanel : DockPanel
 
             builder.Item(Loc.Get("menu.assets.reimport_all"), () =>
             {
-                var db = EditorAssetDatabase.Instance;
+                var db = EditorAssetBackend.Instance;
                 if (db == null) return;
                 foreach (var e in db.GetAllEntries().ToList())
                     db.Reimport(e.Guid);
@@ -1021,7 +1021,7 @@ public class ProjectPanel : DockPanel
 
         Origami.Confirm(Loc.Get("dialog.delete_assets"), Loc.Get("project.delete_confirm_body", new { names = names }), () =>
         {
-            var db = EditorAssetDatabase.Instance;
+            var db = EditorAssetBackend.Instance;
             if (db == null) return;
             foreach (var sel in selected)
             {
@@ -1089,7 +1089,7 @@ public class ProjectPanel : DockPanel
 
             if (item.IsFolder)
             {
-                bool success = EditorAssetDatabase.Instance?.MoveFolder(item.RelativePath, newRelPath) ?? false;
+                bool success = EditorAssetBackend.Instance?.MoveFolder(item.RelativePath, newRelPath) ?? false;
                 if (!success)
                     Toasts.Show(Loc.Get("toast.rename_failed"), Loc.Get("toast.rename_exists", new { name = newName }), ToastType.Warning, 3f);
                 else if (_currentFolder == item.RelativePath)
@@ -1097,7 +1097,7 @@ public class ProjectPanel : DockPanel
             }
             else
             {
-                bool success = EditorAssetDatabase.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
+                bool success = EditorAssetBackend.Instance?.MoveAsset(item.RelativePath, newRelPath) ?? false;
                 if (!success)
                     Toasts.Show(Loc.Get("toast.rename_failed"), Loc.Get("toast.rename_exists", new { name = newName }), ToastType.Warning, 3f);
             }
@@ -1191,14 +1191,14 @@ public class ProjectPanel : DockPanel
             })
             .OnDragStart(sub, (s, _) =>
             {
-                var db = EditorAssetDatabase.Instance;
+                var db = EditorAssetBackend.Instance;
                 Type? subType = db?.GetSubAssets(s.ParentGuid).FirstOrDefault(x => x.Guid == s.Guid)?.Type;
                 DragDrop.StartDrag(new AssetDragPayload(s.Guid, s.Name, subType));
             })
             .Tooltip(sub.Name)
             .Enter())
         {
-            var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(sub.Guid);
+            var thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(sub.Guid);
             if (thumbTex != null)
             {
                 paper.Box($"proj_subth_{sub.Guid}").Width(42).Height(42).Margin(UnitValue.StretchOne, UnitValue.StretchOne, 0, 0)
@@ -1267,7 +1267,7 @@ public class ProjectPanel : DockPanel
             {
                 if (it.IsSubAsset && it.Guid != Guid.Empty)
                 {
-                    var db = EditorAssetDatabase.Instance;
+                    var db = EditorAssetBackend.Instance;
                     Type? subType = db?.GetSubAssets(it.ParentGuid).FirstOrDefault(s => s.Guid == it.Guid)?.Type;
                     DragDrop.StartDrag(new AssetDragPayload(it.Guid, it.Name, subType));
                     return;
@@ -1318,7 +1318,7 @@ public class ProjectPanel : DockPanel
             }
 
             // Thumbnail area
-            var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(item.Guid);
+            var thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(item.Guid);
             if (thumbTex != null)
             {
                 // Rounded image tile (texture-brushed rounded rect) + a matching rounded border.
@@ -1428,7 +1428,7 @@ public class ProjectPanel : DockPanel
     //  Content Item Helpers
     // ================================================================
 
-    private List<ContentItem> GetContentEntries(EditorAssetDatabase db)
+    private List<ContentItem> GetContentEntries(EditorAssetBackend db)
     {
         // Folders and files come from the asset database's cached index (single source of truth),
         // not per-frame filesystem calls.

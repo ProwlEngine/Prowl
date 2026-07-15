@@ -104,7 +104,7 @@ public class PluginAssetEditor : AssetImporterEditor
             meta.Settings = s;
             MetaFile.Write(metaPath, meta);
             _settings = null;
-            EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+            EditorAssetBackend.Instance?.Reimport(entry.Guid);
             ScriptAssemblyManager.RequestRecompile();
         }).Width(150).Show();
     }

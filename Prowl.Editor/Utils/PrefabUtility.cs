@@ -125,7 +125,7 @@ public static class PrefabUtility
     {
         if (!instanceRoot.IsPrefabInstance) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
         var entry = db.GetEntry(instanceRoot.PrefabAssetId);
@@ -301,7 +301,7 @@ public static class PrefabUtility
     {
         if (!instanceGO.IsPrefabInstance) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
         var entry = db.GetEntry(instanceGO.PrefabAssetId);

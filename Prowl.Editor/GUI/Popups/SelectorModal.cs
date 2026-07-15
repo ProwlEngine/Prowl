@@ -311,7 +311,7 @@ public static class SelectorModal
 
     private static void DrawAssetsTab(Paper paper, Prowl.Scribe.FontFile font, float height)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null)
         {
             paper.Box("sel_asset_empty").Height(40)
@@ -381,7 +381,7 @@ public static class SelectorModal
     private static void DrawAssetGridItem(Paper paper, Prowl.Scribe.FontFile font,
         string id, Guid guid, string name, float cellSize, float labelH, float totalCellH)
     {
-        var thumbTex = EditorAssetDatabase.Instance?.GetThumbnailTexture(guid);
+        var thumbTex = EditorAssetBackend.Instance?.GetThumbnailTexture(guid);
 
         using (paper.Column(id)
             .Width(cellSize).Height(totalCellH)

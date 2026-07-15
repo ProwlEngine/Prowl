@@ -1068,7 +1068,7 @@ public static class GameObjectInspector
         bool isNested = PrefabUtility.IsNestedPrefabRoot(go);
         bool hasOverrides = PrefabUtility.HasAnyOverrides(go);
 
-        var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
+        var entry = EditorAssetBackend.Instance?.GetEntry(go.PrefabAssetId);
         bool isMissing = entry == null;
         string prefabName = isMissing ? Loc.Get("inspector.missing") : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
 

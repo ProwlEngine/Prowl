@@ -76,7 +76,7 @@ public static class PackageExportDialog
     {
         _dependencyPaths.Clear();
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         var explicitSet = new HashSet<string>(_explicitPaths, StringComparer.OrdinalIgnoreCase);

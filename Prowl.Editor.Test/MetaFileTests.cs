@@ -134,6 +134,6 @@ public class MetaFileTests : IDisposable
     [Fact]
     public void NormalizePath_UsesForwardSlashes()
     {
-        Assert.Equal("Foo/Bar/Baz.scene", EditorAssetDatabase.NormalizePath("Foo\\Bar\\Baz.scene"));
+        Assert.Equal("Foo/Bar/Baz.scene", EditorAssetBackend.NormalizePath("Foo\\Bar\\Baz.scene"));
     }
 }

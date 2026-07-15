@@ -255,7 +255,7 @@ public sealed class LightmapBakeService
         if (_settings.Denoise) Status = "Denoising…";
         baker.Job?.Denoise();  // edge-avoiding denoise + re-dilate (no-op unless enabled); atlas buffers are now final
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         string scenePath = EditorSceneManager.CurrentScenePath ?? "";
         if (db == null || string.IsNullOrEmpty(scenePath))
         {

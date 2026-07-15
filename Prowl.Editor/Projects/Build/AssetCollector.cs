@@ -22,7 +22,7 @@ public static class AssetCollector
     /// </summary>
     public static CollectionResult Collect(List<Guid> sceneGuids, bool dependenciesOnly)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null)
             return new CollectionResult { AllAssets = new(), ResourcesMap = new() };
 

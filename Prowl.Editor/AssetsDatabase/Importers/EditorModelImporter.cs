@@ -95,7 +95,7 @@ public class EditorModelImporter : AssetImporter
 
     private static void ResolveTextures(ModelImportResult data, ImportContext ctx)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         string modelDir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
@@ -122,7 +122,7 @@ public class EditorModelImporter : AssetImporter
             tex.Dispose();
     }
 
-    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetDatabase db, ImportContext ctx, HashSet<Texture2D> resolved)
+    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetBackend db, ImportContext ctx, HashSet<Texture2D> resolved)
     {
         var tex = mat._properties.GetTexture(slot);
         if (tex == null || tex.IsDisposed) return;

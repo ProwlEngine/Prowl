@@ -110,7 +110,7 @@ public static class Program
             ScriptAssemblyManager.LoadAssemblies(project);
 
             // Initialize asset database for the already-opened project
-            var db = new EditorAssetDatabase(Project.Current!);
+            var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
 
             // Load project settings

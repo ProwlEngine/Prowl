@@ -18,9 +18,9 @@ namespace Prowl.Editor;
 /// Central asset database for the editor. Manages the full asset lifecycle: scanning, importing,
 /// caching, file watching.
 /// </summary>
-public class EditorAssetDatabase : AssetDatabaseBase
+public class EditorAssetBackend : AssetBackendBase
 {
-    public static EditorAssetDatabase? Instance { get; private set; }
+    public static EditorAssetBackend? Instance { get; private set; }
 
     private readonly Project _project;
     // Concurrent so the background AssetLoader thread can read entries / write loaded assets
@@ -54,7 +54,7 @@ public class EditorAssetDatabase : AssetDatabaseBase
     public event Action<string[]>? OnAssetsDeleted;
     public event Action<string, string>? OnAssetMoved;
 
-    public EditorAssetDatabase(Project project)
+    public EditorAssetBackend(Project project)
     {
         _project = project;
     }

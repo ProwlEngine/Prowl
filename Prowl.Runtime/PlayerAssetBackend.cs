@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// Asset database for built standalone players.
 /// Loads binary Echo cache files from loose files, ProwlPak archives, or embedded resources.
 /// </summary>
-public class PlayerAssetDatabase : AssetDatabaseBase
+public class PlayerAssetBackend : AssetBackendBase
 {
     private readonly AssetPackagingMode _mode;
     private readonly string _basePath;
@@ -24,7 +24,7 @@ public class PlayerAssetDatabase : AssetDatabaseBase
     public Dictionary<string, Guid> ResourcesMap { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Guid DefaultSceneGuid { get; private set; }
 
-    public PlayerAssetDatabase(AssetPackagingMode mode, string basePath = "Content")
+    public PlayerAssetBackend(AssetPackagingMode mode, string basePath = "Content")
     {
         _mode = mode;
         _basePath = Path.Combine(Application.DataPath, basePath);

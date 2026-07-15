@@ -623,11 +623,11 @@ public static class PackageImportDialog
         Close();
 
         // Trigger asset database rescan to pick up the new/changed files
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db != null)
         {
             // Reinitialize to pick up all changes
-            var freshDb = new EditorAssetDatabase(project);
+            var freshDb = new EditorAssetBackend(project);
             freshDb.Initialize();
         }
 

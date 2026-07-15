@@ -68,7 +68,7 @@ public class AssetDatabasePanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null)
         {
             EditorGUI.EmptyState(paper, "adb_none", "No project open.", font);
@@ -89,7 +89,7 @@ public class AssetDatabasePanel : DockPanel
         }
     }
 
-    private void RebuildRows(EditorAssetDatabase db)
+    private void RebuildRows(EditorAssetBackend db)
     {
         _totalCount = 0; _idleCount = 0; _lockedCount = 0;
 
@@ -102,7 +102,7 @@ public class AssetDatabasePanel : DockPanel
         foreach (var (guid, asset) in db.GetLoadedAssets())
         {
             _totalCount++;
-            bool idle = AssetDatabase.IsIdle(guid, EditorAssetDatabase.IdleTimeout);
+            bool idle = AssetDatabase.IsIdle(guid, EditorAssetBackend.IdleTimeout);
             bool locked = AssetDatabase.IsLocked(guid);
             if (idle) _idleCount++;
             if (locked) _lockedCount++;
@@ -164,7 +164,7 @@ public class AssetDatabasePanel : DockPanel
         });
     }
 
-    private void DrawToolbar(Paper paper, FontFile font, EditorAssetDatabase db)
+    private void DrawToolbar(Paper paper, FontFile font, EditorAssetBackend db)
     {
         using (paper.Column("adb_tb_col").Height(65).Enter())
         {
@@ -186,7 +186,7 @@ public class AssetDatabasePanel : DockPanel
                 EditorGUI.StatChip(paper, "adb_chip_total", $"Loaded: {_totalCount}", font);
                 EditorGUI.StatChip(paper, "adb_chip_idle", $"Idle: {_idleCount}", font);
                 EditorGUI.StatChip(paper, "adb_chip_locked", $"Locked: {_lockedCount}", font);
-                EditorGUI.StatChip(paper, "adb_chip_timeout", $"Timeout: {EditorAssetDatabase.IdleTimeout.TotalSeconds:0}s", font);
+                EditorGUI.StatChip(paper, "adb_chip_timeout", $"Timeout: {EditorAssetBackend.IdleTimeout.TotalSeconds:0}s", font);
             }
             EditorGUI.Divider(paper, "adb_tb_div");
         }

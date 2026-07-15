@@ -19,7 +19,7 @@ public static class AssetDatabase
 
     /// <summary>The current asset database implementation. Set this before serializing/deserializing
     /// objects that contain asset references.</summary>
-    public static AssetDatabaseBase? Current { get; set; }
+    public static AssetBackendBase? Current { get; set; }
 
     /// <summary>Resolves an asset by ID. Checks built-in assets first, then the current database.</summary>
     public static EngineObject? Get(Guid assetId)
