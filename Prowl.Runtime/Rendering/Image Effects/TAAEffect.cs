@@ -103,8 +103,8 @@ public sealed class TAAEffect : ImageEffect
         int w = context.Width;
         int h = context.Height;
         
-        // Use high-precision floating point format (typically RGBA16F) to keep depth precision in alpha channel
-        var format = context.SceneColor.MainTexture.ImageFormat;
+        // Use high-precision floating point format to keep depth precision in alpha channel
+        TextureImageFormat format = TextureImageFormat.Float4;
 
         // Invalidate history if resolution changed
         if (_history != null && (_history.Width != w || _history.Height != h))
@@ -142,11 +142,11 @@ public sealed class TAAEffect : ImageEffect
 
         // Store resolved result (with depth packed in the alpha channel) as history for next frame
         cmd.Blit(resolved, _history, null, 0);
-        _historyValid = true;
 
         // Copy resolved back to scene color
         cmd.Blit(resolved, context.SceneColor, null, 0);
         Graphics.Submit(cmd);
+        _historyValid = true;
         RenderTexture.ReleaseTemporaryRT(resolved);
     }
 

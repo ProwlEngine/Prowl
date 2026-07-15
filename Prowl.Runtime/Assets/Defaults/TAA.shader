@@ -127,19 +127,19 @@ Pass "Resolve"
             // Unjittered UV for sampling the current frame's center properly
             vec2 unjitteredTexCoords = TexCoords - jitterUV;
 
-            vec3 current = texture(_MainTex, TexCoords).rgb;
+            vec3 current = texture(_MainTex, unjitteredTexCoords).rgb;
 
             // This pixel's surface depth (linear) is stored in the history alpha for the disocclusion check next frame
-            float centerLin = LinearizeDepth(texture(_CameraDepthTexture, TexCoords).r, _NearPlane, _FarPlane);
+            float centerLin = LinearizeDepth(texture(_CameraDepthTexture, unjitteredTexCoords).r, _NearPlane, _FarPlane);
 
             // Closest depth in a 3x3 neighborhood -> stable motion-vector selection (reduces silhouette ghosting)
             float closestDepth = 1.0;
-            vec2 closestUV = TexCoords;
+            vec2 closestUV = unjitteredTexCoords;
             for (int y = -1; y <= 1; ++y)
             {
                 for (int x = -1; x <= 1; ++x)
                 {
-                    vec2 s = TexCoords + vec2(float(x), float(y)) * texelSize;
+                    vec2 s = unjitteredTexCoords + vec2(float(x), float(y)) * texelSize;
                     float d = texture(_CameraDepthTexture, s).r;
                     if (d < closestDepth)
                     {
@@ -150,7 +150,7 @@ Pass "Resolve"
             }
 
             vec2 motion = texture(_MotionVectorsTex, closestUV).rg;
-            vec2 historyUV = TexCoords - motion;
+            vec2 historyUV = unjitteredTexCoords - motion;
 
             // Fallback if no valid history or coordinates are out of bounds
             if (_HistoryValid < 0.5 || any(lessThan(historyUV, vec2(0.0))) || any(greaterThan(historyUV, vec2(1.0))))
@@ -166,7 +166,7 @@ Pass "Resolve"
             {
                 float linCur = LinearizeDepth(closestDepth, _NearPlane, _FarPlane);
                 float relDiff = abs(linCur - linPrev) / max(min(linCur, linPrev), 0.001);
-                if (relDiff > 0.1) // 10% tolerance threshold
+                if (relDiff > 0.03)
                 {
                     OutputColor = vec4(current, centerLin);
                     return;
@@ -199,7 +199,7 @@ Pass "Resolve"
 
             // Blend: drop history as motion grows to avoid blurring fast motion
             float motionMag = clamp(length(motion) * _MotionScale, 0.0, 1.0);
-            float blend = _BlendFactor * (1.0 - 0.5 * motionMag);
+            float blend = clamp(_BlendFactor * (1.0 - 0.5 * motionMag), 0.0, 0.99);
 
             vec3 result = YCoCgToRGB(mix(curY, histY, blend));
             result = max(result, vec3(0.0));

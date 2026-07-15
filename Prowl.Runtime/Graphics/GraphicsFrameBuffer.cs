@@ -51,12 +51,19 @@ public unsafe class GraphicsFrameBuffer
 
     public GraphicsFrameBuffer(Attachment[] attachments, uint width, uint height)
     {
-        int numTextures = attachments.Length;
-        if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
-            throw new Exception("[FrameBuffer] Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
+        int colorAttachments = 0;
+
+        foreach (ref readonly Attachment attachment in attachments.AsSpan())
+        {
+            if (!attachment.IsDepth)
+                colorAttachments++;
+        }
+
+        if (colorAttachments < 0 || colorAttachments > Graphics.MaxFramebufferColorAttachments)
+            throw new Exception("[FrameBuffer] Invalid number of color attachments! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
 
         _attachments = attachments;
-        NumOfAttachments = (uint)numTextures;
+        NumOfAttachments = (uint)colorAttachments;
         Width = width;
         Height = height;
         Handle = 0;
@@ -78,26 +85,40 @@ public unsafe class GraphicsFrameBuffer
 
         Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, Handle);
 
-        int numTextures = (int)NumOfAttachments;
-        if (numTextures > 0)
+        int colorIndex = 0;
+
+        for (int i = 0; i < _attachments.Length; i++)
         {
-            for (int i = 0; i < numTextures; i++)
+            ref readonly Attachment a = ref _attachments[i];
+
+            if (!a.IsDepth)
             {
-                ref readonly Attachment a = ref _attachments[i];
-                if (!a.IsDepth)
-                {
-                    TextureTarget colorTarget = a.IsCubeFace
-                        ? TextureTarget.TextureCubeMapPositiveX + a.CubeFace
-                        : a.Texture!.Target;
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, colorTarget, a.Texture!.Handle, a.MipLevel);
-                }
-                else
-                {
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, a.Texture!.Handle, a.MipLevel);
-                }
+                TextureTarget colorTarget = a.IsCubeFace
+                    ? TextureTarget.TextureCubeMapPositiveX + a.CubeFace
+                    : a.Texture!.Target;
+
+                Graphics.GL.FramebufferTexture2D(
+                    FramebufferTarget.Framebuffer,
+                    FramebufferAttachment.ColorAttachment0 + colorIndex,
+                    colorTarget,
+                    a.Texture!.Handle,
+                    a.MipLevel);
+
+                colorIndex++;
             }
-            Graphics.GL.DrawBuffers((uint)numTextures, buffers);
+            else
+            {
+                Graphics.GL.FramebufferTexture2D(
+                    FramebufferTarget.Framebuffer,
+                    FramebufferAttachment.DepthAttachment,
+                    TextureTarget.Texture2D,
+                    a.Texture!.Handle,
+                    a.MipLevel);
+            }
         }
+
+        if (colorIndex > 0)
+            Graphics.GL.DrawBuffers((uint)colorIndex, buffers);
 
         if (Graphics.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
             throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
