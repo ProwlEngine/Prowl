@@ -15,10 +15,10 @@ using Prowl.Editor.Projects;
 namespace Prowl.Editor;
 
 /// <summary>
-/// Central asset database for the editor. Implements the runtime's IAssetDatabase interface.
-/// Manages the full asset lifecycle: scanning, importing, caching, file watching.
+/// Central asset database for the editor. Manages the full asset lifecycle: scanning, importing,
+/// caching, file watching.
 /// </summary>
-public class EditorAssetDatabase : IAssetDatabase
+public class EditorAssetDatabase : AssetDatabaseBase
 {
     public static EditorAssetDatabase? Instance { get; private set; }
 
@@ -27,26 +27,10 @@ public class EditorAssetDatabase : IAssetDatabase
     // while the main thread imports/scans. (_pathToGuid is main-thread-only the loader never touches it.)
     private readonly ConcurrentDictionary<Guid, AssetEntry> _guidToEntry = new();
     private readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
-    // Strongly held: an asset stays loaded until something explicitly disposes it - either direct
-    // user code, or the idle-timeout sweep (see MaybeSweepIdle) collecting a GUID nothing has
-    // touched (via AssetRef.Res/.Touch, AssetDatabase.Touch, or EngineObject.EnsureNotDisposed) in
-    // a while. Always go through TryGetLoaded/SetLoaded rather than touching this directly, so every
-    // access point consistently records activity.
-    private readonly ConcurrentDictionary<Guid, EngineObject> _loadedAssets = new();
     private readonly ConcurrentDictionary<Guid, (Guid parentGuid, int index)> _subAssetIndex = new();
-    // How long a GUID can go untouched before the idle sweep disposes it, and how often the sweep
-    // runs (see TickIdleSweep, called once per frame from EditorApplication). A locked GUID is
-    // never swept regardless of idle time.
-    public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(60);
-    public static readonly TimeSpan IdleSweepInterval = TimeSpan.FromSeconds(5);
-    private long _lastIdleSweepTicks;
     // GPU-uploaded thumbnail cache. Main-thread-only (texture creation isn't thread-safe), same
     // as _pathToGuid every UI that shows asset thumbnails shares this instead of keeping its own.
     private readonly Dictionary<Guid, Runtime.Resources.Texture2D?> _thumbnailTextures = new();
-    // Per-thread re-entrancy guard that breaks dependency/sub-asset cycles during deserialize.
-    [ThreadStatic] private static HashSet<Guid>? _loadingStack;
-    // Serializes the deserialize body so concurrent loads of the same asset collapse onto one.
-    private readonly object _loadLock = new();
     // Importing (and the file writes / GPU work it implies) stays on the main thread; the
     // background loader only deserializes already-imported on-disk cache files.
     private int _mainThreadId = -1;
@@ -83,7 +67,7 @@ public class EditorAssetDatabase : IAssetDatabase
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
-        // A sub-asset never loads except as a side effect of loading its parent (see GetInternal), so
+        // A sub-asset never loads except as a side effect of loading its parent (see LoadFresh), so
         // resolve it to its parent's GUID for touch/idle/lock purposes too - the whole family is one
         // atomic unit.
         AssetDatabase.ResolveFamily = guid =>
@@ -197,113 +181,10 @@ public class EditorAssetDatabase : IAssetDatabase
     }
 
     // ================================================================
-    //  IAssetDatabase
+    //  Asset Loading
     // ================================================================
 
-    /// <summary>Resolve a loaded asset by GUID if it's present and not disposed. The only valid way
-    /// to read <see cref="_loadedAssets"/> - go through this rather than the dictionary directly so
-    /// every successful resolve consistently records activity.</summary>
-    private bool TryGetLoaded(Guid guid, out EngineObject obj)
-    {
-        if (_loadedAssets.TryGetValue(guid, out var found) && found != null && !found.IsDisposed)
-        {
-            obj = found;
-            AssetDatabase.Touch(guid);
-            return true;
-        }
-        obj = null!;
-        return false;
-    }
-
-    /// <summary>Cache a freshly resolved asset instance by GUID. Strongly held until explicitly
-    /// disposed or idle-swept - see <see cref="_loadedAssets"/>.</summary>
-    private void SetLoaded(Guid guid, EngineObject obj)
-    {
-        _loadedAssets[guid] = obj;
-        AssetDatabase.Touch(guid);
-    }
-
-    /// <summary>UTC time the idle sweep last actually ran (not merely checked its gate). Diagnostic-only.</summary>
-    public DateTime LastSweepUtc => new(Interlocked.Read(ref _lastIdleSweepTicks), DateTimeKind.Utc);
-
-    /// <summary>Dispose and drop every GUID that's gone untouched for <see cref="IdleTimeout"/> and
-    /// isn't locked. Gated to run at most once per <see cref="IdleSweepInterval"/>.</summary>
-    private void MaybeSweepIdle()
-    {
-        var now = DateTime.UtcNow;
-        long last = Interlocked.Read(ref _lastIdleSweepTicks);
-        if (now.Ticks - last < IdleSweepInterval.Ticks) return;
-        if (Interlocked.CompareExchange(ref _lastIdleSweepTicks, now.Ticks, last) != last) return;
-
-        foreach (var kv in _loadedAssets)
-        {
-            Guid guid = kv.Key;
-            if (AssetDatabase.IsLocked(guid)) continue;
-            if (!AssetDatabase.IsIdle(guid, IdleTimeout)) continue;
-
-            if (_loadedAssets.TryRemove(guid, out var obj))
-            {
-                try { obj.Dispose(); } catch (Exception ex) { Runtime.Debug.LogWarning($"Error disposing idle asset {guid}: {ex.Message}"); }
-                AssetDatabase.Forget(guid);
-            }
-        }
-    }
-
-    /// <summary>Run an idle sweep immediately, bypassing <see cref="IdleSweepInterval"/>'s gate - used
-    /// by the Asset Database panel's manual "Sweep Now" action, and by tests via
-    /// <see cref="AssetDatabase.ForceIdle"/>.</summary>
-    public void ForceIdleSweep()
-    {
-        Interlocked.Exchange(ref _lastIdleSweepTicks, 0);
-        MaybeSweepIdle();
-    }
-
-    /// <summary>
-    /// Give the idle sweep a chance to run. Called once per frame from EditorApplication - cheap to
-    /// call that often since MaybeSweepIdle's own gate means the actual scan only happens once per
-    /// IdleSweepInterval regardless of how often this is called.
-    /// </summary>
-    public void TickIdleSweep() => MaybeSweepIdle();
-
-    public EngineObject? Get(Guid assetId)
-    {
-        if (assetId == Guid.Empty) return null;
-
-        // Check in-memory cache (covers both main assets and sub-assets). Lock-free.
-        if (TryGetLoaded(assetId, out var loaded))
-            return loaded;
-
-        // Per-thread re-entrancy guard: prevents infinite recursion when deserializing
-        // assets that reference each other or their own sub-assets.
-        var stack = _loadingStack ??= new HashSet<Guid>();
-        if (!stack.Add(assetId))
-            return null; // Already loading this asset higher up the call stack
-
-        try
-        {
-            // Serialize the deserialize/import so concurrent callers (background loader +
-            // main/render thread in sync mode) don't double-load; the loser picks up the cache.
-            lock (_loadLock)
-            {
-                if (TryGetLoaded(assetId, out loaded))
-                    return loaded;
-                return GetInternal(assetId);
-            }
-        }
-        finally
-        {
-            stack.Remove(assetId);
-        }
-    }
-
-    /// <summary>Non-blocking cache peek (no deserialize, no import). Safe from any thread.</summary>
-    public EngineObject? GetCached(Guid assetId)
-    {
-        if (assetId == Guid.Empty) return null;
-        return TryGetLoaded(assetId, out var c) ? c : null;
-    }
-
-    private EngineObject? GetInternal(Guid assetId)
+    protected override EngineObject? LoadFresh(Guid assetId)
     {
         // Importing writes files / creates GPU resources and mutates the index, so it must run
         // on the main thread. The background loader only deserializes existing cache files; if a
@@ -1058,19 +939,6 @@ public class EditorAssetDatabase : IAssetDatabase
 
     public DependencyGraph Dependencies => _dependencies;
     public string ThumbnailsPath => _project.ThumbnailsPath;
-
-    /// <summary>Get an already-loaded asset from memory without triggering import. Returns null if not loaded.</summary>
-    public EngineObject? GetLoadedAsset(Guid guid) => TryGetLoaded(guid, out var obj) ? obj : null;
-
-    /// <summary>Snapshot of every currently-resident (main + sub-asset) GUID and its loaded instance,
-    /// for diagnostics (e.g. the Asset Database panel) - not a live view, and reading it does not
-    /// itself count as activity (unlike Get/GetCached).</summary>
-    public IEnumerable<(Guid Guid, EngineObject Asset)> GetLoadedAssets()
-    {
-        foreach (var kv in _loadedAssets)
-            if (kv.Value != null && !kv.Value.IsDisposed)
-                yield return (kv.Key, kv.Value);
-    }
 
     /// <summary>
     /// Clear the cache for <see cref="_loadedAssets"/> on assembly reload so that scenes/prefabs that might hold

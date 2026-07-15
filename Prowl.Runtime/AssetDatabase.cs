@@ -10,28 +10,6 @@ using Prowl.Runtime.Resources;
 namespace Prowl.Runtime;
 
 /// <summary>
-/// Interface for resolving engine objects by their asset ID.
-/// Implement this to provide asset storage and retrieval (e.g., from disk, from a content pipeline, etc.).
-/// </summary>
-public interface IAssetDatabase
-{
-    /// <summary>
-    /// Retrieves an <see cref="EngineObject"/> by its asset ID. May block while the asset
-    /// is deserialized (and, in the editor, imported on demand). Called on the
-    /// <see cref="AssetLoader"/> background thread for async loads, and directly on the
-    /// calling thread when async loading is disabled. Returns null if not found.
-    /// </summary>
-    EngineObject? Get(Guid assetId);
-
-    /// <summary>
-    /// Non-blocking cache peek: returns the already-loaded instance for <paramref name="assetId"/>
-    /// or null if it isn't loaded yet. MUST NOT deserialize, import, or block. Safe to call
-    /// from any thread.
-    /// </summary>
-    EngineObject? GetCached(Guid assetId);
-}
-
-/// <summary>
 /// Global asset access: resolving assets by GUID, tracking activity for idle-timeout eviction,
 /// and pinning assets that must stay resident despite not being touched.
 /// </summary>
@@ -41,7 +19,7 @@ public static class AssetDatabase
 
     /// <summary>The current asset database implementation. Set this before serializing/deserializing
     /// objects that contain asset references.</summary>
-    public static IAssetDatabase? Current { get; set; }
+    public static AssetDatabaseBase? Current { get; set; }
 
     /// <summary>Resolves an asset by ID. Checks built-in assets first, then the current database.</summary>
     public static EngineObject? Get(Guid assetId)
