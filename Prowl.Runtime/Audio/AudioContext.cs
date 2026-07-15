@@ -230,25 +230,28 @@ public static class AudioContext
 
     internal static void Remove(AudioClip clip)
     {
-        if (clip.Hash == 0)
+        // Raw accessors: this runs from OnDispose(), where IsDisposed is already true, so the
+        // checked public Hash/Handle properties would themselves throw here.
+        UInt64 hash = clip.RawHash;
+        if (hash == 0)
             return;
 
         lock (clipTableLock)
         {
-            if (!audioClipRefCounts.TryGetValue(clip.Hash, out int count))
+            if (!audioClipRefCounts.TryGetValue(hash, out int count))
                 return;
 
             // Only free the shared native allocation when the last user releases it.
             if (count <= 1)
             {
-                if (audioClipHandles.TryGetValue(clip.Hash, out IntPtr handle) && handle != IntPtr.Zero)
+                if (audioClipHandles.TryGetValue(hash, out IntPtr handle) && handle != IntPtr.Zero)
                     Marshal.FreeHGlobal(handle);
-                audioClipHandles.Remove(clip.Hash);
-                audioClipRefCounts.Remove(clip.Hash);
+                audioClipHandles.Remove(hash);
+                audioClipRefCounts.Remove(hash);
             }
             else
             {
-                audioClipRefCounts[clip.Hash] = count - 1;
+                audioClipRefCounts[hash] = count - 1;
             }
         }
     }
