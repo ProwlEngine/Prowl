@@ -128,6 +128,94 @@ public static class AssetDatabase
     internal static void ForceIdle(Guid guid) => _lastTouched[Resolve(guid)] = DateTime.MinValue;
 
     #endregion
+
+    #region Locking
+
+    // Escape hatch for the idle-timeout sweep: pins an asset resident even though nothing is
+    // actively touching it. Ownership is set membership, not a ref-count, so locking the same GUID
+    // twice is idempotent and an unbalanced unlock can't leave it stuck. LockToScene releases
+    // automatically when that scene disposes; LockPermanent needs an explicit Unlock.
+    private static readonly object Permanent = new();
+    private static readonly Dictionary<Guid, HashSet<object>> _owners = new();
+    // Reverse index so a scene's disposal releases everything it locked in one pass.
+    private static readonly Dictionary<Scene, HashSet<Guid>> _sceneLocks = new();
+    private static readonly object _lockGate = new();
+
+    /// <summary>Pin a GUID's family resident for as long as <paramref name="scene"/> is loaded.
+    /// Released automatically when that scene disposes.</summary>
+    public static void LockToScene(Guid assetId, Scene scene)
+    {
+        if (assetId == Guid.Empty || scene == null) return;
+        assetId = Resolve(assetId);
+        lock (_lockGate)
+        {
+            GetOrAddOwners(assetId).Add(scene);
+            if (!_sceneLocks.TryGetValue(scene, out var guids))
+                _sceneLocks[scene] = guids = new HashSet<Guid>();
+            guids.Add(assetId);
+        }
+    }
+
+    /// <summary>Pin a GUID's family resident indefinitely, until an explicit <see cref="Unlock"/>.</summary>
+    public static void LockPermanent(Guid assetId)
+    {
+        if (assetId == Guid.Empty) return;
+        assetId = Resolve(assetId);
+        lock (_lockGate)
+            GetOrAddOwners(assetId).Add(Permanent);
+    }
+
+    /// <summary>Release a permanent lock. Scene-scoped locks release themselves automatically.</summary>
+    public static void Unlock(Guid assetId)
+    {
+        if (assetId == Guid.Empty) return;
+        assetId = Resolve(assetId);
+        lock (_lockGate)
+        {
+            if (_owners.TryGetValue(assetId, out var owners))
+            {
+                owners.Remove(Permanent);
+                if (owners.Count == 0)
+                    _owners.Remove(assetId);
+            }
+        }
+    }
+
+    /// <summary>True if anything (a scene, or a permanent lock) currently pins this GUID's family resident.</summary>
+    public static bool IsLocked(Guid guid)
+    {
+        guid = Resolve(guid);
+        lock (_lockGate)
+            return _owners.TryGetValue(guid, out var owners) && owners.Count > 0;
+    }
+
+    /// <summary>Release every lock a scene holds. Called from <see cref="Scene.OnDispose"/>.</summary>
+    internal static void ReleaseSceneLocks(Scene scene)
+    {
+        lock (_lockGate)
+        {
+            if (!_sceneLocks.Remove(scene, out var guids)) return;
+            foreach (var guid in guids)
+            {
+                if (_owners.TryGetValue(guid, out var owners))
+                {
+                    owners.Remove(scene);
+                    if (owners.Count == 0)
+                        _owners.Remove(guid);
+                }
+            }
+        }
+    }
+
+    private static HashSet<object> GetOrAddOwners(Guid guid)
+    {
+        if (!_owners.TryGetValue(guid, out var owners))
+            _owners[guid] = owners = new HashSet<object>();
+        return owners;
+    }
+
+    #endregion
+
     #region Test Helpers
 
     /// <summary>Test-only: drop all activity tracking and lock state.</summary>

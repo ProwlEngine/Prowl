@@ -570,6 +570,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (Current == this)
             Current = null;
 
+        // Scene-scoped locks auto-expire with the scene rather than leaking forever.
+        AssetDatabase.ReleaseSceneLocks(this);
+
         // Clear the physics world
         _physics.Clear();
 

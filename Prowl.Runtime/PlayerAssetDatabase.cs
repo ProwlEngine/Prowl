@@ -89,6 +89,7 @@ public class PlayerAssetDatabase : IAssetDatabase
         foreach (var kv in _cache)
         {
             Guid guid = kv.Key;
+            if (AssetDatabase.IsLocked(guid)) continue;
             if (!AssetDatabase.IsIdle(guid, IdleTimeout)) continue;
 
             if (_cache.TryRemove(guid, out var obj))

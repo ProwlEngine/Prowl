@@ -238,6 +238,7 @@ public class EditorAssetDatabase : IAssetDatabase
         foreach (var kv in _loadedAssets)
         {
             Guid guid = kv.Key;
+            if (AssetDatabase.IsLocked(guid)) continue;
             if (!AssetDatabase.IsIdle(guid, IdleTimeout)) continue;
 
             if (_loadedAssets.TryRemove(guid, out var obj))

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -155,6 +156,16 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     /// runtime resource with no AssetID.
     /// </summary>
     public void Touch() => AssetDatabase.Touch(AssetID);
+
+    /// <summary>Pin this asset resident for as long as <paramref name="scene"/> stays loaded -
+    /// released automatically when that scene disposes.</summary>
+    public void LockToScene(Scene scene) => AssetDatabase.LockToScene(AssetID, scene);
+
+    /// <summary>Pin this asset resident indefinitely, until an explicit <see cref="Unlock"/>.</summary>
+    public void LockPermanent() => AssetDatabase.LockPermanent(AssetID);
+
+    /// <summary>Release a permanent lock taken via <see cref="LockPermanent"/>.</summary>
+    public void Unlock() => AssetDatabase.Unlock(AssetID);
 
     // ================================================================
     //  Serialization stores AssetID + inline instance for runtime resources
