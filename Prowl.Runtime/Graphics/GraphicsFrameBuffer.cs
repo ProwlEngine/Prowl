@@ -93,7 +93,8 @@ public unsafe class GraphicsFrameBuffer
                 }
                 else
                 {
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, a.Texture!.Handle, a.MipLevel);
+                    // Use the texture's own target so multisampled depth attaches correctly.
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, a.Texture!.Target, a.Texture!.Handle, a.MipLevel);
                 }
             }
             Graphics.GL.DrawBuffers((uint)numTextures, buffers);

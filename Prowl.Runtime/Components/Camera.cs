@@ -85,6 +85,13 @@ public class Camera : MonoBehaviour
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
+    /// <summary>Hardware multisample anti-aliasing for the geometry passes. Unlike the
+    /// post-process AA effects (FXAA/SMAA/TAA) this antialiases at rasterization time, so it
+    /// costs memory and bandwidth rather than a fullscreen pass, and it does nothing for
+    /// shading or texture aliasing. Clamped to <see cref="Graphics.MaxSamples"/> at render
+    /// time. <see cref="Target"/> stays single-sampled MSAA is internal to the pipeline.</summary>
+    public MSAASamples MSAA = MSAASamples.None;
+
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
     private float _aspect;

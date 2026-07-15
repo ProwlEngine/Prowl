@@ -497,6 +497,15 @@ internal sealed class CommandExecutor
                     }
                     break;
                 }
+                case CommandOpcode.AllocateTexture2DMultisample:
+                {
+                    var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;
+                    uint w = ReadU32(stream, ref pos);
+                    uint h = ReadU32(stream, ref pos);
+                    int samples = ReadI32(stream, ref pos);
+                    tex.TexImage2DMultisample(w, h, samples);
+                    break;
+                }
                 case CommandOpcode.AllocateTextureCubeFace:
                 {
                     var tex = (GraphicsTexture)objects[ReadU16(stream, ref pos)]!;

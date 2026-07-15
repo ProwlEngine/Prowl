@@ -86,6 +86,7 @@ internal enum CommandOpcode : ushort
     DisposeBuffer,
     CreateTexture,
     AllocateTexture2D,
+    AllocateTexture2DMultisample,
     AllocateTexture3D,
     AllocateTextureCubeFace,
     UpdateTexture3D,
