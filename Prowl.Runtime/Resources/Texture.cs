@@ -36,12 +36,19 @@ public abstract class Texture : EngineObject
     /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
     public bool IsMipmappable => !isNotMipmappable;
 
+    /// <summary>GL sample count. 1 means a normal single-sampled texture.</summary>
+    public readonly int Samples;
+
+    /// <summary>Multisampled textures have no sampler state and cannot be read by a
+    /// <c>sampler2D</c>. They are render-target attachments only, resolved via a blit.</summary>
+    public bool IsMultisampled => Samples > 1;
+
     /// <summary>
     /// Creates a <see cref="Texture"/> with specified <see cref="TextureType"/> and <see cref="TextureImageFormat"/>.
     /// </summary>
     /// <param name="type">The type of texture (or texture target) the texture will be.</param>
     /// <param name="imageFormat">The type of image format this texture will store.</param>
-    internal Texture(TextureType type, TextureImageFormat imageFormat) : base("New Texture")
+    internal Texture(TextureType type, TextureImageFormat imageFormat, int samples = 1) : base("New Texture")
     {
         if (!Enum.IsDefined(typeof(TextureType), type))
             throw new FormatException("Invalid texture target");
@@ -52,8 +59,15 @@ public abstract class Texture : EngineObject
         Type = type;
         ImageFormat = imageFormat;
         IsMipmapped = false;
+        Samples = samples;
         isNotMipmappable = !IsTextureTypeMipmappable(type);
-        Handle = Graphics.CreateTexture(type, imageFormat);
+        Handle = Graphics.CreateTexture(type, imageFormat, samples);
+
+        // glTexParameteri raises INVALID_ENUM for any sampler state on a multisample
+        // target, so multisampled textures skip the default wrap/filter setup entirely.
+        if (IsMultisampled)
+            return;
+
         Graphics.SetWrapS(Handle, TextureWrap.Repeat);
         Graphics.SetWrapT(Handle, TextureWrap.Repeat);
         Graphics.SetTextureFilters(Handle, DefaultMinFilter, DefaultMagFilter);

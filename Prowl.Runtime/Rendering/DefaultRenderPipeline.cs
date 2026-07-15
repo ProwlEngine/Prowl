@@ -255,15 +255,26 @@ public class DefaultRenderPipeline : RenderPipeline
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);
 
+        // MSAA applies to the geometry passes only. The target is resolved back down to a
+        // normal single-sampled RT before any image effect can sample it, so everything from
+        // PostProcess onward is identical to the non-MSAA path.
+        int samples = Math.Min((int)camera.MSAA, Graphics.MaxSamples);
+        bool msaa = samples > 1;
+
+        TextureImageFormat colorFormat = isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b;
+
         // Main color render target
         RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            isHDR ? TextureImageFormat.Short4 : TextureImageFormat.Color4b,
-        ]);
+            colorFormat,
+        ], samples);
 
         // Unified prepass RT. One MRT pass writes everything depth-based effects need:
         //   depth attachment      = scene depth
         //   color 0 (Color4b)     = view-space normals
         //   color 1 (Short4)      = motion vectors (.rg) + roughness (.b) + metallic (.a)
+        // Stays single-sampled even under MSAA: these are sampled as plain sampler2D by
+        // GTAO/SSR/TAA, and resolving three attachments per frame would cost more than the
+        // per-sample depth is worth to effects that are screen-space approximations anyway.
         RenderTexture prepass = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
             TextureImageFormat.Color4b,
             TextureImageFormat.Short4,
@@ -290,14 +301,28 @@ public class DefaultRenderPipeline : RenderPipeline
         mainCmd.SetGlobalTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
 
         // Copy depth from prepass into colorRT so the opaque pass can ZTest LEqual against it.
-        mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
-        mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
-                                 0, 0, colorRT.Width, colorRT.Height,
-                                 ClearFlags.Depth, BlitFilter.Nearest);
+        // Skipped under MSAA: the prepass is single-sampled, and replicating its per-pixel depth
+        // to every sample would defeat the coverage MSAA exists to capture. Opaques regenerate
+        // correct per-sample depth on their own (RasterizerState defaults to ZWrite On / LEqual),
+        // so this blit is only an early-Z optimization. The skybox does not need it either it
+        // is ZTest Off / ZWrite Off and is simply overdrawn by the opaques.
+        if (!msaa)
+        {
+            mainCmd.SetRenderTargets(colorRT.frameBuffer, prepass.frameBuffer);
+            mainCmd.BlitFramebuffer(0, 0, prepass.Width, prepass.Height,
+                                     0, 0, colorRT.Width, colorRT.Height,
+                                     ClearFlags.Depth, BlitFilter.Nearest);
+        }
 
         // Switch back to colorRT for the opaque draws.
         mainCmd.SetRenderTarget(colorRT.frameBuffer);
         mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+
+        // With the depth blit skipped, nothing else initializes depth. This has to sit outside
+        // the switch below: the Depth and Nothing branches never clear at all, and colorRT is
+        // pooled, so they would otherwise inherit stale depth from last frame's tenant.
+        if (msaa)
+            mainCmd.ClearRenderTarget(ClearFlags.Depth, default);
 
         // Camera clear flags
         switch (camera.ClearFlags)
@@ -314,22 +339,25 @@ public class DefaultRenderPipeline : RenderPipeline
                 mainCmd.ClearRenderTarget(ClearFlags.Color, camera.ClearColor);
                 break;
             case CameraClearFlags.Depth:
-                if (target.IsValid())
-                {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
-                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                }
-                break;
             case CameraClearFlags.Nothing:
                 if (target.IsValid())
                 {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
-                                            0, 0, colorRT.Width, colorRT.Height,
-                                            ClearFlags.Color, BlitFilter.Nearest);
+                    if (msaa)
+                    {
+                        // A framebuffer blit involving a multisampled target cannot scale, and
+                        // RenderScale routinely makes target and colorRT different sizes. Copy
+                        // with a fullscreen quad instead pass 1 of the blit shader is Blend Off,
+                        // so target's color replaces rather than blends, and it is ZWrite Off so
+                        // the depth cleared above survives.
+                        mainCmd.Blit(target, colorRT, GetBlitMaterial(), 1);
+                    }
+                    else
+                    {
+                        mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
+                        mainCmd.BlitFramebuffer(0, 0, target.Width, target.Height,
+                                                0, 0, colorRT.Width, colorRT.Height,
+                                                ClearFlags.Color, BlitFilter.Nearest);
+                    }
                     mainCmd.SetRenderTarget(colorRT.frameBuffer);
                 }
                 break;
@@ -349,17 +377,43 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderStats.BeginPostFx();
         if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
         {
+            // These effects read and write SceneColor through a sampler2D, which a multisampled
+            // buffer cannot be. Resolve a copy for them to work on, then put the result back into
+            // the multisampled target so the transparents below still rasterize with real coverage
+            // against the live multisampled depth buffer. Replicating the resolved average across
+            // every sample does not lose the opaque edge AA already baked into it resolving
+            // uniform samples again is a no-op.
+            RenderTexture effectRT = colorRT;
+            if (msaa)
+            {
+                effectRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [colorFormat]);
+                using var resolveCmd = Graphics.GetCommandBuffer("MSAAResolveAfterOpaques");
+                resolveCmd.ResolveMultisample(colorRT, effectRT);
+                Graphics.Submit(resolveCmd);
+            }
+
             var afterContext = new RenderContext
             {
                 DepthNormals = prepass,
                 MotionVectors = prepass.InternalTextures[1],
-                SceneColor = colorRT,
+                SceneColor = effectRT,
                 Camera = camera,
                 Width = (int)css.PixelWidth,
                 Height = (int)css.PixelHeight,
                 CurrentStage = RenderStage.AfterOpaques
             };
             ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
+
+            if (msaa)
+            {
+                using (var restoreCmd = Graphics.GetCommandBuffer("MSAARestoreAfterOpaques"))
+                {
+                    // Pass 1 is Blend Off / ZWrite Off: replaces color, leaves MS depth alone.
+                    restoreCmd.Blit(effectRT, colorRT, GetBlitMaterial(), 1);
+                    Graphics.Submit(restoreCmd);
+                }
+                RenderTexture.ReleaseTemporaryRT(effectRT);
+            }
         }
         RenderStats.EndPostFx();
 
@@ -375,6 +429,23 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderUIQueue(css, colorRT, UISurface.World, data);
 
         RenderStats.EndColorPass();
+
+        // ─── MSAA resolve ───
+        // Placed after the last geometry (transparents + world-space UI) so all of it is
+        // antialiased, and before anything samples the scene color. Everything downstream
+        // post-process effects, gizmos, the final blit then sees an ordinary single-sampled
+        // target and behaves exactly as it does with MSAA off.
+        if (msaa)
+        {
+            RenderTexture resolved = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [colorFormat]);
+            using (var resolveCmd = Graphics.GetCommandBuffer("MSAAResolve"))
+            {
+                resolveCmd.ResolveMultisample(colorRT, resolved);
+                Graphics.Submit(resolveCmd);
+            }
+            RenderTexture.ReleaseTemporaryRT(colorRT);
+            colorRT = resolved;
+        }
 
         // ─── PostProcess image effects ───
         RenderStats.BeginPostFx();

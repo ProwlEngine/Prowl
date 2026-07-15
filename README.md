@@ -121,6 +121,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
         - Cascaded Shadow Maps for Directional Lights (up to 4 cascades)
         - Cubemap Shadows for Point Lights
         - Shadow Atlas with Dynamic Packing
+    - MSAA (2x/4x/8x hardware multisampling, per-camera)
     - Post Processing
         - HDR Tonemapping (ACES / Reinhard / Uncharted / Filmic / Melon / AgX)
         - Bloom (dual-filter downsample/upsample)

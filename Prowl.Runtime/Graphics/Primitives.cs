@@ -5,7 +5,11 @@ using System;
 namespace Prowl.Runtime;
 
 public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
-public enum TextureType { Texture2D, Texture3D, TextureCubeMap, }
+public enum TextureType { Texture2D, Texture3D, TextureCubeMap, Texture2DMultisample, }
+
+/// <summary>Multisample anti-aliasing rate for a <see cref="Camera"/>. Values are the
+/// literal GL sample count, so casting to int gives the number to allocate with.</summary>
+public enum MSAASamples { None = 1, X2 = 2, X4 = 4, X8 = 8 }
 public enum TextureParameter { WrapS, WrapT, WrapR, MinFilter, MagFilter }
 public enum TextureMin { Nearest, Linear, NearestMipmapNearest, LinearMipmapNearest, NearestMipmapLinear, LinearMipmapLinear }
 public enum TextureMag { Nearest, Linear }

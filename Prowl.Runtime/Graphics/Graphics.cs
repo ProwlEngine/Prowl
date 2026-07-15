@@ -27,6 +27,10 @@ public static unsafe class Graphics
     public static int MaxArrayTextureLayers { get; internal set; } = 2048;
     public static int MaxFramebufferColorAttachments { get; internal set; } = 8;
 
+    /// <summary>Highest MSAA sample count usable for both color and depth render target
+    /// attachments. GL 4.1 guarantees at least 4.</summary>
+    public static int MaxSamples { get; internal set; } = 4;
+
     public static GL GL;
 
     /// <summary>
@@ -153,10 +157,20 @@ public static unsafe class Graphics
         // and prefiltered-environment sampling.
         GL.Enable(EnableCap.TextureCubeMapSeamless);
 
+        // Only has any effect while the bound draw framebuffer is multisampled, so this
+        // cannot alter single-sampled rendering. Enabled by default per spec; explicit here.
+        GL.Enable(EnableCap.Multisample);
+
         MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
         MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
         MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
         MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+
+        // A render target needs its color and depth attachments to agree on sample count,
+        // and float color formats can cap lower than MAX_SAMPLES, so take the floor of all three.
+        MaxSamples = Math.Min(GL.GetInteger(GLEnum.MaxSamples),
+                     Math.Min(GL.GetInteger(GLEnum.MaxColorTextureSamples),
+                              GL.GetInteger(GLEnum.MaxDepthTextureSamples)));
     }
 
     public static void StartRenderThread()
@@ -286,8 +300,8 @@ public static unsafe class Graphics
     public static GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments, uint width, uint height)
         => new GraphicsFrameBuffer(attachments, width, height);
 
-    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format)
-        => new GraphicsTexture(type, format);
+    public static GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format, int samples = 1)
+        => new GraphicsTexture(type, format, samples);
 
     public static GraphicsProgram CompileProgram(string fragment, string vertex, string geometry)
         => new GraphicsProgram(fragment, vertex, geometry);
@@ -347,6 +361,15 @@ public static unsafe class Graphics
         ReadOnlySpan<byte> span = data != null ? new ReadOnlySpan<byte>(data, size) : ReadOnlySpan<byte>.Empty;
         using var cmd = GetCommandBuffer("Texture.TexImage2D");
         cmd.EncodeAllocateTexture2D(texture, mip, width, height, border, span);
+        Submit(cmd);
+    }
+
+    /// <summary>Allocate multisampled storage for a render-target attachment. There is no
+    /// data parameter multisampled textures can only be rendered into.</summary>
+    public static void TexImage2DMultisample(GraphicsTexture texture, uint width, uint height, int samples)
+    {
+        using var cmd = GetCommandBuffer("Texture.TexImage2DMultisample");
+        cmd.EncodeAllocateTexture2DMultisample(texture, width, height, samples);
         Submit(cmd);
     }
 

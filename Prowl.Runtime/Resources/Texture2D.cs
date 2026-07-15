@@ -12,7 +12,8 @@ namespace Prowl.Runtime.Resources;
 
 
 /// <summary>
-/// A <see cref="Texture"/> whose image has two dimensions and support for multisampling.
+/// A <see cref="Texture"/> whose image has two dimensions. Single-sampled by default;
+/// the <c>samples</c> constructor makes a multisampled render-target attachment instead.
 /// </summary>
 public sealed class Texture2D : Texture, ISerializable
 {
@@ -42,6 +43,27 @@ public sealed class Texture2D : Texture, ISerializable
         Graphics.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
         MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
         MagFilter = DefaultMagFilter;
+    }
+
+    /// <summary>
+    /// Creates a multisampled <see cref="Texture2D"/> for use as a render target attachment.
+    /// It cannot be sampled, uploaded to, mipmapped, or given sampler state it exists only
+    /// to be rendered into and resolved with <see cref="Prowl.Runtime.CommandBuffer.ResolveMultisample"/>.
+    /// </summary>
+    /// <param name="width">The width of the <see cref="Texture2D"/>.</param>
+    /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
+    /// <param name="samples">GL sample count. Must be greater than 1.</param>
+    /// <param name="imageFormat">The image format for this <see cref="Texture2D"/>.</param>
+    public Texture2D(uint width, uint height, int samples, TextureImageFormat imageFormat)
+        : base(TextureType.Texture2DMultisample, imageFormat, samples)
+    {
+        if (samples <= 1)
+            throw new ArgumentOutOfRangeException(nameof(samples), samples, "Use the single-sampled constructor for a sample count of 1.");
+
+        ValidateTextureSize(width, height);
+        Width = width;
+        Height = height;
+        Graphics.TexImage2DMultisample(Handle, width, height, samples);
     }
 
     /// <summary>

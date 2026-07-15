@@ -25,7 +25,14 @@ public unsafe class GraphicsTexture : IDisposable
     /// <summary>The format of the pixel data.</summary>
     public readonly PixelFormat PixelFormat;
 
-    public GraphicsTexture(TextureType type, TextureImageFormat format)
+    /// <summary>GL sample count. 1 means a normal single-sampled texture.</summary>
+    public readonly int Samples;
+
+    /// <summary>Multisampled textures have no sampler state and cannot be read by a
+    /// <c>sampler2D</c> they exist only to be rendered into and resolved via a blit.</summary>
+    public bool IsMultisampled => Samples > 1;
+
+    public GraphicsTexture(TextureType type, TextureImageFormat format, int samples = 1)
     {
         Type = type;
         Target = type switch
@@ -33,8 +40,10 @@ public unsafe class GraphicsTexture : IDisposable
             TextureType.Texture2D => TextureTarget.Texture2D,
             TextureType.Texture3D => TextureTarget.Texture3D,
             TextureType.TextureCubeMap => TextureTarget.TextureCubeMap,
+            TextureType.Texture2DMultisample => TextureTarget.Texture2DMultisample,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
         };
+        Samples = samples;
         GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
         Handle = 0;
 
@@ -50,12 +59,14 @@ public unsafe class GraphicsTexture : IDisposable
 
     public void GenerateMipmap()
     {
+        if (IsMultisampled) return;
         Bind(false);
         Graphics.GL.GenerateMipmap(Target);
     }
 
     public void SetWrapS(TextureWrap wrap)
     {
+        if (IsMultisampled) return;
         Bind(false);
         GLEnum wrapMode = wrap switch
         {
@@ -70,6 +81,7 @@ public unsafe class GraphicsTexture : IDisposable
 
     public void SetWrapT(TextureWrap wrap)
     {
+        if (IsMultisampled) return;
         Bind(false);
         GLEnum wrapMode = wrap switch
         {
@@ -84,6 +96,7 @@ public unsafe class GraphicsTexture : IDisposable
 
     public void SetWrapR(TextureWrap wrap)
     {
+        if (IsMultisampled) return;
         Bind(false);
         GLEnum wrapMode = wrap switch
         {
@@ -98,6 +111,7 @@ public unsafe class GraphicsTexture : IDisposable
 
     public void SetTextureFilters(TextureMin min, TextureMag mag)
     {
+        if (IsMultisampled) return;
         Bind(false);
         GLEnum minFilter = min switch
         {
@@ -126,6 +140,7 @@ public unsafe class GraphicsTexture : IDisposable
     /// </summary>
     public void SetCompareMode(bool enabled)
     {
+        if (IsMultisampled) return;
         Bind(false);
         if (enabled)
         {
@@ -174,6 +189,16 @@ public unsafe class GraphicsTexture : IDisposable
     {
         Bind(false);
         Graphics.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, PixelType, data);
+    }
+
+    /// <summary>Allocate multisampled storage. There is no data pointer multisampled
+    /// textures cannot be uploaded to, only rendered into. <c>fixedsamplelocations</c> is
+    /// true because every attachment of one framebuffer must agree on it.</summary>
+    public void TexImage2DMultisample(uint width, uint height, int samples)
+    {
+        Bind(false);
+        Graphics.GL.TexImage2DMultisample(TextureTarget.Texture2DMultisample, (uint)samples,
+            PixelInternalFormat, width, height, true);
     }
 
     public void TexImage3D(TextureTarget type, int level, uint width, uint height, uint depth, void* data)

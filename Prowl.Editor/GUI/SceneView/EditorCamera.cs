@@ -267,6 +267,7 @@ public class EditorCamera
         _camera.Effects.Clear();
         _camera.Effects.AddRange(_clonedEffects);
         _camera.HDR = sceneCamera.HDR;
+        _camera.MSAA = sceneCamera.MSAA;
     }
 
     /// <summary>

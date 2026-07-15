@@ -173,6 +173,28 @@ public sealed class CommandBuffer : IDisposable
         Write((byte)filter);
     }
 
+    /// <summary>Resolve a multisampled <see cref="RenderTexture"/> down to a single-sampled
+    /// one so it can be sampled by a shader. GL forbids scaling on any blit involving a
+    /// multisampled framebuffer, so mismatched sizes are rejected here rather than left to
+    /// raise INVALID_OPERATION on the render thread. Depth is resolved too when both sides
+    /// carry it (GL picks a single sample, which is what depth-testing gizmos expect).</summary>
+    public void ResolveMultisample(RenderTexture source, RenderTexture destination)
+    {
+        if (source.Width != destination.Width || source.Height != destination.Height)
+            throw new ArgumentException(
+                $"Multisample resolve requires identical dimensions, got {source.Width}x{source.Height} -> {destination.Width}x{destination.Height}.");
+
+        SetRenderTargets(destination.frameBuffer, source.frameBuffer);
+        BlitFramebuffer(0, 0, source.Width, source.Height,
+                        0, 0, destination.Width, destination.Height,
+                        ClearFlags.Color, BlitFilter.Nearest);
+
+        if (source.InternalDepth != null && destination.InternalDepth != null)
+            BlitFramebuffer(0, 0, source.Width, source.Height,
+                            0, 0, destination.Width, destination.Height,
+                            ClearFlags.Depth, BlitFilter.Nearest);
+    }
+
     // ─────────────────────── Pipeline state ───────────────────────
 
     public void SetRasterState(in RasterizerState state)
@@ -568,7 +590,13 @@ public sealed class CommandBuffer : IDisposable
     {
         material ??= Rendering.RenderPipeline.GetBlitMaterial();
         if (source != null)
+        {
+            // MainTexture is typed Texture2D either way, so nothing else would stop a
+            // multisampled attachment being bound to a sampler2D and rendering garbage.
+            if (source.IsMultisampled)
+                throw new InvalidOperationException("Cannot Blit from a multisampled RenderTexture; resolve it first with ResolveMultisample.");
             material.SetTexture("_MainTex", source.MainTexture);
+        }
 
         if (destination != null && destination.IsValid())
         {
@@ -674,6 +702,17 @@ public sealed class CommandBuffer : IDisposable
         Write(border);
         var r = _store.Park(data);
         Write(in r);
+    }
+
+    /// <summary>Allocate multisampled storage for a 2D texture. No data blob is parked
+    /// multisampled textures cannot be uploaded to, only rendered into.</summary>
+    internal void EncodeAllocateTexture2DMultisample(GraphicsTexture tex, uint width, uint height, int samples)
+    {
+        WriteHeader(CommandOpcode.AllocateTexture2DMultisample);
+        Write(PushObject(tex));
+        Write(width);
+        Write(height);
+        Write(samples);
     }
 
     /// <summary>Allocate (and optionally upload) one face of a cubemap at a mip level.
