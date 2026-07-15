@@ -62,7 +62,7 @@ public class PlayerAssetBackend : AssetBackendBase
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[PlayerAssetDatabase] Failed to load asset {assetId}: {ex.Message}");
+            Debug.LogError($"[PlayerAssetBackend] Failed to load asset {assetId}: {ex.Message}");
             return null;
         }
     }
@@ -71,7 +71,7 @@ public class PlayerAssetBackend : AssetBackendBase
     public Scene? LoadScene(Guid sceneGuid)
     {
         byte[]? data = LoadRawAsset(sceneGuid);
-        if (data == null) { Debug.LogError($"[PlayerAssetDatabase] Scene not found: {sceneGuid}"); return null; }
+        if (data == null) { Debug.LogError($"[PlayerAssetBackend] Scene not found: {sceneGuid}"); return null; }
 
         try
         {
@@ -82,7 +82,7 @@ public class PlayerAssetBackend : AssetBackendBase
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[PlayerAssetDatabase] Failed to load scene {sceneGuid}: {ex.Message}");
+            Debug.LogError($"[PlayerAssetBackend] Failed to load scene {sceneGuid}: {ex.Message}");
             return null;
         }
     }
@@ -147,7 +147,7 @@ public class PlayerAssetBackend : AssetBackendBase
     {
         if (!File.Exists(manifestPath))
         {
-            Debug.LogError($"[PlayerAssetDatabase] Manifest not found: {manifestPath}");
+            Debug.LogError($"[PlayerAssetBackend] Manifest not found: {manifestPath}");
             return;
         }
 
@@ -158,7 +158,7 @@ public class PlayerAssetBackend : AssetBackendBase
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[PlayerAssetDatabase] Failed to parse manifest: {ex.Message}");
+            Debug.LogError($"[PlayerAssetBackend] Failed to parse manifest: {ex.Message}");
         }
     }
 
@@ -174,7 +174,7 @@ public class PlayerAssetBackend : AssetBackendBase
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[PlayerAssetDatabase] Failed to open pak {pakFile}: {ex.Message}");
+                Debug.LogError($"[PlayerAssetBackend] Failed to open pak {pakFile}: {ex.Message}");
             }
         }
     }
@@ -183,7 +183,7 @@ public class PlayerAssetBackend : AssetBackendBase
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         using var stream = assembly.GetManifestResourceStream("Assets._manifest.bin");
-        if (stream == null) { Debug.LogError("[PlayerAssetDatabase] Embedded manifest not found."); return; }
+        if (stream == null) { Debug.LogError("[PlayerAssetBackend] Embedded manifest not found."); return; }
 
         using var ms = new MemoryStream();
         stream.CopyTo(ms);

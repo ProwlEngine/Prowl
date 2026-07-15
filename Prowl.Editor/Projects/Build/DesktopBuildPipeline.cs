@@ -532,7 +532,7 @@ public class DesktopBuildPipeline : BuildPipeline
 
             class DesktopPlayer : Prowl.Runtime.Game
             {
-                private Prowl.Runtime.PlayerAssetDatabase? _assetDb;
+                private Prowl.Runtime.PlayerAssetBackend? _assetDb;
 
                 public override void Initialize()
                 {
@@ -554,7 +554,7 @@ public class DesktopBuildPipeline : BuildPipeline
                     Prowl.Runtime.BuiltInAssets.Initialize();
 
                     // Initialize asset database
-                    var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
+                    var db = new Prowl.Runtime.PlayerAssetBackend(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
                     Prowl.Runtime.AssetDatabase.Current = db;
                     Prowl.Runtime.GameResources.Initialize(db.ResourcesMap);
                     _assetDb = db;

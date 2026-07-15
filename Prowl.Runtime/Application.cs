@@ -46,7 +46,7 @@ public static class Application
 
     /// <summary>
     /// Directory containing the running executable (standalone) or project root (editor).
-    /// Used by PlayerAssetDatabase to locate assets relative to the executable.
+    /// Used by PlayerAssetBackend to locate assets relative to the executable.
     /// </summary>
     public static string DataPath { get; set; } = System.AppContext.BaseDirectory;
 }

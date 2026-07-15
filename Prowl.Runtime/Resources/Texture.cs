@@ -104,7 +104,7 @@ public abstract class Texture : EngineObject
     }
 
     // Safety net: once nothing references this Texture, the idle-timeout sweep in
-    // EditorAssetDatabase/PlayerAssetDatabase no longer keeps it alive either, so something must
+    // EditorAssetBackend/PlayerAssetBackend no longer keeps it alive either, so something must
     // still free the GPU handle. Handle.Dispose() only enqueues a thread-safe render-thread command
     // (see GraphicsTexture.Dispose), so calling it from the finalizer thread is safe.
     ~Texture() => Dispose();
@@ -117,4 +117,27 @@ public abstract class Texture : EngineObject
         return textureType == TextureType.Texture2D || textureType == TextureType.Texture3D
             || textureType == TextureType.TextureCubeMap;
     }
+
+    /// <summary>Bytes per texel for a given image format.</summary>
+    public static int GetBytesPerPixel(TextureImageFormat format) => format switch
+    {
+        TextureImageFormat.Color4b => 4,
+        TextureImageFormat.Byte => 1,
+
+        TextureImageFormat.Short or TextureImageFormat.UnsignedShort => 2,
+        TextureImageFormat.Short2 or TextureImageFormat.UnsignedShort2 => 4,
+        TextureImageFormat.Short3 or TextureImageFormat.UnsignedShort3 => 6,
+        TextureImageFormat.Short4 or TextureImageFormat.UnsignedShort4 => 8,
+
+        TextureImageFormat.Float or TextureImageFormat.Int or TextureImageFormat.UnsignedInt => 4,
+        TextureImageFormat.Float2 or TextureImageFormat.Int2 or TextureImageFormat.UnsignedInt2 => 8,
+        TextureImageFormat.Float3 or TextureImageFormat.Int3 or TextureImageFormat.UnsignedInt3 => 12,
+        TextureImageFormat.Float4 or TextureImageFormat.Int4 or TextureImageFormat.UnsignedInt4 => 16,
+
+        TextureImageFormat.Depth16f => 2,
+        TextureImageFormat.Depth24f or TextureImageFormat.Depth24Stencil8 => 4,
+        TextureImageFormat.Depth32f => 4,
+
+        _ => 4,
+    };
 }

@@ -40,10 +40,19 @@ public abstract class AssetBackendBase
     {
         _loadedAssets[guid] = obj;
         AssetDatabase.Touch(guid);
+        _reloadCounts.AddOrUpdate(guid, 1, (_, count) => count + 1);
     }
 
     /// <summary>Get an already-loaded asset from memory without triggering a load. Null if not loaded.</summary>
     public EngineObject? GetLoadedAsset(Guid guid) => TryGetLoaded(guid, out var obj) ? obj : null;
+
+    // Counts fresh loads (cache misses) per GUID for this session - a GUID reloading repeatedly
+    // usually means something is reading it without keeping it in use between reads (see
+    // EngineObject.EnsureNotDisposed). Diagnostic-only, for the Asset Database panel.
+    private readonly ConcurrentDictionary<Guid, int> _reloadCounts = new();
+
+    /// <summary>Number of times this GUID has been freshly loaded (not counting cache hits) since the backend started.</summary>
+    public int GetReloadCount(Guid guid) => _reloadCounts.GetValueOrDefault(guid);
 
     /// <summary>Snapshot of every currently-resident GUID and its loaded instance, for diagnostics.
     /// Not a live view, and reading it doesn't itself count as activity.</summary>
