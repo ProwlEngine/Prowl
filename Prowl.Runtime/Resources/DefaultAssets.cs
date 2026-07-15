@@ -32,6 +32,7 @@ public enum DefaultShader
     Tonemapper,
     SSR,
     FXAA,
+    SMAA,
     Bloom,
     BokehDoF,
     GTAO,
