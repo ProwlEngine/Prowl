@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 
 using Jitter2;
 using Jitter2.Collision;
@@ -31,25 +30,24 @@ public class PhysicsWorld
 
     public static void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.EnableCollisionBetween(bodyA, bodyB);
 
-    // Baked physics meshes, keyed weakly by Mesh so the cache evicts when a mesh is collected.
-    private static readonly ConditionalWeakTable<Mesh, BakedPhysicsMesh> s_bakedMeshes = new();
-    private static readonly object s_bakeLock = new();
-
     /// <summary>
-    /// Bake (or fetch the cached) physics representation of a mesh. The result is shared by every
-    /// collider that uses the mesh, so the bake happens once instead of per MeshCollider instance, and
-    /// is rebuilt automatically when the mesh's <see cref="Mesh.Version"/> changes.
+    /// Bake (or fetch the cached) physics representation of a mesh. The bake is stored directly on
+    /// the <see cref="Mesh"/> instance (<see cref="Mesh.BakedPhysics"/>), so its lifetime is tied to
+    /// the mesh rather than a separate global cache. The result is shared by every collider that uses
+    /// the mesh, so the bake happens once instead of per MeshCollider instance, and is rebuilt
+    /// automatically when the mesh's <see cref="Mesh.Version"/> changes.
     /// <para/>
     /// Thread-safe. The bake is pure CPU work, so this may be called from worker threads to pre-bake
-    /// meshes off the main thread (independent meshes bake in parallel; the cache itself is locked).
+    /// meshes off the main thread (independent meshes bake in parallel; each mesh locks on itself).
     /// </summary>
     public static BakedPhysicsMesh BakeMesh(Mesh mesh)
     {
         ArgumentNullException.ThrowIfNull(mesh);
 
-        lock (s_bakeLock)
+        lock (mesh)
         {
-            if (s_bakedMeshes.TryGetValue(mesh, out var cached) && cached.Version == mesh.Version)
+            var cached = mesh.BakedPhysics;
+            if (cached != null && cached.Version == mesh.Version)
                 return cached;
         }
 
@@ -57,11 +55,12 @@ public class PhysicsWorld
         // same mesh is harmless (the bake is idempotent; last write wins).
         BakedPhysicsMesh baked = BakedPhysicsMesh.Build(mesh);
 
-        lock (s_bakeLock)
+        lock (mesh)
         {
-            if (s_bakedMeshes.TryGetValue(mesh, out var cached) && cached.Version == mesh.Version)
+            var cached = mesh.BakedPhysics;
+            if (cached != null && cached.Version == mesh.Version)
                 return cached; // another thread baked the current version meanwhile
-            s_bakedMeshes.AddOrUpdate(mesh, baked);
+            mesh.BakedPhysics = baked;
             return baked;
         }
     }

@@ -489,6 +489,9 @@ public class Mesh : EngineObject, ISerializable
     private int lastIndexCount = 0;
     private VertexFormat lastVertexLayout = null;
 
+    /// <summary>Cached physics bake (see <see cref="PhysicsWorld.BakeMesh"/>).
+    internal BakedPhysicsMesh? BakedPhysics;
+
     public Mesh() { }
 
     public void Clear()
