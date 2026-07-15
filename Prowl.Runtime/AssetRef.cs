@@ -205,11 +205,16 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     public static bool operator ==(AssetRef<T> a, AssetRef<T> b)
     {
+        // Match GetHashCode's precedence: a real AssetID identifies the asset regardless of which
+        // instance (if any) either side currently has cached, so two refs to the same asset compare
+        // equal even if one was resolved before the other picked up a different cached instance (e.g.
+        // an unload-then-reload swapped which object is cached). Falls back to instance identity only
+        // for runtime-only resources that have no AssetID at all.
+        if (a.AssetID != Guid.Empty || b.AssetID != Guid.Empty)
+            return a.AssetID == b.AssetID;
         if (a.instance != null && b.instance != null)
             return a.instance == b.instance;
-        if (a.IsExplicitNull && b.IsExplicitNull)
-            return true;
-        return a.AssetID == b.AssetID && a.AssetID != Guid.Empty;
+        return a.IsExplicitNull && b.IsExplicitNull;
     }
 
     public static bool operator !=(AssetRef<T> a, AssetRef<T> b) => !(a == b);
