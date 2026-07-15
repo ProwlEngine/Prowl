@@ -27,7 +27,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string FilePath
     {
-        get => filePath;
+        get { EnsureNotDisposed(); return filePath; }
     }
 
     /// <summary>
@@ -36,8 +36,8 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string ClipName
     {
-        get => clipName;
-        set => clipName = value;
+        get { EnsureNotDisposed(); return clipName; }
+        set { EnsureNotDisposed(); clipName = value; }
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public bool StreamFromDisk
     {
-        get => streamFromDisk;
+        get { EnsureNotDisposed(); return streamFromDisk; }
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public IntPtr Handle
     {
-        get => handle;
+        get { EnsureNotDisposed(); return handle; }
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public UInt64 Hash
     {
-        get => hashCode;
+        get { EnsureNotDisposed(); return hashCode; }
     }
 
     /// <summary>
@@ -75,6 +75,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         get
         {
+            EnsureNotDisposed();
             if(handle != IntPtr.Zero)
             {
                 return dataSize;

@@ -16,11 +16,14 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public sealed class Texture2D : Texture, ISerializable
 {
+    private uint _width;
+    private uint _height;
+
     /// <summary>The width of this <see cref="Texture2D"/>.</summary>
-    public uint Width { get; private set; }
+    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
-    public uint Height { get; private set; }
+    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
 
     public Texture2D() : base(TextureType.Texture2D, TextureImageFormat.Color4b) { }
 
@@ -54,6 +57,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
+        EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
         Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
@@ -70,6 +74,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
     public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
     {
+        EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
         if (data.Length < rectWidth * rectHeight)
             throw new ArgumentException("Not enough pixel data", nameof(data));
@@ -85,6 +90,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
+        EnsureNotDisposed();
         SetData(data, 0, 0, Width, Height);
     }
 
@@ -94,6 +100,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="ptr">The pointer to which the pixel data will be written.</param>
     public unsafe void GetDataPtr(void* ptr)
     {
+        EnsureNotDisposed();
         Graphics.GetTexImage(Handle, 0, ptr);
     }
 
@@ -104,6 +111,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
+        EnsureNotDisposed();
         if (data.Length < Width * Height)
             throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
@@ -113,6 +121,7 @@ public sealed class Texture2D : Texture, ISerializable
 
     public int GetSize()
     {
+        EnsureNotDisposed();
         int size = (int)Width * (int)Height;
         switch (ImageFormat)
         {
@@ -163,6 +172,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
     public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
     {
+        EnsureNotDisposed();
         Graphics.SetWrapS(Handle, sWrapMode);
         Graphics.SetWrapT(Handle, tWrapMode);
     }
@@ -172,7 +182,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <c>sampler2DShadow</c> uniform performs the depth test in fixed-function hardware.
     /// Pair with LINEAR filtering for free 2x2 PCF.
     /// </summary>
-    public void SetDepthCompareMode(bool enabled) => Graphics.SetTextureCompareMode(Handle, enabled);
+    public void SetDepthCompareMode(bool enabled) { EnsureNotDisposed(); Graphics.SetTextureCompareMode(Handle, enabled); }
 
     /// <summary>
     /// Recreates this <see cref="Texture2D"/>'s image with a new size,
@@ -182,6 +192,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="height">The new height for the <see cref="Texture2D"/>.</param>
     public unsafe void RecreateImage(uint width, uint height)
     {
+        EnsureNotDisposed();
         ValidateTextureSize(width, height);
 
         Width = width;

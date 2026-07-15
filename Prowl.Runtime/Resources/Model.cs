@@ -15,8 +15,14 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public class Model : EngineObject, ISerializable
 {
+    private EchoObject? _gameObjectData;
+
     /// <summary>Serialized GO hierarchy.</summary>
-    public EchoObject? GameObjectData { get; set; }
+    public EchoObject? GameObjectData
+    {
+        get { EnsureNotDisposed(); return _gameObjectData; }
+        set { EnsureNotDisposed(); _gameObjectData = value; }
+    }
 
     public Model() { }
     public Model(string name) { Name = name; }
@@ -26,6 +32,7 @@ public class Model : EngineObject, ISerializable
     /// </summary>
     public GameObject? Instantiate()
     {
+        EnsureNotDisposed();
         if (GameObjectData == null) return null;
         return Serializer.Deserialize<GameObject>(GameObjectData);
     }

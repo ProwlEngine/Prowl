@@ -25,6 +25,7 @@ public sealed class FontAsset : EngineObject
     {
         get
         {
+            EnsureNotDisposed();
             if (_fontFile == null && _fontData.Length > 0)
                 _fontFile = new FontFile(_fontData);
             return _fontFile!;

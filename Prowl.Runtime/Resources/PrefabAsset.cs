@@ -25,6 +25,7 @@ public class PrefabAsset : EngineObject
     /// </summary>
     public GameObject? Instantiate()
     {
+        EnsureNotDisposed();
         if (GameObjectData == null) return null;
 
         var clone = Serializer.Deserialize<GameObject>(GameObjectData);

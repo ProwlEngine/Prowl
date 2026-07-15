@@ -59,21 +59,27 @@ public sealed class BlendShapeFrame
 [CreateAssetMenu("Mesh", Extension = ".mesh", Order = 4)]
 public class Mesh : EngineObject, ISerializable
 {
+    private readonly bool _isReadable = true;
+    private readonly bool _isWritable = true;
+
     /// <summary> Whether this mesh is readable by the CPU </summary>
-    public readonly bool isReadable = true;
+    public bool isReadable { get { EnsureNotDisposed(); return _isReadable; } }
 
     /// <summary> Whether this mesh is writable </summary>
-    public readonly bool isWritable = true;
+    public bool isWritable { get { EnsureNotDisposed(); return _isWritable; } }
+
+    private AABB _bounds;
 
     /// <summary> The bounds of the mesh </summary>
-    public AABB bounds { get; internal set; }
+    public AABB bounds { get { EnsureNotDisposed(); return _bounds; } internal set => _bounds = value; }
 
     /// <summary> The format of the indices for this mesh </summary>
     public IndexFormat IndexFormat
     {
-        get => indexFormat;
+        get { EnsureNotDisposed(); return indexFormat; }
         set
         {
+            EnsureNotDisposed();
             if (isWritable == false) return;
             changed = true;
             indexFormat = value;
@@ -84,9 +90,10 @@ public class Mesh : EngineObject, ISerializable
     /// <summary> The mesh's primitive type </summary>
     public Topology MeshTopology
     {
-        get => meshTopology;
+        get { EnsureNotDisposed(); return meshTopology; }
         set
         {
+            EnsureNotDisposed();
             if (isWritable == false) return;
             changed = true;
             meshTopology = value;
@@ -110,9 +117,10 @@ public class Mesh : EngineObject, ISerializable
     /// </summary>
     public Float3[] Vertices
     {
-        get => vertices ?? [];
+        get { EnsureNotDisposed(); return vertices ?? []; }
         set
         {
+            EnsureNotDisposed();
             if (isWritable == false)
                 return;
             bool needsReset = vertices == null || vertices.Length != value.Length;
@@ -191,25 +199,27 @@ public class Mesh : EngineObject, ISerializable
         set => WriteVertexData(ref boneWeights, CopyArray(value), value.Length);
     }
 
-    public int VertexCount => vertices?.Length ?? 0;
-    public int IndexCount => indices?.Length ?? 0;
+    public int VertexCount { get { EnsureNotDisposed(); return vertices?.Length ?? 0; } }
+    public int IndexCount { get { EnsureNotDisposed(); return indices?.Length ?? 0; } }
 
-    public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
-    public GraphicsBuffer VertexBuffer => vertexBuffer;
-    public GraphicsBuffer IndexBuffer => indexBuffer;
+    public GraphicsVertexArray? VertexArrayObject { get { EnsureNotDisposed(); return vertexArrayObject; } }
+    public GraphicsBuffer VertexBuffer { get { EnsureNotDisposed(); return vertexBuffer; } }
+    public GraphicsBuffer IndexBuffer { get { EnsureNotDisposed(); return indexBuffer; } }
 
-    public bool HasNormals => (normals?.Length ?? 0) > 0;
-    public bool HasTangents => (tangents?.Length ?? 0) > 0;
-    public bool HasColors => (colors?.Length ?? 0) > 0;
-    public bool HasColors32 => (colors32?.Length ?? 0) > 0;
-    public bool HasUV => (uv?.Length ?? 0) > 0;
-    public bool HasUV2 => (uv2?.Length ?? 0) > 0;
+    public bool HasNormals { get { EnsureNotDisposed(); return (normals?.Length ?? 0) > 0; } }
+    public bool HasTangents { get { EnsureNotDisposed(); return (tangents?.Length ?? 0) > 0; } }
+    public bool HasColors { get { EnsureNotDisposed(); return (colors?.Length ?? 0) > 0; } }
+    public bool HasColors32 { get { EnsureNotDisposed(); return (colors32?.Length ?? 0) > 0; } }
+    public bool HasUV { get { EnsureNotDisposed(); return (uv?.Length ?? 0) > 0; } }
+    public bool HasUV2 { get { EnsureNotDisposed(); return (uv2?.Length ?? 0) > 0; } }
 
-    public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
-    public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
+    public bool HasBoneIndices { get { EnsureNotDisposed(); return (boneIndices?.Length ?? 0) > 0; } }
+    public bool HasBoneWeights { get { EnsureNotDisposed(); return (boneWeights?.Length ?? 0) > 0; } }
 
-    public Float4x4[]? BindPoses;
-    public string[]? BoneNames;
+    private Float4x4[]? _bindPoses;
+    private string[]? _boneNames;
+    public Float4x4[]? BindPoses { get { EnsureNotDisposed(); return _bindPoses; } set { EnsureNotDisposed(); _bindPoses = value; } }
+    public string[]? BoneNames { get { EnsureNotDisposed(); return _boneNames; } set { EnsureNotDisposed(); _boneNames = value; } }
 
     // ─────────────────────── Blend shapes (morph targets) ───────────────────────
     private BlendShape[] _blendShapes = Array.Empty<BlendShape>();
@@ -226,49 +236,62 @@ public class Mesh : EngineObject, ISerializable
     /// <summary>The blend shapes (morph targets) on this mesh.</summary>
     public BlendShape[] BlendShapes
     {
-        get => _blendShapes;
-        set { _blendShapes = value ?? Array.Empty<BlendShape>(); _morphDirty = true; }
+        get { EnsureNotDisposed(); return _blendShapes; }
+        set { EnsureNotDisposed(); _blendShapes = value ?? Array.Empty<BlendShape>(); _morphDirty = true; }
     }
 
-    public bool HasBlendShapes => _blendShapes.Length > 0;
-    public int BlendShapeCount => _blendShapes.Length;
+    public bool HasBlendShapes { get { EnsureNotDisposed(); return _blendShapes.Length > 0; } }
+    public int BlendShapeCount { get { EnsureNotDisposed(); return _blendShapes.Length; } }
 
-    public string GetBlendShapeName(int index) =>
-        (index >= 0 && index < _blendShapes.Length) ? _blendShapes[index].Name : string.Empty;
+    public string GetBlendShapeName(int index)
+    {
+        EnsureNotDisposed();
+        return (index >= 0 && index < _blendShapes.Length) ? _blendShapes[index].Name : string.Empty;
+    }
 
     /// <summary>Index of the blend shape with the given name, or -1 if not found.</summary>
     public int GetBlendShapeIndex(string name)
     {
+        EnsureNotDisposed();
         for (int i = 0; i < _blendShapes.Length; i++)
             if (_blendShapes[i].Name == name) return i;
         return -1;
     }
 
-    public int GetBlendShapeFrameCount(int shapeIndex) =>
-        (shapeIndex >= 0 && shapeIndex < _blendShapes.Length) ? _blendShapes[shapeIndex].Frames.Length : 0;
+    public int GetBlendShapeFrameCount(int shapeIndex)
+    {
+        EnsureNotDisposed();
+        return (shapeIndex >= 0 && shapeIndex < _blendShapes.Length) ? _blendShapes[shapeIndex].Frames.Length : 0;
+    }
 
     public float GetBlendShapeFrameWeight(int shapeIndex, int frameIndex)
     {
+        EnsureNotDisposed();
         if (shapeIndex < 0 || shapeIndex >= _blendShapes.Length) return 0f;
         var frames = _blendShapes[shapeIndex].Frames;
         return (frameIndex >= 0 && frameIndex < frames.Length) ? frames[frameIndex].Weight : 0f;
     }
 
     // GPU morph resources (valid after EnsureMorphTextures).
-    public Texture2D? MorphPositionTexture => _morphPosTex;
-    public Texture2D? MorphNormalTexture => _morphNrmTex;
-    public Texture2D? MorphTangentTexture => _morphTanTex;
-    public bool MorphHasNormals => _morphNrmTex != null;
-    public bool MorphHasTangents => _morphTanTex != null;
-    public int MorphLayerCount => _morphLayerCount;
-    public int MorphTexWidth => _morphTexWidth;
+    public Texture2D? MorphPositionTexture { get { EnsureNotDisposed(); return _morphPosTex; } }
+    public Texture2D? MorphNormalTexture { get { EnsureNotDisposed(); return _morphNrmTex; } }
+    public Texture2D? MorphTangentTexture { get { EnsureNotDisposed(); return _morphTanTex; } }
+    public bool MorphHasNormals { get { EnsureNotDisposed(); return _morphNrmTex != null; } }
+    public bool MorphHasTangents { get { EnsureNotDisposed(); return _morphTanTex != null; } }
+    public int MorphLayerCount { get { EnsureNotDisposed(); return _morphLayerCount; } }
+    public int MorphTexWidth { get { EnsureNotDisposed(); return _morphTexWidth; } }
 
     /// <summary>Global morph-texture layer (row block) for a given shape's frame.</summary>
-    public int GetMorphLayerIndex(int shapeIndex, int frameIndex) => _morphLayerOffsets[shapeIndex] + frameIndex;
+    public int GetMorphLayerIndex(int shapeIndex, int frameIndex)
+    {
+        EnsureNotDisposed();
+        return _morphLayerOffsets[shapeIndex] + frameIndex;
+    }
 
     /// <summary>Builds the GPU morph delta textures from the blend-shape data if dirty. Cheap no-op otherwise.</summary>
     public void EnsureMorphTextures()
     {
+        EnsureNotDisposed();
         if (!_morphDirty) return;
         BuildMorphTextures();
     }
@@ -375,11 +398,12 @@ public class Mesh : EngineObject, ISerializable
     private List<SubMeshDescriptor> _subMeshes = new();
 
     /// <summary>Number of submeshes. Returns 1 if no submeshes defined (entire mesh is one submesh).</summary>
-    public int SubMeshCount => _subMeshes.Count > 0 ? _subMeshes.Count : 1;
+    public int SubMeshCount { get { EnsureNotDisposed(); return _subMeshes.Count > 0 ? _subMeshes.Count : 1; } }
 
     /// <summary>Get a submesh descriptor. If no submeshes defined, index 0 returns the full mesh range.</summary>
     public SubMeshDescriptor GetSubMesh(int index)
     {
+        EnsureNotDisposed();
         if (_subMeshes.Count == 0)
             return new SubMeshDescriptor(0, indices?.Length ?? 0, meshTopology);
         return _subMeshes[index];
@@ -388,6 +412,7 @@ public class Mesh : EngineObject, ISerializable
     /// <summary>Set the number of submeshes.</summary>
     public void SetSubMeshCount(int count)
     {
+        EnsureNotDisposed();
         while (_subMeshes.Count < count) _subMeshes.Add(default);
         while (_subMeshes.Count > count) _subMeshes.RemoveAt(_subMeshes.Count - 1);
         changed = true;
@@ -396,6 +421,7 @@ public class Mesh : EngineObject, ISerializable
     /// <summary>Set a submesh descriptor at the given index.</summary>
     public void SetSubMesh(int index, SubMeshDescriptor desc)
     {
+        EnsureNotDisposed();
         if (index >= _subMeshes.Count) SetSubMeshCount(index + 1);
         _subMeshes[index] = desc;
         changed = true;
@@ -421,7 +447,7 @@ public class Mesh : EngineObject, ISerializable
     /// submeshes, ...). Mirrors <see cref="Prowl.Vector.Transform.Version"/>. Useful for invalidating
     /// caches derived from this mesh (e.g. baked physics meshes - see <see cref="PhysicsWorld.BakeMesh"/>).
     /// </summary>
-    public uint Version => _version;
+    public uint Version { get { EnsureNotDisposed(); return _version; } }
 
     /// <summary>
     /// True if <see cref="Version"/> differs from <paramref name="lastVersion"/>; updates the reference
@@ -429,6 +455,7 @@ public class Mesh : EngineObject, ISerializable
     /// </summary>
     public bool HasChanged(ref uint lastVersion)
     {
+        EnsureNotDisposed();
         if (_version == lastVersion) return false;
         lastVersion = _version;
         return true;
@@ -466,6 +493,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void Clear()
     {
+        EnsureNotDisposed();
         vertices = null;
         normals = null;
         colors = null;
@@ -486,6 +514,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void Upload()
     {
+        EnsureNotDisposed();
         if (changed == false && vertexArrayObject != null)
             return;
 
@@ -622,6 +651,7 @@ public class Mesh : EngineObject, ISerializable
     /// <returns>The instanced VAO to bind for drawing.</returns>
     public GraphicsVertexArray EnsureInstanceVAO(int instanceCount, out GraphicsBuffer instanceBuf)
     {
+        EnsureNotDisposed();
         Upload();
 
         var instanceFormat = new VertexFormat(new[]
@@ -690,6 +720,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateBounds()
     {
+        EnsureNotDisposed();
         if (vertices == null)
             throw new ArgumentNullException();
 
@@ -711,6 +742,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateNormals()
     {
+        EnsureNotDisposed();
         if (vertices == null || vertices.Length < 3) return;
         if (indices == null || indices.Length < 3) return;
 
@@ -744,6 +776,7 @@ public class Mesh : EngineObject, ISerializable
 
     public void RecalculateTangents()
     {
+        EnsureNotDisposed();
         if (vertices == null || vertices.Length < 3) return;
         if (indices == null || indices.Length < 3) return;
         if (uv == null) return;
@@ -814,6 +847,7 @@ public class Mesh : EngineObject, ISerializable
     /// <returns>True if the ray intersects with the mesh, false otherwise</returns>
     public bool Raycast(Ray ray, out float hitDistance, out Float3 hitNormal)
     {
+        EnsureNotDisposed();
         // Initialize out parameters
         hitDistance = float.MaxValue;
         hitNormal = Float3.Zero;
@@ -1381,6 +1415,7 @@ public class Mesh : EngineObject, ISerializable
 
     private T ReadVertexData<T>(T value)
     {
+        EnsureNotDisposed();
         if (isReadable == false)
             throw new InvalidOperationException("Mesh is not readable");
         return value;
@@ -1388,6 +1423,7 @@ public class Mesh : EngineObject, ISerializable
 
     private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
     {
+        EnsureNotDisposed();
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
         if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)

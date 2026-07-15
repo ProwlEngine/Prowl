@@ -80,16 +80,16 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public Shader? Shader
     {
-        get => _shader.Res;
-        set => SetShader(value);
+        get { EnsureNotDisposed(); return _shader.Res; }
+        set { EnsureNotDisposed(); SetShader(value); }
     }
 
     /// <summary>The shader as an <see cref="AssetRef{Shader}"/>, for asset-reference editing.
     /// A material must always have a shader, so assigning an empty ref is ignored.</summary>
     public AssetRef<Shader> ShaderRef
     {
-        get => _shader;
-        set { if (value.Res != null) SetShader(value.Res); }
+        get { EnsureNotDisposed(); return _shader; }
+        set { EnsureNotDisposed(); if (value.Res != null) SetShader(value.Res); }
     }
 
     [SerializeField]
@@ -153,25 +153,25 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
-    public Material Clone() => new Material(this);
+    public Material Clone() { EnsureNotDisposed(); return new Material(this); }
 
-    public void SetKeyword(string keyword, bool value) => _localKeywords[keyword] = value;
+    public void SetKeyword(string keyword, bool value) { EnsureNotDisposed(); _localKeywords[keyword] = value; }
 
     // Every public Set marks the property as user-overridden so subsequent shader
     // default-refreshes won't stomp the user's value.
-    public void SetColor(string name, Color value)        { _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
-    public void SetVector(string name, Float2 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float3 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetVector(string name, Float4 value)      { _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
-    public void SetFloat(string name, float value)        { _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
-    public void SetInt(string name, int value)            { _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
-    public void SetMatrix(string name, Float4x4 value)    { _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
-    public void SetTexture(string name, Texture2D value)  { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture(string name, AssetRef<Texture2D> value) { _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, Texture3D value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
-    public void SetTexture3D(string name, AssetRef<Texture3D> value){ _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, Cubemap value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
-    public void SetTextureCube(string name, AssetRef<Cubemap> value){ _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetColor(string name, Color value)        { EnsureNotDisposed(); _overrides.Add(name); _properties.SetColor(name, value); MarkDirty(); }
+    public void SetVector(string name, Float2 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float3 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetVector(string name, Float4 value)      { EnsureNotDisposed(); _overrides.Add(name); _properties.SetVector(name, value); MarkDirty(); }
+    public void SetFloat(string name, float value)        { EnsureNotDisposed(); _overrides.Add(name); _properties.SetFloat(name, value); MarkDirty(); }
+    public void SetInt(string name, int value)            { EnsureNotDisposed(); _overrides.Add(name); _properties.SetInt(name, value); MarkDirty(); }
+    public void SetMatrix(string name, Float4x4 value)    { EnsureNotDisposed(); _overrides.Add(name); _properties.SetMatrix(name, value); MarkDirty(); }
+    public void SetTexture(string name, Texture2D value)  { EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture(string name, AssetRef<Texture2D> value) { EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, Texture3D value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    public void SetTexture3D(string name, AssetRef<Texture3D> value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTexture3D(name, value); MarkDirty(); }
+    public void SetTextureCube(string name, Cubemap value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
+    public void SetTextureCube(string name, AssetRef<Cubemap> value){ EnsureNotDisposed(); _overrides.Add(name); _properties.SetTextureCube(name, value); MarkDirty(); }
 
     /// <summary>Forget the user override for <paramref name="name"/> next sync
     /// will refill it from the shader's current default. Useful for an inspector
@@ -185,6 +185,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </remarks>
     public void RevertProperty(string name)
     {
+        EnsureNotDisposed();
         _overrides.Remove(name);
         _properties?.RemoveProperty(name);
         MarkDirty();
@@ -192,7 +193,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     /// <summary>True if the user has explicitly set this property (vs holding the
     /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
-    public bool IsOverridden(string name) => _overrides.Contains(name);
+    public bool IsOverridden(string name) { EnsureNotDisposed(); return _overrides.Contains(name); }
 
     #region Global Properties
 
@@ -274,6 +275,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// <returns>A 64-bit hash of all material uniform values</returns>
     public ulong GetStateHash()
     {
+        EnsureNotDisposed();
         if (_isDirty)
         {
             _stateHash = _properties.ComputeHash();
@@ -319,6 +321,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void SyncShaderDefaults()
     {
+        EnsureNotDisposed();
         var shader = _shader.Res;
         if (shader == null) return;
 

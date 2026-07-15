@@ -100,16 +100,19 @@ public sealed class Sprite : EngineObject
     public Sprite() : base("Sprite") { }
 
     /// <summary>True if any border edge is non-zero (i.e. the sprite can be 9-sliced).</summary>
-    public bool HasBorder => Border.X > 0 || Border.Y > 0 || Border.Z > 0 || Border.W > 0;
+    public bool HasBorder { get { EnsureNotDisposed(); return Border.X > 0 || Border.Y > 0 || Border.Z > 0 || Border.W > 0; } }
 
     /// <summary>The sprite's size in world units (rect size divided by pixels-per-unit).</summary>
-    public Float2 SizeInUnits => new(Rect.Width / PixelsPerUnit, Rect.Height / PixelsPerUnit);
+    public Float2 SizeInUnits { get { EnsureNotDisposed(); return new(Rect.Width / PixelsPerUnit, Rect.Height / PixelsPerUnit); } }
+
+    private Float2 _boundsMin;
+    private Float2 _boundsMax;
 
     /// <summary>Minimum corner of the local-space geometry bounds (pivot-relative).</summary>
-    public Float2 BoundsMin { get; private set; }
+    public Float2 BoundsMin { get { EnsureNotDisposed(); return _boundsMin; } private set => _boundsMin = value; }
 
     /// <summary>Maximum corner of the local-space geometry bounds (pivot-relative).</summary>
-    public Float2 BoundsMax { get; private set; }
+    public Float2 BoundsMax { get { EnsureNotDisposed(); return _boundsMax; } private set => _boundsMax = value; }
 
     /// <summary>
     /// Builds a simple full-rect quad (two triangles) for this sprite, resolving the texture dimensions
@@ -117,6 +120,7 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildQuadGeometry()
     {
+        EnsureNotDisposed();
         Texture2D? tex = Texture.Res;
         int texW = (int)(tex?.Width ?? (uint)Math.Max(1, Rect.MaxX));
         int texH = (int)(tex?.Height ?? (uint)Math.Max(1, Rect.MaxY));
@@ -129,6 +133,7 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildQuadGeometry(int textureWidth, int textureHeight)
     {
+        EnsureNotDisposed();
         float w = Rect.Width / PixelsPerUnit;
         float h = Rect.Height / PixelsPerUnit;
 
@@ -176,6 +181,7 @@ public sealed class Sprite : EngineObject
     /// </summary>
     public void BuildTightGeometry(SpriteMeshTracer.TracedMesh traced, int textureWidth, int textureHeight)
     {
+        EnsureNotDisposed();
         if (traced.Vertices.Length < 3 || traced.Indices.Length < 3)
         {
             BuildQuadGeometry(textureWidth, textureHeight);
@@ -212,6 +218,7 @@ public sealed class Sprite : EngineObject
     /// <summary>Recomputes <see cref="BoundsMin"/>/<see cref="BoundsMax"/> from the current vertices.</summary>
     public void RecalculateBounds()
     {
+        EnsureNotDisposed();
         if (Vertices.Length == 0)
         {
             BoundsMin = BoundsMax = default;

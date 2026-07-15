@@ -68,6 +68,25 @@ public abstract class EngineObject : IDisposable
 
     public virtual void OnDispose() { }
 
+    /// <summary>
+    /// Call at the top of any accessor a caller might reasonably use every frame (a texture's Width,
+    /// a mesh's VertexCount, ...). Throws loudly if this object was already disposed - the intended
+    /// signal for "you're holding a raw reference the asset system didn't know was still in use."
+    /// Otherwise touches this object's AssetID as activity, so a raw (non-AssetRef) reference that IS
+    /// being read regularly still counts as in-use and won't be idle-swept out from under it - only
+    /// an asset nobody reads at all, via any path, goes idle.
+    /// </summary>
+    protected void EnsureNotDisposed(
+        [System.Runtime.CompilerServices.CallerMemberName] string? member = null)
+    {
+        if (IsDisposed)
+            throw new ObjectDisposedException(Name,
+                $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
+                "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
+                ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
+                "for something that must survive being unused for a while.");
+    }
+
     public override string ToString() => Name;
 
     protected void SerializeHeader(EchoObject compound)

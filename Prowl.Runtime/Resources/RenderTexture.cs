@@ -11,13 +11,18 @@ namespace Prowl.Runtime.Resources;
 
 public sealed class RenderTexture : EngineObject, ISerializable
 {
-    public GraphicsFrameBuffer frameBuffer { get; private set; }
-    public Texture2D MainTexture => InternalTextures[0];
-    public Texture2D[] InternalTextures { get; private set; }
-    public Texture2D InternalDepth { get; private set; }
+    private GraphicsFrameBuffer _frameBuffer;
+    public GraphicsFrameBuffer frameBuffer { get { EnsureNotDisposed(); return _frameBuffer; } private set => _frameBuffer = value; }
+    public Texture2D MainTexture { get { EnsureNotDisposed(); return InternalTextures[0]; } }
+    private Texture2D[] _internalTextures;
+    public Texture2D[] InternalTextures { get { EnsureNotDisposed(); return _internalTextures; } private set => _internalTextures = value; }
+    private Texture2D _internalDepth;
+    public Texture2D InternalDepth { get { EnsureNotDisposed(); return _internalDepth; } private set => _internalDepth = value; }
 
-    public int Width { get; private set; }
-    public int Height { get; private set; }
+    private int _width;
+    private int _height;
+    public int Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
+    public int Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
     private int numTextures;
     private bool hasDepthAttachment;
     private TextureImageFormat[] textureFormats;
@@ -64,15 +69,15 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public override void OnDispose()
     {
-        if (frameBuffer == null) return;
-        foreach (Texture2D texture in InternalTextures)
+        if (_frameBuffer == null) return;
+        foreach (Texture2D texture in _internalTextures)
             texture.Dispose();
 
         // Dispose depth texture if present
-        if (hasDepthAttachment && InternalDepth != null)
-            InternalDepth.Dispose();
+        if (hasDepthAttachment && _internalDepth != null)
+            _internalDepth.Dispose();
 
-        frameBuffer.Dispose();
+        _frameBuffer.Dispose();
     }
 
     ~RenderTexture() => Dispose();
