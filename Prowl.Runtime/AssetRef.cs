@@ -41,7 +41,13 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         get
         {
             if (instance.IsValid())
+            {
+                // Touched even on this already-cached fast path: an idle-timeout sweep only knows
+                // a GUID is in use if something says so, and the database's own resolve path
+                // (TryGetLoaded/SetLoaded) is bypassed entirely once instance is already cached.
+                AssetDatabase.Touch(AssetID);
                 return instance;
+            }
 
             if (assetID == Guid.Empty)
             {
@@ -123,7 +129,10 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     public void EnsureLoaded()
     {
         if (instance.IsValid())
+        {
+            AssetDatabase.Touch(AssetID);
             return;
+        }
 
         if (assetID == Guid.Empty)
         {
@@ -138,6 +147,14 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     /// <summary>Clear the cached instance. Next access will re-resolve from the database.</summary>
     public void Detach() => instance = null;
+
+    /// <summary>
+    /// Record that this asset is still in use without resolving or blocking. Use this when you're
+    /// holding an AssetRef but aren't calling <see cref="Res"/> right now (e.g. a disabled object's
+    /// reference) and still want to protect it from the idle-timeout eviction sweep. A no-op for a
+    /// runtime resource with no AssetID.
+    /// </summary>
+    public void Touch() => AssetDatabase.Touch(AssetID);
 
     // ================================================================
     //  Serialization stores AssetID + inline instance for runtime resources

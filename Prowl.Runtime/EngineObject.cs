@@ -85,6 +85,9 @@ public abstract class EngineObject : IDisposable
                 "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
                 ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
                 "for something that must survive being unused for a while.");
+
+        if (AssetID != Guid.Empty)
+            AssetDatabase.Touch(AssetID);
     }
 
     public override string ToString() => Name;
