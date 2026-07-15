@@ -23,6 +23,11 @@
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
 
+  <!-- Allow test project to access internal members (e.g. test-only sweep/eviction hooks) -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Editor.Test" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- <ProjectReference Include="..\..\Anthology\Origami\Origami\Origami.csproj" /> -->
     <!-- <ProjectReference Include="..\..\Anthology\Photonic\Photonic\Photonic.csproj" /> -->
