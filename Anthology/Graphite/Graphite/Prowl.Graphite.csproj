@@ -8,12 +8,11 @@
 
     <PropertyGroup>
         <PackageId>Prowl.Graphite</PackageId>
-        <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with backends for Vulkan and Direct3D 11. Graphite can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
-        <PackageTags>3D Graphics Direct3D DirectX Vulkan Core Game</PackageTags>
+        <Description>A low-level, hardware-accelerated graphics and compute library for .NET, with a Vulkan backend. Graphite can be used to create high-performance 2D and 3D games, simulations, tools, and other graphical applications.</Description>
+        <PackageTags>3D Graphics Vulkan Core Game</PackageTags>
     </PropertyGroup>
 
     <PropertyGroup>
-        <DefineConstants Condition="'$(ExcludeD3D11)' == 'true'">$(DefineConstants);EXCLUDE_D3D11_BACKEND</DefineConstants>
         <DefineConstants Condition="'$(ExcludeVulkan)' == 'true'">$(DefineConstants);EXCLUDE_VULKAN_BACKEND</DefineConstants>
     </PropertyGroup>
 
@@ -22,11 +21,6 @@
         <PackageReference Include="Silk.NET.Vulkan" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
         <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
         <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="$(SilkNetVersion)" Condition="'$(ExcludeVulkan)' != 'true'" />
-
-        <!-- Silk.NET Direct3D 11 -->
-        <PackageReference Include="Silk.NET.Direct3D11" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
-        <PackageReference Include="Silk.NET.DXGI" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
-        <PackageReference Include="Silk.NET.Direct3D.Compilers" Version="$(SilkNetVersion)" Condition="'$(ExcludeD3D11)' != 'true'" />
 
         <!-- Silk.NET Core (for SilkMarshal, ComPtr, etc.) -->
         <PackageReference Include="Silk.NET.Core" Version="$(SilkNetVersion)" />

@@ -22,8 +22,7 @@ public static class Program
             backend = args[0] switch
             {
                 "vulkan" => GraphicsBackend.Vulkan,
-                "d3d11" => GraphicsBackend.Direct3D11,
-                _ => throw new Exception("Unknown backend. Must be one of: [vulkan, d3d11]")
+                _ => throw new Exception("Unknown backend. Must be one of: [vulkan]")
             };
         }
 

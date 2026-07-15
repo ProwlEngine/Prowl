@@ -124,7 +124,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         session.RegisterModule(_gl.BackendType switch
         {
             GraphicsBackend.Vulkan => new VulkanCompiler("spirv_1_4"),
-            GraphicsBackend.Direct3D11 => new DXCompiler("sm_5_0", GraphicsBackend.Direct3D11),
             _ => throw new NotSupportedException($"Unsupported graphics backend: {_gl.BackendType}")
         });
 

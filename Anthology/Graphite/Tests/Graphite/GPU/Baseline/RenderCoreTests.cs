@@ -134,8 +134,3 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 [Collection("GPU Tests")]
 public class VulkanRenderCoreTests : RenderCoreTests<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11RenderCoreTests : RenderCoreTests<D3D11DeviceCreator> { }
-#endif

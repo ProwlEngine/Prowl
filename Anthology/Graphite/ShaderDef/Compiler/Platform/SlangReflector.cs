@@ -91,11 +91,11 @@ internal static class SlangReflector
 
         VertexElementDescription element = new($"{rawSemantic}{semanticIndex}", format);
 
-        // d3d11 binds by raw semantic name + index, not by location.
+        // HLSL-based backends bind by raw semantic name + index, not by location.
         uint location;
         if (bindsBySemantic)
         {
-            element.D3D11SemanticName = rawSemantic;
+            element.HlslSemanticName = rawSemantic;
             location = semanticIndex;
         }
         else

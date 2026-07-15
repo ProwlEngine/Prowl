@@ -24,17 +24,6 @@ public static class TestUtils
         gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.Vulkan);
     }
 
-#if TEST_D3D11
-    public static GraphicsDevice CreateD3D11Device()
-        => GraphicsDevice.CreateD3D11(s_headlessOptions);
-
-    public static void CreateD3D11DeviceWithSwapchain(out IWindow window, out GraphicsDevice gd)
-    {
-        window = CreateWindow(GraphicsBackend.Direct3D11);
-        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.Direct3D11);
-    }
-#endif
-
     // Creates a hidden, initialized window for the given backend. Initialize() performs the
     // one-time setup the device needs (GL context, Vulkan surface, native handles) without
     // entering the blocking run loop the samples use.
@@ -57,8 +46,6 @@ public static class TestUtils
     {
         GraphicsBackend.Vulkan =>
             new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
-        GraphicsBackend.Direct3D11 =>
-            new GraphicsAPI(ContextAPI.None, ContextProfile.Core, ContextFlags.Default, new APIVersion(0, 0)),
         _ => throw new ArgumentOutOfRangeException(nameof(backend))
     };
 
@@ -70,26 +57,6 @@ public static class TestUtils
 
         switch (backend)
         {
-            case GraphicsBackend.Direct3D11:
-                if (window.Native!.Win32 == null)
-                    throw new InvalidOperationException("Attempted to make a D3D11 graphics device without a Win32 window!");
-
-                (nint Hwnd, nint HDC, nint HInstance) = window.Native!.Win32!.Value;
-
-                D3D11DeviceOptions d3dOptions = default;
-
-                SwapchainDescription d3dDesc = new()
-                {
-                    DepthFormat = options.SwapchainDepthFormat,
-                    ColorSrgb = options.SwapchainSrgbFormat,
-                    Width = (uint)window.FramebufferSize.X,
-                    Height = (uint)window.FramebufferSize.Y,
-                    SyncToVerticalBlank = options.SyncToVerticalBlank,
-                    Source = SwapchainSource.CreateWin32(Hwnd, HInstance)
-                };
-
-                return GraphicsDevice.CreateD3D11(options, d3dOptions, d3dDesc);
-
             case GraphicsBackend.Vulkan:
                 if (window.API.API != ContextAPI.Vulkan)
                     throw new InvalidOperationException("Attempted to make a Vulkan graphics device without an available Vulkan API");
@@ -271,22 +238,3 @@ public class VulkanDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
         TestUtils.CreateVulkanDeviceWithSwapchain(out window, out gd);
     }
 }
-
-#if TEST_D3D11
-public class D3D11DeviceCreator : GraphicsDeviceCreator
-{
-    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        window = null;
-        gd = TestUtils.CreateD3D11Device();
-    }
-}
-
-public class D3D11DeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
-{
-    public void CreateGraphicsDevice(out IWindow window, out GraphicsDevice gd)
-    {
-        TestUtils.CreateD3D11DeviceWithSwapchain(out window, out gd);
-    }
-}
-#endif

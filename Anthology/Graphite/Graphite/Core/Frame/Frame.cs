@@ -29,12 +29,6 @@ public abstract partial class Frame
     /// Do NOT hold this fence reference past the next <see cref="GraphicsDevice.BeginFrame"/> call for
     /// the same ring slot.
     /// </para>
-    /// <para>
-    /// On the D3D11 backend, the underlying event is set lazily during <see cref="GraphicsDevice.IsFrameComplete(ulong)"/>,
-    /// <see cref="GraphicsDevice.WaitForFrame(ulong)"/>, or <see cref="GraphicsDevice.BeginFrame"/> calls.
-    /// Polling <see cref="Fence.Signaled"/> directly without going through these entry points will not
-    /// reflect completion.
-    /// </para>
     /// </summary>
     public abstract Fence CompletionFence { get; }
 

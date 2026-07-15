@@ -38,7 +38,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
     /// <summary>
     /// In-shader uniform name, historically resolved by the OpenGL backend. Unused by the currently
-    /// registered backends (Vulkan, D3D11). Defaults to <see cref="Name"/>.
+    /// registered backends (Vulkan). Defaults to <see cref="Name"/>.
     /// </summary>
     public string GLUniformName;
 

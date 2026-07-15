@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 
 using Prowl.Graphite.ShaderDef;
@@ -14,7 +15,7 @@ public class EnumVariantCompilationTests
 {
     static CompilationResult Compile() =>
         CompilerTestHarness.CompileSharedAll("EnumVariants",
-            () => new VulkanCompiler(), () => new DXCompiler());
+            () => new VulkanCompiler());
 
 
     [Fact]
@@ -42,7 +43,7 @@ public class EnumVariantCompilationTests
         Assert.Equal(6, result.CompiledVariants.Length);
 
         foreach (VariantResult variant in result.CompiledVariants)
-            Assert.Equal(2, variant.Backends.Length);
+            Assert.Single(variant.Backends);
     }
 
 
@@ -52,13 +53,13 @@ public class EnumVariantCompilationTests
         CompilationResult result = Compile();
 
         // For a fixed Shadows value, the three LightingMode cases must bake different vertex code.
-        string[] vertexHlsl = result.CompiledVariants
+        byte[][] vertexSpirv = result.CompiledVariants
             .Where(v => v.Variants.Single(k => k.Name == "Shadows").Value == "false")
-            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.Direct3D11).Description)
-            .Select(d => CompilerTestHarness.StageText(d, ShaderStages.Vertex))
+            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.Vulkan).Description)
+            .Select(d => CompilerTestHarness.StageOf(d, ShaderStages.Vertex).ShaderBytes)
             .ToArray();
 
-        Assert.Equal(3, vertexHlsl.Length);
-        Assert.Equal(3, vertexHlsl.Distinct().Count());
+        Assert.Equal(3, vertexSpirv.Length);
+        Assert.Equal(3, vertexSpirv.Select(b => Convert.ToBase64String(b)).Distinct().Count());
     }
 }

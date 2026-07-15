@@ -90,8 +90,3 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
 [Collection("GPU Tests")]
 public class VulkanMultiParameterBlockBindingTests : MultiParameterBlockBindingTests<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11MultiParameterBlockBindingTests : MultiParameterBlockBindingTests<D3D11DeviceCreator> { }
-#endif

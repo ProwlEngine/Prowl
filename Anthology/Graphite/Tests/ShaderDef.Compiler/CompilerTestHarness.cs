@@ -123,8 +123,8 @@ internal static class CompilerTestHarness
     }
 
 
-    // Each reflected vertex input becomes its own single-element layout, so these locate one by its
-    // shader location (Vulkan) or by its semantic name (D3D11).
+    // Each reflected vertex input becomes its own single-element layout, so this locates one by its
+    // shader location.
     public static VertexElementDescription ElementAtLocation(ShaderDescription description, uint location)
     {
         foreach (VertexLayoutDescription layout in description.VertexLayouts)

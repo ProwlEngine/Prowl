@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.RegularExpressions;
 
 using Prowl.Graphite;
 using Prowl.Graphite.ShaderDef;
@@ -62,7 +60,6 @@ internal static class Program
     {
         SlangShaderCompiler compiler = new();
 
-        compiler.RegisterModule(new DXCompiler());
         compiler.RegisterModule(new VulkanCompiler());
 
         compiler.BeginSession([new DirectoryInfo(shaderDir), new DirectoryInfo(AppContext.BaseDirectory)]);
@@ -73,7 +70,7 @@ internal static class Program
         IReadOnlyList<VariantSpace> axes = compiler.GetAxes(pass);
         Keyword[][] combos = GenerateCombos(axes);
 
-        GraphicsBackend[] backends = [GraphicsBackend.Direct3D11, GraphicsBackend.Vulkan];
+        GraphicsBackend[] backends = [GraphicsBackend.Vulkan];
 
         foreach (Keyword[] combo in combos)
         {
@@ -87,7 +84,7 @@ internal static class Program
                 foreach (ShaderStageDescription stage in description.Stages)
                 {
                     string fileName = $"{module}.{StageName(stage.Stage)}{suffix}.{extension}";
-                    byte[] bytes = OutputBytes(extension, stage.ShaderBytes);
+                    byte[] bytes = stage.ShaderBytes;
 
                     if (write)
                     {
@@ -142,7 +139,6 @@ internal static class Program
 
     static string Extension(GraphicsBackend backend) => backend switch
     {
-        GraphicsBackend.Direct3D11 => "hlsl",
         GraphicsBackend.Vulkan => "spv",
         _ => throw new NotSupportedException($"No known-good extension for backend {backend}."),
     };
@@ -159,19 +155,6 @@ internal static class Program
         ShaderStages.Compute => "compute",
         _ => stage.ToString().ToLowerInvariant(),
     };
-
-    static byte[] OutputBytes(string extension, byte[] shaderBytes)
-        => extension == "hlsl"
-            ? Encoding.UTF8.GetBytes(NormalizeSourcePaths(Encoding.UTF8.GetString(shaderBytes)))
-            : shaderBytes;
-
-
-    // Remove HLSL line directives for portability.
-    static readonly Regex s_lineDirective = new("^(?<pre>\\s*#line\\s+\\d+\\s+)\"(?<path>[^\"]*)\"", RegexOptions.Multiline);
-
-    static string NormalizeSourcePaths(string hlsl)
-        => s_lineDirective.Replace(hlsl, m => $"{m.Groups["pre"].Value}\"{Path.GetFileName(m.Groups["path"].Value)}\"");
-
 
     static string LocateDirectory(string relative)
     {

@@ -579,8 +579,3 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 [Collection("GPU Tests")]
 public class VulkanBufferTests : BufferTestBase<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11BufferTests : BufferTestBase<D3D11DeviceCreator> { }
-#endif

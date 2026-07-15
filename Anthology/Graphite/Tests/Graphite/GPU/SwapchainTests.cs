@@ -65,11 +65,6 @@ public class SwapchainRegressionTests
     [Trait("Backend", "Vulkan")]
     public void Create_Vulkan_HonorsSwapchainSrgbFormat() => AssertMainSwapchainIsSrgb(GraphicsBackend.Vulkan);
 #endif
-#if TEST_D3D11
-    [Fact]
-    [Trait("Backend", "D3D11")]
-    public void Create_D3D11_HonorsSwapchainSrgbFormat() => AssertMainSwapchainIsSrgb(GraphicsBackend.Direct3D11);
-#endif
 
     private static void AssertMainSwapchainIsSrgb(GraphicsBackend backend)
     {
@@ -98,9 +93,4 @@ public class SwapchainRegressionTests
 [Trait("Backend", "Vulkan")]
 [Collection("GPU Tests")]
 public class VulkanMainSwapchainTests : MainSwapchainTests<VulkanDeviceCreatorWithMainSwapchain> { }
-#endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11MainSwapchainTests : MainSwapchainTests<D3D11DeviceCreatorWithMainSwapchain> { }
 #endif

@@ -8,7 +8,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The Direct3D/HLSL compiler module for all Direct3D backends.
+/// The HLSL compiler module.
 /// </summary>
 public class DXCompiler : CompilerModule
 {
@@ -17,18 +17,15 @@ public class DXCompiler : CompilerModule
     /// <inheritdoc/>
     public TargetDescription Target => _target;
 
-    private GraphicsBackend _backend;
-
     /// <inheritdoc/>
-    public GraphicsBackend Backend => _backend;
+    public GraphicsBackend Backend => throw new NotImplementedException("D3D11 backend does not exist.");
 
 
     /// <summary>
     /// Creates a new instance of <see cref="DXCompiler"/>
     /// </summary>
-    public DXCompiler(string profileString = "sm_5_0", GraphicsBackend backend = GraphicsBackend.Direct3D11)
+    public DXCompiler(string profileString = "sm_5_0")
     {
-        _backend = backend;
         _target = new()
         {
             Profile = GlobalSession.FindProfile(profileString),

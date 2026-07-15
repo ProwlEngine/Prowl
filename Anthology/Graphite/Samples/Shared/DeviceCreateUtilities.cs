@@ -83,26 +83,6 @@ public static class DeviceCreateUtilities
 
         switch (backend)
         {
-            case GraphicsBackend.Direct3D11:
-                if (window.Native!.Win32 == null)
-                    throw new Exception("Attempted to make a D3D11 graphics device without a Win32 window!");
-
-                (nint Hwnd, nint HDC, nint HInstance) = window.Native!.Win32!.Value;
-
-                D3D11DeviceOptions d3dOptions = default;
-
-                SwapchainDescription desc = new()
-                {
-                    DepthFormat = options.SwapchainDepthFormat,
-                    ColorSrgb = options.SwapchainSrgbFormat,
-                    Width = (uint)window.FramebufferSize.X,
-                    Height = (uint)window.FramebufferSize.Y,
-                    SyncToVerticalBlank = options.SyncToVerticalBlank,
-                    Source = SwapchainSource.CreateWin32(Hwnd, HInstance)
-                };
-
-                return GraphicsDevice.CreateD3D11(options, d3dOptions, desc);
-
             case GraphicsBackend.Vulkan:
                 if (window.API.API != ContextAPI.Vulkan)
                     throw new Exception("Attempted to make a Vulkan graphics device without an available Vulkan API");

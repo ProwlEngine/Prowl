@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 
 using Prowl.Graphite.ShaderDef;
@@ -8,14 +9,12 @@ namespace Prowl.Graphite.ShaderDef.Compiler.Tests;
 
 
 // Exercises variant specialization end-to-end. The shared Variants shader declares a single boolean
-// variant space (DoubleColor) consumed by the vertex stage, yielding two compiled permutations; the
-// test is platform-agnostic and registers both backends to show the variant enumeration is
-// independent of the targets.
+// variant space (DoubleColor) consumed by the vertex stage, yielding two compiled permutations.
 public class VariantCompilationTests
 {
     static CompilationResult Compile() =>
         CompilerTestHarness.CompileSharedAll("Variants",
-            () => new VulkanCompiler(), () => new DXCompiler());
+            () => new VulkanCompiler());
 
 
     [Fact]
@@ -41,8 +40,7 @@ public class VariantCompilationTests
             Keyword keyword = Assert.Single(variant.Variants);
             Assert.Equal("DoubleColor", keyword.Name);
 
-            // Each permutation is compiled for both registered backends.
-            Assert.Equal(2, variant.Backends.Length);
+            Assert.Single(variant.Backends);
         }
 
         string[] values = result.CompiledVariants
@@ -60,11 +58,11 @@ public class VariantCompilationTests
         CompilationResult result = Compile();
 
         // Specialization should bake the chosen DoubleColor value into each permutation's code.
-        string[] vertexHlsl = result.CompiledVariants
-            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.Direct3D11).Description)
-            .Select(d => CompilerTestHarness.StageText(d, ShaderStages.Vertex))
+        byte[][] vertexSpirv = result.CompiledVariants
+            .Select(v => v.Backends.First(b => b.Backend == GraphicsBackend.Vulkan).Description)
+            .Select(d => CompilerTestHarness.StageOf(d, ShaderStages.Vertex).ShaderBytes)
             .ToArray();
 
-        Assert.NotEqual(vertexHlsl[0], vertexHlsl[1]);
+        Assert.NotEqual(Convert.ToBase64String(vertexSpirv[0]), Convert.ToBase64String(vertexSpirv[1]));
     }
 }

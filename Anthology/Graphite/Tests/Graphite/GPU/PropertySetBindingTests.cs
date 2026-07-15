@@ -207,8 +207,3 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
 [Collection("GPU Tests")]
 public class VulkanPropertySetBindingTests : PropertySetBindingTests<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11PropertySetBindingTests : PropertySetBindingTests<D3D11DeviceCreator> { }
-#endif

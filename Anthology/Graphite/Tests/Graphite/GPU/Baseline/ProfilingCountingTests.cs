@@ -157,8 +157,3 @@ public abstract class ProfilingCountingTests<T> : GraphicsDeviceTestBase<T> wher
 [Collection("GPU Tests")]
 public class VulkanProfilingCountingTests : ProfilingCountingTests<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11ProfilingCountingTests : ProfilingCountingTests<D3D11DeviceCreator> { }
-#endif

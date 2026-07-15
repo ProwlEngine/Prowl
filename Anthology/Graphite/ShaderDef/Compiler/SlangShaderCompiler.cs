@@ -315,7 +315,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     private static bool IsBackendTopLeft(GraphicsBackend backend)
-        => backend is GraphicsBackend.Direct3D11 or GraphicsBackend.Vulkan;
+        => backend is GraphicsBackend.Vulkan;
 
 
     private void ResetSessionState()

@@ -1544,8 +1544,3 @@ public abstract partial class TextureTestBase<T> : GraphicsDeviceTestBase<T> whe
 [Collection("GPU Tests")]
 public class VulkanTextureTests : TextureTestBase<VulkanDeviceCreator> { }
 #endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11TextureTests : TextureTestBase<D3D11DeviceCreator> { }
-#endif

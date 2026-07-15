@@ -12,9 +12,9 @@ public class CompileForTargetTests
     public void CompilesEveryRegisteredBackend()
     {
         VariantResult variant = CompilerTestHarness.CompileGraphics(
-            () => new VulkanCompiler(), () => new DXCompiler());
+            () => new VulkanCompiler());
 
-        GraphicsBackend[] expected = [GraphicsBackend.Vulkan, GraphicsBackend.Direct3D11];
+        GraphicsBackend[] expected = [GraphicsBackend.Vulkan];
 
         Assert.Equal(expected.Length, variant.Backends.Length);
 

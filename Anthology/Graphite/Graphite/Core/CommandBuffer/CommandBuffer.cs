@@ -40,7 +40,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected IVertexSource? _currentVertexSource;
 
 
-    /// <summary>Per-command-buffer merged property table. Vk and D3D11 read this at draw time.</summary>
+    /// <summary>Per-command-buffer merged property table. Read by the backend at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
     /// <summary>

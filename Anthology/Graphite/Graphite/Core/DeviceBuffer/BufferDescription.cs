@@ -22,7 +22,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
     /// </summary>
     public uint StructureByteStride;
     /// <summary>
-    /// Controls how a structured buffer is bound on HLSL-based backends (D3D11). Only meaningful when
+    /// Controls how a structured buffer is bound on HLSL-based backends. Only meaningful when
     /// <see cref="Usage"/> includes <see cref="BufferUsage.StructuredBufferReadOnly"/> or
     /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. When true, binds as a typed
     /// <c>(RW)StructuredBuffer&lt;T&gt;</c>; use this when binding hand-written HLSL that declares its
@@ -79,7 +79,7 @@ public struct BufferDescription : IEquatable<BufferDescription>
     /// <param name="usage">Indicates how the <see cref="DeviceBuffer"/> will be used.</param>
     /// <param name="structureByteStride">For structured buffers, this value indicates the size in bytes of a single
     /// structure element, and must be non-zero. For all other buffer types, this value must be zero.</param>
-    /// <param name="useTypedHlslBinding">Controls how a structured buffer is bound on HLSL-based backends (D3D11).
+    /// <param name="useTypedHlslBinding">Controls how a structured buffer is bound on HLSL-based backends.
     /// Only meaningful when <paramref name="usage"/> includes <see cref="BufferUsage.StructuredBufferReadOnly"/> or
     /// <see cref="BufferUsage.StructuredBufferReadWrite"/>. When true, binds as a typed
     /// <c>(RW)StructuredBuffer&lt;T&gt;</c>; use this when binding hand-written HLSL that declares its storage

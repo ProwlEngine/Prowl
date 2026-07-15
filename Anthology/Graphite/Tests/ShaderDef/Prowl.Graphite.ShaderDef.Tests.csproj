@@ -5,9 +5,4 @@
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\..\ShaderDef\Prowl.Graphite.ShaderDef.csproj" />
-        <ProjectReference Include="..\..\ShaderDef.Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
-    </ItemGroup>
-
 </Project>

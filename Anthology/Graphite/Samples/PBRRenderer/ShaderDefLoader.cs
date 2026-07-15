@@ -15,7 +15,6 @@ public static class ShaderDefLoader
     private static Dictionary<GraphicsBackend, Func<CompilerModule>> s_modules = new()
     {
         [GraphicsBackend.Vulkan] = () => new VulkanCompiler("spirv_1_4"),
-        [GraphicsBackend.Direct3D11] = () => new DXCompiler("sm_5_0", GraphicsBackend.Direct3D11),
     };
 
 

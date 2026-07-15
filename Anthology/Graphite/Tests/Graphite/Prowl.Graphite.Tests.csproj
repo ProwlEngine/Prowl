@@ -5,9 +5,7 @@
         <IsPackable>false</IsPackable>
         <AllowUnsafeCode>true</AllowUnsafeCode>
         <OutputType>Exe</OutputType>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' != 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_D3D11;TEST_VULKAN</DefineConstants>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(ExcludeD3D11)' == 'true' and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
-        <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
+        <DefineConstants Condition="'$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
         <StartupObject>Program</StartupObject>
     </PropertyGroup>
 
@@ -17,7 +15,6 @@
         <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
         <PackageReference Include="Silk.NET.Windowing.SDL" Version="2.22.0" />
         <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
-        <ProjectReference Include="..\..\ShaderDef.Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -133,9 +133,6 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     private GraphicsDevice CreateIsolatedDevice(GraphicsDeviceOptions options) => GD.BackendType switch
     {
         GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(options),
-#if TEST_D3D11
-        GraphicsBackend.Direct3D11 => GraphicsDevice.CreateD3D11(options),
-#endif
         _ => throw new NotSupportedException(),
     };
 
@@ -228,9 +225,4 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
 [Trait("Backend", "Vulkan")]
 [Collection("GPU Tests")]
 public class VulkanGraphicsDeviceTests : GraphicsDeviceTests<VulkanDeviceCreator> { }
-#endif
-#if TEST_D3D11
-[Trait("Backend", "D3D11")]
-[Collection("GPU Tests")]
-public class D3D11GraphicsDeviceTests : GraphicsDeviceTests<D3D11DeviceCreator> { }
 #endif
