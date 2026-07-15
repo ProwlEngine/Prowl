@@ -381,20 +381,7 @@ public class EditorAssetBackend : AssetBackendBase
 
             // Dispose main + sub-assets so AssetRefs detect invalidation
             DisposeAndRemove(guid);
-            if (entry.SubAssets != null)
-            {
-                foreach (var sub in entry.SubAssets)
-                {
-                    DisposeAndRemove(sub.Guid);
-                    _subAssetIndex.TryRemove(sub.Guid, out _);
-                    _dependencies.RemoveAsset(sub.Guid);
-
-                    // Clean sub-asset cache file
-                    string subCachePath = GetCachePath(sub.Guid);
-                    if (File.Exists(subCachePath))
-                        try { File.Delete(subCachePath); } catch { }
-                }
-            }
+            RemoveSubAssets(entry, includeThumbnails: false);
 
             _pathToGuid.Remove(entry.Path);
             _guidToEntry.TryRemove(guid, out _);
@@ -683,14 +670,7 @@ public class EditorAssetBackend : AssetBackendBase
             foreach (var oldGuid in previousSubGuids)
             {
                 if (newSubGuids.Contains(oldGuid)) continue;
-                _subAssetIndex.TryRemove(oldGuid, out _);
-                if (_loadedAssets.TryRemove(oldGuid, out var oldObj)) oldObj?.Dispose();
-                AssetDatabase.Forget(oldGuid);
-                _dependencies.RemoveAsset(oldGuid);
-                ThumbnailGenerator.DeleteThumbnail(oldGuid, _project.ThumbnailsPath);
-                InvalidateThumbnailTexture(oldGuid);
-                string oldCache = GetCachePath(oldGuid);
-                if (File.Exists(oldCache)) try { File.Delete(oldCache); } catch { }
+                RemoveSubAsset(oldGuid, includeThumbnails: true);
             }
 
             // Serialize main asset
@@ -1185,20 +1165,8 @@ public class EditorAssetBackend : AssetBackendBase
             DisposeAndRemove(guid);
             ThumbnailGenerator.DeleteThumbnail(guid, _project.ThumbnailsPath);
             InvalidateThumbnailTexture(guid);
-            if (entry?.SubAssets != null)
-                foreach (var sub in entry.SubAssets)
-                {
-                    DisposeAndRemove(sub.Guid);
-                    _subAssetIndex.TryRemove(sub.Guid, out _);
-                    _dependencies.RemoveAsset(sub.Guid);
-                    ThumbnailGenerator.DeleteThumbnail(sub.Guid, _project.ThumbnailsPath);
-                    InvalidateThumbnailTexture(sub.Guid);
-
-                    // Clean sub-asset cache file
-                    string subCachePath = GetCachePath(sub.Guid);
-                    if (File.Exists(subCachePath))
-                        try { File.Delete(subCachePath); } catch { }
-                }
+            if (entry != null)
+                RemoveSubAssets(entry, includeThumbnails: true);
 
             _guidToEntry.TryRemove(guid, out _);
             _pathToGuid.Remove(relativePath);
@@ -1297,14 +1265,8 @@ public class EditorAssetBackend : AssetBackendBase
 
             // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
             var movedEntry = _guidToEntry.GetValueOrDefault(guid);
-            if (movedEntry?.SubAssets != null)
-            {
-                foreach (var sub in movedEntry.SubAssets)
-                {
-                    if (TryGetLoaded(sub.Guid, out var subObj))
-                        subObj.AssetPath = $"{newRelativePath}#{sub.Name}";
-                }
-            }
+            if (movedEntry != null)
+                UpdateSubAssetPaths(movedEntry, newRelativePath);
         }
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
@@ -1380,14 +1342,7 @@ public class EditorAssetBackend : AssetBackendBase
                 entry.Path = newPath;
 
                 // Update sub-asset AssetPaths (they use "parent/path#SubName" format)
-                if (entry.SubAssets != null)
-                {
-                    foreach (var sub in entry.SubAssets)
-                    {
-                        if (TryGetLoaded(sub.Guid, out var subObj))
-                            subObj.AssetPath = $"{newPath}#{sub.Name}";
-                    }
-                }
+                UpdateSubAssetPaths(entry, newPath);
             }
             if (TryGetLoaded(guid, out var obj))
                 obj.AssetPath = newPath;
@@ -1548,20 +1503,8 @@ public class EditorAssetBackend : AssetBackendBase
 
                         // Dispose main + sub-assets so AssetRefs detect invalidation
                         DisposeAndRemove(guid);
-                        if (deletedEntry?.SubAssets != null)
-                        {
-                            foreach (var sub in deletedEntry.SubAssets)
-                            {
-                                DisposeAndRemove(sub.Guid);
-                                _subAssetIndex.TryRemove(sub.Guid, out _);
-                                _dependencies.RemoveAsset(sub.Guid);
-
-                                // Clean sub-asset cache file
-                                string subCachePath = GetCachePath(sub.Guid);
-                                if (File.Exists(subCachePath))
-                                    try { File.Delete(subCachePath); } catch { }
-                            }
-                        }
+                        if (deletedEntry != null)
+                            RemoveSubAssets(deletedEntry, includeThumbnails: false);
 
                         _guidToEntry.TryRemove(guid, out _);
                         _pathToGuid.Remove(relativePath);
@@ -1612,14 +1555,7 @@ public class EditorAssetBackend : AssetBackendBase
                                 obj.AssetPath = relativePath;
 
                             // Update sub-asset AssetPaths
-                            if (renamedEntry.SubAssets != null)
-                            {
-                                foreach (var sub in renamedEntry.SubAssets)
-                                {
-                                    if (TryGetLoaded(sub.Guid, out var subObj))
-                                        subObj.AssetPath = $"{relativePath}#{sub.Name}";
-                                }
-                            }
+                            UpdateSubAssetPaths(renamedEntry, relativePath);
 
                             // If extension changed, update importer and trigger reimport
                             string oldExt = Path.GetExtension(evt.OldPath);
@@ -1666,6 +1602,36 @@ public class EditorAssetBackend : AssetBackendBase
 
     private string GetCachePath(Guid guid)
         => Path.Combine(_project.CachePath, $"{guid}.asset");
+
+    private void RemoveSubAsset(Guid subGuid, bool includeThumbnails)
+    {
+        DisposeAndRemove(subGuid);
+        _subAssetIndex.TryRemove(subGuid, out _);
+        _dependencies.RemoveAsset(subGuid);
+        if (includeThumbnails)
+        {
+            ThumbnailGenerator.DeleteThumbnail(subGuid, _project.ThumbnailsPath);
+            InvalidateThumbnailTexture(subGuid);
+        }
+        string subCachePath = GetCachePath(subGuid);
+        if (File.Exists(subCachePath))
+            try { File.Delete(subCachePath); } catch { }
+    }
+
+    private void RemoveSubAssets(AssetEntry entry, bool includeThumbnails)
+    {
+        if (entry.SubAssets == null) return;
+        foreach (var sub in entry.SubAssets)
+            RemoveSubAsset(sub.Guid, includeThumbnails);
+    }
+
+    private void UpdateSubAssetPaths(AssetEntry entry, string newPath)
+    {
+        if (entry.SubAssets == null) return;
+        foreach (var sub in entry.SubAssets)
+            if (TryGetLoaded(sub.Guid, out var subObj))
+                subObj.AssetPath = $"{newPath}#{sub.Name}";
+    }
 
     private void RebuildSubAssetIndex()
     {
