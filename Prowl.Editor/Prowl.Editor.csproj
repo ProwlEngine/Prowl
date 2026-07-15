@@ -23,6 +23,12 @@
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
   </ItemGroup>
 
+  <!-- Fix for Linux Builds -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(RuntimeIdentifier)' == ''">
+    <RuntimeIdentifier>$(NETCoreSdkPortableRuntimeIdentifier)</RuntimeIdentifier>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
   <!-- Allow test project to access internal members (e.g. test-only sweep/eviction hooks) -->
   <ItemGroup>
     <InternalsVisibleTo Include="Prowl.Editor.Test" />
