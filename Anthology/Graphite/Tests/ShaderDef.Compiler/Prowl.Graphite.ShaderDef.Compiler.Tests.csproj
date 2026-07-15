@@ -6,6 +6,14 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\..\..\Slang\Slang\Prowl.Slang.csproj" />
+        <ProjectReference Include="..\..\..\Crumb\Crumb\Prowl.Crumb.csproj" />
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
         <None Include="KnownGood\**\*" CopyToOutputDirectory="PreserveNewest" />
         <None Include="Shaders\**\*" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>

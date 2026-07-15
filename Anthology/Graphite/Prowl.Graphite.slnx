@@ -2,17 +2,14 @@
     <Folder Name="/Tests/">
         <Project Path="Tests/Graphite/Prowl.Graphite.Tests.csproj" />
         <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
-        <Project Path="Tests/Compiler/Prowl.Graphite.Compiler.Tests.csproj" />
-        <Project Path="Tests/Variants/Prowl.Graphite.Variants.Tests.csproj" />
+        <Project Path="Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
     </Folder>
     <Folder Name="/Graphite/">
         <Project Path="Graphite/Prowl.Graphite.csproj" />
     </Folder>
     <Folder Name="/ShaderDef/">
-        <Project Path="ShaderDef/Prowl.Graphite.ShaderDef.csproj" />
-    </Folder>
-    <Folder Name="/Compiler/">
-        <Project Path="Compiler/Prowl.Graphite.Compiler.csproj" />
+        <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
+        <Project Path="ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
     </Folder>
     <Folder Name="/Samples/" />
     <Folder Name="/Samples/HelloTriangle/">
@@ -29,9 +26,6 @@
     </Folder>
     <Folder Name="/Samples/Shared/">
         <Project Path="Samples/Shared/Shared.csproj" />
-    </Folder>
-    <Folder Name="/Variants/">
-        <Project Path="Variants/Prowl.Graphite.Variants.csproj" />
     </Folder>
     <Folder Name="/Tools/">
         <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
