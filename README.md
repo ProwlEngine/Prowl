@@ -126,6 +126,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
         - Bloom (dual-filter downsample/upsample)
         - FXAA (Fast Approximate Anti-Aliasing)
 		- TAA (Temporal Anti-Aliasing)
+        - SMAA 
         - Ground-Truth Ambient Occlusion (GTAO)
 		- Stochastic Screen Space Reflections (SSR)
         - Bokeh Depth of Field
