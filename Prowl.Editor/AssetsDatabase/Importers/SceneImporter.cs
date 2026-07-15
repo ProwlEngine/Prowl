@@ -29,12 +29,11 @@ public class SceneImporter : AssetImporter
             var scene = Serializer.Deserialize<Scene>(echo, serCtx);
             if (scene != null)
             {
-                scene.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
                 ctx.SetMainAsset(scene);
 
                 // Also walk the raw echo for PrefabAssetId references
                 // (these are plain Guid strings, not AssetRef fields, so not auto-tracked)
-                CollectPrefabDependencies(echo, dependencies);
+                ImportHelper.CollectAssetDependencies(echo, dependencies);
 
                 foreach (var dep in dependencies)
                     ctx.AddDependency(dep);
@@ -46,33 +45,5 @@ public class SceneImporter : AssetImporter
             return false;
         }
         return true;
-    }
-
-    /// <summary>Walk EchoObject tree for PrefabAssetId and AssetID Guid strings. AssetID also needs
-    /// checking here (not just PrefabAssetId): a prefab instance's PropertyOverride.Value is a
-    /// pre-serialized EchoObject blob built without a tracking context (see PrefabUtility.CompareField),
-    /// so an AssetRef inside it never reaches the normal Serializer.Deserialize dependency tracking.</summary>
-    private static void CollectPrefabDependencies(EchoObject echo, HashSet<Guid> deps)
-    {
-        if (echo == null) return;
-
-        if (echo.TagType == EchoType.Compound)
-        {
-            if (echo.TryGet("PrefabAssetId", out var prefabIdTag)
-                && Guid.TryParse(prefabIdTag.StringValue, out var prefabGuid) && prefabGuid != Guid.Empty)
-                deps.Add(prefabGuid);
-
-            if (echo.TryGet("AssetID", out var assetIdTag)
-                && Guid.TryParse(assetIdTag.StringValue, out var assetGuid) && assetGuid != Guid.Empty)
-                deps.Add(assetGuid);
-
-            foreach (var kvp in echo.Tags)
-                CollectPrefabDependencies(kvp.Value, deps);
-        }
-        else if (echo.TagType == EchoType.List && echo.List != null)
-        {
-            foreach (var item in echo.List)
-                CollectPrefabDependencies(item, deps);
-        }
     }
 }

@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -306,7 +307,7 @@ public static class ProwlPackage
     public static ImportAction DetermineAction(ZipArchive archive, PackageAssetEntry packageAsset, string assetsPath)
     {
         // Parse the GUID from the package entry
-        if (!System.Guid.TryParse(packageAsset.Guid, out var guid) || guid == System.Guid.Empty)
+        if (!EditorUtils.TryParseNonEmptyGuid(packageAsset.Guid, out var guid))
             return ImportAction.Add;
 
         var db = EditorAssetBackend.Instance;

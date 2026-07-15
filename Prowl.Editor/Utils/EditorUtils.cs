@@ -9,6 +9,12 @@ namespace Prowl.Editor.Utils;
 
 public static class EditorUtils
 {
+    public static bool TryParseNonEmptyGuid(string? s, out Guid result)
+    {
+        result = Guid.Empty;
+        return !string.IsNullOrEmpty(s) && Guid.TryParse(s, out result) && result != Guid.Empty;
+    }
+
     public static IEnumerable<Type> GetAllTypes()
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())

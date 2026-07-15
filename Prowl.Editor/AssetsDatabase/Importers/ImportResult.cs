@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using Prowl.Runtime;
 
@@ -36,10 +37,12 @@ public class ImportContext
         Settings = settings;
     }
 
-    /// <summary>Set the main asset.</summary>
+    /// <summary>Set the main asset. Auto-sets Name from the file path if it isn't already set.</summary>
     public void SetMainAsset(EngineObject asset)
     {
         asset.AssetID = AssetGuid;
+        if (string.IsNullOrEmpty(asset.Name))
+            asset.Name = Path.GetFileNameWithoutExtension(AbsolutePath);
         MainAsset = asset;
     }
 
