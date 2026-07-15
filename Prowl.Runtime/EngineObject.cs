@@ -27,7 +27,11 @@ public abstract class EngineObject : IDisposable
 
     [HideInInspector] public string Name;
 
-    public bool IsDisposed { get; private set; }
+    // Interlocked-guarded rather than a plain bool: a finalizer can now race an explicit Dispose()
+    // call from another thread (the finalizer thread runs independently of everything else), so the
+    // check-and-set must be atomic or both could pass the guard and double-run OnDispose.
+    private int _disposed;
+    public bool IsDisposed => _disposed != 0;
 
     public EngineObject() : this(null) { }
 
@@ -45,9 +49,11 @@ public abstract class EngineObject : IDisposable
 
     public void Dispose()
     {
-        if (IsDisposed) return;
-        IsDisposed = true;
+        if (Interlocked.CompareExchange(ref _disposed, 1, 0) != 0)
+            return;
 
+        // Explicit disposal means a finalizer (if this type has one) has nothing left to do.
+        GC.SuppressFinalize(this);
         OnDispose();
     }
 
