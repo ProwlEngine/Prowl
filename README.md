@@ -47,8 +47,8 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - C# Scripting with .NET 10
     - GameObject & MonoBehaviour Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
-    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Prowl.Paper)), Editor built on top of [Origami](https://github.com/ProwlEngine/Prowl.Origami)
-    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Prowl.Quill)
+    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
+    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Anthology)
     - Full-Featured Editor
         - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
         - Custom Component Editors, Property Editors, and Scene View Editors
@@ -77,7 +77,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
         - Spatial 3D Audio with Attenuation & Doppler
         - Supports WAV, MP3, OGG, FLAC
         - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
-    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
+    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Anthology)
     - Tags & Layers System
     - Scene System with Fog & Ambient Lighting
     - Prefabs with Nested Prefab Support
@@ -91,7 +91,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - GameObject-Based UI, including World Space UI
         - `RectTransform`-driven layout, Buttons, Sliders, layout groups, drag & drop event handlers
     - Prowl Actions - persistent, inspector-configurable event callbacks
-    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector)
+    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Anthology)
         - Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
     - Build System - Build to Standalone Application
@@ -106,7 +106,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 	- Dedicated Render Thread
     - Extensible Render Pipeline (Custom Pipelines Supported)
     - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
-	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic)
+	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Anthology)
 	- Baked Light Probes
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
@@ -155,7 +155,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - Forward & Reverse Dependency Tracking
 	- Threaded Asset Loading
     - Supported Formats:
-        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay))
+        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Anthology))
         - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
         - Audio: WAV, MP3, OGG, FLAC
 
