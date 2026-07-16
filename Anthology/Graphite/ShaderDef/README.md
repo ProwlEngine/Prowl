@@ -80,10 +80,6 @@ Once an index is resolved, `ShaderPass.Resolve` decides what to actually return:
 
 `ShaderPass.CompileAll` walks every combination eagerly rather than waiting for `Resolve` to hit them one at a time; `CompiledCount`/`AvailableCount`/`AllAvailable`/`AllCompiled` let you inspect how much of the space is actually filled in without forcing compilation.
 
-### VariantSet\<T\>
-
-`VariantSet<T>` is the same keyword-resolution machinery (`KeywordMap` + `KeywordState`) generalized over an arbitrary payload type instead of `Variant` specifically. `ShaderPass` doesn't use it internally (it needs the compile-on-demand behavior `Resolve` provides), but it's exposed for callers who already have a fixed array of *something* - compiled `GraphicsProgram`s, higher-level material variants, whatever - and just want keyword-based selection over it with no compiler involved.
-
 ## Pass State
 
 `PassState` is a bag of nullable fields covering rasterizer, depth, stencil, blend, and color-mask state - one field per concept in the ShaderDef render-state commands (`Cull`, `ZTest`, `Blend`, `Stencil { ... }`, etc). Every field is nullable because a `.shaderdef` file only specifies what it cares about; anything left unset should fall through to a caller-supplied base state rather than some arbitrary default baked into the parser.
@@ -144,7 +140,7 @@ commandBuffer.SetShader(pass);
 
 This calls `ShaderPass.ResolveProgram`, which resolves the active variant (compiling on demand if needed and possible), overlays the pass's `PassState` onto the given base blend/depth/rasterizer descriptions, and creates (or reuses, via a per-pass `_programCache` keyed by active variant index) a `GraphicsProgram` from the device's `ResourceFactory`. The overload with no base-state arguments uses library defaults (`BlendStateDescription.SingleDisabled`, `DepthStencilStateDescription.DepthOnlyLessEqual`, back-face culling with clockwise front faces) - the same defaults `PassState`'s own null-coalescing falls back to when a `.shaderdef` file leaves a field unset.
 
-## Where This Slots Into Graphite
+## Graphite Integration
 
 - **Core has no Slang dependency.** A build that only ever plays back baked `ShaderSnapshot`s can link Core alone and never touch the Compiler project or the Slang native library.
 - **The Compiler project is the only thing that knows what a `.shaderdef` file's Slang source means.** Parsing, variant discovery, and per-backend reflection all live there; Core only ever deals in already-resolved `VariantSpace`s and `Variant`s.
