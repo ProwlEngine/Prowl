@@ -1,4 +1,4 @@
-﻿<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
+﻿<img src="https://i.imgur.com/qoJ4RTS.png" width="100%" alt="Prowl logo image">
 
 ![Github top languages](https://img.shields.io/github/languages/top/ProwlEngine/Prowl)
 [![GitHub version](https://img.shields.io/github/v/release/ProwlEngine/Prowl?include_prereleases&style=flat-square)](https://github.com/ProwlEngine/Prowl/releases)
@@ -33,11 +33,14 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
-| ![Screenshot](https://github.com/user-attachments/assets/f124906e-c403-4618-93e7-461b39ba4deb) | ![Screenshot](https://github.com/user-attachments/assets/956c6f00-2052-464e-b426-0b3cdbbe45de) |
+
+<img width="100%" alt="image 5" src="https://i.imgur.com/hDXtuv5.png" />
+
+| ![Screenshot](https://i.imgur.com/khCaEB5.png) | ![Screenshot](https://i.imgur.com/qNeMvC4.jpeg) |
 | :-: | :-: |
-| ![image](https://github.com/user-attachments/assets/974cc488-379c-4db8-bd39-ff6024e341c6) | ![image](https://github.com/user-attachments/assets/5b00b701-5b61-4fd1-afaa-265ef9d578e7) |
-| ![image](https://github.com/user-attachments/assets/e0ec6307-2368-4df5-b7a8-ef7665df2207) | ![image](https://github.com/user-attachments/assets/e59d63d2-d2d9-4ddb-afa7-4a465caa2cc9) |
-| ![UntitledFLightModel](https://github.com/user-attachments/assets/71486b58-a81f-440a-ad43-cabdb1e6d6ba) | ![Untitled](https://github.com/user-attachments/assets/4255a0fe-689f-4696-b062-2d62ca35a23c) |
+| ![image](https://i.imgur.com/xooqeDx.png) | ![image](https://i.imgur.com/zbCJOwI.png) |
+| ![UntitledFLightModel](https://i.imgur.com/TkJOmw9.png) | ![Untitled](https://i.imgur.com/BXn31d0.png) |
+| ![UntitledFLightModel](https://i.imgur.com/rLGLo7h.png) | ![Untitled](https://i.imgur.com/jbKCif2.png) |
 
 # <span align="center">✨ Features ✨</span>
 
