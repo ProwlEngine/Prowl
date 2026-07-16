@@ -530,16 +530,68 @@ public class EditorAssetBackend : AssetBackendBase
         // afterward would include failed imports too and fire OnAssetsImported for them.
         var succeeded = new List<string>();
 
+        int sinceReclaim = 0;
+
         foreach (var entry in dirty)
         {
-            if (RunImport(entry))
+            bool ok = RunImport(entry);
+
+            if (ok)
+            {
                 succeeded.Add(entry.Path);
+
+                // RunImport's SetLoaded calls (main asset + every sub-asset) each touched this
+                // family's shared idle clock (Touch/IsIdle resolve a sub-asset to its parent - see
+                // AssetDatabase.Resolve), so a big model imported here looks "just used" even though
+                // nothing has actually asked for any of it yet. Reset the clock right after each
+                // entry - but marking it idle isn't enough on its own: this whole loop runs
+                // synchronously as part of Initialize(), before the editor's main loop (and its
+                // per-frame TickIdleSweep call) ever starts ticking, so nothing would actually act on
+                // that until the entire batch finishes and normal frame ticking begins. Sweep right
+                // here instead, so peak memory across a big import batch is bounded to roughly one
+                // entry's worth instead of accumulating unreclaimed across all of them. Scoped to this
+                // batch-import loop only (not RunImport itself) - CreateAsset and other single-asset
+                // RunImport callers want the normal "just touched" behavior, since the caller is about
+                // to use what it just created.
+                AssetDatabase.ForceIdle(entry.Guid);
+                ForceIdleSweep();
+            }
+
+            // A full GC+LOH-compaction pass per entry would be excessive (each pass has real CPU
+            // cost), but leaving it only until the whole batch finishes lets committed memory
+            // accumulate unreclaimed across every entry in between - defeating the point of sweeping
+            // above. Every few entries strikes a balance: bounds peak commit without paying full GC
+            // cost per asset.
+            if (++sinceReclaim >= 5)
+            {
+                sinceReclaim = 0;
+                ReclaimMemory();
+            }
         }
 
         Runtime.Debug.Log($"Import complete: {succeeded.Count}/{dirty.Count} succeeded.");
 
         if (succeeded.Count > 0)
+        {
             OnAssetsImported?.Invoke(succeeded.ToArray());
+            ReclaimMemory();
+        }
+    }
+
+    // Importing (especially models/textures) transiently allocates a lot - raw file bytes,
+    // per-polygon-vertex mesh unpacking, texture decode buffers - none of which is reachable once
+    // disposed, but the CLR doesn't eagerly decommit freed Large Object Heap segments back to the OS
+    // on its own. Left alone, a heavy import batch's peak memory (and the page file backing it)
+    // lingers for the rest of the session instead of shrinking back down once the garbage is
+    // actually collectible. Force a compacting collection to reclaim it immediately instead of
+    // waiting on the GC's own heuristics, which are tuned for throughput, not for promptly returning
+    // memory after a one-off spike.
+    private static void ReclaimMemory()
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
     }
 
     private bool RunImport(AssetEntry entry)
