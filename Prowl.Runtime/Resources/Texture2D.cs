@@ -318,7 +318,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
     public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
     {
-        var image = new MagickImage(stream);
+        using var image = new MagickImage(stream);
         return FromImage(image, generateMipmaps);
     }
 
@@ -329,7 +329,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
     public static Texture2D FromFile(string file, bool generateMipmaps = false)
     {
-        var image = new MagickImage(file);
+        using var image = new MagickImage(file);
         return FromImage(image, generateMipmaps);
     }
 
