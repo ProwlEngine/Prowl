@@ -197,6 +197,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     public void SetTexture(string name, Texture2D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(new AssetRef<Texture2D>(value))); }
     public void SetTexture(string name, AssetRef<Texture2D> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture(value)); }
     public void SetTexture3D(string name, Texture3D value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(new AssetRef<Texture3D>(value))); }
+    public void SetTexture3D(string name, AssetRef<Texture3D> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTexture3D(value)); }
     public void SetTextureCube(string name, Cubemap value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(new AssetRef<Cubemap>(value))); }
     public void SetTextureCube(string name, AssetRef<Cubemap> value) { PropertyOverrides.Add(name); Store(name, MaterialProperty.FromTextureCube(value)); }
 

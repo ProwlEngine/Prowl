@@ -92,20 +92,48 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Gets the data of the entire <see cref="Texture2D"/>.
+    /// Gets the data of the entire <see cref="Texture2D"/>. A raw pointer's lifetime can't be
+    /// guaranteed past this call, so unlike <see cref="GetData{T}"/> this only works outside a
+    /// frame (see <see cref="ReadBackSubresource"/>); if a frame is currently open it logs a
+    /// warning and leaves <paramref name="ptr"/> untouched.
     /// </summary>
     public unsafe void GetDataPtr(void* ptr)
     {
-        throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
+        if (Graphics.CurrentFrame != null)
+        {
+            Debug.LogWarning($"Cannot read back '{Name}' into a raw pointer while a frame is being " +
+                "recorded; the pointer isn't guaranteed to stay valid. Use GetData<T> instead, or call outside a frame.");
+            return;
+        }
+
+        TextureDescription stagingDescription =
+            TextureDescription.Texture2D(Width, Height, 1, 1, ImageFormat, TextureUsage.Staging);
+        nint destination = (nint)ptr;
+        uint destSize = (uint)GetSize();
+        uint width = Width, height = Height;
+
+        ReadBackSubresource(stagingDescription, width, height, 1, 0, 0,
+            mapped => CopyMappedRegion(mapped, destination, destSize, width, height, 1));
     }
 
     /// <summary>
-    /// Gets the data of the entire <see cref="Texture2D"/>.
+    /// Gets the data of the entire <see cref="Texture2D"/>. See <see cref="ReadBackSubresource"/>:
+    /// returns true if <paramref name="data"/> was filled synchronously before returning, or false
+    /// if the read was queued and <paramref name="data"/> will be filled once <paramref name="onComplete"/>
+    /// fires on a later tick (both null-safe to ignore if the caller doesn't need to know).
     /// </summary>
-    public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
+    public unsafe bool GetData<T>(Memory<T> data, Action onComplete = null) where T : unmanaged
     {
-        Debug.LogWarning("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture)");
-        // throw new NotSupportedException("Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).");
+        TextureDescription stagingDescription =
+            TextureDescription.Texture2D(Width, Height, 1, 1, ImageFormat, TextureUsage.Staging);
+        uint destSize = (uint)GetSize();
+        uint width = Width, height = Height;
+
+        return ReadBackSubresource(stagingDescription, width, height, 1, 0, 0, mapped =>
+        {
+            using var handle = data.Pin();
+            CopyMappedRegion(mapped, (nint)handle.Pointer, destSize, width, height, 1);
+        }, onComplete);
     }
 
     public int GetSize() => (int)(Width * Height * ImageFormat.GetSizeInBytes());
@@ -173,7 +201,8 @@ public sealed class Texture2D : Texture, ISerializable
         compoundTag.Add("AddressU", new((int)AddressModeU));
         compoundTag.Add("AddressV", new((int)AddressModeV));
         Memory<byte> memory = new byte[GetSize()];
-        GetData(memory);
+        if (!GetData(memory))
+            Debug.LogWarning($"'{Name}' was serialized while a frame was being recorded; its pixel data may be stale.");
         compoundTag.Add("Data", new(memory.ToArray()));
     }
 

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Graphite;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -386,5 +387,19 @@ public class Camera : MonoBehaviour
             proj = Float4x4.CreatePerspectiveFov(Maths.ToRadians(FieldOfView), aspect, NearClipPlane, FarClipPlane);
 
         return proj;
+    }
+
+    /// <summary>
+    /// Returns the matrix needed to normalize a projection matrix built for an OpenGL-style
+    /// clip space (Y up) onto the active graphics backend's actual clip space orientation.
+    /// Camera.ProjectionMatrix itself is left in the OpenGL-style convention (editor tools like
+    /// the transform gizmo do their own CPU-side screen projection assuming that convention);
+    /// the render pipeline applies this flip only to the copy it uploads to the GPU.
+    /// </summary>
+    public static Float4x4 GetCoordinateSystemFlip()
+    {
+        return Graphics.Device.IsClipSpaceYInverted
+            ? Float4x4.Identity
+            : Float4x4.CreateScale(1f, -1f, 1f);
     }
 }

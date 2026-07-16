@@ -374,15 +374,19 @@ public abstract class RenderPipeline : EngineObject
         // Set View Rect
         //buffer.SetViewports((int)(camera.Viewrect.x * target.Width), (int)(camera.Viewrect.y * target.Height), (int)(camera.Viewrect.width * target.Width), (int)(camera.Viewrect.height * target.Height), 0, 1000);
 
+        // Camera's projection matrices are OpenGL-convention; flip to the active backend's
+        // actual clip space orientation only for the copies the GPU consumes below.
+        Float4x4 flip = Camera.GetCoordinateSystemFlip();
+
         // Previous-frame VP for motion vectors (jitter-free). Fall back to the current
         // non-jittered VP on the first frame so motion reads zero instead of garbage.
         GlobalUniforms.SetPrevViewProj(css.HasPreviousViewProj
-            ? css.PreviousViewProj
-            : css.NonJitteredProjection * css.View);
+            ? flip * css.PreviousViewProj
+            : flip * css.NonJitteredProjection * css.View);
 
         // Current-frame VP without TAA jitter, so the prepass can compute motion vectors
         // jitter-free while still rasterizing with the jittered projection.
-        GlobalUniforms.SetMatrixVPNonJittered(css.NonJitteredProjection * css.View);
+        GlobalUniforms.SetMatrixVPNonJittered(flip * css.NonJitteredProjection * css.View);
 
         // Setup Default Uniforms for this frame
         // Camera
@@ -402,6 +406,10 @@ public abstract class RenderPipeline : EngineObject
 
     public void AssignCameraMatrices(Float4x4 view, Float4x4 projection)
     {
+        // Camera's projection matrix is OpenGL-convention; flip it to the active backend's
+        // actual clip space orientation only for the copy the GPU consumes.
+        projection = Camera.GetCoordinateSystemFlip() * projection;
+
         Float4x4 viewProj = projection * view;
 
         GlobalUniforms.SetMatrixV(view);
@@ -456,6 +464,8 @@ public abstract class RenderPipeline : EngineObject
     /// pass in this batch will request a grab texture.</param>
     public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
     {
+        GlobalPropertySet.Apply(cmd);
+
         _perDrawSetCursor = 0;
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 
+using Prowl.Graphite;
 using Prowl.OrigamiUI;
 using Gizmo = Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
@@ -241,12 +242,15 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                         float rw = (float)r.Size.X;
                         float rh = (float)r.Size.Y;
 
-                        // Draw RT with flipped Y OpenGL RT has Y=0 at bottom
                         canvas.SetBrushTexture(rt.MainTexture);
-                        // TextureTransform maps screen rect to UV: flip V by translating +1 and scaling -1 on Y
+                        // TextureTransform maps screen rect to UV. Bottom-left-origin backends (OpenGL)
+                        // store the render target flipped relative to the canvas, so V needs flipping
+                        // there; top-left-origin backends (Vulkan, D3D11) sample upright already.
+                        bool bottomLeftOrigin = Graphics.Device.BackendType is GraphicsBackend.OpenGL or GraphicsBackend.OpenGLES;
                         canvas.SetBrushTextureTransform(
-                            Transform2D.CreateTranslation(rx, ry + rh) *
-                            Transform2D.CreateScale(rw, -rh));
+                            bottomLeftOrigin
+                                ? Transform2D.CreateTranslation(rx, ry + rh) * Transform2D.CreateScale(rw, -rh)
+                                : Transform2D.CreateTranslation(rx, ry) * Transform2D.CreateScale(rw, rh));
                         canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
                         canvas.ClearBrushTexture();
 

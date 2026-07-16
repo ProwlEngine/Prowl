@@ -156,4 +156,91 @@ public abstract class Texture : EngineObject
         while (size > 1) { size /= 2; levels++; }
         return levels;
     }
+
+    /// <summary>
+    /// Reads one subresource of <see cref="Handle"/> back into CPU memory. Graphite only allows
+    /// mapping a Texture created with <see cref="TextureUsage.Staging"/>, and a Texture can only be
+    /// mapped once the copy into it has actually finished on the GPU.
+    /// <para>
+    /// When called outside a frame (the common case - asset saves, editor tooling) this copies the
+    /// requested region into a throwaway staging texture on its own dedicated frame, blocks until the
+    /// GPU has finished it, then maps and copies the result out synchronously; <paramref name="consume"/>
+    /// and <paramref name="onComplete"/> both run before this method returns, and it returns true.
+    /// </para>
+    /// <para>
+    /// When called while a frame is already open (e.g. mid-render, such as a one-shot capture into a
+    /// render target followed by a read-back) Graphite forbids opening a second frame, and the copy
+    /// cannot be waited on/mapped until the frame it lands in actually completes - which cannot happen
+    /// before this method would return, since nothing calls <c>EndFrame</c> until the caller's own stack
+    /// unwinds back into the frame loop. So instead the copy is recorded onto that frame's own command
+    /// stream (piggybacking rather than opening a redundant frame) and the map + <paramref name="consume"/>
+    /// + <paramref name="onComplete"/> are deferred until <see cref="Graphics.FlushPendingReadbacks"/>
+    /// finds the frame complete (drained once per tick, whenever no frame is open); this method then
+    /// returns false immediately without having read anything yet.
+    /// </para>
+    /// </summary>
+    /// <returns>True if the read-back completed synchronously before returning; false if it was queued
+    /// to complete on a later tick.</returns>
+    private protected bool ReadBackSubresource(TextureDescription stagingDescription, uint width, uint height,
+        uint depth, uint srcMipLevel, uint srcArrayLayer, Action<MappedResource> consume, Action onComplete = null)
+    {
+        GraphicsDevice device = Graphics.Device;
+        GraphiteTexture staging = device.ResourceFactory.CreateTexture(stagingDescription);
+        staging.Name = $"{Name} Readback Staging";
+
+        if (Graphics.CurrentFrame == null)
+        {
+            CommandBuffer cmd = device.ResourceFactory.CreateCommandBuffer();
+            cmd.Name = "Texture Readback";
+            cmd.Begin();
+            cmd.CopyTexture(Handle, 0, 0, 0, srcMipLevel, srcArrayLayer,
+                staging, 0, 0, 0, 0, 0, width, height, depth, 1);
+            cmd.End();
+
+            Frame frame = device.BeginFrame();
+            frame.SubmitCommands(cmd);
+            device.EndFrame(frame);
+            device.WaitForFrame(frame);
+            cmd.Dispose();
+
+            MappedResource mapped = device.Map(staging, MapMode.Read);
+            try { consume(mapped); }
+            finally { device.Unmap(staging); }
+            staging.Dispose();
+            onComplete?.Invoke();
+            return true;
+        }
+
+        CommandBuffer piggybackCmd = Graphics.GetCommandBuffer("Texture Readback");
+        piggybackCmd.CopyTexture(Handle, 0, 0, 0, srcMipLevel, srcArrayLayer,
+            staging, 0, 0, 0, 0, 0, width, height, depth, 1);
+        ulong frameId = Graphics.CurrentFrame.FrameId;
+        Graphics.Submit(piggybackCmd);
+
+        Graphics.QueueReadback(staging, frameId, consume, onComplete);
+        return false;
+    }
+
+    /// <summary>Copies one mapped region into <paramref name="destination"/>, honoring <see cref="MappedResource.RowPitch"/>/<see cref="MappedResource.DepthPitch"/> when they don't tightly pack.</summary>
+    private protected unsafe void CopyMappedRegion(MappedResource mapped, nint destination, uint destinationSizeInBytes, uint width, uint height, uint depth)
+    {
+        byte* src = (byte*)mapped.Data;
+        byte* dst = (byte*)destination;
+        uint rowBytes = width * ImageFormat.GetSizeInBytes();
+
+        if (mapped.RowPitch == rowBytes)
+        {
+            Buffer.MemoryCopy(src, dst, destinationSizeInBytes, (long)rowBytes * height * depth);
+        }
+        else
+        {
+            for (uint z = 0; z < depth; z++)
+            {
+                byte* srcSlice = src + z * mapped.DepthPitch;
+                byte* dstSlice = dst + z * rowBytes * height;
+                for (uint y = 0; y < height; y++)
+                    Buffer.MemoryCopy(srcSlice + y * mapped.RowPitch, dstSlice + y * rowBytes, rowBytes, rowBytes);
+            }
+        }
+    }
 }

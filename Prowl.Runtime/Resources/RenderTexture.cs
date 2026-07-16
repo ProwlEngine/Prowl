@@ -180,6 +180,14 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameCreated)>> pool = [];
     private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameAcquired)>> active = [];
+    // Released render textures aren't safe to hand back out until the GPU has actually finished
+    // reading/writing them: a camera render and (say) a material preview render can release and
+    // re-acquire the same pooled RT within the same engine frame, but the backend may still be
+    // replaying the first render's commands (possibly on a separate thread, possibly several engine
+    // frames behind the CPU). Reusing the RT before that replay completes is a write-after-read
+    // hazard: the previous render's draw calls end up reading the new render's contents instead,
+    // which looks like geometry/gizmos randomly bleeding from one render into the other.
+    private static readonly Dictionary<RenderTexture, ulong> pendingGpuSafeFrame = [];
     private const int MaxUnusedFrames = 10;
     private const int MaxActiveFrames = 3; // Warn if held longer than 3 frames
 
@@ -187,17 +195,28 @@ public sealed class RenderTexture : EngineObject, ISerializable
     {
         var key = new RenderTextureKey(width, height, hasDepth, format);
 
-        RenderTexture renderTexture;
+        RenderTexture? renderTexture = null;
         if (pool.TryGetValue(key, out List<(RenderTexture, long frameCreated)>? list) && list.Count > 0)
         {
-            int i = list.Count - 1;
-            renderTexture = list[i].Item1;
-            list.RemoveAt(i);
+            GraphicsDevice device = Graphics.Device;
+
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                RenderTexture candidate = list[i].Item1;
+
+                // Skip (leave in the pool) any candidate the GPU might still be using.
+                if (device != null && pendingGpuSafeFrame.TryGetValue(candidate, out ulong safeFrame)
+                    && !device.IsFrameComplete(safeFrame))
+                    continue;
+
+                pendingGpuSafeFrame.Remove(candidate);
+                renderTexture = candidate;
+                list.RemoveAt(i);
+                break;
+            }
         }
-        else
-        {
-            renderTexture = new RenderTexture(width, height, hasDepth, format);
-        }
+
+        renderTexture ??= new RenderTexture(width, height, hasDepth, format);
 
         // Track in active pool
         if (!active.TryGetValue(key, out List<(RenderTexture, long frameAcquired)>? activeList))
@@ -235,6 +254,12 @@ public sealed class RenderTexture : EngineObject, ISerializable
         }
 
         list.Add((renderTexture, Time.FrameCount));
+
+        // Record the last GPU frame that could still be reading/writing this RT, so GetTemporaryRT
+        // won't hand it back out until that work has actually completed. Mirrors Graphics.DisposeDeferred.
+        GraphicsDevice device = Graphics.Device;
+        if (device != null)
+            pendingGpuSafeFrame[renderTexture] = device.LastCompletedFrameId + device.FramesInFlight;
     }
 
     public static void UpdatePool()
@@ -273,7 +298,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
         }
 
         foreach (RenderTexture renderTexture in disposableTextures)
+        {
+            pendingGpuSafeFrame.Remove(renderTexture);
             renderTexture.Dispose();
+        }
 
         // Clean up empty dictionary entries to prevent unbounded key accumulation
         List<RenderTextureKey>? emptyKeys = null;

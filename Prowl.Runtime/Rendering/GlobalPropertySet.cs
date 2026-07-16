@@ -89,4 +89,11 @@ public static class GlobalPropertySet
     public static void SetSampler(PropertyID name, Sampler sampler) => _globalSet.SetSampler(name, sampler);
 
     public static void ClearGlobals() => _globalSet.Clear();
+
+    /// <summary>
+    /// Merges the global property set into the given command buffer so every bound global
+    /// (Frame UBO, fog/ambient params, etc.) is visible to any shader whose reflection declares
+    /// a matching name, regardless of which draw path issued the command buffer.
+    /// </summary>
+    public static void Apply(CommandBuffer cmd) => cmd.SetProperties(_globalSet);
 }

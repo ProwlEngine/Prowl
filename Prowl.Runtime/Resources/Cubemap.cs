@@ -105,11 +105,24 @@ public sealed class Cubemap : Texture, ISerializable
                 0, 0, 0, s, s, 1, (uint)mip, (uint)face);
     }
 
-    /// <summary>Read back one face's mip level into <paramref name="destination"/>.</summary>
-    public void GetFaceData(int face, byte[] destination, int mip = 0)
+    /// <summary>
+    /// Read back one face's mip level into <paramref name="destination"/>. See
+    /// <see cref="Texture.ReadBackSubresource"/>: returns true if filled synchronously before
+    /// returning, or false if the read was queued and <paramref name="destination"/> will be filled
+    /// once <paramref name="onComplete"/> fires on a later tick.
+    /// </summary>
+    public bool GetFaceData(int face, byte[] destination, int mip = 0, Action onComplete = null)
     {
-        // Texture read-back has not yet been ported to Prowl.Graphite (requires a staging texture).
-        // Graphics.GetTexImageCubeFace(Handle, face, mip, destination);
+        uint s = MipSize(mip);
+        TextureDescription stagingDescription =
+            TextureDescription.Texture2D(s, s, 1, 1, ImageFormat, TextureUsage.Staging);
+        uint destSize = (uint)destination.Length;
+
+        return ReadBackSubresource(stagingDescription, s, s, 1, (uint)mip, (uint)face, mapped =>
+        {
+            using var handle = destination.AsMemory().Pin();
+            unsafe { CopyMappedRegion(mapped, (nint)handle.Pointer, destSize, s, s, 1); }
+        }, onComplete);
     }
 
     /// <summary>A framebuffer that renders into one face at one mip level. With
@@ -173,16 +186,19 @@ public sealed class Cubemap : Texture, ISerializable
         compoundTag.Add("AddressV", new((int)AddressModeV));
 
         EchoObject faces = EchoObject.NewList();
+        bool allSynchronous = true;
         for (int face = 0; face < 6; face++)
         {
             for (int mip = 0; mip < MipLevels; mip++)
             {
                 byte[] dest = new byte[FaceByteSize(mip)];
-                // Read-back not yet ported to Prowl.Graphite; faces serialize as empty for now.
-                // Graphics.GetTexImageCubeFace(Handle, face, mip, dest);
+                allSynchronous &= GetFaceData(face, dest, mip);
                 faces.ListAdd(new(dest));
             }
         }
+
+        if (!allSynchronous)
+            Debug.LogWarning($"'{Name}' was serialized while a frame was being recorded; some face data may be stale.");
         compoundTag.Add("Faces", faces);
     }
 

@@ -90,11 +90,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static void ValidateDefaults()
     {
-        // SMOKE TEST: only the gizmo material is needed for the clear + gizmo path. The full
-        // default-resource setup is preserved below until the rest of the pipeline is reimplemented.
-        s_gizmo ??= new Material(Shader.LoadDefault(DefaultShader.Gizmos));
-
-#if false
         s_quadMesh ??= Mesh.GetFullscreenQuad();
         s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
         s_skybox ??= new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
@@ -104,12 +99,11 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             using var stream = EmbeddedResources.GetStream("Assets/Defaults/SkyDome.obj");
             var skyImport = new AssetImporting.ModelImporter().Import(stream, "SkyDome.obj");
-            s_skyDome = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Resources.Mesh { Name = "SkyDome" };
+            s_skyDome = skyImport.Meshes.Count > 0 ? skyImport.Meshes[0] : new Mesh { Name = "SkyDome" };
         }
 
         // Pre-compute and upload BRDF integration LUT for PBR
         BRDFLutGenerator.UploadGlobal();
-#endif
     }
 
     #endregion
@@ -168,10 +162,6 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void Internal_Render(Camera camera, in RenderingData data)
     {
-        // ============================ SMOKE TEST ============================
-        // Reimplemented down to the two simplest pieces: clear the camera's target framebuffer
-        // and draw gizmos into it. The full forward pipeline is preserved verbatim under the
-        // `#if false` block below and will be brought back incrementally.
         RenderTexture? target = camera.UpdateRenderData();
         if (!target.IsValid())
             return;
@@ -180,61 +170,7 @@ public class DefaultRenderPipeline : RenderPipeline
         SetupGlobalUniforms(css);
         AssignCameraMatrices(css.View, css.Projection);
 
-        CommandBuffer cmd = Graphics.GetCommandBuffer("SmokeTest");
-        cmd.SetRenderTarget(target!.frameBuffer);
-        cmd.SetViewport(0, 0, (uint)target.Width, (uint)target.Height);
-        cmd.ClearRenderTarget(true, true, camera.ClearColor);
-
-        if (data.DisplayGizmos)
-            RenderGizmos(cmd, css);
-
-        Graphics.Submit(cmd);
-
-        camera.SavePreviousViewProjectionMatrix();
-        return;
-
-#if false
-        // =======================================================
-        // 0. Setup
-        bool isHDR = camera.HDR;
-        var effectsByStage = GatherImageEffects(camera);
-        var allEffects = new List<ImageEffect>();
-        foreach (var effects in effectsByStage.Values)
-            allEffects.AddRange(effects);
-
-        // Fire OnDisable on effects that were active last frame but aren't now
-        // (user disabled them, removed them from Camera.Effects, or hot-swapped).
-        camera.UpdateImageEffectLifecycle(allEffects);
-
-        RenderTexture target = camera.UpdateRenderData();
-
-        // =======================================================
-        // 1. Pre Cull
-        foreach (ImageEffect effect in allEffects)
-            effect.OnPreCull(camera);
-
-        // =======================================================
-        // 2. Camera snapshot and global uniforms
-        CameraSnapshot css = new(camera);
-        SetupGlobalUniforms(css);
-
-        // =======================================================
-        // 3. Collect and Cull Renderables
         var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
-        //lights.Clear();
-
-        // Inject editor grid
-        if (data.DisplayGrid)
-        {
-            EnsureGridResources();
-            if (s_gridMesh != null && s_gridMaterial != null)
-            {
-                float cx = MathF.Round(css.CameraPosition.X);
-                float cz = MathF.Round(css.CameraPosition.Z);
-                var gridTransform = Float4x4.CreateTranslation(new Float3(cx, 0, cz));
-                renderables.Add(new MeshRenderable(s_gridMesh, s_gridMaterial, gridTransform, 0));
-            }
-        }
 
         bool[] culledRenderableIndices = CullRenderables(renderables, css.WorldFrustum, css.CullingMask);
 
@@ -253,187 +189,48 @@ public class DefaultRenderPipeline : RenderPipeline
         }
         RenderStats.AddLightCounts(lights.Count, dirCount, pointCount, spotCount, shadowCount);
 
-        // =======================================================
-        // 4. Pre Render
-        foreach (ImageEffect effect in allEffects)
-            effect.OnPreRender(camera);
-
-        // =======================================================
-        // 5. Light system reconcile + shadow atlas + uniform upload
-        // Reconcile does the cheap work first (BVH refits, shadow caster picks). Then the atlas
-        // is rendered for only the directional and the closest-N point/spot, and finally the
-        // BVH textures + directional + shadow uniforms are pushed to the GPU.
+        // Reconcile picks shadow casters and refits the light BVHs, and UploadGlobalUniforms
+        // pushes the BVH textures + directional/local light uniforms the opaque shaders read.
+        // The shadow atlas itself is not rendered yet (RenderShadows is a no-op for now), so
+        // shadow-mapped lights fall back to their unshadowed contribution.
         SceneLightSystem lightSystem = GetOrCreateLightSystem(css.Scene);
         lightSystem.Reconcile(lights, css.CameraPosition, css.CullingMask);
-
-        {
-            var shadowSetup = Graphics.GetCommandBuffer("ShadowAtlasClear");
-            shadowSetup.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-            shadowSetup.ClearRenderTarget(true, true, new Color(0, 0, 0, 1));
-            Graphics.Submit(shadowSetup);
-        }
-
-        RenderStats.BeginShadowPass();
-        lightSystem.RenderShadows(this, css.CameraPosition, renderables);
-        RenderStats.EndShadowPass();
-
-        AssignCameraMatrices(css.View, css.Projection);
         lightSystem.UploadGlobalUniforms();
 
         UploadFogUniforms(css.Scene);
         UploadAmbientUniforms(css.Scene);
 
-        // colorRT owns the shared depth; prepass borrows it so both framebuffers see the same
-        // depth buffer without any CopyTexture call between them.
         RenderTexture colorRT = RenderTexture.GetTemporaryRT((int)css.PixelWidth, (int)css.PixelHeight, true, [
-            isHDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm,
-        ]);
-        RenderTexture prepass = new((int)css.PixelWidth, (int)css.PixelHeight, colorRT.InternalDepth, [
-            PixelFormat.R8_G8_B8_A8_UNorm,
-            PixelFormat.R16_G16_B16_A16_Float,
+            camera.HDR ? PixelFormat.R16_G16_B16_A16_Float : PixelFormat.R8_G8_B8_A8_UNorm,
         ]);
 
-        // ─── Pre-pass + opaque CB ───
-        var mainCmd = Graphics.GetCommandBuffer("ColorPass");
+        CommandBuffer cmd = Graphics.GetCommandBuffer("ColorPass");
 
-        mainCmd.SetRenderTarget(prepass.frameBuffer);
-        mainCmd.ClearRenderTarget(true, true, new Color(0, 0, 0, 0));
-        DrawRenderables(mainCmd, renderables, "LightMode", "Prepass", new ViewerData(css), culledRenderableIndices, true);
+        cmd.SetRenderTarget(colorRT.frameBuffer);
+        cmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
+        cmd.ClearRenderTarget(true, true, camera.ClearColor);
 
-        PropertySet props = new();
-
-        props.SetTexture("_CameraDepthTexture", prepass.InternalDepth);
-        props.SetTexture("_CameraNormalsTexture", prepass.InternalTextures[0]);
-        props.SetTexture("_CameraMotionVectorsTexture", prepass.InternalTextures[1]);
-
-        mainCmd.SetProperties(props);
-
-        // Depth is already in colorRT (shared attachment) — no copy needed.
-        mainCmd.SetRenderTarget(colorRT.frameBuffer);
-        mainCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-
-        switch (camera.ClearFlags)
-        {
-            case CameraClearFlags.Skybox:
-                {
-                    var skyColor = css.Scene.Skybox.Mode == Scene.SkyboxMode.SolidColor
-                        ? css.Scene.Skybox.SolidColor : camera.ClearColor;
-                    mainCmd.ClearRenderTarget(true, false, skyColor);
-                    RenderSkybox(mainCmd, css, lights);
-                    break;
-                }
-            case CameraClearFlags.SolidColor:
-                mainCmd.ClearRenderTarget(true, false, camera.ClearColor);
-                break;
-            case CameraClearFlags.Depth:
-                if (target.IsValid())
-                {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(true, false);
-                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                }
-                break;
-            case CameraClearFlags.Nothing:
-                if (target.IsValid())
-                {
-                    mainCmd.SetRenderTargets(colorRT.frameBuffer, target.frameBuffer);
-                    mainCmd.BlitFramebuffer(true, false);
-                    mainCmd.SetRenderTarget(colorRT.frameBuffer);
-                }
-                break;
-        }
+        RenderSkybox(cmd, css, lights);
 
         RenderStats.BeginColorPass();
-        DrawRenderables(mainCmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
-
-        Graphics.Submit(mainCmd);
-
-        // ─── AfterOpaques image effects ───
-        RenderStats.BeginPostFx();
-        if (effectsByStage[RenderStage.AfterOpaques].Count > 0)
-        {
-            var afterContext = new RenderContext
-            {
-                DepthNormals = prepass,
-                MotionVectors = prepass.InternalTextures[1],
-                SceneColor = colorRT,
-                Camera = camera,
-                Width = (int)css.PixelWidth,
-                Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.AfterOpaques
-            };
-            ExecuteImageEffects(afterContext, effectsByStage[RenderStage.AfterOpaques]);
-        }
-        RenderStats.EndPostFx();
-
-        // ─── Transparents CB ───
-        var transparentCmd = Graphics.GetCommandBuffer("Transparents");
-        transparentCmd.SetRenderTarget(colorRT.frameBuffer);
-        transparentCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-        List<IRenderable> sortBackToFront = SortRenderables(renderables, culledRenderableIndices, css.CameraPosition, SortMode.BackToFront);
-        DrawRenderables(transparentCmd, sortBackToFront, "RenderOrder", "Transparent", new ViewerData(css), null, false, colorRT);
-        Graphics.Submit(transparentCmd);
-
-        RenderUIQueue(css, colorRT, UISurface.World, data);
-
+        DrawRenderables(cmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
         RenderStats.EndColorPass();
 
-        // ─── PostProcess image effects ───
-        RenderStats.BeginPostFx();
-        if (effectsByStage[RenderStage.PostProcess].Count > 0)
-        {
-            var postContext = new RenderContext
-            {
-                DepthNormals = prepass,
-                MotionVectors = prepass.InternalTextures[1],
-                SceneColor = colorRT,
-                Camera = camera,
-                Width = (int)css.PixelWidth,
-                Height = (int)css.PixelHeight,
-                CurrentStage = RenderStage.PostProcess
-            };
+        if (data.DisplayGrid)
+            RenderGrid(cmd, css, colorRT);
 
-            ExecuteImageEffects(postContext, effectsByStage[RenderStage.PostProcess]);
-
-            var replacedRTs = postContext.GetReplacedRTs();
-            if (replacedRTs.Count > 0)
-            {
-                colorRT = postContext.SceneColor;
-                foreach (var oldRT in replacedRTs)
-                    RenderTexture.ReleaseTemporaryRT(oldRT);
-            }
-        }
-        RenderStats.EndPostFx();
-
-        RenderUIQueue(css, colorRT, UISurface.Camera, data);
-
-        // ─── Gizmos + final blit CB ───
-        var finalCmd = Graphics.GetCommandBuffer("FinalBlit");
         if (data.DisplayGizmos)
-        {
-            finalCmd.SetRenderTarget(colorRT.frameBuffer);
-            finalCmd.SetViewport(0, 0, (uint)colorRT.Width, (uint)colorRT.Height);
-            RenderGizmos(finalCmd, css);
-        }
+            RenderGizmos(cmd, css, colorRT);
 
-        finalCmd.Blit(colorRT, target, null, 0, false, false);
-        Graphics.Submit(finalCmd);
+        Graphics.Submit(cmd);
 
-        RenderUIQueue(css, target, UISurface.Overlay, data);
+        var blitCmd = Graphics.GetCommandBuffer("FinalBlit");
+        blitCmd.Blit(colorRT, target, null, 0, false, false);
+        Graphics.Submit(blitCmd);
 
-        var resetCmd = Graphics.GetCommandBuffer("PipelineReset");
-        resetCmd.SetRenderTarget(null);
-        resetCmd.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-        Graphics.Submit(resetCmd);
+        RenderTexture.ReleaseTemporaryRT(colorRT);
 
         camera.SavePreviousViewProjectionMatrix();
-
-        foreach (ImageEffect effect in allEffects)
-            effect.OnPostRender(camera);
-
-        prepass.Dispose();
-        RenderTexture.ReleaseTemporaryRT(colorRT);
-#endif
     }
 
     private static void UploadFogUniforms(Scene scene)
@@ -608,6 +405,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void RenderSkybox(CommandBuffer cmd, CameraSnapshot css, List<IRenderableLight> lights)
     {
+        GlobalPropertySet.Apply(cmd);
+
         var skyParams = css.Scene.Skybox;
 
         switch (skyParams.Mode)
@@ -615,7 +414,7 @@ public class DefaultRenderPipeline : RenderPipeline
             case Scene.SkyboxMode.Procedural:
                 {
                     var sun = lights.FirstOrDefault(l => l is IRenderableLight rl && rl.GetLightType() == LightType.Directional);
-                    var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, -0.7f, 0.5f));
+                    var sunDir = sun != null ? sun.GetLightDirection() : Float3.Normalize(new Float3(0.5f, 0.7f, 0.5f));
                     s_skybox.SetVector("_SunDir", sunDir);
                     cmd.DrawMesh(s_skyDome, s_skybox);
                     break;
@@ -677,20 +476,34 @@ public class DefaultRenderPipeline : RenderPipeline
         }
     }
 
-    private void RenderGizmos(CommandBuffer cmd, CameraSnapshot css)
+    private void RenderGrid(CommandBuffer cmd, CameraSnapshot css, RenderTexture colorRT)
     {
+        EnsureGridResources();
+        if (s_gridMesh == null || s_gridMaterial == null)
+            return;
+
+        GlobalPropertySet.Apply(cmd);
+
+        s_gridMaterial.SetTexture("_CameraDepthTexture", colorRT.InternalDepth);
+
+        float cx = MathF.Round(css.CameraPosition.X);
+        float cz = MathF.Round(css.CameraPosition.Z);
+        var gridTransform = Float4x4.CreateTranslation(new Float3(cx, 0, cz));
+        cmd.DrawMesh(s_gridMesh, s_gridMaterial, 0, gridTransform, null);
+    }
+
+    private void RenderGizmos(CommandBuffer cmd, CameraSnapshot css, RenderTexture colorRT)
+    {
+        GlobalPropertySet.Apply(cmd);
+
         Float4x4 vp = css.Projection * css.View;
-        (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData();
+        (GizmoBuilder.Batch? wire, GizmoBuilder.Batch? solid) = Debug.UploadGizmos();
 
-        // The Gizmos shader samples _CameraDepthTexture to dim occluded lines. The smoke test has no
-        // depth prepass, so bind a white texture (depth == far) and let every gizmo draw fully lit.
-        s_gizmo.SetTexture("_CameraDepthTexture", Texture2D.LoadDefault(DefaultTexture.White));
+        // The Gizmos shader samples _CameraDepthTexture to dim lines occluded by opaque geometry.
+        s_gizmo.SetTexture("_CameraDepthTexture", colorRT.InternalDepth);
 
-        if (wire.IsValid() || solid.IsValid())
-        {
-            if (wire.IsValid()) cmd.DrawMesh(wire, s_gizmo);
-            if (solid.IsValid()) cmd.DrawMesh(solid, s_gizmo);
-        }
+        if (wire != null) DrawGizmoBatch(cmd, wire, s_gizmo);
+        if (solid != null) DrawGizmoBatch(cmd, solid, s_gizmo);
 
         var icons = Debug.GetGizmoIcons();
         if (icons.Count > 0)
@@ -708,6 +521,25 @@ public class DefaultRenderPipeline : RenderPipeline
                 cmd.DrawMesh(s_iconQuad, s_iconMaterial);
             }
         }
+    }
+
+    private static void DrawGizmoBatch(CommandBuffer cmd, IVertexSource source, Material material)
+    {
+        GraphicsProgram? program = material.Shader?.GetPass(0)?.ActiveProgram;
+        if (program == null)
+            return;
+
+        cmd.SetShader(program);
+        cmd.SetMaterialProperties(material);
+
+        var transforms = new PropertySet();
+        transforms.SetMatrix("prowl_ObjectToWorld", Float4x4.Identity);
+        transforms.SetMatrix("prowl_WorldToObject", Float4x4.Identity);
+        transforms.SetMatrix("prowl_PrevObjectToWorld", Float4x4.Identity);
+        cmd.SetProperties(transforms);
+
+        cmd.SetVertexSource(source);
+        cmd.DrawIndexed();
     }
 
     #endregion

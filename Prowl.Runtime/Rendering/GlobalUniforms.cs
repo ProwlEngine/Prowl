@@ -54,9 +54,8 @@ public struct GlobalUniformsData
 /// </summary>
 public static class GlobalUniforms
 {
-    private static DeviceBuffer? s_uniformBuffer;
+    private static StreamingBuffer? s_uniformBuffer;
     private static GlobalUniformsData s_data;
-    private static bool s_isDirty = true;
 
     /// <summary>
     /// Initializes the global uniform buffer
@@ -65,35 +64,41 @@ public static class GlobalUniforms
     {
         if (s_uniformBuffer == null)
         {
-            s_uniformBuffer = Graphics.Device.ResourceFactory.CreateBuffer(
+            s_uniformBuffer = Graphics.Device.ResourceFactory.CreateStreamingBuffer(
                 new BufferDescription((uint)GlobalUniformsData.SizeInBytes, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
-            s_isDirty = true;
+            s_uniformBuffer.Name = "GlobalUniforms (Frame)";
         }
     }
 
     /// <summary>
-    /// Updates the GPU buffer if data has changed.
+    /// Writes this frame's data into the current ring slot and re-registers it as the "Frame"
+    /// global. This is a per-frame write regardless of whether the data changed, since the
+    /// StreamingBuffer rotates to a different backing buffer every frame; skipping the write on
+    /// an unchanged frame would leave that ring slot holding stale data from MaxFramesInFlight
+    /// frames ago.
     /// </summary>
     public static void Upload()
     {
         Initialize();
 
-        if (s_isDirty && s_uniformBuffer != null)
-        {
-            Graphics.Device.UpdateBuffer(s_uniformBuffer, 0u, new[] { s_data });
-            s_isDirty = false;
-        }
+        DeviceBuffer current = s_uniformBuffer!.Current;
+        Graphics.Device.UpdateBuffer(current, 0u, new[] { s_data });
+
+        // GlobalPropertySet.ClearGlobals() wipes all bindings once per camera, so the
+        // "Frame" buffer binding must be re-registered every Upload rather than once in
+        // Initialize, or it would disappear after the first camera renders.
+        GlobalPropertySet.SetBuffer("Frame", current);
     }
 
     /// <summary>
-    /// Gets the uniform buffer for binding to shaders. Does NOT lazily initialize:
-    /// this is called by the executor on the render thread, and the non-atomic
+    /// Gets the current frame's ring-slot buffer for binding to shaders. Does NOT lazily
+    /// initialize: this is called by the executor on the render thread, and the non-atomic
     /// create-if-null in <see cref="Initialize"/> must only ever run on the main
     /// thread. <see cref="Upload"/> (called by the pipeline each frame before any
     /// draw) creates the buffer, so by submit order it is non-null here. Returns
     /// null only before the first Upload; PrepareDraw skips the bind in that case.
     /// </summary>
-    public static DeviceBuffer? GetBuffer() => s_uniformBuffer;
+    public static DeviceBuffer? GetBuffer() => s_uniformBuffer?.Current;
 
     /// <summary>
     /// Cleans up the global uniform buffer resources
@@ -108,105 +113,88 @@ public static class GlobalUniforms
     public static void SetMatrixV(Float4x4 value)
     {
         s_data.prowl_MatV = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixIV(Float4x4 value)
     {
         s_data.prowl_MatIV = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixP(Float4x4 value)
     {
         s_data.prowl_MatP = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixVP(Float4x4 value)
     {
         s_data.prowl_MatVP = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixIP(Float4x4 value)
     {
         s_data.prowl_MatIP = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixIVP(Float4x4 value)
     {
         s_data.prowl_MatIVP = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetMatrixVPNonJittered(Float4x4 value)
     {
         s_data.prowl_MatVP_NonJittered = (Float4x4)value;
-        s_isDirty = true;
     }
 
     public static void SetPrevViewProj(Float4x4 value)
     {
         s_data.prowl_PrevViewProj = (Float4x4)value;
-        s_isDirty = true;
     }
 
     // Camera parameters
     public static void SetWorldSpaceCameraPos(Float3 value)
     {
         s_data._WorldSpaceCameraPos = (Float3)value;
-        s_isDirty = true;
     }
 
     public static void SetProjectionParams(Float4 value)
     {
         s_data._ProjectionParams = (Float4)value;
-        s_isDirty = true;
     }
 
     public static void SetScreenParams(Float4 value)
     {
         s_data._ScreenParams = (Float4)value;
-        s_isDirty = true;
     }
 
     public static void SetCameraJitter(Float2 value)
     {
         s_data._CameraJitter = (Float2)value;
-        s_isDirty = true;
     }
 
     public static void SetCameraPreviousJitter(Float2 value)
     {
         s_data._CameraPreviousJitter = (Float2)value;
-        s_isDirty = true;
     }
 
     // Time parameters
     public static void SetTime(Float4 value)
     {
         s_data._Time = (Float4)value;
-        s_isDirty = true;
     }
 
     public static void SetSinTime(Float4 value)
     {
         s_data._SinTime = (Float4)value;
-        s_isDirty = true;
     }
 
     public static void SetCosTime(Float4 value)
     {
         s_data._CosTime = (Float4)value;
-        s_isDirty = true;
     }
 
     public static void SetDeltaTime(Float4 value)
     {
         s_data.prowl_DeltaTime = (Float4)value;
-        s_isDirty = true;
     }
 
     /// <summary>
@@ -215,6 +203,5 @@ public static class GlobalUniforms
     public static void Clear()
     {
         s_data = new GlobalUniformsData();
-        s_isDirty = true;
     }
 }

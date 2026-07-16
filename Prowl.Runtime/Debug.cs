@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using Prowl.Graphite;
@@ -200,9 +201,9 @@ public static class Debug
         s_gizmoBuilder.Clear();
     }
 
-    public static (Mesh? wire, Mesh? solid) GetGizmoDrawData()
+    public static (GizmoBuilder.Batch? wire, GizmoBuilder.Batch? solid) UploadGizmos()
     {
-        return s_gizmoBuilder.UpdateMesh();
+        return s_gizmoBuilder.Upload();
     }
 
     public static List<GizmoBuilder.IconDrawCall> GetGizmoIcons()
@@ -262,8 +263,8 @@ public class GizmoBuilder
 
     private MeshData _wireData = new();
     private MeshData _solidData = new();
-    private Mesh? _wire;
-    private Mesh? _solid;
+    private readonly Batch _wire = new(PrimitiveTopology.LineList);
+    private readonly Batch _solid = new(PrimitiveTopology.TriangleList);
 
     public struct IconDrawCall
     {
@@ -714,48 +715,117 @@ public class GizmoBuilder
 
     public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
 
-    public (Mesh? wire, Mesh? solid) UpdateMesh()
+    public (Batch? wire, Batch? solid) Upload()
     {
-        bool hasWire = _wireData.Vertices.Count > 0;
-        if (hasWire)
-        {
-            _wire ??= new()
-            {
-                Topology = PrimitiveTopology.LineList,
-                IndexFormat = IndexFormat.UInt32,
-            };
-
-            _wire.Vertices = [.. _wireData.Vertices.Select(v => (Float3)v)];
-            _wire.Colors = [.. _wireData.Colors];
-            _wire.Indices = [.. _wireData.Indices.Select(i => (uint)i)];
-
-            _wire.Vertices = [.. _wireData.Vertices.Select(v => (Float3)v)];
-        }
-
-        bool hasSolid = _solidData.Vertices.Count > 0;
-        if (hasSolid)
-        {
-            _solid ??= new()
-            {
-                Topology = PrimitiveTopology.TriangleList,
-                IndexFormat = IndexFormat.UInt32,
-            };
-
-            _solid.Vertices = [.. _solidData.Vertices.Select(v => (Float3)v)];
-
-            _solid.Colors = [.. _solidData.Colors];
-            _solid.UV = [.. _solidData.Uvs.Select(v => (Float2)v)];
-            _solid.Indices = [.. _solidData.Indices.Select(i => (uint)i)];
-        }
+        _wire.Upload(_wireData.Vertices, _wireData.Colors, _wireData.Indices);
+        _solid.Upload(_solidData.Vertices, _solidData.Colors, _solidData.Indices);
 
         return (
-            hasWire ? _wire : null,
-            hasSolid ? _solid : null
+            _wire.HasData ? _wire : null,
+            _solid.HasData ? _solid : null
             );
     }
 
     public List<IconDrawCall> GetIcons()
     {
         return _icons;
+    }
+
+    /// <summary>
+    /// A ring-buffered vertex source for one gizmo primitive class (wire or solid). The gizmo
+    /// geometry is rebuilt on the CPU every frame, so it is streamed into per-frame-in-flight
+    /// <see cref="StreamingBuffer"/>s rather than a single <see cref="DeviceBuffer"/>, which would
+    /// race with frames still being read by the GPU.
+    /// </summary>
+    public sealed class Batch : IVertexSource
+    {
+        private static readonly VertexAttributeID s_position = "POSITION0";
+
+        private readonly PrimitiveTopology _topology;
+
+        private StreamingBuffer? _positions;
+        private StreamingBuffer? _colors;
+        private StreamingBuffer? _indices;
+
+        private uint _positionCapacity;
+        private uint _colorCapacity;
+        private uint _indexCapacity;
+
+        // The concrete ring-slot buffers captured at upload time. The backend queries the vertex source
+        // at command replay, which runs on a separate thread that may observe a newer CurrentFrame (and
+        // thus a different ring slot) than the one we uploaded into; binding these captured references
+        // instead of re-reading StreamingBuffer.Current keeps the draw pinned to the uploaded slot.
+        private DeviceBuffer? _boundPositions;
+        private DeviceBuffer? _boundColors;
+        private DeviceBuffer? _boundIndices;
+
+        private Color[] _colorScratch = [];
+        private uint _indexCount;
+
+        public Batch(PrimitiveTopology topology) => _topology = topology;
+
+        public bool HasData => _indexCount > 0;
+
+        PrimitiveTopology IVertexSource.Topology => _topology;
+
+        public void Upload(List<Float3> positions, List<Color32> colors, List<int> indices)
+        {
+            _indexCount = (uint)indices.Count;
+            if (_indexCount == 0)
+                return;
+
+            int vertexCount = positions.Count;
+
+            // COLOR0 is a float4 in the shader; widen the packed Color32 stream into a reused scratch array.
+            if (_colorScratch.Length < vertexCount)
+                _colorScratch = new Color[vertexCount];
+            for (int i = 0; i < vertexCount; i++)
+                _colorScratch[i] = (Color)colors[i];
+
+            EnsureBuffer(ref _positions, ref _positionCapacity, (uint)(vertexCount * 12), BufferUsage.VertexBuffer | BufferUsage.Dynamic);
+            EnsureBuffer(ref _colors, ref _colorCapacity, (uint)(vertexCount * 16), BufferUsage.VertexBuffer | BufferUsage.Dynamic);
+            EnsureBuffer(ref _indices, ref _indexCapacity, _indexCount * sizeof(uint), BufferUsage.IndexBuffer | BufferUsage.Dynamic);
+
+            _boundPositions = _positions!.Current;
+            _boundColors = _colors!.Current;
+            _boundIndices = _indices!.Current;
+
+            // Dynamic buffers are host-visible and persistently mapped, so the device write copies straight
+            // into mapped GPU memory with no staging buffer or copy command (unlike CommandBuffer.UpdateBuffer).
+            Graphics.Device.UpdateBuffer(_boundPositions, 0, CollectionsMarshal.AsSpan(positions));
+            Graphics.Device.UpdateBuffer(_boundColors, 0, _colorScratch.AsSpan(0, vertexCount));
+            Graphics.Device.UpdateBuffer(_boundIndices, 0, MemoryMarshal.Cast<int, uint>(CollectionsMarshal.AsSpan(indices)));
+        }
+
+        void IVertexSource.ResolveSlot(uint layoutSlot, in VertexLayoutDescription layout, out VertexBinding binding)
+        {
+            DeviceBuffer buffer = layout.Elements[0].Name == s_position ? _boundPositions! : _boundColors!;
+            binding = new VertexBinding(buffer);
+        }
+
+        bool IVertexSource.TryGetIndexBuffer(out DeviceBuffer buffer, out IndexFormat format, out uint indexCount)
+        {
+            buffer = _boundIndices!;
+            format = IndexFormat.UInt32;
+            indexCount = _indexCount;
+            return true;
+        }
+
+        private static void EnsureBuffer(ref StreamingBuffer? buffer, ref uint capacity, uint sizeInBytes, BufferUsage usage)
+        {
+            if (buffer != null && sizeInBytes <= capacity)
+                return;
+
+            // Deferred, not immediate: a command buffer still queued for replay (possibly on a
+            // separate thread) may reference the old buffer. Freeing it now would let that memory
+            // get reused by the very next render (e.g. a material/mesh preview drawn later this
+            // frame), so the stale gizmo draw call would read someone else's GPU data instead.
+            if (buffer != null)
+                Graphics.DisposeDeferred(buffer);
+            uint newCapacity = (uint)(sizeInBytes * 1.5f) + 256;
+            buffer = Graphics.Device.ResourceFactory.CreateStreamingBuffer(new BufferDescription(newCapacity, usage));
+            buffer.Name = $"Gizmo {usage}";
+            capacity = newCapacity;
+        }
     }
 }
