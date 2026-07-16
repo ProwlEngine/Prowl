@@ -78,7 +78,7 @@ internal sealed class MtlReader
         }
         if (keyword.SequenceEqual("Ka") || keyword.SequenceEqual("Ks") || keyword.SequenceEqual("Tf"))
         {
-            // Ambient, specular, transmission filter - consumed but not surfaced (Unity Lit doesn't expose them).
+            // Ambient, specular, transmission filter - consumed but not surfaced.
             return;
         }
 

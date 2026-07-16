@@ -17,48 +17,89 @@ internal static class FbxTextureMapper
     public sealed class TextureMapping
     {
         public Dictionary<long, int> TextureIndex { get; } = new();
+
+        /// <summary>Per-Texture-object UV transform, keyed by the FBX Texture object's own id -
+        /// kept separate from the (possibly shared/deduplicated) <see cref="IntermediateTexture"/>
+        /// image data in <see cref="TextureIndex"/>, since two materials can legitimately tile/offset
+        /// the same image differently (e.g. a shared brick texture repeated 2x2 on one wall and 4x4
+        /// on another).</summary>
+        public Dictionary<long, (Vector.Float2 Offset, Vector.Float2 Scale, float Rotation)> UVTransform { get; } = new();
     }
 
     public static TextureMapping MapAll(FbxDocument doc, IntermediateScene scene, ImportContext ctx)
     {
         var result = new TextureMapping();
+
+        // FBX creates one "Texture" object per material-texture *usage*, not per unique image - a
+        // scene where many materials reuse the same diffuse/normal map (e.g. every wall/floor
+        // material in an architectural scene sharing a handful of textures) commonly has far more
+        // Texture objects than actual images. Without dedup here, each usage would independently
+        // resolve/embed and (downstream, in the caller that decodes IntermediateTexture into a real
+        // texture) fully decode the same image again, multiplying import cost by the reuse count
+        // instead of the unique-texture count. Dedup first by the shared Video object (the common
+        // case: multiple Texture objects pointing at one Video), then by resolved file path (covers
+        // Texture objects with no Video that still point at the same file on disk). UV transform is
+        // read per Texture-object regardless of dedup, since it's a per-usage property, not part of
+        // the image identity.
+        var videoIdToIndex = new Dictionary<long, int>();
+        var pathToIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var obj in doc.Objects.Values)
         {
             if (obj.ObjectType != "Texture") continue;
+
+            result.UVTransform[obj.Id] = ReadUVTransform(obj);
+
+            FbxObject? video = FindConnectedVideo(doc, obj.Id);
+            if (video is not null && videoIdToIndex.TryGetValue(video.Id, out int existingByVideo))
+            {
+                result.TextureIndex[obj.Id] = existingByVideo;
+                continue;
+            }
+
+            var built = BuildTexture(obj, video, ctx);
+
+            if (built.SourcePath is not null && pathToIndex.TryGetValue(built.SourcePath, out int existingByPath))
+            {
+                result.TextureIndex[obj.Id] = existingByPath;
+                if (video is not null) videoIdToIndex[video.Id] = existingByPath;
+                continue;
+            }
+
             int idx = scene.Textures.Count;
-            scene.Textures.Add(BuildTexture(obj, doc, ctx));
+            scene.Textures.Add(built);
             result.TextureIndex[obj.Id] = idx;
+            if (video is not null) videoIdToIndex[video.Id] = idx;
+            if (built.SourcePath is not null) pathToIndex[built.SourcePath] = idx;
         }
         return result;
     }
 
-    private static IntermediateTexture BuildTexture(FbxObject tex, FbxDocument doc, ImportContext ctx)
+    /// <summary>Walks the Texture object's connections to find the Video object carrying its bytes/filename, if any.</summary>
+    private static FbxObject? FindConnectedVideo(FbxDocument doc, long texId)
+    {
+        if (doc.ConnectionsByDestination.TryGetValue(texId, out var conns))
+        {
+            foreach (var c in conns)
+            {
+                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
+                if (srcObj.ObjectType == "Video")
+                    return srcObj;
+            }
+        }
+        return null;
+    }
+
+    private static IntermediateTexture BuildTexture(FbxObject tex, FbxObject? video, ImportContext ctx)
     {
         var intermediate = new IntermediateTexture
         {
             Name = string.IsNullOrEmpty(tex.Name) ? $"Texture_{tex.Id}" : tex.Name,
         };
 
-        ReadUVTransform(tex, intermediate);
-
         // Direct filename: Texture has a "FileName" or "RelativeFilename" child.
         string? fileName = tex.Node.FindChild("FileName")?.StringAt(0);
         string? relName = tex.Node.FindChild("RelativeFilename")?.StringAt(0);
-
-        // Walk to the Video object - that's where the bytes might live.
-        FbxObject? video = null;
-        if (doc.ConnectionsByDestination.TryGetValue(tex.Id, out var conns))
-        {
-            foreach (var c in conns)
-            {
-                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
-                if (srcObj.ObjectType == "Video")
-                {
-                    video = srcObj;
-                    break;
-                }
-            }
-        }
 
         if (video is not null)
         {
@@ -106,37 +147,42 @@ internal static class FbxTextureMapper
     }
 
     /// <summary>
-    /// Reads the Texture node's UV transform onto <paramref name="intermediate"/>. Pulls the
-    /// old-style <c>ModelUVTranslation</c> / <c>ModelUVScaling</c> from the node's direct
-    /// children, then overrides with the <c>Texture.FbxFileTexture</c> property table's
-    /// <c>Translation</c> / <c>Scaling</c> / <c>Rotation</c> (3ds Max + FBX SDK style;
-    /// <c>Rotation.Z</c> is the 2D angle in degrees).
+    /// Reads a Texture object's UV transform. Pulls the old-style <c>ModelUVTranslation</c> /
+    /// <c>ModelUVScaling</c> from the node's direct children, then overrides with the
+    /// <c>Texture.FbxFileTexture</c> property table's <c>Translation</c> / <c>Scaling</c> /
+    /// <c>Rotation</c> (3ds Max + FBX SDK style; <c>Rotation.Z</c> is the 2D angle in degrees).
     /// </summary>
-    private static void ReadUVTransform(FbxObject tex, IntermediateTexture intermediate)
+    private static (Float2 Offset, Float2 Scale, float Rotation) ReadUVTransform(FbxObject tex)
     {
+        Float2 offset = Float2.Zero;
+        Float2 scale = Float2.One;
+        float rotation = 0f;
+
         // Old-style ModelUVTranslation / ModelUVScaling: direct children with two floats.
         var modelUVT = tex.Node.FindChild("ModelUVTranslation");
         if (modelUVT is not null && modelUVT.Properties.Count >= 2)
         {
-            intermediate.UVOffset = new Float2(
+            offset = new Float2(
                 (float)(modelUVT.Properties[0].AsDouble()),
                 (float)(modelUVT.Properties[1].AsDouble()));
         }
         var modelUVS = tex.Node.FindChild("ModelUVScaling");
         if (modelUVS is not null && modelUVS.Properties.Count >= 2)
         {
-            intermediate.UVScale = new Float2(
+            scale = new Float2(
                 (float)(modelUVS.Properties[0].AsDouble()),
                 (float)(modelUVS.Properties[1].AsDouble()));
         }
         // Property-table form (overrides old-style if present).
         var p = tex.Properties;
         if (p.TryGetVec3("Translation", out double tx, out double ty, out _))
-            intermediate.UVOffset = new Float2((float)tx, (float)ty);
+            offset = new Float2((float)tx, (float)ty);
         if (p.TryGetVec3("Scaling", out double sx, out double sy, out _))
-            intermediate.UVScale = new Float2((float)sx, (float)sy);
+            scale = new Float2((float)sx, (float)sy);
         if (p.TryGetVec3("Rotation", out _, out _, out double rz))
-            intermediate.UVRotation = (float)(rz * Math.PI / 180.0); // FBX stores rotation in degrees, we want radians
+            rotation = (float)(rz * Math.PI / 180.0); // FBX stores rotation in degrees, we want radians
+
+        return (offset, scale, rotation);
     }
 
     /// <summary>

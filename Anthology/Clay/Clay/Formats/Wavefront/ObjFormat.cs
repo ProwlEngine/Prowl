@@ -7,7 +7,7 @@ namespace Prowl.Clay.Formats.Wavefront;
 
 /// <summary>
 /// Wavefront OBJ importer (with companion MTL parsing). Produces one
-/// <see cref="IntermediateMesh"/> per (object, material) pair so the Unity-style
+/// <see cref="IntermediateMesh"/> per (object, material) pair so the
 /// "node -&gt; mesh -&gt; material" mapping holds.
 /// </summary>
 /// <remarks>
