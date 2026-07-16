@@ -1,10 +1,12 @@
+using System.Text;
+
 using Common;
 using Prowl.Quill;
 using Prowl.Vector;
 using Prowl.Vector.Geometry;
 using Prowl.Graphite;
-using Prowl.Graphite.Compiler;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 
 namespace GraphiteExample;
 
@@ -44,9 +46,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     private CommandBuffer _buffer;
     public CommandBuffer CommandBuffer => _buffer;
 
-    private GraphicsProgram _shader;
-    private GraphicsProgram[] _blurPrograms;
-    private VariantSet<GraphicsProgram> _blurProgram;
+    private ShaderPass _canvasPass;
+    private GraphicsProgram _canvasProgram;
+    private ShaderPass _blurPass;
 
     private Float4x4 _projection;
     private TextureGraphite _defaultTexture;
@@ -120,42 +122,39 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
     private void CreateShaderProgram()
     {
-        CompilationSession session = new();
-        session.RegisterModule(_gl.BackendType switch
+        SlangShaderCompiler compiler = new();
+        compiler.RegisterModule(_gl.BackendType switch
         {
             GraphicsBackend.Vulkan => new VulkanCompiler("spirv_1_4"),
             _ => throw new NotSupportedException($"Unsupported graphics backend: {_gl.BackendType}")
         });
 
-        session.BeginSession([new DirectoryInfo("/Shaders")], s_fileLoader);
+        compiler.BeginSession([new DirectoryInfo("/Shaders")], s_fileLoader);
 
-        CompilationResult result = session.CompileShader("Shader.slang", ShaderType.Rasterization);
-        CompilationResult blurResult = session.CompileShader("Blur.slang", ShaderType.Rasterization);
+        ShaderDefinition canvasDef = ShaderParser.Parse(ReadShaderSource("Shader.shader"));
+        canvasDef.Create(_gl, compiler, CompileMode.All);
+        _canvasPass = canvasDef.Passes![0];
+        _canvasProgram = CreateCanvasProgram(_canvasPass);
 
-        session.EndSession();
+        ShaderDefinition blurDef = ShaderParser.Parse(ReadShaderSource("Blur.shader"));
+        blurDef.Create(_gl, compiler, CompileMode.All);
+        _blurPass = blurDef.Passes![0];
 
-        BlendStateDescription oneMinusSrcAlphaBlend = new()
-        {
-            AttachmentStates = [
-                new BlendAttachmentDescription()
-                {
-                    BlendEnabled = true,
-                    SourceColorFactor = BlendFactor.One,
-                    DestinationColorFactor = BlendFactor.InverseSourceAlpha,
-                    ColorFunction = BlendFunction.Add,
-                    SourceAlphaFactor = BlendFactor.One,
-                    DestinationAlphaFactor = BlendFactor.InverseSourceAlpha,
-                    AlphaFunction = BlendFunction.Add
-                }
-            ]
-        };
+        compiler.EndSession();
+    }
 
-        ShaderDescription resultDesc = result.CompiledVariants[0].Backends[0].Description;
-        resultDesc.BlendState = oneMinusSrcAlphaBlend;
-        resultDesc.DepthStencilState = DepthStencilStateDescription.Disabled;
-        resultDesc.RasterizerState = new(FaceCullMode.None, FrontFace.Clockwise, true, false);
 
-        resultDesc.VertexLayouts =
+    // The canvas vertex buffer is a single interleaved struct with a byte-packed color
+    // (Vertex.SizeInBytes, COLOR0 as Byte4_Norm). Slang reflection can only describe one
+    // buffer slot per vertex-input field and has no way to express a packed UNORM color from
+    // a `float4` field, so the reflected VertexLayouts are replaced by hand here instead of
+    // going through ShaderPass.ResolveProgram/SetShader(ShaderPass).
+    private GraphicsProgram CreateCanvasProgram(ShaderPass pass)
+    {
+        if (!pass.ActiveVariant.TryGetDescription(_gl.BackendType, out ShaderDescription description))
+            throw new InvalidOperationException($"Canvas shader was not compiled for backend {_gl.BackendType}.");
+
+        description.VertexLayouts =
         [
             new VertexLayoutDescription(0, (uint)Vertex.SizeInBytes,
                 new VertexElementDescription("POSITION0", VertexElementFormat.Float2, 0),
@@ -163,21 +162,21 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
                 new VertexElementDescription("COLOR0", VertexElementFormat.Byte4_Norm, 16))
         ];
 
-        _shader = _gl.ResourceFactory.CreateGraphicsProgram(resultDesc);
-        _blurPrograms = new GraphicsProgram[blurResult.CompiledVariants.Length];
+        description.BlendState = pass.State.ToBlendState(BlendStateDescription.SingleDisabled);
+        description.DepthStencilState = pass.State.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyLessEqual);
+        description.RasterizerState = pass.State.ToRasterizerState(new(FaceCullMode.Back, FrontFace.Clockwise, true, false));
 
-        for (int i = 0; i < blurResult.CompiledVariants.Length; i++)
-        {
-            ShaderDescription blurDesc = blurResult.CompiledVariants[i].Backends[0].Description;
-            // Blur and present passes overwrite their target, so they use no blending.
-            blurDesc.BlendState = BlendStateDescription.SingleDisabled;
-            blurDesc.DepthStencilState = DepthStencilStateDescription.Disabled;
-            blurDesc.RasterizerState = new(FaceCullMode.None, FrontFace.Clockwise, true, false);
+        return _gl.ResourceFactory.CreateGraphicsProgram(description);
+    }
 
-            _blurPrograms[i] = _gl.ResourceFactory.CreateGraphicsProgram(blurDesc);
-        }
 
-        _blurProgram = new VariantSet<GraphicsProgram>(_blurPrograms, [.. blurResult.CompiledVariants.Select(v => v.Variants)]);
+    private static string ReadShaderSource(string fileName)
+    {
+        Memory<byte>? bytes = s_fileLoader(fileName);
+        if (bytes == null)
+            throw new FileNotFoundException(fileName);
+
+        return Encoding.UTF8.GetString(bytes.Value.Span);
     }
 
 
@@ -325,7 +324,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             IndexCount = (uint)drawCall.ElementCount
         };
 
-        _buffer.SetShader(_shader);
+        _buffer.SetShader(_canvasProgram);
         _buffer.SetVertexSource(source);
         _buffer.SetProperties(_properties);
 
@@ -363,13 +362,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         _buffer.SetFramebuffer(_blurFB[dstLevel]);
 
-        _blurProgram.SetKeyword(upsample ? UpsampleOn : UpsampleOff);
+        _blurPass.SetKeyword(upsample ? UpsampleOn : UpsampleOff);
 
         _properties.SetTexture("sourceTexture", source, _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
         _properties.SetFloat("offset", offset);
 
-        _buffer.SetShader(_blurProgram.ActiveVariant);
+        _buffer.SetShader(_blurPass);
         _buffer.SetVertexSource(_fullscreenSource);
         _buffer.SetProperties(_properties);
         _buffer.Draw(3);
@@ -380,13 +379,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     {
         _buffer.SetFramebuffer(_gl.SwapchainFramebuffer!);
 
-        _blurProgram.SetKeyword(UpsampleOff);
+        _blurPass.SetKeyword(UpsampleOff);
 
         _properties.SetTexture("sourceTexture", _sceneTex, _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
         _properties.SetFloat("offset", 0f);
 
-        _buffer.SetShader(_blurProgram.ActiveVariant);
+        _buffer.SetShader(_blurPass);
         _buffer.SetVertexSource(_fullscreenSource);
         _buffer.SetProperties(_properties);
         _buffer.Draw(3);
@@ -452,11 +451,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             _activeEbo?.Dispose();
 
         _sampler?.Dispose();
-        _shader?.Dispose();
-
-        if (_blurPrograms != null)
-            foreach (GraphicsProgram program in _blurPrograms)
-                program?.Dispose();
+        _canvasProgram?.Dispose();
 
         _buffer?.Dispose();
     }

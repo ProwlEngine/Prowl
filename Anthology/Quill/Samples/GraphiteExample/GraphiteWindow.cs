@@ -6,7 +6,6 @@ using Prowl.Scribe;
 using Prowl.Scribe.Internal;
 using Prowl.Vector;
 using Silk.NET.Input;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
 using Texture = Prowl.Graphite.Texture;

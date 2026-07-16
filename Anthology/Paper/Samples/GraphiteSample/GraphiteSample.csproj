@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Shared\Shared.csproj" />
     <ProjectReference Include="..\..\..\Graphite\Graphite\Prowl.Graphite.csproj" />
-    <ProjectReference Include="..\..\..\Graphite\Compiler\Prowl.Graphite.Compiler.csproj" />
+    <ProjectReference Include="..\..\..\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
   </ItemGroup>
 
 </Project>
