@@ -66,6 +66,9 @@ internal static class MaterialPropertyReadExtensions
     public static Texture3D GetTexture3D(this Dictionary<string, MaterialProperty> p, string name)
         => p.TryGetValue(name, out MaterialProperty v) ? v.Tex3D.Res : null;
 
+    public static AssetRef<Texture3D> GetTexture3DRef(this Dictionary<string, MaterialProperty> p, string name)
+        => p.TryGetValue(name, out MaterialProperty v) ? v.Tex3D : default;
+
     public static bool RemoveProperty(this Dictionary<string, MaterialProperty> p, string name)
         => p.Remove(name);
 }
