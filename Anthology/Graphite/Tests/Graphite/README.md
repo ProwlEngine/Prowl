@@ -24,6 +24,20 @@
   - `PropertySetBindingTests` - end-to-end `PropertySet` binding through `CommandBuffer`:
     transient vs. read-only vs. writable uniform buffers, structured buffers, `ApplyOther`, and
     the missing-property handler.
+  - `CrossSetBindingTests` - binding spread across three descriptor sets: a structured buffer
+    outside set 0, a texture/sampler pair in a third set, descriptor-set cache reuse and
+    non-aliasing, sub-ranges of one buffer, and `ClearProperties`.
+  - `FrameLifecycleTests` - the frame system's validation guards (double `BeginFrame`, stale
+    `EndFrame`, waiting on the open frame), ring slot cycling, and per-slot fence recycling.
+  - `TransientAllocationTests` - the per-frame bump allocator: offset alignment, non-overlap,
+    per-frame head reset, and the overflow spill path (growth rule, cumulative hard cap, the
+    one-shot soft-cap warning).
+  - `BufferSafetyTests` - the implicit-reallocation ("orphaning") path: writing a buffer that is
+    still in flight retires its native resource behind a stable managed identity, and the retired
+    resource is freed once the ring cycles. Also covers the `TransientWrites` opt-out and the
+    repeat-reallocation warning.
+  - `StreamingBufferTests` - per-ring-slot rotation, and the property that motivates the type:
+    rewriting `Current` every frame never orphans.
   - `FramebufferTests` / `SwapchainTests` - offscreen framebuffers and `OutputDescription`, plus
     the main swapchain's framebuffer, presentation, resize, and sRGB creation.
   - `DisposalTests` - resource disposal and dependency lifetimes.
