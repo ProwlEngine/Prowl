@@ -216,16 +216,16 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 - [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenGL & Audio Bindings
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
 - [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
-- [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo) - Serialization
-- [Prowl.Paper](https://github.com/ProwlEngine/Prowl.Paper) - UI Framework
-- [Prowl.Origami](https://github.com/ProwlEngine/Prowl.Origami) - Component Library for Paper
-- [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill) - Vector Graphics & Text Rendering
-- [Prowl.Scribe](https://github.com/ProwlEngine/Prowl.Scribe) - TrueType font parsing, glyph rasterization & markdown layout
-- [Prowl.Rosetta](https://github.com/ProwlEngine/Prowl.Rosetta) - For Editor Localisation
-- [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector) - 64-bit Math Library
-- [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper) - UV Unwrapper
-- [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic) - Progressive Lightmapper
-- [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay) - Model Importing (GLTF, GLB, OBJ, FBX)
+- [Prowl.Echo](https://github.com/ProwlEngine/Anthology) - Serialization
+- [Prowl.Paper](https://github.com/ProwlEngine/Anthology) - UI Framework
+- [Prowl.Origami](https://github.com/ProwlEngine/Anthology) - Component Library for Paper
+- [Prowl.Quill](https://github.com/ProwlEngine/Anthology) - Vector Graphics & Text Rendering
+- [Prowl.Scribe](https://github.com/ProwlEngine/Anthology) - TrueType font parsing, glyph rasterization & markdown layout
+- [Prowl.Rosetta](https://github.com/ProwlEngine/Anthology) - For Editor Localisation
+- [Prowl.Vector](https://github.com/ProwlEngine/Anthology) - 64-bit Math Library
+- [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology) - UV Unwrapper
+- [Prowl.Photonic](https://github.com/ProwlEngine/Anthology) - Progressive Lightmapper
+- [Prowl.Clay](https://github.com/ProwlEngine/Anthology) - Model Importing (GLTF, GLB, OBJ, FBX)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
