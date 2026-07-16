@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -21,22 +20,23 @@ public class EditorModelImporter : AssetImporter
     {
         try
         {
-            ModelImporterSettings? importSettings = null;
+            // The editor's resolver never decodes another asset's pixel data itself: external
+            // textures resolve to the already-imported project asset by path/GUID, and embedded ones
+            // are registered as sub-assets. Unconditional, not settings-gated: holds for every
+            // editor import.
+            var importSettings = new ModelImporterSettings { TextureResolver = new EditorModelTextureResolver(ctx) };
             if (ctx.Settings != null)
             {
                 var s = ctx.Settings;
-                importSettings = new ModelImporterSettings
-                {
-                    GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue,
-                    GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue,
-                    RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue,
-                    CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue,
-                    FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue,
-                    UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f,
-                    // Off by default (slow; some models ship their own UV2). The importer runs the
-                    // unwrap in its post-process so the baked UV2 is captured before serialization.
-                    GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue,
-                };
+                importSettings.GenerateNormals = !s.TryGet("generateNormals", out var gn) || gn.BoolValue;
+                importSettings.GenerateSmoothNormals = !s.TryGet("generateSmoothNormals", out var gsn) || gsn.BoolValue;
+                importSettings.RecalculateNormals = s.TryGet("recalculateNormals", out var rn) && rn.BoolValue;
+                importSettings.CalculateTangentSpace = !s.TryGet("calculateTangents", out var ct) || ct.BoolValue;
+                importSettings.FlipUVs = !s.TryGet("flipUVs", out var fu) || fu.BoolValue;
+                importSettings.UnitScale = s.TryGet("unitScale", out var us) ? us.FloatValue : 1.0f;
+                // Off by default (slow; some models ship their own UV2). The importer runs the
+                // unwrap in its post-process so the baked UV2 is captured before serialization.
+                importSettings.GenerateLightmapUVs = s.TryGet("generateLightmapUVs", out var glu) && glu.BoolValue;
             }
 
             // 1. Import creates live meshes, materials, animations, GO hierarchy (+ UV2 if enabled).
@@ -53,25 +53,16 @@ public class EditorModelImporter : AssetImporter
             for (int i = 0; i < data.Animations.Count; i++)
                 ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i]);
 
-            // Embedded textures (GLB inline images, FBX Video::Clip content, data: URIs) live
-            // entirely inside the model file. Register them as sub-assets so the asset browser
-            // can show / drag / reuse them. Textures with an AssetPath came from sibling files
-            // on disk and ResolveTextures below will swap them to AssetRefs.
-            for (int i = 0; i < data.Textures.Count; i++)
-            {
-                var tex = data.Textures[i];
-                if (tex == null || !string.IsNullOrEmpty(tex.AssetPath)) continue;
-                ctx.AddSubAsset(tex.Name ?? $"Texture_{i}", tex);
-            }
+            // Note: model-referenced textures (both external and embedded) are already fully
+            // resolved by this point - materials carry AssetRefs, and any embedded texture is
+            // already registered as a sub-asset - both as side effects of EditorModelTextureResolver
+            // running during importer.Import() above.
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
             for (int i = 0; i < data.Meshes.Count; i++)
                 MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx);
 
-            // 3. Resolve inline textures to asset DB references
-            ResolveTextures(data, ctx);
-
-            // 4. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
+            // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
             //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
             //    reflects what its GameObject hierarchy actually references.
             var model = new Model(Path.GetFileNameWithoutExtension(ctx.AbsolutePath));
@@ -93,80 +84,6 @@ public class EditorModelImporter : AssetImporter
         }
     }
 
-    private static void ResolveTextures(ModelImportResult data, ImportContext ctx)
-    {
-        var db = EditorAssetBackend.Instance;
-        if (db == null) return;
-
-        string modelDir = Path.GetDirectoryName(ctx.AbsolutePath) ?? "";
-        string assetsRoot = Project.Current?.AssetsPath ?? "";
-        if (string.IsNullOrEmpty(assetsRoot)) return;
-
-        // A disk-backed texture is loaded once by the model importer but can be referenced by
-        // multiple material slots (the source file references it once, by index), so collect every
-        // live texture object that gets replaced by an AssetRef here and dispose each only once,
-        // after every slot referencing it has been resolved - disposing eagerly per-slot would free
-        // a texture a later slot still needs to read.
-        var resolved = new HashSet<Texture2D>();
-
-        foreach (var mat in data.Materials)
-        {
-            if (mat == null) continue;
-            ResolveSlot(mat, "_MainTex", modelDir, assetsRoot, db, ctx, resolved);
-            ResolveSlot(mat, "_NormalTex", modelDir, assetsRoot, db, ctx, resolved);
-            ResolveSlot(mat, "_SurfaceTex", modelDir, assetsRoot, db, ctx, resolved);
-            ResolveSlot(mat, "_EmissionTex", modelDir, assetsRoot, db, ctx, resolved);
-        }
-
-        foreach (var tex in resolved)
-            tex.Dispose();
-    }
-
-    private static void ResolveSlot(Material mat, string slot, string modelDir, string assetsRoot, EditorAssetBackend db, ImportContext ctx, HashSet<Texture2D> resolved)
-    {
-        var tex = mat._properties.GetTexture(slot);
-        if (tex == null || tex.IsDisposed) return;
-
-        string? texPath = tex.AssetPath;
-        if (string.IsNullOrEmpty(texPath)) return;
-
-        string? relativePath = null;
-        try
-        {
-            if (Path.IsPathRooted(texPath))
-            {
-                if (texPath.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
-                    relativePath = Path.GetRelativePath(assetsRoot, texPath).Replace('\\', '/');
-            }
-            else
-            {
-                string abs = Path.GetFullPath(Path.Combine(modelDir, texPath));
-                if (abs.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
-                    relativePath = Path.GetRelativePath(assetsRoot, abs).Replace('\\', '/');
-            }
-        }
-        catch (Exception)
-        {
-            // tex.AssetPath isn't a real filesystem path - e.g. a shared built-in/default texture
-            // (Texture2D.LoadDefault fallback for an unset material slot) carries a synthetic
-            // "$Default:Texture/Normal"-style identifier, and the embedded ':' makes Path.GetFullPath
-            // throw NotSupportedException on Windows. Nothing to resolve; leave the live texture as-is.
-            return;
-        }
-
-        if (relativePath == null) return;
-
-        var entry = db.GetEntry(relativePath);
-        if (entry == null) return;
-
-        // Don't load the texture just set the AssetRef by GUID.
-        // The texture may not be imported yet, but the GUID is assigned.
-        // At runtime, AssetRef lazy-loads via AssetDatabase.Get().
-        mat.SetTexture(slot, new AssetRef<Texture2D>(entry.Guid));
-        ctx.AddDependency(entry.Guid);
-        resolved.Add(tex);
-    }
-
     public override EchoObject? DefaultSettings()
     {
         var s = EchoObject.NewCompound();
@@ -179,5 +96,60 @@ public class EditorModelImporter : AssetImporter
         s["generateLightmapUVs"] = new EchoObject(false);
         MeshFeatureRegistry.PopulateDefaultSettings(s);
         return s;
+    }
+}
+
+/// <summary>
+/// The editor's <see cref="IModelTextureResolver"/>: never decodes another asset's pixel data.
+/// An externally referenced texture is resolved purely by path, against the asset database's
+/// existing GUID for that file. An embedded texture is registered as a proper sub-asset of the
+/// model for the asset database to own and cache (this is the one case that still has to decode -
+/// there's no separate file for the asset database to already know about).
+/// </summary>
+internal sealed class EditorModelTextureResolver : IModelTextureResolver
+{
+    private readonly ImportContext _ctx;
+    private readonly string _assetsRoot;
+    private readonly EditorAssetBackend? _db;
+
+    public EditorModelTextureResolver(ImportContext ctx)
+    {
+        _ctx = ctx;
+        _assetsRoot = Project.Current?.AssetsPath ?? "";
+        _db = EditorAssetBackend.Instance;
+    }
+
+    public AssetRef<Texture2D> ResolveExternal(string sourcePath)
+    {
+        if (_db == null || string.IsNullOrEmpty(_assetsRoot)) return default;
+
+        // sourcePath is always already a resolved, existing, absolute path (guaranteed by Clay's
+        // Texture.SourcePath contract) - a plain prefix check + relative-path computation is enough,
+        // no need to re-resolve it against the model's own directory.
+        if (!sourcePath.StartsWith(_assetsRoot, StringComparison.OrdinalIgnoreCase)) return default;
+
+        string relativePath = Path.GetRelativePath(_assetsRoot, sourcePath).Replace('\\', '/');
+        var entry = _db.GetEntry(relativePath);
+        if (entry == null) return default;
+
+        _ctx.AddDependency(entry.Guid);
+        return new AssetRef<Texture2D>(entry.Guid);
+    }
+
+    public AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    {
+        try
+        {
+            using var ms = new MemoryStream(encodedBytes);
+            var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
+            tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
+            _ctx.AddSubAsset(tex.Name, tex); // assigns tex.AssetID
+            return new AssetRef<Texture2D>(tex);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Clay] Failed to load embedded texture '{name ?? "(unnamed)"}': {ex.Message}");
+            return default;
+        }
     }
 }
