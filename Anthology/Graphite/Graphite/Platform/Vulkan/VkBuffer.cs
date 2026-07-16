@@ -35,8 +35,6 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         CreateNativeBuffer();
 
         RefCount = new ResourceRefCount(DisposeCore);
-
-        _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
     private void CreateNativeBuffer()
@@ -132,6 +130,8 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             _deviceBuffer);
         _memory = memoryToken;
         _gd.Vk.BindBufferMemory(_gd.Device, _deviceBuffer, _memory.DeviceMemory, _memory.Offset).CheckResult();
+
+        _gd.RecordBufferAllocation(Usage, SizeInBytes);
     }
 
     protected internal override void OrphanCore(GraphicsDevice device, ulong inFlightFrameId)
@@ -141,7 +141,8 @@ internal unsafe partial class VkBuffer : DeviceBuffer
 
         CreateNativeBuffer();
 
-        device.DisposeWhenFrameComplete(inFlightFrameId, new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory));
+        device.DisposeWhenFrameComplete(inFlightFrameId,
+            new RetiredNativeBuffer(_gd, retiredBuffer, retiredMemory, Usage, SizeInBytes));
     }
 
     private sealed class RetiredNativeBuffer : IDisposable
@@ -149,18 +150,24 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         private readonly VkGraphicsDevice _gd;
         private readonly VkBufferHandle _buffer;
         private readonly VkMemoryBlock _memory;
+        private readonly BufferUsage _usage;
+        private readonly uint _sizeInBytes;
 
-        public RetiredNativeBuffer(VkGraphicsDevice gd, VkBufferHandle buffer, VkMemoryBlock memory)
+        public RetiredNativeBuffer(
+            VkGraphicsDevice gd, VkBufferHandle buffer, VkMemoryBlock memory, BufferUsage usage, uint sizeInBytes)
         {
             _gd = gd;
             _buffer = buffer;
             _memory = memory;
+            _usage = usage;
+            _sizeInBytes = sizeInBytes;
         }
 
         public void Dispose()
         {
             _gd.Vk.DestroyBuffer(_gd.Device, _buffer, null);
             _gd.MemoryManager.Free(_memory);
+            _gd.RecordBufferFree(_usage, _sizeInBytes);
         }
     }
 
