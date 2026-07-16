@@ -229,6 +229,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         ResourceFactory = new VkResourceFactory(this);
 
+        InitializeFrameOptions(options);
+
         if (scDesc != null)
         {
             SwapchainDescription desc = scDesc.Value;
@@ -253,7 +255,6 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
         _vulkanInfo = new BackendInfoVulkan(this);
 
-        InitializeFrameOptions(options);
         InitializeSlots();
         PostDeviceCreated();
     }
