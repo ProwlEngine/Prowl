@@ -237,9 +237,9 @@ public sealed class Texture2D : Texture, ISerializable
         compoundTag.Add("MinFilter", new((int)MinFilter));
         compoundTag.Add("MagFilter", new((int)MagFilter));
         compoundTag.Add("Wrap", new((int)WrapMode));
-        Memory<byte> memory = new byte[GetSize()];
-        GetData(memory);
-        compoundTag.Add("Data", new(memory.ToArray()));
+        byte[] data = new byte[GetSize()];
+        GetData<byte>(data);
+        compoundTag.Add("Data", new(data));
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
