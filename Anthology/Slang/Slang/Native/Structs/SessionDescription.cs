@@ -46,16 +46,16 @@ internal unsafe struct SessionDescription()
         if (src.FileProvider != null)
             FileSystem = fsAllocation = new FileSystem(src.FileProvider);
 
-        if (src.Targets != null)
+        if (src.Targets != null && src.Targets.Length > 0)
             Targets.Allocate([.. src.Targets.Select(x => new TargetDescription().Allocate(x))]);
 
-        if (src.SearchPaths != null)
+        if (src.SearchPaths != null && src.SearchPaths.Length > 0)
             SearchPaths.Allocate([.. src.SearchPaths.Select(U8Str.Alloc)]);
 
-        if (src.PreprocessorMacros != null)
+        if (src.PreprocessorMacros != null && src.PreprocessorMacros.Length > 0)
             PreprocessorMacros.Allocate([.. src.PreprocessorMacros.Select(x => new PreprocessorMacroDescription().Allocate(x))]);
 
-        if (src.CompilerOptionEntries != null)
+        if (src.CompilerOptionEntries != null && src.CompilerOptionEntries.Length > 0)
             CompilerOptionEntries.Allocate([.. src.CompilerOptionEntries.Select(x => new CompilerOptionEntry().Allocate(x))]);
 
         return this;
