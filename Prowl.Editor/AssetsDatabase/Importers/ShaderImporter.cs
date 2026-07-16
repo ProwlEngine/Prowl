@@ -20,7 +20,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".shader")]
 public class ShaderImporter : AssetImporter
 {
-    public override int Version => 2;
+    public override int Version => 3;
 
 
     public override bool Import(ImportContext ctx)
