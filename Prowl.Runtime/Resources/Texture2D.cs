@@ -280,19 +280,35 @@ public sealed class Texture2D : Texture, ISerializable
 
         image.Flip();
 
-        TextureImageFormat format = TextureImageFormat.UnsignedShort4;
         image.ColorSpace = ColorSpace.sRGB;
         image.ColorType = ColorType.TrueColorAlpha;
 
-        nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
+        // Most sources (PNG/JPG/TGA/etc.) are 8 bits per channel. Only keep the full 16-bit path for
+        // genuinely higher-depth sources (16-bit PNG, some TIFF/EXR/HDR) - storing an 8-bit source as
+        // UnsignedShort4 doubles its GPU/disk footprint for zero precision benefit.
+        bool highBitDepth = image.Depth > 8;
+        TextureImageFormat format = highBitDepth ? TextureImageFormat.UnsignedShort4 : TextureImageFormat.Color4b;
 
         Texture2D texture = new(image.Width, image.Height, false, format);
         try
         {
-
-            unsafe
+            if (highBitDepth)
             {
-                Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
+                nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
+                unsafe
+                {
+                    Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
+                }
+            }
+            else
+            {
+                byte[]? rgba = image.GetPixels().ToByteArray(PixelMapping.RGBA)
+                    ?? throw new InvalidOperationException("Failed to read pixel data from the source image.");
+                unsafe
+                {
+                    fixed (byte* ptr = rgba)
+                        Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, ptr);
+                }
             }
 
             if (generateMipmaps)
