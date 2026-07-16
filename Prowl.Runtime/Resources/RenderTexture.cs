@@ -109,8 +109,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         foreach (Texture2D texture in _internalTextures)
             texture.Dispose();
 
-        if (ownsDepth && InternalDepth != null)
-            InternalDepth.Dispose();
+        if (ownsDepth && _internalDepth != null)
+            _internalDepth.Dispose();
 
         _frameBuffer.Dispose();
     }

@@ -6,17 +6,12 @@ using Prowl.Vector;
 
 using Prowl.Runtime;
 using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Rendering.Shaders;
-
 
 using ParsedProperty = Prowl.Graphite.ShaderDef.ShaderProperty;
 using ShaderProperty = Prowl.Runtime.Rendering.Shaders.ShaderProperty;
 using ShaderPropertyType = Prowl.Graphite.ShaderDef.ShaderPropertyType;
-using System.Threading.Tasks;
-using Prowl.Graphite.Compiler;
-using Prowl.Editor.Projects;
-using Prowl.Graphite;
 
 
 namespace Prowl.Editor.Importers;
@@ -68,29 +63,25 @@ public class ShaderImporter : AssetImporter
 
     public static Shader? LoadShader(string source, string path)
     {
-        string assetsRoot = Path.GetFullPath(Project.Current.AssetsPath);
-        string relative = Path.GetRelativePath(assetsRoot, path);
-        ParsedShader? parsed = null;
         try
         {
-            parsed = ParsedShader.Parse(source);
+            ShaderDefinition definition = ShaderParser.Parse(source);
 
-            ShaderProperty[] properties = [.. parsed!.Properties.Select(ConvertProperty)];
+            ShaderProperty[] properties = [.. (definition.Properties ?? []).Select(ConvertProperty)];
 
-            ShaderPass[] passes = Task
-                .WhenAll(parsed.Passes.Select((x) => CompilePass(x, parsed.Name, relative)))
-                .GetAwaiter()
-                .GetResult();
+            ShaderSnapshot snapshot = CompilationWorker.CompileAll(definition, definition.Name ?? Path.GetFileNameWithoutExtension(path), path);
 
-            ShaderPass? firstFail = passes.FirstOrDefault(x => !x.Variants.Any(), null);
+            bool anyCompiled = false;
+            foreach (PassSnapshot passSnapshot in snapshot.Passes ?? [])
+                anyCompiled |= passSnapshot.Variants is { Length: > 0 };
 
-            if (firstFail != null)
+            if (!anyCompiled)
             {
-                Debug.LogError($"Pass '{firstFail.Name}' failed to compile");
+                Debug.LogError($"Shader '{definition.Name}' produced no compiled variants.");
                 return null;
             }
 
-            return new Shader(parsed.Name, properties, passes, parsed.Fallback);
+            return new Shader(definition.Name ?? Path.GetFileNameWithoutExtension(path), properties, definition, snapshot);
         }
         catch (ParseException parseEx)
         {
@@ -98,50 +89,11 @@ public class ShaderImporter : AssetImporter
             Debug.Log(parseEx.Message, LogSeverity.Error, new(frame));
             return null;
         }
-    }
-
-
-    private static async Task<ShaderPass> CompilePass(ParsedPass parsed, string name, string path)
-    {
-        CompilationRequest request = new()
+        catch (Exception)
         {
-            ModuleName = name,
-            ModulePath = path,
-            SourceUtf8 = System.Text.Encoding.UTF8.GetBytes(parsed.InlineSlang),
-            Type = ShaderType.Rasterization
-        };
-
-        CompilationResult result = await CompilationWorker.CompileAsync(request);
-
-        if (result.CompiledVariants == null || result.CompiledVariants.Length == 0)
-            return new ShaderPass(parsed.Name, [], []);
-
-        ShaderVariant[] variants = [.. result.CompiledVariants.Select(x => ConvertVariant(x, parsed))];
-
-        return new ShaderPass(parsed.Name, parsed.Tags, variants);
-    }
-
-
-    private static ShaderVariant ConvertVariant(VariantResult result, ParsedPass pass)
-    {
-        (ShaderDescription, GraphicsBackend)[] variantBackends = new (ShaderDescription, GraphicsBackend)[result.Backends.Length];
-        for (int i = 0; i < result.Backends.Length; i++)
-        {
-            (ShaderDescription desc, GraphicsBackend back) = result.Backends[i];
-            desc.BlendState = pass.State.ToBlendState(BlendStateDescription.SingleDisabled);
-            desc.DepthStencilState = pass.State.ToDepthStencilState(DepthStencilStateDescription.DepthOnlyLessEqual);
-            desc.RasterizerState = pass.State.ToRasterizerState(RasterizerStateDescription.Default);
-
-            variantBackends[i] = (desc, back);
+            // Compile failures are already logged by CompilationWorker with source-mapped diagnostics.
+            return null;
         }
-
-        ShaderVariant variant = new()
-        {
-            Backends = variantBackends,
-            Keywords = result.Variants
-        };
-
-        return variant;
     }
 
 
@@ -149,9 +101,9 @@ public class ShaderImporter : AssetImporter
     {
         ShaderProperty prop = parsed.PropertyType switch
         {
-            ShaderPropertyType.Float => (float)parsed.Value.R,
-            ShaderPropertyType.Integer => (int)parsed.Value.R,
-            ShaderPropertyType.Color => new Color(parsed.Value.R, parsed.Value.G, parsed.Value.B, parsed.Value.A),
+            ShaderPropertyType.Float => (float)parsed.Value.X,
+            ShaderPropertyType.Integer => (int)parsed.Value.X,
+            ShaderPropertyType.Color => new Color(parsed.Value.X, parsed.Value.Y, parsed.Value.Z, parsed.Value.W),
             ShaderPropertyType.Vector => parsed.Value,
             ShaderPropertyType.Matrix => parsed.MatrixValue,
             ShaderPropertyType.Texture2D => Texture2DParse(parsed.TextureValue),
@@ -164,8 +116,8 @@ public class ShaderImporter : AssetImporter
 
         prop.Name = parsed.Name;
         prop.DisplayName = parsed.DisplayName;
-        prop.HasRange = false;//parsed.HasRange;
-        prop.Range = Float2.One;//parsed.Range;
+        prop.HasRange = false;
+        prop.Range = Float2.One;
 
         return prop;
     }

@@ -1,42 +1,33 @@
 #!/usr/bin/env dotnet run
 
-#:package Prowl.Echo@2.3.0
-#:package Prowl.Graphite@2.3.0
-#:package Prowl.Graphite.Compiler@2.3.0
+#:package Prowl.Echo@2.6.3
+#:package Prowl.Graphite@2.6.3
+#:package Prowl.Graphite.ShaderDef@2.6.3
+#:package Prowl.Graphite.ShaderDef.Compiler@2.6.3
 
 #:sdk Microsoft.NET.Sdk
 
 #:property LangVersion=preview
 #:property TargetFramework=net10.0
+#:property AllowUnsafeBlocks=true
 
 #:project ../Prowl.Runtime/Prowl.Runtime.csproj
 
 using Prowl.Echo;
 using Prowl.Graphite;
-using Prowl.Graphite.Compiler;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
-string shaderDir;
-
-var allBackends = new Dictionary<string, Func<CompilerModule>>(StringComparer.OrdinalIgnoreCase)
-{
-    ["OpenGL"] = () => new GLCompiler("glsl_450", GraphicsBackend.OpenGL),
-    ["OpenGLES"] = () => new GLCompiler("glsl_es_310", GraphicsBackend.OpenGLES),
-    ["Vulkan"] = () => new VulkanCompiler("spirv_1_4"),
-    ["Direct3D11"] = () => new DXCompiler("sm_5_0", GraphicsBackend.Direct3D11),
-};
-
 SerializationFormats.RegisterDefaults();
 
-string scriptDir = Path.GetDirectoryName(
-    Environment.ProcessPath!)!;
+// Run from Tools/ (e.g. `dotnet run UIShaderCompiler.cs`): Environment.ProcessPath points into the
+// dotnet runfile cache when launched this way, not this script's directory, so use the CWD instead.
+string scriptDir = Directory.GetCurrentDirectory();
+string runtimeDir = Path.GetFullPath(Path.Combine(scriptDir, "..", "Prowl.Runtime"));
 
-string runtimeDir = Path.GetFullPath(
-    Path.Combine(scriptDir, "..", "Prowl.Runtime"));
-
-shaderDir = args.Length > 0
+string shaderDir = args.Length > 0
     ? args[0]
     : Path.Combine(runtimeDir, "GUI", "Shaders");
 
@@ -46,44 +37,37 @@ string outputDir = args.Length > 1
 
 Directory.CreateDirectory(outputDir);
 
+// Headless Vulkan device: only used so the ShaderDef library has a device to bind passes to while
+// compiling. GraphicsBackend only has one value (Vulkan) now, so this is also what runtime playback
+// will target - no per-backend loop needed anymore.
+GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions());
+
 Compile("UI.slang", Path.Combine(outputDir, "UI.shaderblob"));
 Compile("Blur.slang", Path.Combine(outputDir, "Blur.shaderblob"));
 
+device.Dispose();
+
 return;
-
-(string Name, Func<CompilerModule> Factory)[] SelectedBackends()
-{
-    string env = Environment.GetEnvironmentVariable("UISHADER_BACKENDS");
-
-    string[] names = string.IsNullOrWhiteSpace(env)
-        ? ["OpenGL", "OpenGLES", "Vulkan"]
-        : env.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    return [.. names.Select(n => (n, allBackends[n]))];
-}
 
 void Compile(string shaderFile, string outputPath)
 {
     Console.WriteLine($"Compiling {shaderFile} ...");
 
-    List<VariantResult> merged = new();
+    string source = File.ReadAllText(Path.Combine(shaderDir, shaderFile));
 
-    foreach ((string name, Func<CompilerModule> factory) in SelectedBackends())
-    {
-        Console.WriteLine($"  backend {name} ...");
+    ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
+    ShaderDefinition definition = new() { Name = shaderFile, Passes = [pass] };
 
-        CompilationSession session = new();
-        session.RegisterModule(factory());
-        session.BeginSession([new DirectoryInfo(shaderDir)], FileLoader);
+    SlangShaderCompiler compiler = new();
+    compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
+    compiler.BeginSession([new DirectoryInfo(shaderDir)], FileLoader);
 
-        CompilationResult result = session.CompileShader(shaderFile, ShaderType.Rasterization);
+    definition.Create(device, compiler, CompileMode.All);
+    ShaderSnapshot snapshot = definition.Snapshot();
 
-        session.EndSession();
+    compiler.EndSession();
 
-        MergeBackend(merged, result);
-    }
-
-    UIShaderBlobData data = BuildBlobData(merged);
+    UIShaderBlobData data = new() { Definition = definition, Snapshot = snapshot };
 
     EchoObject root = Serializer.Serialize(data, TypeMode.None);
 
@@ -92,23 +76,13 @@ void Compile(string shaderFile, string outputPath)
 
     VerifyRoundTrip(outputPath, data);
 
-    Console.WriteLine($"  wrote {outputPath} ({data.Variants.Length} variant(s))");
-}
+    Console.WriteLine($"  wrote {outputPath} ({snapshot.Passes[0].Variants?.Length ?? 0} variant(s))");
 
-UIShaderBlobData BuildBlobData(List<VariantResult> merged)
-{
-    return new UIShaderBlobData
+    Memory<byte>? FileLoader(string name)
     {
-        Variants = [.. merged.Select(v => new UIShaderVariantData
-        {
-            Keywords = v.Variants,
-            Backends = [.. v.Backends.Select(b => new UIShaderBackendData
-            {
-                Backend = b.Backend,
-                Description = b.Description,
-            })],
-        })],
-    };
+        string path = Path.Combine(shaderDir, name);
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+    }
 }
 
 void VerifyRoundTrip(string outputPath, UIShaderBlobData original)
@@ -118,102 +92,34 @@ void VerifyRoundTrip(string outputPath, UIShaderBlobData original)
     EchoObject root = EchoObject.ReadFromBinary(reader);
     UIShaderBlobData restored = Serializer.Deserialize<UIShaderBlobData>(root);
 
-    if (restored.Variants.Length != original.Variants.Length)
+    Variant[] originalVariants = original.Snapshot.Passes[0].Variants ?? [];
+    Variant[] restoredVariants = restored.Snapshot.Passes[0].Variants ?? [];
+
+    if (originalVariants.Length != restoredVariants.Length)
         throw new InvalidOperationException("Round-trip variant count mismatch.");
 
-    for (int i = 0; i < original.Variants.Length; i++)
+    for (int i = 0; i < originalVariants.Length; i++)
     {
-        UIShaderBackendData[] a = original.Variants[i].Backends;
-        UIShaderBackendData[] b = restored.Variants[i].Backends;
+        if (!originalVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription a))
+            continue;
 
-        if (a.Length != b.Length)
-            throw new InvalidOperationException("Round-trip backend count mismatch.");
+        if (!restoredVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription b))
+            throw new InvalidOperationException($"Round-trip lost the Vulkan variant at index {i}.");
 
-        for (int j = 0; j < a.Length; j++)
-            VerifyDescription(a[j], b[j], i);
-    }
-}
+        ShaderStageDescription[] sa = a.Stages;
+        ShaderStageDescription[] sb = b.Stages;
 
-void VerifyDescription(UIShaderBackendData a, UIShaderBackendData b, int variant)
-{
-    if (a.Backend != b.Backend)
-        throw new InvalidOperationException($"Round-trip backend mismatch (variant {variant}).");
+        if (sa.Length != sb.Length)
+            throw new InvalidOperationException($"Round-trip stage count mismatch (variant {i}).");
 
-    ShaderStageDescription[] sa = a.Description.Stages;
-    ShaderStageDescription[] sb = b.Description.Stages;
-
-    if (sa.Length != sb.Length)
-        throw new InvalidOperationException($"Round-trip stage count mismatch (variant {variant}, {a.Backend}).");
-
-    for (int i = 0; i < sa.Length; i++)
-    {
-        if (sa[i].Stage != sb[i].Stage ||
-            sa[i].EntryPoint != sb[i].EntryPoint ||
-            !sa[i].ShaderBytes.AsSpan().SequenceEqual(sb[i].ShaderBytes))
+        for (int s = 0; s < sa.Length; s++)
         {
-            throw new InvalidOperationException(
-                $"Round-trip stage mismatch (variant {variant}, {a.Backend}, stage {sa[i].Stage}).");
-        }
-    }
-
-    ResourceLayoutDescription[] ra = a.Description.ResourceLayouts;
-    ResourceLayoutDescription[] rb = b.Description.ResourceLayouts;
-
-    if (ra.Length != rb.Length)
-        throw new InvalidOperationException(
-            $"Round-trip resource-layout count mismatch (variant {variant}, {a.Backend}).");
-
-    for (int i = 0; i < ra.Length; i++)
-    {
-        if (ra[i].Elements.Length != rb[i].Elements.Length)
-            throw new InvalidOperationException(
-                $"Round-trip resource-element count mismatch (variant {variant}, {a.Backend}).");
-
-        for (int j = 0; j < ra[i].Elements.Length; j++)
-        {
-            if (ra[i].Elements[j].Name != rb[i].Elements[j].Name)
+            if (sa[s].Stage != sb[s].Stage ||
+                sa[s].EntryPoint != sb[s].EntryPoint ||
+                !sa[s].ShaderBytes.AsSpan().SequenceEqual(sb[s].ShaderBytes))
             {
-                throw new InvalidOperationException(
-                    $"Round-trip resource-element name mismatch (variant {variant}, {a.Backend}).");
+                throw new InvalidOperationException($"Round-trip stage mismatch (variant {i}, stage {sa[s].Stage}).");
             }
         }
     }
-}
-
-void MergeBackend(List<VariantResult> merged, CompilationResult result)
-{
-    foreach (VariantResult variant in result.CompiledVariants)
-    {
-        int index = merged.FindIndex(v => SameKeywords(v.Variants, variant.Variants));
-
-        if (index < 0)
-        {
-            merged.Add(variant);
-            continue;
-        }
-
-        VariantResult existing = merged[index];
-        existing.Backends = [.. existing.Backends, .. variant.Backends];
-        merged[index] = existing;
-    }
-}
-
-bool SameKeywords(Keyword[] a, Keyword[] b)
-{
-    if (a.Length != b.Length)
-        return false;
-
-    for (int i = 0; i < a.Length; i++)
-    {
-        if (a[i].Name != b[i].Name || a[i].Value != b[i].Value)
-            return false;
-    }
-
-    return true;
-}
-
-Memory<byte>? FileLoader(string name)
-{
-    string path = Path.Combine(shaderDir, name);
-    return File.Exists(path) ? File.ReadAllBytes(path) : null;
 }

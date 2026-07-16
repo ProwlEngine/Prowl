@@ -8,10 +8,12 @@ using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Graphite;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Shaders;
 using Prowl.Vector;
+
+using ShaderProperty = Prowl.Runtime.Rendering.Shaders.ShaderProperty;
+using ShaderPropertyType = Prowl.Runtime.Rendering.Shaders.ShaderPropertyType;
 
 namespace Prowl.Runtime.Resources;
 
@@ -94,15 +96,6 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     {
         get { EnsureNotDisposed(); return _shader; }
         set { EnsureNotDisposed(); if (value.Res != null) SetShader(value.Res); }
-    }
-
-    /// <summary>The raw asset reference backing <see cref="Shader"/>. Used by the editor
-    /// inspector so the shader field is drawn/dropped-into as a proper asset reference
-    /// instead of an unwrapped instance.</summary>
-    public AssetRef<Shader> ShaderRef
-    {
-        get => _shader;
-        set { _shader = value; _isDirty = true; }
     }
 
     /// <summary>

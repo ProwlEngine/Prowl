@@ -39,8 +39,7 @@
     <PackageReference Include="Prowl.Photonic" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Rosetta" Version="$(ProwlVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Graphite.Compiler" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="$(ProwlVersion)" />
   </ItemGroup>
 
   <ItemGroup>

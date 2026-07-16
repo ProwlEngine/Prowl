@@ -288,14 +288,10 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                         float rnd = EditorTheme.Roundness;
 
                         canvas.SetBrushTexture(rt.MainTexture);
-                        // TextureTransform maps screen rect to UV. Bottom-left-origin backends (OpenGL)
-                        // store the render target flipped relative to the canvas, so V needs flipping
-                        // there; top-left-origin backends (Vulkan, D3D11) sample upright already.
-                        bool bottomLeftOrigin = Graphics.Device.BackendType is GraphicsBackend.OpenGL or GraphicsBackend.OpenGLES;
+                        // TextureTransform maps screen rect to UV. Vulkan is top-left-origin, so the
+                        // render target already samples upright relative to the canvas.
                         canvas.SetBrushTextureTransform(
-                            bottomLeftOrigin
-                                ? Transform2D.CreateTranslation(rx, ry + rh) * Transform2D.CreateScale(rw, -rh)
-                                : Transform2D.CreateTranslation(rx, ry) * Transform2D.CreateScale(rw, rh));
+                            Transform2D.CreateTranslation(rx, ry) * Transform2D.CreateScale(rw, rh));
                         canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, rnd, rnd, Color.White);
                         canvas.ClearBrushTexture();
 

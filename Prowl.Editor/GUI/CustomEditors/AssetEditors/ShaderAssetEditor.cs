@@ -11,7 +11,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.ShaderDef;
 
 namespace Prowl.Editor.Inspector;
 
@@ -43,9 +43,10 @@ public class ShaderAssetEditor : AssetImporterEditor
         if (shader == null) return;
 
         ShaderPass[] passes = shader.Passes.ToArray();
-        int totalVariants = passes.Sum(p => p.Variants.Count());
-        int variantSpaces = passes
-            .SelectMany(p => p.Variants)
+        IReadOnlyList<Variant>[] passVariants = [.. Enumerable.Range(0, passes.Length).Select(shader.GetCompiledVariants)];
+        int totalVariants = passVariants.Sum(v => v.Count);
+        int variantSpaces = passVariants
+            .SelectMany(v => v)
             .SelectMany(v => v.Keywords)
             .Select(k => k.Name)
             .Distinct()
@@ -63,27 +64,27 @@ public class ShaderAssetEditor : AssetImporterEditor
         for (int passIndex = 0; passIndex < passes.Length; passIndex++)
         {
             ShaderPass pass = passes[passIndex];
-            ShaderVariant[] variants = pass.Variants.ToArray();
+            IReadOnlyList<Variant> variants = passVariants[passIndex];
             string passId = $"{id}_pass_{passIndex}";
 
             Origami.Foldout(paper, passId, $"Pass: {pass.Name}")
-                .Badge($"{variants.Length} variant{(variants.Length == 1 ? "" : "s")}")
+                .Badge($"{variants.Count} variant{(variants.Count == 1 ? "" : "s")}")
                 .Body(() =>
                 {
-                    for (int variantIndex = 0; variantIndex < variants.Length; variantIndex++)
+                    for (int variantIndex = 0; variantIndex < variants.Count; variantIndex++)
                         DrawVariant(paper, $"{passId}_v{variantIndex}", passIndex, variantIndex, variants[variantIndex]);
                 });
         }
     }
 
-    private void DrawVariant(Paper paper, string id, int passIndex, int variantIndex, ShaderVariant variant)
+    private void DrawVariant(Paper paper, string id, int passIndex, int variantIndex, Variant variant)
     {
         string key = $"{passIndex}_{variantIndex}";
         string label = variant.Keywords.Length == 0
             ? "Base (no keywords)"
             : string.Join(", ", variant.Keywords.Select(k => $"{k.Name}={k.Value}"));
 
-        GraphicsBackend[] backends = [.. variant.Backends.Select(b => b.Item2)];
+        GraphicsBackend[] backends = [.. variant.Compiled.Select(b => b.Backend)];
         if (!_selectedBackend.TryGetValue(key, out GraphicsBackend selected) || Array.IndexOf(backends, selected) < 0)
         {
             selected = backends.Length > 0 ? backends[0] : default;
@@ -97,7 +98,7 @@ public class ShaderAssetEditor : AssetImporterEditor
 
         Origami.Button(paper, $"{id}_open", $"{EditorIcons.FileCode}  View Shader Source", () =>
         {
-            (ShaderDescription description, GraphicsBackend backend) = Array.Find(variant.Backends, b => b.Item2 == selected);
+            (GraphicsBackend backend, ShaderDescription description) = Array.Find(variant.Compiled, b => b.Backend == selected);
             OpenPermutation(passIndex, variantIndex, description, backend);
         }).Show();
 
@@ -114,7 +115,6 @@ public class ShaderAssetEditor : AssetImporterEditor
             string extension = backend switch
             {
                 GraphicsBackend.Vulkan => "spv",
-                GraphicsBackend.Direct3D11 => "hlsl",
                 _ => "glsl",
             };
 

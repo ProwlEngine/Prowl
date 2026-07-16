@@ -2,12 +2,14 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Graphite;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
 
 namespace Prowl.Runtime;
 
@@ -37,6 +39,7 @@ public static class SerializationFormats
             Serializer.RegisterFormat(new PropertyIDFormat());
             Serializer.RegisterFormat(new VertexAttributeIDFormat());
             Serializer.RegisterFormat(new KeywordFormat());
+            Serializer.RegisterFormat(new VariantSpaceFormat());
         }
     }
 
@@ -83,5 +86,46 @@ public static class SerializationFormats
 
         public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
             => new Keyword(value["Name"].StringValue, value["Value"].StringValue);
+    }
+
+    /// <summary>
+    /// <see cref="VariantSpace"/> exposes its data as get-only auto-properties (no public fields), which
+    /// Echo's default reflection format can't see - it only serializes fields. Without this it silently
+    /// round-trips as an empty struct, and <c>VariantCombos.Generate</c> then NREs on the null
+    /// <see cref="VariantSpace.Values"/> of the "restored" instance.
+    /// </summary>
+    private sealed class VariantSpaceFormat : ISerializationFormat
+    {
+        public bool CanHandle(Type type) => type == typeof(VariantSpace);
+
+        public EchoObject Serialize(Type targetType, object value, SerializationContext context)
+        {
+            var space = (VariantSpace)value;
+            EchoObject compound = EchoObject.NewCompound();
+            compound.Add("Name", new EchoObject(space.Name ?? ""));
+            compound.Add("DeclType", new EchoObject(space.DeclType ?? ""));
+
+            EchoObject values = EchoObject.NewList();
+            foreach (string v in space.Values ?? [])
+                values.ListAdd(new EchoObject(v));
+            compound.Add("Values", values);
+
+            compound.Add("IsEnum", new EchoObject(space.IsEnum));
+            compound.Add("TypeModule", new EchoObject(space.TypeModule ?? ""));
+            return compound;
+        }
+
+        public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
+        {
+            List<string> values = [.. value["Values"].List.Select(v => v.StringValue)];
+            string? typeModule = value["TypeModule"].StringValue;
+
+            return new VariantSpace(
+                value["Name"].StringValue,
+                value["DeclType"].StringValue,
+                values,
+                value["IsEnum"].BoolValue,
+                string.IsNullOrEmpty(typeModule) ? null : typeModule);
+        }
     }
 }

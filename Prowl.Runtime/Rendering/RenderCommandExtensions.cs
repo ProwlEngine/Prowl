@@ -4,7 +4,7 @@
 using System.Linq;
 
 using Prowl.Graphite;
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -248,8 +248,6 @@ public static class RenderCommandExtensions
         if (shaderPass == null) return;
 
         shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
-        GraphicsProgram? program = shaderPass.ActiveProgram;
-        if (program == null) return;
 
         Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
@@ -260,7 +258,7 @@ public static class RenderCommandExtensions
         if (source?.IsValid() == true && source.MainTexture?.Handle != null)
             props.SetTexture("_MainTex", source.MainTexture.Handle, source.MainTexture.Sampler);
 
-        cmd.SetShader(program);
+        cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(props);
         cmd.Draw(3, 1, 0, 0);
@@ -283,12 +281,10 @@ public static class RenderCommandExtensions
         if (shaderPass == null) return;
 
         shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
-        GraphicsProgram? program = shaderPass.ActiveProgram;
-        if (program == null) return;
 
         Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
-        cmd.SetShader(program);
+        cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(mat.BuildPropertySet());
         cmd.Draw(3, 1, 0, 0);
@@ -307,15 +303,11 @@ public static class RenderCommandExtensions
         if (mesh == null || material == null || pass == null)
             return;
 
-        GraphicsProgram program = pass.ActiveProgram;
-        if (program == null)
-            return;
-
         mesh.Upload();
         if (mesh.VertexBuffer == null || mesh.IndexBuffer == null)
             return;
 
-        cmd.SetShader(program);
+        cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
         if (properties != null)
             cmd.SetProperties(properties);

@@ -2,7 +2,7 @@ import VariantAttributes;
 import UVOrigin;
 
 
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool Upsample;
 
 

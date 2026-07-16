@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Runtime.Rendering.Shaders;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -544,7 +544,7 @@ public abstract class RenderPipeline : EngineObject
                 {
                     instancedPassIndex++;
 
-                    if (hasRenderOrder && !pass.HasTag(shaderTag, tagValue))
+                    if (hasRenderOrder && !Shader.PassHasTag(pass, shaderTag, tagValue))
                         continue;
 
                     // Compute sort key for this pass (same as non-instanced)
@@ -579,7 +579,7 @@ public abstract class RenderPipeline : EngineObject
             {
                 passIndex++;
 
-                if (hasRenderOrder && !pass.HasTag(shaderTag, tagValue))
+                if (hasRenderOrder && !Shader.PassHasTag(pass, shaderTag, tagValue))
                     continue;
 
 
@@ -660,9 +660,6 @@ public abstract class RenderPipeline : EngineObject
 
             ShaderPass pass = material.Shader.GetPass(passIndex);
             pass.SetKeywords(Enumerable.ToArray(material._localKeywords.Values));
-            GraphicsProgram variant = pass.ActiveProgram;
-            if (variant == null)
-                continue;
 
             // GrabTexture: blit current framebuffer into a temporary RT and expose it
             // as a global texture for the shader to sample. Uses the CB's read/draw
@@ -702,7 +699,7 @@ public abstract class RenderPipeline : EngineObject
             // Bind state for the batch. Globals UBO + material uniforms (with shader
             // defaults filled in) apply once; per-object only sets instance uniforms
             // and transforms.
-            cmd.SetShader(variant);
+            cmd.SetShader(pass);
             // Graphite owns blend/depth/raster on the GraphicsProgram; the pass-level RasterizerState was removed.
             // cmd.SetRasterState(pass.State);
 
@@ -788,12 +785,6 @@ public abstract class RenderPipeline : EngineObject
 
         ShaderPass pass = material.Shader.GetPass(passIndex);
         pass.SetKeywords(Enumerable.ToArray(material._localKeywords.Values));
-        GraphicsProgram variant = pass.ActiveProgram;
-        if (variant == null)
-        {
-            material.SetKeyword("GPU_INSTANCING", false);
-            return;
-        }
 
         mesh.Upload();
         if (mesh.VertexBuffer == null || mesh.IndexBuffer == null)
@@ -806,7 +797,7 @@ public abstract class RenderPipeline : EngineObject
         DeviceBuffer instanceBuf = mesh.EnsureInstanceBuffer(instanceCount);
         Graphics.Device.UpdateBuffer(instanceBuf, 0u, instanceData);
 
-        cmd.SetShader(variant);
+        cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
         if (sharedProperties != null)
             cmd.SetProperties(sharedProperties);

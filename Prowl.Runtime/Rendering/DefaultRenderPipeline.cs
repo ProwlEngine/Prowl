@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Prowl.Graphite;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
@@ -527,11 +528,11 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static void DrawGizmoBatch(CommandBuffer cmd, IVertexSource source, Material material)
     {
-        GraphicsProgram? program = material.Shader?.GetPass(0)?.ActiveProgram;
-        if (program == null)
+        Prowl.Graphite.ShaderDef.ShaderPass? pass = material.Shader?.GetPass(0);
+        if (pass == null)
             return;
 
-        cmd.SetShader(program);
+        cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
 
         var transforms = new PropertySet();

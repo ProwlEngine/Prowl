@@ -206,8 +206,6 @@ public static class Window
 
     private static GraphicsAPI SilkApiFor(GraphicsBackend backend) => backend switch
     {
-        GraphicsBackend.OpenGL => new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(4, 5)),
-        GraphicsBackend.OpenGLES => new GraphicsAPI(ContextAPI.OpenGLES, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(3, 2)),
         GraphicsBackend.Vulkan => new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
         _ => GraphicsAPI.None,
     };

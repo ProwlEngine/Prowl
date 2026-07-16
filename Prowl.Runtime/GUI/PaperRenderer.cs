@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Graphite;
-using Prowl.Graphite.Variants;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Quill;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -56,8 +56,9 @@ public class PaperRenderer : ICanvasRenderer
     private CommandBuffer _buffer;
 
     private GraphicsProgram _shader;
-    private GraphicsProgram[] _blurPrograms;
-    private VariantSet<GraphicsProgram> _blurProgram;
+    private ShaderPass _blurPass;
+    private GraphicsProgram _blurProgramOff;
+    private GraphicsProgram _blurProgramOn;
 
     private Float4x4 _projection;
     private Texture2D _defaultTexture;
@@ -138,7 +139,11 @@ public class PaperRenderer : ICanvasRenderer
             ]
         };
 
-        ShaderDescription uiDesc = PickBackend(ui.Variants[0]);
+        ui.Definition.Create(_device, ui.Snapshot);
+        blur.Definition.Create(_device, blur.Snapshot);
+
+        ShaderPass uiPass = ui.Definition.Passes![0];
+        ShaderDescription uiDesc = ResolveDescription(uiPass);
         uiDesc.BlendState = oneMinusSrcAlphaBlend;
         uiDesc.DepthStencilState = DepthStencilStateDescription.Disabled;
         uiDesc.RasterizerState = new RasterizerStateDescription(FaceCullMode.None, FrontFace.Clockwise, true, false);
@@ -152,34 +157,35 @@ public class PaperRenderer : ICanvasRenderer
         _shader = _device.ResourceFactory.CreateGraphicsProgram(uiDesc);
         _shader.Name = "PaperRenderer UI Shader";
 
-        _blurPrograms = new GraphicsProgram[blur.Variants.Length];
-        var keywords = new Keyword[blur.Variants.Length][];
-        for (int i = 0; i < blur.Variants.Length; i++)
-        {
-            ShaderDescription blurDesc = PickBackend(blur.Variants[i]);
-            // Blur and present passes overwrite their target, so they use no blending.
-            blurDesc.BlendState = BlendStateDescription.SingleDisabled;
-            blurDesc.DepthStencilState = DepthStencilStateDescription.Disabled;
-            blurDesc.RasterizerState = new RasterizerStateDescription(FaceCullMode.None, FrontFace.Clockwise, true, false);
-
-            _blurPrograms[i] = _device.ResourceFactory.CreateGraphicsProgram(blurDesc);
-            _blurPrograms[i].Name = $"PaperRenderer Blur Shader {i}";
-            keywords[i] = blur.Variants[i].Keywords;
-        }
-
-        _blurProgram = new VariantSet<GraphicsProgram>(_blurPrograms, keywords);
+        _blurPass = blur.Definition.Passes![0];
+        _blurProgramOff = BuildBlurProgram(s_upsampleOff);
+        _blurProgramOn = BuildBlurProgram(s_upsampleOn);
     }
 
-    private ShaderDescription PickBackend(UIShaderVariantData variant)
+    private GraphicsProgram BuildBlurProgram(Keyword upsample)
     {
-        foreach (UIShaderBackendData entry in variant.Backends)
+        _blurPass.SetKeyword(upsample);
+        ShaderDescription desc = ResolveDescription(_blurPass);
+
+        // Blur and present passes overwrite their target, so they use no blending.
+        desc.BlendState = BlendStateDescription.SingleDisabled;
+        desc.DepthStencilState = DepthStencilStateDescription.Disabled;
+        desc.RasterizerState = new RasterizerStateDescription(FaceCullMode.None, FrontFace.Clockwise, true, false);
+
+        GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(desc);
+        program.Name = $"PaperRenderer Blur Shader (Upsample={upsample.Value})";
+        return program;
+    }
+
+    private ShaderDescription ResolveDescription(ShaderPass pass)
+    {
+        if (!pass.ActiveVariant.TryGetDescription(_device.BackendType, out ShaderDescription description))
         {
-            if (entry.Backend == _device.BackendType)
-                return entry.Description;
+            throw new NotSupportedException(
+                $"A GUI shader was not compiled for backend {_device.BackendType}. Re-run Tools/CompileUIShaders with that backend enabled.");
         }
 
-        throw new NotSupportedException(
-            $"The GUI shader was not compiled for backend {_device.BackendType}. Re-run Tools/CompileUIShaders with that backend enabled.");
+        return description;
     }
 
     private static UIShaderBlobData LoadBlob(string resourcePath)
@@ -371,13 +377,11 @@ public class PaperRenderer : ICanvasRenderer
 
         _buffer.SetFramebuffer(_blurFB[dstLevel]);
 
-        _blurProgram.SetKeyword(upsample ? s_upsampleOn : s_upsampleOff);
-
         _properties.SetTexture("sourceTexture", source, _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
         _properties.SetFloat("offset", offset);
 
-        _buffer.SetShader(_blurProgram.ActiveVariant);
+        _buffer.SetShader(upsample ? _blurProgramOn : _blurProgramOff);
         _buffer.SetVertexSource(_fullscreenSource);
         _buffer.SetProperties(_properties);
         _buffer.Draw(3);
@@ -387,13 +391,11 @@ public class PaperRenderer : ICanvasRenderer
     {
         _buffer.SetFramebuffer(PresentTarget ?? _device.SwapchainFramebuffer!);
 
-        _blurProgram.SetKeyword(s_upsampleOff);
-
         _properties.SetTexture("sourceTexture", _sceneTex, _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
         _properties.SetFloat("offset", 0f);
 
-        _buffer.SetShader(_blurProgram.ActiveVariant);
+        _buffer.SetShader(_blurProgramOff);
         _buffer.SetVertexSource(_fullscreenSource);
         _buffer.SetProperties(_properties);
         _buffer.Draw(3);
@@ -458,9 +460,8 @@ public class PaperRenderer : ICanvasRenderer
         _sampler?.Dispose();
         _shader?.Dispose();
 
-        if (_blurPrograms != null)
-            foreach (GraphicsProgram program in _blurPrograms)
-                program?.Dispose();
+        _blurProgramOff?.Dispose();
+        _blurProgramOn?.Dispose();
 
         _defaultTexture?.Dispose();
         _buffer?.Dispose();

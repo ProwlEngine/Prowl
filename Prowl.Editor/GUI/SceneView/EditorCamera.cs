@@ -115,10 +115,12 @@ public class EditorCamera
 
         if (_renderTarget == null || _renderTarget.Width != width || _renderTarget.Height != height)
         {
-            _renderTarget?.Dispose();
+            if (_renderTarget != null)
+                _renderTarget.Dispose();
+
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
-                new[] { PixelFormat.R8_G8_B8_A8_UNorm });
+                [PixelFormat.R8_G8_B8_A8_UNorm]);
 
             _camera.Target = _renderTarget;
         }

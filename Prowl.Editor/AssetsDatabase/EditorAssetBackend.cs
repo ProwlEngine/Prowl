@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 
 using Prowl.Echo;
+using Prowl.Graphite;
 using Prowl.Editor.Thumbnails;
 using Prowl.Editor.Importers;
 using Prowl.Runtime;
@@ -422,7 +423,7 @@ public class EditorAssetBackend : AssetBackendBase
             // rest of the project - log it and move on, leaving that entry to retry on the next scan.
             try
             {
-                ScanAssetFile(assetsPath, file, relativePath);
+                ScanAssetFile(rootPath, file, relativePath);
             }
             catch (Exception ex)
             {
@@ -1055,9 +1056,9 @@ public class EditorAssetBackend : AssetBackendBase
         try
         {
             var (w, h, pixels) = thumb.Value;
-            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, TextureImageFormat.Color4b);
+            var tex = new Runtime.Resources.Texture2D((uint)w, (uint)h, false, PixelFormat.R8_G8_B8_A8_UNorm);
             tex.SetData<byte>(pixels);
-            tex.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            tex.SetTextureFilters(SamplerFilter.MinLinear_MagLinear_MipPoint);
             _thumbnailTextures[guid] = tex;
             return tex;
         }

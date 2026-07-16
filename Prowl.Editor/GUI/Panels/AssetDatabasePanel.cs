@@ -16,6 +16,7 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 using TextAlignment = Prowl.PaperUI.TextAlignment;
+using IndexFormat = Prowl.Graphite.IndexFormat;
 
 namespace Prowl.Editor.GUI.Panels;
 
