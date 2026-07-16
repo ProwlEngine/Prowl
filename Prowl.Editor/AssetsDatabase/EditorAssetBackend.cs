@@ -67,6 +67,9 @@ public class EditorAssetBackend : AssetBackendBase
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 
+        Instance = this;
+        Runtime.AssetDatabase.Current = this;
+
         // A sub-asset never loads except as a side effect of loading its parent (see LoadFresh), so
         // resolve it to its parent's GUID for touch/idle/lock purposes too - the whole family is one
         // atomic unit.
@@ -123,10 +126,6 @@ public class EditorAssetBackend : AssetBackendBase
         // Start file watching
         _watcher = new AssetWatcher();
         _watcher.Start(_project.AssetsPath);
-
-        // Register as the active database
-        Instance = this;
-        Runtime.AssetDatabase.Current = this;
 
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
