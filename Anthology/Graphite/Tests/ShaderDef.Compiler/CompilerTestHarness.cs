@@ -66,6 +66,20 @@ internal static class CompilerTestHarness
 
 
     public static CompilationResult Compile(string source, string moduleName, params Func<CompilerModule>[] moduleFactories)
+        => CompilePassAll(new ShaderPass { Name = moduleName, State = new PassState(), InlineSlang = source }, moduleFactories);
+
+
+    // Compiles an already-parsed ShaderPass (e.g. from ShaderParser.Parse) for the given backends and
+    // returns the single (non-variant) result. Use for passes whose source declares no variant space.
+    public static VariantResult CompilePass(ShaderPass pass, params Func<CompilerModule>[] moduleFactories)
+        => CompilePassAll(pass, moduleFactories).CompiledVariants[0];
+
+
+    // Compiles an already-parsed ShaderPass for the given backends and returns the full result (every
+    // variant permutation). This is the same path CompileSharedAll uses internally, exposed directly
+    // so callers holding a real ShaderPass (parsed from full ShaderDef markup) don't need to go through
+    // a synthetic one built from raw source text.
+    public static CompilationResult CompilePassAll(ShaderPass pass, params Func<CompilerModule>[] moduleFactories)
         => SlangThread.Run(() =>
         {
             SlangShaderCompiler compiler = new();
@@ -76,8 +90,6 @@ internal static class CompilerTestHarness
             // The Shaders directory is on the search path so shaders can import sibling modules
             // (e.g. Modules imports Common); the base directory satisfies the native non-empty path.
             compiler.BeginSession([new DirectoryInfo(ShadersDirectory), new DirectoryInfo(AppContext.BaseDirectory)]);
-
-            ShaderPass pass = new() { Name = moduleName, State = new PassState(), InlineSlang = source };
 
             IReadOnlyList<VariantSpace> axes = compiler.GetAxes(pass);
             Keyword[][] combos = VariantCombos.Generate(axes);

@@ -67,6 +67,8 @@ public class VulkanCompilationTests
     [InlineData("Modules")]
     [InlineData("ConstantBuffers")]
     [InlineData("ParameterBlocks")]
+    [InlineData("UVOriginUsage")]
+    [InlineData("CombinedSampler")]
     public void Spirv_IsValid(string module)
     {
         ShaderDescription d = Compile(module);

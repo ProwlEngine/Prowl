@@ -65,4 +65,26 @@ public class VariantCompilationTests
 
         Assert.NotEqual(Convert.ToBase64String(vertexSpirv[0]), Convert.ToBase64String(vertexSpirv[1]));
     }
+
+
+    [Fact]
+    public void EveryVariant_ProducesValidSpirv()
+    {
+        CompilationResult result = Compile();
+
+        foreach (VariantResult variant in result.CompiledVariants)
+        {
+            ShaderDescription description = variant.Backends.Single().Description;
+
+            foreach (ShaderStages stage in new[] { ShaderStages.Vertex, ShaderStages.Fragment })
+            {
+                byte[] spirv = CompilerTestHarness.StageOf(description, stage).ShaderBytes;
+                string validation = CompilerTestHarness.TryValidateSpirv(spirv);
+
+                // null => spirv-val unavailable in this environment.
+                if (validation != null)
+                    Assert.True(validation.Length == 0, $"spirv-val rejected variant {variant.Variants.Single().Value} {stage}:\n{validation}");
+            }
+        }
+    }
 }

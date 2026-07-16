@@ -62,4 +62,26 @@ public class EnumVariantCompilationTests
         Assert.Equal(3, vertexSpirv.Length);
         Assert.Equal(3, vertexSpirv.Select(b => Convert.ToBase64String(b)).Distinct().Count());
     }
+
+
+    [Fact]
+    public void EveryVariant_ProducesValidSpirv()
+    {
+        CompilationResult result = Compile();
+
+        foreach (VariantResult variant in result.CompiledVariants)
+        {
+            ShaderDescription description = variant.Backends.Single().Description;
+
+            foreach (ShaderStages stage in new[] { ShaderStages.Vertex, ShaderStages.Fragment })
+            {
+                byte[] spirv = CompilerTestHarness.StageOf(description, stage).ShaderBytes;
+                string validation = CompilerTestHarness.TryValidateSpirv(spirv);
+
+                // null => spirv-val unavailable in this environment.
+                if (validation != null)
+                    Assert.True(validation.Length == 0, $"spirv-val rejected variant {stage}:\n{validation}");
+            }
+        }
+    }
 }
