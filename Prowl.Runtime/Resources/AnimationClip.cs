@@ -23,29 +23,37 @@ public enum AnimationWrapMode
 /// </summary>
 public sealed class AnimationClip : EngineObject, ISerializable
 {
-    public float Duration;
-    public float TicksPerSecond = 1f;
-    public float DurationInTicks;
+    private float _duration;
+    private float _ticksPerSecond = 1f;
+    private float _durationInTicks;
+    private AnimationWrapMode _wrap;
 
-    public AnimationWrapMode Wrap;
+    public float Duration { get { EnsureNotDisposed(); return _duration; } set { EnsureNotDisposed(); _duration = value; } }
+    public float TicksPerSecond { get { EnsureNotDisposed(); return _ticksPerSecond; } set { EnsureNotDisposed(); _ticksPerSecond = value; } }
+    public float DurationInTicks { get { EnsureNotDisposed(); return _durationInTicks; } set { EnsureNotDisposed(); _durationInTicks = value; } }
+    public AnimationWrapMode Wrap { get { EnsureNotDisposed(); return _wrap; } set { EnsureNotDisposed(); _wrap = value; } }
 
-    public List<AnimBone> Bones { get; private set; } = [];
+    private List<AnimBone> _bones = [];
+    public List<AnimBone> Bones { get { EnsureNotDisposed(); return _bones; } }
 
     /// <summary>Blend-shape weight tracks. Each targets a renderer (by path) and a named blend shape.</summary>
-    public List<BlendShapeAnim> BlendShapes { get; private set; } = [];
+    private List<BlendShapeAnim> _blendShapes = [];
+    public List<BlendShapeAnim> BlendShapes { get { EnsureNotDisposed(); return _blendShapes; } }
 
     private Dictionary<string, AnimBone> _boneMap = [];
 
     public void AddBone(AnimBone bone)
     {
+        EnsureNotDisposed();
         Bones.Add(bone);
         _boneMap[bone.BoneName] = bone;
     }
 
-    public void AddBlendShape(BlendShapeAnim blendShape) => BlendShapes.Add(blendShape);
+    public void AddBlendShape(BlendShapeAnim blendShape) { EnsureNotDisposed(); BlendShapes.Add(blendShape); }
 
     public AnimBone? GetBone(string name)
     {
+        EnsureNotDisposed();
         if (_boneMap.TryGetValue(name, out AnimBone? bone))
             return bone;
         return null;
@@ -53,6 +61,7 @@ public sealed class AnimationClip : EngineObject, ISerializable
 
     public void EnsureQuaternionContinuity()
     {
+        EnsureNotDisposed();
         foreach (AnimBone bone in Bones)
         {
             if (bone.RotX == null || bone.RotX.Keys.Count < 2) continue;

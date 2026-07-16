@@ -34,7 +34,7 @@ public class AssetSettings : ProjectSettingsBase
         Origami.Header(paper, "assets_h_load", $"{EditorIcons.Cubes}  Loading").Underline().Show();
 
         Origami.Checkbox(paper, "assets_async", AsyncAssetLoading,
-                v => { AsyncAssetLoading = v; AssetLoadingConfig.AsyncEnabled = v; ProjectSettingsRegistry.SaveAll(); })
+                v => { AsyncAssetLoading = v; AssetLoadingConfig.AsyncEnabled = v; EditorRegistries.SaveSettings(); })
             .LabelRight("Async Asset Loading").Show();
     }
 }

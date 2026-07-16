@@ -13,17 +13,20 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Scene")]
 public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 {
+    [MenuItem("Window/General/Scene", priority: 5)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SceneViewPanel));
+
     public override string Title => Loc.Get("panel.scene");
-    public override string Icon => EditorIcons.Video;
+    public override string Icon => EditorIcons.Shapes;
 
     private EditorCamera? _editorCamera;
 
@@ -36,6 +39,37 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
+
+    public static ISceneViewEditor? ActiveSceneViewEditor { get; private set; }
+    public static GameObject? ActiveSceneViewTarget { get; private set; }
+
+    public static void UpdateSceneViewEditor()
+    {
+        var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
+        if (selectedGO == null || selectedGO == ActiveSceneViewTarget)
+        {
+            if (selectedGO == null && ActiveSceneViewEditor != null) DeactivateSceneViewEditor();
+            return;
+        }
+        var editor = EditorRegistries.FindSceneViewEditor(selectedGO);
+        if (editor != null)
+        {
+            if (ActiveSceneViewEditor?.GetType() == editor.GetType() && ActiveSceneViewTarget == selectedGO) return;
+            DeactivateSceneViewEditor();
+            ActiveSceneViewEditor = editor;
+            ActiveSceneViewTarget = selectedGO;
+            ActiveSceneViewEditor.OnActivate(selectedGO);
+        }
+        else if (ActiveSceneViewEditor != null)
+            DeactivateSceneViewEditor();
+    }
+
+    public static void DeactivateSceneViewEditor()
+    {
+        ActiveSceneViewEditor?.OnDeactivate();
+        ActiveSceneViewEditor = null;
+        ActiveSceneViewTarget = null;
+    }
     private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
@@ -66,52 +100,44 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
         using (paper.Column("sv_root").Size(width, height).Enter())
         {
-            DrawToolbar(paper, font);
-            DrawViewport(paper, font, width, height - EditorTheme.RowHeight);
+            DrawViewport(paper, font, width, height);
         }
     }
 
-    private void DrawToolbar(Paper paper, Scribe.FontFile font)
+    // Grid / gizmo visibility live in the leaf's tab-bar header (right side)
+    public override float HeaderWidth => 28f;
+    public override void OnHeaderContent(Paper paper, float width, float height)
     {
-        using (paper.Row("sv_toolbar")
-            .Height(EditorTheme.RowHeight)
+        EditorGUI.HeaderIconButton(paper, "sv_hdr_settings", EditorIcons.Gear, () =>
+            Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+            {
+                b.Header(Loc.Get("panel.scene"));
+                b.Toggle(Loc.Get("scene.show_grid"),
+                    () => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; },
+                    () => _editorCamera?.ShowGrid ?? true);
+                b.Toggle(Loc.Get("scene.show_gizmos"),
+                    () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
+                    () => _editorCamera?.ShowGizmos ?? true);
+            }));
+    }
+
+    // Floating transform-tools panel, top-left of the viewport. The active scene-view
+    // editor may replace the default gizmo-mode buttons with its own toolbar.
+    private void DrawTransformTools(Paper paper, Scribe.FontFile font)
+    {
+        using (paper.Column("sv_tools")
+            .PositionType(PositionType.SelfDirected)
+            .Position(12, 12)
+            .Width(34).Height(UnitValue.Auto)
+            .Rounded(9).Padding(5, 5, 5, 5).ColBetween(3)
+            .BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            // Let active scene view editor draw its toolbar first
-            var sceneEditor = SceneViewEditorRegistry.ActiveEditor;
-            bool suppressDefaultToolbar = false;
-            if (sceneEditor != null)
-                suppressDefaultToolbar = sceneEditor.DrawToolbar(paper, "sv_sce", font);
-
-            if (!suppressDefaultToolbar)
+            var sceneEditor = ActiveSceneViewEditor;
+            bool suppressDefault = sceneEditor != null && sceneEditor.DrawToolbar(paper, "sv_sce", font);
+            if (!suppressDefault)
                 DrawDefaultToolbar(paper, font);
-
-            paper.Box("sv_sep_grid").Width(1).Height(18).BackgroundColor(EditorTheme.Ink200);
-
-            // Grid toggle (always shown)
-            bool showGrid = _editorCamera?.ShowGrid ?? true;
-            paper.Box("sv_grid_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(showGrid ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.TableCellsLarge, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGrid = !_editorCamera.ShowGrid; });
-
-            // Gizmos toggle
-            bool showGizmos = _editorCamera?.ShowGizmos ?? true;
-            paper.Box("sv_gizmo_btn")
-                .Width(24).Height(24).Rounded(4)
-                .BackgroundColor(showGizmos ? EditorTheme.Purple400 : Color.Transparent)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Eye, font).TextColor(EditorTheme.Ink500)
-                .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-                .OnClick(0, (_, _) => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; });
-
-            // Spacer
-            paper.Box("sv_spacer");
-
-            paper.Box("sv_middle").Width(UnitValue.Stretch());
         }
     }
 
@@ -123,33 +149,33 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         bool isUniversal = _gizmoMode == Gizmo.TransformGizmoMode.Universal;
 
         paper.Box("sv_move_btn")
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(6)
             .BackgroundColor(isTranslate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
 
         paper.Box("sv_rotate_btn")
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(6)
             .BackgroundColor(isRotate ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
 
         paper.Box("sv_scale_btn")
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(6)
             .BackgroundColor(isScale ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
 
         paper.Box("sv_universal_btn")
-            .Width(24).Height(24).Rounded(4)
+            .Width(24).Height(24).Rounded(6)
             .BackgroundColor(isUniversal ? EditorTheme.Purple400 : Color.Transparent)
-            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+            .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
             .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
@@ -159,21 +185,26 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
     {
         if (_editorCamera == null || width <= 0 || height <= 0) return;
 
+        uint rtWidth = (uint)MathF.Max(1, width);
+        uint rtHeight = (uint)MathF.Max(1, height);
+        _editorCamera.EnsureRenderTarget(rtWidth, rtHeight);
+
         var scene = Scene.Current;
+        var rt = _editorCamera.RenderTarget;
 
         if (scene == null)
         {
             // No scene show message and create button
             using (paper.Column("sv_no_scene")
                 .Size(width, height)
-                .BackgroundColor(Color.FromArgb(255, 30, 30, 35))
+                .BackgroundColor(EditorTheme.Neutral300)
                 .Enter())
             {
                 paper.Box("sv_no_scene_spacer");
 
                 paper.Box("sv_no_scene_text")
                     .Height(30)
-                    .Text("No Scene Loaded", font)
+                    .Text(Loc.Get("hierarchy.no_scene_loaded"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
@@ -183,7 +214,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  New Scene", () => CreateAndLoadDefaultScene()).Width(120).Show();
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => CreateAndLoadDefaultScene()).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -193,37 +224,47 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         }
 
         // Update scene view editor registry based on selection
-        SceneViewEditorRegistry.UpdateFromSelection();
+        UpdateSceneViewEditor();
 
-        // Let active scene editor handle input before gizmo
+        // The scene view always presents and edits UI in world space (each canvas's ReferenceResolution
+        // + GameObject transform) regardless of its RenderMode, so screen-space UI can be manipulated
+        // like any other GameObject. This wraps input, gizmos AND the render so the canvas wireframe,
+        // the element handles and the drawn mesh all agree on the same rect.
         bool sceneEditorConsumedInput = false;
-        var activeSceneEditor = SceneViewEditorRegistry.ActiveEditor;
-        if (activeSceneEditor != null && _editorCamera != null)
+        bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
+        GameCanvas.EditorWorldSpaceOverride = true;
+        try
         {
-            var cam = _editorCamera.Camera;
-            if (cam != null)
+            // Let active scene editor handle input before gizmo
+            var activeSceneEditor = ActiveSceneViewEditor;
+            if (activeSceneEditor != null && _editorCamera != null)
             {
-                // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
-                Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-                Float2 viewSize = new Float2(width, height);
-                Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
-                // Use Paper's hover state which respects overlays/popups, not just bounds
-                bool hovered = paper.IsParentHovered;
-                Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
-                sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
+                var cam = _editorCamera.Camera;
+                if (cam != null)
+                {
+                    // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
+                    Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+                    Float2 viewSize = new Float2(width, height);
+                    Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
+                    // Use Paper's hover state which respects overlays/popups, not just bounds
+                    bool hovered = paper.IsParentHovered;
+                    Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
+                    sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
+                }
             }
+
+            // Update transform gizmo for selected objects (skip if scene editor consumed input)
+            if (!sceneEditorConsumedInput)
+                UpdateTransformGizmo(paper, scene, width, height);
+
+            // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
+            DrawSelectionGizmos();
+            _editorCamera.Render(scene);
         }
-
-        // Update transform gizmo for selected objects (skip if scene editor consumed input)
-        if (!sceneEditorConsumedInput)
-            UpdateTransformGizmo(paper, scene, width, height);
-
-        // Render the editor camera into its own RenderTexture, then display it below. The frame is
-        // open during OnGui and Paper defers its draws to EndFrame, so this fills the RT before
-        // Paper samples it. Sized to the viewport (last frame's gizmos are already populated by OnUpdate).
-        _editorCamera.EnsureRenderTarget((uint)Math.Max(1f, width), (uint)Math.Max(1f, height));
-        _editorCamera.Render(scene);
-        var rt = _editorCamera.RenderTarget;
+        finally
+        {
+            GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
+        }
 
         if (rt != null && rt.MainTexture != null)
         {
@@ -242,6 +283,10 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                         float rw = (float)r.Size.X;
                         float rh = (float)r.Size.Y;
 
+                        // Top corners stay square so the viewport butts flush against the panel header;
+                        // only the bottom two are rounded.
+                        float rnd = EditorTheme.Roundness;
+
                         canvas.SetBrushTexture(rt.MainTexture);
                         // TextureTransform maps screen rect to UV. Bottom-left-origin backends (OpenGL)
                         // store the render target flipped relative to the canvas, so V needs flipping
@@ -251,10 +296,11 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                             bottomLeftOrigin
                                 ? Transform2D.CreateTranslation(rx, ry + rh) * Transform2D.CreateScale(rw, -rh)
                                 : Transform2D.CreateTranslation(rx, ry) * Transform2D.CreateScale(rw, rh));
-                        canvas.RoundedRectFilled(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, Color.White);
+                        canvas.RoundedRectFilled(rx, ry, rw, rh, 0, 0, rnd, rnd, Color.White);
                         canvas.ClearBrushTexture();
 
-                        canvas.RoundedRect(rx, ry, rw, rh, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness, EditorTheme.Roundness);
+                        // Inset the border by half its width so the full stroke sits on top of the texture edge.
+                        canvas.RoundedRect(rx + 1, ry + 1, rw - 2, rh - 2, 0, 0, rnd, rnd);
                         canvas.SetStrokeColor(EditorTheme.Purple500);
                         canvas.SetStrokeWidth(2);
                         canvas.Stroke();
@@ -270,7 +316,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     }
 
                     // Draw scene view editor overlay
-                    var sceneEditorOverlay = SceneViewEditorRegistry.ActiveEditor;
+                    var sceneEditorOverlay = ActiveSceneViewEditor;
                     if (sceneEditorOverlay != null)
                     {
                         paper.DrawForeground(ref handle, (canvas2, r2) =>
@@ -303,12 +349,10 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             {
                 if (ShortcutManager.IsPressed("Scene/Delete"))
                 {
-                    foreach (var go in Selection.GetSelected<GameObject>().ToList())
-                    {
-                        Undo.RegisterDestroyObject(go, "Delete GameObject");
-                        scene.Remove(go);
-                        go.Dispose();
-                    }
+                    // Shared with HierarchyPanel so the viewport enforces the same prefab
+                    // structural-child protection and undo registration as the Hierarchy's Delete.
+                    foreach (var go in HierarchyPanel.ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList()))
+                        HierarchyPanel.DeleteGameObject(go);
                     Selection.Clear();
                     EditorSceneManager.IsDirty = true;
                 }
@@ -342,25 +386,25 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             if (isHovered && DragDrop.IsDraggingType<AssetDragPayload>())
             {
                 var dragPayload = (AssetDragPayload)DragDrop.Payload!;
-                var handler = SceneDropHandlerRegistry.FindHandler(dragPayload.AssetType);
+                var handler = EditorRegistries.FindSceneDropHandler(dragPayload.AssetType);
 
                 if (handler != null)
                 {
                     paper.Box("sv_drop_indicator")
                         .PositionType(PositionType.SelfDirected)
                         .Position(0, height - 24).Size(width, 24)
-                        .BackgroundColor(Color.FromArgb(150, 30, 30, 35))
+                        .BackgroundColor(Color.FromArgb(150, EditorTheme.Neutral400))
                         .IsNotInteractable()
                         .Text(handler.DropHint, font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 2)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleCenter);
                 }
             }
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
-                var handler = SceneDropHandlerRegistry.FindHandler(assetDrop.AssetType);
+                var handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
                     // Convert Paper-space pointer to viewport-local using the cached viewport
@@ -379,6 +423,9 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     DragDrop.EndDrag();
                 }
             }
+
+            // Floating transform-tools panel (top-left)
+            DrawTransformTools(paper, font);
 
             // Speed indicator (shows briefly when scroll changes fly speed)
             DrawSpeedIndicator(paper, font, width, height);
@@ -408,14 +455,12 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
         }
 
-        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable
-        // from the scene view. Push the same screen-size override the render pass uses so the
-        // canvases lay out / scale identically — otherwise the picker's design-space hit test
-        // would disagree with what's actually drawn.
-        RenderTexture? sceneRT = camera.Camera?.Target;
-        Float2? prevOverride = GameCanvas.ScreenSizeOverride;
-        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
-            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
+        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable from the
+        // scene view. The scene view lays UI out in world space (ReferenceResolution + transform), so
+        // pick with the same world-space override or the design-space hit test would disagree with
+        // what's drawn.
+        bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
+        GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
             GameObject? uiHit = UIPicker.Pick(scene, ray);
@@ -423,7 +468,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         }
         finally
         {
-            GameCanvas.ScreenSizeOverride = prevOverride;
+            GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
         }
 
         return bestHit;
@@ -773,11 +818,11 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         paper.Box("sv_speed_hud")
             .PositionType(PositionType.SelfDirected)
             .Position(x, y).Size(boxW, boxH)
-            .BackgroundColor(Color.FromArgb(a, 30, 30, 34))
+            .BackgroundColor(Color.FromArgb(a, EditorTheme.Neutral400))
             .Rounded(6)
             .IsNotInteractable()
             .Text($"{_editorCamera.MoveSpeed:F1}", font)
-            .TextColor(Color.FromArgb(ta, 255, 255, 255))
+            .TextColor(Color.FromArgb(ta, EditorTheme.Ink500))
             .FontSize(18f)
             .Alignment(TextAlignment.MiddleCenter);
     }
@@ -796,7 +841,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         // Draw as overlay on top of the scene use SelfDirected + DrawForeground
         paper.Box("sv_view_manip")
             .PositionType(PositionType.SelfDirected)
-            .Position(width - cubeSize - 8, 8 + EditorTheme.RowHeight)
+            .Position(width - cubeSize - 8, 12)
             .Size(cubeSize, cubeSize)
             .OnPostLayout((handle, rect) => paper.DrawForeground(ref handle, (canvas, r) =>
             {

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 using Prowl.Editor.Projects.Settings;
 
@@ -347,6 +348,15 @@ public static class ScriptCompiler
             {
                 string name = Path.GetFileNameWithoutExtension(dll);
                 if (name == "Prowl.Runtime" || name == "Prowl.Editor" || unitNames.Contains(name)) continue;
+
+                // A self-contained Prowl publish drops the whole .NET runtime next to the app. Never
+                // reference the shared-framework assemblies (esp. System.Private.CoreLib): they are the
+                // *implementation* copies, and referencing them on top of the SDK's reference assemblies
+                // gives the compiler two definitions of System.Object/String/etc. (CS0433 -> CS0518).
+                // Skip the native runtime libs too (coreclr/clrjit/hostfxr/... -> MSB3246 "bad image").
+                if (IsFrameworkAssembly(name)) continue;
+                if (!IsManagedAssembly(dll)) continue;
+
                 AppendReference(sb, emitted, name, dll, copyLocal: true);
             }
         }
@@ -389,6 +399,40 @@ public static class ScriptCompiler
         sb.AppendLine($"      <HintPath>{Xml(hintPath)}</HintPath>");
         sb.AppendLine($"      <Private>{(copyLocal ? "true" : "false")}</Private>");
         sb.AppendLine("    </Reference>");
+    }
+
+    /// <summary>
+    /// True for .NET shared-framework / runtime assemblies. The SDK's targeting pack already supplies
+    /// reference assemblies for all of these, so a generated csproj must never reference the runtime's
+    /// own implementation copies (which sit in the engine folder only on a self-contained publish).
+    /// </summary>
+    private static bool IsFrameworkAssembly(string name)
+    {
+        if (name.StartsWith("System.", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.StartsWith("Microsoft.VisualBasic", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.StartsWith("Microsoft.Win32.", StringComparison.OrdinalIgnoreCase)) return true;
+        switch (name.ToLowerInvariant())
+        {
+            case "system":
+            case "mscorlib":
+            case "netstandard":
+            case "windowsbase":
+            case "microsoft.csharp":
+            case "microsoft.diasymreader.native":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>True if the file is a managed .NET assembly. Native libraries (coreclr.dll, clrjit.dll,
+    /// hostfxr.dll, msquic.dll, …) shipped by a self-contained publish are not compile references and
+    /// otherwise produce MSB3246 "bad image" warnings.</summary>
+    private static bool IsManagedAssembly(string path)
+    {
+        try { System.Reflection.AssemblyName.GetAssemblyName(path); return true; }
+        catch (BadImageFormatException) { return false; } // native library
+        catch { return false; }
     }
 
     /// <summary>XML-escapes a value for safe interpolation into a generated .csproj.</summary>
@@ -451,7 +495,7 @@ public static class ScriptCompiler
     {
         try
         {
-            var pkgSettings = ProjectSettingsRegistry.Get<PackageSettings>();
+            var pkgSettings = EditorRegistries.GetSettings<PackageSettings>();
             if (pkgSettings.Packages.Count == 0) return;
 
             var filtered = pkgSettings.Packages.Where(p => p.EditorOnly == isEditorAssembly).ToList();
@@ -486,11 +530,21 @@ public static class ScriptCompiler
             using var process = System.Diagnostics.Process.Start(psi);
             if (process == null) return (-1, "", "Failed to start dotnet process");
 
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit(120_000); // 120s timeout (multiple assemblies may build)
+            // Read both streams concurrently: draining stdout then stderr sequentially deadlocks
+            // if the child fills the other stream's pipe buffer first and blocks waiting on us.
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
 
-            return (process.ExitCode, stdout, stderr);
+            bool exited = process.WaitForExit(120_000); // 120s timeout (multiple assemblies may build)
+            if (!exited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                process.WaitForExit();
+            }
+
+            Task.WaitAll(stdoutTask, stderrTask);
+
+            return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
         }
         catch (Exception ex)
         {

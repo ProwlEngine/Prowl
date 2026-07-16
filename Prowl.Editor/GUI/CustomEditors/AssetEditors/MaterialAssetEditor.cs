@@ -116,7 +116,7 @@ public class MaterialAssetEditor : AssetImporterEditor
                 _lastPreviewAsset = null;
 
                 // Reimport to update cache + thumbnail
-                EditorAssetDatabase.Instance?.Reimport(entry.Guid);
+                EditorAssetBackend.Instance?.Reimport(entry.Guid);
             }
         }
         catch (Exception ex)

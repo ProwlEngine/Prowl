@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Inspector;
+using Prowl.Editor.GUI;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Editor.Projects.Settings;
@@ -42,30 +42,27 @@ public class DesktopBuildProfile : PlatformBuildProfile
 
     public override void OnGUI(Paper paper)
     {
-        InspectorRow.Draw(paper, "bld_platform", "Platform", () =>
+        EditorGUI.SettingsRow(paper, "bld_platform", "Platform", () =>
             Origami.EnumDropdown(paper, "bld_platform_v", Platform,
-                v => { Platform = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { Platform = v; EditorRegistries.SaveSettings(); }).Show(), separator: false);
 
-        Origami.Checkbox(paper, "bld_selfcontained", SelfContained,
-                v => { SelfContained = v; ProjectSettingsRegistry.SaveAll(); })
-            .LabelRight("Self-Contained").Show();
+        EditorGUI.SettingsToggle(paper, "bld_selfcontained", "Self-Contained", SelfContained,
+            v => { SelfContained = v; EditorRegistries.SaveSettings(); }, separator: false);
 
-        Origami.Checkbox(paper, "bld_trimmed", PublishTrimmed,
-                v => { PublishTrimmed = v; ProjectSettingsRegistry.SaveAll(); })
-            .LabelRight("Publish Trimmed").Show();
+        EditorGUI.SettingsToggle(paper, "bld_trimmed", "Publish Trimmed", PublishTrimmed,
+            v => { PublishTrimmed = v; EditorRegistries.SaveSettings(); }, separator: false);
 
-        paper.Box("bld_sp2").Height(8);
-        Origami.Header(paper, "bld_window_h", "Window").Underline().Show();
+        EditorGUI.SectionHeader(paper, "bld_window_h", "Window");
 
-        InspectorRow.Draw(paper, "bld_width", "Width", () =>
+        EditorGUI.SettingsRow(paper, "bld_width", "Width", () =>
             Origami.NumericField<int>(paper, "bld_width_v", WindowWidth,
-                v => { WindowWidth = Math.Max(320, v); ProjectSettingsRegistry.SaveAll(); })
-                .Min(320).Show());
+                v => { WindowWidth = Math.Max(320, v); EditorRegistries.SaveSettings(); })
+                .Min(320).Show(), separator: false);
 
-        InspectorRow.Draw(paper, "bld_height", "Height", () =>
+        EditorGUI.SettingsRow(paper, "bld_height", "Height", () =>
             Origami.NumericField<int>(paper, "bld_height_v", WindowHeight,
-                v => { WindowHeight = Math.Max(240, v); ProjectSettingsRegistry.SaveAll(); })
-                .Min(240).Show());
+                v => { WindowHeight = Math.Max(240, v); EditorRegistries.SaveSettings(); })
+                .Min(240).Show(), separator: false);
     }
 
     public override void ModifyDefines(List<string> defines)
@@ -82,7 +79,8 @@ public class DesktopBuildProfile : PlatformBuildProfile
     public override void ToDefault()
     {
         Platform = BuildTarget.Windows;
-        SelfContained = true;
+        SelfContained = false;
+        PublishTrimmed = false;
         WindowWidth = 1280;
         WindowHeight = 720;
     }

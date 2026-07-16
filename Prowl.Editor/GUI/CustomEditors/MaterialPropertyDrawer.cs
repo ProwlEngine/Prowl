@@ -13,6 +13,7 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using PropertyGridUtils = Prowl.Editor.GUI.PropertyGridUtils;
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Inspector;
 
 /// <summary>
@@ -84,14 +85,14 @@ public static class MaterialPropertyDrawer
                 // Non-ranged Floats still draw as plain number fields.
                 if (prop.HasRange)
                 {
-                    InspectorRow.Draw(paper, id, label, () =>
+                    EditorGUI.Row(paper, id, label, () =>
                         Origami.Slider(paper, $"{id}_v", val,
                             v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); },
                             (float)prop.Range.X, (float)prop.Range.Y).Format("F2").Show());
                 }
                 else
                 {
-                    InspectorRow.Draw(paper, id, label, () =>
+                    EditorGUI.Row(paper, id, label, () =>
                         Origami.NumericField<float>(paper, $"{id}_v", val,
                             v => { material.SetFloat(prop.Name, v); onChanged?.Invoke(); }).Show());
                 }
@@ -100,7 +101,7 @@ public static class MaterialPropertyDrawer
             case ShaderPropertyType.Int:
             {
                 int val = ps.HasInt(prop.Name) ? ps.GetInt(prop.Name) : (int)prop.Value.X;
-                InspectorRow.Draw(paper, id, label, () =>
+                EditorGUI.Row(paper, id, label, () =>
                     Origami.NumericField<int>(paper, $"{id}_v", val,
                         v => { material.SetInt(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
@@ -110,28 +111,28 @@ public static class MaterialPropertyDrawer
                 var val = ps.HasColor(prop.Name)
                     ? ps.GetColor(prop.Name)
                     : new Prowl.Vector.Color((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z, (float)prop.Value.W);
-                InspectorRow.Draw(paper, id, label, () =>
+                EditorGUI.Row(paper, id, label, () =>
                     Origami.ColorField(paper, $"{id}_cf", val, v => { material.SetColor(prop.Name, new Prowl.Vector.Color(v.R, v.G, v.B, v.A)); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector2:
             {
                 var val = ps.HasVector2(prop.Name) ? ps.GetVector2(prop.Name) : new Float2((float)prop.Value.X, (float)prop.Value.Y);
-                InspectorRow.Draw(paper, id, label, () =>
+                EditorGUI.Row(paper, id, label, () =>
                     Origami.Float2Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector3:
             {
                 var val = ps.HasVector3(prop.Name) ? ps.GetVector3(prop.Name) : new Float3((float)prop.Value.X, (float)prop.Value.Y, (float)prop.Value.Z);
-                InspectorRow.Draw(paper, id, label, () =>
+                EditorGUI.Row(paper, id, label, () =>
                     Origami.Float3Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }
             case ShaderPropertyType.Vector4:
             {
                 var val = ps.HasVector4(prop.Name) ? ps.GetVector4(prop.Name) : prop.Value;
-                InspectorRow.Draw(paper, id, label, () =>
+                EditorGUI.Row(paper, id, label, () =>
                     Origami.Float4Field(paper, $"{id}_vf", val, v => { material.SetVector(prop.Name, v); onChanged?.Invoke(); }).Show());
                 break;
             }

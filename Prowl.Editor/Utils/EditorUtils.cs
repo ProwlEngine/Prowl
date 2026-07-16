@@ -1,12 +1,40 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Editor.Utils;
 
 public static class EditorUtils
 {
+    public static bool TryParseNonEmptyGuid(string? s, out Guid result)
+    {
+        result = Guid.Empty;
+        return !string.IsNullOrEmpty(s) && Guid.TryParse(s, out result) && result != Guid.Empty;
+    }
+
+    public static IEnumerable<Type> GetAllTypes()
+    {
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type[] types;
+            try { types = assembly.GetTypes(); }
+            catch { continue; }
+            foreach (var type in types)
+                yield return type;
+        }
+    }
+
+    public static IEnumerable<MethodInfo> GetAllMethods(BindingFlags flags)
+    {
+        foreach (var type in GetAllTypes())
+            foreach (var method in type.GetMethods(flags))
+                yield return method;
+    }
+
+
     public static void OpenUrl(string url)
     {
         try

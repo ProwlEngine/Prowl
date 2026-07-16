@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Prowl.Editor.Projects;
@@ -10,6 +11,7 @@ public class RecentProjectEntry
     public string Path { get; set; } = "";
     public string Name { get; set; } = "";
     public DateTime LastOpened { get; set; }
+    public bool Favorite { get; set; }
 }
 
 /// <summary>
@@ -49,9 +51,21 @@ public static class RecentProjects
             LastOpened = DateTime.UtcNow
         });
 
-        // Trim
-        if (_entries.Count > MaxRecent)
-            _entries.RemoveRange(MaxRecent, _entries.Count - MaxRecent);
+        // Trim the non-favorite tail to MaxRecent entries. Favorites are never evicted regardless
+        // of count or age - starring a project is meant to pin it in this list permanently.
+        int nonFavoriteCount = _entries.Count(e => !e.Favorite);
+        if (nonFavoriteCount > MaxRecent)
+        {
+            int toRemove = nonFavoriteCount - MaxRecent;
+            for (int i = _entries.Count - 1; i >= 0 && toRemove > 0; i--)
+            {
+                if (!_entries[i].Favorite)
+                {
+                    _entries.RemoveAt(i);
+                    toRemove--;
+                }
+            }
+        }
 
         Save();
     }
@@ -61,6 +75,26 @@ public static class RecentProjects
         _entries ??= Load();
         _entries.RemoveAll(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
         Save();
+    }
+
+    /// <summary>Mark a recent project as a favorite (or clear it) and persist.</summary>
+    public static void SetFavorite(string path, bool favorite)
+    {
+        _entries ??= Load();
+        var entry = _entries.Find(e => e.Path.Equals(path, StringComparison.OrdinalIgnoreCase));
+        if (entry == null || entry.Favorite == favorite) return;
+        entry.Favorite = favorite;
+        Save();
+    }
+
+    /// <summary>Recent entries with favorites floated to the top; each group keeps recency order.</summary>
+    public static List<RecentProjectEntry> FavoritesFirst()
+    {
+        _entries ??= Load();
+        var ordered = new List<RecentProjectEntry>(_entries.Count);
+        foreach (var e in _entries) if (e.Favorite) ordered.Add(e);
+        foreach (var e in _entries) if (!e.Favorite) ordered.Add(e);
+        return ordered;
     }
 
     private static List<RecentProjectEntry> Load()

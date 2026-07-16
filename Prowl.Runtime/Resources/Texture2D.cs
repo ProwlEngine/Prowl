@@ -17,11 +17,14 @@ namespace Prowl.Runtime.Resources;
 /// </summary>
 public sealed class Texture2D : Texture, ISerializable
 {
+    private uint _width;
+    private uint _height;
+
     /// <summary>The width of this <see cref="Texture2D"/>.</summary>
-    public uint Width { get; private set; }
+    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
-    public uint Height { get; private set; }
+    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
 
     private bool _generateMipmaps;
 
@@ -63,6 +66,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
     {
+        EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
         uint bytes = rectWidth * rectHeight * ImageFormat.GetSizeInBytes();
@@ -75,6 +79,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
     {
+        EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
         if (data.Length < rectWidth * rectHeight)
             throw new ArgumentException("Not enough pixel data", nameof(data));
@@ -88,6 +93,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
+        EnsureNotDisposed();
         SetData(data, 0, 0, Width, Height);
     }
 
@@ -144,6 +150,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe void RecreateImage(uint width, uint height)
     {
+        EnsureNotDisposed();
         ValidateTextureSize(width, height);
 
         Width = width;
@@ -328,6 +335,7 @@ public sealed class Texture2D : Texture, ISerializable
             DefaultTexture.Surface => "default_surface.png",
             DefaultTexture.Emission => "default_emission.png",
             DefaultTexture.Grid => "grid.png",
+            DefaultTexture.UIPanel => "UI_Panel.png",
             DefaultTexture.Handle => "handle_ui.png",
             DefaultTexture.Noise => "noise.png",
             DefaultTexture.IconCamera => "icon_camera.png",

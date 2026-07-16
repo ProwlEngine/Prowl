@@ -8,22 +8,15 @@ using Prowl.Vector.Geometry;
 namespace Prowl.Runtime.UI;
 
 /// <summary>
-/// Axis-aligned rectangular mask backed by GPU scissor. Children outside the rect are
-/// not drawn; children fully outside are culled at build time and produce no draw call.
+/// Clips descendant graphics to this element's rectangle. The clip is evaluated per-fragment in the
+/// shader against a matrix that maps each fragment into the mask's local space, so it follows the
+/// mask's rotation and scale (not just a screen-aligned box) and supports <see cref="CornerRadius"/>
+/// rounded corners and a soft <see cref="Softness"/> edge. Items whose rect lies entirely outside the
+/// mask are culled at build time so they cost nothing.
 /// </summary>
-/// <remarks>
-/// Compared to <see cref="Mask"/>:
-/// <list type="bullet">
-///   <item><b>Cheaper</b> - no extra draws, no fragment overdraw, no stencil buffer requirement.</item>
-///   <item><b>Cull</b> - items whose bounding rect lies entirely outside the scissor are dropped from the tree.</item>
-///   <item><b>Limitation</b> - the clip is axis-aligned in framebuffer space. Rotated UI hierarchies will
-///         still get an axis-aligned clip (the rect's screen-space AABB).</item>
-/// </list>
-/// Use <see cref="RectMask"/> for scroll views, lists, and any other rectangular clipping;
-/// fall back to <see cref="Mask"/> when you need an arbitrary or rounded shape.
-/// </remarks>
 [AddComponentMenu("UI/Rect Mask")]
 [ExecuteAlways]
+[ComponentIcon("")] // Crop
 public class RectMask : UIBehaviour
 {
     /// <summary>
@@ -36,9 +29,27 @@ public class RectMask : UIBehaviour
         set => SetField(ref _padding, value, UIDirtyFlags.Hierarchy);
     }
 
+    /// <summary>Corner radius of the clip, in canvas pixels. 0 = sharp rectangle.</summary>
+    [SerializeField] private float _cornerRadius;
+    public float CornerRadius
+    {
+        get => _cornerRadius;
+        set => SetField(ref _cornerRadius, Maths.Max(0f, value), UIDirtyFlags.Hierarchy);
+    }
+
+    /// <summary>Width of the soft alpha falloff at the clip edge, in canvas pixels. 0 = a crisp
+    /// anti-aliased edge; larger values feather the mask.</summary>
+    [SerializeField] private float _softness;
+    public float Softness
+    {
+        get => _softness;
+        set => SetField(ref _softness, Maths.Max(0f, value), UIDirtyFlags.Hierarchy);
+    }
+
     /// <summary>
     /// Computes the clip rect in canvas-design pixels (the same space as <see cref="RectTransform.ComputedRect"/>),
-    /// after applying <see cref="Padding"/>. Returns a degenerate rect if the RectTransform is missing.
+    /// after applying <see cref="Padding"/>. Used for the coarse build-time cull. Returns a degenerate
+    /// rect if the RectTransform is missing.
     /// </summary>
     public Rect GetClipRectInCanvasPixels()
     {
@@ -52,6 +63,6 @@ public class RectMask : UIBehaviour
             r.Max.Y - _padding.Y);
     }
 
-    /// <summary>RectMask itself contributes no geometry - the work happens in <see cref="GameCanvas.BuildRecursive"/>.</summary>
+    /// <summary>RectMask itself contributes no geometry - the clip is applied in <see cref="GameCanvas.BuildRecursive"/>.</summary>
     public override void GenerateMesh(UIMeshBuilder _, in UIContext __) { /* no geometry */ }
 }

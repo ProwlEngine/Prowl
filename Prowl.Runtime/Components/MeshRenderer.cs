@@ -3,6 +3,7 @@
 
 using Prowl.Graphite;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
@@ -37,34 +38,54 @@ public class MeshRenderer : MonoBehaviour
     /// <summary>UV2 → atlas transform: <c>uv2 * xy + zw</c>. Assigned by the lightmap bake.</summary>
     [HideInInspector] public Float4 LightmapScaleOffset = new(1, 1, 0, 0);
 
+    // Per-instance property blocks, reused across frames so a static scene collects without allocating.
+    // The command buffer snapshots these at encode time, so mutating them next frame is safe.
+    [System.NonSerialized] private PropertySet[] _propCache;
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = Mesh.Res;
         if (mesh == null || Materials.Count == 0) return;
 
         int subCount = mesh.SubMeshCount;
+        if (_propCache == null || _propCache.Length != subCount)
+        {
+            _propCache = new PropertySet[subCount];
+            for (int i = 0; i < subCount; i++)
+                _propCache[i] = new PropertySet();
+        }
+
+        // LocalToWorldMatrix is cached on Transform, so this is cheap for a static renderer.
+        Float4x4 world = Transform.LocalToWorldMatrix;
+        Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
+
+        // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
+        // returns value-type elements by copy, so Materials[s].Res would mutate a throwaway copy
+        // and never actually cache anything. CollectionsMarshal.AsSpan gives a ref to the real
+        // backing elements so the cache (and the async-load dedup it drives) actually sticks.
+        var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
         {
             Material? mat = null;
-            if (s < Materials.Count)
-                mat = Materials[s].Res;
-            else if (Materials.Count > 0)
-                mat = Materials[^1].Res;
+            if (s < materials.Length)
+                mat = materials[s].Res;
+            else if (materials.Length > 0)
+                mat = materials[^1].Res;
 
             if (mat == null) continue;
 
-            PropertySet props = new();
+            PropertySet props = _propCache[s];
+            props.Clear();
             props.SetInt("_ObjectID", InstanceID);
             // A blend-shape mesh forces the BLENDSHAPES shader variant (keyword is mesh-derived).
             // MeshRenderer doesn't drive morph weights, so pin the morph loop to a no-op rather than
             // inherit a stale count from a previous skinned draw using the same program.
             if (mesh.HasBlendShapes)
                 props.SetInt("morphActiveCount", 0);
-            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
             LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
 
             renderables.Add(new MeshRenderable(
-                mesh, mat, Transform.LocalToWorldMatrix,
+                mesh, mat, world,
                 GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
         }
     }

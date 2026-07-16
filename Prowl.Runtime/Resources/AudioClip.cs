@@ -27,7 +27,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string FilePath
     {
-        get => filePath;
+        get { EnsureNotDisposed(); return filePath; }
     }
 
     /// <summary>
@@ -36,8 +36,8 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public string ClipName
     {
-        get => clipName;
-        set => clipName = value;
+        get { EnsureNotDisposed(); return clipName; }
+        set { EnsureNotDisposed(); clipName = value; }
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public bool StreamFromDisk
     {
-        get => streamFromDisk;
+        get { EnsureNotDisposed(); return streamFromDisk; }
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public IntPtr Handle
     {
-        get => handle;
+        get { EnsureNotDisposed(); return handle; }
     }
 
     /// <summary>
@@ -64,8 +64,14 @@ public sealed class AudioClip : EngineObject, ISerializable
     /// <value></value>
     public UInt64 Hash
     {
-        get => hashCode;
+        get { EnsureNotDisposed(); return hashCode; }
     }
+
+    // Raw, unchecked accessors for AudioContext.Remove to use during OnDispose(): at that point
+    // IsDisposed is already true (EngineObject.Dispose sets the flag before calling OnDispose), so
+    // the checked public Hash/Handle properties would themselves throw right when disposal needs them.
+    internal UInt64 RawHash => hashCode;
+    internal IntPtr RawHandle => handle;
 
     /// <summary>
     /// If the constructor with 'byte[] data' overload is used this will contain the size of the data in number of bytes.
@@ -75,6 +81,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         get
         {
+            EnsureNotDisposed();
             if(handle != IntPtr.Zero)
             {
                 return dataSize;
@@ -143,6 +150,8 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         AudioContext.Remove(this);
     }
+
+    ~AudioClip() => Dispose();
 
     /// <summary>
     /// This methods creates a hash of the given data.

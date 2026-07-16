@@ -25,14 +25,11 @@ public class PrefabImporter : AssetImporter
             string text = File.ReadAllText(ctx.AbsolutePath);
             var goEcho = EchoObject.ReadFromString(text);
 
-            // Walk the EchoObject tree for dependencies no deserialization needed
             var dependencies = new HashSet<Guid>();
-            CollectDependencies(goEcho, dependencies);
+            ImportHelper.CollectAssetDependencies(goEcho, dependencies);
 
-            // Wrap in PrefabAsset
             var prefab = new PrefabAsset();
             prefab.GameObjectData = goEcho;
-            prefab.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
 
             ctx.SetMainAsset(prefab);
             foreach (var dep in dependencies)
@@ -44,41 +41,5 @@ public class PrefabImporter : AssetImporter
             return false;
         }
         return true;
-    }
-
-    /// <summary>
-    /// Recursively walks an EchoObject tree to find all asset references (AssetID tags
-    /// from AssetRef serialization) and prefab references (PrefabAssetId strings).
-    /// </summary>
-    private static void CollectDependencies(EchoObject echo, HashSet<Guid> deps)
-    {
-        if (echo == null) return;
-
-        if (echo.TagType == EchoType.Compound)
-        {
-            // Check for AssetRef references (materials, textures, meshes, etc.)
-            // AssetRef<T> serializes as { "AssetID": "guid-string" }
-            if (echo.TryGet("AssetID", out var assetIdTag))
-            {
-                if (Guid.TryParse(assetIdTag.StringValue, out var assetGuid) && assetGuid != Guid.Empty)
-                    deps.Add(assetGuid);
-            }
-
-            // Check for PrefabAssetId (nested prefab references)
-            if (echo.TryGet("PrefabAssetId", out var prefabIdTag))
-            {
-                if (Guid.TryParse(prefabIdTag.StringValue, out var prefabGuid) && prefabGuid != Guid.Empty)
-                    deps.Add(prefabGuid);
-            }
-
-            // Recurse into all compound children
-            foreach (var kvp in echo.Tags)
-                CollectDependencies(kvp.Value, deps);
-        }
-        else if (echo.TagType == EchoType.List && echo.List != null)
-        {
-            foreach (var item in echo.List)
-                CollectDependencies(item, deps);
-        }
     }
 }

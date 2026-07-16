@@ -249,14 +249,16 @@ public abstract class RenderPipeline : EngineObject
     /// </summary>
     public bool[] CullRenderables(IReadOnlyList<IRenderable> renderables, Frustum? worldFrustum, LayerMask cullingMask)
     {
+        EnsureWorldBounds(renderables);
+
         bool[] culledRenderableIndices = new bool[renderables.Count];
         int culled = 0;
         for (int renderIndex = 0; renderIndex < renderables.Count; renderIndex++)
         {
-            IRenderable renderable = renderables[renderIndex];
+            bool frustumCull = worldFrustum != null
+                && (!_boundsRenderable[renderIndex] || !worldFrustum.Value.Intersects(_worldBounds[renderIndex]));
 
-            if ((worldFrustum != null && CullRenderable(renderable, worldFrustum.Value))
-                || cullingMask.HasLayer(renderable.GetLayer()) == false)
+            if (frustumCull || cullingMask.HasLayer(renderables[renderIndex].GetLayer()) == false)
             {
                 culledRenderableIndices[renderIndex] = true;
                 culled++;
@@ -320,6 +322,39 @@ public abstract class RenderPipeline : EngineObject
     private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
     private readonly List<List<int>> _indexListPool = new();
     private int _indexListRented;
+
+    // Per-frame world-space AABB cache shared by the main cull and every shadow cascade cull, so each
+    // renderable's bounds are transformed once per frame instead of once per frustum (main + 4 cascades).
+    private AABB[] _worldBounds = System.Array.Empty<AABB>();
+    private bool[] _boundsRenderable = System.Array.Empty<bool>();
+    private IReadOnlyList<IRenderable> _boundsFrameList;
+    private int _boundsCount;
+
+    /// <summary>
+    /// Computes (or returns the cached) per-renderable world-space bounds for this frame's list. Keyed
+    /// on list identity + count: the first cull of the frame builds it, later culls reuse it. Renderables
+    /// don't move between collection and drawing, so caching for the frame is safe.
+    /// </summary>
+    public void EnsureWorldBounds(IReadOnlyList<IRenderable> renderables)
+    {
+        int count = renderables.Count;
+        if (ReferenceEquals(_boundsFrameList, renderables) && _boundsCount == count)
+            return;
+
+        if (_worldBounds.Length < count)
+        {
+            _worldBounds = new AABB[count];
+            _boundsRenderable = new bool[count];
+        }
+        for (int i = 0; i < count; i++)
+        {
+            renderables[i].GetCullingData(out bool isRenderable, out AABB bounds);
+            _boundsRenderable[i] = isRenderable;
+            _worldBounds[i] = bounds;
+        }
+        _boundsFrameList = renderables;
+        _boundsCount = count;
+    }
 
     // Rent a cleared per-batch index list from the pool, growing it only when a frame needs
     // more distinct batches than any previous frame.

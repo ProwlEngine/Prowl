@@ -4,6 +4,7 @@ using Prowl.PaperUI;
 using Prowl.Runtime.Audio;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("Audio", EditorIcons.VolumeHigh, order: 25)]
@@ -25,9 +26,9 @@ public class AudioSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio").Underline().Show();
 
-        InspectorRow.Draw(paper, "audio_vol", "Global Volume", () =>
+        EditorGUI.Row(paper, "audio_vol", "Global Volume", () =>
             Origami.Slider(paper, "audio_vol_v", GlobalVolume,
-                v => { GlobalVolume = v; Apply(); ProjectSettingsRegistry.SaveAll(); },
+                v => { GlobalVolume = v; Apply(); EditorRegistries.SaveSettings(); },
                 0f, 1f).Format("F2").Show());
     }
 }

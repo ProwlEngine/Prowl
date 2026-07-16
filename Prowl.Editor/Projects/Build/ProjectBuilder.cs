@@ -173,7 +173,7 @@ public static class ProjectBuilder
         BuildSettings? settings;
         try
         {
-            settings = ProjectSettingsRegistry.Get<BuildSettings>();
+            settings = EditorRegistries.GetSettings<BuildSettings>();
         }
         catch
         {
@@ -185,7 +185,7 @@ public static class ProjectBuilder
         if (string.IsNullOrEmpty(outputPath)) return null;
 
         settings.OutputDirectory = outputPath;
-        ProjectSettingsRegistry.SaveAll();
+        EditorRegistries.SaveSettings();
 
         var pipeline = new DesktopBuildPipeline();
 
@@ -194,7 +194,7 @@ public static class ProjectBuilder
         var progress = new BuildProgress();
         var projectPath = Project.Current?.RootPath ?? "";
 
-        var assetSettings = ProjectSettingsRegistry.Get<AssetSettings>();
+        var assetSettings = EditorRegistries.GetSettings<AssetSettings>();
         if (assetSettings != null && assetSettings.AsyncAssetLoading)
         {
             // Now that rendering is handled by a separate thread, we should be able to run

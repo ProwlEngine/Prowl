@@ -22,23 +22,29 @@ namespace Prowl.Runtime.MeshFeatures;
 /// </remarks>
 public sealed class MeshSDF : EngineObject, IMeshFeature
 {
+    private Texture3D? _volume;
+    private AABB _bounds;
+    private Int3 _resolution;
+    private float _padding;
+    private float _maxDistance;
+
     /// <summary>Float3D texture holding signed distances, layout matches <see cref="Resolution"/>.</summary>
-    public Texture3D? Volume;
+    public Texture3D? Volume { get { EnsureNotDisposed(); return _volume; } set { EnsureNotDisposed(); _volume = value; } }
 
     /// <summary>World-agnostic bounds the volume covers, in mesh-local coordinates.</summary>
-    public AABB Bounds;
+    public AABB Bounds { get { EnsureNotDisposed(); return _bounds; } set { EnsureNotDisposed(); _bounds = value; } }
 
     /// <summary>Voxel grid resolution (X/Y/Z counts).</summary>
-    public Int3 Resolution;
+    public Int3 Resolution { get { EnsureNotDisposed(); return _resolution; } set { EnsureNotDisposed(); _resolution = value; } }
 
     /// <summary>Extra margin around the source mesh bounds, in mesh-local units.</summary>
-    public float Padding;
+    public float Padding { get { EnsureNotDisposed(); return _padding; } set { EnsureNotDisposed(); _padding = value; } }
 
     /// <summary>
     /// Distance values are clamped to this during generation. Useful for narrow-band SDFs
     /// and for normalizing for visualization.
     /// </summary>
-    public float MaxDistance;
+    public float MaxDistance { get { EnsureNotDisposed(); return _maxDistance; } set { EnsureNotDisposed(); _maxDistance = value; } }
 
     public MeshSDF() { }
 

@@ -28,7 +28,7 @@ public class ShaderProperty
     /// <summary>
     /// Optional [min, max] hint for inspector UI. Populated by the shader parser when a
     /// property is declared as <c>Range(min, max)</c>; the inspector reads this to draw
-    /// a slider instead of a plain number field. Always zero for non-Range properties —
+    /// a slider instead of a plain number field. Always zero for non-Range properties
     /// use <see cref="HasRange"/> to distinguish "unset" from "range 0..0".
     /// </summary>
     public Float2 Range;

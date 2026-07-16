@@ -94,8 +94,6 @@ public sealed class RectTransform : MonoBehaviour
     [SerializeIgnore]
     public Rect ComputedRect;
 
-    private static bool Approximately(float a, float b) => Maths.Abs(a - b) < 1e-6f;
-
     // Rotation / scale / Z live on the GameObject's regular Transform; the RectTransform proxies them so
     // UI code (layout, gizmos, inspector) reads them through one place while anchors/pivot/size drive XY.
     public Quaternion LocalRotation { get => Transform.LocalRotation; set => Transform.LocalRotation = value; }
@@ -115,47 +113,23 @@ public sealed class RectTransform : MonoBehaviour
         float parentW = parentRect.Size.X;
         float parentH = parentRect.Size.Y;
 
-        // Anchor positions in parent space
+        // Anchor positions in parent space (+Y up: min is the lower edge, max the upper edge).
         float anchorMinX = parentX + AnchorMin.X * parentW;
         float anchorMinY = parentY + AnchorMin.Y * parentH;
         float anchorMaxX = parentX + AnchorMax.X * parentW;
         float anchorMaxY = parentY + AnchorMax.Y * parentH;
 
-        float width, height, posX, posY;
-
-        // Horizontal
-        if (Approximately(AnchorMin.X, AnchorMax.X))
-        {
-            // Fixed width
-            width = SizeDelta.X;
-            float anchorX = anchorMinX;
-            posX = anchorX + AnchoredPosition.X - Pivot.X * width;
-        }
-        else
-        {
-            // Stretch
-            float left = anchorMinX + SizeDelta.X * 0.5f;
-            float right = anchorMaxX - SizeDelta.X * 0.5f;
-            width = right - left;
-            posX = left + AnchoredPosition.X;
-        }
-
-        // Vertical (+Y up: anchorMinY is the lower edge, anchorMaxY the upper edge).
-        if (Approximately(AnchorMin.Y, AnchorMax.Y))
-        {
-            // Fixed height
-            height = SizeDelta.Y;
-            float anchorY = anchorMinY;
-            posY = anchorY + AnchoredPosition.Y - Pivot.Y * height;
-        }
-        else
-        {
-            // Stretch
-            float lower = anchorMinY + SizeDelta.Y * 0.5f;
-            float upper = anchorMaxY - SizeDelta.Y * 0.5f;
-            height = upper - lower;
-            posY = lower + AnchoredPosition.Y;
-        }
+        // One formula for both fixed and stretched anchors:
+        //   size       = anchorSpan + sizeDelta
+        //   min-corner = anchorMin + anchoredPosition - pivot * sizeDelta
+        // When the anchors coincide, anchorSpan is 0 so sizeDelta is the literal size and the pivot
+        // places it about the anchor point. When they differ, sizeDelta pads the anchor span, split by
+        // the pivot (not symmetrically) so a non-center pivot on a stretched rect stays put. No branch,
+        // no anchor-equality epsilon.
+        float width  = (anchorMaxX - anchorMinX) + SizeDelta.X;
+        float height = (anchorMaxY - anchorMinY) + SizeDelta.Y;
+        float posX = anchorMinX + AnchoredPosition.X - Pivot.X * SizeDelta.X;
+        float posY = anchorMinY + AnchoredPosition.Y - Pivot.Y * SizeDelta.Y;
 
         // Rect.Min is the bottom-left corner, Rect.Max the top-right (+Y up).
         ComputedRect = new Rect(posX, posY, posX + width, posY + height);

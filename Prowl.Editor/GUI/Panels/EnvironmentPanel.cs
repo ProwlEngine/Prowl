@@ -1,249 +1,286 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Linq;
+
 using Prowl.Editor.Core;
+using Prowl.Editor.GUI;
+using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Inspector;
 using Prowl.Editor.Lightmapping;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Environment")]
 public class EnvironmentPanel : DockPanel
 {
+    [MenuItem("Window/General/Environment", priority: 6)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(EnvironmentPanel));
+
     public override string Title => Loc.Get("panel.environment");
     public override string Icon => EditorIcons.Sun;
 
     private readonly LightmapBakeService _bake = new();
+    private string _cat = "sky";
+
+    // label holds a localization key, resolved via Loc.Get at render (see the Sidebar call).
+    private static readonly (string id, string label, string icon)[] Cats =
+    {
+        ("sky",      "env.tab_sky",      EditorIcons.Sun),
+        ("fog",      "env.tab_fog",      EditorIcons.Cloud),
+        ("ambient",  "env.tab_ambient",  EditorIcons.Lightbulb),
+        ("lightmap", "env.tab_lightmap", EditorIcons.TableCellsLarge),
+    };
+
+    private static VColor ToColor(Float4 f) => new((float)f.X, (float)f.Y, (float)f.Z, (float)f.W);
+    private static Float4 ToF4(VColor c) => new(c.R, c.G, c.B, c.A);
 
     public override void OnGUI(Paper paper, float width, float height)
     {
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        // Drive the background bake job (finalizes on the main thread when complete).
         _bake.Poll();
 
         var scene = Scene.Current;
         if (scene == null)
         {
             paper.Box("env_noscene").Height(30)
-                .Text("No scene loaded.", font).TextColor(EditorTheme.Ink300)
+                .Text(Loc.Get("selector.no_scene"), font).TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
             return;
         }
 
-        using (paper.Column("env_root").Width(width).Height(height).Padding(8, 8, 8, 0).ColBetween(4).Clip().Enter())
+        using (paper.Row("env_root").Width(width).Height(height).Clip().Enter())
         {
-            DrawSkyboxSection(paper, "env_sky", font, scene);
-            paper.Box("env_sp1").Height(8);
-            DrawFogSection(paper, "env_fog", font, scene);
-            paper.Box("env_sp2").Height(8);
-            DrawAmbientSection(paper, "env_amb", font, scene);
-            paper.Box("env_sp3").Height(8);
-            DrawLightmappingSection(paper, "env_lm", font, scene);
+            var cats = Cats.Select(c => (c.id, Loc.Get(c.label), c.icon)).ToArray();
+            float side = EditorGUI.Sidebar(paper, "env_side", cats, _cat, c => _cat = c);
+            paper.Box("env_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
+
+            Origami.ScrollView(paper, "env_scroll", width - side - 1, height).Body(() =>
+            {
+                using (paper.Column("env_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
+                {
+                    switch (_cat)
+                    {
+                        case "fog":      DrawFogSection(paper, "env_fog", font, scene); break;
+                        case "ambient":  DrawAmbientSection(paper, "env_amb", font, scene); break;
+                        case "lightmap": DrawLightmappingSection(paper, "env_lm", font, scene); break;
+                        default:         DrawSkyboxSection(paper, "env_sky", font, scene); break;
+                    }
+                }
+            });
+        }
+    }
+
+    private void DrawSkyboxSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.skybox"), first: true);
+
+        var sky = scene.Skybox;
+        void Dirty() { scene.Skybox = sky; EditorSceneManager.IsDirty = true; }
+
+        EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
+            Origami.EnumDropdown(paper, $"{id}_mode_v", sky.Mode, v => { sky.Mode = v; Dirty(); }).Show());
+
+        switch (sky.Mode)
+        {
+            case Scene.SkyboxMode.SolidColor:
+                EditorGUI.SettingsRow(paper, $"{id}_solid", Loc.Get("env.color"), () =>
+                    Origami.ColorField(paper, $"{id}_solid_v", sky.SolidColor, v => { sky.SolidColor = v; Dirty(); }).Show());
+                break;
+
+            case Scene.SkyboxMode.Gradient:
+                EditorGUI.SettingsRow(paper, $"{id}_top", Loc.Get("env.top_color"), () =>
+                    Origami.ColorField(paper, $"{id}_top_v", sky.GradientTop, v => { sky.GradientTop = v; Dirty(); }).Show());
+                EditorGUI.SettingsRow(paper, $"{id}_bot", Loc.Get("env.bottom_color"), () =>
+                    Origami.ColorField(paper, $"{id}_bot_v", sky.GradientBottom, v => { sky.GradientBottom = v; Dirty(); }).Show());
+                EditorGUI.SettingsRow(paper, $"{id}_exp", Loc.Get("env.exponent"), () =>
+                    Origami.Slider(paper, $"{id}_exp_v", sky.GradientExponent, v => { sky.GradientExponent = v; Dirty(); }, 0.1f, 5f).Show());
+                break;
+
+            case Scene.SkyboxMode.Material:
+                EditorGUI.SettingsRow(paper, $"{id}_mat", Loc.Get("env.material"), () =>
+                    PropertyGridUtils.DrawField(paper, $"{id}_mat_v", "", typeof(AssetRef<Material>), sky.CustomMaterial,
+                        v => { sky.CustomMaterial = (AssetRef<Material>)v!; Dirty(); }, 0));
+                break;
+
+            case Scene.SkyboxMode.Procedural:
+                paper.Box($"{id}_hint").Height(20).Margin(Origami.Current.Metrics.PaddingLarge, 0, 0, 0)
+                    .Text(Loc.Get("env.sun_auto"), font)
+                    .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                break;
+        }
+    }
+
+    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
+
+        var fog = scene.Fog;
+        void Dirty() { scene.Fog = fog; EditorSceneManager.IsDirty = true; }
+
+        EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
+            Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode, v => { fog.Mode = v; Dirty(); }).Show());
+
+        if (fog.Mode != Scene.FogParams.FogMode.Off)
+        {
+            EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
+                Origami.ColorField(paper, $"{id}_color_v", fog.Color, v => { fog.Color = v; Dirty(); }).Show());
+
+            if (fog.Mode == Scene.FogParams.FogMode.Linear)
+            {
+                EditorGUI.SettingsRow(paper, $"{id}_start", Loc.Get("env.start_distance"), () =>
+                    Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start, v => { fog.Start = v; Dirty(); }).Show());
+                EditorGUI.SettingsRow(paper, $"{id}_end", Loc.Get("env.end_distance"), () =>
+                    Origami.NumericField<float>(paper, $"{id}_end_v", fog.End, v => { fog.End = v; Dirty(); }).Show());
+            }
+            else
+            {
+                EditorGUI.SettingsRow(paper, $"{id}_density", Loc.Get("env.density"), () =>
+                    Origami.Slider(paper, $"{id}_density_v", fog.Density, v => { fog.Density = v; Dirty(); }, 0f, 0.1f).Format("F4").Show());
+            }
+        }
+    }
+
+    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    {
+        EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
+
+        var ambient = scene.Ambient;
+        void Dirty() { scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }
+
+        EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
+            Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode, v => { ambient.Mode = v; Dirty(); }).Show());
+
+        EditorGUI.SettingsRow(paper, $"{id}_str", Loc.Get("env.strength"), () =>
+            Origami.Slider(paper, $"{id}_str_v", ambient.Strength, v => { ambient.Strength = v; Dirty(); }, 0f, 5f).Show());
+
+        if (ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform)
+        {
+            EditorGUI.SettingsRow(paper, $"{id}_color", Loc.Get("env.color"), () =>
+                Origami.ColorField(paper, $"{id}_color_v", ToColor(ambient.Color), v => { ambient.Color = ToF4(v); Dirty(); }).Show());
+        }
+        else
+        {
+            EditorGUI.SettingsRow(paper, $"{id}_sky", Loc.Get("env.sky_color"), () =>
+                Origami.ColorField(paper, $"{id}_sky_v", ToColor(ambient.SkyColor), v => { ambient.SkyColor = ToF4(v); Dirty(); }).Show());
+            EditorGUI.SettingsRow(paper, $"{id}_gnd", Loc.Get("env.ground_color"), () =>
+                Origami.ColorField(paper, $"{id}_gnd_v", ToColor(ambient.GroundColor), v => { ambient.GroundColor = ToF4(v); Dirty(); }).Show());
         }
     }
 
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
-        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Lightmapping").Body(() =>
+        // IsBaking alone doesn't say WHICH scene it's for - only one bake can run at a time, so
+        // switching to a different scene while it's in flight must not show this scene as baking too.
+        bool baking = _bake.IsBaking && _bake.TargetScene == scene;
+        var s = scene.LightmapBake;
+        void Touch() => EditorSceneManager.IsDirty = true;
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
+
+        EditorGUI.SettingsRow(paper, $"{id}_size", Loc.Get("env.atlas_size"), () =>
+            Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize, v => { if (!baking) { s.AtlasSize = v; Touch(); } }, 256, 4096).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_tpu", Loc.Get("env.texels_unit"), () =>
+            Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit, v => { if (!baking) { s.TexelsPerUnit = v; Touch(); } }, 1f, 100f).Format("F0").Show());
+        EditorGUI.SettingsRow(paper, $"{id}_dil", Loc.Get("env.padding_dilate"), () =>
+            Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels, v => { if (!baking) { s.DilatePixels = v; Touch(); } }, 0, 16).Show());
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_qual", Loc.Get("env.quality"));
+
+        EditorGUI.SettingsRow(paper, $"{id}_bnc", Loc.Get("env.bounces"), () =>
+            Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces, v => { if (!baking) { s.Bounces = v; Touch(); } }, 0, 8).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_smp", Loc.Get("env.indirect_samples"), () =>
+            Origami.IntSlider(paper, $"{id}_smp_v", s.Samples, v => { if (!baking) { s.Samples = v; Touch(); } }, 1, 1024).Show());
+        EditorGUI.SettingsRow(paper, $"{id}_psmp", Loc.Get("env.probe_samples"), () =>
+            Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples, v => { if (!baking) { s.ProbeSamples = v; Touch(); } }, 16, 2048).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_cull", Loc.Get("env.backface_cull"), s.DoBackfaceCull, v => { if (!baking) { s.DoBackfaceCull = v; Touch(); } });
+        EditorGUI.SettingsToggle(paper, $"{id}_dn", Loc.Get("env.denoise"), s.Denoise, v => { if (!baking) { s.Denoise = v; Touch(); } });
+        if (s.Denoise)
+            EditorGUI.SettingsRow(paper, $"{id}_dnr", Loc.Get("env.denoise_radius"), () =>
+                Origami.IntSlider(paper, $"{id}_dnr_v", s.DenoiseRadius, v => { if (!baking) { s.DenoiseRadius = v; Touch(); } }, 1, 8).Show());
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_env", Loc.Get("panel.environment"));
+        EditorGUI.SettingsToggle(paper, $"{id}_sky", Loc.Get("env.bake_sky_gi"), s.BakeSkyLighting, v => { if (!baking) { s.BakeSkyLighting = v; Touch(); } });
+
+        EditorGUI.SectionHeader(paper, $"{id}_h_adv", Loc.Get("env.advanced"));
+        EditorGUI.SettingsRow(paper, $"{id}_rr", Loc.Get("env.russian_roulette"), () =>
+            Origami.Slider(paper, $"{id}_rr_v", s.RussianRoulette, v => { if (!baking) { s.RussianRoulette = v; Touch(); } }, 0f, 1f).Show());
+        EditorGUI.SettingsToggle(paper, $"{id}_alb", Loc.Get("env.ignore_albedo"), s.IgnoreAlbedo, v => { if (!baking) { s.IgnoreAlbedo = v; Touch(); } });
+
+        DrawBakeCard(paper, id, font, scene, s, baking);
+    }
+
+    private void DrawBakeCard(Paper paper, string id, Scribe.FontFile font, Scene scene,
+        Scene.LightmapBakeSettings s, bool baking)
+    {
+        var m = Origami.Current.Metrics;
+        var semi = EditorTheme.FontSemiBold ?? font;
+        bool hasBaked = LightmapBakeService.HasBakedData(scene);
+
+        using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
+            .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
+            .BorderColor(EditorTheme.BorderSoft).BorderWidth(1).ColBetween(10).Enter())
         {
-            bool baking = _bake.IsBaking;
-            var s = scene.LightmapBake;
-            // The settings live on the scene, so each edit dirties it for the next save.
-            void Touch() => EditorSceneManager.IsDirty = true;
-
-            Origami.Header(paper, $"{id}_h_res", "Resolution").Underline().Show();
-
-            InspectorRow.Draw(paper, $"{id}_size", "Atlas Size", () =>
-                Origami.IntSlider(paper, $"{id}_size_v", s.AtlasSize,
-                    v => { if (!baking) { s.AtlasSize = v; Touch(); } }, 256, 4096).Show());
-
-            InspectorRow.Draw(paper, $"{id}_tpu", "Texels / Unit", () =>
-                Origami.Slider(paper, $"{id}_tpu_v", s.TexelsPerUnit,
-                    v => { if (!baking) { s.TexelsPerUnit = v; Touch(); } }, 1f, 100f).Format("F0").Show());
-
-            InspectorRow.Draw(paper, $"{id}_dil", "Padding (Dilate)", () =>
-                Origami.IntSlider(paper, $"{id}_dil_v", s.DilatePixels,
-                    v => { if (!baking) { s.DilatePixels = v; Touch(); } }, 0, 16).Show());
-
-            Origami.Header(paper, $"{id}_h_qual", "Quality").Underline().Show();
-
-            InspectorRow.Draw(paper, $"{id}_bnc", "Bounces", () =>
-                Origami.IntSlider(paper, $"{id}_bnc_v", s.Bounces,
-                    v => { if (!baking) { s.Bounces = v; Touch(); } }, 0, 8).Show());
-
-            InspectorRow.Draw(paper, $"{id}_smp", "Indirect Samples", () =>
-                Origami.IntSlider(paper, $"{id}_smp_v", s.Samples,
-                    v => { if (!baking) { s.Samples = v; Touch(); } }, 1, 1024).Show());
-
-            InspectorRow.Draw(paper, $"{id}_psmp", "Probe Samples", () =>
-                Origami.IntSlider(paper, $"{id}_psmp_v", s.ProbeSamples,
-                    v => { if (!baking) { s.ProbeSamples = v; Touch(); } }, 16, 2048).Show());
-
-            Origami.Checkbox(paper, $"{id}_cull", s.DoBackfaceCull,
-                    v => { if (!baking) { s.DoBackfaceCull = v; Touch(); } })
-                .LabelRight("Backface Cull (match Prowl rendering)").Show();
-
-            Origami.Checkbox(paper, $"{id}_dn", s.Denoise,
-                    v => { if (!baking) { s.Denoise = v; Touch(); } })
-                .LabelRight("Denoise").Show();
-
-            if (s.Denoise)
-                InspectorRow.Draw(paper, $"{id}_dnr", "Denoise Radius", () =>
-                    Origami.IntSlider(paper, $"{id}_dnr_v", s.DenoiseRadius,
-                        v => { if (!baking) { s.DenoiseRadius = v; Touch(); } }, 1, 8).Show());
-
-            Origami.Header(paper, $"{id}_h_env", "Environment").Underline().Show();
-
-            Origami.Checkbox(paper, $"{id}_sky", s.BakeSkyLighting,
-                    v => { if (!baking) { s.BakeSkyLighting = v; Touch(); } })
-                .LabelRight("Bake Sky / Ambient as GI").Show();
-
-            Origami.Header(paper, $"{id}_h_adv", "Advanced").Underline().Show();
-
-            InspectorRow.Draw(paper, $"{id}_rr", "Russian Roulette", () =>
-                Origami.Slider(paper, $"{id}_rr_v", s.RussianRoulette,
-                    v => { if (!baking) { s.RussianRoulette = v; Touch(); } }, 0f, 1f).Format("F2").Show());
-
-            Origami.Checkbox(paper, $"{id}_alb", s.IgnoreAlbedo,
-                    v => { if (!baking) { s.IgnoreAlbedo = v; Touch(); } })
-                .LabelRight("Ignore Albedo (debug)").Show();
-
-            paper.Box($"{id}_sp_btn").Height(6);
-
             if (baking)
             {
+                Origami.ProgressBar(paper, $"{id}_pb", _bake.Progress).Show();
                 paper.Box($"{id}_status").Height(18)
-                    .Text($"{_bake.Status} ({_bake.Progress * 100f:F0}%)", font)
-                    .TextColor(EditorTheme.Ink300).FontSize(10f).Alignment(TextAlignment.MiddleLeft);
-                Origami.Button(paper, $"{id}_cancel", "Cancel", () => _bake.Cancel()).Show();
+                    .Text($"{_bake.Status}  ({_bake.Progress * 100f:F0}%)", font)
+                    .TextColor(EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
+                EditorGUI.CtaButton(paper, $"{id}_cancel", $"{EditorIcons.Xmark}  {Loc.Get("common.cancel")}", EditorTheme.Red400, () => _bake.Cancel(), height: 34f);
             }
             else
             {
-                Origami.Button(paper, $"{id}_bake", $"{EditorIcons.Sun}  Bake Lightmaps",
-                    () => _bake.Start(scene, scene.LightmapBake)).Show();
-
-                if (LightmapBakeService.HasBakedData(scene))
-                    Origami.Button(paper, $"{id}_clear", $"{EditorIcons.Trash}  Clear Baked Lighting",
-                        () => _bake.Clear(scene)).Show();
-            }
-        });
-    }
-
-    private void DrawSkyboxSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
-    {
-        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Sun}  Skybox").Body(() =>
-        {
-            var sky = scene.Skybox;
-
-            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
-                Origami.EnumDropdown(paper, $"{id}_mode_v", sky.Mode,
-                    v => { sky.Mode = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }).Show());
-
-            switch (sky.Mode)
-            {
-                case Scene.SkyboxMode.SolidColor:
-                    PropertyGridUtils.DrawField(paper, $"{id}_solid", "Color", typeof(VColor), sky.SolidColor,
-                        v => { sky.SolidColor = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    break;
-
-                case Scene.SkyboxMode.Gradient:
-                    PropertyGridUtils.DrawField(paper, $"{id}_top", "Top Color", typeof(VColor), sky.GradientTop,
-                        v => { sky.GradientTop = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    PropertyGridUtils.DrawField(paper, $"{id}_bot", "Bottom Color", typeof(VColor), sky.GradientBottom,
-                        v => { sky.GradientBottom = (VColor)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    InspectorRow.Draw(paper, $"{id}_exp", "Exponent", () =>
-                        Origami.Slider(paper, $"{id}_exp_v", sky.GradientExponent,
-                            v => { sky.GradientExponent = v; scene.Skybox = sky; EditorSceneManager.IsDirty = true; },
-                            0.1f, 5f).Format("F2").Show());
-                    break;
-
-                case Scene.SkyboxMode.Material:
-                    PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Material>), sky.CustomMaterial,
-                        v => { sky.CustomMaterial = (AssetRef<Material>)v!; scene.Skybox = sky; EditorSceneManager.IsDirty = true; }, 0);
-                    break;
-
-                case Scene.SkyboxMode.Procedural:
-                    paper.Box($"{id}_hint").Height(20)
-                        .Text("Sun direction set automatically from Directional Light.", font)
-                        .TextColor(EditorTheme.Ink300).FontSize(9f).Alignment(TextAlignment.MiddleLeft);
-                    break;
-            }
-        });
-    }
-
-    private void DrawFogSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
-    {
-        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Cloud}  Fog").Body(() =>
-        {
-            var fog = scene.Fog;
-
-            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
-                Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode,
-                    v => { fog.Mode = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
-
-            if (fog.Mode != Scene.FogParams.FogMode.Off)
-            {
-                PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(VColor), fog.Color,
-                    v => { fog.Color = (VColor)v!; scene.Fog = fog; EditorSceneManager.IsDirty = true; }, 0);
-
-                if (fog.Mode == Scene.FogParams.FogMode.Linear)
+                using (paper.Row($"{id}_info").Height(UnitValue.Auto).MinHeight(18).RowBetween(8).Enter())
                 {
-                    InspectorRow.Draw(paper, $"{id}_start", "Start Distance", () =>
-                        Origami.NumericField<float>(paper, $"{id}_start_v", fog.Start,
-                            v => { fog.Start = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
-                    InspectorRow.Draw(paper, $"{id}_end", "End Distance", () =>
-                        Origami.NumericField<float>(paper, $"{id}_end_v", fog.End,
-                            v => { fog.End = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; }).Show());
+                    paper.Box($"{id}_info_i").Width(14).Height(18).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+                        .Text(hasBaked ? EditorIcons.Check : EditorIcons.Sun, font)
+                        .TextColor(hasBaked ? EditorTheme.Green400 : EditorTheme.Ink300)
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
+                    paper.Box($"{id}_info_t").Height(18).IsNotInteractable()
+                        .Text($"{s.AtlasSize}px atlas  ·  {s.Bounces} bounce{(s.Bounces == 1 ? "" : "s")}  ·  {s.TexelsPerUnit:F0} texels/unit", font)
+                        .TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
                 }
-                else
+
+                using (paper.Row($"{id}_btns").Height(34).RowBetween(8).Enter())
                 {
-                    InspectorRow.Draw(paper, $"{id}_density", "Density", () =>
-                        Origami.Slider(paper, $"{id}_density_v", fog.Density,
-                            v => { fog.Density = v; scene.Fog = fog; EditorSceneManager.IsDirty = true; },
-                            0f, 0.1f).Format("F4").Show());
+                    EditorGUI.CtaButton(paper, $"{id}_bake", $"{EditorIcons.Sun}  {Loc.Get("env.generate_lighting")}", EditorTheme.Accent,
+                        () =>
+                        {
+                            if (_bake.IsBaking)
+                            {
+                                Toasts.Warning(Loc.Get("env.toast_bake_busy"), Loc.Get("env.toast_bake_busy_msg"));
+                                return;
+                            }
+                            _bake.Start(scene, scene.LightmapBake);
+                        }, grow: true, height: 34f);
+                    if (hasBaked)
+                        ChipButton(paper, $"{id}_clear", Loc.Get("console.clear"), () => _bake.Clear(scene));
                 }
             }
-        });
+        }
     }
 
-    private void DrawAmbientSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
+    private static void ChipButton(Paper paper, string id, string label, Action onClick)
     {
-        Origami.Foldout(paper, $"{id}_fold", $"{EditorIcons.Lightbulb}  Ambient Lighting").Body(() =>
-        {
-            var ambient = scene.Ambient;
-
-            InspectorRow.Draw(paper, $"{id}_mode", "Mode", () =>
-                Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode,
-                    v => { ambient.Mode = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }).Show());
-
-            InspectorRow.Draw(paper, $"{id}_str", "Strength", () =>
-                Origami.Slider(paper, $"{id}_str_v", ambient.Strength,
-                    v => { ambient.Strength = v; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; },
-                    0f, 5f).Format("F2").Show());
-
-            if (ambient.Mode == Scene.AmbientLightParams.AmbientMode.Uniform)
-            {
-                PropertyGridUtils.DrawField(paper, $"{id}_color", "Color", typeof(Float4), ambient.Color,
-                    v => { ambient.Color = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
-            }
-            else
-            {
-                PropertyGridUtils.DrawField(paper, $"{id}_sky", "Sky Color", typeof(Float4), ambient.SkyColor,
-                    v => { ambient.SkyColor = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
-                PropertyGridUtils.DrawField(paper, $"{id}_gnd", "Ground Color", typeof(Float4), ambient.GroundColor,
-                    v => { ambient.GroundColor = (Float4)v!; scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }, 0);
-            }
-        });
+        var font = EditorTheme.DefaultFont;
+        paper.Box(id).Width(UnitValue.Auto).Height(34).Rounded(9).Padding(14, 14, 0, 0)
+            .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+            .Hovered.BorderColor(EditorTheme.BorderStrong).End()
+            .Text(label, font).TextColor(EditorTheme.Ink400).FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) => onClick());
     }
 }

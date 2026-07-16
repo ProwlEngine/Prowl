@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.OrigamiUI;
+using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Popups;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -18,9 +19,11 @@ using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Hierarchy")]
 public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 {
+    [MenuItem("Window/General/Hierarchy", priority: 2)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(HierarchyPanel));
+
     public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
 
@@ -33,6 +36,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     }
 
     private string _searchText = "";
+    private bool _sceneExpanded = true;
     private Paper? _paper;
     // Rename state is managed by RenameOverlay
 
@@ -105,7 +109,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .Width(UnitValue.Auto).Height(24)
                         .Text($"{EditorIcons.ArrowLeft}  {Loc.Get("hierarchy.back")}", font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft)
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
                         .OnClick(0, (_, _) => PrefabEditingMode.Exit());
 
@@ -115,12 +119,12 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string sceneName = PrefabEditingMode.OriginalSceneName ?? "Scene";
+                    string sceneName = PrefabEditingMode.OriginalSceneName ?? Loc.Get("panel.scene");
                     paper.Box("hier_prefab_scene")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(sceneName, font)
                         .TextColor(EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box("hier_prefab_sep_arrow2")
                         .Width(UnitValue.Auto).Height(24)
@@ -128,13 +132,14 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         .TextColor(EditorTheme.Ink400)
                         .FontSize(8f).Alignment(TextAlignment.MiddleCenter);
 
-                    string prefabName = System.IO.Path.GetFileNameWithoutExtension(
-                        PrefabEditingMode.EditingPrefabPath ?? "Prefab");
+                    string prefabName = PrefabEditingMode.EditingPrefabPath != null
+                        ? System.IO.Path.GetFileNameWithoutExtension(PrefabEditingMode.EditingPrefabPath)
+                        : Loc.Get("hierarchy.prefab_fallback");
                     paper.Box("hier_prefab_name")
                         .Width(UnitValue.Auto).Height(24)
                         .Text(prefabName, font)
                         .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                        .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                     paper.Box("hier_prefab_spacer");
 
@@ -147,32 +152,42 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
             if (scene == null)
             {
-                paper.Box("hier_empty")
-                    .Height(60)
-                    .Text(Loc.Get("hierarchy.no_scene_loaded"), font)
-                    .TextColor(EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize)
-                    .Alignment(TextAlignment.MiddleCenter);
-
+                EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
                 Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 
-            // Scene name header
-            using (paper.Box("hier_scene_name")
+            // Scene section header (collapsible, open by default)
+            using (paper.Row("hier_scene_hdr")
                 .Height(EditorTheme.RowHeight)
-                .Margin(6, 6, 0, 6)
-                .Rounded(4)
-                .BackgroundColor(EditorTheme.Neutral200).Enter())
+                .Margin(6, 6, 0, 2)
+                .Rounded(6).Padding(8, 8, 0, 0).RowBetween(6)
+                .BackgroundColor(EditorTheme.Glass)
+                .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                .OnClick(0, (_, _) => _sceneExpanded = !_sceneExpanded)
+                .Enter())
             {
+                paper.Box("hier_scene_caret")
+                    .Width(10).Height(EditorTheme.RowHeight).IsNotInteractable()
+                    .Text(_sceneExpanded ? EditorIcons.ChevronDown : EditorIcons.ChevronRight, font)
+                    .TextColor(EditorTheme.Ink300)
+                    .FontSize(9f).Alignment(TextAlignment.MiddleCenter);
+
+                paper.Box("hier_scene_icon")
+                    .Width(16).Height(EditorTheme.RowHeight).IsNotInteractable()
+                    .Icon(paper, EditorIcons.Shapes_I, EditorTheme.Amber400, size: 14f);
+
                 paper.Box("hier_scene_name_text")
-                    .Margin(8, 0)
-                    .Height(EditorTheme.RowHeight)
-                    .Text($"{EditorIcons.Film}  {scene.Name}", font)
+                    .Width(UnitValue.StretchOne).Height(EditorTheme.RowHeight)
+                    .Text(scene.Name, font)
                     .TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
             }
+
+            if (!_sceneExpanded)
+                return;
 
             using (paper.Box("hier_bg").Enter())
             {
@@ -187,7 +202,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 {
                     if (ShortcutManager.IsPressed("Hierarchy/Delete"))
                     {
-                        foreach (var go in Selection.GetSelected<GameObject>().ToList())
+                        foreach (var go in ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList()))
                             DeleteGameObject(go);
                     }
                     else if (ShortcutManager.IsPressed("Hierarchy/Duplicate"))
@@ -318,12 +333,12 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         var go = (GameObject)node.UserData!;
                         string goId = go.Identifier.ToString();
 
-                        // Icon
+                        // Icon (vector, chosen from the GameObject's first component + coloured)
+                        var (goIcon, goColor) = GetGoStyle(go);
+                        if (!go.EnabledInHierarchy) goColor = Color.FromArgb(120, goColor);
                         paper.Box($"hier_ico_{goId}")
-                            .Width(16).Height(EditorTheme.RowHeight)
-                            .Text(node.Icon, font)
-                            .TextColor(node.IconColor ?? EditorTheme.Ink400)
-                            .FontSize(11f).Alignment(TextAlignment.MiddleCenter);
+                            .Width(18).Height(EditorTheme.RowHeight).IsNotInteractable()
+                            .Icon(paper, goIcon, goColor, size: 14f);
 
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
@@ -336,7 +351,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                                 .Height(EditorTheme.RowHeight).ChildLeft(4)
                                 .Text(go.Name, font)
                                 .TextColor(node.LabelColor ?? EditorTheme.Ink500)
-                                .FontSize(EditorTheme.FontSize - 1)
+                                .FontSize(EditorTheme.FontSizeSmall)
                                 .Alignment(TextAlignment.MiddleLeft);
                         }
 
@@ -368,13 +383,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 if (DragDrop.IsDraggingType<AssetDragPayload>() && bgHovered)
                 {
                     _assetDropTarget = true;
-                    paper.Box("hier_drop_zone").Height(24)
-                        .BackgroundColor(Color.FromArgb(40, EditorTheme.Purple400))
-                        .Rounded(3)
-                        .Text(Loc.Get("hierarchy.drop_to_spawn"), font)
-                        .TextColor(EditorTheme.Purple400)
-                        .FontSize(EditorTheme.FontSize - 2)
-                        .Alignment(TextAlignment.MiddleCenter);
+                    EditorGUI.DropBanner(paper, "hier_drop_zone", Loc.Get("hierarchy.drop_to_spawn"));
                 }
                 else if (DragDrop.IsDraggingType<AssetDragPayload>())
                 {
@@ -385,7 +394,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 {
                     if (assetDrop.AssetType == typeof(Runtime.Resources.Scene))
                     {
-                        var entry = EditorAssetDatabase.Instance?.GetEntry(assetDrop.AssetGuid);
+                        var entry = EditorAssetBackend.Instance?.GetEntry(assetDrop.AssetGuid);
                         if (entry != null)
                             EditorSceneManager.OpenScene(entry.Path);
                     }
@@ -451,30 +460,14 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         using (paper.Row("hier_toolbar")
             .Height(ToolbarHeight)
             .Margin(4, 4, 4, 0)
-            .RowBetween(4)
             .Enter())
         {
-            // Create button
-            using (paper.Box("hier_add")
-                .Width(EditorTheme.RowHeight)
-                .Height(EditorTheme.RowHeight)
-                .Rounded(4)
-                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .Text(EditorIcons.Plus, font)
-                .TextColor(EditorTheme.Ink500)
-                .FontSize(16f)
-                .Alignment(TextAlignment.MiddleCenter)
+            using (paper.Row("hier_search_wrap")
+                .Width(UnitValue.StretchOne).Height(25)
+                .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                 .Enter())
-            {
-                if (paper.IsParentHovered)
-                {
-                    Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
-                        BuildCreateMenu(b, null));
-                }
-            }
-
-            // Search
-            Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v).Show();
+                Origami.SearchField(paper, "hier_search", _searchText, v => _searchText = v)
+                    .Width(UnitValue.StretchOne).Height(25).Show();
         }
     }
 
@@ -543,7 +536,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         var targetParent = target.Parent;
         bool targetIsRoot = targetParent == null || !targetParent.IsValid();
 
-        foreach (var dragged in goDrop.GameObjects)
+        // A descendant dragged alongside its own ancestor moves implicitly with it; reparenting it
+        // again here would yank it out from under the ancestor and flatten it as a sibling instead.
+        foreach (var dragged in ExcludeNestedSelections(goDrop.GameObjects))
         {
             if (dragged == target || IsDescendantOf(target, dragged))
                 continue;
@@ -674,6 +669,32 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         return false;
     }
 
+    /// <summary>
+    /// Filters out any GameObject whose ancestor is also present in the same collection. A
+    /// per-item operation (delete, reparent) applied to an ancestor already cascades to its
+    /// descendants structurally, so re-applying it to a separately-selected descendant corrupts
+    /// undo (double-serializes it) or flattens it out of its parent during a reparent.
+    /// </summary>
+    internal static List<GameObject> ExcludeNestedSelections(IReadOnlyCollection<GameObject> selection)
+    {
+        var result = new List<GameObject>(selection.Count);
+        foreach (var go in selection)
+        {
+            bool hasSelectedAncestor = false;
+            foreach (var other in selection)
+            {
+                if (!ReferenceEquals(other, go) && IsDescendantOf(go, other))
+                {
+                    hasSelectedAncestor = true;
+                    break;
+                }
+            }
+            if (!hasSelectedAncestor)
+                result.Add(go);
+        }
+        return result;
+    }
+
     // ================================================================
     //  Context Menus
     // ================================================================
@@ -682,6 +703,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     {
         Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
+            builder.Header("Create");
             BuildCreateMenu(builder, null);
         });
     }
@@ -695,6 +717,67 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             if (selectedGOs.Count == 0) return;
 
             bool multiSelect = selectedGOs.Count > 1;
+
+            builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = Selection.Count }) : firstSelected.Name, iconDraw: GetGoStyle(firstSelected).icon);
+
+            // Create parent to first selected
+            builder.Submenu("Create", (b) => { BuildCreateMenu(b, firstSelected); }, EditorIcons.Plus);
+
+            builder.Separator();
+
+            if (multiSelect)
+            {
+                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
+                {
+                    var dupes = GameObjectClipboard.Duplicate(selectedGOs);
+                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                }, icon: EditorIcons.Copy);
+
+                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
+                {
+                    StartRenameGO(firstSelected!, selectedGOs);
+                }, icon: EditorIcons.PenToSquare);
+
+                builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
+                {
+                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
+                }, icon: EditorIcons.Trash);
+
+                builder.Separator();
+
+                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
+                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
+                {
+                    bool newState = !anyEnabled;
+                    var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
+                    Undo.RegisterAction(newState ? "Enable All" : "Disable All",
+                        undo: () => { foreach (var (id, old) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; } },
+                        redo: () => { foreach (var (id, _) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = newState; } });
+                    foreach (var go in selectedGOs) go.Enabled = newState;
+                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+            else
+            {
+                var go = firstSelected!;
+                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
+                {
+                    var dupes = GameObjectClipboard.Duplicate([go]);
+                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
+                }, icon: EditorIcons.Copy);
+                builder.Item(Loc.Get("hierarchy.rename"), () =>
+                {
+                    StartRenameGO(go, [go]);
+                }, icon: EditorIcons.PenToSquare);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
+                builder.Separator();
+                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
+                {
+                    Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
+                    go.Enabled = !go.Enabled;
+                }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+            }
+
+            builder.Separator();
 
             // Move to View / Move View To
             var cam = SceneViewPanel.ActiveCamera;
@@ -749,61 +832,19 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 builder.Separator();
             }
 
-            // Create parent to first selected
-            BuildCreateMenu(builder, firstSelected);
-            builder.Separator();
-
             if (multiSelect)
             {
-                builder.Item($"{Loc.Get("hierarchy.duplicate")} ({selectedGOs.Count})", () =>
-                {
-                    var dupes = GameObjectClipboard.Duplicate(selectedGOs);
-                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-
-                builder.Item($"{Loc.Get("hierarchy.rename")} ({selectedGOs.Count})", () =>
-                {
-                    StartRenameGO(firstSelected!, selectedGOs);
-                }, icon: EditorIcons.PenToSquare);
-
                 builder.Item($"{Loc.Get("hierarchy.delete")} ({selectedGOs.Count})", () =>
                 {
-                    foreach (var go in selectedGOs.ToList()) DeleteGameObject(go);
-                }, icon: EditorIcons.Trash);
-
-                builder.Separator();
-
-                bool anyEnabled = selectedGOs.Any(g => g.Enabled);
-                builder.Item(anyEnabled ? Loc.Get("hierarchy.disable_all") : Loc.Get("hierarchy.enable_all"), () =>
-                {
-                    bool newState = !anyEnabled;
-                    var oldStates = selectedGOs.Select(g => (g.Identifier, g.Enabled)).ToList();
-                    Undo.RegisterAction(newState ? "Enable All" : "Disable All",
-                        undo: () => { foreach (var (id, old) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = old; } },
-                        redo: () => { foreach (var (id, _) in oldStates) { var r = Undo.FindGO(id); if (r != null) r.Enabled = newState; } });
-                    foreach (var go in selectedGOs) go.Enabled = newState;
-                }, icon: anyEnabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                    foreach (var go in ExcludeNestedSelections(selectedGOs)) DeleteGameObject(go);
+                }, icon: EditorIcons.Trash, danger: true);
             }
             else
             {
                 var go = firstSelected!;
-                builder.Item(Loc.Get("hierarchy.duplicate"), () =>
-                {
-                    var dupes = GameObjectClipboard.Duplicate([go]);
-                    foreach (var d in dupes) Undo.RegisterCreatedObject(d, "Duplicate");
-                }, icon: EditorIcons.Copy);
-                builder.Item(Loc.Get("hierarchy.rename"), () =>
-                {
-                    StartRenameGO(go, [go]);
-                }, icon: EditorIcons.PenToSquare);
-                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash);
-                builder.Separator();
-                builder.Item(go.Enabled ? Loc.Get("hierarchy.disable") : Loc.Get("hierarchy.enable"), () =>
-                {
-                    Undo.RecordGameObjectChange(go, "Toggle Visibility", go.Enabled, !go.Enabled, (g, e) => g.Enabled = e);
-                    go.Enabled = !go.Enabled;
-                }, icon: go.Enabled ? EditorIcons.EyeSlash : EditorIcons.Eye);
+                builder.Item(Loc.Get("hierarchy.delete"), () => DeleteGameObject(go), icon: EditorIcons.Trash, danger: true);
             }
+
         });
     }
 
@@ -813,7 +854,8 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
     private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
     {
-        CreateGameObjectMenuRegistry.BuildMenu(builder, parent);
+        MenuContext.Set(parent);
+        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
     }
 
     /// <summary>
@@ -872,7 +914,10 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         });
     }
 
-    private void DeleteGameObject(GameObject go)
+    /// <summary>Delete a GameObject, blocking deletion of prefab-structural children (with a toast)
+    /// and registering proper undo. Shared with SceneViewPanel's in-viewport Delete shortcut so both
+    /// entry points enforce the same rules instead of the viewport bypassing them.</summary>
+    internal static void DeleteGameObject(GameObject go)
     {
         // Block deleting prefab children that are part of the prefab structure
         if (go.Parent != null && go.Parent.IsPrefabInstance && go.Parent.PrefabChildCount >= 0)
@@ -928,13 +973,11 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             return go.EnabledInHierarchy ? EditorTheme.Ink500 : EditorTheme.Ink300;
 
         // Check if the prefab asset still exists
-        var entry = EditorAssetDatabase.Instance?.GetEntry(go.PrefabAssetId);
+        var entry = EditorAssetBackend.Instance?.GetEntry(go.PrefabAssetId);
         if (entry == null)
         {
             // Broken prefab link red text
-            return go.EnabledInHierarchy
-                ? Color.FromArgb(255, 220, 80, 80)
-                : Color.FromArgb(255, 160, 60, 60);
+            return go.EnabledInHierarchy ? EditorTheme.Red400 : EditorTheme.Red300;
         }
 
         // Valid prefab purple text
@@ -948,6 +991,21 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         if (go.GetComponent<MeshRenderer>() != null) return EditorIcons.Cube;
         if (go.GetComponent<SkinnedMeshRenderer>() != null) return EditorIcons.Cubes;
         return EditorIcons.Circle;
+    }
+
+    // Vector icon + accent colour chosen from the GameObject's defining (first) component.
+    private static (IOrigamiIcon icon, Color color) GetGoStyle(GameObject go)
+    {
+        var first = go.GetComponents<MonoBehaviour>().FirstOrDefault();
+        if (first is Camera)               return (EditorIcons.Camera_I, EditorTheme.Blue400);    // blue
+        if (first is Light)                return (EditorIcons.Lightbulb_I, EditorTheme.Amber400);    // amber
+        if (first is SkinnedMeshRenderer)  return (EditorIcons.Cubes_I, EditorTheme.Purple400);    // purple
+        if (first is MeshRenderer)         return (EditorIcons.Cube_I, EditorTheme.Purple400);    // purple
+        if (first != null)                 return (EditorIcons.FileCode_I, EditorTheme.Green400);   // any other component = green script
+        // Empty GameObject: a group icon when it parents others, else a dim generic mark.
+        return go.Children.Count > 0
+            ? (EditorIcons.ObjectGroup_I, EditorTheme.Ink300)
+            : (EditorIcons.Cube_I, EditorTheme.InkDim);
     }
 
     private GameObject? FindGOByIdentifier(string id)
@@ -1041,6 +1099,17 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             if (parent != null) go.SetParent(parent);
             Selection.Select(go);
             Undo.RegisterCreatedObject(go, "Spawn Mesh");
+        }
+        else if (asset is Sprite sprite)
+        {
+            var go = new GameObject(string.IsNullOrEmpty(sprite.Name) ? name : sprite.Name);
+            go.Transform.Position = position;
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.Sprite = sprite;
+            scene.Add(go);
+            if (parent != null) go.SetParent(parent);
+            Selection.Select(go);
+            Undo.RegisterCreatedObject(go, "Spawn Sprite");
         }
         else if (asset is PrefabAsset)
         {

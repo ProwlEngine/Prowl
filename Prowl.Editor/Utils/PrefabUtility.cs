@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
@@ -124,7 +125,7 @@ public static class PrefabUtility
     {
         if (!instanceRoot.IsPrefabInstance) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
         var entry = db.GetEntry(instanceRoot.PrefabAssetId);
@@ -215,6 +216,7 @@ public static class PrefabUtility
         if (scene != null)
         {
             scene.Remove(instanceRoot);
+            instanceRoot.Dispose();
             scene.Add(fresh);
             if (parent != null)
             {
@@ -299,7 +301,7 @@ public static class PrefabUtility
     {
         if (!instanceGO.IsPrefabInstance) return;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
         var entry = db.GetEntry(instanceGO.PrefabAssetId);
@@ -419,52 +421,42 @@ public static class PrefabUtility
         EditorSceneManager.IsDirty = true;
     }
 
-    private static System.Reflection.FieldInfo? GetFieldByPath(object target, string fieldPath)
+    private const BindingFlags InstanceFields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+    private static bool TraverseToParent(object target, string[] parts, out object parent)
     {
-        string[] parts = fieldPath.Split('.');
-        object current = target;
+        parent = target;
         for (int i = 0; i < parts.Length - 1; i++)
         {
-            var field = current.GetType().GetField(parts[i],
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (field == null) return null;
-            current = field.GetValue(current);
-            if (current == null) return null;
+            var field = parent.GetType().GetField(parts[i], InstanceFields);
+            if (field == null) return false;
+            var next = field.GetValue(parent);
+            if (next == null) return false;
+            parent = next;
         }
-        return current.GetType().GetField(parts[^1],
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return true;
+    }
+
+    private static FieldInfo? GetFieldByPath(object target, string fieldPath)
+    {
+        string[] parts = fieldPath.Split('.');
+        if (!TraverseToParent(target, parts, out var parent)) return null;
+        return parent.GetType().GetField(parts[^1], InstanceFields);
     }
 
     private static object? GetFieldValue(object target, string fieldPath)
     {
         string[] parts = fieldPath.Split('.');
-        object current = target;
-        for (int i = 0; i < parts.Length; i++)
-        {
-            var field = current.GetType().GetField(parts[i],
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (field == null) return null;
-            current = field.GetValue(current);
-            if (current == null && i < parts.Length - 1) return null;
-        }
-        return current;
+        if (!TraverseToParent(target, parts, out var parent)) return null;
+        var field = parent.GetType().GetField(parts[^1], InstanceFields);
+        return field?.GetValue(parent);
     }
 
     private static void SetFieldValue(object target, string fieldPath, object? value)
     {
         string[] parts = fieldPath.Split('.');
-        object current = target;
-        for (int i = 0; i < parts.Length - 1; i++)
-        {
-            var field = current.GetType().GetField(parts[i],
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (field == null) return;
-            current = field.GetValue(current);
-            if (current == null) return;
-        }
-        var finalField = current.GetType().GetField(parts[^1],
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        finalField?.SetValue(current, value);
+        if (!TraverseToParent(target, parts, out var parent)) return;
+        parent.GetType().GetField(parts[^1], InstanceFields)?.SetValue(parent, value);
     }
 
     /// <summary>Check if a specific property path is overridden on a GameObject.</summary>
@@ -531,6 +523,7 @@ public static class PrefabUtility
             fresh.Transform.LocalScale = scale;
 
             scene.Remove(root);
+            root.Dispose();
             scene.Add(fresh);
             if (parent != null)
             {
@@ -669,25 +662,18 @@ public static class PrefabUtility
     private static void ApplyFieldValue(object target, string fieldPath, EchoObject value)
     {
         string[] parts = fieldPath.Split('.');
-        object current = target;
+        if (!TraverseToParent(target, parts, out var parent)) return;
 
-        for (int i = 0; i < parts.Length - 1; i++)
-        {
-            var field = current.GetType().GetField(parts[i],
-                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (field == null) return;
-            current = field.GetValue(current);
-            if (current == null) return;
-        }
-
-        string finalField = parts[^1];
-        var finalFieldInfo = current.GetType().GetField(finalField,
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var finalFieldInfo = parent.GetType().GetField(parts[^1], InstanceFields);
         if (finalFieldInfo == null) return;
 
         var deserialized = Serializer.Deserialize(value, finalFieldInfo.FieldType);
-        if (deserialized != null)
-            finalFieldInfo.SetValue(current, deserialized);
+
+        // Null is a valid override for reference fields (e.g. clearing an object reference).
+        // Only skip for non-nullable value types where null means deserialization failed.
+        bool fieldAllowsNull = !finalFieldInfo.FieldType.IsValueType || Nullable.GetUnderlyingType(finalFieldInfo.FieldType) != null;
+        if (deserialized != null || fieldAllowsNull)
+            finalFieldInfo.SetValue(parent, deserialized);
     }
 
     // ================================================================

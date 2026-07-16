@@ -78,26 +78,62 @@ internal sealed class UIFontSystem : IFontRenderer
     {
         if (texture is not Texture2D tex) return;
 
-        int pixelCount = bounds.Width * bounds.Height;
-        byte[] rgba = new byte[pixelCount * 4];
-        for (int i = 0; i < pixelCount; i++)
-        {
-            byte a = i < data.Length ? data[i] : (byte)0;
-            rgba[i * 4 + 0] = 255;
-            rgba[i * 4 + 1] = 255;
-            rgba[i * 4 + 2] = 255;
-            rgba[i * 4 + 3] = a;
-        }
+        // Scribe hands us RGBA data (4 bytes/pixel - the single-channel SDF replicated across the
+        // channels, matching the Color4b atlas), so write it straight in like the Quill PaperRenderer
+        // does. The old per-pixel repack treated `data` as one byte/pixel and read only the first
+        // quarter of it, scattering garbage into the alpha channel - which is why nothing rendered.
+        tex.SetData(new Memory<byte>(data), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);
+    }
 
-        tex.SetData(new Memory<byte>(rgba), bounds.X, bounds.Y, (uint)bounds.Width, (uint)bounds.Height);
+    // ---- Mesh capture -------------------------------------------------------------------------
+    // A text component sets a capture target + coordinate mapping, calls Scribe's DrawLayout /
+    // RichTextLayout.Draw (which drive DrawQuads below), then clears it. Single-threaded UI build,
+    // so a single set of fields is fine.
+    private UIMeshBuilder? _target;
+    private float _originX;
+    private float _baseY;
+    private float _scale = 1f;
+
+    /// <summary>
+    /// Route the next <see cref="System"/>.<c>DrawLayout</c> / rich-text draw into <paramref name="builder"/>,
+    /// mapping Scribe's +Y-down layout space (origin passed as (0,0)) into element-local +Y-up space:
+    /// <c>x -> (originX + x) * scale</c>, <c>y -> (baseY - y) * scale</c>. UI text uses the default
+    /// unit scale; the 3D <c>TextMeshComponent</c> passes a world-units-per-pixel scale so the same
+    /// pixel-space layout bakes into a world-space mesh. Always pair with <see cref="EndCapture"/>.
+    /// </summary>
+    public void BeginCapture(UIMeshBuilder builder, float originX, float baseY, float scale = 1f)
+    {
+        _target = builder;
+        _originX = originX;
+        _baseY = baseY;
+        _scale = scale;
+    }
+
+    public void EndCapture()
+    {
+        _target = null;
+        _scale = 1f;
     }
 
     /// <summary>
-    /// Internal DrawQuads is not used- Instead <see cref="TextComponent"/> walks the
-    /// <see cref="TextLayout"/> itself and emits quads into <see cref="UIMeshBuilder"/>.
+    /// Scribe's draw callback: append its generated glyph triangles to the active capture target,
+    /// transformed into element-local space, keeping per-vertex colour (so rich text works).
     /// </summary>
     public void DrawQuads(object texture, ReadOnlySpan<IFontRenderer.Vertex> vertices, ReadOnlySpan<int> indices)
     {
-        // Intentionally empty.
+        UIMeshBuilder? b = _target;
+        if (b is null) return;
+
+        uint baseIdx = b.NextVertex;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            IFontRenderer.Vertex v = vertices[i];
+            b.AddVertex(
+                new Float3((_originX + v.Position.X) * _scale, (_baseY - v.Position.Y) * _scale, 0f),
+                v.TextureCoordinate,
+                Color32.FromArgb(v.Color.A, v.Color.R, v.Color.G, v.Color.B));
+        }
+        for (int i = 0; i < indices.Length; i++)
+            b.AddIndex(baseIdx + (uint)indices[i]);
     }
 }

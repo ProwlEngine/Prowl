@@ -4,13 +4,13 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Graphite;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
@@ -60,7 +60,7 @@ public static class PackageImportDialog
             if (_manifest == null)
             {
                 CloseArchive();
-                Origami.Message("Import Error", "Invalid package: missing manifest.json");
+                Origami.Message(Loc.Get("package.import_error"), Loc.Get("package.err_no_manifest"));
                 return;
             }
 
@@ -89,7 +89,7 @@ public static class PackageImportDialog
         catch (Exception ex)
         {
             CloseArchive();
-            Origami.Message("Import Error", $"Failed to open package: {ex.Message}");
+            Origami.Message(Loc.Get("package.import_error"), Loc.Get("package.err_open", new { message = ex.Message }));
         }
     }
 
@@ -123,17 +123,17 @@ public static class PackageImportDialog
 
     private static Color GetActionColor(ImportAction action) => action switch
     {
-        ImportAction.Add => Color.FromArgb(255, 80, 200, 80),
-        ImportAction.Replace => Color.FromArgb(255, 220, 180, 40),
-        ImportAction.Skip => Color.FromArgb(255, 130, 130, 130),
+        ImportAction.Add => EditorTheme.Green400,
+        ImportAction.Replace => EditorTheme.Amber400,
+        ImportAction.Skip => EditorTheme.Ink300,
         _ => EditorTheme.Ink400
     };
 
     private static string GetActionBadge(ImportAction action) => action switch
     {
-        ImportAction.Add => "Add",
-        ImportAction.Replace => "Replace",
-        ImportAction.Skip => "Identical",
+        ImportAction.Add => Loc.Get("package.badge_add"),
+        ImportAction.Replace => Loc.Get("package.badge_replace"),
+        ImportAction.Skip => Loc.Get("package.badge_identical"),
         _ => ""
     };
 
@@ -214,7 +214,7 @@ public static class PackageImportDialog
                         Id = fullPath,
                         Label = name,
                         Icon = EditorIcons.Folder,
-                        IconColor = Color.FromArgb(255, 220, 180, 80),
+                        IconColor = EditorTheme.Amber400,
                         HasChildren = true,
                         DefaultExpanded = true,
                         Depth = depth,
@@ -235,9 +235,9 @@ public static class PackageImportDialog
                     {
                         Id = fullPath,
                         Label = name,
-                        Icon = FileIconRegistry.GetIconForFile(name),
+                        Icon = EditorRegistries.GetFileIcon(name),
                         IconColor = color,
-                        LabelColor = enabled ? color : Color.FromArgb(255, 130, 130, 130),
+                        LabelColor = enabled ? color : EditorTheme.Ink300,
                         IsLeaf = true,
                         Depth = depth,
                         Checked = enabled,
@@ -338,9 +338,9 @@ public static class PackageImportDialog
             string fileName = Path.GetFileName(_packagePath);
             paper.Box("pkgimp_title_text")
                 .Height(32)
-                .Text($"Import ProwlPackage - {fileName}", font)
+                .Text(Loc.Get("package.import_title", new { file = fileName }), font)
                 .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize + 1)
+                .FontSize(EditorTheme.FontSizeLarge)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("pkgimp_title_spacer").Width(UnitValue.Stretch());
@@ -359,28 +359,28 @@ public static class PackageImportDialog
     {
         using (paper.Row("pkgimp_settings_warn")
             .Height(36)
-            .BackgroundColor(Color.FromArgb(255, 80, 60, 20))
+            .BackgroundColor(EditorTheme.Amber300)
             .ChildLeft(12).RowBetween(8)
             .Enter())
         {
             paper.Box("pkgimp_warn_ico")
                 .Size(20, 36)
                 .Text(EditorIcons.TriangleExclamation, font)
-                .TextColor(Color.FromArgb(255, 255, 200, 60))
+                .TextColor(EditorTheme.Amber400)
                 .FontSize(EditorTheme.FontSize)
                 .Alignment(TextAlignment.MiddleCenter);
 
             paper.Box("pkgimp_warn_text")
                 .Height(36)
-                .Text("This package contains project settings. Recommended for fresh projects.", font)
-                .TextColor(Color.FromArgb(255, 255, 220, 120))
-                .FontSize(EditorTheme.FontSize - 1)
+                .Text(Loc.Get("package.settings_note"), font)
+                .TextColor(EditorTheme.Amber500)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("pkgimp_warn_spacer").Width(UnitValue.Stretch());
 
             Origami.Checkbox(paper, "pkgimp_settings_chk", _importProjectSettings, v => _importProjectSettings = v)
-                .LabelRight("Import Settings").Show();
+                .LabelRight(Loc.Get("package.import_settings")).Show();
         }
     }
 
@@ -415,7 +415,7 @@ public static class PackageImportDialog
                         else _enabledPaths.Remove(path);
                     }
                 })
-                .EmptyMessage("No assets in package")
+                .EmptyMessage(Loc.Get("package.no_assets"))
                 .Show();
 
             // Separator
@@ -442,7 +442,7 @@ public static class PackageImportDialog
             {
                 paper.Box("pkgimp_detail_hint")
                     .Height(60)
-                    .Text("Select an asset to view details", font)
+                    .Text(Loc.Get("package.select_asset"), font)
                     .TextColor(EditorTheme.Ink300)
                     .FontSize(EditorTheme.FontSize)
                     .Alignment(TextAlignment.MiddleCenter);
@@ -474,8 +474,8 @@ public static class PackageImportDialog
             }
 
             // Info rows
-            DetailRow(paper, font, "pkgimp_d_name", "Name", Path.GetFileName(asset.Path));
-            DetailRow(paper, font, "pkgimp_d_path", "Path", asset.Path);
+            DetailRow(paper, font, "pkgimp_d_name", Loc.Get("inspector.name"), Path.GetFileName(asset.Path));
+            DetailRow(paper, font, "pkgimp_d_path", Loc.Get("inspector.path"), asset.Path);
 
             // Type name - show just the class name, not the full assembly-qualified name
             string typeName = asset.MainAssetType;
@@ -483,24 +483,24 @@ public static class PackageImportDialog
             if (commaIdx > 0) typeName = typeName[..commaIdx];
             int dotIdx = typeName.LastIndexOf('.');
             if (dotIdx >= 0) typeName = typeName[(dotIdx + 1)..];
-            if (string.IsNullOrEmpty(typeName)) typeName = "Unknown";
-            DetailRow(paper, font, "pkgimp_d_type", "Type", typeName);
+            if (string.IsNullOrEmpty(typeName)) typeName = Loc.Get("inspector.unknown");
+            DetailRow(paper, font, "pkgimp_d_type", Loc.Get("inspector.type"), typeName);
 
-            DetailRow(paper, font, "pkgimp_d_guid", "GUID", asset.Guid);
-            DetailRow(paper, font, "pkgimp_d_size", "Size", FormatSize(asset.FileSize));
+            DetailRow(paper, font, "pkgimp_d_guid", Loc.Get("inspector.guid"), asset.Guid);
+            DetailRow(paper, font, "pkgimp_d_size", Loc.Get("inspector.size"), FormatSize(asset.FileSize));
 
             // Status with color
             string statusText = action switch
             {
-                ImportAction.Add => "Add (new asset)",
-                ImportAction.Replace => "Replace (files differ)",
-                ImportAction.Skip => "Nothing (identical)",
-                _ => "Unknown"
+                ImportAction.Add => Loc.Get("package.status_add"),
+                ImportAction.Replace => Loc.Get("package.status_replace"),
+                ImportAction.Skip => Loc.Get("package.status_skip"),
+                _ => Loc.Get("inspector.unknown")
             };
             Color statusColor = action switch
             {
-                ImportAction.Add => Color.FromArgb(255, 80, 200, 80),
-                ImportAction.Replace => Color.FromArgb(255, 220, 180, 40),
+                ImportAction.Add => EditorTheme.Green400,
+                ImportAction.Replace => EditorTheme.Amber400,
                 ImportAction.Skip => EditorTheme.Ink300,
                 _ => EditorTheme.Ink400
             };
@@ -512,14 +512,14 @@ public static class PackageImportDialog
             {
                 paper.Box("pkgimp_d_status_lbl")
                     .Width(50).Height(RowHeight)
-                    .Text("Status", font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2)
+                    .Text(Loc.Get("package.status"), font).TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 paper.Box("pkgimp_d_status_val")
                     .Height(RowHeight)
                     .Text(statusText, font).TextColor(statusColor)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
             }
         }
@@ -535,13 +535,13 @@ public static class PackageImportDialog
             paper.Box($"{id}_lbl")
                 .Width(50).Height(RowHeight)
                 .Text(label, font).TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 2)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box($"{id}_val")
                 .Height(RowHeight)
                 .Text(value, font).TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize - 1)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft)
                 .Clip();
         }
@@ -562,16 +562,16 @@ public static class PackageImportDialog
 
             paper.Box("pkgimp_count")
                 .Height(24).ChildLeft(12)
-                .Text($"{enabledCount} of {totalCount} selected ({addCount} add, {replaceCount} replace)", font)
+                .Text(Loc.Get("package.import_count", new { enabled = enabledCount, total = totalCount, add = addCount, replace = replaceCount }), font)
                 .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 1)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("pkgimp_spacer").Width(UnitValue.Stretch());
 
-            Origami.Button(paper, "pkgimp_cancel", "Cancel", () => { Close(); }).Width(80).Show();
+            Origami.Button(paper, "pkgimp_cancel", Loc.Get("common.cancel"), () => { Close(); }).Width(80).Show();
 
-            Origami.Button(paper, "pkgimp_import", "Import", () => { DoImport(); }).Width(80).Show();
+            Origami.Button(paper, "pkgimp_import", Loc.Get("pref.import"), () => { DoImport(); }).Width(80).Show();
         }
     }
 
@@ -624,18 +624,18 @@ public static class PackageImportDialog
         Close();
 
         // Trigger asset database rescan to pick up the new/changed files
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db != null)
         {
             // Reinitialize to pick up all changes
-            var freshDb = new EditorAssetDatabase(project);
+            var freshDb = new EditorAssetBackend(project);
             freshDb.Initialize();
         }
 
         string message = failed > 0
-            ? $"Imported {imported} assets ({failed} failed)"
-            : $"Imported {imported} assets";
-        Toasts.Success("Package Imported", message);
+            ? Loc.Get("package.imported_msg_failed", new { count = imported, failed = failed })
+            : Loc.Get("package.imported_msg", new { count = imported });
+        Toasts.Success(Loc.Get("package.imported_title"), message);
         Debug.Log($"[ProwlPackage] {message}");
     }
 

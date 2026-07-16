@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 using Silk.NET.Input;
@@ -63,6 +64,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     private Queue<char> pressedChars { get; set; } = new();
 
+    // Characters typed this frame, accumulated as KeyChar events arrive (during DoEvents) and cleared at
+    // the frame boundary (LateUpdate). Unlike the pressedChars queue this is read non-destructively, so
+    // any number of consumers - Paper, GameObject UI, user UI - can all see the same input each frame.
+    private string _inputString = string.Empty;
+
     public event Action<KeyCode, bool> OnKeyEvent;
     public event Action<MouseButton, float, float, bool, bool> OnMouseEvent;
 
@@ -100,7 +106,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         }
 
         foreach (IKeyboard keyboard in Keyboards)
-            keyboard.KeyChar += (keyboard, c) => pressedChars.Enqueue(c);
+            keyboard.KeyChar += (keyboard, c) => { pressedChars.Enqueue(c); _inputString += c; };
 
         UpdateKeyStates();
     }
@@ -122,6 +128,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
     internal void LateUpdate()
     {
+        // Typed characters live for exactly one frame: they arrive during DoEvents, are read (non
+        // destructively) by every consumer during Update, and are cleared here at the frame boundary.
+        _inputString = string.Empty;
+        pressedChars.Clear();
+
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Int2)(Float2)Mice[0].Position;
         if (!_prevMousePos.Equals(_currentMousePos))
@@ -212,6 +223,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         return null;
     }
 
+    public string InputString => _inputString;
+
     // TryGetValue (not the indexer) so an unmapped key/button - e.g. KeyCode.Unknown, which isn't in
     // the dictionaries - returns false instead of throwing KeyNotFoundException.
     private static bool Down(Dictionary<KeyCode, bool> map, KeyCode key) => map.TryGetValue(key, out var v) && v;
@@ -230,6 +243,30 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public bool GetMouseButtonUp(int button) => !Down(isMousePressed, (MouseButton)button) && Down(wasMousePressed, (MouseButton)button);
 
     public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Disabled;
+
+    public void SetCursorShape(PaperCursor shape, int miceIndex = 0)
+    {
+        ICursor cursor = Mice[miceIndex].Cursor;
+        // Only relevant while the cursor is visible; don't fight a locked/hidden cursor (FPS mode).
+        if (cursor.CursorMode != CursorMode.Normal)
+            return;
+
+        // Silk.NET has no grab/help shapes, so those fall back to the hand or the arrow.
+        cursor.StandardCursor = shape switch
+        {
+            PaperCursor.Pointer or PaperCursor.Grab or PaperCursor.Grabbing => StandardCursor.Hand,
+            PaperCursor.Text => StandardCursor.IBeam,
+            PaperCursor.Crosshair => StandardCursor.Crosshair,
+            PaperCursor.ResizeHorizontal => StandardCursor.HResize,
+            PaperCursor.ResizeVertical => StandardCursor.VResize,
+            PaperCursor.ResizeNWSE => StandardCursor.NwseResize,
+            PaperCursor.ResizeNESW => StandardCursor.NeswResize,
+            PaperCursor.ResizeAll => StandardCursor.ResizeAll,
+            PaperCursor.NotAllowed => StandardCursor.NotAllowed,
+            PaperCursor.Wait => StandardCursor.Wait,
+            _ => StandardCursor.Default,
+        };
+    }
 
     // Gamepad methods implementation
     public int GetGamepadCount() => Context.Gamepads.Count;

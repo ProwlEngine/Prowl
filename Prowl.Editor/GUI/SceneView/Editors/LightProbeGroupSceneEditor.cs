@@ -75,7 +75,8 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
             bool down = Input.GetMouseButtonDown(0);
             bool moved = Handles.PositionHandle(MoveHandleId, camera, viewport, mouseRay, mousePos, ref centroid, out hot);
 
-            if (hot && down && !_dragging) { Undo.Snapshot(_group); _dragging = true; }
+            if (hot && down && !_dragging) _dragging = true;
+            if (_dragging) Undo.Snapshot(_group);
             if (moved)
             {
                 ApplyWorldDelta(centroid - before);

@@ -5,6 +5,7 @@ using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 [ProjectSettings("Time", EditorIcons.Clock, order: 22)]
@@ -32,31 +33,31 @@ public class TimeSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "time_hdr", $"{EditorIcons.Clock}  Time").Underline().Show();
 
-        InspectorRow.Draw(paper, "time_fixed", "Fixed Timestep", () =>
+        EditorGUI.Row(paper, "time_fixed", "Fixed Timestep", () =>
             Origami.NumericField<float>(paper, "time_fixed_v", FixedTimestep, v =>
             {
                 FixedTimestep = MathF.Max(0.0001f, v);
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }).Min(0.0001f).Show());
 
         Origami.Label(paper, "time_fixed_info",
             $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)").Show();
 
-        InspectorRow.Draw(paper, "time_maxiter", "Max Fixed Iterations", () =>
+        EditorGUI.Row(paper, "time_maxiter", "Max Fixed Iterations", () =>
             Origami.IntSlider(paper, "time_maxiter_v", MaxFixedIterations, v =>
             {
                 MaxFixedIterations = v;
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }, 1, 15).Show());
 
-        InspectorRow.Draw(paper, "time_scale", "Default Time Scale", () =>
+        EditorGUI.Row(paper, "time_scale", "Default Time Scale", () =>
             Origami.Slider(paper, "time_scale_v", DefaultTimeScale, v =>
             {
                 DefaultTimeScale = v;
                 Apply();
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }, 0f, 10f).Format("F2").Show());
     }
 }

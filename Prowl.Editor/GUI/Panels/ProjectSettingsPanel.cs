@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 
 using Prowl.Editor.Core;
@@ -14,15 +15,17 @@ using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.Panels;
 
-[EditorWindow("General/Project Settings")]
 public class ProjectSettingsPanel : DockPanel
 {
+    [MenuItem("Window/General/Project Settings", priority: 8)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(ProjectSettingsPanel));
+
     public override string Title => Loc.Get("panel.project_settings");
     public override string Icon => EditorIcons.Gear;
 
     private int _selectedIndex;
 
-    // Shared with ProjectSettingsRegistry.Save keeping the serializer options identical
+    // Shared with EditorRegistries.SaveSettings keeping the serializer options identical
     // means the before/after JSON comparison is stable field-by-field.
     private static readonly JsonSerializerOptions s_jsonOpts = new()
     {
@@ -37,7 +40,7 @@ public class ProjectSettingsPanel : DockPanel
     /// widget mutation becomes undoable without each settings class needing to know
     /// about Undo.
     /// </summary>
-    private static void DiffAndRegisterUndo(ProjectSettingsRegistry.SettingsEntry entry, string beforeJson)
+    private static void DiffAndRegisterUndo(EditorRegistries.SettingsEntry entry, string beforeJson)
     {
         if (Application.IsPlaying) return;
 
@@ -53,15 +56,15 @@ public class ProjectSettingsPanel : DockPanel
             redo: () => ApplyJsonToEntry(capturedEntry, afterJson));
     }
 
-    private static void ApplyJsonToEntry(ProjectSettingsRegistry.SettingsEntry entry, string json)
+    private static void ApplyJsonToEntry(EditorRegistries.SettingsEntry entry, string json)
     {
         try
         {
             var loaded = (ProjectSettingsBase?)JsonSerializer.Deserialize(json, entry.Type, s_jsonOpts);
             if (loaded == null) return;
-            ProjectSettingsRegistry.CopyFields(loaded, entry.Instance);
+            EditorRegistries.CopySettingsFields(loaded, entry.Instance);
             entry.Instance.Apply();
-            ProjectSettingsRegistry.Save(entry);
+            EditorRegistries.SaveSettings(entry);
         }
         catch (Exception ex)
         {
@@ -74,11 +77,11 @@ public class ProjectSettingsPanel : DockPanel
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 
-        var entries = ProjectSettingsRegistry.Entries;
+        var entries = EditorRegistries.SettingsEntries;
         if (entries.Count == 0)
         {
             paper.Box("ps_empty").Size(width, height)
-                .Text("No settings registered", font)
+                .Text(Loc.Get("projset.none"), font)
                 .TextColor(EditorTheme.Ink300)
                 .FontSize(EditorTheme.FontSize)
                 .Alignment(TextAlignment.MiddleCenter);
@@ -87,56 +90,24 @@ public class ProjectSettingsPanel : DockPanel
 
         if (_selectedIndex >= entries.Count) _selectedIndex = 0;
 
-        using (paper.Row("ps_root").Size(width, height).Enter())
+        // The entry index is used as the string id so the sidebar selection maps straight back to _selectedIndex.
+        var cats = new List<(string id, string label, string icon)>();
+        for (int i = 0; i < entries.Count; i++)
         {
-            // Left sidebar category list
-            float sidebarW = 220f;
-            using (paper.Column("ps_sidebar")
-                .Padding(new UnitValue(EditorTheme.SidePixelPadding))
-                .Width(sidebarW).Height(height)
-                .BackgroundColor(EditorTheme.Neutral200)
-                .Enter())
-            {
-                paper.Box("ps_sidebar_header")
-                    .Height(EditorTheme.RowHeight).ChildLeft(EditorTheme.Padding)
-                    .Text("Settings", font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleLeft);
+            var e = entries[i];
+            if (e.Instance == null || !e.Instance.DrawInProjectSettingsPanel) continue;
+            string icon = string.IsNullOrEmpty(e.Icon) ? EditorIcons.Gear : e.Icon;
+            cats.Add((i.ToString(), e.Name, icon));
+        }
 
-                Origami.Separator(paper, "ps_sidebar_sep").Show();
+        using (paper.Row("ps_root").Size(width, height).Clip().Enter())
+        {
+            float side = EditorGUI.Sidebar(paper, "ps_side", cats.ToArray(), _selectedIndex.ToString(),
+                c => { if (int.TryParse(c, out int idx)) _selectedIndex = idx; });
+            paper.Box("ps_vdiv").Width(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
-                for (int i = 0; i < entries.Count; i++)
-                {
-                    int idx = i;
-                    var entry = entries[i];
-
-                    if (entry.Instance == null || !entry.Instance.DrawInProjectSettingsPanel) continue;
-
-                    bool isSelected = _selectedIndex == i;
-                    string icon = string.IsNullOrEmpty(entry.Icon) ? EditorIcons.Gear : entry.Icon;
-
-                    paper.Box($"ps_cat_{i}")
-                        .Height(EditorTheme.RowHeight + 4).ChildLeft(EditorTheme.Padding)
-                        .Rounded(EditorTheme.Roundness * 0.5f)
-                        .Margin(0,0,0,EditorTheme.VerticalNavbarSpacing)
-                        .BackgroundColor(isSelected ? EditorTheme.Purple400 : Color.Transparent)
-                        .Hovered.BackgroundColor(isSelected ? EditorTheme.Purple400 : EditorTheme.Ink200).End()
-                        .Text($" {icon}  {entry.Name}", font)
-                        .TextColor(isSelected ? EditorTheme.Ink500 : EditorTheme.Ink400)
-                        .FontSize(EditorTheme.FontSize - 1)
-                        .Alignment(TextAlignment.MiddleLeft)
-                        .OnClick(idx, (id, _) => _selectedIndex = id);
-                }
-            }
-
-            // Separator
-            paper.Box("ps_divider").Width(1).Height(height).BackgroundColor(EditorTheme.Ink200);
-
-            // Right content selected settings.
-            // Wrap the draw with a JSON snapshot: System.Text.Json is the same serializer
-            // used to persist settings, so it handles properties, fields, lists, arrays
-            // uniformly (unlike Echo which is fields-only). Anything the user changes in
-            // OnGUI becomes a coalescable undo step keyed by the settings name.
-            float contentW = width - sidebarW - 1;
+            // TODO: Port to using Echo to serialize to match how Project Settings serialize
+            float contentW = width - side - 1;
             var currentEntry = entries[_selectedIndex];
             string? beforeJson = null;
             if (!Application.IsPlaying)
@@ -145,13 +116,14 @@ public class ProjectSettingsPanel : DockPanel
                 catch { beforeJson = null; }
             }
 
-            Origami.ScrollView(paper, "ps_content", contentW, height)
-                .Padding(EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding, EditorTheme.SidePixelPadding)
-                .Body(() =>
+            Origami.ScrollView(paper, "ps_scroll", contentW, height).Body(() =>
             {
-                paper.Box("ps_content_pad").Height(EditorTheme.Padding * 2);
-                currentEntry.Instance.OnGUI(paper, contentW - EditorTheme.SidePixelPadding * 2);
-                paper.Box("ps_content_pad2").Height(EditorTheme.Padding * 4);
+                using (paper.Column("ps_content").Height(UnitValue.Auto).Padding(0, 0, 8, 12).Enter())
+                {
+                    EditorGUI.SectionHeader(paper, "ps_content_h", currentEntry.Name, first: true);
+                    currentEntry.Instance.OnGUI(paper, contentW);
+                    paper.Box("ps_content_pad").Height(EditorTheme.Padding * 4);
+                }
             });
 
             if (beforeJson != null) DiffAndRegisterUndo(currentEntry, beforeJson);

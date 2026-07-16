@@ -38,7 +38,7 @@ public static class PropertyGridUtils
             .Show();
     }
 
-    /// <summary>Draw a single field with label and control. Routes through the editor's PropertyEditorRegistry.</summary>
+    /// <summary>Draw a single field with label and control.</summary>
     public static void DrawField(Paper paper, string id, string label, Type type, object? value,
         Action<object?> onChange, int depth = 0)
     {

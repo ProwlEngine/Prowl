@@ -15,10 +15,6 @@ public enum UISurface : byte
     /// Items participate in frustum culling and back-to-front sorting.</summary>
     World    = 0,
 
-    /// <summary>Drawn into the camera's <c>colorRT</c> after Transparent and before PostProcess,
-    /// with a screen-pixel orthographic projection. Post-process effects therefore apply on top.</summary>
-    Camera   = 1,
-
     /// <summary>Drawn directly to the back-buffer (or camera target) after the final blit
     /// and gizmos. Bypasses HDR tonemapping and post-process.</summary>
     Overlay  = 2,

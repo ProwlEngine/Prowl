@@ -342,7 +342,6 @@ public class DefaultRenderPipeline : RenderPipeline
             if (data.IsSceneView)
             {
                 // The scene view shows every canvas in world space, regardless of RenderMode.
-                UIRenderTree.CollectFor(css.Scene, UISurface.Camera, s_uiTmp);
                 UIRenderTree.CollectFor(css.Scene, UISurface.Overlay, s_uiTmp);
             }
             if (s_uiTmp.Count == 0) return;
@@ -366,6 +365,12 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private void DrawUIItems(CommandBuffer cmd, List<IRenderable> items, ViewerData viewer)
     {
+        // GetPassesWithTag allocates a fresh list per call, and UI items are drawn back-to-back with the
+        // same shared material - so memoize the resolved pass index for the last shader seen instead of
+        // re-querying (and allocating) for every one of potentially hundreds of items each frame.
+        Shader? cachedShader = null;
+        int cachedPass = -1;
+
         for (int i = 0; i < items.Count; i++)
         {
             var item = (UIRenderItem)items[i];
@@ -376,24 +381,21 @@ public class DefaultRenderPipeline : RenderPipeline
             if (mesh == null || mesh.VertexCount <= 0) continue;
 
             // UI materials carry a single pass tagged RenderOrder=UI.
-            var uiPasses = material.Shader.GetPassesWithTag("RenderOrder", "UI");
-            if (uiPasses.Count == 0) continue;
-
-            // Per-item clip rect (RectMask). ScissorPixels are framebuffer pixels (bottom-left origin).
-            if (item.ScissorPixels is { } sp)
-            {
-                int sx = (int)MathF.Floor(sp.X);
-                int sy = (int)MathF.Floor(sp.Y);
-                int sw = Math.Max(0, (int)MathF.Ceiling(sp.X + sp.Z) - sx);
-                int sh = Math.Max(0, (int)MathF.Ceiling(sp.Y + sp.W) - sy);
-                cmd.SetScissorRect(0, (uint)sx, (uint)sy, (uint)sw, (uint)sh);
-            }
+            int uiPass;
+            if (ReferenceEquals(material.Shader, cachedShader))
+                uiPass = cachedPass;
             else
             {
-                cmd.SetFullScissorRects();
+                var uiPasses = material.Shader.GetPassesWithTag("RenderOrder", "UI");
+                uiPass = uiPasses.Count > 0 ? uiPasses[0] : -1;
+                cachedShader = material.Shader;
+                cachedPass = uiPass;
             }
+            if (uiPass < 0) continue;
 
-            cmd.DrawMesh(mesh, material, uiPasses[0], model, properties);
+            // Clipping (RectMask) is done per-fragment in the shader via the item's clip uniforms, so
+            // no GPU scissor here - that lets the clip follow rotation/scale and round its corners.
+            cmd.DrawMesh(mesh, material, uiPass, model, properties);
         }
 
         // Leave the scissor test off so the next command buffer isn't clipped.

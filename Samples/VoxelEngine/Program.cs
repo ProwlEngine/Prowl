@@ -318,8 +318,6 @@ public class VoxelChunk : MonoBehaviour
 
     public override void OnEnable()
     {
-        meshRenderer = GameObject.AddComponent<MeshRenderer>();
-        meshRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
     }
 
     public byte GetVoxel(int x, int y, int z)
@@ -339,6 +337,12 @@ public class VoxelChunk : MonoBehaviour
 
     public void GenerateChunk()
     {
+        if (meshRenderer == null)
+        {
+            meshRenderer = GameObject.AddComponent<MeshRenderer>();
+            meshRenderer.Material = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        }
+
         // Generate simple terrain with world coordinates
         int worldOffsetX = chunkPosition.X * ChunkWidth;
         int worldOffsetZ = chunkPosition.Z * ChunkDepth;

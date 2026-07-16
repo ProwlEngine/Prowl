@@ -28,14 +28,16 @@ public sealed class Texture3D : Texture, ISerializable
         }
     }
 
+    private uint _width, _height, _depth;
+
     /// <summary>The width of this <see cref="Texture3D"/>.</summary>
-    public uint Width { get; private set; }
+    public uint Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
 
     /// <summary>The height of this <see cref="Texture3D"/>.</summary>
-    public uint Height { get; private set; }
+    public uint Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
 
     /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
-    public uint Depth { get; private set; }
+    public uint Depth { get { EnsureNotDisposed(); return _depth; } private set => _depth = value; }
 
     private bool _generateMipmaps;
 
@@ -58,6 +60,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void SetDataPtr(void* ptr, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)
     {
+        EnsureNotDisposed();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
 
         uint bytes = boxWidth * boxHeight * boxDepth * ImageFormat.GetSizeInBytes();
@@ -70,6 +73,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void SetData<T>(Memory<T> data, int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth) where T : unmanaged
     {
+        EnsureNotDisposed();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
         if (data.Length < boxWidth * boxHeight * boxDepth)
             throw new ArgumentException("Not enough voxel data", nameof(data));
@@ -83,6 +87,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public void SetData<T>(Memory<T> data) where T : unmanaged
     {
+        EnsureNotDisposed();
         SetData(data, 0, 0, 0, Width, Height, Depth);
     }
 
@@ -139,6 +144,7 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe void RecreateImage(uint width, uint height, uint depth)
     {
+        EnsureNotDisposed();
         ValidateTextureSize(width, height, depth);
 
         Width = width;

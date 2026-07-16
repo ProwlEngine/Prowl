@@ -344,7 +344,7 @@ public static class ScriptAssemblyManager
 
     /// <summary>
     /// Nulls the static field and unloads the context. The only strong reference to the context
-    /// lives in this method's <c>ctx</c> local, which goes out of scope on return — so the caller's
+    /// lives in this method's <c>ctx</c> local, which goes out of scope on return so the caller's
     /// GC loop can collect it. NoInlining keeps that local out of the caller's stack frame.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]

@@ -44,7 +44,7 @@ public class SkinnedMeshRendererEditor : CustomEditor
             if (string.IsNullOrEmpty(name)) name = $"BlendShape {index}";
             float weight = renderer.GetBlendShapeWeight(index);
 
-            InspectorRow.Draw(paper, $"{id}_bs_{index}", name, () =>
+            EditorGUI.Row(paper, $"{id}_bs_{index}", name, () =>
                 Origami.Slider(paper, $"{id}_bs_{index}_v", weight,
                     v => renderer.SetBlendShapeWeight(index, v),
                     0f, 100f).Format("F1").Show());

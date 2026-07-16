@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Text.Json;
 
@@ -43,6 +42,9 @@ public class EditorSettings
     // Shortcuts only user-overridden bindings are stored
     public Dictionary<string, ShortcutBinding> ShortcutOverrides { get; set; } = new();
 
+    // IDs of interactive guides/tutorials the user has already completed or skipped.
+    public List<string> SeenGuides { get; set; } = new();
+
     // Theme
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
 
@@ -52,42 +54,9 @@ public class EditorSettings
         var t = Theme;
         t.InitRamps();
 
-        // Ramp stops -> EditorTheme ramp fields
-        EditorTheme.Neutral100 = t.Neutral.GetStop(0);
-        EditorTheme.Neutral200 = t.Neutral.GetStop(1);
-        EditorTheme.Neutral300 = t.Neutral.GetStop(2);
-        EditorTheme.Neutral400 = t.Neutral.GetStop(3);
-        EditorTheme.Neutral500 = t.Neutral.GetStop(4);
-
-        EditorTheme.Purple100 = t.Purple.GetStop(0);
-        EditorTheme.Purple200 = t.Purple.GetStop(1);
-        EditorTheme.Purple300 = t.Purple.GetStop(2);
-        EditorTheme.Purple400 = t.Purple.GetStop(3);
-        EditorTheme.Purple500 = t.Purple.GetStop(4);
-        EditorTheme.Purple600 = t.Purple.GetStop(5);
-        EditorTheme.Purple700 = t.Purple.GetStop(6);
-
-        EditorTheme.Blue100 = t.Blue.GetStop(0);
-        EditorTheme.Blue200 = t.Blue.GetStop(1);
-        EditorTheme.Blue300 = t.Blue.GetStop(2);
-        EditorTheme.Blue400 = t.Blue.GetStop(3);
-        EditorTheme.Blue500 = t.Blue.GetStop(4);
-        EditorTheme.Blue600 = t.Blue.GetStop(5);
-        EditorTheme.Blue700 = t.Blue.GetStop(6);
-
-        EditorTheme.Red100 = t.Red.GetStop(0);
-        EditorTheme.Red200 = t.Red.GetStop(1);
-        EditorTheme.Red300 = t.Red.GetStop(2);
-        EditorTheme.Red400 = t.Red.GetStop(3);
-        EditorTheme.Red500 = t.Red.GetStop(4);
-        EditorTheme.Red600 = t.Red.GetStop(5);
-        EditorTheme.Red700 = t.Red.GetStop(6);
-
-        EditorTheme.Ink100 = t.Ink.GetStop(0);
-        EditorTheme.Ink200 = t.Ink.GetStop(1);
-        EditorTheme.Ink300 = t.Ink.GetStop(2);
-        EditorTheme.Ink400 = t.Ink.GetStop(3);
-        EditorTheme.Ink500 = t.Ink.GetStop(4);
+        // Origami's default theme is the base; this data is the customization overlaid on top of it
+        // (see EditorTheme.BuildOrigamiTheme). SyncOrigami below rebuilds the live palette from it.
+        EditorTheme.Customization = t;
 
         EditorTheme.DefaultFontName = t.DefaultFontName;
         EditorTheme.DefaultBoldFontName = t.DefaultBoldFontName;
@@ -98,16 +67,33 @@ public class EditorSettings
 
         // Sizing
         EditorTheme.MenuBarHeight = t.MenuBarHeight;
+        EditorTheme.StatusBarHeight = t.StatusBarHeight;
         EditorTheme.RowHeight = t.RowHeight;
         EditorTheme.FontSize = t.FontSize;
         EditorTheme.LabelWidth = t.LabelWidth;
         EditorTheme.Spacing = t.Spacing;
         EditorTheme.Padding = t.Padding;
-        EditorTheme.SplitterSize = t.SplitterSize;
-        EditorTheme.DockPadding = t.DockPadding;
+        EditorTheme.SplitterSize = t.DockSpacing;
+        EditorTheme.DockPadding = t.DockSpacing;
         EditorTheme.TabBarHeight = t.TabBarHeight;
         EditorTheme.TabPadding = t.TabPadding;
         EditorTheme.Roundness = t.Roundness;
+
+        // Effects
+        EditorTheme.GlassBlur = t.GlassBlur;
+        EditorTheme.BlurAmount = t.BlurAmount;
+        EditorTheme.DropShadows = t.DropShadows;
+        EditorTheme.AccentGlow = t.AccentGlow;
+        EditorTheme.AntiAliasing = t.AntiAliasing;
+        EditorTheme.AnimatedBackground = t.AnimatedBackground;
+        EditorTheme.BackgroundSpeed = t.BackgroundSpeed;
+        EditorTheme.BackgroundStyle = t.BackgroundStyle;
+        EditorTheme.BackgroundColorA = ColorRamp.ParseHex(t.BackgroundColorA);
+        EditorTheme.BackgroundColorB = ColorRamp.ParseHex(t.BackgroundColorB);
+        EditorTheme.BgShowGradients = t.BgShowGradients;
+        EditorTheme.BgShowStars = t.BgShowStars;
+        EditorTheme.BgShowComets = t.BgShowComets;
+        EditorTheme.BackgroundVoidColor = ColorRamp.ParseHex(t.BackgroundVoidColor);
 
         // Push the freshly-applied editor theme into Origami. Brief lerp so user-visible
         // theme tweaks animate instead of snapping.
@@ -160,11 +146,5 @@ public class EditorSettings
         Theme = EditorThemeData.CreateDefault();
         ApplyTheme();
         Save();
-    }
-
-    private static Color ParseColor(string hex)
-    {
-        try { return ColorTranslator.FromHtml(hex); }
-        catch { return Color.Magenta; }
     }
 }

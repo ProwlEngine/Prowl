@@ -92,7 +92,7 @@ public sealed class SceneLightSystem : IDisposable
             if (light == null) continue;
 
             // Fully-baked lights live entirely in the lightmap + probes excluded from the realtime
-            // set. (Mixed lights stay realtime — only their indirect bounce is baked.)
+            // set. (Mixed lights stay realtime only their indirect bounce is baked.)
             if (light is Light bakedLight && bakedLight.BakeMode == LightBakeMode.Baked)
                 continue;
 

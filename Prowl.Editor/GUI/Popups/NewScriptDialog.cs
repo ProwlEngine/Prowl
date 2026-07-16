@@ -8,6 +8,7 @@ using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 
 using Color = System.Drawing.Color;
 
@@ -43,15 +44,14 @@ public static class NewScriptDialog
         s_selectedIndex = 0;
         s_onCreated = onCreated;
 
-        ScriptTemplateRegistry.Initialize();
-        s_templates = ScriptTemplateRegistry.Templates;
+        s_templates = EditorRegistries.ScriptTemplates;
         if (s_templates.Count == 0)
         {
             Runtime.Debug.LogWarning("NewScriptDialog: no script templates registered.");
             return;
         }
 
-        Modal.Push(new DialogModal { Title = "Create C# Script", DrawContent = DrawContent, Width = 560 });
+        Modal.Push(new DialogModal { Title = Loc.Get("menu.assets.create_script"), DrawContent = DrawContent, Width = 560 });
     }
 
     private static void DrawContent(Paper paper)
@@ -103,7 +103,7 @@ public static class NewScriptDialog
                                         .Width(UnitValue.Stretch()).Height(28)
                                         .Text(tpl.Name, font)
                                         .TextColor(EditorTheme.Ink500)
-                                        .FontSize(EditorTheme.FontSize - 1)
+                                        .FontSize(EditorTheme.FontSizeSmall)
                                         .Alignment(TextAlignment.MiddleLeft);
                                 }
                             }
@@ -123,7 +123,7 @@ public static class NewScriptDialog
                         .Width(UnitValue.Stretch()).Height(22)
                         .Text(tpl.Name, font)
                         .TextColor(EditorTheme.Ink500)
-                        .FontSize(EditorTheme.FontSize + 1)
+                        .FontSize(EditorTheme.FontSizeLarge)
                         .Alignment(TextAlignment.MiddleLeft);
 
                     // Auto-height + wrap so long descriptions aren't clipped.
@@ -131,25 +131,25 @@ public static class NewScriptDialog
                         .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(48)
                         .Text(tpl.Description, font)
                         .TextColor(EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize - 2)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.Left)
                         .Wrap(Scribe.TextWrapMode.Wrap);
                 }
 
                 Origami.TextField(paper, "scr_name", s_name, v => s_name = v)
-                    .Placeholder("Name").Width(UnitValue.Stretch()).Show();
+                    .Placeholder(Loc.Get("inspector.name")).Width(UnitValue.Stretch()).Show();
 
                 // Validation hint green when valid, red when not. Always visible so the
                 // user knows why Create is disabled.
                 if (font != null)
                 {
-                    string hint = ok ? $"Will create {s_name}.cs" : (error ?? "");
-                    var col = ok ? Color.FromArgb(255, 90, 180, 100) : Color.FromArgb(255, 220, 110, 110);
+                    string hint = ok ? Loc.Get("newscript.will_create", new { name = s_name }) : (error ?? "");
+                    var col = ok ? EditorTheme.Green400 : EditorTheme.Red400;
                     paper.Box("scr_hint")
                         .Width(UnitValue.Stretch()).Height(UnitValue.Auto).MinHeight(18)
                         .Text(hint, font)
                         .TextColor(col)
-                        .FontSize(EditorTheme.FontSize - 2)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.Left)
                         .Wrap(Scribe.TextWrapMode.Wrap);
 
@@ -159,7 +159,7 @@ public static class NewScriptDialog
                         .Width(UnitValue.Stretch()).Height(16)
                         .Text(folderDisplay, font)
                         .TextColor(EditorTheme.Ink300)
-                        .FontSize(EditorTheme.FontSize - 3)
+                        .FontSize(EditorTheme.FontSizeSmall)
                         .Alignment(TextAlignment.MiddleLeft);
                 }
             }
@@ -170,7 +170,7 @@ public static class NewScriptDialog
         // so the user sees the error hint rather than clicking a dead button.
         using (paper.Row("scr_btns").Height(EditorTheme.RowHeight).ChildLeft(UnitValue.Stretch()).RowBetween(8).Enter())
         {
-            Origami.Button(paper, "scr_cancel", "Cancel", () => { Modal.Pop(); }).Width(90).Show();
+            Origami.Button(paper, "scr_cancel", Loc.Get("common.cancel"), () => { Modal.Pop(); }).Width(90).Show();
 
             if (ok)
             {
@@ -185,8 +185,8 @@ public static class NewScriptDialog
                     if (font != null)
                         paper.Box("scr_create_lbl")
                             .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                            .Text("Create", font)
-                            .TextColor(Color.White)
+                            .Text(Loc.Get("launcher.create"), font)
+                            .TextColor(EditorTheme.Ink700)
                             .FontSize(EditorTheme.FontSize)
                             .Alignment(TextAlignment.MiddleCenter)
                             .IsNotInteractable();
@@ -203,7 +203,7 @@ public static class NewScriptDialog
                     if (font != null)
                         paper.Box("scr_create_dis_lbl")
                             .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                            .Text("Create", font)
+                            .Text(Loc.Get("launcher.create"), font)
                             .TextColor(EditorTheme.Ink300)
                             .FontSize(EditorTheme.FontSize)
                             .Alignment(TextAlignment.MiddleCenter)
@@ -320,15 +320,15 @@ public static class NewScriptDialog
     private static (bool ok, string? error) Validate(string name, string folder)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return (false, "Name is required.");
+            return (false, Loc.Get("newscript.err_required"));
         if (!s_identifier.IsMatch(name))
-            return (false, "Name must start with a letter or underscore, then letters/digits only.");
+            return (false, Loc.Get("newscript.err_invalid"));
         if (s_reserved.Contains(name))
-            return (false, $"'{name}' is a reserved C# keyword.");
+            return (false, Loc.Get("newscript.err_reserved", new { name = name }));
 
         string abs = AssetCreateMenu.GetAbsoluteFolder(folder);
         if (File.Exists(Path.Combine(abs, name + ".cs")))
-            return (false, $"{name}.cs already exists in this folder.");
+            return (false, Loc.Get("newscript.err_exists", new { name = name }));
 
         return (true, null);
     }

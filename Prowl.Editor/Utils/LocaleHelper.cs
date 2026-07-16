@@ -13,6 +13,8 @@ public static class LocaleHelper
 {
     public static readonly string[] Codes = { "en", "de", "fr", "es", "ja", "zh", "ko", "pt", "ru", "it", "pl", "tr" };
     public static readonly string[] Names = { "English", "Deutsch", "Francais", "Espanol", "Japanese", "Chinese", "Korean", "Portugues", "Russian", "Italiano", "Polski", "Turkce" };
+    // Short region tag shown as a chip next to each language (parallels Codes).
+    public static readonly string[] Tags = { "US", "DE", "FR", "ES", "JP", "CN", "KR", "PT", "RU", "IT", "PL", "TR" };
 
     public static int GetIndex(string locale)
     {

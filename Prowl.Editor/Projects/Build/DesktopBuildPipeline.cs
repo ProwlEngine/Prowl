@@ -100,7 +100,7 @@ public class DesktopBuildPipeline : BuildPipeline
             }
 
             // 1c. Reimport all build scenes to ensure caches are fresh
-            var db = EditorAssetDatabase.Instance;
+            var db = EditorAssetBackend.Instance;
             foreach (var sceneEntry in enabledScenes)
             {
                 if (db != null && sceneEntry.SceneGuid != Guid.Empty)
@@ -266,6 +266,14 @@ public class DesktopBuildPipeline : BuildPipeline
                 }
             }
 
+            // 7b. macOS ships as a real .app bundle, not a bare folder of files.
+            if (desktopProfile.Platform == BuildTarget.MacOS)
+            {
+                progress?.Log("Bundling macOS .app...", 0.92f);
+                var general = EditorRegistries.GetSettings<GeneralSettings>();
+                BundleMacApp(outputDirectory, project.Name, general.ProductName, general.CompanyName, general.Version);
+            }
+
             // 8. Clean temp
             if (Directory.Exists(buildTempDir))
                 try { Directory.Delete(buildTempDir, true); } catch { }
@@ -299,7 +307,7 @@ public class DesktopBuildPipeline : BuildPipeline
     private void GeneratePlayerSource(Project project, BuildSettings settings, DesktopBuildProfile desktopProfile, Guid defaultSceneGuid, string outputDir, List<string> gameAssemblyNames)
     {
         string productName = "Prowl Game";
-        try { productName = ProjectSettingsRegistry.Get<GeneralSettings>().ProductName; } catch { }
+        try { productName = EditorRegistries.GetSettings<GeneralSettings>().ProductName; } catch { }
 
         // C# array literal of user game assemblies to load at startup (dependency order).
         string gameAssembliesLiteral = string.Join(", ", gameAssemblyNames.Select(n => $"\"{n}\""));
@@ -524,6 +532,8 @@ public class DesktopBuildPipeline : BuildPipeline
 
             class DesktopPlayer : Prowl.Runtime.Game
             {
+                private Prowl.Runtime.PlayerAssetBackend? _assetDb;
+
                 public override void Initialize()
                 {
                     Prowl.Runtime.Application.IsPlaying = true;
@@ -544,9 +554,10 @@ public class DesktopBuildPipeline : BuildPipeline
                     Prowl.Runtime.BuiltInAssets.Initialize();
 
                     // Initialize asset database
-                    var db = new Prowl.Runtime.PlayerAssetDatabase(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
+                    var db = new Prowl.Runtime.PlayerAssetBackend(Prowl.Runtime.AssetPackagingMode.{{settings.PackagingMode}}, "Content");
                     Prowl.Runtime.AssetDatabase.Current = db;
                     Prowl.Runtime.GameResources.Initialize(db.ResourcesMap);
+                    _assetDb = db;
 
                     // Apply the async-loading toggle before the scene loads (component OnEnable may resolve AssetRefs).
                     Prowl.Runtime.PlayerSettingsLoader.ApplyAssetConfig(Path.Combine(Prowl.Runtime.Application.DataPath, "Content", "Settings"));
@@ -563,7 +574,12 @@ public class DesktopBuildPipeline : BuildPipeline
 
                 }
 
-                public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene) => scene?.Update();
+                public override void OnUpdate(Prowl.Runtime.Resources.Scene? scene)
+                {
+                    _assetDb?.TickIdleSweep();
+                    scene?.Update();
+                }
+
                 public override void OnRender(Prowl.Runtime.Resources.Scene? scene) => scene?.Render();
                 public override void OnGui(Prowl.Runtime.Resources.Scene? scene, Prowl.PaperUI.Paper paper) => scene?.OnGui(paper);
             }
@@ -812,5 +828,71 @@ public class DesktopBuildPipeline : BuildPipeline
                 File.Move(pdbPath, pdbDest, true);
             }
         }
+    }
+
+    /// <summary>
+    /// Wraps a finished publish output into a real "ProductName.app" bundle: everything moves under
+    /// Contents/MacOS unchanged (so relative lookups like "Content/Settings" keep working), plus a
+    /// minimal Contents/Info.plist. Does NOT code-sign or notarize - Gatekeeper will still show an
+    /// "unidentified developer" warning until the user right-clicks Open (or runs `xattr -cr`).
+    /// </summary>
+    private static void BundleMacApp(string outputDir, string executableName, string productName, string companyName, string version)
+    {
+        // Snapshot BEFORE creating the bundle folder so it never sweeps up itself.
+        var existingEntries = Directory.GetFileSystemEntries(outputDir).ToList();
+
+        string appDir = Path.Combine(outputDir, $"{productName}.app");
+        string macOsDir = Path.Combine(appDir, "Contents", "MacOS");
+        Directory.CreateDirectory(macOsDir);
+
+        foreach (var entry in existingEntries)
+        {
+            string dest = Path.Combine(macOsDir, Path.GetFileName(entry));
+            if (Directory.Exists(entry))
+                Directory.Move(entry, dest);
+            else
+                File.Move(entry, dest);
+        }
+
+        // Windows can't hold POSIX exec bits - a .app built there will need `chmod +x` once it
+        // actually reaches a Mac.
+        string exePath = Path.Combine(macOsDir, executableName);
+        if (!OperatingSystem.IsWindows() && File.Exists(exePath))
+        {
+            try
+            {
+                UnixFileMode mode = File.GetUnixFileMode(exePath);
+                File.SetUnixFileMode(exePath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+            }
+            catch { /* best-effort */ }
+        }
+
+        string bundleId = $"com.{SanitizeBundleIdSegment(companyName)}.{SanitizeBundleIdSegment(productName)}";
+
+        string plist = $"""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>CFBundleName</key><string>{productName}</string>
+                <key>CFBundleDisplayName</key><string>{productName}</string>
+                <key>CFBundleExecutable</key><string>{executableName}</string>
+                <key>CFBundleIdentifier</key><string>{bundleId}</string>
+                <key>CFBundlePackageType</key><string>APPL</string>
+                <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+                <key>CFBundleVersion</key><string>{version}</string>
+                <key>CFBundleShortVersionString</key><string>{version}</string>
+                <key>NSHighResolutionCapable</key><true/>
+            </dict>
+            </plist>
+            """;
+        File.WriteAllText(Path.Combine(appDir, "Contents", "Info.plist"), plist);
+    }
+
+    // Bundle identifier segments are restricted to alphanumerics, dots and hyphens.
+    private static string SanitizeBundleIdSegment(string s)
+    {
+        string cleaned = new string([.. s.Where(c => char.IsLetterOrDigit(c) || c is '-' or '.')]);
+        return cleaned.Length > 0 ? cleaned : "prowlgame";
     }
 }

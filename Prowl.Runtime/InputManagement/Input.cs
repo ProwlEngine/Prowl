@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.PaperUI;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -60,6 +61,10 @@ public static class Input
 
     // Keyboard
     public static char? GetPressedChar() => Current.GetPressedChar();
+
+    /// <summary>The characters typed this frame, read non-destructively. Prefer this over
+    /// <see cref="GetPressedChar"/> for text input - multiple consumers can read it in the same frame.</summary>
+    public static string InputString => Current.InputString;
     public static bool GetKey(KeyCode key) => Current.GetKey(key);
     public static bool GetKeyDown(KeyCode key) => Current.GetKeyDown(key);
     public static bool GetKeyUp(KeyCode key) => Current.GetKeyUp(key);
@@ -69,6 +74,10 @@ public static class Input
     public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
     public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
     public static void SetCursorVisible(bool visible, int miceIndex = 0) => Current.SetCursorVisible(visible, miceIndex);
+
+    /// <summary>Sets the hardware cursor shape. Hook this to <c>Paper.OnCursorChange</c> so hovered
+    /// elements can request a shape (pointer, resize, text, ...).</summary>
+    public static void SetCursorShape(PaperCursor shape, int miceIndex = 0) => Current.SetCursorShape(shape, miceIndex);
 
     /// <summary>
     /// Whether the cursor is currently locked (hidden + recentered each frame).

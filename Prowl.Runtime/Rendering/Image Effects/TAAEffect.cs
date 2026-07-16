@@ -125,7 +125,7 @@ public sealed class TAAEffect : ImageEffect
         _mat.SetFloat("_Sharpness", Maths.Clamp(Sharpness, 0.0f, 1.0f));
         _mat.SetTexture("_HistoryTex", _history.MainTexture);
 
-        // Bind motion vectors and depth — these are globals set by the pipeline,
+        // Bind motion vectors and depth these are globals set by the pipeline,
         // but the shader uses its own uniform names so we must bind explicitly.
         if (context.MotionVectors != null)
             _mat.SetTexture("_MotionVectorsTex", context.MotionVectors);

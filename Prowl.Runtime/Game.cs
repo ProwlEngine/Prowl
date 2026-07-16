@@ -78,6 +78,10 @@ public abstract class Game
             _paperRenderer.Initialize(fbSize.X, fbSize.Y);
             _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
+            // Apply the hovered element's requested cursor to the OS window.
+            _paper.OnCursorChange += c => Input.SetCursorShape(c);
+
+            _paper.DevTools.Enabled = true;
 
             BuiltInAssets.Initialize();
 
@@ -99,9 +103,6 @@ public abstract class Game
                 // Input interaction timing (Hold/Tap/MultiTap windows) is real-world timing, so it uses
                 // UNSCALED delta
                 Input.UpdateActions(Time.UnscaledDeltaTime);
-
-                // UI input runs after low-level Input is fresh and before script Updates
-                UIEventSystem.Tick(time.Time);
 
                 BeginUpdate();
 
@@ -373,7 +374,7 @@ public abstract class Game
     /// <see cref="PaperRenderer.UpdateProjection"/>.
     /// <para>
     /// A widget declared <c>Width(100)</c> occupies 100 logical points = 100 physical pixels at
-    /// 1× DPI and 200 physical pixels at 2× (Retina) DPI — the same physical size on screen
+    /// 1× DPI and 200 physical pixels at 2× (Retina) DPI the same physical size on screen
     /// regardless of display density, with higher pixel quality on HiDPI displays.
     /// </para>
     /// </summary>
@@ -428,13 +429,10 @@ public abstract class Game
         if (wheelDelta != 0)
             _paper.SetPointerWheel(wheelDelta);
 
-        // Handle keyboard input
-        char? c = Input.GetPressedChar();
-        while (c != null)
-        {
-            _paper.AddInputCharacter((c.Value).ToString());
-            c = Input.GetPressedChar();
-        }
+        // Handle keyboard input. InputString is read non-destructively, so the GameObject UI (and any
+        // user UI) still sees the same characters this frame.
+        foreach (char ch in Input.InputString)
+            _paper.AddInputCharacter(ch.ToString());
 
         // Handle key states for keys
         // Fortunately Papers key enums have almost all the same names

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Vector;
 
@@ -72,8 +73,10 @@ public class AnimationComponent : MonoBehaviour
     private AnimationClip? ResolveAutoPlayClip()
     {
         var clip = DefaultClip.Res;
+        // CollectionsMarshal.AsSpan: List<T>'s indexer would copy the value-type element, so
+        // AssetRef.Res's internal caching would mutate a throwaway copy and never actually stick.
         if (clip == null && Clips.Count > 0)
-            clip = Clips[0].Res;
+            clip = CollectionsMarshal.AsSpan(Clips)[0].Res;
         return clip;
     }
 
@@ -136,9 +139,13 @@ public class AnimationComponent : MonoBehaviour
     /// <summary>Play a clip by name (searches the Clips list).</summary>
     public void Play(string clipName)
     {
-        foreach (var clipRef in Clips)
+        // foreach over List<T> copies each element by value - .Res's caching would mutate the
+        // throwaway copy and never stick, so use CollectionsMarshal to resolve against the real
+        // backing elements (same reasoning as the DefaultClip.Res resolve above).
+        var clips = CollectionsMarshal.AsSpan(Clips);
+        for (int i = 0; i < clips.Length; i++)
         {
-            var clip = clipRef.Res;
+            var clip = clips[i].Res;
             if (clip != null && clip.Name == clipName)
             {
                 Play(clip);

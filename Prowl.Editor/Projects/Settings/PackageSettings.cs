@@ -6,11 +6,12 @@ using Prowl.PaperUI;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 /// <summary>
 /// Manages NuGet package references for user scripts.
-/// Reads/writes ProjectSettings/Packages.json which is consumed by ScriptCompiler.
+/// Persisted as ProjectSettings/Packages.yaml and consumed by ScriptCompiler via the settings registry.
 /// </summary>
 [ProjectSettings("Packages", EditorIcons.Cubes, order: 30, exportToBuild: false)]
 public class PackageSettings : ProjectSettingsBase
@@ -58,21 +59,21 @@ public class PackageSettings : ProjectSettingsBase
                 paper.Box($"pkg_name_{i}")
                     .Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(pkg.Name, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
 
                 Origami.Checkbox(paper, $"pkg_eo_{i}", pkg.EditorOnly, v =>
                     {
                         Packages[idx].EditorOnly = v;
                         Apply();
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     })
                     .LabelRight("Editor Only").Show();
 
                 paper.Box($"pkg_ver_{i}")
                     .Width(80).Height(EditorTheme.RowHeight)
                     .Text(pkg.Version, font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleRight);
 
                 paper.Box($"pkg_del_{i}")
@@ -84,7 +85,7 @@ public class PackageSettings : ProjectSettingsBase
                     {
                         Packages.RemoveAt(ci);
                         Apply();
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     });
             }
         }
@@ -93,7 +94,7 @@ public class PackageSettings : ProjectSettingsBase
         {
             paper.Box("pkg_empty").Height(30)
                 .Text("No packages installed", font).TextColor(EditorTheme.Ink300)
-                .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
         }
 
         paper.Box("pkg_sp2").Height(8);
@@ -102,10 +103,10 @@ public class PackageSettings : ProjectSettingsBase
         // Add new package
         Origami.Header(paper, "pkg_add_hdr", "Add Package").Show();
 
-        InspectorRow.Draw(paper, "pkg_add_name", "Package Name", () =>
+        EditorGUI.Row(paper, "pkg_add_name", "Package Name", () =>
             Origami.TextField(paper, "pkg_add_name_v", _newName, v => _newName = v).Show());
 
-        InspectorRow.Draw(paper, "pkg_add_ver", "Version", () =>
+        EditorGUI.Row(paper, "pkg_add_ver", "Version", () =>
             Origami.TextField(paper, "pkg_add_ver_v", _newVersion, v => _newVersion = v).Show());
 
         Origami.Checkbox(paper, "pkg_add_editor_only", _newEditorOnly, v => _newEditorOnly = v)
@@ -120,7 +121,7 @@ public class PackageSettings : ProjectSettingsBase
                     _newVersion = "";
                     _newEditorOnly = false;
                     Apply();
-                    ProjectSettingsRegistry.SaveAll();
+                    EditorRegistries.SaveSettings();
                 }
             }).Width(140).Show();
 

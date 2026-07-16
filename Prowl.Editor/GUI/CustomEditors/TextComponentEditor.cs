@@ -43,17 +43,27 @@ public class TextComponentEditor : CustomEditor
         // ── Main Settings ─────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_main", "Main Settings").Show();
 
-        PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(FontAsset), text.Font,
-            v => text.Font = (FontAsset)v!, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_font", "Font Asset", typeof(AssetRef<FontAsset>), text.Font,
+            v => text.Font = (AssetRef<FontAsset>)v!, 0);
 
         paper.Box($"{id}_sp0.1").Height(6);
 
-        InspectorRow.Draw(paper, $"{id}_size", "Font Size", () =>
+        EditorGUI.Row(paper, $"{id}_size", "Font Size", () =>
             Origami.NumericField<int>(paper, $"{id}_size_v", text.Size, v => text.Size = v).Show());
+
+        paper.Box($"{id}_sp0.15").Height(6);
+
+        EditorGUI.Row(paper, $"{id}_quality", "Quality", () =>
+            Origami.EnumDropdown<Prowl.Scribe.FontQuality>(paper, $"{id}_quality_v", text.Quality, v => text.Quality = v).Show());
+
+        paper.Box($"{id}_sp0.18").Height(6);
+
+        Origami.Checkbox(paper, $"{id}_rich", text.RichTextEnabled, v => text.RichTextEnabled = v)
+            .LabelRight("Rich Text").Show();
 
         paper.Box($"{id}_sp0.2").Height(6);
 
-        InspectorRow.Draw(paper, $"{id}_color", "Text Color", () =>
+        EditorGUI.Row(paper, $"{id}_color", "Text Color", () =>
         Origami.ColorField(paper, $"{id}_color_f", text.TextColor, v => text.TextColor = v).Show());
 
         paper.Box($"{id}_sp0.3").Height(6);
@@ -65,8 +75,8 @@ public class TextComponentEditor : CustomEditor
         // ── Extra Settings ────────────────────────────────────────
         Origami.Header(paper, $"{id}_h_extra", "Extra Settings").Show();
 
-        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(Runtime.Resources.Material), text.Material,
-            v => text.Material = v as Runtime.Resources.Material, 0);
+        PropertyGridUtils.DrawField(paper, $"{id}_mat", "Material", typeof(AssetRef<Runtime.Resources.Material>), text.Material,
+            v => text.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
     }
 
     // ================================================================

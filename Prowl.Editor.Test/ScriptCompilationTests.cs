@@ -24,8 +24,8 @@ public class ScriptCompilationTests : EditorTestHarness
 {
     public ScriptCompilationTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
     }
 
     // Editor code may use game code, and the two land in separate assemblies.
@@ -93,18 +93,23 @@ public class ScriptCompilationTests : EditorTestHarness
         Assert.Equal("VERSION_TWO", InvokeVersionedTag());
     }
 
-    // An editor script can declare an [EditorWindow] DockPanel discoverable by the engine's scan.
+    // An editor script can declare a DockPanel with a [MenuItem]-attributed static opener method,
+    // discoverable by the engine's scan (the unified menu system replaced the old [EditorWindow] attribute).
     [Fact]
     public void EditorScript_CanDeclareEditorWindow_DiscoverableByEngineScan()
     {
         WriteScript(Path.Combine("Editor", "MyTestWindow.cs"), """
+            using Prowl.Editor;
+            using Prowl.Editor.Core;
             using Prowl.Editor.GUI;
             using Prowl.OrigamiUI;
             using Prowl.PaperUI;
 
-            [EditorWindow("Test/MyTestWindow")]
             public class MyTestWindow : DockPanel
             {
+                [MenuItem("Test/MyTestWindow")]
+                static void Open() => EditorApplication.Instance?.OpenPanel(typeof(MyTestWindow));
+
                 public override string Title => "My Test Window";
                 public override string Icon => "?";
                 public override void OnGUI(Paper paper, float width, float height) { }
@@ -116,14 +121,18 @@ public class ScriptCompilationTests : EditorTestHarness
 
         var editor = Assembly.Load(File.ReadAllBytes(Project.EditorAssemblyPath));
 
-        // The same predicate EditorApplication uses: a non-abstract DockPanel subclass with [EditorWindow].
         // (DockPanel matched by name to avoid a compile dependency on Prowl.PaperUI in the test project.)
         var window = editor.GetTypes()
-            .Where(t => !t.IsAbstract && DerivesFromDockPanel(t) && t.GetCustomAttribute<EditorWindowAttribute>() != null)
+            .Where(t => !t.IsAbstract && DerivesFromDockPanel(t))
             .SingleOrDefault(t => t.Name == "MyTestWindow");
 
         Assert.NotNull(window);
-        Assert.Equal("Test/MyTestWindow", window!.GetCustomAttribute<EditorWindowAttribute>()!.Path);
+
+        var openMethod = window!.GetMethod("Open", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(openMethod);
+        var attr = openMethod!.GetCustomAttribute<MenuItemAttribute>();
+        Assert.NotNull(attr);
+        Assert.Equal("Test/MyTestWindow", attr!.Path);
     }
 
     // A script path containing '&' must produce a well-formed csproj and compile (XML escaping).

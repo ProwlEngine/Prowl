@@ -17,8 +17,8 @@ public class AssemblyDefinitionTests : EditorTestHarness
 {
     public AssemblyDefinitionTests()
     {
-        ProjectSettingsRegistry.Initialize();
-        ProjectSettingsRegistry.OnProjectOpened();
+        EditorRegistries.Initialize();
+        EditorRegistries.OnProjectOpened();
     }
 
     // ---- Fast: the planner rejects invalid graphs before invoking the compiler ----

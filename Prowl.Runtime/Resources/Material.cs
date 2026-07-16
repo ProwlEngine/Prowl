@@ -84,8 +84,16 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
     public Shader? Shader
     {
-        get => _shader.Res;
-        set => SetShader(value);
+        get { EnsureNotDisposed(); return _shader.Res; }
+        set { EnsureNotDisposed(); SetShader(value); }
+    }
+
+    /// <summary>The shader as an <see cref="AssetRef{Shader}"/>, for asset-reference editing.
+    /// A material must always have a shader, so assigning an empty ref is ignored.</summary>
+    public AssetRef<Shader> ShaderRef
+    {
+        get { EnsureNotDisposed(); return _shader; }
+        set { EnsureNotDisposed(); if (value.Res != null) SetShader(value.Res); }
     }
 
     /// <summary>The raw asset reference backing <see cref="Shader"/>. Used by the editor
@@ -164,7 +172,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
 
 
     /// <summary>Returns a deep copy of this material (see <see cref="Material(Material)"/>).</summary>
-    public Material Clone() => new Material(this);
+    public Material Clone() { EnsureNotDisposed(); return new Material(this); }
 
     /// <summary>Records a local keyword as currently set on this material.</summary>
     public void SetKeyword(Keyword keyword)
@@ -374,6 +382,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// <returns>A 64-bit hash of all material uniform values</returns>
     public ulong GetStateHash()
     {
+        EnsureNotDisposed();
         if (_isDirty)
         {
             _stateHash = ComputeHash();
@@ -440,6 +449,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void SyncShaderDefaults()
     {
+        EnsureNotDisposed();
         var shader = _shader.Res;
         if (shader == null) return;
 

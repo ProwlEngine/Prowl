@@ -4,12 +4,12 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI.Registries;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
+using Prowl.Rosetta;
 
 using Color = System.Drawing.Color;
 
@@ -76,7 +76,7 @@ public static class PackageExportDialog
     {
         _dependencyPaths.Clear();
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return;
 
         var explicitSet = new HashSet<string>(_explicitPaths, StringComparer.OrdinalIgnoreCase);
@@ -169,9 +169,9 @@ public static class PackageExportDialog
         {
             paper.Box("pkgexp_title_text")
                 .Height(32)
-                .Text("Export ProwlPackage", font)
+                .Text(Loc.Get("package.export_title"), font)
                 .TextColor(EditorTheme.Ink500)
-                .FontSize(EditorTheme.FontSize + 1)
+                .FontSize(EditorTheme.FontSizeLarge)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("pkgexp_title_spacer").Width(UnitValue.Stretch());
@@ -221,7 +221,7 @@ public static class PackageExportDialog
                     else _enabledPaths.Remove(path);
                 }
             })
-            .EmptyMessage("No assets to export.")
+            .EmptyMessage(Loc.Get("package.no_assets_export"))
             .Show();
     }
 
@@ -292,7 +292,7 @@ public static class PackageExportDialog
                         Id = "f_" + folderPath,
                         Label = Path.GetFileName(folderPath),
                         Icon = EditorIcons.Folder,
-                        IconColor = Color.FromArgb(255, 220, 180, 80),
+                        IconColor = EditorTheme.Amber400,
                         HasChildren = true,
                         DefaultExpanded = true,
                         Depth = depth,
@@ -313,18 +313,18 @@ public static class PackageExportDialog
                 {
                     bool isDep = _dependencyPaths.Contains(filePath);
                     bool enabled = _enabledPaths.Contains(filePath);
-                    Color? labelColor = isDep ? Color.FromArgb(255, 140, 180, 220) : null;
-                    Color? iconColor = isDep ? Color.FromArgb(255, 140, 180, 220) : null;
+                    Color? labelColor = isDep ? EditorTheme.Blue500 : null;
+                    Color? iconColor = isDep ? EditorTheme.Blue500 : null;
 
                     result.Add(new TreeNode
                     {
                         Id = "a_" + filePath,
                         Label = Path.GetFileName(filePath),
-                        Icon = FileIconRegistry.GetIconForFile(filePath),
+                        Icon = EditorRegistries.GetFileIcon(filePath),
                         IconColor = iconColor,
                         LabelColor = labelColor,
                         Badge = isDep ? "(dependency)" : null,
-                        BadgeColor = isDep ? Color.FromArgb(255, 100, 140, 180) : null,
+                        BadgeColor = isDep ? EditorTheme.Blue400 : null,
                         HasChildren = false,
                         IsLeaf = true,
                         Depth = depth,
@@ -365,14 +365,14 @@ public static class PackageExportDialog
             .Enter())
         {
             string depLabel = _dependencyPaths.Count > 0
-                ? $"Include Dependencies ({_dependencyPaths.Count})"
-                : "Include Dependencies";
+                ? Loc.Get("package.include_deps_count", new { count = _dependencyPaths.Count })
+                : Loc.Get("package.include_deps");
 
             Origami.Checkbox(paper, "pkgexp_deps", _includeDependencies, v => _includeDependencies = v)
                 .LabelRight(depLabel).Show();
 
             Origami.Checkbox(paper, "pkgexp_settings", _includeProjectSettings, v => _includeProjectSettings = v)
-                .LabelRight("Include Project Settings").Show();
+                .LabelRight(Loc.Get("package.include_settings")).Show();
 
             // Output path
             using (paper.Row("pkgexp_path_row")
@@ -382,8 +382,8 @@ public static class PackageExportDialog
             {
                 paper.Box("pkgexp_path_lbl")
                     .Width(60).Height(EditorTheme.RowHeight)
-                    .Text("Save to:", font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 1)
+                    .Text(Loc.Get("package.save_to"), font).TextColor(EditorTheme.Ink400)
+                    .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleRight);
 
                 Origami.TextField(paper, "pkgexp_path", _outputPath, v => _outputPath = v)
@@ -402,7 +402,7 @@ public static class PackageExportDialog
                         },
                         startPath: Path.GetDirectoryName(_outputPath),
                         filters: new[] { "*.prowlpackage" },
-                        filterLabels: new[] { "ProwlPackage (*.prowlpackage)" });
+                        filterLabels: new[] { Loc.Get("editor.filter_package") });
                     }).Width(30).Show();
             }
         }
@@ -421,16 +421,16 @@ public static class PackageExportDialog
 
             paper.Box("pkgexp_count")
                 .Height(24).ChildLeft(12)
-                .Text($"{enabledCount} of {totalInTree} assets selected", font)
+                .Text(Loc.Get("package.selected_count", new { enabled = enabledCount, total = totalInTree }), font)
                 .TextColor(EditorTheme.Ink400)
-                .FontSize(EditorTheme.FontSize - 1)
+                .FontSize(EditorTheme.FontSizeSmall)
                 .Alignment(TextAlignment.MiddleLeft);
 
             paper.Box("pkgexp_spacer").Width(UnitValue.Stretch());
 
-            Origami.Button(paper, "pkgexp_cancel", "Cancel", () => { Close(); }).Width(80).Show();
+            Origami.Button(paper, "pkgexp_cancel", Loc.Get("common.cancel"), () => { Close(); }).Width(80).Show();
 
-            Origami.Button(paper, "pkgexp_export", "Export", () => { DoExport(); }).Width(80).Show();
+            Origami.Button(paper, "pkgexp_export", Loc.Get("pref.export"), () => { DoExport(); }).Width(80).Show();
         }
     }
 
@@ -438,13 +438,13 @@ public static class PackageExportDialog
     {
         if (string.IsNullOrWhiteSpace(_outputPath))
         {
-            Origami.Message("Export Error", "Please specify an output path.");
+            Origami.Message(Loc.Get("package.export_error"), Loc.Get("package.err_no_path"));
             return;
         }
 
         if (_enabledPaths.Count == 0)
         {
-            Origami.Message("Export Error", "No assets selected for export.");
+            Origami.Message(Loc.Get("package.export_error"), Loc.Get("package.err_no_assets"));
             return;
         }
 
@@ -453,12 +453,12 @@ public static class PackageExportDialog
             Directory.CreateDirectory(Path.GetDirectoryName(_outputPath)!);
             // Pass includeDependencies=false since we already resolved deps into the enabled set
             ProwlPackage.Export(_outputPath, _enabledPaths, _includeProjectSettings, includeDependencies: false);
-            Toasts.Success("Package Exported", $"Exported {_enabledPaths.Count} assets");
+            Toasts.Success(Loc.Get("package.exported_title"), Loc.Get("package.exported_msg", new { count = _enabledPaths.Count }));
             Close();
         }
         catch (Exception ex)
         {
-            Origami.Message("Export Failed", ex.Message);
+            Origami.Message(Loc.Get("package.export_failed"), ex.Message);
         }
     }
 

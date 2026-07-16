@@ -90,7 +90,7 @@ public class TransformPropertyEditor : PropertyEditor
                     .IsNotInteractable()
                     .Text(displayName, font)
                     .TextColor(hasValue ? EditorTheme.Ink500 : EditorTheme.Ink300)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 // Picker button
                 paper.Box($"{id}_pick")

@@ -6,8 +6,9 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.0-preview</Version>
+    <Version>1.0-preview-2</Version>
     <NoWarn>8600;8601;8618;8602;8603;8604;8625;NU1902;NU1903</NoWarn>
+    <ApplicationIcon>prowl.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -20,6 +21,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  </ItemGroup>
+
+  <!-- Fix for Linux Builds -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(RuntimeIdentifier)' == ''">
+    <RuntimeIdentifier>$(NETCoreSdkPortableRuntimeIdentifier)</RuntimeIdentifier>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <!-- Allow test project to access internal members (e.g. test-only sweep/eviction hooks) -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Editor.Test" />
   </ItemGroup>
 
   <ItemGroup>

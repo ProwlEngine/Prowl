@@ -24,6 +24,7 @@ public sealed class ShaderPass
     [SerializeField] private ShaderVariant[] _variants;
 
     [SerializeIgnore] private VariantSet<GraphicsProgram> _variantSet;
+    [SerializeIgnore] private GraphicsProgram[]? _compiledPrograms;
 
 
     /// <summary>
@@ -86,6 +87,8 @@ public sealed class ShaderPass
             keywords[i] = _variants[i].Keywords;
         }
 
+        _compiledPrograms = programs;
+
         return new VariantSet<GraphicsProgram>(programs, keywords);
     }
 
@@ -106,5 +109,18 @@ public sealed class ShaderPass
             return tagValue == null || value == tagValue;
 
         return false;
+    }
+
+    /// <summary>Disposes every compiled variant program. The pass itself keeps its source/tags so it
+    /// can still recompile fresh variants on next use if the owning Shader isn't actually disposed.</summary>
+    public void Dispose()
+    {
+        if (_compiledPrograms == null) return;
+
+        foreach (var program in _compiledPrograms)
+            program?.Dispose();
+
+        _compiledPrograms = null;
+        _variantSet = null;
     }
 }

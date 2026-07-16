@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Thumbnails;
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -80,7 +81,7 @@ public static class ProwlPackage
     {
         var project = Project.Current;
         if (project == null) throw new InvalidOperationException("No project is open.");
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) throw new InvalidOperationException("Asset database not initialized.");
 
         // Collect all asset paths (including dependencies if requested)
@@ -306,10 +307,10 @@ public static class ProwlPackage
     public static ImportAction DetermineAction(ZipArchive archive, PackageAssetEntry packageAsset, string assetsPath)
     {
         // Parse the GUID from the package entry
-        if (!System.Guid.TryParse(packageAsset.Guid, out var guid) || guid == System.Guid.Empty)
+        if (!EditorUtils.TryParseNonEmptyGuid(packageAsset.Guid, out var guid))
             return ImportAction.Add;
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return ImportAction.Add;
 
         var existing = db.GetEntry(guid);
@@ -416,7 +417,7 @@ public static class ProwlPackage
     {
         var project = Project.Current;
         if (project == null) return new List<string>();
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null) return new List<string>();
 
         string prefix = string.IsNullOrEmpty(folderRelativePath) ? "" : folderRelativePath.Replace('\\', '/') + "/";

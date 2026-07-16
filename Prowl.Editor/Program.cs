@@ -1,11 +1,13 @@
 using Prowl.Editor.Core;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
-using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Theming;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 
 
 namespace Prowl.Editor;
@@ -30,7 +32,7 @@ public static class Program
     {
         foreach ((string[] aliases, Action<List<string>> a, int m, string desc) in s_commands)
         {
-            if (args.Count == 0 || Array.Exists(aliases, (x) => x.Equals(args[1])))
+            if (args.Count == 0 || Array.Exists(aliases, (x) => x.Equals(args[0])))
                 Console.WriteLine($"[{string.Join(", ", aliases)}]: {desc}");
         }
 
@@ -66,6 +68,9 @@ public static class Program
             (string[]? a, Action<List<string>>? action, int argsCount, string? d) =
                 Array.Find(s_commands, (x) => Array.Exists(x.commandAliases, (x) => x.Equals(result)));
 
+            if (action == null)
+                throw new Exception($"Unknown argument '{result}'");
+
             List<string> cmdArgs = [];
 
             while (argQueue.TryPeek(out string next))
@@ -90,11 +95,13 @@ public static class Program
 
     public static void Main(string[] args)
     {
+        RegisterMiniAudioExResolver();
+
         ReadArguments(args);
 
         if (BuildMode)
         {
-            ProjectSettingsRegistry.Initialize();
+            EditorRegistries.Initialize();
 
             var project = Project.Open(StartupProjectPath);
             project.SetActive();
@@ -103,11 +110,11 @@ public static class Program
             ScriptAssemblyManager.LoadAssemblies(project);
 
             // Initialize asset database for the already-opened project
-            var db = new EditorAssetDatabase(Project.Current!);
+            var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
 
             // Load project settings
-            ProjectSettingsRegistry.OnProjectOpened();
+            EditorRegistries.OnProjectOpened();
 
             Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
             return;
@@ -117,5 +124,46 @@ public static class Program
         editor.Run("Prowl Editor", 1920, 1080);
 
         //Runtime.Window.InternalWindow.WindowState = EditorSettings.Instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;
+    }
+
+    /// <summary>
+    /// "miniaudioex" is manually vendored (not a real NuGet native-asset package), so a self-contained
+    /// Editor publish never flattens it to the app root and needs explicit resolving. Registered here
+    /// (Editor-only), not in Prowl.Runtime.dll: exported Player builds already register their own
+    /// resolver for that assembly, and only one resolver per assembly is allowed.
+    /// </summary>
+    private static void RegisterMiniAudioExResolver()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(Prowl.Runtime.Game).Assembly, (libraryName, _, _) =>
+        {
+            if (libraryName != "miniaudioex")
+                return IntPtr.Zero;
+
+            string? os = OperatingSystem.IsWindows() ? "win"
+                       : OperatingSystem.IsMacOS() ? "osx"
+                       : OperatingSystem.IsLinux() ? "linux"
+                       : null;
+
+            // ProcessArchitecture (not OSArchitecture): a 32-bit process on a 64-bit Windows OS must
+            // load the x86 native lib, not x64 - Libraries/win-x86 exists precisely for that case.
+            string? arch = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "x64",
+                Architecture.X86 => "x86",
+                Architecture.Arm64 => "arm64",
+                Architecture.Arm => "arm",
+                _ => null,
+            };
+
+            if (os == null || arch == null)
+                return IntPtr.Zero;
+
+            string fileName = OperatingSystem.IsWindows() ? "miniaudioex.dll"
+                             : OperatingSystem.IsMacOS() ? "libminiaudioex.dylib"
+                             : "libminiaudioex.so";
+
+            string path = Path.Combine(AppContext.BaseDirectory, "runtimes", $"{os}-{arch}", "native", fileName);
+            return File.Exists(path) ? NativeLibrary.Load(path) : IntPtr.Zero;
+        });
     }
 }

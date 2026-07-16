@@ -5,6 +5,7 @@ using Prowl.Graphite;
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -54,6 +55,16 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Transform?[]? _bones;
     [System.NonSerialized] private Float4x4[]? _skinMatrices;
     [System.NonSerialized] private bool _resolved;
+
+    // Skinning is only recomputed when the skeleton actually moves. The dirty check is the sum of every
+    // bone's Transform.Version plus the renderer's - versions are monotonic, so an unchanged sum means a
+    // static pose (skip the whole skin loop + texture upload). This also dedups redundant per-camera
+    // OnRenderCollect calls in the same frame (nothing changed between cameras).
+    [System.NonSerialized] private ulong _lastSkeletonVersion = ulong.MaxValue;
+    [System.NonSerialized] private AABB _cachedBounds;
+    // Reused per-recompute memo so bones sharing ancestors don't re-walk the chain to root each:
+    // O(bones + depth) world-matrix builds instead of O(bones * depth).
+    [System.NonSerialized] private readonly Dictionary<Transform, Float4x4> _worldMemo = new();
 
     // Bone matrix texture each bone is 4 RGBA32F texels (one per matrix row)
     [System.NonSerialized] private Texture2D? _boneTexture;
@@ -214,31 +225,69 @@ public class SkinnedMeshRenderer : MonoBehaviour
     }
 
     /// <summary>
-    /// Compute world-space AABB from bone positions, padded by the mesh's max vertex extent.
-    /// Much cheaper than transforming every vertex, and correct for frustum culling.
+    /// Recompute the skinning matrices, world-space bounds and bone texture for the current pose.
+    /// Called only when the skeleton has actually moved (see the version check in OnRenderCollect).
+    /// Each bone's world matrix is built once via <see cref="WorldMatrixOf"/> (memoized so shared
+    /// ancestors aren't re-walked) and reused for both the skin matrix and the bounds corner.
     /// </summary>
-    private AABB ComputeSkinnedBounds(Mesh mesh)
+    private void RecomputeSkinning(Mesh mesh)
     {
-        if (_bones == null || _bones.Length == 0)
-            return mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+        _worldMemo.Clear();
+        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
 
-        // Find the max distance any vertex can be from its bone (approximated from bind-pose bounds)
-        float padding = MathF.Max(MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Y), mesh.bounds.Size.Z) * 0.5f;
+        float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
+        bool anyBone = false;
 
-        Float3 min = new Float3(float.MaxValue);
-        Float3 max = new Float3(float.MinValue);
-
-        for (int i = 0; i < _bones.Length; i++)
+        for (int i = 0; i < _bones!.Length; i++)
         {
-            if (_bones[i] == null) continue;
-            Float3 boneWorldPos = _bones[i].Position;
-            min = new Float3(MathF.Min(min.X, boneWorldPos.X), MathF.Min(min.Y, boneWorldPos.Y), MathF.Min(min.Z, boneWorldPos.Z));
-            max = new Float3(MathF.Max(max.X, boneWorldPos.X), MathF.Max(max.Y, boneWorldPos.Y), MathF.Max(max.Z, boneWorldPos.Z));
+            Transform? bone = _bones[i];
+            if (bone != null && i < mesh.BindPoses!.Length)
+            {
+                Float4x4 boneWorld = WorldMatrixOf(bone);
+                _skinMatrices![i] = worldToLocal * boneWorld * mesh.BindPoses[i];
+
+                // Bone world position is the translation column of its world matrix (reuses the walk above).
+                Float4 p = boneWorld.Translation;
+                if (p.X < minX) minX = p.X; if (p.Y < minY) minY = p.Y; if (p.Z < minZ) minZ = p.Z;
+                if (p.X > maxX) maxX = p.X; if (p.Y > maxY) maxY = p.Y; if (p.Z > maxZ) maxZ = p.Z;
+                anyBone = true;
+            }
+            else
+            {
+                _skinMatrices![i] = Float4x4.Identity;
+            }
         }
 
-        // Pad by mesh extent so vertices attached to edge bones aren't clipped
-        Float3 pad = new Float3(padding);
-        return new AABB(min - pad, max + pad);
+        // Pad by the mesh's max extent so vertices attached to edge bones aren't clipped.
+        if (anyBone)
+        {
+            float padding = MathF.Max(MathF.Max(mesh.bounds.Size.X, mesh.bounds.Size.Y), mesh.bounds.Size.Z) * 0.5f;
+            Float3 pad = new Float3(padding);
+            _cachedBounds = new AABB(new Float3(minX, minY, minZ) - pad, new Float3(maxX, maxY, maxZ) + pad);
+        }
+        else
+        {
+            _cachedBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+        }
+
+        UploadBoneTexture(_skinMatrices!);
+    }
+
+    /// <summary>
+    /// World matrix of a Transform, memoized in <see cref="_worldMemo"/> for the current recompute.
+    /// Mirrors <see cref="Transform.LocalToWorldMatrix"/> but avoids re-walking shared ancestor chains.
+    /// </summary>
+    private Float4x4 WorldMatrixOf(Transform t)
+    {
+        if (_worldMemo.TryGetValue(t, out Float4x4 cached))
+            return cached;
+
+        Float4x4 local = Float4x4.CreateTRS(t.LocalPosition, t.LocalRotation, t.LocalScale);
+        Transform? parent = t.Parent;
+        Float4x4 world = parent != null ? WorldMatrixOf(parent) * local : local;
+        _worldMemo[t] = world;
+        return world;
     }
 
     public override void OnDisable()
@@ -418,41 +467,54 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
         Resolve();
 
-        // Compute skinning matrices
+        AABB worldBounds;
         if (_bones != null && _bones.Length > 0 && mesh.BindPoses != null)
         {
             if (_skinMatrices == null || _skinMatrices.Length != _bones.Length)
-                _skinMatrices = new Float4x4[_bones.Length];
-
-            Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
-            for (int i = 0; i < _bones.Length; i++)
             {
-                if (_bones[i] != null && i < mesh.BindPoses.Length)
-                    _skinMatrices[i] = worldToLocal * _bones[i].LocalToWorldMatrix * mesh.BindPoses[i];
-                else
-                    _skinMatrices[i] = Float4x4.Identity;
+                _skinMatrices = new Float4x4[_bones.Length];
+                _lastSkeletonVersion = ulong.MaxValue; // force a recompute after a bone-count change
             }
 
-            // Upload to bone texture
-            UploadBoneTexture(_skinMatrices);
-        }
+            // Dirty check: sum of monotonic Transform.Versions across every bone and the renderer's own
+            // ancestor chain (so moving a shared character root, which bumps none of the bones, still
+            // refreshes the world-space bounds used for culling). Unchanged sum => static pose, so the
+            // cached skin matrices, bone texture and bounds from last frame are still valid.
+            ulong version = 0;
+            for (Transform? t = Transform; t != null; t = t.Parent)
+                version += t.Version;
+            for (int i = 0; i < _bones.Length; i++)
+                if (_bones[i] != null) version += _bones[i]!.Version;
 
-        // Compute world-space bounds from bone positions (cheap, avoids culling issues)
-        AABB worldBounds = ComputeSkinnedBounds(mesh);
+            if (version != _lastSkeletonVersion || _boneTexture == null)
+            {
+                _lastSkeletonVersion = version;
+                RecomputeSkinning(mesh);
+            }
+
+            worldBounds = _cachedBounds;
+        }
+        else
+        {
+            worldBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
+        }
 
         // Resolve blend-shape weights -> active morph layers + weight texture (once per frame).
         if (mesh.HasBlendShapes)
             PrepareBlendShapes(mesh);
 
-        // Render each submesh with its material
+        // Render each submesh with its material. CollectionsMarshal.AsSpan gives a ref to the
+        // list's real backing elements (List<T>'s indexer would copy a value-type element, so
+        // AssetRef<Material>.Res's internal caching would mutate a throwaway copy and never stick).
         int subCount = mesh.SubMeshCount;
+        var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
         {
             Material? mat = null;
-            if (s < Materials.Count)
-                mat = Materials[s].Res;
-            else if (Materials.Count > 0)
-                mat = Materials[^1].Res; // Reuse last material for extra submeshes
+            if (s < materials.Length)
+                mat = materials[s].Res;
+            else if (materials.Length > 0)
+                mat = materials[^1].Res; // Reuse last material for extra submeshes
 
             if (mat == null) continue;
 

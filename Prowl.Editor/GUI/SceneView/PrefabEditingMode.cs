@@ -7,6 +7,8 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Prefabs;
 using Prowl.Editor.Projects;
+using Prowl.OrigamiUI;
+using Prowl.Rosetta;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -31,12 +33,32 @@ public static class PrefabEditingMode
     private static GameObject? _editingRoot;
 
     /// <summary>
-    /// Enter prefab editing mode.
+    /// Enter prefab editing mode. If another prefab is already being edited with unsaved
+    /// changes, prompts to save before switching rather than silently discarding them.
     /// </summary>
     public static void Enter(Guid prefabGuid)
     {
-        if (IsEditing) Exit();
+        if (IsEditing)
+        {
+            if (EditorSceneManager.IsDirty)
+            {
+                string name = EditingPrefabPath != null ? Path.GetFileNameWithoutExtension(EditingPrefabPath) : "prefab";
+                Origami.Confirm(
+                    Loc.Get("dialog.unsaved_prefab"),
+                    Loc.Get("dialog.unsaved_prefab_body", new { name }),
+                    onYes: () => { SaveAndExit(); EnterInternal(prefabGuid); },
+                    onNo: () => { Exit(); EnterInternal(prefabGuid); });
+                return;
+            }
 
+            Exit();
+        }
+
+        EnterInternal(prefabGuid);
+    }
+
+    private static void EnterInternal(Guid prefabGuid)
+    {
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null)
         {
@@ -44,7 +66,7 @@ public static class PrefabEditingMode
             return;
         }
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         var entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;
 
@@ -131,7 +153,7 @@ public static class PrefabEditingMode
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
             File.WriteAllText(absolutePath, echo.WriteToString());
-            EditorAssetDatabase.Instance?.Reimport(EditingPrefabGuid);
+            EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
             // Label reported via SaveManager.OnSave handler

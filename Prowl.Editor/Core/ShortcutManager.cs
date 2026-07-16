@@ -86,6 +86,12 @@ public static class ShortcutManager
     public static void Register(string id, string displayName, KeyCode key,
         bool ctrl = false, bool shift = false, bool alt = false)
     {
+        // Most Mac keyboards (laptops especially) have no dedicated forward-delete
+        // key; the key labeled "delete" reports as Backspace. Default Delete-bound
+        // shortcuts to Backspace on macOS so they work out of the box.
+        if (key == KeyCode.Delete && RuntimeUtils.IsMac())
+            key = KeyCode.Backspace;
+
         var def = new ShortcutDefinition(id, displayName, new ShortcutBinding(key, ctrl, shift, alt));
 
         // If overrides have been loaded and one exists for this id, apply it

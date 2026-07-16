@@ -65,19 +65,25 @@ public class CharacterController : MonoBehaviour
         Float3 position = GameObject.Transform.Position;
         lastVelocity = motion;
 
-        // Update grounded state before moving
-        UpdateGroundedState(position);
+        // Use the grounded state from the end of the previous move for this
+        // frame's step-up and snap decisions, since we haven't moved yet.
+        bool wasGrounded = IsGrounded;
 
         // Perform movement with collision
-        Float3 finalPosition = CollideAndSlide(position, motion, 0);
+        Float3 finalPosition = CollideAndSlide(position, motion, 0, wasGrounded);
 
         // Snap down to ground if moving horizontally on slopes
-        if (IsGrounded && motion.Y <= 0)
+        if (wasGrounded && motion.Y <= 0)
         {
             finalPosition = SnapToGround(finalPosition);
         }
 
         GameObject.Transform.Position = finalPosition;
+
+        // Update grounded state based on where we actually ended up this
+        // frame, so callers see an up-to-date value on the next frame
+        // (e.g. right after a jump leaves the ground).
+        UpdateGroundedState(finalPosition);
     }
 
     /// <summary>
@@ -233,7 +239,7 @@ public class CharacterController : MonoBehaviour
         }
     }
 
-    private Float3 CollideAndSlide(Float3 position, Float3 velocity, int depth)
+    private Float3 CollideAndSlide(Float3 position, Float3 velocity, int depth, bool grounded)
     {
         const int MaxDepth = 5;
         if (depth >= MaxDepth)
@@ -265,7 +271,7 @@ public class CharacterController : MonoBehaviour
             // Check if this is a step we can climb
             // Only attempt step-up if we're grounded and moving mostly horizontally
             float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
-            if (IsGrounded && horizontalSpeed > 0.0001 && StepSize > 0)
+            if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
             {
                 if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
                 {
@@ -277,7 +283,7 @@ public class CharacterController : MonoBehaviour
             Float3 slideMove = ProjectOntoSurface(remainingMove, hitInfo.Normal);
 
             // Recurse with remaining slide movement
-            return CollideAndSlide(position, slideMove, depth + 1);
+            return CollideAndSlide(position, slideMove, depth + 1, grounded);
         }
         else
         {

@@ -16,11 +16,11 @@ namespace Prowl.Runtime.UI;
 /// <summary>How a <see cref="UIImage"/> stretches its texture across the rect.</summary>
 public enum ImageType
 {
-    /// <summary>The texture is stretched to fit the whole rect (the default).</summary>
+    /// <summary>The sprite is stretched to fit the whole rect.</summary>
     Simple,
-    /// <summary>The four <see cref="UIImage.Border"/> regions stay unstretched; only the middle scales.</summary>
+    /// <summary>The sprite's four border regions stay unstretched; only the middle scales (nine-slice).</summary>
     Sliced,
-    /// <summary>The texture repeats across the rect at its native size (scaled by <see cref="UIImage.PixelsPerUnit"/>).</summary>
+    /// <summary>The sprite repeats across the rect at its native pixel size.</summary>
     Tiled,
     /// <summary>Only a portion of the texture is drawn, controlled by <see cref="UIImage.FillAmount"/>.</summary>
     Filled,
@@ -42,7 +42,8 @@ public enum FillMethod
 }
 
 /// <summary>
-/// Displays a colored rectangle or a <see cref="Texture2D"/> sprite in the UI.
+/// Displays a <see cref="Sprite"/> in the UI, drawn Simple / Sliced (nine-slice) / Tiled / Filled.
+/// With no sprite assigned it draws nothing but still hit-tests as a raycast target.
 /// </summary>
 /// <remarks>
 /// Expects the parent GameObject to have a <see cref="RectTransform"/>.
@@ -65,16 +66,48 @@ public class UIImage : UIBehaviour
         }
     }
 
-    [SerializeField] private Texture2D? _texture;
-    public Texture2D? Texture
+    /// <summary>
+    /// The sprite to display. This is the image's only source: its texture is bound, its atlas sub-rect drives
+    /// the UVs, and its 9-slice border feeds <see cref="ImageType.Sliced"/>. With no sprite the image draws
+    /// nothing but still hit-tests as a <see cref="RaycastTarget"/>. New images default to the built-in UI panel.
+    /// </summary>
+    [SerializeField] private AssetRef<Sprite> _sprite = new(BuiltInAssets.GuidFor(DefaultSprite.UIPanel));
+    public AssetRef<Sprite> Sprite
     {
-        get => _texture;
-        set => SetField(ref _texture, value, UIDirtyFlags.Material);
+        get => _sprite;
+        set => SetField(ref _sprite, value, UIDirtyFlags.Material | UIDirtyFlags.Vertices);
+    }
+
+    /// <summary>The resolved sprite, or null when none is assigned.</summary>
+    private Sprite? Spr => _sprite.Res;
+
+    /// <summary>The source texture bound for drawing: the sprite's texture, or null when no sprite is set.</summary>
+    private Texture2D? SourceTexture => Spr?.Texture.Res;
+
+    /// <summary>9-slice border in source pixels, taken from the sprite (zero when no sprite is set).</summary>
+    private Float4 EffectiveBorder => Spr is Sprite s ? s.Border : Float4.Zero;
+
+    /// <summary>Source-region size in pixels used for UV/border/tile math: the sprite's rect (zero when none).</summary>
+    private (float w, float h) SourceSize => Spr is Sprite s ? (s.Rect.Width, s.Rect.Height) : (0f, 0f);
+
+    // Sets the builder's UV remap to the sprite's atlas sub-rect (identity when the sprite covers the whole texture).
+    private void ApplySpriteUVRect(UIMeshBuilder b)
+    {
+        if (Spr is Sprite s && s.Texture.Res is Texture2D st && st.Width > 0 && st.Height > 0)
+        {
+            float u0 = s.Rect.X / (float)st.Width, u1 = s.Rect.MaxX / (float)st.Width;
+            float v0 = s.Rect.Y / (float)st.Height, v1 = s.Rect.MaxY / (float)st.Height;
+            b.SetUVRect(new Float2(u0, v0), new Float2(u1 - u0, v1 - v0));
+        }
+        else
+        {
+            b.SetUVRect(Float2.Zero, Float2.One);
+        }
     }
 
     // ---- Material override ----
-    [SerializeField] private Material? _material;
-    public Material? Material
+    [SerializeField] private AssetRef<Material> _material;
+    public AssetRef<Material> Material
     {
         get => _material;
         set => SetField(ref _material, value, UIDirtyFlags.Material);
@@ -96,36 +129,25 @@ public class UIImage : UIBehaviour
         set => SetField(ref _preserveAspect, value, UIDirtyFlags.Vertices);
     }
 
-    /// <summary>Corner radius for rounded rectangles (in pixels). 0 = sharp corners. Only honored when <see cref="Type"/> is <see cref="ImageType.Simple"/>.</summary>
-    [SerializeField] private float _cornerRadius;
-    public float CornerRadius
-    {
-        get => _cornerRadius;
-        set => SetField(ref _cornerRadius, value, UIDirtyFlags.Vertices);
-    }
-
-    /// <summary>How the texture is mapped to the rect. See <see cref="ImageType"/>.</summary>
-    [SerializeField] private ImageType _type = ImageType.Simple;
+    /// <summary>How the texture is mapped to the rect. See <see cref="ImageType"/>. Defaults to Sliced so the
+    /// default nine-slice panel renders correctly; for a zero-border sprite/texture this is identical to Simple.</summary>
+    [SerializeField] private ImageType _type = ImageType.Sliced;
     public ImageType Type
     {
         get => _type;
         set => SetField(ref _type, value, UIDirtyFlags.Vertices);
     }
 
-    /// <summary>Source-texture border in pixels (L, T, R, B). Used by <see cref="ImageType.Sliced"/> and <see cref="ImageType.Tiled"/> to keep edges un-stretched.</summary>
-    [SerializeField] private Float4 _border;
-    public Float4 Border
+    /// <summary>
+    /// Multiplies the sprite's nine-slice border and tile size on screen (affects Sliced/Tiled only).
+    /// 1 = the sprite's native pixels. This is purely a display multiplier - UI sizing comes from the
+    /// RectTransform, not from pixels-per-unit (that's a world-space concept for SpriteRenderer).
+    /// </summary>
+    [SerializeField] private float _pixelsPerUnitMultiplier = 1f;
+    public float PixelsPerUnitMultiplier
     {
-        get => _border;
-        set => SetField(ref _border, value, UIDirtyFlags.Vertices);
-    }
-
-    /// <summary>Pixels-per-unit divisor applied to <see cref="Border"/> and tile size. Higher values shrink borders/tiles on-screen.</summary>
-    [SerializeField] private float _pixelsPerUnit = 1f;
-    public float PixelsPerUnit
-    {
-        get => _pixelsPerUnit;
-        set => SetField(ref _pixelsPerUnit, value, UIDirtyFlags.Vertices);
+        get => _pixelsPerUnitMultiplier;
+        set => SetField(ref _pixelsPerUnitMultiplier, MathF.Max(0.0001f, value), UIDirtyFlags.Vertices);
     }
 
     /// <summary>Fill geometry used when <see cref="Type"/> is <see cref="ImageType.Filled"/>.</summary>
@@ -171,7 +193,7 @@ public class UIImage : UIBehaviour
         set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
     }
 
-    public override Material GetMaterial() => _material ?? base.GetMaterial();
+    public override Material GetMaterial() => _material.Res ?? base.GetMaterial();
 
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
     {
@@ -179,6 +201,12 @@ public class UIImage : UIBehaviour
         if (rt is null) return;
         Rect r = rt.ComputedRect;
         if (r.Size.X <= 0 || r.Size.Y <= 0) return;
+
+        // Nothing to draw without a sprite - the element is still a raycast target, just invisible.
+        if (SourceTexture is null) return;
+
+        // Remap generated UVs onto the sprite's atlas sub-rect (identity when it covers the whole texture).
+        ApplySpriteUVRect(b);
 
         // Emit vertices in element-local pixel space, with the pivot at the origin.
         // GameCanvas.BuildItemModel translates this pivot to its absolute design-pixel
@@ -191,6 +219,13 @@ public class UIImage : UIBehaviour
             -pivot.Y * h,
             (1f - pivot.X) * w,
             (1f - pivot.Y) * h);
+
+        // Fit the source aspect inside the rect (letterbox), centered, when requested.
+        if (_preserveAspect)
+        {
+            var (sw, sh) = SourceSize;
+            local = FitAspect(local, sw, sh);
+        }
 
         Color tinted = Color * new Color(1, 1, 1, ctx.Alpha);
 
@@ -206,65 +241,95 @@ public class UIImage : UIBehaviour
                 b.AddFilled(local, tinted, _fillMethod, _fillOrigin, _fillAmount, _fillClockwise);
                 break;
             default:
-                if (CornerRadius > 0)
-                    b.AddRoundedRect(local, CornerRadius, tinted);
-                else
-                    // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
-                    b.AddQuad(local, tinted, Float2.Zero, Float2.One);
-                return;
+                // UV (0,0) at the rect's bottom-left, (1,1) at its top-right (+Y up).
+                b.AddQuad(local, tinted, Float2.Zero, Float2.One);
+                break;
         }
-
-        // Simple already emits a rounded mesh directly via AddRoundedRect; other fill modes need a
-        // post-process clip pass to round their corners.
-        if (CornerRadius > 0)
-            b.ClipToRoundedRect(local, CornerRadius);
     }
 
     private void EmitSliced(UIMeshBuilder b, Rect local, Color tinted)
     {
-        float ppu = _pixelsPerUnit > 0 ? _pixelsPerUnit : 1f;
-        // Pixel borders are in source-texture pixels; divide by PPU to get screen pixels and
-        // clamp so opposite borders never overlap (which would invert the center quad).
-        float bl = _border.X / ppu, bt = _border.Y / ppu, br = _border.Z / ppu, bb = _border.W / ppu;
-        float maxX = local.Size.X * 0.5f, maxY = local.Size.Y * 0.5f;
-        bl = MathF.Min(bl, maxX); br = MathF.Min(br, maxX);
-        bt = MathF.Min(bt, maxY); bb = MathF.Min(bb, maxY);
+        // Borders are in source pixels, scaled by the display multiplier and drawn in the RectTransform's
+        // pixel space.
+        float m = _pixelsPerUnitMultiplier > 0 ? _pixelsPerUnitMultiplier : 1f;
+        Float4 border = EffectiveBorder;
+        float bl = border.X * m, bt = border.Y * m, br = border.Z * m, bb = border.W * m;
+
+        // When the rect is too small to fit the borders, scale ALL of them by a single factor rather than
+        // clamping each axis on its own. Independent clamping squishes a square corner into a rectangle
+        // (a thin element keeps full-height side corners but tiny top/bottom ones); a uniform scale keeps
+        // every corner at its native aspect - square corners stay square - while still guaranteeing
+        // opposite borders never overlap (which would invert the center quad).
+        float w = local.Size.X, h = local.Size.Y;
+        float scale = 1f;
+        if (bl + br > w && bl + br > 0f) scale = MathF.Min(scale, w / (bl + br));
+        if (bt + bb > h && bt + bb > 0f) scale = MathF.Min(scale, h / (bt + bb));
+        if (scale < 1f) { bl *= scale; br *= scale; bt *= scale; bb *= scale; }
 
         Float4 uv = ComputeUVBorder();
+        // Clamp opposite UV borders the same way as the pixel borders: if left+right (or top+bottom)
+        // exceed the full 0..1 range, the center slice's UV would invert and sample garbage. Scale each
+        // overflowing pair down proportionally so the borders just meet. (uv is L, T, R, B.)
+        float uh = uv.X + uv.Z;
+        if (uh > 1f) { uv.X /= uh; uv.Z /= uh; }
+        float uvv = uv.Y + uv.W;
+        if (uvv > 1f) { uv.Y /= uvv; uv.W /= uvv; }
+
         b.AddNineSlice(local, new Float4(bl, bt, br, bb), uv, tinted);
     }
 
     private void EmitTiled(UIMeshBuilder b, Rect local, Color tinted)
     {
-        // Tile size in screen pixels: source texture native size scaled by 1/PPU. If no texture
-        // is set we fall back to the rect itself so the image just stretches like Simple.
-        Texture2D? tex = _texture;
-        if (tex is null || tex.Width == 0 || tex.Height == 0)
+        // Tile at the sprite's native pixel size in the RectTransform's pixel space.
+        // NOTE: Border-aware tiling (keeping the sprite's 9-slice edges un-tiled) is not done yet;
+        // Tiled currently repeats the whole sprite rect.
+        var (sw, sh) = SourceSize;
+        if (sw <= 0f || sh <= 0f)
         {
             b.AddQuad(local, tinted, Float2.Zero, Float2.One);
             return;
         }
 
-        float ppu = _pixelsPerUnit > 0 ? _pixelsPerUnit : 1f;
-        Float2 tileSize = new Float2(tex.Width / ppu, tex.Height / ppu);
-        b.AddTiled(local, tileSize, tinted);
+        float m = _pixelsPerUnitMultiplier > 0 ? _pixelsPerUnitMultiplier : 1f;
+        b.AddTiled(local, new Float2(sw * m, sh * m), tinted);
+    }
+
+    // Fits a source region's aspect ratio inside `local`, centered (letterbox). No-op without a valid size.
+    private static Rect FitAspect(Rect local, float texW, float texH)
+    {
+        if (texW <= 0f || texH <= 0f) return local;
+        float rw = local.Size.X, rh = local.Size.Y;
+        if (rw <= 0f || rh <= 0f) return local;
+
+        float texAspect = texW / texH;
+        float nw = rw, nh = rh;
+        if (rw / rh > texAspect) nw = rh * texAspect;  // rect wider than the texture -> shrink width
+        else                     nh = rw / texAspect;  // rect taller -> shrink height
+
+        float cx = (local.Min.X + local.Max.X) * 0.5f;
+        float cy = (local.Min.Y + local.Max.Y) * 0.5f;
+        return new Rect(cx - nw * 0.5f, cy - nh * 0.5f, cx + nw * 0.5f, cy + nh * 0.5f);
     }
 
     private Float4 ComputeUVBorder()
     {
-        Texture2D? tex = _texture;
-        if (tex is null || tex.Width == 0 || tex.Height == 0) return Float4.Zero;
+        var (sw, sh) = SourceSize;
+        if (sw <= 0f || sh <= 0f) return Float4.Zero;
+        Float4 border = EffectiveBorder;
         return new Float4(
-            _border.X / tex.Width,
-            _border.Y / tex.Height,
-            _border.Z / tex.Width,
-            _border.W / tex.Height);
+            border.X / sw,
+            border.Y / sh,
+            border.Z / sw,
+            border.W / sh);
     }
 
     public override void PopulateProperties(PropertySet p, in UIContext _)
     {
-        p.SetTexture("_MainTex", Texture ?? defaultTexture);
-        p.SetColor("_MainColor", Color);   // tint already baked into vertex color
+        p.SetTexture("_MainTex", SourceTexture ?? defaultTexture);
+        // The tint (and CanvasGroup alpha) is already baked into the vertex color in GenerateMesh,
+        // and the shader computes texture * vColor * _MainColor - so _MainColor must stay white or
+        // the color/alpha would be applied twice (a 50% tint would render at 25%).
+        p.SetColor("_MainColor", Color.White);
         p.SetVector("_Tiling", new Float2(1, 1));
         p.SetVector("_Offset", Float2.Zero);
     }

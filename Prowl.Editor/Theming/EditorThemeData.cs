@@ -4,7 +4,12 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Prowl.OrigamiUI;
+
 namespace Prowl.Editor.Theming;
+
+/// <summary>Static editor-background style used when the animated background is off.</summary>
+public enum EditorBackgroundStyle { Nebula, Gradient, Color }
 
 /// <summary>
 /// A color ramp with a single primary color. Other stops are computed from RGB offsets.
@@ -81,53 +86,107 @@ public class ColorRamp
 /// </summary>
 public class EditorThemeData
 {
-    public string Name { get; set; } = "Default Dark";
+    public string Name { get; set; } = "Indigo";
 
-    // Color ramps
-    public ColorRamp Neutral { get; set; } = new() { Primary = "#1D1E22" };
-    public ColorRamp Purple { get; set; } = new() { Primary = "#563784" };
-    public ColorRamp Blue { get; set; } = new() { Primary = "#82AAC6" };
-    public ColorRamp Red { get; set; } = new() { Primary = "#CB594F" };
-    public ColorRamp Ink { get; set; } = new() { Primary = "#6C6A7A" };
+    // Color ramps (customization overlaid onto Origami's defaults). Primary = the bright ★ C500 stop.
+    public ColorRamp Neutral { get; set; } = new() { Primary = "#181830" };
+    public ColorRamp Purple { get; set; } = new() { Primary = "#6366F1" };
+    public ColorRamp Blue { get; set; } = new() { Primary = "#8B5CF6" };
+    public ColorRamp Red { get; set; } = new() { Primary = "#FB7185" };
+    public ColorRamp Green { get; set; } = new() { Primary = "#4ADE80" };
+    public ColorRamp Amber { get; set; } = new() { Primary = "#FBBF24" };
+    public ColorRamp Ink { get; set; } = new() { Primary = "#EAEAF7" };
 
     // Font
-    public string DefaultFontName { get; set; } = "inter";
+    public string DefaultFontName { get; set; } = "Geist";
 
-    public string DefaultBoldFontName { get; set; } = "inter";
+    public string DefaultBoldFontName { get; set; } = "Geist";
 
     public float UserScale { get; set; } = 1f;
 
     // Sizing
-    public float MenuBarHeight { get; set; } = 26f;
-    public float RowHeight { get; set; } = 22f;
+    public float MenuBarHeight { get; set; } = 40f;
+    public float StatusBarHeight { get; set; } = 26f;
+    public float RowHeight { get; set; } = 24f;
     public float FontSize { get; set; } = 17f;
-    public float LabelWidth { get; set; } = 120f;
-    public float Spacing { get; set; } = 2f;
-    public float Padding { get; set; } = 4f;
-    public float SplitterSize { get; set; } = 14f;
-    public float DockPadding { get; set; } = 14f;
-    public float TabBarHeight { get; set; } = 26f;
+    public float LabelWidth { get; set; } = 150f;
+    public float Spacing { get; set; } = 4f;
+    public float Padding { get; set; } = 6f;
+    // Single knob driving both the dock gutter padding and the splitter thickness.
+    public float DockSpacing { get; set; } = 6f;
+    public float TabBarHeight { get; set; } = 32f;
     public float TabPadding { get; set; } = 12f;
-    public float Roundness { get; set; } = 8f;
+    public float Roundness { get; set; } = 6f;
 
-    // Default ramp colors for computing offsets
-    private static readonly Color[] DefaultNeutral = [H("#101116"), H("#16151A"), H("#18191D"), H("#1D1E22"), H("#2E2D35")];
-    private static readonly Color[] DefaultPurple = [H("#1D1010"), H("#271D36"), H("#3D2660"), H("#563784"), H("#7252AA"), H("#A886D8"), H("#D4B8F4")];
-    private static readonly Color[] DefaultBlue = [H("#0D1A24"), H("#1D3044"), H("#2E5470"), H("#82AAC6"), H("#AECADD"), H("#CDDEED"), H("#E8F2F9")];
-    private static readonly Color[] DefaultRed = [H("#1C0E0E"), H("#361818"), H("#7A3030"), H("#CB594F"), H("#E68880"), H("#F2B0AB"), H("#FDE0DE")];
-    private static readonly Color[] DefaultInk = [H("#2E2D35"), H("#3E3D47"), H("#6C6A7A"), H("#B0ADBE"), H("#F0EEF8")];
+    // Effects
+    public bool GlassBlur { get; set; } = true;
+    public float BlurAmount { get; set; } = 22f;
+    public bool DropShadows { get; set; } = true;
+    public bool AccentGlow { get; set; } = true;
+    public bool AntiAliasing { get; set; } = true;
+
+    // Background: animated nebula, or a static style (frozen nebula / gradient / solid colour).
+    public bool AnimatedBackground { get; set; } = true;
+    public float BackgroundSpeed { get; set; } = 1f;
+    public EditorBackgroundStyle BackgroundStyle { get; set; } = EditorBackgroundStyle.Nebula;
+    public string BackgroundColorA { get; set; } = "#1B1130";
+    public string BackgroundColorB { get; set; } = "#08060C";
+
+    // Nebula layer toggles + the raw void colour behind everything.
+    public bool BgShowGradients { get; set; } = true;
+    public bool BgShowStars { get; set; } = true;
+    public bool BgShowComets { get; set; } = true;
+    public string BackgroundVoidColor { get; set; } = "#060409";
+
+    // Default ramp stops (RGB) = Origami's ramps. Customization is applied on top of Origami's
+    // live theme, preserving each stop's alpha, so translucent glass surfaces stay glass.
+    private static readonly Color[] DefaultNeutral = [H("#06060E"), H("#96A0FF"), H("#161628"), H("#0E0E1C"), H("#181830"), H("#22223E"), H("#30304E")];
+    private static readonly Color[] DefaultPurple  = [H("#14153A"), H("#1E1F4D"), H("#2E3072"), H("#464B9E"), H("#6366F1"), H("#818CF8"), H("#A5B4FC")];
+    private static readonly Color[] DefaultBlue    = [H("#1A0F33"), H("#241547"), H("#372066"), H("#4E2E8C"), H("#8B5CF6"), H("#A78BFA"), H("#C4B5FD")];
+    private static readonly Color[] DefaultRed     = [H("#1F0E10"), H("#3A181E"), H("#5A242C"), H("#8C3442"), H("#FB7185"), H("#FC8C9C"), H("#FAAFBA")];
+    private static readonly Color[] DefaultGreen   = [H("#0F1F15"), H("#162C20"), H("#1F4530"), H("#2D6446"), H("#4ADE80"), H("#78E6A0"), H("#AAF0C3")];
+    private static readonly Color[] DefaultAmber   = [H("#1F1808"), H("#3A2A10"), H("#5C4017"), H("#825C28"), H("#FBBF24"), H("#FCD060"), H("#FAE0A0")];
+    private static readonly Color[] DefaultInk     = [H("#494960"), H("#6A6A86"), H("#9090AB"), H("#BBBBD4"), H("#EAEAF7"), H("#FFFFFF"), H("#FFFFFF")];
 
     private static Color H(string hex) => ColorTranslator.FromHtml(hex);
 
-    /// <summary>Initialize ramp offsets from defaults. Must be called after deserialization.</summary>
+    /// <summary>Initialize ramp offsets from the Origami defaults. Must be called after deserialization.</summary>
     public void InitRamps()
     {
-        Neutral.Init(5, 3, DefaultNeutral);   // ★ = 400 (index 3)
-        Purple.Init(7, 3, DefaultPurple);     // ★ = 400 (index 3)
-        Blue.Init(7, 3, DefaultBlue);         // ★ = 400 (index 3)
-        Red.Init(7, 3, DefaultRed);           // ★ = 400 (index 3)
-        Ink.Init(5, 2, DefaultInk);           // ★ = 300 (index 2)
+        Neutral.Init(7, 4, DefaultNeutral);   // ★ = C500 (index 4)
+        Purple.Init(7, 4, DefaultPurple);
+        Blue.Init(7, 4, DefaultBlue);
+        Red.Init(7, 4, DefaultRed);
+        Green.Init(7, 4, DefaultGreen);
+        Amber.Init(7, 4, DefaultAmber);
+        Ink.Init(7, 4, DefaultInk);
     }
+
+    /// <summary>Overlay this customization onto Origami's live theme: overwrite each ramp's RGB from the
+    /// edited stops while keeping Origami's per-stop alpha (so translucent surfaces stay glass).</summary>
+    public void ApplyTo(OrigamiTheme t)
+    {
+        ApplyRamp(t.Neutral, Neutral);
+        ApplyRamp(t.Primary, Purple);
+        ApplyRamp(t.Blue, Blue);
+        ApplyRamp(t.Red, Red);
+        ApplyRamp(t.Green, Green);
+        ApplyRamp(t.Amber, Amber);
+        ApplyRamp(t.Ink, Ink);
+    }
+
+    private static void ApplyRamp(OrigamiRamp dst, ColorRamp src)
+    {
+        dst.C100 = KeepAlpha(dst.C100, src.GetStop(0));
+        dst.C200 = KeepAlpha(dst.C200, src.GetStop(1));
+        dst.C300 = KeepAlpha(dst.C300, src.GetStop(2));
+        dst.C400 = KeepAlpha(dst.C400, src.GetStop(3));
+        dst.C500 = KeepAlpha(dst.C500, src.GetStop(4));
+        dst.C600 = KeepAlpha(dst.C600, src.GetStop(5));
+        dst.C700 = KeepAlpha(dst.C700, src.GetStop(6));
+    }
+
+    private static Color KeepAlpha(Color dst, Color rgb) => Color.FromArgb(dst.A, rgb.R, rgb.G, rgb.B);
 
     public EditorThemeData Clone()
     {

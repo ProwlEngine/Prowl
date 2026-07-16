@@ -18,12 +18,12 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField]
     private ShaderProperty[] _properties;
-    public IEnumerable<ShaderProperty> Properties => _properties;
+    public IEnumerable<ShaderProperty> Properties { get { EnsureNotDisposed(); return _properties; } }
 
 
     [SerializeField]
     private ShaderPass[] _passes;
-    public IEnumerable<ShaderPass> Passes => _passes;
+    public IEnumerable<ShaderPass> Passes { get { EnsureNotDisposed(); return _passes; } }
 
     [SerializeField]
     private string _fallbackShader;
@@ -66,28 +66,33 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public ShaderPass GetPass(int passIndex)
     {
+        EnsureNotDisposed();
         passIndex = Maths.Clamp(passIndex, 0, _passes.Length - 1);
         return _passes[passIndex];
     }
 
     public ShaderPass GetPass(string passName)
     {
+        EnsureNotDisposed();
         return _passes[GetPassIndex(passName)];
     }
 
     public int GetPassIndex(string passName)
     {
+        EnsureNotDisposed();
         return _nameIndexLookup.GetValueOrDefault(passName, -1);
     }
 
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
+        EnsureNotDisposed();
         List<int> passes = GetPassesWithTag(tag, tagValue);
         return passes.Count > 0 ? passes[0] : null;
     }
 
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {
+        EnsureNotDisposed();
         List<int> passes = [];
 
         if (_tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
@@ -119,4 +124,11 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         for (int i = 0; i < _passes.Length; i++)
             RegisterPass(_passes[i], i);
     }
+
+    public override void OnDispose()
+    {
+        foreach (var pass in _passes)
+            pass.Dispose();
+    }
+
 }

@@ -26,13 +26,6 @@ internal sealed class UIRenderTree
     public IReadOnlyList<UIRenderItem> Items => _items;
     public int Count => _items.Count;
 
-    /// <summary>
-    /// Whether the tree's *contents* are stale (a canvas-level dirty flag).
-    /// Tracked separately from individual <see cref="UIBehaviour.DirtyFlags"/> so that
-    /// a single boolean check short-circuits the whole rebuild path.
-    /// </summary>
-    public bool IsDirty = true;
-
     // -------- Topology mutation --------
 
     /// <summary>
@@ -57,7 +50,7 @@ internal sealed class UIRenderTree
             it.Owner = null!; it.Canvas = null!;
             it.Mesh = null!;  it.Material = null!;
             it.Props.Clear();
-            it.ScissorPixels = null;
+            it.HasClip = false; it.ClipSource = null;
             _freeItems.Push(it);
         }
         _items.Clear();
@@ -119,8 +112,7 @@ internal sealed class UIRenderTree
     /// </summary>
     internal static UISurface ToSurface(RenderMode m) => m switch
     {
-        RenderMode.WorldSpace        => UISurface.World,
-        RenderMode.ScreenSpaceCamera => UISurface.Camera,
-        _                            => UISurface.Overlay,
+        RenderMode.WorldSpace => UISurface.World,
+        _                     => UISurface.Overlay,
     };
 }

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 
 using ImageMagick;
 
@@ -46,6 +47,10 @@ public sealed class LightmapBakeService
     public bool IsBaking => _job != null;
     public float Progress { get; private set; }
     public string Status { get; private set; } = "Idle";
+    /// <summary>The scene the in-flight bake belongs to, or null when idle. Only one bake can run at
+    /// a time; callers showing bake UI for a scene should compare this against their own scene
+    /// rather than trusting <see cref="IsBaking"/> alone, which is true for any scene while baking.</summary>
+    public Scene? TargetScene => _scene;
 
     /// <summary>Begin a bake of <paramref name="scene"/>. Returns false (with a logged reason) if there's nothing to bake.</summary>
     public bool Start(Scene scene, Scene.LightmapBakeSettings settings)
@@ -174,7 +179,7 @@ public sealed class LightmapBakeService
                 }
                 if (total > 0)
                 {
-                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) — each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
+                    Runtime.Debug.Log($"[LM perf] coveredTexels={covered:N0}/{total:N0} ({100.0 * covered / total:F0}% over {_atlas.Targets.Length} page(s)) each iteration shoots ~{covered:N0} primary rays x {_settings.Bounces} bounces");
                     _statsReported = true;
                 }
             }
@@ -251,7 +256,7 @@ public sealed class LightmapBakeService
         if (_settings.Denoise) Status = "Denoising…";
         baker.Job?.Denoise();  // edge-avoiding denoise + re-dilate (no-op unless enabled); atlas buffers are now final
 
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         string scenePath = EditorSceneManager.CurrentScenePath ?? "";
         if (db == null || string.IsNullOrEmpty(scenePath))
         {
@@ -370,7 +375,8 @@ public sealed class LightmapBakeService
             // One BakeMaterial per (renderer, submesh) with the Prowl material's base colour.
             string matName = $"m{matCounter++}";
             var bmat = bake.CreateMaterial(matName);
-            var pm = (s < materials.Count ? materials[s] : (materials.Count > 0 ? materials[^1] : default)).Res;
+            var materialsSpan = CollectionsMarshal.AsSpan(materials);
+            var pm = (s < materialsSpan.Length ? materialsSpan[s] : (materialsSpan.Length > 0 ? materialsSpan[^1] : default)).Res;
             if (pm != null)
             {
                 var c = pm._properties.GetColor("_MainColor");
@@ -404,7 +410,7 @@ public sealed class LightmapBakeService
         if (key != Guid.Empty && _texCache.TryGetValue(key, out var cached)) return cached;
 
         // Photonic keys textures by name and rejects duplicates, so give each one a unique name
-        // (Texture2D names aren't unique — many default to "New Texture").
+        // (Texture2D names aren't unique many default to "New Texture").
         string name = $"albedo_{_bakeTexCounter++}";
         BakeTexture? result = TryLoadFromFile(bake, tex, name) ?? TryReadback(bake, tex, name);
         if (key != Guid.Empty) _texCache[key] = result;

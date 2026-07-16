@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Runtime;
 
@@ -41,7 +42,13 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         get
         {
             if (instance.IsValid())
+            {
+                // Touched even on this already-cached fast path: an idle-timeout sweep only knows
+                // a GUID is in use if something says so, and the database's own resolve path
+                // (TryGetLoaded/SetLoaded) is bypassed entirely once instance is already cached.
+                AssetDatabase.Touch(AssetID);
                 return instance;
+            }
 
             if (assetID == Guid.Empty)
             {
@@ -123,7 +130,10 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     public void EnsureLoaded()
     {
         if (instance.IsValid())
+        {
+            AssetDatabase.Touch(AssetID);
             return;
+        }
 
         if (assetID == Guid.Empty)
         {
@@ -138,6 +148,24 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     /// <summary>Clear the cached instance. Next access will re-resolve from the database.</summary>
     public void Detach() => instance = null;
+
+    /// <summary>
+    /// Record that this asset is still in use without resolving or blocking. Use this when you're
+    /// holding an AssetRef but aren't calling <see cref="Res"/> right now (e.g. a disabled object's
+    /// reference) and still want to protect it from the idle-timeout eviction sweep. A no-op for a
+    /// runtime resource with no AssetID.
+    /// </summary>
+    public void Touch() => AssetDatabase.Touch(AssetID);
+
+    /// <summary>Pin this asset resident for as long as <paramref name="scene"/> stays loaded -
+    /// released automatically when that scene disposes.</summary>
+    public void LockToScene(Scene scene) => AssetDatabase.LockToScene(AssetID, scene);
+
+    /// <summary>Pin this asset resident indefinitely, until an explicit <see cref="Unlock"/>.</summary>
+    public void LockPermanent() => AssetDatabase.LockPermanent(AssetID);
+
+    /// <summary>Release a permanent lock taken via <see cref="LockPermanent"/>.</summary>
+    public void Unlock() => AssetDatabase.Unlock(AssetID);
 
     // ================================================================
     //  Serialization stores AssetID + inline instance for runtime resources
@@ -188,11 +216,16 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
 
     public static bool operator ==(AssetRef<T> a, AssetRef<T> b)
     {
+        // Match GetHashCode's precedence: a real AssetID identifies the asset regardless of which
+        // instance (if any) either side currently has cached, so two refs to the same asset compare
+        // equal even if one was resolved before the other picked up a different cached instance (e.g.
+        // an unload-then-reload swapped which object is cached). Falls back to instance identity only
+        // for runtime-only resources that have no AssetID at all.
+        if (a.AssetID != Guid.Empty || b.AssetID != Guid.Empty)
+            return a.AssetID == b.AssetID;
         if (a.instance != null && b.instance != null)
             return a.instance == b.instance;
-        if (a.IsExplicitNull && b.IsExplicitNull)
-            return true;
-        return a.AssetID == b.AssetID && a.AssetID != Guid.Empty;
+        return a.IsExplicitNull && b.IsExplicitNull;
     }
 
     public static bool operator !=(AssetRef<T> a, AssetRef<T> b) => !(a == b);

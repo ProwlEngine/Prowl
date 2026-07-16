@@ -12,6 +12,7 @@ public enum DefaultShader
     StandardTransparent,
     StandardAnisotropic,
     Unlit,
+    Sprite,
     Line,
     Invalid,
     UI,
@@ -21,7 +22,9 @@ public enum DefaultShader
     Terrain,
     Grass,
     Refraction,
-    GameUI,
+    DefaultUI,
+    DefaultText,
+    DefaultTextMesh,
 
     ProceduralSkybox,
     GradientSkybox,
@@ -29,6 +32,7 @@ public enum DefaultShader
     Tonemapper,
     SSR,
     FXAA,
+    SMAA,
     Bloom,
     BokehDoF,
     GTAO,
@@ -65,6 +69,15 @@ public enum DefaultMaterial
 }
 
 /// <summary>
+/// Default sprites embedded in the runtime
+/// </summary>
+public enum DefaultSprite
+{
+    /// <summary>A rounded nine-slice panel (white fill, subtle border) used as the default UI background.</summary>
+    UIPanel,
+}
+
+/// <summary>
 /// Default textures embedded in the runtime
 /// </summary>
 public enum DefaultTexture
@@ -77,12 +90,23 @@ public enum DefaultTexture
     Grid,
     Noise,
 
+    // UI
+    UIPanel,
+
     // Scene helpers
     Handle,
 
     // Gizmo icons
     IconCamera,
     IconLight,
+}
+
+/// <summary>
+/// Default fonts embedded in the runtime
+/// </summary>
+public enum DefaultFont
+{
+    Default, // Geist-Regular
 }
 
 /// <summary>

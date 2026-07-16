@@ -6,7 +6,6 @@ using Prowl.Editor.Importers;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Editor.GraphTools.ShaderGraphs.Editors;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Core;
@@ -122,9 +121,9 @@ public static class EditorSceneManager
         if (Scene.Current != null) return;
 
         // Try to restore last scene
-        if (ProjectSettingsRegistry.Entries.Count > 0)
+        if (EditorRegistries.SettingsEntries.Count > 0)
         {
-            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            var general = EditorRegistries.GetSettings<GeneralSettings>();
             if (!string.IsNullOrEmpty(general.LastScenePath))
             {
                 if (OpenScene(general.LastScenePath))
@@ -132,7 +131,7 @@ public static class EditorSceneManager
 
                 // Path was invalid, clear it
                 general.LastScenePath = null;
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }
         }
 
@@ -146,7 +145,7 @@ public static class EditorSceneManager
     /// asset was handled.
     /// </summary>
     public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
-        => AssetDoubleClickRegistry.Dispatch(relativePath, guid);
+        => EditorRegistries.DispatchDoubleClick(relativePath, guid);
 
     [AssetDoubleClickHandler(".scene")]
     private static bool OpenSceneHandler(string relativePath, Guid guid) => OpenScene(relativePath);
@@ -156,21 +155,6 @@ public static class EditorSceneManager
     {
         PrefabEditingMode.Enter(guid);
         return true;
-    }
-
-    [AssetDoubleClickHandler(".shadergraph")]
-    private static bool OpenShaderGraphHandler(string relativePath, Guid guid)
-    {
-        // Resolve via AssetRef so the asset loads through the standard pipeline (importer
-        // runs, sub-assets register). Main asset is the ShaderGraph itself; the compiled
-        // Shader is its sub-asset.
-        var graphRef = new AssetRef<Runtime.GraphTools.Graph>(guid);
-        if (graphRef.Res is Runtime.GraphTools.ShaderGraphs.ShaderGraph sg)
-        {
-            ShaderGraphEditorWindow.OpenFor(sg);
-            return true;
-        }
-        return false;
     }
 
     private static bool SaveTo(string relativePath)
@@ -213,12 +197,12 @@ public static class EditorSceneManager
 
     private static void SaveLastScenePath(string? path)
     {
-        if (ProjectSettingsRegistry.Entries.Count == 0) return;
+        if (EditorRegistries.SettingsEntries.Count == 0) return;
         try
         {
-            var general = ProjectSettingsRegistry.Get<GeneralSettings>();
+            var general = EditorRegistries.GetSettings<GeneralSettings>();
             general.LastScenePath = path;
-            ProjectSettingsRegistry.SaveAll();
+            EditorRegistries.SaveSettings();
         }
         catch { }
     }

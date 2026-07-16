@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.Editor.Utils;
+
 using Prowl.Editor.Inspector;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -9,6 +11,7 @@ using Prowl.Runtime;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 
+using Prowl.Editor.GUI;
 namespace Prowl.Editor.Projects.Settings;
 
 public enum BuildTarget { Windows, Linux, MacOS }
@@ -77,19 +80,14 @@ public sealed class BuildSettings : ProjectSettingsBase
         if (profile == null)
         {
             Type targetType = null;
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var type in EditorUtils.GetAllTypes())
             {
-                foreach (var type in asm.GetTypes())
+                if (!type.IsSubclassOf(typeof(PlatformBuildProfile)) || type == typeof(PlatformBuildProfile)) continue;
+                var check = Activator.CreateInstance(type) as PlatformBuildProfile;
+                if (check?.GetPipelineType() == pipelineType)
                 {
-                    if (type.IsSubclassOf(typeof(PlatformBuildProfile)) && type != typeof(PlatformBuildProfile))
-                    {
-                        var check = Activator.CreateInstance(type) as PlatformBuildProfile;
-                        if (check.GetPipelineType() == pipelineType)
-                        {
-                            targetType = type;
-                            break;
-                        }
-                    }
+                    targetType = type;
+                    break;
                 }
             }
 
@@ -97,7 +95,7 @@ public sealed class BuildSettings : ProjectSettingsBase
             {
                 profile = (PlatformBuildProfile)System.Activator.CreateInstance(targetType);
                 PlatformProfiles.Add(profile);
-                ProjectSettingsRegistry.SaveAll();
+                EditorRegistries.SaveSettings();
             }
         }
         return profile;
@@ -109,7 +107,7 @@ public sealed class BuildSettings : ProjectSettingsBase
         if (font == null) return;
 
         // Scene List
-        Origami.Header(paper, "bld_scenes_h", $"{EditorIcons.Film}  Scenes").Underline().Show();
+        Origami.Header(paper, "bld_scenes_h", $"{EditorIcons.Shapes}  Scenes").Underline().Show();
 
         for (int i = 0; i < Scenes.Count; i++)
         {
@@ -122,11 +120,11 @@ public sealed class BuildSettings : ProjectSettingsBase
                 paper.Box($"bld_si_{i}")
                     .Width(20).Height(EditorTheme.RowHeight)
                     .Text(i.ToString(), font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSize - 2).Alignment(TextAlignment.MiddleCenter);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
 
                 // Enable toggle
                 Origami.Checkbox(paper, $"bld_se_{i}", scene.Enabled,
-                        v => { scene.Enabled = v; ProjectSettingsRegistry.SaveAll(); })
+                        v => { scene.Enabled = v; EditorRegistries.SaveSettings(); })
                     .NoLabel().Show();
 
                 // Scene name
@@ -137,7 +135,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                 paper.Box($"bld_sn_{i}")
                     .Height(EditorTheme.RowHeight).ChildLeft(4)
                     .Text(displayName, font).TextColor(EditorTheme.Ink500)
-                    .FontSize(EditorTheme.FontSize - 1).Alignment(TextAlignment.MiddleLeft);
+                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
                 // Move up/down
                 if (i > 0)
@@ -150,7 +148,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                         .OnClick(idx, (ci, _) =>
                         {
                             (Scenes[ci - 1], Scenes[ci]) = (Scenes[ci], Scenes[ci - 1]);
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         });
                 }
 
@@ -163,7 +161,7 @@ public sealed class BuildSettings : ProjectSettingsBase
                     .OnClick(idx, (ci, _) =>
                     {
                         Scenes.RemoveAt(ci);
-                        ProjectSettingsRegistry.SaveAll();
+                        EditorRegistries.SaveSettings();
                     });
             }
         }
@@ -175,12 +173,12 @@ public sealed class BuildSettings : ProjectSettingsBase
                 {
                     if (EditorSceneManager.CurrentScenePath != null)
                     {
-                        var db = EditorAssetDatabase.Instance;
+                        var db = EditorAssetBackend.Instance;
                         var entry = db?.GetEntry(EditorSceneManager.CurrentScenePath);
                         if (entry != null && !Scenes.Any(s => s.SceneGuid == entry.Guid))
                         {
                             Scenes.Add(new SceneBuildEntry { Path = entry.Path, SceneGuid = entry.Guid });
-                            ProjectSettingsRegistry.SaveAll();
+                            EditorRegistries.SaveSettings();
                         }
                     }
                 }).Width(140).Show();
@@ -191,27 +189,27 @@ public sealed class BuildSettings : ProjectSettingsBase
         // Build Configuration
         Origami.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration").Underline().Show();
 
-        InspectorRow.Draw(paper, "bld_config", "Configuration", () =>
+        EditorGUI.Row(paper, "bld_config", "Configuration", () =>
             Origami.EnumDropdown(paper, "bld_config_v", Config,
-                v => { Config = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { Config = v; EditorRegistries.SaveSettings(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_output", "Output Directory", () =>
+        EditorGUI.Row(paper, "bld_output", "Output Directory", () =>
             Origami.TextField(paper, "bld_output_v", OutputDirectory,
-                v => { OutputDirectory = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { OutputDirectory = v; EditorRegistries.SaveSettings(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_packaging", "Asset Packaging", () =>
+        EditorGUI.Row(paper, "bld_packaging", "Asset Packaging", () =>
             Origami.EnumDropdown(paper, "bld_packaging_v", PackagingMode,
-                v => { PackagingMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { PackagingMode = v; EditorRegistries.SaveSettings(); }).Show());
 
-        InspectorRow.Draw(paper, "bld_assetmode", "Asset Export", () =>
+        EditorGUI.Row(paper, "bld_assetmode", "Asset Export", () =>
             Origami.EnumDropdown(paper, "bld_assetmode_v", AssetMode,
-                v => { AssetMode = v; ProjectSettingsRegistry.SaveAll(); }).Show());
+                v => { AssetMode = v; EditorRegistries.SaveSettings(); }).Show());
 
         if (PackagingMode == AssetPackagingMode.ProwlPak)
         {
-            InspectorRow.Draw(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
+            EditorGUI.Row(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
                 Origami.IntSlider(paper, "bld_maxpak_v", MaxPakSizeMB,
-                    v => { MaxPakSizeMB = v; ProjectSettingsRegistry.SaveAll(); },
+                    v => { MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
                     256, 4096).Show());
         }
 

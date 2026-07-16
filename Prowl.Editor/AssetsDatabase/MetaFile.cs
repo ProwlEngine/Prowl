@@ -58,7 +58,12 @@ public static class MetaFile
         if (data.Settings != null)
             echo["settings"] = data.Settings.Clone();
 
-        File.WriteAllText(metaFilePath, echo.WriteToString());
+        // Write to a temp file and rename into place so a crash/power-loss mid-write can't
+        // leave a truncated .meta file EnsureMeta would otherwise mint a new GUID for it,
+        // permanently breaking every reference to the asset.
+        string tempPath = metaFilePath + ".tmp";
+        File.WriteAllText(tempPath, echo.WriteToString());
+        File.Move(tempPath, metaFilePath, overwrite: true);
     }
 
     public static MetaFileData CreateNew(string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null)

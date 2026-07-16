@@ -6,7 +6,7 @@ using Prowl.Vector;
 namespace Prowl.Runtime.Rendering;
 
 /// <summary>
-/// Order-2 (9-coefficient) RGB spherical harmonics — the light-probe representation for ambient
+/// Order-2 (9-coefficient) RGB spherical harmonics the light-probe representation for ambient
 /// GI on dynamic objects. Layout matches <c>Prowl.Photonic.Sh9Rgb</c> (the editor copies the baked
 /// coefficients straight across). Serialized as plain public fields.
 /// </summary>
@@ -30,7 +30,7 @@ public struct SphericalHarmonicsL2
     public static SphericalHarmonicsL2 FromConstant(Float3 color)
         => new SphericalHarmonicsL2 { C0 = color / (A0 * K0) };
 
-    /// <summary>CPU diffuse irradiance response (E/π) for <paramref name="normal"/> — matches the GPU <c>ShadeSH9</c>.</summary>
+    /// <summary>CPU diffuse irradiance response (E/π) for <paramref name="normal"/> maches the GPU <c>ShadeSH9</c>.</summary>
     public readonly Float3 Evaluate(Float3 normal)
     {
         float x = (float)normal.X, y = (float)normal.Y, z = (float)normal.Z;

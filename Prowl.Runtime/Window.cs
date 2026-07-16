@@ -299,6 +299,37 @@ public static class Window
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
         Input.PushHandler(WindowInputHandler);
+        TrySetWindowIcon();
+    }
+
+    // GLFW doesn't use the executable's icon for the window/taskbar, so set it explicitly from a
+    // raw-RGBA pack embedded in the entry assembly (the editor ships "Resources/prowl-icon.rgba").
+    // Format: int32 count, then per image: int32 width, int32 height, width*height*4 straight-alpha RGBA.
+    private static void TrySetWindowIcon()
+    {
+        try
+        {
+            var asm = System.Reflection.Assembly.GetEntryAssembly();
+            string name = System.Array.Find(asm?.GetManifestResourceNames() ?? System.Array.Empty<string>(),
+                n => n.EndsWith(".prowl-icon.rgba", StringComparison.Ordinal));
+            if (name == null) return;
+
+            using var stream = asm!.GetManifestResourceStream(name);
+            if (stream == null) return;
+            using var br = new System.IO.BinaryReader(stream);
+
+            int count = br.ReadInt32();
+            var icons = new Silk.NET.Core.RawImage[count];
+            for (int i = 0; i < count; i++)
+            {
+                int w = br.ReadInt32();
+                int h = br.ReadInt32();
+                byte[] pixels = br.ReadBytes(w * h * 4);
+                icons[i] = new Silk.NET.Core.RawImage(w, h, pixels);
+            }
+            InternalWindow.SetWindowIcon(icons);
+        }
+        catch { /* no icon shipped, or the platform doesn't support it - keep the default */ }
     }
 
     public static void OnResize(Vector2D<int> size) => Resize?.Invoke(size);

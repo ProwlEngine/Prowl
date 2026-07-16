@@ -246,6 +246,10 @@ public class GameObject : EngineObject, ISerializable
         if (IsChildOrSameTransform(NewParent, this))
             return false;
 
+        // A UI subtree moving between canvases must rebuild both: the old canvas (this element left
+        // it) and the new one (it joined). Capture the old canvas before the parent pointer changes.
+        GameCanvas? uiOldCanvas = GetComponentInParent<GameCanvas>();
+
         Scene newScene = (NewParent.IsValid()) ? NewParent.Scene : Scene;
 
         if (newScene != Scene)
@@ -308,6 +312,13 @@ public class GameObject : EngineObject, ISerializable
             Transform.MarkChanged();
 
         HierarchyStateChanged();
+
+        // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
+        // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
+        GameCanvas? uiNewCanvas = GetComponentInParent<GameCanvas>();
+        uiOldCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        if (!ReferenceEquals(uiNewCanvas, uiOldCanvas))
+            uiNewCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
 
         return true;
     }
@@ -483,6 +494,10 @@ public class GameObject : EngineObject, ISerializable
 
         // Insert at new position
         Parent.Children.Insert(index, this);
+
+        // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
+        // reorder is reflected instead of drawing in the stale order.
+        GetComponentInParent<GameCanvas>()?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>
@@ -927,10 +942,19 @@ public class GameObject : EngineObject, ISerializable
     internal bool IsComponentRequired(MonoBehaviour requiredComponent, out Type dependentType)
     {
         Type componentType = requiredComponent.GetType();
+
+        // Check if there is multiple of the same type before checking if required.
+        int numType = _components.Count(x => x.GetType() == componentType);
+        if (numType > 1)
+        {
+            dependentType = null;
+            return false;
+        }
+
+        // If it is the last type on a GameObject, check if it is required by another component.
         foreach (MonoBehaviour component in _components)
         {
-            RequireComponentAttribute? requireComponentAttribute =
-                component.GetType().GetCustomAttribute<RequireComponentAttribute>();
+            RequireComponentAttribute? requireComponentAttribute = component.GetType().GetCustomAttribute<RequireComponentAttribute>();
             if (requireComponentAttribute == null)
                 continue;
 
@@ -1171,12 +1195,18 @@ public class GameObject : EngineObject, ISerializable
         if (value.TryGet("PrefabChildCount", out var childCount))
             _prefabChildCount = childCount.IntValue;
 
-        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
+        // A GameObject always needs a Transform. If the serialized one can't be restored (e.g. an
+        // unresolved forward $id reference from a scene's flat-array + nested-children encoding), fall
+        // back to a fresh Transform rather than NRE - a single bad object would otherwise throw out of
+        // the serializeObj array and drop every object in the scene.
+        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx) ?? new Transform();
         _transform.GameObject = this;
 
         EchoObject comps = value["Components"];
         _components = [];
-        foreach (EchoObject compTag in comps.List)
+        // comps is null when this echo is a bare $id reference stub (an unresolved forward reference);
+        // guard so such an object degrades to an empty GameObject instead of NREing out of the whole scene.
+        foreach (EchoObject compTag in comps?.List ?? [])
         {
             // Fallback for Missing Type
             EchoObject? typeProperty = compTag.Get("$type");
@@ -1193,6 +1223,16 @@ public class GameObject : EngineObject, ISerializable
                         ComponentData = compTag
                     };
                     _components.Add(missing);
+
+                    // Echo emits an object's full definition at its FIRST encounter during traversal, so the
+                    // definition of an unrelated object (an engine component, a child GameObject, an AssetRef
+                    // holder) can live INLINE inside this missing component's field data. If we ignore it, the
+                    // rest of the scene's references to that object stay as empty "New GameObject"/blank-component
+                    // placeholders. We can't populate them now (the placeholders don't all exist yet, and a
+                    // GameObject reference carries no $type here), so DEFER: once the whole graph is loaded and
+                    // every placeholder exists with its correct type, back-patch them from this trapped data.
+                    EchoObject trapped = compTag;
+                    ctx.Defer(() => BackPatchTrappedDefinitions(trapped, ctx));
                     continue;
                 }
                 else if (oType == typeof(MissingMonobehaviour))
@@ -1218,12 +1258,70 @@ public class GameObject : EngineObject, ISerializable
         // cyclic reference) into broken forward refs.
         EchoObject children = value["Children"];
         Children = [];
-        foreach (EchoObject childTag in children.List)
+        foreach (EchoObject childTag in children?.List ?? [])
         {
             GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child.IsNotValid()) continue;
             child._parent = this;
             Children.Add(child);
+        }
+    }
+
+    /// <summary>
+    /// Phase-2 recovery for objects whose definition was serialized inline inside a missing component. Runs
+    /// after the whole graph is deserialized (via <see cref="SerializationContext.Defer"/>), so every
+    /// reference placeholder already exists with its correct type. Walks the trapped data and, for any node
+    /// that carries a body, populates the matching placeholder in place (so a $type-less object such as a
+    /// GameObject - whose type came from the now-missing declared field - is still recovered), or materializes
+    /// a self-describing definition that nothing else referenced. Best-effort; failures are swallowed.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Recovery path: back-patches previously-serialized objects nested in a missing component's data. User game types must be preserved by the consuming application's trim configuration.")]
+    private void BackPatchTrappedDefinitions(EchoObject? node, SerializationContext ctx)
+    {
+        if (node == null) return;
+
+        if (node.TagType == EchoType.List)
+        {
+            foreach (EchoObject child in node.List)
+                BackPatchTrappedDefinitions(child, ctx);
+            return;
+        }
+
+        if (node.TagType != EchoType.Compound) return;
+
+        bool hasId = node.TryGet("$id", out EchoObject? idTag);
+        bool hasBody = false;
+        foreach (string n in node.GetNames())
+            if (n != "$id" && n != "$type") { hasBody = true; break; }
+
+        if (hasId && hasBody)
+        {
+            int refId = idTag!.IntValue;
+            // A placeholder for this id already exists (created by a typed reference elsewhere - the flat
+            // scene array, a Children list, a typed field). Populate it in place; this is the only way to
+            // recover a $type-less object whose body was trapped here. fullyDefinedIds guards double work.
+            if (ctx.idToObject.TryGetValue(refId, out object? placeholder) && ctx.fullyDefinedIds.Add(refId))
+            {
+                try { Serializer.DeserializeInto(node, placeholder, ctx); }
+                catch (Exception ex) { Debug.LogWarning($"Failed to recover a reference trapped in a missing component on '{Name}': {ex.Message}"); }
+                return; // DeserializeInto walked the body
+            }
+
+            // No placeholder anywhere, but self-describing (resolvable $type): materialize it standalone.
+            EchoObject? typeTag = node.Get("$type");
+            if (!ctx.idToObject.ContainsKey(refId) && typeTag != null
+                && !string.IsNullOrWhiteSpace(typeTag.StringValue) && RuntimeUtils.FindType(typeTag.StringValue) != null)
+            {
+                try { Serializer.Deserialize(node, typeof(object), ctx); return; }
+                catch (Exception ex) { Debug.LogWarning($"Failed to recover a reference trapped in a missing component on '{Name}': {ex.Message}"); }
+            }
+        }
+
+        foreach (string n in node.GetNames())
+        {
+            if (n == "$id" || n == "$type") continue;
+            BackPatchTrappedDefinitions(node[n], ctx);
         }
     }
 

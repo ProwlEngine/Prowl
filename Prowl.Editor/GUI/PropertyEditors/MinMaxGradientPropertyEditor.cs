@@ -24,14 +24,14 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
 
         using (paper.Column(id).Height(UnitValue.Auto).Enter())
         {
-            InspectorRow.Draw(paper, $"{id}_mode", label, () =>
+            EditorGUI.Row(paper, $"{id}_mode", label, () =>
                 Origami.EnumDropdown(paper, $"{id}_mode_v", gradient.Mode,
                     v => { gradient.Mode = v; onChange(gradient); }).Show());
 
             switch (gradient.Mode)
             {
                 case MinMaxGradientMode.Color:
-                    InspectorRow.Draw(paper, $"{id}_color", "Color", () =>
+                    EditorGUI.Row(paper, $"{id}_color", "Color", () =>
                         Origami.ColorField(paper, $"{id}_color_cf", gradient.ConstantColor, v => { gradient.ConstantColor = v; onChange(gradient); }).Show());
                     break;
 
@@ -41,9 +41,9 @@ public class MinMaxGradientPropertyEditor : PropertyEditor
                     break;
 
                 case MinMaxGradientMode.RandomBetweenTwoColors:
-                    InspectorRow.Draw(paper, $"{id}_minc", "Min Color", () =>
+                    EditorGUI.Row(paper, $"{id}_minc", "Min Color", () =>
                         Origami.ColorField(paper, $"{id}_minc_cf", gradient.MinColor, v => { gradient.MinColor = v; onChange(gradient); }).Show());
-                    InspectorRow.Draw(paper, $"{id}_maxc", "Max Color", () =>
+                    EditorGUI.Row(paper, $"{id}_maxc", "Max Color", () =>
                         Origami.ColorField(paper, $"{id}_maxc_cf", gradient.MaxColor, v => { gradient.MaxColor = v; onChange(gradient); }).Show());
                     break;
 

@@ -100,7 +100,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     private PhysicsWorld _physics = new();
 
-    public PhysicsWorld Physics => _physics;
+    public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
 
     [SerializeIgnore]
     private readonly SceneComponentRegistry _componentRegistry = new();
@@ -148,7 +148,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         public float Strength = 1f;
 
         // Uniform ambient
-        public Float4 Color = new(0.2f, 0.2f, 0.2f, 1.0f);
+        public Float4 Color = new(0.43f, 0.55f, 0.65f, 1.0f);
 
         // Hemisphere ambient
         public Float4 SkyColor = new(0.3f, 0.3f, 0.4f, 1.0f);
@@ -244,6 +244,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         get
         {
+            EnsureNotDisposed();
             if (_probeVolume == null && BakedLighting.HasProbes)
                 _probeVolume = new LightProbeVolume(BakedLighting.ProbePositions, BakedLighting.ProbeSH,
                                                     BakedLighting.ProbeTetrahedra, BakedLighting.ProbeTetNeighbours);
@@ -252,31 +253,31 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>Drop the cached probe volume so the next access rebuilds it (call after a rebake).</summary>
-    public void InvalidateProbeVolume() => _probeVolume = null;
+    public void InvalidateProbeVolume() { EnsureNotDisposed(); _probeVolume = null; }
 
     /// <summary> The number of registered, non-disposed objects. </summary>
-    public int Count => _allObj.Count(o => !o.IsDisposed);
+    public int Count { get { EnsureNotDisposed(); return _allObj.Count(o => !o.IsDisposed); } }
 
     /// <summary> Enumerates all registered objects. </summary>
-    public IEnumerable<GameObject> AllObjects => _allObj.Where(o => !o.IsDisposed);
+    public IEnumerable<GameObject> AllObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed); } }
 
     /// <summary> Enumerates all registered objects that are currently active and saveable. </summary>
-    public IEnumerable<GameObject> SaveableObjects => _allObj.Where(o => !o.IsDisposed && !o.HideFlags.HasFlag(HideFlags.DontSave) && !o.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+    public IEnumerable<GameObject> SaveableObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && !o.HideFlags.HasFlag(HideFlags.DontSave) && !o.HideFlags.HasFlag(HideFlags.HideAndDontSave)); } }
 
     /// <summary> Enumerates all registered objects that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveObjects => _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy);
+    public IEnumerable<GameObject> ActiveObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.EnabledInHierarchy); } }
 
     /// <summary> Enumerates all root GameObjects, i.e. all GameObjects without a parent object. </summary>
-    public IEnumerable<GameObject> RootObjects => _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null);
+    public IEnumerable<GameObject> RootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null); } }
 
     /// <summary> Enumerates all <see cref="RootObjects"/> that are currently active. </summary>
-    public IEnumerable<GameObject> ActiveRootObjects => _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null && o.EnabledInHierarchy);
+    public IEnumerable<GameObject> ActiveRootObjects { get { EnsureNotDisposed(); return _allObj.Where(o => !o.IsDisposed && o.Transform.Parent == null && o.EnabledInHierarchy); } }
 
     /// <summary> Returns whether this Scene is completely empty. </summary>
-    public bool IsEmpty => !AllObjects.Any();
+    public bool IsEmpty { get { EnsureNotDisposed(); return !AllObjects.Any(); } }
 
     /// <summary> Returns whether this scene is currently active. </summary>
-    public bool IsActive => _isActive;
+    public bool IsActive { get { EnsureNotDisposed(); return _isActive; } }
 
     /// <summary>
     /// Creates a new, empty scene which does not contain any <see cref="GameObject">GameObjects</see>.
@@ -291,6 +292,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Enable()
     {
+        EnsureNotDisposed();
         if (_isActive) throw new Exception("Scene is already enabled!");
 
         _isActive = true;
@@ -323,6 +325,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Disable()
     {
+        EnsureNotDisposed();
         if (!_isActive) throw new Exception("Scene is not enabled!");
 
         // Create a copy to avoid collection modification during enumeration
@@ -355,6 +358,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Add(GameObject obj)
     {
+        EnsureNotDisposed();
         if (obj.Scene.IsValid() && obj.Scene != this) obj.Scene.Remove(obj);
         AddObject(obj);
     }
@@ -365,6 +369,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void SetRootIndex(GameObject obj, int index)
     {
+        EnsureNotDisposed();
         if (obj.Scene != this || obj.Parent.IsValid()) return;
         int current = _allObj.IndexOf(obj);
         if (current < 0) return;
@@ -385,6 +390,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public int GetRootIndex(GameObject obj)
     {
+        EnsureNotDisposed();
         if (obj.Scene != this || obj.Parent.IsValid()) return -1;
         int rootIdx = 0;
         foreach (var go in _allObj)
@@ -401,6 +407,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Remove(GameObject obj)
     {
+        EnsureNotDisposed();
         if (obj.Scene != this) return;
         if (obj.Parent.IsValid() && obj.Parent.Scene == this)
         {
@@ -483,6 +490,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public T?[] FindObjectsOfType<T>() where T : EngineObject
     {
+        EnsureNotDisposed();
         List<T> objects = [];
         foreach (GameObject go in AllObjects)
         {
@@ -498,6 +506,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public T? FindObjectByID<T>(int id) where T : EngineObject
     {
+        EnsureNotDisposed();
         foreach (GameObject go in AllObjects)
         {
             if (go.InstanceID == id)
@@ -511,6 +520,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
     public T? FindObjectByIdentifier<T>(Guid identifier) where T : EngineObject
     {
+        EnsureNotDisposed();
         foreach (GameObject go in AllObjects)
         {
             if (go.Identifier == identifier)
@@ -525,6 +535,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all GameObjects. </summary>
     public void Clear()
     {
+        EnsureNotDisposed();
         // Create a copy to iterate over since RemoveObject modifies the collection
         List<GameObject> rootObjects = [.. RootObjects];
         foreach (GameObject obj in rootObjects)
@@ -536,6 +547,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     public void Flush()
     {
+        EnsureNotDisposed();
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
         {
@@ -558,13 +570,16 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (Current == this)
             Current = null;
 
+        // Scene-scoped locks auto-expire with the scene rather than leaking forever.
+        AssetDatabase.ReleaseSceneLocks(this);
+
         // Clear the physics world
         _physics.Clear();
 
         // Dispose all GameObjects which will also remove them from the scene. Dispose() (not the raw
         // OnDispose() body) sets IsDisposed and is idempotent, so the flat list's double-hits on
         // already-disposed children are no-ops.
-        List<GameObject> allObjects = [.. AllObjects];
+        List<GameObject> allObjects = [.. _allObj.Where(o => !o.IsDisposed)];
         foreach (GameObject g in allObjects)
             g.Dispose();
 
@@ -638,6 +653,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Update()
     {
+        EnsureNotDisposed();
         _componentRegistry.RunStart();
         _componentRegistry.RunUpdate();
         _componentRegistry.RunLateUpdate();
@@ -651,6 +667,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void FixedUpdate()
     {
+        EnsureNotDisposed();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _componentRegistry.RunStart();
@@ -668,6 +685,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
+        EnsureNotDisposed();
         _componentRegistry.RunRenderCollect(camera, renderables, lights);
     }
 
@@ -676,6 +694,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
+        EnsureNotDisposed();
         _componentRegistry.RunDrawGizmos();
 
         Flush();
@@ -687,6 +706,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void OnGui(Paper paper)
     {
+        EnsureNotDisposed();
         _componentRegistry.RunOnGui(paper);
 
         Flush();
@@ -699,6 +719,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <returns>True if any cameras were rendered, false otherwise</returns>
     public bool Render(RenderTexture? target = null)
     {
+        EnsureNotDisposed();
         // Renderables are now collected per-camera inside pipeline.Render()
 
         // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a

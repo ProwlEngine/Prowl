@@ -41,6 +41,7 @@ public abstract class Texture : EngineObject
     /// <summary>The pixel format for this <see cref="Texture"/>'s image.</summary>
     public readonly PixelFormat ImageFormat;
 
+    private bool _isMipmapped;
     /// <summary>Gets whether this <see cref="Texture"/> is mipmapped.</summary>
     public bool IsMipmapped { get; private protected set; }
 
@@ -48,7 +49,7 @@ public abstract class Texture : EngineObject
     private readonly bool isNotMipmappable;
 
     /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
-    public bool IsMipmappable => !isNotMipmappable;
+    public bool IsMipmappable { get { EnsureNotDisposed(); return !isNotMipmappable; } }
 
     public bool IsCubemap { get; private protected set; }
 
@@ -121,6 +122,8 @@ public abstract class Texture : EngineObject
     /// <exception cref="InvalidOperationException"/>
     public void GenerateMipmaps()
     {
+        EnsureNotDisposed();
+
         if (isNotMipmappable)
             throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", Type.ToString()));
 
@@ -138,6 +141,12 @@ public abstract class Texture : EngineObject
         Graphics.DisposeDeferred(Handle);
         Graphics.DisposeDeferred(Sampler);
     }
+
+    // Safety net: once nothing references this Texture, the idle-timeout sweep in
+    // EditorAssetBackend/PlayerAssetBackend no longer keeps it alive either, so something must
+    // still free the GPU handle. Handle.Dispose() only enqueues a thread-safe render-thread command
+    // (see GraphicsTexture.Dispose), so calling it from the finalizer thread is safe.
+    ~Texture() => Dispose();
 
     /// <summary>
     /// Gets whether the specified <see cref="TextureType"/> type is mipmappable.
@@ -243,4 +252,7 @@ public abstract class Texture : EngineObject
             }
         }
     }
+
+    /// <summary>Bytes per texel for a given image format.</summary>
+    public static int GetBytesPerPixel(PixelFormat format) => (int)format.GetSizeInBytes();
 }

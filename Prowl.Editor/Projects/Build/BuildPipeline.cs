@@ -190,7 +190,7 @@ public abstract class BuildPipeline
         // Serialize the live (in-memory) settings instances. The in-memory registry is the source
         // of truth at build time. TypeMode.None keeps the output a flat compound keyed by field name
         // so the player (PlayerSettingsLoader) can read it without referencing the settings types.
-        foreach (var entry in ProjectSettingsRegistry.Entries)
+        foreach (var entry in EditorRegistries.SettingsEntries)
         {
             if (!entry.ExportToBuild) continue;
 
@@ -204,16 +204,6 @@ public abstract class BuildPipeline
                 Runtime.Debug.LogWarning($"[Build] Failed to export setting '{entry.Name}': {ex.Message}");
             }
         }
-    }
-
-    /// <summary>Run dotnet publish and return result.</summary>
-    protected (int exitCode, string stdout, string stderr) RunDotnetPublish(
-        string csprojPath, string config, string rid, bool selfContained, string outputDir)
-    {
-        string args = $"publish \"{csprojPath}\" -c {config} -r {rid} " +
-            $"--self-contained {selfContained.ToString().ToLower()} -o \"{outputDir}\"";
-
-        return ScriptCompiler.RunDotnetCommand(args, Path.GetDirectoryName(csprojPath)!);
     }
 
     protected static async Task<(int exitCode, string stdout, string stderr)> RunDotnetAsync(

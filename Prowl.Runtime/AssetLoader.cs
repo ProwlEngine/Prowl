@@ -41,7 +41,7 @@ public static class AssetLoader
 
     // True only on the loader thread itself. Lets LoadBlocking detect a re-entrant blocking
     // load (e.g. a deserialize that calls EnsureLoaded on a dependency) and load it inline
-    // instead of enqueueing and waiting on the single loader thread — which would deadlock.
+    // instead of enqueueing and waiting on the single loader thread which would deadlock.
     [ThreadStatic] private static bool _isLoaderThread;
 
     /// <summary>Queue a non-blocking background load. No-op if already cached/queued/in-flight.</summary>

@@ -28,7 +28,14 @@ public abstract class UIBehaviour : MonoBehaviour
 {
     [SerializeIgnore] internal Mesh? CachedMesh;
     [SerializeIgnore] internal UIDirtyFlags DirtyFlags = UIDirtyFlags.All;
-    [SerializeIgnore] internal int LastBuiltAtFrame = -1;
+
+    // The rect size and inherited alpha the CachedMesh was last baked from. The baked geometry
+    // depends on both (size drives the quad extents; alpha is baked into vertex colors), yet neither
+    // is covered by the Vertices dirty flag: a parent resize or an ancestor CanvasGroup alpha change
+    // reflows/recolors this element without touching its own flags. EnsureBaked compares these to
+    // force a re-bake when they drift (otherwise a stretched child renders at its old size).
+    [SerializeIgnore] internal Float2 LastBakeSize = new(float.NaN, float.NaN);
+    [SerializeIgnore] internal float LastBakeAlpha = float.NaN;
 
     public override void OnEnable()
     {
@@ -63,6 +70,12 @@ public abstract class UIBehaviour : MonoBehaviour
         GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
 
         MarkDirty(UIDirtyFlags.Hierarchy);
+
+        // Free the baked GPU buffers - the canvas will re-bake from scratch if this element
+        // is ever re-added. Without this every created/destroyed UI element leaks its mesh.
+        CachedMesh?.OnDispose();
+        CachedMesh = null;
+        DirtyFlags |= UIDirtyFlags.Vertices;
     }
 
     /// <summary>Subclasses fill <paramref name="builder"/> in canvas-local pixel space.</summary>
@@ -71,11 +84,8 @@ public abstract class UIBehaviour : MonoBehaviour
     /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
     public virtual void PopulateProperties(PropertySet props, in UIContext context) { }
 
-    /// <summary>The material this element draws with. Default returns the shared `GameUI` material.</summary>
+    /// <summary>The material this element draws with. Default returns the shared `DefaultUI` material.</summary>
     public virtual Material GetMaterial() => GameCanvas.SharedUIMaterial;
-
-    /// <summary>True if this element should never share a draw call with siblings (e.g. text with its own font atlas).</summary>
-    public virtual bool RequiresPerElementMaterial => false;
 
     public void MarkDirty(UIDirtyFlags flags)
     {

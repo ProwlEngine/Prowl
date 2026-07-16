@@ -18,7 +18,7 @@ namespace Prowl.Editor.Test;
 
 /// <summary>
 /// Base class for headless editor tests. Each test gets a fresh throwaway project on disk with a live
-/// <see cref="EditorAssetDatabase"/>, and everything is torn down (including the temp directory) when
+/// <see cref="EditorAssetBackend"/>, and everything is torn down (including the temp directory) when
 /// the test finishes.
 ///
 /// This deliberately avoids the editor GUI/graphics layer: never instantiate EditorApplication and
@@ -36,7 +36,7 @@ public abstract class EditorTestHarness : IDisposable
     protected Project Project { get; }
 
     /// <summary>The live asset database for the project.</summary>
-    protected EditorAssetDatabase Assets { get; private set; }
+    protected EditorAssetBackend Assets { get; private set; }
 
     protected EditorTestHarness()
     {
@@ -51,7 +51,7 @@ public abstract class EditorTestHarness : IDisposable
         Project = Project.Create(_root, "TestProject");
         Project.SetActive(addToRecent: false); // don't pollute the user's recent-projects list
 
-        Assets = new EditorAssetDatabase(Project);
+        Assets = new EditorAssetBackend(Project);
         Assets.Initialize(); // registers itself as AssetDatabase.Current
     }
 
@@ -92,10 +92,10 @@ public abstract class EditorTestHarness : IDisposable
     /// Disposes the current asset database and opens a fresh one over the same project, simulating
     /// closing and re-opening the editor (re-scan, reading .meta files and the metadata cache).
     /// </summary>
-    protected EditorAssetDatabase ReopenDatabase()
+    protected EditorAssetBackend ReopenDatabase()
     {
         Assets.Dispose();
-        Assets = new EditorAssetDatabase(Project);
+        Assets = new EditorAssetBackend(Project);
         Assets.Initialize();
         return Assets;
     }
@@ -157,9 +157,9 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Build the project to a fresh temp output directory and assert success. Returns the output path.</summary>
     protected string RunBuild(Guid sceneGuid, AssetPackagingMode packaging = AssetPackagingMode.LooseFiles)
     {
-        ProjectSettingsRegistry.Initialize(); // idempotent - ensures BuildSettings exists
+        EditorRegistries.Initialize(); // idempotent - ensures BuildSettings exists
 
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         build.Scenes.Clear();
         build.Scenes.Add(new SceneBuildEntry { Path = "Main.scene", SceneGuid = sceneGuid, Enabled = true });
         build.PackagingMode = packaging;
@@ -198,7 +198,7 @@ public abstract class EditorTestHarness : IDisposable
     /// <summary>Run the built player headlessly for a few frames and return its stdout (asserts a clean exit).</summary>
     protected string RunPlayerHeadless(string outputDir, int frames = 30)
     {
-        var build = ProjectSettingsRegistry.Get<BuildSettings>();
+        var build = EditorRegistries.GetSettings<BuildSettings>();
         string exe = new DesktopBuildPipeline().GetExecutablePath(outputDir, build);
         Assert.True(File.Exists(exe), $"Executable not found at {exe}");
 

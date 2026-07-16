@@ -43,18 +43,22 @@ internal static class UIRaycaster
             GameCanvas? canvas = go.GetComponent<GameCanvas>();
             if (canvas is null || !canvas.EnabledInHierarchy) continue;
 
-            // Only screen-space canvases participate in the runtime raycaster - World canvases
-            // need a 3D ray from a Camera, which lives in TryPickWorld below.
+            // Screen-space canvases only in this pass - World canvases are cast against a camera ray
+            // in TryPickWorld below, and only when nothing screen-space is hit (overlay UI composites
+            // on top of the 3D scene, so it wins the pointer).
             if (canvas.RenderMode == RenderMode.WorldSpace) continue;
 
             canvas.RebuildIfDirty();
 
             if (!ScreenToDesign(canvas, screenPos, windowSize, out Float2 designPt)) continue;
 
+            // Overlay/screen projects orthographically: cast a design-space ray straight into the screen.
+            Float3 rayO = new Float3(designPt.X, designPt.Y, 1e6f);
+            Float3 rayD = new Float3(0f, 0f, -1f);
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, designPt, scissor: null, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             // Higher SortOrder wins; ties resolved by deeper DFS index (drawn on top).
@@ -72,9 +76,113 @@ internal static class UIRaycaster
             }
         }
 
+        // No screen-space hit -> fall back to world-space canvases via a 3D camera ray.
+        if (bestGO == null)
+            TryPickWorld(scene, screenPos, windowSize, ref bestGO, ref bestCanvas, ref bestDesign);
+
         if (bestGO == null || bestCanvas == null) return false;
         hit = new Hit(bestGO, bestCanvas, bestDesign);
         return true;
+    }
+
+    /// <summary>
+    /// Pick for <see cref="RenderMode.WorldSpace"/> canvases: unproject the pointer through the
+    /// scene's main camera, intersect each world canvas's plane, and keep the nearest canvas whose
+    /// element sits under the resulting point. Only called when no screen-space canvas was hit.
+    /// </summary>
+    private static void TryPickWorld(Scene scene, Float2 screenPos, Float2 windowSize,
+        ref GameObject? bestGO, ref GameCanvas? bestCanvas, ref Float2 bestDesign)
+    {
+        Camera? cam = ResolveMainCamera(scene);
+        if (cam == null) return;
+
+        Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
+        float bestT = float.MaxValue;
+
+        foreach (GameObject go in scene.ActiveObjects)
+        {
+            GameCanvas? canvas = go.GetComponent<GameCanvas>();
+            if (canvas is null || !canvas.EnabledInHierarchy) continue;
+            if (canvas.RenderMode != RenderMode.WorldSpace) continue;
+
+            canvas.RebuildIfDirty();
+
+            if (!WorldRayToDesign(canvas, ray, out Float2 designPt, out float t)) continue;
+            if (t >= bestT) continue; // a nearer canvas already owns the pointer
+
+            // The camera ray expressed in the canvas's design space, so element quads (BuildRectModel)
+            // are tested in 3D and out-of-plane element rotation is respected.
+            Float4x4 w2d = canvas.CanvasToWorld.Invert();
+            Float3 rayO = Float4x4.TransformPoint(ray.Origin, w2d);
+            Float3 rayD = Float4x4.TransformPoint(ray.Origin + ray.Direction, w2d) - rayO;
+            int dfs = 0;
+            GameObject? localHit = null;
+            int localDfs = -1;
+            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, ref dfs, ref localHit, ref localDfs);
+            if (localHit == null) continue;
+
+            bestT = t;
+            bestGO = localHit;
+            bestCanvas = canvas;
+            bestDesign = designPt;
+        }
+    }
+
+    /// <summary>The scene's primary rendering camera: the enabled camera with the highest Depth.</summary>
+    private static Camera? ResolveMainCamera(Scene scene)
+    {
+        Camera? best = null;
+        foreach (GameObject go in scene.ActiveObjects)
+        {
+            Camera? c = go.GetComponent<Camera>();
+            if (c == null || !c.EnabledInHierarchy) continue;
+            if (best == null || c.Depth > best.Depth) best = c;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Intersects a world-space ray with a world canvas's plane (the design-pixel Z=0 plane mapped
+    /// through <see cref="GameCanvas.CanvasToWorld"/>) and returns the hit point in the canvas's
+    /// design-pixel space plus the ray distance. False if the ray is parallel or hits behind the origin.
+    /// </summary>
+    private static bool WorldRayToDesign(GameCanvas canvas, Ray ray, out Float2 designPt, out float t)
+    {
+        designPt = Float2.Zero;
+
+        Float4x4 toWorld = canvas.CanvasToWorld;
+        Float3 p0 = Float4x4.TransformPoint(Float3.Zero, toWorld);
+        Float3 p1 = Float4x4.TransformPoint(new Float3(1f, 0f, 0f), toWorld);
+        Float3 p2 = Float4x4.TransformPoint(new Float3(0f, 1f, 0f), toWorld);
+        Plane plane = new Plane(p0, p1, p2);
+
+        if (!ray.Intersects(plane, out t) || t < 0f) return false;
+
+        Float3 world = ray.Origin + ray.Direction * t;
+        Float3 local = Float4x4.TransformPoint(world, toWorld.Invert());
+        designPt = new Float2(local.X, local.Y);
+        return true;
+    }
+
+    /// <summary>
+    /// Projects a screen pointer into <paramref name="canvas"/>'s design space without requiring an
+    /// element hit. Used to keep a drag tracking the pointer after it leaves every raycast target
+    /// (otherwise the hit-test yields no design position and sliders/scrollbars snap to the origin).
+    /// Returns false when the projection is undefined (degenerate scale, no camera, or a parallel ray).
+    /// </summary>
+    internal static bool TryProjectPointer(GameCanvas canvas, Float2 screenPos, Float2 windowSize, out Float2 designPt)
+    {
+        if (canvas.RenderMode == RenderMode.WorldSpace)
+        {
+            designPt = Float2.Zero;
+            Scene? scene = canvas.GameObject.Scene;
+            if (scene == null) return false;
+            Camera? cam = ResolveMainCamera(scene);
+            if (cam == null) return false;
+            Ray ray = cam.ScreenPointToRay(screenPos, windowSize);
+            return WorldRayToDesign(canvas, ray, out designPt, out _);
+        }
+        return ScreenToDesign(canvas, screenPos, windowSize, out designPt);
     }
 
     private static bool ScreenToDesign(GameCanvas canvas, Float2 screenPos, Float2 windowSize, out Float2 designPt)
@@ -86,7 +194,10 @@ internal static class UIRaycaster
         return true;
     }
 
-    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Rect? scissor, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    // pt is the pointer on the canvas plane (used for the RectMask scissor, which is canvas-aligned);
+    // (rayO, rayD) is the same pointer as a design-space ray, intersected with each element's own quad
+    // so out-of-plane (3D) element rotation is respected.
+    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Float3 rayO, Float3 rayD, Rect? scissor, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
     {
         foreach (GameObject child in parent.Children)
         {
@@ -118,7 +229,7 @@ internal static class UIRaycaster
                 RectTransform? rt = child.RectTransform;
                 if (rt != null)
                 {
-                    bool inside = ContainsCanvasPoint(canvas, rt, pt);
+                    bool inside = RayHitsRect(canvas, rt, rayO, rayD);
 
                     foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
                     {
@@ -137,7 +248,7 @@ internal static class UIRaycaster
                 }
             }
 
-            WalkRecurse(canvas, child, pt, childScissor, ref dfs, ref bestGO, ref bestDfs);
+            WalkRecurse(canvas, child, pt, rayO, rayD, childScissor, ref dfs, ref bestGO, ref bestDfs);
         }
     }
 
@@ -155,22 +266,36 @@ internal static class UIRaycaster
     internal static bool RectContainsPoint(Rect r, Float2 p)
         => p.X >= r.Min.X && p.X <= r.Max.X && p.Y >= r.Min.Y && p.Y <= r.Max.Y;
 
-    internal static bool ContainsCanvasPoint(GameCanvas canvas, RectTransform rt, Float2 canvasPt)
+    /// <summary>
+    /// True if a ray hits the element's quad. <paramref name="model"/> maps the element's pivot-centered
+    /// local space into the ray's space; the ray is intersected with the element's actual (possibly
+    /// out-of-plane tilted) plane rather than a flat projection, so 3D rotation is respected. Runtime
+    /// passes a canvas-design-space ray + <see cref="GameCanvas.BuildRectModel"/>; the editor passes a
+    /// world-space ray + world model.
+    /// </summary>
+    public static bool RayHitsRect(Float4x4 model, RectTransform rt, Float3 rayOrigin, Float3 rayDir, out float t)
     {
+        t = 0f;
         Rect cr = rt.ComputedRect;
         if (cr.Size.X <= 0 || cr.Size.Y <= 0) return false;
 
-        Float4x4 model = canvas.BuildRectModel(rt);
-        Float3 local = Float4x4.TransformPoint(new Float3(canvasPt.X, canvasPt.Y, 0), model.Invert());
+        Float4x4 inv = model.Invert();
+        Float3 lo = Float4x4.TransformPoint(rayOrigin, inv);
+        Float3 ld = Float4x4.TransformPoint(rayOrigin + rayDir, inv) - lo;
+        if (Maths.Abs(ld.Z) < 1e-9f) return false;
 
+        t = -lo.Z / ld.Z;
+        if (t < 0f) return false;
+
+        Float3 lh = lo + ld * t;
         Float2 pivot = rt.Pivot;
-        float w = cr.Size.X;
-        float h = cr.Size.Y;
-        float minX = -pivot.X * w;
-        float maxX = (1f - pivot.X) * w;
-        float minY = -pivot.Y * h;
-        float maxY = (1f - pivot.Y) * h;
-
-        return local.X >= minX && local.X <= maxX && local.Y >= minY && local.Y <= maxY;
+        float w = cr.Size.X, h = cr.Size.Y;
+        return lh.X >= -pivot.X * w && lh.X <= (1f - pivot.X) * w
+            && lh.Y >= -pivot.Y * h && lh.Y <= (1f - pivot.Y) * h;
     }
+
+    /// <summary>Ray-vs-element test in canvas design space (element model = <see cref="GameCanvas.BuildRectModel"/>).</summary>
+    internal static bool RayHitsRect(GameCanvas canvas, RectTransform rt, Float3 rayOrigin, Float3 rayDir)
+        => RayHitsRect(canvas.BuildRectModel(rt), rt, rayOrigin, rayDir, out _);
+
 }

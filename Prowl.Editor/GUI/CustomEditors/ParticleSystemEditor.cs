@@ -88,11 +88,11 @@ public class ParticleSystemComponentEditor : CustomEditor
             // Shape
             EnumRow(paper, $"{id}_emit_shape", "Shape", ps.Emission.Shape, v => ps.Emission.Shape = v);
 
-            InspectorRow.Draw(paper, $"{id}_emit_pos", "Position", () =>
+            EditorGUI.Row(paper, $"{id}_emit_pos", "Position", () =>
                 Origami.Float3Field(paper, $"{id}_emit_pos_vf", ps.Emission.ShapePosition, v => ps.Emission.ShapePosition = v).Show());
-            InspectorRow.Draw(paper, $"{id}_emit_rot2", "Rotation", () =>
+            EditorGUI.Row(paper, $"{id}_emit_rot2", "Rotation", () =>
                 Origami.Float3Field(paper, $"{id}_emit_rot2_vf", ps.Emission.ShapeRotation, v => ps.Emission.ShapeRotation = v).Show());
-            InspectorRow.Draw(paper, $"{id}_emit_scl", "Scale", () =>
+            EditorGUI.Row(paper, $"{id}_emit_scl", "Scale", () =>
                 Origami.Float3Field(paper, $"{id}_emit_scl_vf", ps.Emission.ShapeScale, v => ps.Emission.ShapeScale = v).Show());
 
             // Shape-specific fields
@@ -110,7 +110,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                         v => ps.Emission.EmitFromShell = v);
                     break;
                 case EmissionShape.Box:
-                    InspectorRow.Draw(paper, $"{id}_emit_box", "Box Size", () =>
+                    EditorGUI.Row(paper, $"{id}_emit_box", "Box Size", () =>
                         Origami.Float3Field(paper, $"{id}_emit_box_vf", ps.Emission.BoxSize, v => ps.Emission.BoxSize = v).Show());
                     break;
                 case EmissionShape.Cone:
@@ -208,7 +208,7 @@ public class ParticleSystemComponentEditor : CustomEditor
                     v => ps.UV.UOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
                 PropertyGridUtils.DrawField(paper, $"{id}_uv_vo", "V Offset", typeof(AnimationCurve), ps.UV.VOffsetCurve,
                     v => ps.UV.VOffsetCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
-                InspectorRow.Draw(paper, $"{id}_uv_ss", "Scroll Speed", () =>
+                EditorGUI.Row(paper, $"{id}_uv_ss", "Scroll Speed", () =>
                     Origami.Float2Field(paper, $"{id}_uv_ss_vf", ps.UV.ScrollSpeed, v => ps.UV.ScrollSpeed = v).Show());
             }
 
@@ -237,16 +237,16 @@ public class ParticleSystemComponentEditor : CustomEditor
     // -- Origami row helpers --------------------------------------------
 
     private static void FloatRow(Paper paper, string id, string label, float value, Action<float> setter)
-        => InspectorRow.Draw(paper, id, label, () =>
+        => EditorGUI.Row(paper, id, label, () =>
             Origami.NumericField<float>(paper, $"{id}_v", value, setter).Show());
 
     private static void IntRow(Paper paper, string id, string label, int value, Action<int> setter)
-        => InspectorRow.Draw(paper, id, label, () =>
+        => EditorGUI.Row(paper, id, label, () =>
             Origami.NumericField<int>(paper, $"{id}_v", value, setter).Show());
 
     private static void EnumRow<T>(Paper paper, string id, string label, T value, Action<T> setter)
         where T : struct, Enum
-        => InspectorRow.Draw(paper, id, label, () =>
+        => EditorGUI.Row(paper, id, label, () =>
             Origami.EnumDropdown<T>(paper, $"{id}_v", value, setter).Show());
 
     private static void BoolRow(Paper paper, string id, string label, bool value, Action<bool> setter)

@@ -14,7 +14,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".scene")]
 public class SceneImporter : AssetImporter
 {
-    public override int Version => 2; // Bumped: now tracks PrefabAssetId deps
+    public override int Version => 3; // Bumped: re-import to regenerate scenes cached by the pre-fix
+                                      // GameObject deserializer (which could drop every object to null).
 
     public override bool Import(ImportContext ctx)
     {
@@ -28,12 +29,11 @@ public class SceneImporter : AssetImporter
             var scene = Serializer.Deserialize<Scene>(echo, serCtx);
             if (scene != null)
             {
-                scene.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
                 ctx.SetMainAsset(scene);
 
                 // Also walk the raw echo for PrefabAssetId references
                 // (these are plain Guid strings, not AssetRef fields, so not auto-tracked)
-                CollectPrefabDependencies(echo, dependencies);
+                ImportHelper.CollectAssetDependencies(echo, dependencies);
 
                 foreach (var dep in dependencies)
                     ctx.AddDependency(dep);
@@ -45,27 +45,5 @@ public class SceneImporter : AssetImporter
             return false;
         }
         return true;
-    }
-
-    /// <summary>Walk EchoObject tree for PrefabAssetId Guid strings.</summary>
-    private static void CollectPrefabDependencies(EchoObject echo, HashSet<Guid> deps)
-    {
-        if (echo == null) return;
-
-        if (echo.TagType == EchoType.Compound)
-        {
-            if (echo.TryGet("PrefabAssetId", out var prefabIdTag))
-            {
-                if (Guid.TryParse(prefabIdTag.StringValue, out var prefabGuid) && prefabGuid != Guid.Empty)
-                    deps.Add(prefabGuid);
-            }
-            foreach (var kvp in echo.Tags)
-                CollectPrefabDependencies(kvp.Value, deps);
-        }
-        else if (echo.TagType == EchoType.List && echo.List != null)
-        {
-            foreach (var item in echo.List)
-                CollectPrefabDependencies(item, deps);
-        }
     }
 }

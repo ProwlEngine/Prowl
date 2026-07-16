@@ -43,11 +43,11 @@ public class LightProbeGroupEditor : CustomEditor
         PropertyGridUtils.DrawField(paper, $"{id}_max", "Max (local)", typeof(Float3), _max,
             v => _max = (Float3)v!, 0);
 
-        InspectorRow.Draw(paper, $"{id}_cx", "Count X", () =>
+        EditorGUI.Row(paper, $"{id}_cx", "Count X", () =>
             Origami.IntSlider(paper, $"{id}_cx_v", _countX, v => _countX = v, 1, 32).Show());
-        InspectorRow.Draw(paper, $"{id}_cy", "Count Y", () =>
+        EditorGUI.Row(paper, $"{id}_cy", "Count Y", () =>
             Origami.IntSlider(paper, $"{id}_cy_v", _countY, v => _countY = v, 1, 32).Show());
-        InspectorRow.Draw(paper, $"{id}_cz", "Count Z", () =>
+        EditorGUI.Row(paper, $"{id}_cz", "Count Z", () =>
             Origami.IntSlider(paper, $"{id}_cz_v", _countZ, v => _countZ = v, 1, 32).Show());
 
         Origami.Button(paper, $"{id}_gen", $"{EditorIcons.Sun}  Generate Grid", () =>

@@ -22,7 +22,7 @@ public static class AssetCollector
     /// </summary>
     public static CollectionResult Collect(List<Guid> sceneGuids, bool dependenciesOnly)
     {
-        var db = EditorAssetDatabase.Instance;
+        var db = EditorAssetBackend.Instance;
         if (db == null)
             return new CollectionResult { AllAssets = new(), ResourcesMap = new() };
 
@@ -75,17 +75,34 @@ public static class AssetCollector
         if (dependenciesOnly && resourceGuids.Count > 0)
             allAssets.UnionWith(db.Dependencies.GetTransitiveDependencies(resourceGuids));
 
-        // Ensure sub-assets of all collected parents are included
-        foreach (var entry in db.GetAllEntries())
+        // Ensure sub-assets of all collected parents are included, and walk what those sub-assets
+        // themselves reference too - not just their GUID. Repeats until nothing new turns up, since
+        // a newly pulled-in dependency can itself be a parent with its own sub-assets.
+        int previousCount;
+        do
         {
-            if (allAssets.Contains(entry.Guid) && entry.SubAssets != null)
-            {
-                foreach (var sub in entry.SubAssets)
-                    allAssets.Add(sub.Guid);
-            }
-        }
+            previousCount = allAssets.Count;
 
-        // Exclude editor-only files (importers flag non-shippable types; plus anything in an Editor/ folder).
+            var newSubAssetGuids = new List<Guid>();
+            foreach (var entry in db.GetAllEntries())
+            {
+                if (!allAssets.Contains(entry.Guid) || entry.SubAssets == null) continue;
+                foreach (var sub in entry.SubAssets)
+                    if (allAssets.Add(sub.Guid))
+                        newSubAssetGuids.Add(sub.Guid);
+            }
+
+            if (newSubAssetGuids.Count > 0)
+                allAssets.UnionWith(db.Dependencies.GetTransitiveDependencies(newSubAssetGuids));
+
+        } while (allAssets.Count > previousCount);
+
+        // Exclude editor-only assets (importers flag non-shippable types; plus anything under an
+        // Editor/ folder) by default - UNLESS something that's actually shipping still depends on it,
+        // in which case it ships anyway (a normal runtime asset can legitimately reference something
+        // that happens to live under Editor/ tooling). Walked to a fixed point since the dependency
+        // itself might also be editor-only (e.g. two files under Editor/ referencing each other, where
+        // neither should ship unless something outside Editor/ needs the chain).
         var editorOnlyImporters = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var editorOnly = new HashSet<Guid>();
         foreach (var entry in db.GetAllEntries())
@@ -96,17 +113,38 @@ public static class AssetCollector
                 foreach (var sub in entry.SubAssets)
                     editorOnly.Add(sub.Guid);
         }
-        allAssets.ExceptWith(editorOnly);
-        foreach (var kv in resourcesMap.Where(kv => editorOnly.Contains(kv.Value)).ToList())
+
+        var neededEditorOnly = new HashSet<Guid>();
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var guid in editorOnly)
+            {
+                if (!allAssets.Contains(guid) || neededEditorOnly.Contains(guid)) continue;
+                foreach (var dependent in db.Dependencies.GetDependents(guid))
+                {
+                    if (!allAssets.Contains(dependent)) continue;
+                    if (editorOnly.Contains(dependent) && !neededEditorOnly.Contains(dependent)) continue;
+                    neededEditorOnly.Add(guid);
+                    grew = true;
+                    break;
+                }
+            }
+        } while (grew);
+
+        allAssets.ExceptWith(editorOnly.Where(g => !neededEditorOnly.Contains(g)));
+        foreach (var kv in resourcesMap.Where(kv => editorOnly.Contains(kv.Value) && !neededEditorOnly.Contains(kv.Value)).ToList())
             resourcesMap.Remove(kv.Key);
 
         return new CollectionResult { AllAssets = allAssets, ResourcesMap = resourcesMap };
     }
 
     /// <summary>
-    /// An asset is editor-only (excluded from build packaging) when it lives under an Editor/ folder,
-    /// or when its importer declares <see cref="Importers.AssetImporter.IsEditorOnlyAsset"/> (scripts,
-    /// plugins, assembly definitions - things that aren't real runtime data assets).
+    /// An asset is editor-only (excluded from build packaging by default - see <see cref="Collect"/>'s
+    /// "still needed" check for the dependency override) when it lives under an Editor/ folder, or when
+    /// its importer declares <see cref="Importers.AssetImporter.IsEditorOnlyAsset"/> (scripts, plugins,
+    /// assembly definitions - things that aren't real runtime data assets).
     /// </summary>
     /// <param name="importerCache">Per-collection cache of importer-type-name -> editor-only.</param>
     public static bool IsEditorOnly(AssetEntry entry, Dictionary<string, bool> importerCache)
@@ -120,7 +158,7 @@ public static class AssetCollector
 
         if (!importerCache.TryGetValue(entry.ImporterType, out bool editorOnly))
         {
-            editorOnly = Importers.ImporterRegistry.CreateByTypeName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
+            editorOnly = EditorRegistries.CreateImporterByName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
             importerCache[entry.ImporterType] = editorOnly;
         }
         return editorOnly;

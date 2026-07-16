@@ -12,7 +12,7 @@ namespace Prowl.Editor.Core;
 /// <see cref="EditorApplication.ReleaseScriptReferences"/> calls <see cref="OnScriptReloadCleanup"/>
 /// on every open panel right before the unload. Implementations must drop their cached
 /// scene/user references (set fields to null, clear collections). They do NOT need to dispose
-/// themselves — the panel instance lives on; only its references into the dying context go away.
+/// themselves the panel instance lives on; only its references into the dying context go away.
 /// </summary>
 public interface IScriptReloadCleanup
 {
