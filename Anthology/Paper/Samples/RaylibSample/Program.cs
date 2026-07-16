@@ -30,6 +30,7 @@ internal class Program
         _renderer = new RaylibCanvasRenderer();
         P = new Paper(_renderer, width, height, new Prowl.Quill.FontAtlasSettings());
         P.SetClipboardHandler(new RaylibClipboardHandler());
+        P.OnCursorChange += c => SetMouseCursor(MapCursor(c));
 
         // Initialize the Demo, this loads the Demo fonts and other resources
         PaperDemo.Initialize(P);
@@ -150,4 +151,19 @@ internal class Program
         else if (IsKeyReleased(rayKey))
             P.SetKeyState(paperKey, false);
     }
+
+    // Raylib has no grab/wait/help shapes, so those fall back to the pointing hand or the arrow.
+    static MouseCursor MapCursor(PaperCursor c) => c switch
+    {
+        PaperCursor.Pointer or PaperCursor.Grab or PaperCursor.Grabbing => MouseCursor.PointingHand,
+        PaperCursor.Text => MouseCursor.IBeam,
+        PaperCursor.Crosshair => MouseCursor.Crosshair,
+        PaperCursor.ResizeHorizontal => MouseCursor.ResizeEw,
+        PaperCursor.ResizeVertical => MouseCursor.ResizeNs,
+        PaperCursor.ResizeNWSE => MouseCursor.ResizeNwse,
+        PaperCursor.ResizeNESW => MouseCursor.ResizeNesw,
+        PaperCursor.ResizeAll => MouseCursor.ResizeAll,
+        PaperCursor.NotAllowed => MouseCursor.NotAllowed,
+        _ => MouseCursor.Default,
+    };
 }

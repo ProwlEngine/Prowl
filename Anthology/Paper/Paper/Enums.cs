@@ -219,4 +219,59 @@ namespace Prowl.PaperUI
         /// <summary>Scales uniformly to cover the entire rect, preserving aspect ratio. May crop.</summary>
         Fill
     }
+
+    /// <summary>
+    /// A hardware mouse cursor shape an element requests while hovered. Paper only resolves which
+    /// shape the pointer is over (see <see cref="Paper.CurrentCursor"/> / <see cref="Paper.OnCursorChange"/>);
+    /// the host application maps the value to its windowing library and sets the OS cursor. The names
+    /// mirror the common cross-platform standard set (GLFW / SDL); a host should fall back to
+    /// <see cref="Default"/> for any shape it doesn't provide.
+    /// </summary>
+    public enum PaperCursor
+    {
+        /// <summary>No explicit cursor; inherit from the parent (resolves to <see cref="Default"/> at the root).</summary>
+        Inherit = 0,
+
+        /// <summary>The standard arrow cursor.</summary>
+        Default,
+
+        /// <summary>Pointing hand, for clickable elements (links, buttons).</summary>
+        Pointer,
+
+        /// <summary>Open hand, for something grabbable that isn't being dragged yet.</summary>
+        Grab,
+
+        /// <summary>Closed hand, for something currently being dragged.</summary>
+        Grabbing,
+
+        /// <summary>I-beam, for editable/selectable text.</summary>
+        Text,
+
+        /// <summary>Crosshair.</summary>
+        Crosshair,
+
+        /// <summary>Horizontal resize (left-right arrows), for column splitters / east-west edges.</summary>
+        ResizeHorizontal,
+
+        /// <summary>Vertical resize (up-down arrows), for row splitters / north-south edges.</summary>
+        ResizeVertical,
+
+        /// <summary>Diagonal resize along the top-left / bottom-right axis.</summary>
+        ResizeNWSE,
+
+        /// <summary>Diagonal resize along the top-right / bottom-left axis.</summary>
+        ResizeNESW,
+
+        /// <summary>Move / resize in all directions (four-way arrows).</summary>
+        ResizeAll,
+
+        /// <summary>Operation not allowed (slashed circle).</summary>
+        NotAllowed,
+
+        /// <summary>Busy / wait.</summary>
+        Wait,
+
+        /// <summary>Help (arrow with question mark).</summary>
+        Help
+    }
 }

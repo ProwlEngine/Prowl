@@ -164,7 +164,7 @@ public class DockSpace
             float aw = (w - sp) * node.SplitRatio;
             float bw = w - aw - sp;
             DrawNodeTree(paper, node.ChildA!, node, x, y, aw, h, fw, theme, m, icons, font);
-            DrawSplitter(paper, node, x + aw, y, sp, h, true, theme);
+            DrawSplitter(paper, node, x + aw, y, sp, h, true, theme, icons);
             DrawNodeTree(paper, node.ChildB!, node, x + aw + sp, y, bw, h, fw, theme, m, icons, font);
         }
         else
@@ -172,7 +172,7 @@ public class DockSpace
             float ah = (h - sp) * node.SplitRatio;
             float bh = h - ah - sp;
             DrawNodeTree(paper, node.ChildA!, node, x, y, w, ah, fw, theme, m, icons, font);
-            DrawSplitter(paper, node, x, y + ah, w, sp, false, theme);
+            DrawSplitter(paper, node, x, y + ah, w, sp, false, theme, icons);
             DrawNodeTree(paper, node.ChildB!, node, x, y + ah + sp, w, bh, fw, theme, m, icons, font);
         }
     }
@@ -181,14 +181,15 @@ public class DockSpace
     //  SPLITTER
     // ================================================================
 
+    private const float SplitterGripLength = 28f;
+
     private void DrawSplitter(Paper paper, DockNode node, float x, float y, float w, float h, bool horiz,
-                               OrigamiTheme theme)
+                               OrigamiTheme theme, OrigamiIcons icons)
     {
         bool active = _splitterDragNode == node;
-        paper.Box($"spl_{node.GetHashCode()}")
+
+        using (paper.Box($"spl_{node.GetHashCode()}")
             .PositionType(PositionType.SelfDirected).Position(x, y).Size(w, h)
-            .Hovered.BackgroundColor(theme.Primary.C500).End()
-            .Active.BackgroundColor(theme.Primary.C400).End()
             .OnDragStart(node, (n, e) => _splitterDragNode = n)
             .OnDragging(node, (n, e) =>
             {
@@ -197,7 +198,53 @@ public class DockSpace
                 if (total > 0)
                     n.SplitRatio = Math.Clamp(n.SplitRatio + (horiz ? e.Delta.X : e.Delta.Y) / total, 0.1f, 0.9f);
             })
-            .OnDragEnd(e => _splitterDragNode = null);
+            .OnDragEnd(e => _splitterDragNode = null)
+            .Cursor(horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical)
+            .Enter())
+        {
+            bool hovered = paper.IsParentHovered || active;
+            Float2 pointer = paper.PointerPos;
+
+            // Everything below is plain canvas drawing (no child Boxes) since this repaints every
+            // frame regardless and Box elements carry real layout overhead we don't need here.
+            paper.Draw((canvas, rect) =>
+            {
+                // A hairline divider spans the length of the splitter at all times, inset a few
+                // pixels at each end with rounded caps.
+                const float lineThickness = 1f;
+                const float lineInset = 4f;
+                float lineW = horiz ? lineThickness : w - lineInset * 2f;
+                float lineH = horiz ? h - lineInset * 2f : lineThickness;
+                float lx = rect.Min.X + (w - lineW) / 2f;
+                float ly = rect.Min.Y + (h - lineH) / 2f;
+                canvas.RectFilled(lx, ly, lineW, lineH, theme.BorderSoft);
+
+                // The grip only appears while the splitter is hovered or being dragged.
+                if (!hovered) return;
+
+                float thickness = MathF.Min(w, h) / 2f;
+                float gripW = horiz ? thickness : SplitterGripLength;
+                float gripH = horiz ? SplitterGripLength : thickness;
+
+                // Slide the grip along the splitter's long axis to track the pointer, clamped so
+                // it stays fully inside the (inset) hairline.
+                float axisLen = horiz ? h : w;
+                float gripLenAlong = horiz ? gripH : gripW;
+                float localPointer = horiz ? pointer.Y - rect.Min.Y : pointer.X - rect.Min.X;
+                float alongPos = Math.Clamp(localPointer - gripLenAlong / 2f,
+                    lineInset, axisLen - lineInset - gripLenAlong);
+
+                float gx = rect.Min.X + (horiz ? (w - gripW) / 2f : alongPos);
+                float gy = rect.Min.Y + (horiz ? alongPos : (h - gripH) / 2f);
+
+                var gripColor = active ? theme.Primary.C400 : theme.Primary.C500;
+                canvas.RoundedRectFilled(gx, gy, gripW, gripH, thickness / 2f, gripColor);
+
+                var grip = horiz ? icons.GripVertical : icons.GripHorizontal;
+                var gripRect = new Rect(new Float2(gx, gy), new Float2(gx + gripW, gy + gripH));
+                grip?.Draw(canvas, gripRect, theme.Ink.C300);
+            });
+        }
     }
 
     private float EstimateSplitSize(DockNode n, bool horiz)
@@ -268,7 +315,7 @@ public class DockSpace
             // In a floating window, dragging the tab-bar background (behind the tabs) moves the whole
             // window — the tabs sit on top with StopEventPropagation, so a tab drag still detaches it.
             if (fw != null)
-                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta);
+                tabbar.OnDragging(fw, (cap, e) => cap.Position += e.Delta).Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
             else
                 tabbar.IsNotInteractable();
 
@@ -313,10 +360,15 @@ public class DockSpace
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
                     .BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0))
                     .Hovered.BackgroundColor(isActive ? Color.FromArgb(0, 0, 0, 0) : OrigamiTheme.WithAlpha(theme.Primary.C500, 70)).End()
-                    .StopEventPropagation()
-                    .OnClick(ci, (idx, e) => { if (!_isDragging) node.ActiveTabIndex = idx; })
+                    // Per-event stops (not blanket .StopEventPropagation()) isolate the tab's click and
+                    // drag from the tab-bar/window underneath, while letting the wheel bubble to a
+                    // parent ScrollView. The drag-start frame also fires a dragging event, so stop that
+                    // too or it would reach the floating tab-bar's OnDragging and move the window.
+                    .OnClick(ci, (idx, e) => { e.StopPropagation(); if (!_isDragging) node.ActiveTabIndex = idx; })
+                    .OnDragging(e => e.StopPropagation())
                     .OnDragStart((node, ci, fw), (cap, e) =>
                     {
+                        e.StopPropagation();
                         var srcNode = cap.Item1;
                         var srcIdx = cap.Item2;
                         var srcFw = cap.Item3;
@@ -339,7 +391,8 @@ public class DockSpace
                         _dragSourceNode = newNode;
                         _dragSourceWindow = newFw;
                         CleanupTree();
-                    });
+                    })
+                    .Cursor(PaperCursor.Pointer).CursorDragging(PaperCursor.Grabbing);
 
                 // Full-height separator on the left edge of every tab after the first.
                 if (i > 0)
@@ -388,8 +441,9 @@ public class DockSpace
                         .Size(closeSz, closeSz)
                         .Rounded(closeSz / 2)
                         .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
-                        .StopEventPropagation()
-                        .OnClick((node, ci, fw), (cap, e) => cap.Item1.RemoveTab(cap.Item2))
+                        // Per-event stop so closing a tab doesn't select/drag it, while the wheel bubbles.
+                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.Item1.RemoveTab(cap.Item2)?.OnClosed(); })
+                        .Cursor(PaperCursor.Pointer)
                         .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
                         {
                             float ccx = (float)(rr.Min.X + rr.Size.X / 2);
@@ -535,7 +589,17 @@ public class DockSpace
                     captured.Position += new Float2(0, actualDelta);
                     captured.Size = new Float2(captured.Size.X, newH);
                 }
-            });
+            })
+            .Cursor(ResizeCursorFor(right, bottom, left, top));
+    }
+
+    // Diagonal cursors: NW-SE runs top-left/bottom-right, NE-SW runs top-right/bottom-left.
+    private static PaperCursor ResizeCursorFor(bool right, bool bottom, bool left, bool top)
+    {
+        bool horiz = left || right, vert = top || bottom;
+        if (horiz && vert)
+            return ((top && left) || (bottom && right)) ? PaperCursor.ResizeNWSE : PaperCursor.ResizeNESW;
+        return horiz ? PaperCursor.ResizeHorizontal : PaperCursor.ResizeVertical;
     }
 
     private void BringToFront(int index)

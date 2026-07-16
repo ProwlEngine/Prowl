@@ -151,7 +151,8 @@ public sealed class TabsBuilder
         int idx = i;
         var tabBox = _paper.Box($"{_id}_t{i}")
             .Width(tabW).Height(pills ? UnitValue.Stretch() : th)
-            .OnClick(_ => _onSelect(idx));
+            .OnClick(_ => _onSelect(idx))
+            .Cursor(PaperCursor.Pointer);
         if (pills) tabBox.Rounded(th * 0.5f).Margin(i == 0 ? 0 : 4, 0, 0, 0);
         if (_onTabPress != null)
             tabBox.OnPress(e => _onTabPress!(idx, e.PointerPosition));
@@ -180,8 +181,10 @@ public sealed class TabsBuilder
                     .Position(tabW - closeSize - padX + 4f, (th - closeSize) * 0.5f)
                     .Size(closeSize, closeSize).Rounded(closeSize * 0.5f)
                     .Hovered.BackgroundColor(Color.FromArgb(60, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
-                    .StopEventPropagation()
-                    .OnClick(_ => onClose(idx))
+                    // Per-event stop (not blanket .StopEventPropagation()) so closing a tab doesn't
+                    // also select it, while the wheel still bubbles to a parent ScrollView.
+                    .OnClick(e => { e.StopPropagation(); onClose(idx); })
+                    .Cursor(PaperCursor.Pointer)
                     .OnPostLayout((h2, r) => _paper.Draw(ref h2, (canvas, rr) =>
                     {
                         float cx = (float)(rr.Min.X + rr.Size.X / 2), cy = (float)(rr.Min.Y + rr.Size.Y / 2);

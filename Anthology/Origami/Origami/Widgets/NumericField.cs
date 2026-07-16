@@ -225,7 +225,8 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         var b = _paper.Box(bid).Width(22).Height(bh)
             .Rounded(0f, up ? r : 0f, up ? 0f : r, 0f)   // round the outer corner against the field
             .Hovered.BackgroundColor(hover).End()
-            .OnClick(0, (_, _) => Increment(up ? 1 : -1));
+            .OnClick(0, (_, _) => Increment(up ? 1 : -1))
+            .Cursor(PaperCursor.Pointer);
         b.OnPostLayout((hh, r) => _paper.Draw(ref hh, (canvas, rr) =>
         {
             float cx = (float)(rr.Min.X + rr.Size.X * 0.5f);

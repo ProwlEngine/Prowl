@@ -300,6 +300,9 @@ public sealed class ContextBuilder
                 .RowBetween(RowGap)
                 .Rounded(6f)
                 .Hovered.BackgroundColor(theme.Hover).End()
+                // Remember this row's on-screen rect so next frame the submenu can decide which side to
+                // open on (this frame's layout isn't available yet at build time).
+                .OnPostLayout((h, r) => paper.SetElementStorage(h, "srect", r))
                 .Enter())
             {
                 bool hovered = paper.IsParentHovered;
@@ -323,17 +326,23 @@ public sealed class ContextBuilder
                     paper.Draw((canvas, rect) => ContextMenu.DrawChevron(canvas, rect, arrow));
 
                 if (paper.IsParentHovered && Sub != null)
-                    // The submenu stays open only while this ROW (or the submenu, which is its child)
-                    // is hovered - the panel's padding strip does not count. So the submenu's left
-                    // edge must overlap the row's RIGHT edge, else the mouse crosses a dead strip
-                    // between the row and the submenu and it closes. A self-directed child's X is
-                    // measured from the row's border box then offset by the row's own left padding,
-                    // so relative to the row's right edge: RowPadX + X - rowWidth. With rowWidth =
-                    // MenuWidth - 2*MenuPad = 190, a 1px overlap is X = 190 - 9 (RowPadX) - 1 = 180.
+                {
+                    // The submenu is a self-directed child of this row, so its X is measured from the
+                    // row's border box (offset by the row's left padding). It overlaps the row's edge by
+                    // 1px so the mouse can cross from row to submenu without passing a dead strip (which
+                    // would close it). SubOpenRightX opens it just past the row; SubOpenLeftX mirrors it
+                    // to the parent menu's left.
                     //
-                    // Render one layer above the parent menu so the submenu sits on top of every row
-                    // in this panel (and any deeper submenu stacks above this one in turn).
-                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, 180f, 0, close, layer + 1);
+                    // Choose the side from the row's on-screen position (captured last frame): flip left
+                    // only when a right-opening submenu would run off the right edge AND there's room on
+                    // the left - otherwise keep right and let ClampToScreen handle it. Rendered one layer
+                    // above so the submenu sits on top of every row in this panel.
+                    var row = paper.GetElementStorage<Rect>(paper.CurrentParent, "srect", default);
+                    bool flipLeft = row.Max.X + ContextMenu.MenuWidth > paper.Width - 4f
+                                 && row.Min.X - ContextMenu.MenuWidth >= 4f;
+                    float subX = flipLeft ? ContextMenu.SubOpenLeftX : ContextMenu.SubOpenRightX;
+                    ContextMenu.RenderMenu(paper, $"{id}_s_{index}", Sub, subX, 0, close, layer + 1);
+                }
             }
         }
     }
@@ -357,7 +366,13 @@ public static class ContextMenu
     // Nebula .w2menu container literals.
     private const float MenuRadius = 9f;
     private const float MenuPad = 5f;
-    private const float MenuWidth = 200f;
+    internal const float MenuWidth = 200f;
+
+    // Submenu self-directed X offsets (relative to the parent row). Right is the default; left flips
+    // the submenu to the parent menu's left when a right-opening one would run off screen. See the
+    // positioning note in CtxSubmenu.Draw for the derivation.
+    internal const float SubOpenRightX = 180f;
+    internal const float SubOpenLeftX = 1f - MenuWidth - ContextBuilder.RowPadX; // = -208
 
     public static bool IsOpen => _isOpen;
 

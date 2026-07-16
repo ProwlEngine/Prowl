@@ -295,6 +295,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 if (interactive)
                 {
                     trackBuilder.TabIndex(0);
+                    trackBuilder.Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
 
                     // Click anywhere on track > set value to that position.
                     trackBuilder.OnClick(e =>

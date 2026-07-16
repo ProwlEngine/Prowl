@@ -180,6 +180,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 if (interactive)
                 {
                     trackBuilder.TabIndex(0);
+                    trackBuilder.Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
                     trackBuilder.OnDragStart(e =>
                     {
                         // Decide which thumb to drag based on the closer thumb to the pointer.

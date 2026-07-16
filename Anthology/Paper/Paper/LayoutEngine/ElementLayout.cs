@@ -19,8 +19,8 @@ namespace Prowl.PaperUI.LayoutEngine
         {
             ref var data = ref elementHandle.Data;
 
-            var wValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Width);
-            var hValue = (UnitValue)data._elementStyle.GetValue(GuiProp.Height);
+            var wValue = data._elementStyle.GetUnit(GuiProp.Width);
+            var hValue = data._elementStyle.GetUnit(GuiProp.Height);
             float width = wValue.IsPixels ? wValue.Px : throw new Exception("Root element must have fixed width");
             float height = hValue.IsPixels ? hValue.Px : throw new Exception("Root element must have fixed height");
 
@@ -38,7 +38,7 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
         private static UnitValue GetProp(ref ElementData element, LayoutType parentType, GuiProp row, GuiProp column)
-            => (UnitValue)element._elementStyle.GetValue(parentType == LayoutType.Row ? row : column);
+            => element._elementStyle.GetUnit(parentType == LayoutType.Row ? row : column);
 
         private static UnitValue GetMain(ref ElementData element, LayoutType parentType) => GetProp(ref element, parentType, GuiProp.Width, GuiProp.Height);
         private static UnitValue GetCross(ref ElementData element, LayoutType parentType) => GetProp(ref element, parentType, GuiProp.Height, GuiProp.Width);
@@ -173,7 +173,7 @@ namespace Prowl.PaperUI.LayoutEngine
             float computedCross = cross.HasGrow ? parentCross : cross.Floor(parentCross);
 
             // Apply aspect ratio if set
-            var aspectRatio = (float)element._elementStyle.GetValue(GuiProp.AspectRatio);
+            var aspectRatio = element._elementStyle.GetAspectRatio();
             if (aspectRatio >= 0)
             {
                 aspectRatio = Maths.Max(0.001f, aspectRatio); // Prevent divide-by-zero
@@ -1510,11 +1510,32 @@ namespace Prowl.PaperUI.LayoutEngine
         }
 
 
+        // Records this frame's ProcessText result so the element's later layout/render passes can
+        // reuse it (see the memo early-out at the top of ProcessText). widthIndependent marks text
+        // whose size does not depend on availableWidth (plain left/no-wrap/no-truncate).
+        private static Float2 Memo(ref ElementData element, Float2 size, float availableWidth, bool widthIndependent)
+        {
+            element._textMemoSize = size;
+            element._textMemoWidth = availableWidth;
+            element._textMemoWidthIndependent = widthIndependent;
+            element._textMemoValid = true;
+            return size;
+        }
+
         internal static Float2 ProcessText(this ref ElementData element, Paper gui, float availableWidth)
         {
             //if (element.ProcessedText) return Vector2.zero;
 
             if (string.IsNullOrWhiteSpace(element.Paragraph)) return Float2.Zero;
+
+            // Per-frame memo: this runs several times per frame (stretch resolution) plus once at
+            // render. Once we've computed the size this frame, reuse it while the width still applies
+            // (width-independent plain text always applies; width-dependent text must match). The
+            // cached _textLayout/_quillRichText/_quillMarkdown set on the first compute stay valid on
+            // the same per-frame ElementData, so the render pass still finds them.
+            if (element._textMemoValid
+                && (element._textMemoWidthIndependent || element._textMemoWidth == availableWidth))
+                return element._textMemoSize;
 
             element.ProcessedText = true;
 
@@ -1533,12 +1554,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     ItalicFont = element.FontItalic,
                     BoldItalicFont = element.FontBoldItalic,
                     MonoFont = element.FontMono,
-                    PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize)),
-                    Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality),
-                    LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight)),
-                    LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing)),
-                    WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing)),
-                    TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize),
+                    PixelSize = element._elementStyle.GetFontSize(),
+                    Quality = element._elementStyle.GetTextQuality(),
+                    LineHeight = element._elementStyle.GetLineHeight(),
+                    LetterSpacing = element._elementStyle.GetLetterSpacing(),
+                    WordSpacing = element._elementStyle.GetWordSpacing(),
+                    TabSize = element._elementStyle.GetTabSize(),
                     WrapMode = element.WrapMode,
                     MaxWidth = element.WrapMode == TextWrapMode.Wrap ? availableWidth : 0f,
                     Alignment = ToScribeAlignment(element.TextAlignment),
@@ -1564,19 +1585,20 @@ namespace Prowl.PaperUI.LayoutEngine
                 }
                 element._quillRichText = richText;
 
-                return richText.Size; // QuillRichText.Size is already in logical units.
+                // QuillRichText.Size is already in logical units. Width matters only when wrapping.
+                return Memo(ref element, richText.Size, availableWidth, element.WrapMode != TextWrapMode.Wrap);
             }
 
             if (element.IsMarkdown == false)
             {
                 var settings = TextLayoutSettings.Default;
 
-                settings.WordSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.WordSpacing));
-                settings.LetterSpacing = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LetterSpacing));
-                settings.LineHeight = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.LineHeight));
-                settings.TabSize = (int)element._elementStyle.GetValue(GuiProp.TabSize);
-                settings.PixelSize = Convert.ToSingle(element._elementStyle.GetValue(GuiProp.FontSize));
-                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
+                settings.WordSpacing = element._elementStyle.GetWordSpacing();
+                settings.LetterSpacing = element._elementStyle.GetLetterSpacing();
+                settings.LineHeight = element._elementStyle.GetLineHeight();
+                settings.TabSize = element._elementStyle.GetTabSize();
+                settings.PixelSize = element._elementStyle.GetFontSize();
+                settings.Quality = element._elementStyle.GetTextQuality();
 
                 settings.Alignment = ToScribeAlignment(element.TextAlignment);
 
@@ -1601,13 +1623,13 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (cachedLayout != null && cachedKey.Equals(ptKey))
                     {
                         element._textLayout = cachedLayout;
-                        return (Float2)cachedLayout.Size * invScale;
+                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, true);
                     }
 
                     element._textLayout = canvas.CreateLayout(element.Paragraph, settings);
                     gui.SetElementStorageById<TextLayout>(element.ID, Paper.PlainTextLayoutKey, element._textLayout);
                     gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.PlainTextKeyKey, ptKey);
-                    return (Float2)element._textLayout.Size * invScale;
+                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, true);
                 }
 
                 string text = element.Paragraph;
@@ -1624,7 +1646,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     if (cachedLayout != null && cachedKey.Equals(trKey))
                     {
                         element._textLayout = cachedLayout;
-                        return (Float2)cachedLayout.Size * invScale;
+                        return Memo(ref element, (Float2)cachedLayout.Size * invScale, availableWidth, false);
                     }
 
                     var measure = settings;
@@ -1650,12 +1672,12 @@ namespace Prowl.PaperUI.LayoutEngine
                     element._textLayout = canvas.CreateLayout(text, settings);
                     gui.SetElementStorageById<TextLayout>(element.ID, Paper.TruncTextLayoutKey, element._textLayout);
                     gui.SetElementStorageById<PlainTextKey>(element.ID, Paper.TruncTextKeyKey, trKey);
-                    return (Float2)element._textLayout.Size * invScale;
+                    return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
                 }
 
                 element._textLayout = canvas.CreateLayout(text, settings);
 
-                return (Float2)element._textLayout.Size * invScale;
+                return Memo(ref element, (Float2)element._textLayout.Size * invScale, availableWidth, false);
             }
             else
             {
@@ -1665,12 +1687,12 @@ namespace Prowl.PaperUI.LayoutEngine
                 var i = element.FontItalic;
                 var bi = element.FontBoldItalic;
                 var settings = MarkdownLayoutSettings.Default(r, availableWidth, m, b, i, bi);
-                settings.Quality = (FontQuality)element._elementStyle.GetValue(GuiProp.TextQuality);
+                settings.Quality = element._elementStyle.GetTextQuality();
 
                 element._quillMarkdown = canvas.CreateMarkdown(element.Paragraph, settings);
 
                 var markdownResult = element._quillMarkdown;
-                return (markdownResult?.Size ?? Float2.Zero) * invScale;
+                return Memo(ref element, (markdownResult?.Size ?? Float2.Zero) * invScale, availableWidth, false);
             }
         }
 

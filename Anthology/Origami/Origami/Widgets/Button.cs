@@ -264,6 +264,7 @@ public sealed class ButtonBuilder
 
         if (interactive)
         {
+            box.Cursor(PaperCursor.Pointer);
             if (_tabIndex.HasValue) box.TabIndex(_tabIndex.Value);
             if (_onClick != null)
             {

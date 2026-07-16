@@ -55,6 +55,10 @@ public sealed class OrigamiIcons
     public IOrigamiIcon? Download   = OrigamiIconSet.Download;
     public IOrigamiIcon? User       = OrigamiIconSet.User;
 
+    // ── Layout / resize ───────────────────────────────────────
+    public IOrigamiIcon? GripVertical   = OrigamiIconSet.GripVertical;
+    public IOrigamiIcon? GripHorizontal = OrigamiIconSet.GripHorizontal;
+
     /// <summary>Shallow copy (icons are immutable, so the references are shared).</summary>
     public OrigamiIcons Clone() => new()
     {
@@ -65,5 +69,6 @@ public sealed class OrigamiIcons
         Search = Search, More = More, Eye = Eye, EyeOff = EyeOff, Plus = Plus, Pencil = Pencil, Trash = Trash, Duplicate = Duplicate,
         Folder = Folder, FolderPlus = FolderPlus, File = File, Document = Document, Drive = Drive,
         Star = Star, Clock = Clock, Desktop = Desktop, Download = Download, User = User,
+        GripVertical = GripVertical, GripHorizontal = GripHorizontal,
     };
 }

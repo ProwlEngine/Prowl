@@ -946,6 +946,30 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary>
+        /// Sets the mouse cursor shape shown while this element is hovered (e.g.
+        /// <see cref="PaperCursor.Pointer"/> for clickable elements, <see cref="PaperCursor.ResizeHorizontal"/>
+        /// for a splitter). Read the resolved shape via <see cref="Paper.CurrentCursor"/> or hook
+        /// <see cref="Paper.OnCursorChange"/> to apply it to the OS window.
+        /// </summary>
+        public ElementBuilder Cursor(PaperCursor cursor)
+        {
+            _handle.Data.Cursor = cursor;
+            return this;
+        }
+
+        /// <summary>
+        /// Sets the mouse cursor shape shown while this element is pressed/dragged (e.g.
+        /// <see cref="PaperCursor.Grabbing"/> to pair with a <see cref="PaperCursor.Grab"/> hover cursor).
+        /// While dragging this takes priority over <see cref="Cursor"/>; if left unset the drag falls
+        /// back to the hover cursor.
+        /// </summary>
+        public ElementBuilder CursorDragging(PaperCursor cursor)
+        {
+            _handle.Data.CursorDragging = cursor;
+            return this;
+        }
+
         /// <summary>Makes any event on this element not trigger any parent events.</summary>
         public ElementBuilder StopEventPropagation()
         {
@@ -1545,12 +1569,12 @@ namespace Prowl.PaperUI
 
         private TextLayoutSettings CreateTextLayoutSettings(TextInputSettings inputSettings, bool isMultiLine, float maxWidth = float.MaxValue)
         {
-            var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-            var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+            var fontSize = _handle.Data._elementStyle.GetFontSize();
+            var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
 
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = (float)fontSize;
-            settings.Quality = (FontQuality)_handle.Data._elementStyle.GetValue(GuiProp.TextQuality);
+            settings.Quality = _handle.Data._elementStyle.GetTextQuality();
             settings.Font = inputSettings.Font;
             settings.LetterSpacing = (float)letterSpacing;
             settings.Alignment = Scribe.TextAlignment.Left;
@@ -2010,6 +2034,21 @@ namespace Prowl.PaperUI
         {
             Clip();
 
+            // Editable text shows the I-beam cursor. When the field is hooked into an interactable
+            // parent (a common wrapping pattern is IsNotInteractable + HookToParent so the wrapper row
+            // takes focus/clicks), surface the cursor on that parent too, since it - not this
+            // non-interactable element - is what the pointer actually hovers.
+            if (!settings.ReadOnly)
+            {
+                _handle.Data.Cursor = PaperCursor.Text;
+                if (_handle.Data.IsHookedToParent)
+                {
+                    ElementHandle textParent = _handle.GetParentHandle();
+                    if (textParent.IsValid && textParent.Data.Cursor == PaperCursor.Inherit)
+                        textParent.Data.Cursor = PaperCursor.Text;
+                }
+            }
+
             if(_paper.IsParentFocused && isMultiLine)
             {
                 // If a text input field is focused and its a Multi-Line input field, Then Tab navigation is disabled
@@ -2232,7 +2271,7 @@ namespace Prowl.PaperUI
                     // at logical × FramebufferScale for HiDPI crispness); divide by FramebufferScale
                     // to reach logical space, matching the widget's own coordinate system.
                     float invFb = 1.0f / canvas.FramebufferScale;
-                    var fontSize = (float)elHandle.Data._elementStyle.GetValue(GuiProp.FontSize);
+                    var fontSize = elHandle.Data._elementStyle.GetFontSize();
 
                     // Draw text or placeholder. Mask the visible text when MaskChar is set; the
                     // underlying renderState.Value stays untouched so cursor / selection /
@@ -2398,8 +2437,8 @@ namespace Prowl.PaperUI
             {
                 // Single-line horizontal scrolling only. GetCursorPositionFromIndex returns
                 // pixel-space; convert to logical.
-                var fontSize = (float)_handle.Data._elementStyle.GetValue(GuiProp.FontSize);
-                var letterSpacing = (float)_handle.Data._elementStyle.GetValue(GuiProp.LetterSpacing);
+                var fontSize = _handle.Data._elementStyle.GetFontSize();
+                var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
                 var displayValue = GetDisplayValue(state.Value, settings);
                 var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
 

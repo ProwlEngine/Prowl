@@ -202,6 +202,8 @@ namespace Prowl.PaperUI
         private Dictionary<int, Float2> _dragStartPos = new Dictionary<int, Float2>();
         private HashSet<int> _elementsInBubblePath = new HashSet<int>();
         private Dictionary<int, bool> _isDragging = new Dictionary<int, bool>();
+        // Reused each frame by HandleHoverEvents so it doesn't allocate a HashSet every frame.
+        private readonly HashSet<int> _leftElementsScratch = new HashSet<int>();
 
         // Layered elements collected after layout for independent hit testing.
         // Each entry stores the element handle and the accumulated parent transform
@@ -212,6 +214,20 @@ namespace Prowl.PaperUI
         public int HoveredElementId => _theHoveredElementId;
         public int ActiveElementId => _activeElementId;
         public int FocusedElementId => _focusedElementId;
+
+        private PaperCursor _currentCursor = PaperCursor.Default;
+
+        /// <summary>
+        /// The mouse cursor shape requested by the element currently under the pointer (or the element
+        /// being dragged), resolved by walking up the hierarchy for the nearest set cursor. Defaults to
+        /// <see cref="PaperCursor.Default"/> when nothing requests one. Read this each frame - or hook
+        /// <see cref="OnCursorChange"/> - and apply it to the OS window from your host application.
+        /// </summary>
+        public PaperCursor CurrentCursor => _currentCursor;
+
+        /// <summary>Fires when <see cref="CurrentCursor"/> changes, so a host can set the OS cursor
+        /// only on change rather than every frame.</summary>
+        public event Action<PaperCursor> OnCursorChange;
 
         /// <summary>
         /// Programmatically set focus to an element.
@@ -278,6 +294,11 @@ namespace Prowl.PaperUI
             // Process hover events
             HandleHoverEvents(previousHoveredElementId);
 
+            // Resolve the desired mouse cursor. While an element is pressed/dragged its cursor wins
+            // (so a resize/grab cursor sticks even if the pointer slips off the handle); otherwise the
+            // hovered element decides.
+            UpdateCursor();
+
             // Process scroll events
             if (_theHoveredElementId != 0 && PointerWheel != 0)
             {
@@ -322,7 +343,6 @@ namespace Prowl.PaperUI
                 // Store the PARENT's accumulated transform (not this element's).
                 // HitTestElementTree will apply this element's own transform when testing.
                 _layeredElements.Add((handle, parentTransform));
-                return;
             }
 
             // Accumulate this element's transform for children
@@ -330,12 +350,10 @@ namespace Prowl.PaperUI
             Transform2D styleTransform = data._elementStyle.GetTransformForElement(rect);
             Transform2D combinedTransform = styleTransform * parentTransform;
 
-            Transform2D childTransform = combinedTransform;
-
             foreach (var childIndex in data.ChildIndices)
             {
                 var child = new ElementHandle(this, childIndex);
-                CollectLayeredElements(child, childTransform);
+                CollectLayeredElements(child, combinedTransform);
             }
         }
 
@@ -497,6 +515,42 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Resolves the desired mouse cursor and raises <see cref="OnCursorChange"/> if it changed.
+        /// A pressed/dragged element wins over the hovered one; on each element up the chain a dragged
+        /// element prefers <see cref="ElementData.CursorDragging"/> then <see cref="ElementData.Cursor"/>,
+        /// and the nearest set cursor wins (CSS-like inheritance).
+        /// </summary>
+        private void UpdateCursor()
+        {
+            bool dragging = _activeElementId != 0;
+            int fromId = dragging ? _activeElementId : _theHoveredElementId;
+
+            PaperCursor resolved = PaperCursor.Default;
+            ElementHandle current = fromId != 0 ? FindElementByID(fromId) : default;
+            while (current.IsValid)
+            {
+                ref ElementData data = ref current.Data;
+                if (dragging && data.CursorDragging != PaperCursor.Inherit)
+                {
+                    resolved = data.CursorDragging;
+                    break;
+                }
+                if (data.Cursor != PaperCursor.Inherit)
+                {
+                    resolved = data.Cursor;
+                    break;
+                }
+                current = current.GetParentHandle();
+            }
+
+            if (resolved != _currentCursor)
+            {
+                _currentCursor = resolved;
+                OnCursorChange?.Invoke(resolved);
+            }
+        }
+
+        /// <summary>
         /// Propagates an event up the element hierarchy.
         /// Stops if the source element has StopPropagation set, if the event's
         /// StopPropagation() was called, or if a parent element has StopPropagation set.
@@ -598,7 +652,9 @@ namespace Prowl.PaperUI
         private void HandleHoverEvents(int previousHoveredElementId)
         {
             // Find elements that were previously hovered but are no longer in bubble path
-            var leftElements = new HashSet<int>(_wasHoveredState.Keys);
+            var leftElements = _leftElementsScratch;
+            leftElements.Clear();
+            foreach (var k in _wasHoveredState.Keys) leftElements.Add(k);
             leftElements.ExceptWith(_elementsInBubblePath);
 
             // Trigger leave events

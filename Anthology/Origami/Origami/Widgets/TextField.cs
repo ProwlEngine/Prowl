@@ -324,7 +324,8 @@ public sealed class TextFieldBuilder
                     if (_prefixDrag != null)
                     {
                         var d = _prefixDrag;
-                        pfx.OnDragging(_ => d((float)_paper.PointerDelta.X));
+                        pfx.OnDragging(_ => d((float)_paper.PointerDelta.X))
+                           .Cursor(PaperCursor.ResizeHorizontal);
                     }
                     else pfx.IsNotInteractable();
                 }
@@ -485,7 +486,7 @@ public sealed class TextFieldBuilder
         if (click != null)
         {
             box.Hovered.TextColor(_theme.Ink.C500).End();
-            box.OnClick(_ => click());
+            box.OnClick(_ => click()).Cursor(PaperCursor.Pointer);
         }
         else
         {
@@ -498,7 +499,7 @@ public sealed class TextFieldBuilder
         var box = _paper.Box(id).Width(16).Height(_height).Margin(leftPad, rightPad, 0, 0)
             .Icon(_paper, icon, color, size: 15f);
 
-        if (click != null) box.OnClick(_ => click());
+        if (click != null) box.OnClick(_ => click()).Cursor(PaperCursor.Pointer);
         else box.IsNotInteractable();
     }
 
@@ -506,7 +507,7 @@ public sealed class TextFieldBuilder
     private void DrawVecIcon(string id, string kind, Color color, float leftPad, float rightPad, Action? click, float fieldH)
     {
         var box = _paper.Box(id).Width(16).Height(fieldH).Margin(leftPad, rightPad, 0, 0);
-        if (click != null) box.OnClick(_ => click());
+        if (click != null) box.OnClick(_ => click()).Cursor(PaperCursor.Pointer);
         else box.IsNotInteractable();
         box.OnPostLayout((h, r) => _paper.Draw(ref h, (canvas, rr) =>
         {
