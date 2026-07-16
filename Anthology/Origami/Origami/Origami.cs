@@ -580,6 +580,18 @@ public static class Origami
     public static TreeBuilder Tree(Paper paper, string id, float width, float height)
         => new TreeBuilder(paper, id, Current).Size(width, height);
 
+    // ── Node graph factory ─────────────────────────────────────
+
+    /// <summary>
+    /// Begin building a node graph. Nodes are real Paper elements (card, header, port labels); the
+    /// grid, wires and port dots are drawn on the canvas from the same pan/zoom used to place the
+    /// nodes, so wire endpoints stay frame-perfect. Provide the model via
+    /// <see cref="NodeGraphBuilder.Nodes"/> / <see cref="NodeGraphBuilder.Connections"/> and call
+    /// <see cref="NodeGraphBuilder.Show"/>.
+    /// </summary>
+    public static NodeGraphBuilder NodeGraph(Paper paper, string id, float width, float height)
+        => new NodeGraphBuilder(paper, id, Current).Size(width, height);
+
     // ── Slider factories ─────────────────────────────────────────
 
     /// <summary>
