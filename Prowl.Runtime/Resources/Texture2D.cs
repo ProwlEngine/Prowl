@@ -283,32 +283,22 @@ public sealed class Texture2D : Texture, ISerializable
         image.ColorSpace = ColorSpace.sRGB;
         image.ColorType = ColorType.TrueColorAlpha;
 
-        // Most sources (PNG/JPG/TGA/etc.) are 8 bits per channel. Only keep the full 16-bit path for
-        // genuinely higher-depth sources (16-bit PNG, some TIFF/EXR/HDR) - storing an 8-bit source as
-        // UnsignedShort4 doubles its GPU/disk footprint for zero precision benefit.
-        bool highBitDepth = image.Depth > 8;
-        TextureImageFormat format = highBitDepth ? TextureImageFormat.UnsignedShort4 : TextureImageFormat.Color4b;
-
-        Texture2D texture = new(image.Width, image.Height, false, format);
+        // Magick.NET-Q8's native quantum is 8-bit, so this is always the actual decoded precision
+        // regardless of source depth - a 16-bit PNG/.hdr/.exr source is quantized to 8-bit here (a
+        // library limitation, not a choice this code makes).
+        //
+        // Read straight from Magick's own pixel cache instead of ToByteArray(PixelMapping.RGBA),
+        // which would allocate a whole extra managed byte[] just to re-pack data that's already in
+        // the right layout. ColorType.TrueColorAlpha above forces the cache to tightly-packed R,G,B,A
+        // - exactly the byte layout Color4b/TexSubImage2D expects for Q8's byte-quantum pixels - so
+        // the raw pointer can go straight to the GPU with no extra copy.
+        Texture2D texture = new(image.Width, image.Height, false, TextureImageFormat.Color4b);
         try
         {
-            if (highBitDepth)
+            nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
+            unsafe
             {
-                nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
-                unsafe
-                {
-                    Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
-                }
-            }
-            else
-            {
-                byte[]? rgba = image.GetPixels().ToByteArray(PixelMapping.RGBA)
-                    ?? throw new InvalidOperationException("Failed to read pixel data from the source image.");
-                unsafe
-                {
-                    fixed (byte* ptr = rgba)
-                        Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, ptr);
-                }
+                Graphics.TexSubImage2D(texture.Handle, 0, 0, 0, image.Width, image.Height, (void*)pixels);
             }
 
             if (generateMipmaps)
