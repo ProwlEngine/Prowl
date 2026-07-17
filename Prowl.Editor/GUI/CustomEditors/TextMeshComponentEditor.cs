@@ -26,8 +26,6 @@ public class TextMeshComponentEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var text = (TextMeshComponent)target;
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
 
         Undo.Snapshot(text);
 

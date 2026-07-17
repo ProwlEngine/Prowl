@@ -23,8 +23,6 @@ public class TextComponentEditor : CustomEditor
     public override void OnGUI(Paper paper, string id, object target)
     {
         var text = (TextComponent)target;
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
 
         // Pre-snapshot: captures component state before any widget mutates it.
         Undo.Snapshot(text);
