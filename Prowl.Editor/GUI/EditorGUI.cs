@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Editor;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -110,6 +111,32 @@ public static class EditorGUI
         => SettingsRow(paper, id, label, () =>
             Origami.ColorField(paper, $"{id}_v", HexToVColor(get()), v => setter(VColorToHex(v)))
                 .Width(130f).Show(), separator, compact: compact);
+
+    // =====================================================================
+    //  Project Settings row helpers — Row + widget + auto EditorRegistries.SaveSettings()
+    // =====================================================================
+
+    public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
+        => Row(paper, id, label, () =>
+            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+
+    public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)
+        => Row(paper, id, label, () =>
+            Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
+
+    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : Enum
+        => Row(paper, id, label, () =>
+            Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+
+    public static void SettingsCheckbox(Paper paper, string id, string label, bool value, Action<bool> setter)
+        => Origami.Checkbox(paper, id, value, v => { setter(v); EditorRegistries.SaveSettings(); })
+            .LabelRight(label).Show();
+
+    public static void SettingsSliderField(Paper paper, string id, string label, float value, float min, float max,
+        Action<float> setter, string format = "F2")
+        => Row(paper, id, label, () =>
+            Origami.Slider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max)
+                .Format(format).Show());
 
     // =====================================================================
     //  Inspector row helpers

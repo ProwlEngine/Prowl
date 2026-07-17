@@ -26,9 +26,7 @@ public class AudioSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "audio_hdr", $"{EditorIcons.VolumeHigh}  Audio").Underline().Show();
 
-        EditorGUI.Row(paper, "audio_vol", "Global Volume", () =>
-            Origami.Slider(paper, "audio_vol_v", GlobalVolume,
-                v => { GlobalVolume = v; Apply(); EditorRegistries.SaveSettings(); },
-                0f, 1f).Format("F2").Show());
+        EditorGUI.SettingsSliderField(paper, "audio_vol", "Global Volume", GlobalVolume, 0f, 1f,
+            v => { GlobalVolume = v; Apply(); });
     }
 }

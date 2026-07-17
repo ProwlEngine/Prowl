@@ -147,7 +147,7 @@ public abstract class BuildPipeline
 
     internal static string FinalizeDefineString(BuildSettings settings, BuildPipeline pipeline)
     {
-        var profile = settings.GetProfile(pipeline.GetType());
+        var profile = settings.GetOrCreateProfile(pipeline.GetType());
         var symbols = new List<string>(profile.ScriptingDefineSymbols);
 
         profile.ModifyDefines(symbols);

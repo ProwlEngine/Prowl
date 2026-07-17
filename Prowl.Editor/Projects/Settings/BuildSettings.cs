@@ -59,16 +59,6 @@ public sealed class BuildSettings : ProjectSettingsBase
     }
 
     /// <summary>
-    /// Returns the profile for the given target.
-    /// If not present, returns null.
-    /// </summary>
-    public PlatformBuildProfile GetProfile(Type pipelineType)
-    {
-        var profile = PlatformProfiles.FirstOrDefault(profile => pipelineType == profile.GetPipelineType());
-        return profile;
-    }
-
-    /// <summary>
     /// Returns or creates the profile for the given target.
     /// If not present, returns null.
     /// </summary>
@@ -189,29 +179,13 @@ public sealed class BuildSettings : ProjectSettingsBase
         // Build Configuration
         Origami.Header(paper, "bld_config_h", $"{EditorIcons.Gear}  Configuration").Underline().Show();
 
-        EditorGUI.Row(paper, "bld_config", "Configuration", () =>
-            Origami.EnumDropdown(paper, "bld_config_v", Config,
-                v => { Config = v; EditorRegistries.SaveSettings(); }).Show());
-
-        EditorGUI.Row(paper, "bld_output", "Output Directory", () =>
-            Origami.TextField(paper, "bld_output_v", OutputDirectory,
-                v => { OutputDirectory = v; EditorRegistries.SaveSettings(); }).Show());
-
-        EditorGUI.Row(paper, "bld_packaging", "Asset Packaging", () =>
-            Origami.EnumDropdown(paper, "bld_packaging_v", PackagingMode,
-                v => { PackagingMode = v; EditorRegistries.SaveSettings(); }).Show());
-
-        EditorGUI.Row(paper, "bld_assetmode", "Asset Export", () =>
-            Origami.EnumDropdown(paper, "bld_assetmode_v", AssetMode,
-                v => { AssetMode = v; EditorRegistries.SaveSettings(); }).Show());
+        EditorGUI.SettingsEnumDropdown(paper, "bld_config", "Configuration", Config, v => Config = v);
+        EditorGUI.SettingsTextField(paper, "bld_output", "Output Directory", OutputDirectory, v => OutputDirectory = v);
+        EditorGUI.SettingsEnumDropdown(paper, "bld_packaging", "Asset Packaging", PackagingMode, v => PackagingMode = v);
+        EditorGUI.SettingsEnumDropdown(paper, "bld_assetmode", "Asset Export", AssetMode, v => AssetMode = v);
 
         if (PackagingMode == AssetPackagingMode.ProwlPak)
-        {
-            EditorGUI.Row(paper, "bld_maxpak", "Max Pak Size (MB)", () =>
-                Origami.IntSlider(paper, "bld_maxpak_v", MaxPakSizeMB,
-                    v => { MaxPakSizeMB = v; EditorRegistries.SaveSettings(); },
-                    256, 4096).Show());
-        }
+            EditorGUI.SettingsIntSlider(paper, "bld_maxpak", "Max Pak Size (MB)", MaxPakSizeMB, 256, 4096, v => MaxPakSizeMB = v);
 
         paper.Box("bld_sp3").Height(12);
 
