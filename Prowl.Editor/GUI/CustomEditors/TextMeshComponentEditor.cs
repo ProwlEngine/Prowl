@@ -3,13 +3,10 @@
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-
-using TAlignment = Prowl.Runtime.UI.TextAlignment;
 
 namespace Prowl.Editor.Inspector;
 
@@ -66,7 +63,7 @@ public class TextMeshComponentEditor : CustomEditor
 
         paper.Box($"{id}_sp0.3").Height(6);
 
-        AnchorRow(paper, $"{id}_anchor", text);
+        EditorGUI.TextAlignmentRow(paper, $"{id}_anchor", "Anchor", text.Anchor, v => text.Anchor = v);
 
         paper.Box($"{id}_sp1").Height(6);
 
@@ -90,52 +87,4 @@ public class TextMeshComponentEditor : CustomEditor
             v => text.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
     }
 
-    // ================================================================
-    //  Anchor setter - two segmented controls on one row (9-point grid)
-    // ================================================================
-
-    private static void AnchorRow(Paper paper, string id, TextMeshComponent text)
-    {
-        var font = EditorTheme.DefaultFont;
-
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
-        {
-            if (font != null)
-                paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
-                    .ChildLeft(4)
-                    .IsNotInteractable()
-                    .Text("Anchor", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
-
-            Origami.ButtonGroup(paper, $"{id}_h", HIndex(text.Anchor),
-                    idx => text.Anchor = VFlag(VIndex(text.Anchor)) | HFlag(idx))
-                .Height(EditorTheme.RowHeight)
-                .FullWidth()
-                .Item("", EditorIcons.AlignLeft, "Left")
-                .Item("", EditorIcons.AlignCenter, "Center")
-                .Item("", EditorIcons.AlignRight, "Right")
-                .Show();
-
-            Origami.ButtonGroup(paper, $"{id}_v", VIndex(text.Anchor),
-                    idx => text.Anchor = VFlag(idx) | HFlag(HIndex(text.Anchor)))
-                .Height(EditorTheme.RowHeight)
-                .FullWidth()
-                .Item("Top", tooltip: "Top")
-                .Item("Mid", tooltip: "Middle")
-                .Item("Bot", tooltip: "Bottom")
-                .Show();
-        }
-    }
-
-    private static int HIndex(TAlignment a)
-        => (a & TAlignment.Right) != 0 ? 2 : (a & TAlignment.Middle) != 0 ? 1 : 0;
-
-    private static int VIndex(TAlignment a)
-        => (a & TAlignment.Bottom) != 0 ? 2 : (a & TAlignment.Center) != 0 ? 1 : 0;
-
-    private static TAlignment HFlag(int i)
-        => i == 2 ? TAlignment.Right : i == 1 ? TAlignment.Middle : TAlignment.Left;
-
-    private static TAlignment VFlag(int i)
-        => i == 2 ? TAlignment.Bottom : i == 1 ? TAlignment.Center : TAlignment.Top;
 }

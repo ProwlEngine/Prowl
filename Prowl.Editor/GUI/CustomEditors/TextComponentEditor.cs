@@ -3,13 +3,10 @@
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
-using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-
-using TAlignment = Prowl.Runtime.UI.TextAlignment;
 
 namespace Prowl.Editor.Inspector;
 
@@ -24,7 +21,6 @@ public class TextComponentEditor : CustomEditor
     {
         var text = (TextComponent)target;
 
-        // Pre-snapshot: captures component state before any widget mutates it.
         Undo.Snapshot(text);
 
         // ── Text Input ────────────────────────────────────────────
@@ -66,7 +62,7 @@ public class TextComponentEditor : CustomEditor
 
         paper.Box($"{id}_sp0.3").Height(6);
 
-        AlignmentRow(paper, $"{id}_align", text);
+        EditorGUI.TextAlignmentRow(paper, $"{id}_align", "Alignment", text.Alignment, v => text.Alignment = v);
 
         paper.Box($"{id}_sp1").Height(6);
 
@@ -77,58 +73,4 @@ public class TextComponentEditor : CustomEditor
             v => text.Material = (AssetRef<Runtime.Resources.Material>)v!, 0);
     }
 
-    // ================================================================
-    //  Alignment setter - two segmented controls on one row
-    // ================================================================
-
-    private static void AlignmentRow(Paper paper, string id, TextComponent text)
-    {
-        var font = EditorTheme.DefaultFont;
-
-        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
-        {
-            if (font != null)
-                paper.Box($"{id}_lbl")
-                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
-                    .ChildLeft(4)
-                    .IsNotInteractable()
-                    .Text("Alignment", font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
-
-            // Horizontal axis - icon segments, captures the current vertical flag on click.
-            Origami.ButtonGroup(paper, $"{id}_h", HIndex(text.Alignment),
-                    idx => text.Alignment = VFlag(VIndex(text.Alignment)) | HFlag(idx))
-                .Height(EditorTheme.RowHeight)
-                .FullWidth()
-                .Item("", EditorIcons.AlignLeft, "Left")
-                .Item("", EditorIcons.AlignCenter, "Center")
-                .Item("", EditorIcons.AlignRight, "Right")
-                .Show();
-
-            // Vertical axis - labelled segments (no clean vertical-align glyphs in the icon font).
-            Origami.ButtonGroup(paper, $"{id}_v", VIndex(text.Alignment),
-                    idx => text.Alignment = VFlag(idx) | HFlag(HIndex(text.Alignment)))
-                .Height(EditorTheme.RowHeight)
-                .FullWidth()
-                .Item("Top", tooltip: "Top")
-                .Item("Mid", tooltip: "Middle")
-                .Item("Bot", tooltip: "Bottom")
-                .Show();
-        }
-    }
-
-    // TextAlignment is a [Flags] enum split across two axes. These map each axis to/from
-    // a 0..2 segment index for the button groups; recombining the two flags yields one of
-    // the nine named combinations (e.g. Top | Left == TopLeft).
-
-    private static int HIndex(TAlignment a)
-        => (a & TAlignment.Right) != 0 ? 2 : (a & TAlignment.Middle) != 0 ? 1 : 0;
-
-    private static int VIndex(TAlignment a)
-        => (a & TAlignment.Bottom) != 0 ? 2 : (a & TAlignment.Center) != 0 ? 1 : 0;
-
-    private static TAlignment HFlag(int i)
-        => i == 2 ? TAlignment.Right : i == 1 ? TAlignment.Middle : TAlignment.Left;
-
-    private static TAlignment VFlag(int i)
-        => i == 2 ? TAlignment.Bottom : i == 1 ? TAlignment.Center : TAlignment.Top;
 }

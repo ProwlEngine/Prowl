@@ -21,18 +21,18 @@ public class VolumetricFogEffectEditor : CustomEditor
 
         // -- Global --
         Origami.Header(paper, $"{id}_h_global", "Global").Show();
-        SliderRow(paper, $"{id}_dens", "Global Density", fx.GlobalDensity, 0, 0.2f, v => fx.GlobalDensity = v);
+        EditorGUI.SliderRow(paper, $"{id}_dens", "Global Density", fx.GlobalDensity, 0, 0.2f, v => fx.GlobalDensity = v, "F3");
         EditorGUI.Row(paper, $"{id}_tint", "Color Tint", () =>
                 Origami.ColorField(paper, $"{id}_tint_cf", fx.GlobalColorTint, v => fx.GlobalColorTint = v).Show());
-        SliderRow(paper, $"{id}_scat", "Scattering (Anisotropy)", fx.Scattering, -0.99f, 0.99f, v => fx.Scattering = v, bipolar: true);
-        SliderRow(paper, $"{id}_ext", "Extinction", fx.Extinction, 0, 5, v => fx.Extinction = v);
-        SliderRow(paper, $"{id}_dith", "Dithering", fx.Dithering, 0, 0.2f, v => fx.Dithering = v);
+        EditorGUI.SliderRow(paper, $"{id}_scat", "Scattering (Anisotropy)", fx.Scattering, -0.99f, 0.99f, v => fx.Scattering = v, "F3", bipolar: true);
+        EditorGUI.SliderRow(paper, $"{id}_ext", "Extinction", fx.Extinction, 0, 5, v => fx.Extinction = v, "F3");
+        EditorGUI.SliderRow(paper, $"{id}_dith", "Dithering", fx.Dithering, 0, 0.2f, v => fx.Dithering = v, "F3");
 
         // -- Ambient --
         Origami.Header(paper, $"{id}_h_amb", "Ambient").Underline().Show();
         EditorGUI.Row(paper, $"{id}_amb_col", "Ambient Color", () =>
                 Origami.ColorField(paper, $"{id}_amb_col_cf", fx.AmbientColor, v => fx.AmbientColor = v).Show());
-        SliderRow(paper, $"{id}_amb_int", "Ambient Intensity", fx.AmbientIntensity, 0, 5, v => fx.AmbientIntensity = v);
+        EditorGUI.SliderRow(paper, $"{id}_amb_int", "Ambient Intensity", fx.AmbientIntensity, 0, 5, v => fx.AmbientIntensity = v, "F3");
 
         // -- Lights --
         Origami.Header(paper, $"{id}_h_lights", "Light Types").Underline().Show();
@@ -55,21 +55,9 @@ public class VolumetricFogEffectEditor : CustomEditor
         // -- Performance --
         Origami.Header(paper, $"{id}_h_perf", "Performance").Underline().Show();
 
-        SliderRow(paper, $"{id}_maxd", "Max Distance", fx.MaxDistance, 1, 500, v => fx.MaxDistance = v);
-        IntSliderRow(paper, $"{id}_steps", "Steps", fx.Steps, 8, 128, v => fx.Steps = v);
-        IntSliderRow(paper, $"{id}_down", "Downsample (1=full,2=half,4=quarter)", fx.DownsampleScale, 1, 4, v => fx.DownsampleScale = v);
-        SliderRow(paper, $"{id}_upthr", "Upsample Depth Threshold", fx.UpsampleDepthThreshold, 0.001f, 1f, v => fx.UpsampleDepthThreshold = v);
+        EditorGUI.SliderRow(paper, $"{id}_maxd", "Max Distance", fx.MaxDistance, 1, 500, v => fx.MaxDistance = v, "F3");
+        EditorGUI.IntSliderRow(paper, $"{id}_steps", "Steps", fx.Steps, 8, 128, v => fx.Steps = v);
+        EditorGUI.IntSliderRow(paper, $"{id}_down", "Downsample (1=full,2=half,4=quarter)", fx.DownsampleScale, 1, 4, v => fx.DownsampleScale = v);
+        EditorGUI.SliderRow(paper, $"{id}_upthr", "Upsample Depth Threshold", fx.UpsampleDepthThreshold, 0.001f, 1f, v => fx.UpsampleDepthThreshold = v, "F3");
     }
-
-    private static void SliderRow(Paper paper, string id, string label, float value, float min, float max, System.Action<float> setter, bool bipolar = false)
-        => EditorGUI.Row(paper, id, label, () =>
-        {
-            var s = Origami.Slider(paper, $"{id}_v", value, setter, min, max).Format("F3");
-            if (bipolar) s.Bipolar();
-            s.Show();
-        });
-
-    private static void IntSliderRow(Paper paper, string id, string label, int value, int min, int max, System.Action<int> setter)
-        => EditorGUI.Row(paper, id, label, () =>
-            Origami.IntSlider(paper, $"{id}_v", value, setter, min, max).Show());
 }
