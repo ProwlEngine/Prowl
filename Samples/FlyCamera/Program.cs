@@ -71,11 +71,6 @@ public sealed class MyGame : Game
         camera.ClearColor = new Color(0.02f, 0.02f, 0.05f, 1.0f);
         camera.Depth = -1;
         camera.HDR = true;
-        camera.Effects =
-        [
-            new FXAAEffect(),
-            new TonemapperEffect(),
-        ];
         scene.Add(cameraGO);
 
         // Create cube

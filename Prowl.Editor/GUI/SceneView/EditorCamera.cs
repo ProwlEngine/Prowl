@@ -127,22 +127,11 @@ public class EditorCamera
     }
 
     /// <summary>
-    /// Whether to copy image effects from the scene's main camera onto the editor camera.
-    /// </summary>
-    public bool UseSceneEffects { get; set; } = true;
-
-    /// <summary>
     /// Render the scene from this camera's perspective.
     /// </summary>
     public void Render(Scene scene, bool drawUI = true)
     {
         if (_renderTarget == null) return;
-
-        // Copy image effects from the scene's main camera (if enabled)
-        if (UseSceneEffects)
-            CopySceneEffects(scene);
-        else
-            _camera.Effects.Clear();
 
         // Update camera pixel dimensions
         _camera.UpdateRenderData();
@@ -170,144 +159,12 @@ public class EditorCamera
             scene.Remove(_cameraObject);
     }
 
-    // Cached cloned effects for the editor camera. Persistent across frames so
-    // temporal effects (TAA, motion blur) keep their history buffers intact.
-    private readonly List<ImageEffect> _clonedEffects = new();
-    private Camera? _lastSceneCamera;
-
     /// <summary>
-    /// Drop references to scene-derived objects: the cached scene <see cref="Camera"/> and the
-    /// cloned <see cref="ImageEffect"/> instances (which can be user-script types). These persist
-    /// across frames, so they must be released before a script hot-reload unloads the ALC.
+    /// Drop references to scene-derived objects held across frames, before a script
+    /// hot-reload unloads the ALC.
     /// </summary>
     public void ReleaseSceneReferences()
     {
-        DisposeClonedEffects();
-        _camera.Effects.Clear();
-        _lastSceneCamera = null;
-    }
-
-    /// <summary>
-    /// Sync image effects from the scene's main camera. Clones effect instances on first
-    /// use or when the effect list changes, then uses DeserializeInto each frame to copy
-    /// settings without destroying internal state (TAA history, etc.).
-    /// </summary>
-    private void CopySceneEffects(Scene scene)
-    {
-        Camera? sceneCamera = FindSceneCamera(scene);
-        if (sceneCamera == null || sceneCamera == _camera)
-        {
-            _camera.Effects.Clear();
-            DisposeClonedEffects();
-            _lastSceneCamera = null;
-            return;
-        }
-
-        // Build a filtered list of non-null effects from the scene camera so null
-        // entries don't cause index misalignment between the source and clone lists.
-        var sourceEffects = new List<ImageEffect>();
-        foreach (var effect in sceneCamera.Effects)
-        {
-            if (effect != null)
-                sourceEffects.Add(effect);
-        }
-
-        // Check if the effect list structure changed (different types, count, or camera)
-        bool needsReclone = sceneCamera != _lastSceneCamera
-            || sourceEffects.Count != _clonedEffects.Count;
-
-        if (!needsReclone)
-        {
-            for (int i = 0; i < sourceEffects.Count; i++)
-            {
-                if (sourceEffects[i].GetType() != _clonedEffects[i].GetType())
-                {
-                    needsReclone = true;
-                    break;
-                }
-            }
-        }
-
-        if (needsReclone)
-        {
-            // Dispose old clones first so persistent GPU resources (TAA history,
-            // adaptation buffers, etc.) are freed before creating new instances.
-            DisposeClonedEffects();
-
-            foreach (var effect in sourceEffects)
-            {
-                try
-                {
-                    var echo = Echo.Serializer.Serialize(effect);
-                    var clone = Echo.Serializer.Deserialize(echo, effect.GetType()) as ImageEffect;
-                    if (clone != null)
-                        _clonedEffects.Add(clone);
-                }
-                catch
-                {
-                    // Fallback: create a blank instance
-                    if (Activator.CreateInstance(effect.GetType()) is ImageEffect blank)
-                        _clonedEffects.Add(blank);
-                }
-            }
-            _lastSceneCamera = sceneCamera;
-        }
-        else
-        {
-            // Sync settings into existing clones (preserves internal state like TAA history)
-            for (int i = 0; i < sourceEffects.Count; i++)
-            {
-                try
-                {
-                    var echo = Echo.Serializer.Serialize(sourceEffects[i]);
-                    Echo.Serializer.DeserializeInto(echo, _clonedEffects[i]);
-                }
-                catch { }
-            }
-        }
-
-        // Apply cloned effects to editor camera
-        _camera.Effects.Clear();
-        _camera.Effects.AddRange(_clonedEffects);
-        _camera.HDR = sceneCamera.HDR;
-    }
-
-    /// <summary>
-    /// Dispose all cloned effects so persistent GPU resources (history buffers, adaptation
-    /// RTs, etc.) are properly freed.
-    /// </summary>
-    private void DisposeClonedEffects()
-    {
-        foreach (var effect in _clonedEffects)
-        {
-            try { effect.OnDisable(); }
-            catch { }
-        }
-        _clonedEffects.Clear();
-    }
-
-    private static Camera? FindSceneCamera(Scene scene)
-    {
-        // First try to find a camera tagged "Main Camera"
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
-            if (!go.CompareTag("Main Camera")) continue;
-
-            var cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
-        }
-
-        // Fallback: first visible Camera in the scene
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
-
-            var cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
-        }
-
-        return null;
     }
 
     // ================================================================
@@ -541,7 +398,6 @@ public class EditorCamera
 
     public void Dispose()
     {
-        DisposeClonedEffects();
         _renderTarget?.Dispose();
         _renderTarget = null;
     }

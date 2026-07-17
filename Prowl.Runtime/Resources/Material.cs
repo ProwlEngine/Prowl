@@ -294,20 +294,6 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// shader's default value). Inspector uses this to highlight overridden fields.</summary>
     public bool IsOverridden(string name) => PropertyOverrides.Contains(name);
 
-    #region Global Properties
-
-    public static void SetGlobalColor(string name, Color value) => GlobalPropertySet.SetFloat4(name, value);
-    public static void SetGlobalVector(string name, Float2 value) => GlobalPropertySet.SetFloat2(name, value);
-    public static void SetGlobalVector(string name, Float3 value) => GlobalPropertySet.SetFloat3(name, value);
-    public static void SetGlobalVector(string name, Float4 value) => GlobalPropertySet.SetFloat4(name, value);
-    public static void SetGlobalFloat(string name, float value) => GlobalPropertySet.SetFloat(name, value);
-    public static void SetGlobalInt(string name, int value) => GlobalPropertySet.SetInt(name, value);
-    public static void SetGlobalMatrix(string name, Float4x4 value) => GlobalPropertySet.SetMatrix(name, value);
-    public static void SetGlobalTexture(string name, Texture2D value) { if (value?.Handle != null) GlobalPropertySet.SetTexture(name, value.Handle, value.Sampler); }
-    public static void SetGlobalTexture3D(string name, Texture3D value) { if (value?.Handle != null) GlobalPropertySet.SetTexture(name, value.Handle, value.Sampler); }
-
-    #endregion
-
     private void UpdatePropertyState(ShaderProperty property)
     {
         switch (property.PropertyType)

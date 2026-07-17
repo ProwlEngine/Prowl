@@ -31,11 +31,6 @@ public class DirectionalLight : Light
 
     public float ShadowDistance = 70f;
 
-    // Cascade data (max 4 cascades)
-    private Float4x4[] _cascadeShadowMatrices = new Float4x4[4];
-    private Float4[] _cascadeAtlasParams = new Float4[4]; // xy = atlas pos, z = atlas size, w = split distance
-    private int _activeCascades = 0;
-
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         lights.Add(this);
@@ -79,107 +74,6 @@ public class DirectionalLight : Light
 
     public override LightType GetLightType() => LightType.Directional;
 
-    private void GetShadowMatrix(Float3 cameraPosition, int shadowResolution, float cascadeDistance, out Float4x4 view, out Float4x4 projection)
-    {
-        Float3 forward = -Transform.Forward;
-        projection = Float4x4.CreateOrtho(cascadeDistance, cascadeDistance, -cascadeDistance * 0.5f, cascadeDistance * 0.5f);
-
-        // Calculate texel size in world units
-        float texelSize = (cascadeDistance * 2.0f) / shadowResolution;
-
-        // Build orthonormal basis for light space
-        Float3 lightUp = Float3.Normalize(Transform.Up);
-        Float3 lightRight = Float3.Normalize(Float3.Cross(lightUp, forward));
-        lightUp = Float3.Normalize(Float3.Cross(forward, lightRight)); // Recompute to ensure orthogonality
-
-        // Project camera position onto light space axes
-        float x = Float3.Dot(cameraPosition, lightRight);
-        float y = Float3.Dot(cameraPosition, lightUp);
-        float z = Float3.Dot(cameraPosition, forward); // KEEP the Z component! god damnit lost so much time to this
-
-        // Snap only X and Y to texel grid in light space
-        x = Maths.Round(x / texelSize) * texelSize;
-        y = Maths.Round(y / texelSize) * texelSize;
-
-        // Reconstruct the snapped position (X and Y snapped, Z preserved)
-        Float3 snappedPosition = (lightRight * x) + (lightUp * y) + (forward * z);
-
-        // Position the shadow map at the snapped position
-        view = Float4x4.CreateLookTo(snappedPosition, forward, Transform.Up);
-    }
-
-    public override void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
-    {
-        if (!DoCastShadows())
-        {
-            // No shadows
-            _activeCascades = 0;
-            return;
-        }
-
-        // Determine number of cascades
-        int numCascades = (int)Cascades;
-        _activeCascades = numCascades;
-
-        // Calculate linear split distances
-        float cascadeInterval = ShadowDistance / numCascades;
-
-
-        // Light direction vectors
-        Float3 forward = -Transform.Forward;
-        Float3 right = Transform.Right;
-        Float3 up = Transform.Up;
-
-        // Render each cascade
-        for (int cascadeIndex = 0; cascadeIndex < numCascades; cascadeIndex++)
-        {
-            // Calculate this cascade's distance (linear split)
-            float cascadeDistance = cascadeInterval * (cascadeIndex + 1);
-
-            // Get shadow resolution per cascade
-            int res = (int)ShadowResolution;
-            // Half resolution for each cascade beyond the first
-            if (cascadeIndex > 0)
-                res /= cascadeIndex + 1;
-
-
-            // Reserve space in shadow atlas for this cascade
-            Int2? slot = ShadowAtlas.ReserveTiles(res, res, GetLightID() + cascadeIndex);
-
-            if (slot != null)
-            {
-                int atlasX = slot.Value.X;
-                int atlasY = slot.Value.Y;
-
-                GetShadowMatrix(cameraPosition, res, cascadeDistance, out Float4x4 view, out Float4x4 proj);
-
-                Frustum frustum = Frustum.FromMatrix(proj * view);
-
-                bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
-
-                // Upload this cascade's matrices BEFORE its CB encodes draws. Each
-                // cascade is its own submitted CB so all four don't get batched and
-                // executed against just the last cascade's matrices.
-                pipeline.AssignCameraMatrices(view, proj);
-
-                var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
-                cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-                cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
-                pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices);
-                Graphics.Submit(cmd);
-
-                // Store cascade data for shader
-                _cascadeShadowMatrices[cascadeIndex] = proj * view;
-                _cascadeAtlasParams[cascadeIndex] = new Float4(atlasX, atlasY, res, cascadeDistance);
-            }
-            else
-            {
-                // Failed to reserve atlas space for this cascade
-                _cascadeAtlasParams[cascadeIndex] = new Float4(-1, -1, 0, cascadeDistance);
-            }
-        }
-    }
-
     public override ForwardLightData GetForwardLightData()
     {
         return new ForwardLightData
@@ -193,15 +87,11 @@ public class DirectionalLight : Light
             SpotAngle = 0,
             InnerSpotAngle = 0,
 
-            ShadowEnabled = CastShadows && _activeCascades > 0,
+            ShadowEnabled = false,
             ShadowBias = ShadowBias,
             ShadowNormalBias = ShadowNormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
-
-            CascadeCount = _activeCascades,
-            CascadeShadowMatrices = _cascadeShadowMatrices,
-            CascadeAtlasParams = _cascadeAtlasParams,
         };
     }
 }

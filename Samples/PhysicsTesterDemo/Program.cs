@@ -53,13 +53,6 @@ public sealed class PhysicsTesterDemo : Game
         camera.HDR = true;
         cameraGO = cam;
 
-        camera.Effects =
-        [
-            new ScreenSpaceReflectionEffect(),
-            new FXAAEffect(),
-            new BloomEffect(),
-            new TonemapperEffect(),
-        ];
 
         scene.Add(cam);
 

@@ -25,9 +25,6 @@ public class SpotLight : Light
     public float SpotAngle = 45.0f; // Outer cone angle in degrees
     public float InnerSpotAngle = 30.0f; // Inner cone angle in degrees for smooth falloff
 
-    private Float4x4 _shadowMatrix;
-    private Float4 _shadowAtlasParams; // xy = atlas pos, z = atlas size, w = 1.0
-
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         lights.Add(this);
@@ -69,62 +66,6 @@ public class SpotLight : Light
 
     public override LightType GetLightType() => LightType.Spot;
 
-    private void GetShadowMatrix(out Float4x4 view, out Float4x4 projection)
-    {
-        Float3 forward = Transform.Forward;
-        Float3 position = Transform.Position;
-
-        // Use perspective projection for spot light
-        float fov = SpotAngle * 2.0f; // Full cone angle
-        projection = Float4x4.CreatePerspectiveFov(fov * Maths.Deg2Rad, 1.0f, 0.1f, Range);
-
-        view = Float4x4.CreateLookTo(position, forward, Transform.Up);
-    }
-
-    public override void RenderShadows(RenderPipeline pipeline, Float3 cameraPosition, System.Collections.Generic.IReadOnlyList<IRenderable> renderables)
-    {
-        if (!DoCastShadows())
-        {
-            _shadowAtlasParams = new Float4(-1, -1, 0, 0);
-            return;
-        }
-
-        int res = (int)ShadowResolution;
-        Int2? slot = ShadowAtlas.ReserveTiles(res, res, GetLightID());
-
-        if (slot != null)
-        {
-            int atlasX = slot.Value.X;
-            int atlasY = slot.Value.Y;
-
-            GetShadowMatrix(out Float4x4 view, out Float4x4 proj);
-
-            Frustum frustum = Frustum.FromMatrix(proj * view);
-
-            Float3 forward = Transform.Forward;
-            Float3 right = Transform.Right;
-            Float3 up = Transform.Up;
-
-            bool[] culledRenderableIndices = pipeline.CullRenderables(renderables, frustum, LayerMask.Everything);
-            pipeline.AssignCameraMatrices(view, proj);
-
-            var cmd = Graphics.GetCommandBuffer("SpotLightShadow");
-            cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
-            cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
-            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices);
-            Graphics.Submit(cmd);
-
-            // Store shadow data for shader
-            _shadowMatrix = proj * view;
-            _shadowAtlasParams = new Float4(atlasX, atlasY, res, 1.0f);
-        }
-        else
-        {
-            // Failed to reserve atlas space
-            _shadowAtlasParams = new Float4(-1, -1, 0, 0);
-        }
-    }
-
     public override ForwardLightData GetForwardLightData()
     {
         return new ForwardLightData
@@ -138,14 +79,11 @@ public class SpotLight : Light
             SpotAngle = SpotAngle,
             InnerSpotAngle = InnerSpotAngle,
 
-            ShadowEnabled = CastShadows && _shadowAtlasParams.Z > 0,
+            ShadowEnabled = false,
             ShadowBias = ShadowBias,
             ShadowNormalBias = ShadowNormalBias,
             ShadowStrength = ShadowStrength,
             ShadowQuality = (float)ShadowQuality,
-
-            SpotShadowMatrix = _shadowMatrix,
-            SpotShadowAtlasParams = _shadowAtlasParams,
         };
     }
 }

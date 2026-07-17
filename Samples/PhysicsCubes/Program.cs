@@ -51,13 +51,6 @@ public sealed class PhysicsDemo : Game
         camera.HDR = true;
         cameraGO = cam;
 
-        camera.Effects =
-        [
-            new FXAAEffect(),
-            new BokehDepthOfFieldEffect(),
-            new BloomEffect(),
-            new TonemapperEffect(),
-        ];
 
         scene.Add(cam);
 

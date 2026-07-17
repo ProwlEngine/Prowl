@@ -50,13 +50,6 @@ public sealed class ShapeCastDemoGame : Game
         camera.HDR = true;
         cameraGO = cam;
 
-        camera.Effects =
-        [
-            new ScreenSpaceReflectionEffect(),
-            new FXAAEffect(),
-            new BloomEffect(),
-            new TonemapperEffect(),
-        ];
 
         scene.Add(cam);
 

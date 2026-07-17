@@ -1,9 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.Collections.Generic;
-
 using Prowl.Echo;
 using Prowl.Graphite;
 using Prowl.Runtime.Rendering;
@@ -11,47 +8,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
-
-public abstract class ImageEffect
-{
-    /// <summary>
-    /// When false, the effect is skipped by the render pipeline.
-    /// </summary>
-    public bool Enabled = true;
-
-    /// <summary>
-    /// Defines at which stage of the rendering pipeline this effect should run.
-    /// AfterOpaques: runs after opaque geometry, before transparents (GTAO, SSR).
-    /// PostProcess: runs after all rendering (tonemapping, bloom, FXAA).
-    /// </summary>
-    public virtual RenderStage Stage => RenderStage.PostProcess;
-
-    /// <summary>
-    /// Whether this effect transforms HDR to LDR. Used for tonemapping effects.
-    /// </summary>
-    public virtual bool TransformsToLDR { get; } = false;
-
-    /// <summary>
-    /// Called during rendering with access to render targets.
-    /// </summary>
-    public virtual void OnRenderEffect(RenderContext context) { }
-
-    /// <summary>Called after all rendering is complete for this camera.</summary>
-    public virtual void OnPostRender(Camera camera) { }
-
-    /// <summary>Called before culling for this camera.</summary>
-    public virtual void OnPreCull(Camera camera) { }
-
-    /// <summary>Called before rendering starts for this camera.</summary>
-    public virtual void OnPreRender(Camera camera) { }
-
-    /// <summary>
-    /// Called when the effect transitions from active to inactive (Enabled = false,
-    /// or removed from Camera.Effects). Override to release GPU resources such as
-    /// materials, persistent RenderTextures, or shader-program handles.
-    /// </summary>
-    public virtual void OnDisable() { }
-}
 
 public enum CameraClearFlags
 {
@@ -65,8 +21,6 @@ public enum CameraClearFlags
 [ComponentIcon("\uf030")] // Camera
 public class Camera : MonoBehaviour
 {
-    public List<ImageEffect> Effects = [];
-
     public CameraClearFlags ClearFlags = CameraClearFlags.Skybox;
     public Color ClearColor = new(0f, 0f, 0f, 1f);
     public LayerMask CullingMask = LayerMask.Everything;
@@ -103,12 +57,6 @@ public class Camera : MonoBehaviour
     // Previous frame state, written by the render pipeline at end of frame.
     private Float4x4 _previousViewProjectionMatrix;
     private bool _hasPreviousViewProjectionMatrix;
-
-    // Image effects that were considered active on the previous render tick for this
-    // camera. Compared against the current list each frame to fire OnDisable() on
-    // anything that's been disabled, removed, or hot-swapped out.
-    [SerializeIgnore]
-    private readonly HashSet<ImageEffect> _lastActiveEffects = new();
 
     public uint PixelWidth { get; private set; }
     public uint PixelHeight { get; private set; }
@@ -174,47 +122,6 @@ public class Camera : MonoBehaviour
     public override void OnEnable()
     {
         _hasPreviousViewProjectionMatrix = false;
-    }
-
-    /// <summary>
-    /// Fire OnDisable on every image effect we were rendering, because the camera
-    /// itself is going away (disabled or destroyed). Render pipelines never get
-    /// another chance to do this for us, so it has to happen here.
-    /// </summary>
-    public override void OnDisable()
-    {
-        foreach (var effect in _lastActiveEffects)
-        {
-            if (effect == null) continue;
-            try { effect.OnDisable(); }
-            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
-        }
-        _lastActiveEffects.Clear();
-    }
-
-    /// <summary>
-    /// Called once per render tick by the render pipeline. Fires OnDisable on any
-    /// effect that was active last frame but isn't in <paramref name="currentlyActive"/>
-    /// this frame covers disabled, removed, and hot-swapped effects. Pipelines
-    /// don't need to track this themselves; they just pass in whatever they're about
-    /// to render.
-    /// </summary>
-    public void UpdateImageEffectLifecycle(IEnumerable<ImageEffect> currentlyActive)
-    {
-        var current = new HashSet<ImageEffect>();
-        foreach (var effect in currentlyActive)
-            if (effect != null) current.Add(effect);
-
-        foreach (var previous in _lastActiveEffects)
-        {
-            if (previous == null || current.Contains(previous)) continue;
-            try { previous.OnDisable(); }
-            catch (Exception e) { Debug.LogError($"ImageEffect.OnDisable threw: {e}"); }
-        }
-
-        _lastActiveEffects.Clear();
-        foreach (var effect in current)
-            _lastActiveEffects.Add(effect);
     }
 
     public override void DrawGizmos()

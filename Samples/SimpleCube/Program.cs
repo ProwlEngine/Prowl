@@ -74,12 +74,6 @@ public sealed class MyGame : Game
         Camera camera = cameraGO.AddComponent<Camera>();
         camera.Depth = -1;
         camera.HDR = true;
-        camera.Effects =
-        [
-            new FXAAEffect(),
-            new BloomEffect(),
-            new TonemapperEffect(),
-        ];
         scene.Add(cameraGO);
 
         // Create ground plane

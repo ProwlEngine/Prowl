@@ -52,13 +52,6 @@ public sealed class VoxelGame : Game
         sl.Intensity = 256f;
         scene.Add(spot);
 
-        camera.Effects =
-        [
-            new ScreenSpaceReflectionEffect(),
-            new BloomEffect(),
-            new BokehDepthOfFieldEffect(),
-            new TonemapperEffect(),
-        ];
 
         scene.Add(cameraGO);
 

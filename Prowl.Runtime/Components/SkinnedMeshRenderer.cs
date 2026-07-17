@@ -5,7 +5,6 @@ using Prowl.Graphite;
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Rendering;
@@ -230,7 +229,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// Each bone's world matrix is built once via <see cref="WorldMatrixOf"/> (memoized so shared
     /// ancestors aren't re-walked) and reused for both the skin matrix and the bounds corner.
     /// </summary>
-    private void RecomputeSkinning(Mesh mesh)
+    public void RecomputeSkinning(Mesh mesh)
     {
         _worldMemo.Clear();
         Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
@@ -348,7 +347,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     /// Once per frame: builds the mesh's static delta textures (first use), resolves the current
     /// weights into active morph layers, and uploads the per-renderer weight texture. Cheap when idle.
     /// </summary>
-    private void PrepareBlendShapes(Mesh mesh)
+    public void PrepareBlendShapes(Mesh mesh)
     {
         _morphReady = false;
         _morphActiveCount = 0;
@@ -466,85 +465,5 @@ public class SkinnedMeshRenderer : MonoBehaviour
 
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        var mesh = SharedMesh.Res;
-        if (mesh == null || Materials.Count == 0) return;
-
-        Resolve();
-
-        AABB worldBounds;
-        if (_bones != null && _bones.Length > 0 && mesh.BindPoses != null)
-        {
-            if (_skinMatrices == null || _skinMatrices.Length != _bones.Length)
-            {
-                _skinMatrices = new Float4x4[_bones.Length];
-                _lastSkeletonVersion = ulong.MaxValue; // force a recompute after a bone-count change
-            }
-
-            // Dirty check: sum of monotonic Transform.Versions across every bone and the renderer's own
-            // ancestor chain (so moving a shared character root, which bumps none of the bones, still
-            // refreshes the world-space bounds used for culling). Unchanged sum => static pose, so the
-            // cached skin matrices, bone texture and bounds from last frame are still valid.
-            ulong version = 0;
-            for (Transform? t = Transform; t != null; t = t.Parent)
-                version += t.Version;
-            for (int i = 0; i < _bones.Length; i++)
-                if (_bones[i] != null) version += _bones[i]!.Version;
-
-            if (version != _lastSkeletonVersion || _boneTexture == null)
-            {
-                _lastSkeletonVersion = version;
-                RecomputeSkinning(mesh);
-            }
-
-            worldBounds = _cachedBounds;
-        }
-        else
-        {
-            worldBounds = mesh.bounds.TransformBy(Transform.LocalToWorldMatrix);
-        }
-
-        // Resolve blend-shape weights -> active morph layers + weight texture (once per frame).
-        if (mesh.HasBlendShapes)
-            PrepareBlendShapes(mesh);
-
-        // Render each submesh with its material. CollectionsMarshal.AsSpan gives a ref to the
-        // list's real backing elements (List<T>'s indexer would copy a value-type element, so
-        // AssetRef<Material>.Res's internal caching would mutate a throwaway copy and never stick).
-        Float4x4 world = Transform.LocalToWorldMatrix;
-        Float4x4 prevWorld = _hasPrevWorld ? _prevWorld : world;
-
-        int subCount = mesh.SubMeshCount;
-        var materials = CollectionsMarshal.AsSpan(Materials);
-        for (int s = 0; s < subCount; s++)
-        {
-            Material? mat = null;
-            if (s < materials.Length)
-                mat = materials[s].Res;
-            else if (materials.Length > 0)
-                mat = materials[^1].Res; // Reuse last material for extra submeshes
-
-            if (mat == null) continue;
-
-            PropertySet props = new();
-            props.SetInt("_ObjectID", InstanceID);
-            props.SetColor("_MainColor", MainColor);
-            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
-            LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
-            if (_boneTexture != null)
-            {
-                props.SetTexture("boneMatrixTexture", _boneTexture);
-                props.SetInt("boneCount", _skinMatrices?.Length ?? 0);
-            }
-
-            if (mesh.HasBlendShapes)
-                ApplyBlendShapeProps(mesh, props);
-
-            renderables.Add(new SkinnedMeshRenderable(
-                mesh, mat, world,
-                GameObject.LayerIndex, worldBounds, props, subMeshIndex: s, prevMatrix: prevWorld));
-        }
-
-        _prevWorld = world;
-        _hasPrevWorld = true;
     }
 }

@@ -50,12 +50,6 @@ public sealed class CarPhysicsGame : Game
         camera.HDR = true;
         cameraGO = cam;
 
-        camera.Effects =
-        [
-            new TAAEffect(),
-            //new BloomEffect(),
-            new TonemapperEffect(),
-        ];
 
         scene.Add(cam);
 
