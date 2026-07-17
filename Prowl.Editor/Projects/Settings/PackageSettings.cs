@@ -67,6 +67,7 @@ public class PackageSettings : ProjectSettingsBase
                         Packages[idx].EditorOnly = v;
                         Apply();
                         EditorRegistries.SaveSettings();
+                        ScriptAssemblyManager.RequestRecompile();
                     })
                     .LabelRight("Editor Only").Show();
 
@@ -86,6 +87,7 @@ public class PackageSettings : ProjectSettingsBase
                         Packages.RemoveAt(ci);
                         Apply();
                         EditorRegistries.SaveSettings();
+                        ScriptAssemblyManager.RequestRecompile();
                     });
             }
         }
@@ -114,21 +116,25 @@ public class PackageSettings : ProjectSettingsBase
 
         Origami.Button(paper, "pkg_add_btn", $"{EditorIcons.Plus}  Add Package", () =>
             {
-                if (!string.IsNullOrWhiteSpace(_newName) && !string.IsNullOrWhiteSpace(_newVersion))
+                string name = _newName.Trim();
+                string version = _newVersion.Trim();
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(version))
+                    return;
+
+                if (Packages.Exists(p => p.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase)))
                 {
-                    Packages.Add(new PackageEntry { Name = _newName.Trim(), Version = _newVersion.Trim(), EditorOnly = _newEditorOnly });
-                    _newName = "";
-                    _newVersion = "";
-                    _newEditorOnly = false;
-                    Apply();
-                    EditorRegistries.SaveSettings();
+                    Runtime.Debug.LogWarning($"Package '{name}' is already in the list.");
+                    return;
                 }
+
+                Packages.Add(new PackageEntry { Name = name, Version = version, EditorOnly = _newEditorOnly });
+                _newName = "";
+                _newVersion = "";
+                _newEditorOnly = false;
+                Apply();
+                EditorRegistries.SaveSettings();
+                ScriptAssemblyManager.RequestRecompile();
             }).Width(140).Show();
-
-        paper.Box("pkg_sp3").Height(8);
-
-        // Recompile button
-        Origami.Button(paper, "pkg_recompile", $"{EditorIcons.ArrowsRotate}  Recompile Scripts", () => { ScriptAssemblyManager.RequestRecompile(); }).Width(180).Show();
     }
 
 }

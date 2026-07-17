@@ -506,9 +506,9 @@ public static class ScriptCompiler
                 sb.AppendLine($"    <PackageReference Include=\"{Xml(pkg.Name)}\" Version=\"{Xml(pkg.Version)}\" />");
             sb.AppendLine("  </ItemGroup>");
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback: no packages
+            Runtime.Debug.LogError($"[ScriptCompiler] Failed to append NuGet packages: {ex.Message}");
         }
     }
 
