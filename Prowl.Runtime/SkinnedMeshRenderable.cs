@@ -19,17 +19,19 @@ public class SkinnedMeshRenderable : IRenderable
     private Mesh _mesh;
     private Material _material;
     private Float4x4 _transform;
+    private Float4x4 _prevTransform;
     private int _layerIndex;
     private PropertySet _properties;
     private int _subMeshIndex;
     private AABB _worldBounds;
     private Float4x4? _worldToObject;
 
-    public SkinnedMeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, AABB worldBounds, PropertySet? propertyBlock = null, int subMeshIndex = -1)
+    public SkinnedMeshRenderable(Mesh mesh, Material material, Float4x4 matrix, int layerIndex, AABB worldBounds, PropertySet? propertyBlock = null, int subMeshIndex = -1, Float4x4? prevMatrix = null)
     {
         _mesh = mesh;
         _material = material;
         _transform = matrix;
+        _prevTransform = prevMatrix ?? matrix;
         _layerIndex = layerIndex;
         _worldBounds = worldBounds;
         _properties = propertyBlock ?? new();
@@ -47,6 +49,9 @@ public class SkinnedMeshRenderable : IRenderable
     public void GetRenderingData(ViewerData viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData)
     {
         mesh = _mesh;
+        _properties.SetMatrix("prowl_ObjectToWorld", _transform);
+        _properties.SetMatrix("prowl_WorldToObject", GetWorldToObjectMatrix(_transform));
+        _properties.SetMatrix("prowl_PrevObjectToWorld", _prevTransform);
         properties = _properties;
         model = _transform;
         instanceData = null;

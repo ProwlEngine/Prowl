@@ -1,239 +1,203 @@
 Shader "Default/SMAA"
-
-// Subpixel Morphological Anti-Aliasing (SMAA 1x), luma edge detection.
-// Three chained fullscreen passes driven by SMAAEffect:
-//   Pass 0 "EdgeDetection"    : scene color -> edges (rg)
-//   Pass 1 "BlendWeights"     : edges + AreaTex + SearchTex -> blend weights (rgba)
-//   Pass 2 "NeighborhoodBlend": scene color + weights -> antialiased color
-// The heavy lifting is the upstream reference SMAA, pulled in via `#include "SMAA"`.
-// Quality is HIGH (16 search steps, diagonal + corner detection); the edge
-// threshold is driven live from the _EdgeThreshold uniform.
-
-Properties
 {
-}
+    // Subpixel Morphological Anti-Aliasing (SMAA 1x), luma edge detection.
+    // Three chained fullscreen passes driven by SMAAEffect:
+    //   Pass 0 "EdgeDetection"    : scene color -> edges (rg)
+    //   Pass 1 "BlendWeights"     : edges + AreaTex + SearchTex -> blend weights (rgba)
+    //   Pass 2 "NeighborhoodBlend": scene color + weights -> antialiased color
+    // The heavy lifting is the upstream reference SMAA, ported in `SMAA.slang`.
+    // Quality is HIGH (16 search steps, diagonal + corner detection); the edge
+    // threshold is driven live from the _EdgeThreshold uniform.
 
-Pass "EdgeDetection"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "EdgeDetection"
+        Tags { "RenderOrder" = "Opaque" }
 
-        out vec2 TexCoords;
-        out vec4 offset[3];
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-        uniform vec2 _Resolution;
+        SLANGPROGRAM
+        import SMAA;
 
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 1
-        #define SMAA_INCLUDE_PS 0
-        #include "SMAA"
-
-        void main()
+        struct MaterialData
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-
-            vec4 o[3];
-            SMAAEdgeDetectionVS(TexCoords, o);
-            offset[0] = o[0];
-            offset[1] = o[1];
-            offset[2] = o[2];
+            Sampler2D<float4> _MainTex;
+            float2 _Resolution;
+            float _EdgeThreshold;
         }
+        ParameterBlock<MaterialData> Mat;
+
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoords : TEXCOORD0;
+            float4 offset0 : TEXCOORD1;
+            float4 offset1 : TEXCOORD2;
+            float4 offset2 : TEXCOORD3;
+        }
+
+        float4 rtMetrics()
+        {
+            return float4(1.0 / Mat._Resolution.x, 1.0 / Mat._Resolution.y, Mat._Resolution.x, Mat._Resolution.y);
+        }
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.texCoords = input.uv;
+            output.position = float4(input.position, 1.0);
+
+            float4 offset[3];
+            SMAAEdgeDetectionVS(rtMetrics(), output.texCoords, offset);
+            output.offset0 = offset[0];
+            output.offset1 = offset[1];
+            output.offset2 = offset[2];
+            return output;
+        }
+
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float4 offset[3] = { input.offset0, input.offset1, input.offset2 };
+            float2 edges = SMAALumaEdgeDetectionPS(Mat._EdgeThreshold, input.texCoords, offset, Mat._MainTex);
+            return float4(edges, 0.0, 0.0);
+        }
+        ENDSLANG
     }
 
-    Fragment
+    Pass
     {
-        layout(location = 0) out vec4 OutputColor;
+        Name "BlendWeights"
+        Tags { "RenderOrder" = "Opaque" }
 
-        in vec2 TexCoords;
-        in vec4 offset[3];
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-        uniform sampler2D _MainTex;
-        uniform vec2 _Resolution;
-        uniform float _EdgeThreshold;
+        SLANGPROGRAM
+        import SMAA;
 
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_THRESHOLD _EdgeThreshold
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 0
-        #define SMAA_INCLUDE_PS 1
-        #include "SMAA"
-
-        void main()
+        struct MaterialData
         {
-            vec2 edges = SMAALumaEdgeDetectionPS(TexCoords, offset, _MainTex);
-            OutputColor = vec4(edges, 0.0, 0.0);
+            Sampler2D<float4> _MainTex;   // edges texture (bound by Blit source)
+            Sampler2D<float4> _AreaTex;
+            Sampler2D<float4> _SearchTex;
+            float2 _Resolution;
+            float _EdgeThreshold;
         }
+        ParameterBlock<MaterialData> Mat;
+
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoords : TEXCOORD0;
+            float2 pixCoord : TEXCOORD1;
+            float4 offset0 : TEXCOORD2;
+            float4 offset1 : TEXCOORD3;
+            float4 offset2 : TEXCOORD4;
+        }
+
+        float4 rtMetrics()
+        {
+            return float4(1.0 / Mat._Resolution.x, 1.0 / Mat._Resolution.y, Mat._Resolution.x, Mat._Resolution.y);
+        }
+
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.texCoords = input.uv;
+            output.position = float4(input.position, 1.0);
+
+            float2 pixcoord;
+            float4 offset[3];
+            SMAABlendingWeightCalculationVS(rtMetrics(), output.texCoords, pixcoord, offset);
+            output.pixCoord = pixcoord;
+            output.offset0 = offset[0];
+            output.offset1 = offset[1];
+            output.offset2 = offset[2];
+            return output;
+        }
+
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float4 offset[3] = { input.offset0, input.offset1, input.offset2 };
+            return SMAABlendingWeightCalculationPS(
+                rtMetrics(), input.texCoords, input.pixCoord, offset,
+                Mat._MainTex, Mat._AreaTex, Mat._SearchTex);
+        }
+        ENDSLANG
     }
 
-    ENDGLSL
-}
-
-Pass "BlendWeights"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
+    Pass
     {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
+        Name "NeighborhoodBlend"
+        Tags { "RenderOrder" = "Opaque" }
 
-        out vec2 TexCoords;
-        out vec2 pixcoord;
-        out vec4 offset[3];
+        Cull Off
+        ZTest Disabled
+        ZWrite Off
 
-        uniform vec2 _Resolution;
+        SLANGPROGRAM
+        import SMAA;
 
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 1
-        #define SMAA_INCLUDE_PS 0
-        #include "SMAA"
-
-        void main()
+        struct MaterialData
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-
-            vec2 pc;
-            vec4 o[3];
-            SMAABlendingWeightCalculationVS(TexCoords, pc, o);
-            pixcoord = pc;
-            offset[0] = o[0];
-            offset[1] = o[1];
-            offset[2] = o[2];
+            Sampler2D<float4> _MainTex;   // scene color (bound by Blit source)
+            Sampler2D<float4> _BlendTex;  // blend weights
+            float2 _Resolution;
         }
-    }
+        ParameterBlock<MaterialData> Mat;
 
-    Fragment
-    {
-        layout(location = 0) out vec4 OutputColor;
-
-        in vec2 TexCoords;
-        in vec2 pixcoord;
-        in vec4 offset[3];
-
-        uniform sampler2D _MainTex;    // edges texture (bound by Blit source)
-        uniform sampler2D _AreaTex;
-        uniform sampler2D _SearchTex;
-        uniform vec2 _Resolution;
-        uniform float _EdgeThreshold;
-
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_THRESHOLD _EdgeThreshold
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 0
-        #define SMAA_INCLUDE_PS 1
-        #include "SMAA"
-
-        void main()
+        struct VertexInput
         {
-            OutputColor = SMAABlendingWeightCalculationPS(
-                TexCoords, pixcoord, offset,
-                _MainTex, _AreaTex, _SearchTex, vec4(0.0));
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
         }
-    }
-
-    ENDGLSL
-}
-
-Pass "NeighborhoodBlend"
-{
-    Tags { "RenderOrder" = "Opaque" }
-
-    Blend Off
-    Cull None
-    ZTest Off
-    ZWrite Off
-
-    GLSLPROGRAM
-
-    Vertex
-    {
-        layout (location = 0) in vec3 vertexPosition;
-        layout (location = 1) in vec2 vertexTexCoord;
-
-        out vec2 TexCoords;
-        out vec4 offset;
-
-        uniform vec2 _Resolution;
-
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 1
-        #define SMAA_INCLUDE_PS 0
-        #include "SMAA"
-
-        void main()
+        struct Varyings
         {
-            TexCoords = vertexTexCoord;
-            gl_Position = vec4(vertexPosition, 1.0);
-
-            vec4 o;
-            SMAANeighborhoodBlendingVS(TexCoords, o);
-            offset = o;
+            float4 position : SV_Position;
+            float2 texCoords : TEXCOORD0;
+            float4 offset : TEXCOORD1;
         }
-    }
 
-    Fragment
-    {
-        layout(location = 0) out vec4 OutputColor;
-
-        in vec2 TexCoords;
-        in vec4 offset;
-
-        uniform sampler2D _MainTex;    // scene color (bound by Blit source)
-        uniform sampler2D _BlendTex;   // blend weights
-        uniform vec2 _Resolution;
-
-        #define SMAA_RT_METRICS vec4(1.0 / _Resolution.x, 1.0 / _Resolution.y, _Resolution.x, _Resolution.y)
-        #define SMAA_GLSL_4
-        #define SMAA_MAX_SEARCH_STEPS 16
-        #define SMAA_MAX_SEARCH_STEPS_DIAG 8
-        #define SMAA_CORNER_ROUNDING 25
-        #define SMAA_INCLUDE_VS 0
-        #define SMAA_INCLUDE_PS 1
-        #include "SMAA"
-
-        void main()
+        float4 rtMetrics()
         {
-            OutputColor = SMAANeighborhoodBlendingPS(TexCoords, offset, _MainTex, _BlendTex);
+            return float4(1.0 / Mat._Resolution.x, 1.0 / Mat._Resolution.y, Mat._Resolution.x, Mat._Resolution.y);
         }
-    }
 
-    ENDGLSL
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.texCoords = input.uv;
+            output.position = float4(input.position, 1.0);
+
+            float4 offset;
+            SMAANeighborhoodBlendingVS(rtMetrics(), output.texCoords, offset);
+            output.offset = offset;
+            return output;
+        }
+
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            return SMAANeighborhoodBlendingPS(rtMetrics(), input.texCoords, input.offset, Mat._MainTex, Mat._BlendTex);
+        }
+        ENDSLANG
+    }
 }

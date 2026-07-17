@@ -8,7 +8,7 @@ import VariantAttributes;
 
 // Shadow toggle for shader-graph / lit shaders. Declared here (module-level) so every importer
 // compiles a shadowed and an unshadowed permutation.
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool SG_NO_SHADOWS;
 
 public static const int MAX_SHADOW_CASTERS = 4;

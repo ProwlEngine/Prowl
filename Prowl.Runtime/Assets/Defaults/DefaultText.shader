@@ -1,96 +1,99 @@
 Shader "Default/DefaultText"
-
-Properties
 {
-    _MainTex ("SDF Atlas", Texture2D) = "white"
-    _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
-    _Tiling ("Tiling", Vector2) = (1.0, 1.0)
-    _Offset ("Offset", Vector2) = (0.0, 0.0)
-}
-
-Pass "DefaultText"
-{
-    Tags { "RenderOrder" = "UI" }
-
-    Blend {
-        Src SrcAlpha
-        Dst OneMinusSrcAlpha
-        Mode Add
+    Properties
+    {
+        _MainTex ("SDF Atlas", Texture2D) = "white" {}
+        _MainColor ("Tint", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Tiling ("Tiling", Vector) = (1.0, 1.0, 0.0, 0.0)
+        _Offset ("Offset", Vector) = (0.0, 0.0, 0.0, 0.0)
     }
-    ZTest Off
-    ZWrite Off
-    Cull Off
 
-    GLSLPROGRAM
-		Vertex
-		{
-            #include "ProwlCG"
-            #include "VertexAttributes"
+    Pass
+    {
+        Name "DefaultText"
+        Tags { "RenderOrder" = "UI" }
 
-			out vec2 texCoord0;
-			out vec3 worldPos;
-			out vec4 vColor;
+        Blend SourceAlpha InverseSourceAlpha
+        BlendOp Add
+        ZTest Disabled
+        ZWrite Off
+        Cull Off
 
-			uniform vec2 _Tiling;
-			uniform vec2 _Offset;
+        SLANGPROGRAM
+        import ProwlCG;
 
-			void main()
-			{
-				gl_Position = TransformClip(vertexPosition);
-				texCoord0 = vertexTexCoord0 * _Tiling + _Offset;
-				worldPos = TransformPosition(vertexPosition);
-				vColor = GetInstanceColor();
-			}
-		}
+        struct MaterialData
+        {
+            Sampler2D<float4> _MainTex; // single-channel SDF replicated across RGB(A)
+            float4 _MainColor;
+            float2 _Tiling;
+            float2 _Offset;
 
-		Fragment
-		{
-            #include "ProwlCG"
-            #include "Lighting"
+            // Per-item rounded-rect clip (RectMask), matching Default/DefaultUI.
+            float4x4 _ClipToLocal;
+            float4 _ClipRect;
+            float _ClipRadius;
+            float _ClipSoftness;
+            float _ClipEnable;
+        }
+        ParameterBlock<MaterialData> Mat;
 
-			layout (location = 0) out vec4 fragColor;
+        struct VertexInput
+        {
+            float3 position : POSITION0;
+            float2 uv : TEXCOORD0;
+            float4 color : COLOR0;
+        }
+        struct Varyings
+        {
+            float4 position : SV_Position;
+            float2 texCoord0 : TEXCOORD0;
+            float3 worldPos : TEXCOORD1;
+            float4 vColor : COLOR0;
+        }
 
-			in vec2 texCoord0;
-			in vec3 worldPos;
-			in vec4 vColor;
+        [shader("vertex")]
+        Varyings Vertex(VertexInput input)
+        {
+            Varyings output;
+            output.position = mul(Object.mvp, float4(input.position, 1.0));
+            output.texCoord0 = input.uv * Mat._Tiling + Mat._Offset;
+            output.worldPos = mul(Object.prowl_ObjectToWorld, float4(input.position, 1.0)).xyz;
+            output.vColor = input.color;
+            return output;
+        }
 
-			uniform sampler2D _MainTex;   // single-channel SDF replicated across RGB(A)
-			uniform vec4 _MainColor;
+        float uiClipCoverage(float3 worldPosition)
+        {
+            if (Mat._ClipEnable < 0.5) return 1.0;
+            float2 p = mul(Mat._ClipToLocal, float4(worldPosition, 1.0)).xy;
+            float2 c = (Mat._ClipRect.xy + Mat._ClipRect.zw) * 0.5;
+            float2 e = (Mat._ClipRect.zw - Mat._ClipRect.xy) * 0.5 - float2(Mat._ClipRadius);
+            float2 d = abs(p - c) - e;
+            float dist = length(max(d, float2(0.0))) + min(max(d.x, d.y), 0.0) - Mat._ClipRadius;
+            float soft = max(Mat._ClipSoftness, max(fwidth(dist), 1e-4));
+            return clamp(0.5 - dist / soft, 0.0, 1.0);
+        }
 
-			// Per-item rounded-rect clip (RectMask), matching Default/DefaultUI.
-			uniform mat4 _ClipToLocal;
-			uniform vec4 _ClipRect;
-			uniform float _ClipRadius;
-			uniform float _ClipSoftness;
-			uniform float _ClipEnable;
+        // Reconstruct sharp, resolution-independent coverage from the distance field.
+        static const float sdfPxRange = 4.0;
+        float sdfScreenPxRange(float2 uv)
+        {
+            uint w, h;
+            Mat._MainTex.GetDimensions(w, h);
+            float2 unitRange = float2(sdfPxRange) / float2(w, h);
+            float2 screenTexSize = float2(1.0) / fwidth(uv);
+            return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+        }
 
-			float uiClipCoverage(vec3 worldPosition)
-			{
-				if (_ClipEnable < 0.5) return 1.0;
-				vec2 p = (_ClipToLocal * vec4(worldPosition, 1.0)).xy;
-				vec2 c = (_ClipRect.xy + _ClipRect.zw) * 0.5;
-				vec2 e = (_ClipRect.zw - _ClipRect.xy) * 0.5 - vec2(_ClipRadius);
-				vec2 d = abs(p - c) - e;
-				float dist = length(max(d, vec2(0.0))) + min(max(d.x, d.y), 0.0) - _ClipRadius;
-				float soft = max(_ClipSoftness, max(fwidth(dist), 1e-4));
-				return clamp(0.5 - dist / soft, 0.0, 1.0);
-			}
-
-			// Reconstruct sharp, resolution-independent coverage from the distance field.
-			const float sdfPxRange = 4.0;
-			float sdfScreenPxRange(vec2 uv) {
-				vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(_MainTex, 0));
-				vec2 screenTexSize = vec2(1.0) / fwidth(uv);
-				return max(0.5 * dot(unitRange, screenTexSize), 1.0);
-			}
-
-			void main()
-			{
-				float sd = texture(_MainTex, texCoord0).r;
-				float screenPxDistance = sdfScreenPxRange(texCoord0) * (sd - 0.5);
-				float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-				fragColor = vColor * _MainColor * coverage * uiClipCoverage(worldPos);
-			}
-		}
-	ENDGLSL
+        [shader("fragment")]
+        float4 Fragment(Varyings input) : SV_Target
+        {
+            float sd = Mat._MainTex.Sample(input.texCoord0).r;
+            float screenPxDistance = sdfScreenPxRange(input.texCoord0) * (sd - 0.5);
+            float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+            return input.vColor * Mat._MainColor * coverage * uiClipCoverage(input.worldPos);
+        }
+        ENDSLANG
+    }
 }

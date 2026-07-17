@@ -460,6 +460,10 @@ public class SkinnedMeshRenderer : MonoBehaviour
         _morphWeightTexture!.SetData<Float4>(data.AsMemory(0, _morphWeightCapacity), 0, 0, (uint)_morphWeightCapacity, 1);
     }
 
+    // Previous frame's world matrix, for the prowl_PrevObjectToWorld motion-vector uniform.
+    [System.NonSerialized] private Float4x4 _prevWorld;
+    [System.NonSerialized] private bool _hasPrevWorld;
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = SharedMesh.Res;
@@ -506,6 +510,9 @@ public class SkinnedMeshRenderer : MonoBehaviour
         // Render each submesh with its material. CollectionsMarshal.AsSpan gives a ref to the
         // list's real backing elements (List<T>'s indexer would copy a value-type element, so
         // AssetRef<Material>.Res's internal caching would mutate a throwaway copy and never stick).
+        Float4x4 world = Transform.LocalToWorldMatrix;
+        Float4x4 prevWorld = _hasPrevWorld ? _prevWorld : world;
+
         int subCount = mesh.SubMeshCount;
         var materials = CollectionsMarshal.AsSpan(Materials);
         for (int s = 0; s < subCount; s++)
@@ -521,7 +528,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
             PropertySet props = new();
             props.SetInt("_ObjectID", InstanceID);
             props.SetColor("_MainColor", MainColor);
-            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, Transform.LocalToWorldMatrix);
+            Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
             LightmapBinding.Fill(props, GameObject.Scene, LightmapIndex, LightmapScaleOffset, giAnchor, mesh.HasUV2);
             if (_boneTexture != null)
             {
@@ -533,8 +540,11 @@ public class SkinnedMeshRenderer : MonoBehaviour
                 ApplyBlendShapeProps(mesh, props);
 
             renderables.Add(new SkinnedMeshRenderable(
-                mesh, mat, Transform.LocalToWorldMatrix,
-                GameObject.LayerIndex, worldBounds, props, subMeshIndex: s));
+                mesh, mat, world,
+                GameObject.LayerIndex, worldBounds, props, subMeshIndex: s, prevMatrix: prevWorld));
         }
+
+        _prevWorld = world;
+        _hasPrevWorld = true;
     }
 }

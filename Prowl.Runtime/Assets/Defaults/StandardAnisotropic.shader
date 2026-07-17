@@ -32,7 +32,7 @@ Shader "Default/StandardAnisotropic"
         import VertexAttributes;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
+        [VariantAxis]
         extern static const bool HAS_TANGENTS;
 
         struct MaterialData
@@ -201,7 +201,6 @@ Shader "Default/StandardAnisotropic"
         import VertexAttributes;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
         extern static const bool HAS_TANGENTS;
 
         struct MaterialData

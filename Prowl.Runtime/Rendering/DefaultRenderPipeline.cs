@@ -31,7 +31,7 @@ public struct ViewerData
     public Float4x4 ViewMatrix;
     public Float4x4 ProjectionMatrix;
 
-    public ViewerData(DefaultRenderPipeline.CameraSnapshot css) : this()
+    public ViewerData(RenderPipeline.CameraSnapshot css) : this()
     {
         Position = css.CameraPosition;
         Forward = css.CameraForward;
@@ -214,7 +214,7 @@ public class DefaultRenderPipeline : RenderPipeline
         RenderSkybox(cmd, css, lights);
 
         RenderStats.BeginColorPass();
-        DrawRenderables(cmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, false, colorRT);
+        DrawRenderables(cmd, renderables, "RenderOrder", "Opaque", new ViewerData(css), culledRenderableIndices, colorRT);
         RenderStats.EndColorPass();
 
         if (data.DisplayGrid)

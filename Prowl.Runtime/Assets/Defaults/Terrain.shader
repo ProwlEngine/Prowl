@@ -68,9 +68,9 @@ Shader "Default/Terrain"
         import Lighting;
         import VariantAttributes;
 
-        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
-        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
-        [variant("false") variant("true")] extern static const bool TERRAIN_8_LAYERS;
+        [VariantAxis] extern static const bool TERRAIN_BICUBIC;
+        [VariantAxis] extern static const bool GPU_INSTANCING;
+        [VariantAxis] extern static const bool TERRAIN_8_LAYERS;
 
         struct MaterialData
         {
@@ -356,8 +356,8 @@ Shader "Default/Terrain"
         import ProwlCG;
         import VariantAttributes;
 
-        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
-        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
+        extern static const bool TERRAIN_BICUBIC;
+        extern static const bool GPU_INSTANCING;
 
         struct MaterialData
         {
@@ -477,8 +477,8 @@ Shader "Default/Terrain"
         import ProwlCG;
         import VariantAttributes;
 
-        [variant("false") variant("true")] extern static const bool TERRAIN_BICUBIC;
-        [variant("false") variant("true")] extern static const bool GPU_INSTANCING;
+        extern static const bool TERRAIN_BICUBIC;
+        extern static const bool GPU_INSTANCING;
 
         struct MaterialData
         {

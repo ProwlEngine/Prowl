@@ -200,6 +200,9 @@ public class LineRenderer : MonoBehaviour, IRenderable
 
         drawData = _cachedMesh!;
         model = Float4x4.Identity; // Vertices are already in world space
+        properties.SetMatrix("prowl_ObjectToWorld", model);
+        properties.SetMatrix("prowl_WorldToObject", model);
+        properties.SetMatrix("prowl_PrevObjectToWorld", model);
         instanceData = null; // Single instance rendering
     }
 

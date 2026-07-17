@@ -28,7 +28,7 @@ Shader "Default/Grass"
         import Lighting;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
+        [VariantAxis]
         extern static const bool GPU_INSTANCING;
 
         struct MaterialData
@@ -198,7 +198,6 @@ Shader "Default/Grass"
         import ProwlCG;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
         extern static const bool GPU_INSTANCING;
 
         struct MaterialData

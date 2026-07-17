@@ -15,19 +15,22 @@ Shader "Default/Tonemapper"
         import VariantAttributes;
 
         // Mutually-exclusive tonemap operator selection.
-        static const int TONEMAP_NONE            = 0;
-        static const int TONEMAP_MELON           = 1;
-        static const int TONEMAP_ACES            = 2;
-        static const int TONEMAP_ACES_SIMPLE     = 3;
-        static const int TONEMAP_AGX             = 4;
-        static const int TONEMAP_REINHARD_SIMPLE = 5;
-        static const int TONEMAP_REINHARD_LUMA   = 6;
-        static const int TONEMAP_REINHARD_WHITE  = 7;
-        static const int TONEMAP_ROMBINDAHOUSE   = 8;
-        static const int TONEMAP_UNCHARTED2      = 9;
+        public enum TonemapOp
+        {
+            None,
+            Melon,
+            ACES,
+            ACESSimple,
+            AgX,
+            ReinhardSimple,
+            ReinhardLuma,
+            ReinhardWhitePreserving,
+            RomBinDaHouse,
+            Uncharted2
+        }
 
-        [variant("0") variant("1") variant("2") variant("3") variant("4") variant("5") variant("6") variant("7") variant("8") variant("9")]
-        extern static const int TonemapMode;
+        [VariantAxis]
+        extern static const TonemapOp TonemapMode;
 
         struct MaterialData
         {
@@ -181,15 +184,15 @@ Shader "Default/Tonemapper"
         {
             switch (TonemapMode)
             {
-                case TONEMAP_MELON:           color = MelonTonemap(color); break;
-                case TONEMAP_ACES:            color = ACESFitted(color); break;
-                case TONEMAP_ACES_SIMPLE:     color = ACESSimple(color); break;
-                case TONEMAP_AGX:             color = AgX(color); break;
-                case TONEMAP_REINHARD_SIMPLE: color = ReinhardSimple(color); break;
-                case TONEMAP_REINHARD_LUMA:   color = ReinhardLuma(color); break;
-                case TONEMAP_REINHARD_WHITE:  color = ReinhardWhitePreserving(color); break;
-                case TONEMAP_ROMBINDAHOUSE:   color = RomBinDaHouse(color); break;
-                case TONEMAP_UNCHARTED2:      color = Uncharted2(color); break;
+                case TonemapOp.Melon:          color = MelonTonemap(color); break;
+                case TonemapOp.ACES:           color = ACESFitted(color); break;
+                case TonemapOp.ACESSimple:     color = ACESSimple(color); break;
+                case TonemapOp.AgX:            color = AgX(color); break;
+                case TonemapOp.ReinhardSimple: color = ReinhardSimple(color); break;
+                case TonemapOp.ReinhardLuma:   color = ReinhardLuma(color); break;
+                case TonemapOp.ReinhardWhitePreserving: color = ReinhardWhitePreserving(color); break;
+                case TonemapOp.RomBinDaHouse:  color = RomBinDaHouse(color); break;
+                case TonemapOp.Uncharted2:     color = Uncharted2(color); break;
                 default: break; // None / Clamp
             }
 

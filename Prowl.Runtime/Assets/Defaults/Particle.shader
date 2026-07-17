@@ -20,7 +20,7 @@ Shader "Default/Particle"
         import ProwlCG;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
+        [VariantAxis]
         extern static const bool GPU_INSTANCING;
 
         struct MaterialData

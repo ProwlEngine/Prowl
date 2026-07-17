@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Graphite;
+using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 
 using Material = Prowl.Runtime.Resources.Material;
@@ -36,15 +37,7 @@ public sealed class TonemapperEffect : ImageEffect
     {
         _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
 
-        _mat.SetKeyword("TONEMAP_MELON", Type == TonemapperType.Melon);
-        _mat.SetKeyword("TONEMAP_ACES", Type == TonemapperType.ACES);
-        _mat.SetKeyword("TONEMAP_ACES_SIMPLE", Type == TonemapperType.ACESSimple);
-        _mat.SetKeyword("TONEMAP_AGX", Type == TonemapperType.AgX);
-        _mat.SetKeyword("TONEMAP_REINHARD_SIMPLE", Type == TonemapperType.ReinhardSimple);
-        _mat.SetKeyword("TONEMAP_REINHARD_LUMA", Type == TonemapperType.ReinhardLuma);
-        _mat.SetKeyword("TONEMAP_REINHARD_WHITE", Type == TonemapperType.ReinhardWhitePreserving);
-        _mat.SetKeyword("TONEMAP_ROMBINDAHOUSE", Type == TonemapperType.RomBinDaHouse);
-        _mat.SetKeyword("TONEMAP_UNCHARTED2", Type == TonemapperType.Uncharted2);
+        _mat.SetKeyword(new Keyword("TonemapMode", Type.ToString()));
 
         _mat.SetFloat("Contrast", Contrast);
         _mat.SetFloat("Saturation", Saturation);

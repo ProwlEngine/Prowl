@@ -165,7 +165,7 @@ public class DirectionalLight : Light
                 var cmd = Graphics.GetCommandBuffer($"DirectionalLightCascade{cascadeIndex}");
                 cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
                 cmd.SetViewport(atlasX, atlasY, (uint)res, (uint)res);
-                pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices, false);
+                pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", new ViewerData(GetLightPosition(), forward, right, up), culledRenderableIndices);
                 Graphics.Submit(cmd);
 
                 // Store cascade data for shader

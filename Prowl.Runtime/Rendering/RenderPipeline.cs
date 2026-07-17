@@ -66,13 +66,6 @@ public interface IRenderable
     /// </summary>
     public Float4x4 GetWorldToObjectMatrix(in Float4x4 model) => model.Invert();
 
-    /// <summary>
-    /// Returns a stable integer identity for this renderable, used to track its model matrix
-    /// across frames for motion-vector computation. Return 0 to opt out of per-object tracking
-    /// (motion vectors will show zero for this object). The default returns 0.
-    /// </summary>
-    public int GetObjectID() => 0;
-
     public void GetCullingData(out bool isRenderable, out AABB bounds);
 }
 
@@ -176,53 +169,6 @@ public abstract class RenderPipeline : EngineObject
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
     }
 
-    public HashSet<int> ActiveObjectIds { get => s_activeObjectIds; set => s_activeObjectIds = value; }
-
-    private Dictionary<int, Float4x4> s_prevModelMatrices = [];
-    private HashSet<int> s_activeObjectIds = [];
-    private const int CLEANUP_INTERVAL_FRAMES = 120; // Clean up every 120 frames
-    private int s_framesSinceLastCleanup = 0;
-
-    private void CleanupUnusedModelMatrices()
-    {
-        // Increment frame counter
-        s_framesSinceLastCleanup++;
-
-        // Only perform cleanup at specified interval
-        if (s_framesSinceLastCleanup < CLEANUP_INTERVAL_FRAMES)
-            return;
-
-        s_framesSinceLastCleanup = 0;
-
-        // Remove all matrices that weren't used in this frame
-        var unusedKeys = s_prevModelMatrices.Keys
-            .Where(key => !ActiveObjectIds.Contains(key))
-            .ToList();
-
-        foreach (int key in unusedKeys)
-            s_prevModelMatrices.Remove(key);
-
-        // Clear the active IDs set for next frame
-        ActiveObjectIds.Clear();
-    }
-
-    /// <summary>
-    /// Tracks an object's model matrix for motion vector computation.
-    /// Returns the previous frame's model matrix (or current if first frame).
-    /// </summary>
-    private Float4x4 TrackModelMatrix(int objectId, Float4x4 currentModel)
-    {
-        // Mark this object ID as active this frame
-        ActiveObjectIds.Add(objectId);
-
-        Float4x4 prevModel;
-        if (!s_prevModelMatrices.TryGetValue(objectId, out prevModel))
-            prevModel = currentModel; // First frame, use current matrix
-
-        s_prevModelMatrices[objectId] = currentModel;
-        return prevModel;
-    }
-
     /// <summary>
     /// Collects renderables and lights from the scene for the given camera.
     /// Components receive camera info for LOD/culling decisions.
@@ -237,8 +183,6 @@ public abstract class RenderPipeline : EngineObject
 
     public virtual void Render(Camera camera, in RenderingData data)
     {
-        // Clean up unused matrices after rendering
-        CleanupUnusedModelMatrices();
     }
 
     /// <summary>
@@ -300,23 +244,6 @@ public abstract class RenderPipeline : EngineObject
     private readonly List<(IRenderable renderable, float distSq)> _sortPairs = new();
     private readonly List<IRenderable> _sortResult = new();
 
-    // Per-draw PropertySets for model/prevModel matrices. A single CB may encode hundreds of
-    // draws; each needs its own PropertySet so successive calls don't overwrite earlier ones
-    // (SetProperties records by reference, not by value). The pool is cursor-indexed: reset the
-    // cursor at the start of each DrawRenderables call, allocate from the pool per draw.
-    private readonly List<PropertySet> _perDrawSetPool = new();
-    private int _perDrawSetCursor;
-
-    private PropertySet RentPerDrawSet()
-    {
-        if (_perDrawSetCursor < _perDrawSetPool.Count)
-            return _perDrawSetPool[_perDrawSetCursor++];
-        var set = new PropertySet();
-        _perDrawSetPool.Add(set);
-        _perDrawSetCursor++;
-        return set;
-    }
-
     // DrawRenderables scratch, reused across passes (encode is sequential, never re-entrant).
     private readonly List<RenderBatch> _batches = new();
     private readonly Dictionary<(ulong, int, Mesh), int> _batchLookup = new();
@@ -325,8 +252,8 @@ public abstract class RenderPipeline : EngineObject
 
     // Per-frame world-space AABB cache shared by the main cull and every shadow cascade cull, so each
     // renderable's bounds are transformed once per frame instead of once per frustum (main + 4 cascades).
-    private AABB[] _worldBounds = System.Array.Empty<AABB>();
-    private bool[] _boundsRenderable = System.Array.Empty<bool>();
+    private AABB[] _worldBounds = Array.Empty<AABB>();
+    private bool[] _boundsRenderable = Array.Empty<bool>();
     private IReadOnlyList<IRenderable> _boundsFrameList;
     private int _boundsCount;
 
@@ -497,11 +424,10 @@ public abstract class RenderPipeline : EngineObject
     /// <param name="currentRT">Currently bound color render target, used for the
     /// GrabTexture handshake (read FB for the blit-into-grab-RT). Pass null if no
     /// pass in this batch will request a grab texture.</param>
-    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, bool updatePreviousMatrices, RenderTexture? currentRT = null)
+    public void DrawRenderables(CommandBuffer cmd, IReadOnlyList<IRenderable> renderables, string shaderTag, string tagValue, ViewerData viewer, bool[] culledRenderableIndices, RenderTexture? currentRT = null)
     {
         GlobalPropertySet.Apply(cmd);
 
-        _perDrawSetCursor = 0;
         bool hasRenderOrder = !string.IsNullOrWhiteSpace(shaderTag);
         bool hasSortOffsets = false;
 
@@ -659,7 +585,7 @@ public abstract class RenderPipeline : EngineObject
             material.SetKeyword("BLENDSHAPES", mesh.HasBlendShapes);
 
             ShaderPass pass = material.Shader.GetPass(passIndex);
-            pass.SetKeywords(Enumerable.ToArray(material._localKeywords.Values));
+            pass.TrySetKeywords(Enumerable.ToArray(material._localKeywords.Values));
 
             // GrabTexture: blit current framebuffer into a temporary RT and expose it
             // as a global texture for the shader to sample. Uses the CB's read/draw
@@ -715,21 +641,9 @@ public abstract class RenderPipeline : EngineObject
             {
                 IRenderable renderable = renderables[renderIndex];
 
-                renderable.GetRenderingData(viewer, out PropertySet properties, out Mesh _, out Float4x4 model, out InstanceData[]? _);
-
-                int instanceId = renderable.GetObjectID();
-                Float4x4 prevModel = model;
-                if (updatePreviousMatrices && instanceId != 0)
-                    prevModel = TrackModelMatrix(instanceId, model);
+                renderable.GetRenderingData(viewer, out PropertySet properties, out Mesh _, out Float4x4 _, out InstanceData[]? _);
 
                 cmd.SetProperties(properties);
-
-                PropertySet perDraw = RentPerDrawSet();
-                perDraw.SetMatrix("prowl_ObjectToWorld", model);
-                Float4x4 inv = renderable.GetWorldToObjectMatrix(in model);
-                perDraw.SetMatrix("prowl_WorldToObject", inv);
-                perDraw.SetMatrix("prowl_PrevObjectToWorld", updatePreviousMatrices ? prevModel : model);
-                cmd.SetProperties(perDraw);
 
                 int subIdx = renderable.GetSubMeshIndex();
                 if (subIdx >= 0 && subIdx < mesh.SubMeshCount)

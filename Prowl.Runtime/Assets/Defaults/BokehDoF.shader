@@ -12,7 +12,7 @@ Shader "Default/EnhancedBokehdoF"
         SLANGPROGRAM
         import VariantAttributes;
 
-        [variant("false") variant("true")]
+        [VariantAxis]
         extern static const bool AUTOFOCUS;
 
         static const int KERNEL_RADIUS = 8;
@@ -127,7 +127,6 @@ Shader "Default/EnhancedBokehdoF"
         SLANGPROGRAM
         import VariantAttributes;
 
-        [variant("false") variant("true")]
         extern static const bool AUTOFOCUS;
 
         static const int KERNEL_RADIUS = 8;
@@ -259,7 +258,6 @@ Shader "Default/EnhancedBokehdoF"
         SLANGPROGRAM
         import VariantAttributes;
 
-        [variant("false") variant("true")]
         extern static const bool AUTOFOCUS;
 
         struct MaterialData

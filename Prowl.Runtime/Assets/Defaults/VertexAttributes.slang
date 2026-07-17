@@ -5,11 +5,11 @@ import VariantAttributes;
 
 // Global mesh keywords. Shaders that call the Transform* / GetInstance* helpers below get all three
 // permutation axes; each shader still declares its own vertex input struct and fills a MeshVertex.
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool SKINNED;
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool GPU_INSTANCING;
-[variant("false") variant("true")]
+[VariantAxis]
 extern static const bool BLENDSHAPES;
 
 // =============================================================

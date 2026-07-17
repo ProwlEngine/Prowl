@@ -115,7 +115,7 @@ public class PointLight : Light
             var cmd = Graphics.GetCommandBuffer($"PointLightFace{faceIndex}");
             cmd.SetRenderTarget(ShadowAtlas.GetAtlas().frameBuffer);
             cmd.SetViewport(viewportX, viewportY, (uint)res, (uint)res);
-            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices, false);
+            pipeline.DrawRenderables(cmd, renderables, "LightMode", "ShadowCaster", viewerData, culledRenderableIndices);
             Graphics.Submit(cmd);
 
             // Store face data for shader

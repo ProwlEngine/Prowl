@@ -54,59 +54,55 @@ public struct GlobalUniformsData
 /// </summary>
 public static class GlobalUniforms
 {
-    private static StreamingBuffer? s_uniformBuffer;
+    private static DeviceBuffer? s_currentBuffer;
     private static GlobalUniformsData s_data;
 
     /// <summary>
-    /// Initializes the global uniform buffer
-    /// </summary>
-    public static void Initialize()
-    {
-        if (s_uniformBuffer == null)
-        {
-            s_uniformBuffer = Graphics.Device.ResourceFactory.CreateStreamingBuffer(
-                new BufferDescription((uint)GlobalUniformsData.SizeInBytes, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
-            s_uniformBuffer.Name = "GlobalUniforms (Frame)";
-        }
-    }
-
-    /// <summary>
-    /// Writes this frame's data into the current ring slot and re-registers it as the "Frame"
-    /// global. This is a per-frame write regardless of whether the data changed, since the
-    /// StreamingBuffer rotates to a different backing buffer every frame; skipping the write on
-    /// an unchanged frame would leave that ring slot holding stale data from MaxFramesInFlight
-    /// frames ago.
+    /// Writes this call's data into a freshly allocated buffer and re-registers it as the "Frame"
+    /// global, retiring the previous buffer through <see cref="Graphics.DisposeDeferred"/>.
+    /// <para>
+    /// A single reused (or even per-engine-frame ring-buffered) buffer is not safe here: multiple
+    /// cameras/passes (Scene View, Game View, PreviewRenderer, shadow cascades, ...) can each call
+    /// <see cref="Upload"/> within the same engine frame, and GPU command execution is deferred to a
+    /// background thread. Writing a shared buffer's bytes in place would let a later call's data land
+    /// in memory an earlier, still-pending draw is about to read - exactly the "wrong camera's view/proj
+    /// matrices" race this method exists to avoid. Allocating a new buffer per call and only freeing the
+    /// old one once the GPU has provably finished with it (via DisposeDeferred) removes the hazard
+    /// entirely, at the cost of one small buffer allocation per call.
+    /// </para>
     /// </summary>
     public static void Upload()
     {
-        Initialize();
+        BufferDescription desc = new((uint)GlobalUniformsData.SizeInBytes, BufferUsage.UniformBuffer | BufferUsage.Dynamic);
+        DeviceBuffer buffer = Graphics.Device.ResourceFactory.CreateBuffer(desc);
+        buffer.Name = "GlobalUniforms (Frame)";
 
-        DeviceBuffer current = s_uniformBuffer!.Current;
-        Graphics.Device.UpdateBuffer(current, 0u, new[] { s_data });
+        Graphics.Device.UpdateBuffer(buffer, 0u, new[] { s_data });
 
         // GlobalPropertySet.ClearGlobals() wipes all bindings once per camera, so the
-        // "Frame" buffer binding must be re-registered every Upload rather than once in
-        // Initialize, or it would disappear after the first camera renders.
-        GlobalPropertySet.SetBuffer("Frame", current);
+        // "Frame" buffer binding must be re-registered every Upload rather than once.
+        GlobalPropertySet.SetBuffer("Frame", buffer);
+
+        DeviceBuffer? previous = s_currentBuffer;
+        s_currentBuffer = buffer;
+
+        if (previous != null)
+            Graphics.DisposeDeferred(previous);
     }
 
     /// <summary>
-    /// Gets the current frame's ring-slot buffer for binding to shaders. Does NOT lazily
-    /// initialize: this is called by the executor on the render thread, and the non-atomic
-    /// create-if-null in <see cref="Initialize"/> must only ever run on the main
-    /// thread. <see cref="Upload"/> (called by the pipeline each frame before any
-    /// draw) creates the buffer, so by submit order it is non-null here. Returns
-    /// null only before the first Upload; PrepareDraw skips the bind in that case.
+    /// Gets the most recently uploaded buffer for binding to shaders. Returns null before the
+    /// first Upload.
     /// </summary>
-    public static DeviceBuffer? GetBuffer() => s_uniformBuffer?.Current;
+    public static DeviceBuffer? GetBuffer() => s_currentBuffer;
 
     /// <summary>
     /// Cleans up the global uniform buffer resources
     /// </summary>
     public static void Dispose()
     {
-        s_uniformBuffer?.Dispose();
-        s_uniformBuffer = null;
+        s_currentBuffer?.Dispose();
+        s_currentBuffer = null;
     }
 
     // Camera matrix setters (per-frame data)

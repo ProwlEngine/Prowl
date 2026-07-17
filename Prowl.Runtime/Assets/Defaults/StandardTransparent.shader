@@ -34,7 +34,7 @@ Shader "Default/StandardTransparent"
         import VertexAttributes;
         import VariantAttributes;
 
-        [variant("false") variant("true")]
+        [VariantAxis]
         extern static const bool HAS_TANGENTS;
 
         struct MaterialData

@@ -13,15 +13,15 @@ Shader "Default/CinematicEffects"
         import ProwlCG;
         import VariantAttributes;
 
-        [variant("false") variant("true")] extern static const bool VIGNETTE;
-        [variant("false") variant("true")] extern static const bool CHROMATIC_ABERRATION;
-        [variant("false") variant("true")] extern static const bool FILM_GRAIN;
-        [variant("false") variant("true")] extern static const bool COLOR_GRADING;
-        [variant("false") variant("true")] extern static const bool LUT;
-        [variant("false") variant("true")] extern static const bool SHARPEN;
-        [variant("false") variant("true")] extern static const bool EDGE_DETECTION;
-        [variant("false") variant("true")] extern static const bool PIXELATION;
-        [variant("false") variant("true")] extern static const bool GOD_RAYS;
+        [VariantAxis] extern static const bool VIGNETTE;
+        [VariantAxis] extern static const bool CHROMATIC_ABERRATION;
+        [VariantAxis] extern static const bool FILM_GRAIN;
+        [VariantAxis] extern static const bool COLOR_GRADING;
+        [VariantAxis] extern static const bool LUT;
+        [VariantAxis] extern static const bool SHARPEN;
+        [VariantAxis] extern static const bool EDGE_DETECTION;
+        [VariantAxis] extern static const bool PIXELATION;
+        [VariantAxis] extern static const bool GOD_RAYS;
 
         struct MaterialData
         {

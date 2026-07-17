@@ -42,6 +42,10 @@ public class MeshRenderer : MonoBehaviour
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertySet[] _propCache;
 
+    // Previous frame's world matrix, for the prowl_PrevObjectToWorld motion-vector uniform.
+    [System.NonSerialized] private Float4x4 _prevWorld;
+    [System.NonSerialized] private bool _hasPrevWorld;
+
     public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         var mesh = Mesh.Res;
@@ -57,6 +61,7 @@ public class MeshRenderer : MonoBehaviour
 
         // LocalToWorldMatrix is cached on Transform, so this is cheap for a static renderer.
         Float4x4 world = Transform.LocalToWorldMatrix;
+        Float4x4 prevWorld = _hasPrevWorld ? _prevWorld : world;
         Float3 giAnchor = Float4x4.TransformPoint(mesh.bounds.Center, world);
 
         // AssetRef<T> caches its resolved instance as a side effect of .Res - List<T>'s indexer
@@ -86,8 +91,11 @@ public class MeshRenderer : MonoBehaviour
 
             renderables.Add(new MeshRenderable(
                 mesh, mat, world,
-                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
+                GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1, prevMatrix: prevWorld));
         }
+
+        _prevWorld = world;
+        _hasPrevWorld = true;
     }
 
     /// <summary>
