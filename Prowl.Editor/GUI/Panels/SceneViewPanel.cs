@@ -350,7 +350,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     foreach (var go in HierarchyPanel.ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList()))
                         HierarchyPanel.DeleteGameObject(go);
                     Selection.Clear();
-                    EditorSceneManager.IsDirty = true;
+                    EditorSceneManager.MarkDirty();
                 }
                 else if (ShortcutManager.IsPressed("Scene/Duplicate"))
                 {
@@ -788,7 +788,7 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
                     go.Transform.LocalScale *= r.ScaleDelta.Value;
             }
 
-            EditorSceneManager.IsDirty = true;
+            EditorSceneManager.MarkDirty();
         }
     }
 

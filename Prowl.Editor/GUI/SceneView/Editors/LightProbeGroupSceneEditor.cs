@@ -80,7 +80,7 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
             if (moved)
             {
                 ApplyWorldDelta(centroid - before);
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             }
             if (Input.GetMouseButtonUp(0)) _dragging = false;
             if (hot) consumed = true;
@@ -154,7 +154,7 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
         _group.ProbePositions.Add(_group.Transform.InverseTransformPoint(world));
         _selection.Clear();
         _selection.Add(_group.ProbePositions.Count - 1);
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     private void DeleteSelected()
@@ -169,7 +169,7 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
                 _group.ProbePositions.RemoveAt(idx);
         }
         _selection.Clear();
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     private void DuplicateSelected()
@@ -186,7 +186,7 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
         }
         _selection.Clear();
         _selection.AddRange(dup);
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     private void SelectAll()

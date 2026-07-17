@@ -56,7 +56,7 @@ public static class PrefabUtility
         // Stamp the source GO as a prefab instance
         StampAsPrefabInstance(source, meta.Guid);
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Prefab] Created prefab: {relativeSavePath}");
 
         return true;
@@ -110,7 +110,7 @@ public static class PrefabUtility
             redo: () => goRef.ClearPrefabDataRecursive());
 
         go.ClearPrefabDataRecursive();
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     // ================================================================
@@ -173,7 +173,7 @@ public static class PrefabUtility
             },
             redo: () => ApplyOverrides(goRef));
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Prefab] Applied overrides to {entry.Path}");
     }
 
@@ -277,7 +277,7 @@ public static class PrefabUtility
             });
 
         Selection.Select(fresh);
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     private static GameObject? FindByIdentifier(Scene scene, Guid id)
@@ -360,7 +360,7 @@ public static class PrefabUtility
         // Refresh other instances to pick up the change
         RefreshAllInstances(instanceGO.PrefabAssetId);
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     /// <summary>
@@ -418,7 +418,7 @@ public static class PrefabUtility
                 RevertSingleOverride(goRef, path);
             });
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
     }
 
     private const BindingFlags InstanceFields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;

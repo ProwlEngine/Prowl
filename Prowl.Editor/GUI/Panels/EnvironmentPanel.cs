@@ -89,7 +89,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.skybox"), first: true);
 
         var sky = scene.Skybox;
-        void Dirty() { scene.Skybox = sky; EditorSceneManager.IsDirty = true; }
+        void Dirty() { scene.Skybox = sky; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_mode_v", sky.Mode, v => { sky.Mode = v; Dirty(); }).Show());
@@ -129,7 +129,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.fog"), first: true);
 
         var fog = scene.Fog;
-        void Dirty() { scene.Fog = fog; EditorSceneManager.IsDirty = true; }
+        void Dirty() { scene.Fog = fog; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_mode_v", fog.Mode, v => { fog.Mode = v; Dirty(); }).Show());
@@ -159,7 +159,7 @@ public class EnvironmentPanel : DockPanel
         EditorGUI.SectionHeader(paper, $"{id}_h", Loc.Get("env.ambient_lighting"), first: true);
 
         var ambient = scene.Ambient;
-        void Dirty() { scene.Ambient = ambient; EditorSceneManager.IsDirty = true; }
+        void Dirty() { scene.Ambient = ambient; EditorSceneManager.MarkDirty(); }
 
         EditorGUI.SettingsRow(paper, $"{id}_mode", Loc.Get("env.mode"), () =>
             Origami.EnumDropdown(paper, $"{id}_mode_v", ambient.Mode, v => { ambient.Mode = v; Dirty(); }).Show());
@@ -187,7 +187,7 @@ public class EnvironmentPanel : DockPanel
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
         var s = scene.LightmapBake;
-        void Touch() => EditorSceneManager.IsDirty = true;
+        void Touch() => EditorSceneManager.MarkDirty();
 
         EditorGUI.SectionHeader(paper, $"{id}_h_res", Loc.Get("game.resolution"), first: true);
 

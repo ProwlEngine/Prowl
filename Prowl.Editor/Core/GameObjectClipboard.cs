@@ -88,7 +88,7 @@ public static class GameObjectClipboard
                 Selection.Clear();
                 foreach (var go in results)
                     Selection.AddToSelection(go);
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             }
         }
         catch (Exception ex)
@@ -139,7 +139,7 @@ public static class GameObjectClipboard
             Selection.Clear();
             foreach (var go in results)
                 Selection.AddToSelection(go);
-            EditorSceneManager.IsDirty = true;
+            EditorSceneManager.MarkDirty();
         }
 
         return results;

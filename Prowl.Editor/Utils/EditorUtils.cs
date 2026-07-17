@@ -21,6 +21,9 @@ public static class EditorUtils
         return !string.IsNullOrEmpty(s) && Guid.TryParse(s, out result) && result != Guid.Empty;
     }
 
+    public static bool MatchesSearch(string text, string? search) =>
+        string.IsNullOrEmpty(search) || text.Contains(search, StringComparison.OrdinalIgnoreCase);
+
     public static IEnumerable<Type> GetAllTypes()
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())

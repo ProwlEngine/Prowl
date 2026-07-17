@@ -56,7 +56,7 @@ internal class MaterialDropHandler : ISceneDropHandler
         var mat = Runtime.AssetDatabase.Get(payload.AssetGuid) as Material;
         if (mat == null) return;
         var meshRenderer = hitGO.GetComponent<MeshRenderer>();
-        if (meshRenderer != null) { meshRenderer.Material = mat; EditorSceneManager.IsDirty = true; }
+        if (meshRenderer != null) { meshRenderer.Material = mat; EditorSceneManager.MarkDirty(); }
     }
 }
 

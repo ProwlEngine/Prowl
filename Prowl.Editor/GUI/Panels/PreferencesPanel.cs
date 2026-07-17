@@ -668,9 +668,8 @@ public class PreferencesPanel : DockPanel
         foreach (var shortcut in ShortcutManager.GetAllShortcuts())
         {
             // Filter by search
-            if (!string.IsNullOrEmpty(_shortcutSearch) &&
-                !shortcut.DisplayName.Contains(_shortcutSearch, StringComparison.OrdinalIgnoreCase) &&
-                !shortcut.Id.Contains(_shortcutSearch, StringComparison.OrdinalIgnoreCase))
+            if (!EditorUtils.MatchesSearch(shortcut.DisplayName, _shortcutSearch) &&
+                !EditorUtils.MatchesSearch(shortcut.Id, _shortcutSearch))
                 continue;
 
             // Category header

@@ -202,7 +202,7 @@ public class TerrainSceneEditor : ISceneViewEditor
                             () => { capturedData.Trees = new List<TreeInstance>(pre); },
                             () => { capturedData.Trees = new List<TreeInstance>(post); });
                         TerrainEditor.ActiveInstance?.MarkDirty();
-                        EditorSceneManager.IsDirty = true;
+                        EditorSceneManager.MarkDirty();
                     }
                 }
                 else
@@ -216,7 +216,7 @@ public class TerrainSceneEditor : ISceneViewEditor
                         () => { capturedData.Trees = new List<TreeInstance>(pre); },
                         () => { capturedData.Trees = new List<TreeInstance>(post); });
                     TerrainEditor.ActiveInstance?.MarkDirty();
-                    EditorSceneManager.IsDirty = true;
+                    EditorSceneManager.MarkDirty();
                 }
             }
         }
@@ -239,7 +239,7 @@ public class TerrainSceneEditor : ISceneViewEditor
                 {
                     if (hChanged || gChanged) _terrain.InvalidateGrassCache();
                     TerrainEditor.ActiveInstance?.MarkDirty();
-                    EditorSceneManager.IsDirty = true;
+                    EditorSceneManager.MarkDirty();
                 }
             }
 
