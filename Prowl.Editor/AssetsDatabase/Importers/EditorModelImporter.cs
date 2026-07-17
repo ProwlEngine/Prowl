@@ -115,7 +115,13 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
     public EditorModelTextureResolver(ImportContext ctx)
     {
         _ctx = ctx;
-        _assetsRoot = Project.Current?.AssetsPath ?? "";
+        // Project.AssetsPath is a plain Path.Combine(RootPath, "Assets"), not run through
+        // GetFullPath - sourcePath (below) comes from Clay's own, separately-normalized
+        // Path.GetFullPath pipeline. Normalizing both through GetFullPath here means a prefix
+        // comparison between them is comparing like with like, even if RootPath itself has a
+        // trailing separator or other cosmetic difference GetFullPath would otherwise collapse.
+        string assetsRoot = Project.Current?.AssetsPath ?? "";
+        _assetsRoot = string.IsNullOrEmpty(assetsRoot) ? "" : Path.GetFullPath(assetsRoot);
         _db = EditorAssetBackend.Instance;
     }
 
@@ -126,11 +132,21 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
         // sourcePath is always already a resolved, existing, absolute path (guaranteed by Clay's
         // Texture.SourcePath contract) - a plain prefix check + relative-path computation is enough,
         // no need to re-resolve it against the model's own directory.
-        if (!sourcePath.StartsWith(_assetsRoot, StringComparison.OrdinalIgnoreCase)) return default;
+        if (!sourcePath.StartsWith(_assetsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            Debug.LogWarning($"[Clay] External texture '{sourcePath}' is not under the project's " +
+                $"Assets folder '{_assetsRoot}' - using the default fallback texture instead.");
+            return default;
+        }
 
         string relativePath = Path.GetRelativePath(_assetsRoot, sourcePath).Replace('\\', '/');
         var entry = _db.GetEntry(relativePath);
-        if (entry == null) return default;
+        if (entry == null)
+        {
+            Debug.LogWarning($"[Clay] External texture '{sourcePath}' (resolved to '{relativePath}') has no " +
+                "tracked asset entry - using the default fallback texture instead. Has it been imported yet?");
+            return default;
+        }
 
         _ctx.AddDependency(entry.Guid);
         return new AssetRef<Texture2D>(entry.Guid);
