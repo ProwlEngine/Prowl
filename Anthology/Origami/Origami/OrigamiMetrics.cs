@@ -116,6 +116,29 @@ public sealed class OrigamiMetrics
     /// <summary>Gap between dock zone indicator squares.</summary>
     public float IndicatorGap = 4f;
 
+    // ── Node graph ─────────────────────────────────────────────
+    // Node cards reuse the shared metrics: HeaderHeight (title strip), RowHeight (port rows),
+    // Rounding (card corners), FontSize (title), FontSizeSmall (port labels). Only the values with no
+    // general equivalent live here.
+
+    /// <summary>Radius of a port socket dot.</summary>
+    public float GraphPortRadius = 4.5f;
+
+    /// <summary>Spacing between background grid lines (graph space).</summary>
+    public float GraphGridSpacing = 26f;
+
+    /// <summary>Stroke width of a wire.</summary>
+    public float GraphWireThickness = 2f;
+
+    /// <summary>Minimum / maximum zoom the graph clamps to.</summary>
+    public float GraphMinZoom = 0.1f;
+    public float GraphMaxZoom = 2.5f;
+
+    /// <summary>Zoom at/above which nodes render full detail (labels + title); below
+    /// <see cref="GraphLodHeader"/> they collapse to a solid block.</summary>
+    public float GraphLodFull = 0.55f;
+    public float GraphLodHeader = 0.3f;
+
     /// <summary>Linearly interpolate between two metrics blocks. Used during theme transitions.</summary>
     public static OrigamiMetrics Lerp(OrigamiMetrics a, OrigamiMetrics b, float t) => new()
     {
@@ -148,6 +171,13 @@ public sealed class OrigamiMetrics
         DockPadding       = LerpF(a.DockPadding,       b.DockPadding,       t),
         IndicatorSize     = LerpF(a.IndicatorSize,     b.IndicatorSize,     t),
         IndicatorGap      = LerpF(a.IndicatorGap,      b.IndicatorGap,      t),
+        GraphPortRadius   = LerpF(a.GraphPortRadius,   b.GraphPortRadius,   t),
+        GraphGridSpacing  = LerpF(a.GraphGridSpacing,  b.GraphGridSpacing,  t),
+        GraphWireThickness = LerpF(a.GraphWireThickness, b.GraphWireThickness, t),
+        GraphMinZoom      = LerpF(a.GraphMinZoom,      b.GraphMinZoom,      t),
+        GraphMaxZoom      = LerpF(a.GraphMaxZoom,      b.GraphMaxZoom,      t),
+        GraphLodFull      = LerpF(a.GraphLodFull,      b.GraphLodFull,      t),
+        GraphLodHeader    = LerpF(a.GraphLodHeader,    b.GraphLodHeader,    t),
     };
 
     /// <summary>Shallow copy.</summary>
@@ -182,6 +212,13 @@ public sealed class OrigamiMetrics
         DockPadding       = DockPadding,
         IndicatorSize     = IndicatorSize,
         IndicatorGap      = IndicatorGap,
+        GraphPortRadius   = GraphPortRadius,
+        GraphGridSpacing  = GraphGridSpacing,
+        GraphWireThickness = GraphWireThickness,
+        GraphMinZoom      = GraphMinZoom,
+        GraphMaxZoom      = GraphMaxZoom,
+        GraphLodFull      = GraphLodFull,
+        GraphLodHeader    = GraphLodHeader,
     };
 
     private static float LerpF(float a, float b, float t) => a + (b - a) * t;

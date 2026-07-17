@@ -313,8 +313,6 @@ public sealed class ContextBuilder
                         .Width(IconSize).Height(RowHeight)
                         .Text(Icon, font).TextColor(txt)
                         .FontSize(RowFont).Alignment(TextAlignment.MiddleCenter);
-                else
-                    paper.Box($"{id}_pad_{index}").Width(IconSize);
 
                 paper.Box($"{id}_l_{index}")
                     .Width(UnitValue.Stretch()).Height(RowHeight)

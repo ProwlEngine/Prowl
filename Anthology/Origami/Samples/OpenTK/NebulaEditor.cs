@@ -101,7 +101,7 @@ namespace OrigamiSample
         private DockSpace BuildDock()
         {
             var scene = new EmptyPanel("Scene", "Scene viewport", _geistSemi, _geist);
-            var shader = new EmptyPanel("Shader Graph", "Node canvas", _geistSemi, _geist);
+            var shader = new NodeGraphPanel();
             var visual = new EmptyPanel("Visual Scripts", "Block canvas", _geistSemi, _geist);
             _widgets = new WidgetPlaygroundPanel(_geist, _geistMed, _geistSemi, _mono);
             var widgets = _widgets;

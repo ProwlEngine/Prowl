@@ -75,15 +75,16 @@ internal static class FbxMaterialMapper
                 if (srcObj.ObjectType != "Texture") continue;
                 if (!textureMapping.TextureIndex.TryGetValue(srcObj.Id, out int texIdx)) continue;
 
-                // Carry the texture's UV transform onto the slot: every material slot using a
-                // given Texture inherits that Texture's UV transform.
-                var iTex = scene.Textures[texIdx];
+                // UV transform is read per Texture-object usage (srcObj.Id), not from the shared
+                // IntermediateTexture - two materials can reference the same image but tile/offset
+                // it differently. MapAll populates this for every Texture object unconditionally.
+                var uv = textureMapping.UVTransform[srcObj.Id];
                 var slot = new IntermediateTextureSlot
                 {
                     TextureIndex = texIdx,
-                    Offset = iTex.UVOffset,
-                    Scale = iTex.UVScale,
-                    Rotation = iTex.UVRotation,
+                    Offset = uv.Offset,
+                    Scale = uv.Scale,
+                    Rotation = uv.Rotation,
                 };
                 AssignSlot(mat, c.Property, slot);
             }
