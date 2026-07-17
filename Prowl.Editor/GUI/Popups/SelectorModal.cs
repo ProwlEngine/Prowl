@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -226,7 +227,7 @@ public static class SelectorModal
                         continue;
 
                     object selectValue = isTransform ? go.Transform : go;
-                    string path = GetHierarchyPath(go);
+                    string path = EditorUtils.GetHierarchyPath(go);
                     string detail = string.IsNullOrEmpty(path) ? "" : path;
 
                     DrawSceneItem(paper, font, $"sel_s_{idx++}", go.Name, detail,
@@ -432,17 +433,4 @@ public static class SelectorModal
         return EditorIcons.Circle;
     }
 
-    private static string GetHierarchyPath(GameObject go)
-    {
-        var parent = go.Parent;
-        if (!parent.IsValid()) return "";
-        var parts = new List<string>();
-        while (parent.IsValid())
-        {
-            parts.Add(parent.Name);
-            parent = parent.Parent;
-        }
-        parts.Reverse();
-        return string.Join("/", parts);
-    }
 }

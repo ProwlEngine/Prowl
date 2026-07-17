@@ -1,9 +1,15 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Utils;
 
@@ -19,12 +25,23 @@ public static class EditorUtils
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
+            if (IsFrameworkAssembly(assembly)) continue;
             Type[] types;
             try { types = assembly.GetTypes(); }
+            catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
             catch { continue; }
             foreach (var type in types)
                 yield return type;
         }
+    }
+
+    public static bool IsFrameworkAssembly(Assembly assembly)
+    {
+        string? name = assembly.GetName().Name;
+        if (string.IsNullOrEmpty(name)) return true;
+        return name.StartsWith("System", StringComparison.Ordinal)
+            || name.StartsWith("Microsoft", StringComparison.Ordinal)
+            || name == "mscorlib" || name == "netstandard" || name == "WindowsBase";
     }
 
     public static IEnumerable<MethodInfo> GetAllMethods(BindingFlags flags)
@@ -34,26 +51,30 @@ public static class EditorUtils
                 yield return method;
     }
 
+    public static string GetHierarchyPath(GameObject go)
+    {
+        var parent = go.Parent;
+        if (!parent.IsValid()) return "";
+        var parts = new List<string>();
+        while (parent.IsValid())
+        {
+            parts.Add(parent.Name);
+            parent = parent.Parent;
+        }
+        parts.Reverse();
+        return string.Join("/", parts);
+    }
 
     public static void OpenUrl(string url)
     {
         try
         {
-            // For Windows: Launching via shell
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            }
-            // For macOS: Use the 'open' command
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
                 Process.Start("open", url);
-            }
-            // For Linux: Use 'xdg-open'
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
                 Process.Start("xdg-open", url);
-            }
         }
         catch (Exception ex)
         {
@@ -65,30 +86,17 @@ public static class EditorUtils
     {
         try
         {
-            // For Windows: Launching via shell
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 if (Directory.Exists(absPath))
-                {
                     Process.Start("explorer.exe", absPath);
-                }
                 else if (File.Exists(absPath))
-                {
                     Process.Start("explorer.exe", $"/select,\"{absPath}\"");
-                }
             }
-            // For macOS: Use the 'open' command
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                // The -R flag tells Finder to "reveal" the item (select it)
                 Process.Start("open", $"-R \"{absPath}\"");
-            }
-            // For Linux: Use 'xdg-open'
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                // Linux varies by distro; 'dbus-send' or 'xdg-open' are common alternatives
                 Process.Start("xdg-open", $"\"{Path.GetDirectoryName(absPath)}\"");
-            }
         }
         catch { }
     }
