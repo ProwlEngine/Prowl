@@ -35,10 +35,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     public IEnumerable<ShaderPass> Passes { get { EnsureNotDisposed(); EnsureCreated(); return _definition.Passes ?? []; } }
 
 
-    private Dictionary<string, int> _nameIndexLookup = [];
-    private Dictionary<string, List<int>> _tagIndexLookup = [];
-
-
     internal Shader() : base("New Shader") { }
 
     /// <summary>
@@ -50,8 +46,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
         _properties = properties;
         _definition = definition;
         _snapshot = snapshot;
-
-        OnAfterDeserialize();
     }
 
     /// <summary>Binds <see cref="_definition"/> to the current device from the baked snapshot, if not
@@ -63,40 +57,6 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             return;
 
         _definition.Create(Graphics.Device, _snapshot);
-    }
-
-    private void RegisterPass(ShaderPass pass, int index)
-    {
-        if (!string.IsNullOrWhiteSpace(pass.Name))
-        {
-            if (!_nameIndexLookup.TryAdd(pass.Name, index))
-                throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {_nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
-        }
-
-        if (pass.Tags == null)
-            return;
-
-        foreach (KeyValuePair<string, string> pair in pass.Tags)
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key))
-                continue;
-
-            if (!_tagIndexLookup.TryGetValue(pair.Key, out _))
-                _tagIndexLookup.Add(pair.Key, []);
-
-            _tagIndexLookup[pair.Key].Add(index);
-        }
-    }
-
-    /// <summary>True if <paramref name="pass"/> carries <paramref name="tag"/>, optionally matching a
-    /// specific value. <see cref="ShaderPass"/> has no such helper itself, Prowl only needs it for
-    /// pass lookup by tag.</summary>
-    public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
-    {
-        if (pass.Tags != null && pass.Tags.TryGetValue(tag, out string value))
-            return tagValue == null || value == tagValue;
-
-        return false;
     }
 
     public ShaderPass GetPass(int passIndex)
@@ -123,40 +83,32 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     {
         EnsureNotDisposed();
         EnsureCreated();
-        return _definition.Passes![GetPassIndex(passName)];
+        return _definition.GetPass(passName);
     }
 
     public int GetPassIndex(string passName)
     {
         EnsureNotDisposed();
-        return _nameIndexLookup.GetValueOrDefault(passName, -1);
+        return _definition.GetPassIndex(passName);
     }
+
+    /// <summary>True if <paramref name="pass"/> carries <paramref name="tag"/>, optionally matching a
+    /// specific value.</summary>
+    public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
+        => ShaderDefinition.PassHasTag(pass, tag, tagValue);
 
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
         EnsureNotDisposed();
-        List<int> passes = GetPassesWithTag(tag, tagValue);
-        return passes.Count > 0 ? passes[0] : null;
+        EnsureCreated();
+        return _definition.GetPassWithTag(tag, tagValue);
     }
 
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {
         EnsureNotDisposed();
         EnsureCreated();
-        List<int> passes = [];
-
-        if (_tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
-        {
-            ShaderPass[] all = _definition.Passes!;
-
-            foreach (int index in passesWithTag)
-            {
-                if (PassHasTag(all[index], tag, tagValue))
-                    passes.Add(index);
-            }
-        }
-
-        return passes;
+        return _definition.GetPassesWithTag(tag, tagValue);
     }
 
     /// <summary>
@@ -169,13 +121,5 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public void OnBeforeSerialize() { }
 
-    public void OnAfterDeserialize()
-    {
-        _nameIndexLookup = [];
-        _tagIndexLookup = [];
-
-        ShaderPass[] passes = _definition.Passes ?? [];
-        for (int i = 0; i < passes.Length; i++)
-            RegisterPass(passes[i], i);
-    }
+    public void OnAfterDeserialize() { }
 }
