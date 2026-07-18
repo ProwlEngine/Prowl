@@ -1260,7 +1260,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         {
             ImageSubresourceLayers srcSubresource = new()
             {
-                AspectMask = ImageAspectFlags.ColorBit,
+                AspectMask = CopyAspectMask(srcVkTexture),
                 LayerCount = layerCount,
                 MipLevel = srcMipLevel,
                 BaseArrayLayer = srcBaseArrayLayer
@@ -1268,7 +1268,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
             ImageSubresourceLayers dstSubresource = new()
             {
-                AspectMask = ImageAspectFlags.ColorBit,
+                AspectMask = CopyAspectMask(dstVkTexture),
                 LayerCount = layerCount,
                 MipLevel = dstMipLevel,
                 BaseArrayLayer = dstBaseArrayLayer
@@ -1533,6 +1533,17 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
             }
         }
+    }
+
+
+    private static ImageAspectFlags CopyAspectMask(VkTexture texture)
+    {
+        if ((texture.Usage & TextureUsage.DepthStencil) == 0)
+            return ImageAspectFlags.ColorBit;
+
+        return FormatHelpers.IsStencilFormat(texture.Format)
+            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
+            : ImageAspectFlags.DepthBit;
     }
 
     private protected override void GenerateMipmapsCore(Texture texture)
