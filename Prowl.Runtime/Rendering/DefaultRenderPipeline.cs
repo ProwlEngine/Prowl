@@ -43,10 +43,24 @@ public struct ViewerData
 
 
 /// <summary>
-/// Placeholder render pipeline, pending the new pipeline architecture. Kept instantiable
-/// since Camera/Scene/editor code falls back to this when a camera has no custom Pipeline set.
+/// Default graph-driven pipeline. Sets up the standard pass chain (shadows -> opaque -> transparents
+/// -> volumetrics -> post-processing); the passes are empty scaffolding that copy textures along the
+/// chain to prove the graph plumbing, draw the skybox in the opaque pass, and (in the editor) draw
+/// gizmos and the grid. Camera/Scene/editor code falls back to this when a camera has no custom
+/// Pipeline set.
 /// </summary>
-public class DefaultRenderPipeline : RenderPipeline
+public class DefaultRenderPipeline : RenderPipeline<DrawCommand>
 {
     public static DefaultRenderPipeline Default { get; } = new();
+
+    protected override void InitializePasses()
+    {
+        Culler = new DefaultRenderCuller();
+
+        AddPass(new ShadowsPass());
+        AddPass(new OpaquePass());
+        AddPass(new TransparentsPass());
+        AddPass(new VolumetricsPass());
+        AddPass(new PostProcessingPass());
+    }
 }

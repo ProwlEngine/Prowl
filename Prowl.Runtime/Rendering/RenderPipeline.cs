@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Graphite;
 
 using Prowl.Graphite.ShaderDef;
@@ -161,6 +163,40 @@ public abstract class RenderPipeline : EngineObject
         public Float4x4 PreviousViewProj = camera.PreviousViewProjectionMatrix;
         public bool HasPreviousViewProj = camera.HasPreviousViewProjectionMatrix;
         public Frustum WorldFrustum = Frustum.FromMatrix(camera.ProjectionMatrix * camera.ViewMatrix);
+    }
+
+    /// <summary>
+    /// Collects the renderables and lights the given camera can see from its scene. The lists are
+    /// filled by every active component's render-collect callback; the pipeline then culls/sorts them.
+    /// </summary>
+    public static (List<IRenderable> renderables, List<IRenderableLight> lights) CollectRenderables(Scene scene, Camera camera)
+    {
+        var renderables = new List<IRenderable>();
+        var lights = new List<IRenderableLight>();
+        scene.CollectRenderables(camera, renderables, lights);
+        return (renderables, lights);
+    }
+
+    /// <summary>
+    /// Writes the standard camera matrices and world-space camera position into a globals property set
+    /// under the names the default shaders expect (<c>prowl_MatV/P/VP/IV/IP/IVP</c>,
+    /// <c>prowl_MatVP_NonJittered</c>, <c>prowl_PrevViewProj</c>, <c>_WorldSpaceCameraPos</c>).
+    /// </summary>
+    public static void PopulateCameraGlobals(PropertySet globals, in CameraSnapshot css)
+    {
+        Float4x4 view = css.View;
+        Float4x4 proj = css.Projection;
+        Float4x4 viewProj = proj * view;
+
+        globals.SetMatrix("prowl_MatV", view);
+        globals.SetMatrix("prowl_MatP", proj);
+        globals.SetMatrix("prowl_MatVP", viewProj);
+        globals.SetMatrix("prowl_MatIV", css.ViewInverse);
+        globals.SetMatrix("prowl_MatIP", proj.Invert());
+        globals.SetMatrix("prowl_MatIVP", viewProj.Invert());
+        globals.SetMatrix("prowl_MatVP_NonJittered", css.NonJitteredProjection * view);
+        globals.SetMatrix("prowl_PrevViewProj", css.HasPreviousViewProj ? css.PreviousViewProj : css.NonJitteredProjection * view);
+        globals.SetFloat3("_WorldSpaceCameraPos", css.CameraPosition);
     }
 
     public virtual void Render(Camera camera, in RenderingData data)

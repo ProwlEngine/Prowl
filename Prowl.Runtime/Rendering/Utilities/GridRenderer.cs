@@ -21,11 +21,13 @@ public static class GridRenderer
     private static Material? s_gridMaterial;
 
     /// <summary>Records the grid into <paramref name="cmd"/>, centered under <paramref name="cameraPosition"/>.</summary>
-    public static void Render(CommandBuffer cmd, Float3 cameraPosition)
+    public static void Render(CommandBuffer cmd, Float3 cameraPosition, Texture2D depthCopy)
     {
         EnsureResources();
         if (s_gridMesh == null || s_gridMaterial == null)
             return;
+
+        s_gridMaterial.SetTexture("_CameraDepthTexture", depthCopy);
 
         float cx = MathF.Round((float)cameraPosition.X);
         float cz = MathF.Round((float)cameraPosition.Z);

@@ -32,6 +32,14 @@ public sealed class RenderContext<TDrawCommand>
     public RenderingData Data { get; internal set; }
 
     /// <summary>
+    /// A sampleable copy of the opaque pass's depth buffer, taken after opaque geometry is drawn and
+    /// before its source depth attachment is written to again. Debug overlays (gizmos, grid) that need
+    /// to depth-test against the scene sample this instead of the live depth attachment, since a
+    /// texture can't be bound as a framebuffer's depth target and a shader resource at the same time.
+    /// </summary>
+    public Texture2D? SceneDepthCopy { get; set; }
+
+    /// <summary>
     /// Global shader properties for this execution (camera matrices, time, ambient, ...). Scoped to
     /// the one camera this context renders - a fresh context is created per execution, so globals
     /// never bleed between cameras. Automatically bound on every command buffer rented through

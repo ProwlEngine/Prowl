@@ -23,6 +23,12 @@ public class PreviewRenderer : IDisposable
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
 
+    // Previews and thumbnails must not share the scene view's pipeline: the pass state it carries
+    // (notably the sampled depth copy the grid/gizmo shaders read) is sized to whatever surface last
+    // rendered through it. Sharing one instance across differently-sized surfaces in the same frame
+    // thrashes that state and makes the grid/gizmos flicker. Each PreviewRenderer owns an isolated one.
+    private readonly DefaultRenderPipeline _pipeline = new();
+
     /// <summary>Whether to draw a grid plane in the preview.</summary>
     public bool ShowGrid { get; set; }
 
@@ -48,6 +54,7 @@ public class PreviewRenderer : IDisposable
         _cameraGo = new GameObject("PreviewCamera");
         _cameraGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _camera = _cameraGo.AddComponent<Camera>();
+        _camera.Pipeline = _pipeline;
         _camera.FieldOfView = 35f;
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 100f;
@@ -353,5 +360,8 @@ public class PreviewRenderer : IDisposable
 
         // Disposes every GameObject still in the scene (camera + light), not just disables it.
         _scene.Dispose();
+
+        // Releases this preview's isolated pipeline pass state (e.g. the depth copy texture).
+        _pipeline.Dispose();
     }
 }

@@ -16,7 +16,7 @@ public sealed class TransparentsPass : CopyChainPass
 
     protected override void OnRender(RenderContext<DrawCommand> context, CommandBuffer cmd, RenderTexture output)
     {
-        if (context.Data.DisplayGrid)
-            GridRenderer.Render(cmd, context.CameraData.CameraPosition);
+        if (context.Data.DisplayGrid && context.SceneDepthCopy != null)
+            GridRenderer.Render(cmd, context.CameraData.CameraPosition, context.SceneDepthCopy);
     }
 }

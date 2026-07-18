@@ -134,7 +134,12 @@ public static class RenderCommandExtensions
             SizeInBytes = 3 * 2 * sizeof(float),
         });
         s_fullscreenUVBuffer.Name = "Fullscreen UV Buffer";
-        float[] uvs = [0f, 0f, 2f, 0f, 0f, 2f];
+        // On backends whose texture origin is top-left (Vulkan/D3D), a raw fullscreen sample would
+        // vertically flip the source, so flip V here to keep the blit orientation-preserving. GL
+        // (bottom-left origin) samples straight. Positions are (-1,-1)(3,-1)(-1,3).
+        float[] uvs = Graphics.Device.IsUvOriginTopLeft
+            ? [0f, 1f, 2f, 1f, 0f, -1f]
+            : [0f, 0f, 2f, 0f, 0f, 2f];
         Graphics.Device.UpdateBuffer(s_fullscreenUVBuffer, 0u, uvs);
         return s_fullscreenUVBuffer;
     }
@@ -306,6 +311,9 @@ public static class RenderCommandExtensions
         mesh.Upload();
         if (mesh.VertexBuffer == null || mesh.IndexBuffer == null)
             return;
+
+        // Select the material's active variant (keywords) before recording the shader.
+        pass.SetKeywords(material._localKeywords.Values.ToArray());
 
         cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);

@@ -123,4 +123,12 @@ public abstract class RenderPipeline<TDrawCommand> : RenderPipeline
         _rented.Clear();
         _resources.Clear();
     }
+
+    public override void OnDispose()
+    {
+        foreach (IPass<TDrawCommand> pass in _passes)
+            (pass as IDisposable)?.Dispose();
+
+        base.OnDispose();
+    }
 }

@@ -23,12 +23,13 @@ public static class GizmoRenderer
     private static Mesh? s_iconQuad;
 
     /// <summary>Records the current frame's gizmos into <paramref name="cmd"/>.</summary>
-    public static void Render(CommandBuffer cmd)
+    public static void Render(CommandBuffer cmd, Texture2D depthCopy)
     {
         Shader? gizmoShader = Shader.LoadDefault(DefaultShader.Gizmos);
         if (gizmoShader.IsValid())
         {
             s_gizmoMaterial ??= new Material(gizmoShader);
+            s_gizmoMaterial.SetTexture("_CameraDepthTexture", depthCopy);
             ShaderPass pass = gizmoShader.GetPass(0);
             if (pass != null)
             {
@@ -38,7 +39,7 @@ public static class GizmoRenderer
             }
         }
 
-        DrawIcons(cmd);
+        DrawIcons(cmd, depthCopy);
     }
 
     private static void DrawBatch(CommandBuffer cmd, ShaderPass pass, Material material, GizmoBuilder.Batch batch)
@@ -49,7 +50,7 @@ public static class GizmoRenderer
         cmd.DrawIndexed(1, 0, 0, 0);
     }
 
-    private static void DrawIcons(CommandBuffer cmd)
+    private static void DrawIcons(CommandBuffer cmd, Texture2D depthCopy)
     {
         List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
         if (icons.Count == 0)
@@ -60,6 +61,7 @@ public static class GizmoRenderer
             return;
 
         s_iconMaterial ??= new Material(iconShader);
+        s_iconMaterial.SetTexture("_CameraDepthTexture", depthCopy);
         s_iconQuad ??= Mesh.GetFullscreenQuad();
 
         foreach (GizmoBuilder.IconDrawCall icon in icons)
