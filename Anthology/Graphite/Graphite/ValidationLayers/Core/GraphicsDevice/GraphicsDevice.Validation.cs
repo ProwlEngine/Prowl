@@ -26,6 +26,21 @@ public abstract partial class GraphicsDevice
         }
     }
 
+    private static void SubmitAndWait_CheckEnded(TransferCommandBuffer commandBuffer)
+    {
+        if (!ValidationEnabled)
+            return;
+
+        if (commandBuffer == null)
+        {
+            throw new RenderException("Cannot submit a null TransferCommandBuffer.");
+        }
+        if (!commandBuffer.HasEnded)
+        {
+            throw new RenderException("TransferCommandBuffer.End() must be called before submitting.");
+        }
+    }
+
     private void BeginFrame_CheckNoActive()
     {
         if (!ValidationEnabled)

@@ -415,6 +415,38 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         SubmitCommandBuffer(cl, 0, null, 0, null, null);
     }
 
+    /// <summary>
+    /// Submits a raw one-shot <see cref="Silk.NET.Vulkan.CommandBuffer"/> to the graphics queue and blocks the
+    /// calling thread until it has finished executing on the GPU. Does not touch the Frame ring-buffer or its
+    /// fences: safe to call whether or not a Frame is currently open. Used by <see cref="VkTransferCommandBuffer"/>.
+    /// </summary>
+    internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb)
+    {
+        VkFenceHandle fence = GetFreeSubmissionFence();
+
+        SubmitInfo si = new(sType: StructureType.SubmitInfo)
+        {
+            CommandBufferCount = 1,
+            PCommandBuffers = &cb
+        };
+
+        lock (_graphicsQueueLock)
+        {
+            _vk.QueueSubmit(_graphicsQueue, 1, &si, fence).CheckResult();
+            FlushValidationErrors();
+        }
+
+        _vk.WaitForFences(_device, 1, &fence, true, ulong.MaxValue).CheckResult();
+        _vk.ResetFences(_device, 1, &fence).CheckResult();
+        ReturnSubmissionFence(fence);
+    }
+
+    private protected override void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
+    {
+        VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
+        vkCb.SubmitAndWait();
+    }
+
     private void SubmitCommandBuffer(
         CommandBuffer cl,
         uint waitSemaphoreCount,

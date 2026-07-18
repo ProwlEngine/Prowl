@@ -337,6 +337,26 @@ public abstract partial class GraphicsDevice : IDisposable
     public bool WaitForFrame(Frame frame, ulong nanosecondTimeout) => WaitForFrame(frame.FrameId, nanosecondTimeout);
 
     /// <summary>
+    /// Submits a recorded <see cref="TransferCommandBuffer"/> for immediate execution and blocks the calling
+    /// thread until the GPU has finished executing it. Unlike <see cref="Frame.SubmitCommands(CommandBuffer)"/>,
+    /// this does not require a <see cref="Frame"/> to be open, and may be called whether or not one is: it does
+    /// not touch the frame ring-buffer or its fences at all. Intended for one-off transfer work such as texture
+    /// read-back or streaming uploads that would otherwise require opening a throwaway Frame.
+    /// </summary>
+    /// <param name="commandBuffer">The recorded <see cref="TransferCommandBuffer"/> to submit. <see cref="TransferCommandBuffer.End"/>
+    /// must have been called on it first.</param>
+    public void SubmitAndWait(TransferCommandBuffer commandBuffer)
+    {
+        SubmitAndWait_CheckEnded(commandBuffer);
+        SubmitAndWaitCore(commandBuffer);
+    }
+
+    private protected virtual void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
+    {
+        throw new RenderException($"{GetType().Name} does not support {nameof(SubmitAndWait)}.");
+    }
+
+    /// <summary>
     /// Allocates a transient <see cref="DeviceBufferRange"/> from the currently active frame's bump allocator.
     /// Convenience wrapper over <see cref="Frame.AllocateTransient"/>. A frame must be active.
     /// </summary>

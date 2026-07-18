@@ -1541,6 +1541,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
         _currentStagingInfo.Resources.Add(vkTex.RefCount);
 
+        GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex);
+    }
+
+    internal static unsafe void GenerateMipmapsCore_VkCommandBuffer(VkGraphicsDevice gd, Silk.NET.Vulkan.CommandBuffer cb, VkTexture vkTex)
+    {
         uint layerCount = vkTex.ArrayLayers;
         if ((vkTex.Usage & TextureUsage.Cubemap) != 0)
         {
@@ -1554,8 +1559,8 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         uint depth = vkTex.Depth;
         for (uint level = 1; level < vkTex.MipLevels; level++)
         {
-            vkTex.TransitionImageLayoutNonmatching(_cb, level - 1, 1, 0, layerCount, ImageLayout.TransferSrcOptimal);
-            vkTex.TransitionImageLayoutNonmatching(_cb, level, 1, 0, layerCount, ImageLayout.TransferDstOptimal);
+            vkTex.TransitionImageLayoutNonmatching(cb, level - 1, 1, 0, layerCount, ImageLayout.TransferSrcOptimal);
+            vkTex.TransitionImageLayoutNonmatching(cb, level, 1, 0, layerCount, ImageLayout.TransferDstOptimal);
 
             VkImageHandle deviceImage = vkTex.OptimalDeviceImage;
             uint mipWidth = Math.Max(width >> 1, 1);
@@ -1584,12 +1589,12 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             };
 
             region.DstOffsets.Element1 = new Offset3D { X = (int)mipWidth, Y = (int)mipHeight, Z = (int)mipDepth };
-            _gd.Vk.CmdBlitImage(
-                _cb,
+            gd.Vk.CmdBlitImage(
+                cb,
                 deviceImage, ImageLayout.TransferSrcOptimal,
                 deviceImage, ImageLayout.TransferDstOptimal,
                 1, &region,
-                _gd.GetFormatFilter(vkTex.VkFormat));
+                gd.GetFormatFilter(vkTex.VkFormat));
 
             width = mipWidth;
             height = mipHeight;
@@ -1598,7 +1603,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         if ((vkTex.Usage & TextureUsage.Sampled) != 0)
         {
-            vkTex.TransitionImageLayoutNonmatching(_cb, 0, vkTex.MipLevels, 0, layerCount, ImageLayout.ShaderReadOnlyOptimal);
+            vkTex.TransitionImageLayoutNonmatching(cb, 0, vkTex.MipLevels, 0, layerCount, ImageLayout.ShaderReadOnlyOptimal);
         }
     }
 

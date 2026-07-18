@@ -261,6 +261,17 @@ public abstract partial class ResourceFactory
     public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
 
     /// <summary>
+    /// Creates a new <see cref="TransferCommandBuffer"/>, for recording buffer/texture transfer commands
+    /// outside of the frame system. Not every backend supports this; unsupported backends throw
+    /// <see cref="RenderException"/>.
+    /// </summary>
+    /// <returns>A new <see cref="TransferCommandBuffer"/>.</returns>
+    public virtual TransferCommandBuffer CreateTransferCommandBuffer()
+    {
+        throw new RenderException($"{GetType().Name} does not support {nameof(CreateTransferCommandBuffer)}.");
+    }
+
+    /// <summary>
     /// Creates a new <see cref="Fence"/> in the given state.
     /// </summary>
     /// <param name="signaled">A value indicating whether the Fence should be in the signaled state when created.</param>
