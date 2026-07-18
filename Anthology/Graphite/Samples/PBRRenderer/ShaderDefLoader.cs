@@ -27,7 +27,9 @@ public static class ShaderDefLoader
         compiler.RegisterModule(s_modules[device.BackendType]());
         compiler.BeginSession(FileLoader.SearchDirectories, FileLoader.Load);
 
-        def.Create(device, compiler);
+        // This sample compiles synchronously before ever drawing, so there's nothing to fall back to -
+        // an empty (uncompiled) Variant just means "throw if resolution ever fails", same as before.
+        def.Create(device, compiler, new Variant());
 
         ShaderPass pass = def.Passes![passIndex];
         pass.ActiveVariant.TryGetDescription(device.BackendType, out ShaderDescription description);
