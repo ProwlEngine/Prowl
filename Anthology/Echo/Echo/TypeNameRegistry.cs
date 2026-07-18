@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Concurrent;
+using System.Reflection;
 
 namespace Prowl.Echo;
 
@@ -147,10 +148,28 @@ public static class TypeNameRegistry
 
     private static Type? ResolveEnumType(string enumName)
     {
-        // Simple enum resolution - could be enhanced
-        return AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(a => a.GetTypes())
-            .FirstOrDefault(t => t.IsEnum && t.Name == enumName);
+        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type?[] types;
+            try
+            {
+                types = asm.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                // A partially-loadable assembly must not abort the whole search - fall back to the
+                // types that did load, the same way ReflectionUtils.FindTypeByName does.
+                types = ex.Types;
+            }
+
+            foreach (Type? t in types)
+            {
+                if (t != null && t.IsEnum && t.Name == enumName)
+                    return t;
+            }
+        }
+
+        return null;
     }
 
     private static Type? ResolveArrayType(string arrayName)
