@@ -34,6 +34,18 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public IEnumerable<ShaderPass> Passes { get { EnsureNotDisposed(); EnsureCreated(); return _definition.Passes ?? []; } }
 
+    /// <summary>Set by the editor (Prowl.Editor's CompilationWorker) so a shader bound from a cached
+    /// snapshot can still compile a missing variant on demand. Never set outside the editor - builds
+    /// carry no Slang compiler, so <see cref="EnsureCreated"/> only reads these when
+    /// <see cref="Application.IsEditor"/> is true.</summary>
+    public static IShaderCompiler? EditorCompiler;
+
+    /// <summary>Lazily produces the fallback <see cref="Variant"/> every pass falls back to when it
+    /// can't resolve its own (required by Graphite whenever a compiler is attached). A provider rather
+    /// than a plain field since computing it needs a live <see cref="GraphicsDevice"/>, which doesn't
+    /// exist yet when the editor registers this hook.</summary>
+    public static Func<Variant>? EditorFallbackProvider;
+
 
     internal Shader() : base("New Shader") { }
 
@@ -49,14 +61,18 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>Binds <see cref="_definition"/> to the current device from the baked snapshot, if not
-    /// already bound. No compiler is attached: this is the shipped-runtime path, playing back whatever
-    /// variants were baked ahead of time.</summary>
+    /// already bound. In the editor, <see cref="EditorCompiler"/> is attached so a variant missing from
+    /// the snapshot can still be compiled the first time it's requested; a shipped build attaches no
+    /// compiler and only plays back whatever variants were baked ahead of time.</summary>
     private void EnsureCreated()
     {
         if (_definition.IsCreated)
             return;
 
-        _definition.Create(Graphics.Device, _snapshot);
+        if (Application.IsEditor && EditorCompiler != null && EditorFallbackProvider != null)
+            _definition.Create(Graphics.Device, _snapshot, EditorCompiler, EditorFallbackProvider());
+        else
+            _definition.Create(Graphics.Device, _snapshot);
     }
 
     public ShaderPass GetPass(int passIndex)

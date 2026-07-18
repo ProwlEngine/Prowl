@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 using Prowl.Runtime;
@@ -20,14 +21,17 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".shader")]
 public class ShaderImporter : AssetImporter
 {
-    public override int Version => 3;
+    public override int Version => 4; // Bumped: on-demand compilation setting
 
 
     public override bool Import(ImportContext ctx)
     {
         string source = File.ReadAllText(ctx.AbsolutePath);
 
-        Shader? shader = LoadShader(source, ctx.AbsolutePath);
+        // Settings are guaranteed to have defaults merged by EditorAssetDatabase.RunImport
+        bool onDemand = ctx.Settings?.TryGet("onDemandCompilation", out EchoObject? onDemandTag) == true && onDemandTag.BoolValue;
+
+        Shader? shader = LoadShader(source, ctx.AbsolutePath, onDemand);
 
         if (shader == null && !IsFallbackShader(ctx.AbsolutePath))
         {
@@ -39,6 +43,14 @@ public class ShaderImporter : AssetImporter
             ctx.SetMainAsset(shader);
 
         return shader != null;
+    }
+
+
+    public override EchoObject? DefaultSettings()
+    {
+        var s = EchoObject.NewCompound();
+        s["onDemandCompilation"] = new EchoObject(false);
+        return s;
     }
 
 
@@ -61,7 +73,7 @@ public class ShaderImporter : AssetImporter
     }
 
 
-    public static Shader? LoadShader(string source, string path)
+    public static Shader? LoadShader(string source, string path, bool onDemand = false)
     {
         try
         {
@@ -69,16 +81,22 @@ public class ShaderImporter : AssetImporter
 
             ShaderProperty[] properties = [.. (definition.Properties ?? []).Select(ConvertProperty)];
 
-            ShaderSnapshot snapshot = CompilationWorker.CompileAll(definition, definition.Name ?? Path.GetFileNameWithoutExtension(path), path);
+            ShaderSnapshot snapshot = CompilationWorker.CompileAll(definition, definition.Name ?? Path.GetFileNameWithoutExtension(path), path, onDemand);
 
-            bool anyCompiled = false;
-            foreach (PassSnapshot passSnapshot in snapshot.Passes ?? [])
-                anyCompiled |= passSnapshot.Variants is { Length: > 0 };
-
-            if (!anyCompiled)
+            // On-demand shaders legitimately bake zero variants at import - whatever's requested first
+            // compiles then, through Shader.EditorCompiler. Only eager (CompileMode.All) imports use an
+            // empty snapshot as a signal that the shader is genuinely broken.
+            if (!onDemand)
             {
-                Debug.LogError($"Shader '{definition.Name}' produced no compiled variants.");
-                return null;
+                bool anyCompiled = false;
+                foreach (PassSnapshot passSnapshot in snapshot.Passes ?? [])
+                    anyCompiled |= passSnapshot.Variants is { Length: > 0 };
+
+                if (!anyCompiled)
+                {
+                    Debug.LogError($"Shader '{definition.Name}' produced no compiled variants.");
+                    return null;
+                }
             }
 
             return new Shader(definition.Name ?? Path.GetFileNameWithoutExtension(path), properties, definition, snapshot);

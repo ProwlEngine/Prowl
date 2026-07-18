@@ -4,11 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
+using Prowl.Echo;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
 using Prowl.Editor.Utils;
 using Prowl.Graphite;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Graphite.ShaderDef;
@@ -22,6 +26,11 @@ public class ShaderAssetEditor : AssetImporterEditor
 
     // Selected backend per permutation, keyed by "{passIndex}_{variantIndex}".
     private readonly Dictionary<string, GraphicsBackend> _selectedBackend = new();
+
+    // Cache settings across frames so changes stick until Save
+    private EchoObject? _cachedSettings;
+    private bool _dirty;
+    private Guid _cachedForGuid;
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -39,6 +48,8 @@ public class ShaderAssetEditor : AssetImporterEditor
 
         Origami.Header(paper, $"{id}_h_info", $"{EditorIcons.WandSparkles}  Shader").Show();
         Origami.Label(paper, $"{id}_path", $"Path: {entry.Path}").Show();
+
+        DrawImportSettings(paper, id, entry);
 
         if (shader == null) return;
 
@@ -75,6 +86,58 @@ public class ShaderAssetEditor : AssetImporterEditor
                         DrawVariant(paper, $"{passId}_v{variantIndex}", passIndex, variantIndex, variants[variantIndex]);
                 });
         }
+    }
+
+    private void DrawImportSettings(Paper paper, string id, AssetEntry entry)
+    {
+        if (Project.Current == null) return;
+        string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        string metaPath = MetaFile.GetMetaPath(absPath);
+        if (!File.Exists(metaPath)) return;
+
+        // Load and cache settings (only reload when asset changes)
+        if (_cachedSettings == null || _cachedForGuid != entry.Guid)
+        {
+            var meta = MetaFile.Read(metaPath);
+            _cachedSettings = meta.Settings ?? EchoObject.NewCompound();
+
+            var defaults = new Importers.ShaderImporter().DefaultSettings();
+            if (defaults != null)
+                foreach (var kvp in defaults.Tags)
+                    if (!_cachedSettings.TryGet(kvp.Key, out _))
+                        _cachedSettings[kvp.Key] = kvp.Value.Clone();
+
+            _dirty = false;
+            _cachedForGuid = entry.Guid;
+        }
+
+        var settings = _cachedSettings;
+
+        EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: false);
+
+        bool onDemand = settings.TryGet("onDemandCompilation", out var onDemandTag) && onDemandTag.BoolValue;
+        EditorGUI.SettingsToggle(paper, $"{id}_ondemand", "On-Demand Compilation", onDemand,
+            v => { settings["onDemandCompilation"] = new EchoObject(v); _dirty = true; }, separator: false);
+
+        bool dirty = !Origami.IsReadOnly && _dirty;
+        var m = Origami.Current.Metrics;
+        paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
+            .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
+            .Hovered.BackgroundColor(dirty ? EditorTheme.AccentBright : EditorTheme.Neutral300).End()
+            .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont)
+            .TextColor(dirty ? System.Drawing.Color.White : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
+            .Alignment(TextAlignment.MiddleCenter)
+            .OnClick(0, (_, _) =>
+            {
+                if (!dirty) return;
+                var meta = MetaFile.Read(metaPath);
+                meta.Settings = settings;
+                MetaFile.Write(metaPath, meta);
+                _cachedSettings = null;
+                _dirty = false;
+                EditorAssetBackend.Instance?.Reimport(entry.Guid);
+            });
     }
 
     private void DrawVariant(Paper paper, string id, int passIndex, int variantIndex, Variant variant)
