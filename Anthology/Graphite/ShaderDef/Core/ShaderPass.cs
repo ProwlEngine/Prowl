@@ -44,20 +44,29 @@ public sealed class ShaderPass
     private KeywordState _state;
     private Variant?[] _variants = [];
     private int _activeIndex;
+    private Variant? _fallback;
 
     private Dictionary<int, GraphicsProgram> _programCache = new();
+    private Dictionary<int, GraphicsProgram> _fallbackProgramCache = new();
     private bool _created;
 
 
-    internal void Bind(GraphicsDevice device, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode)
+    /// <summary>
+    /// Binds this pass to a device. <paramref name="fallback"/> is the variant every unresolved request
+    /// falls back to (required whenever <paramref name="compiler"/> is non-null - see
+    /// <see cref="ShaderDefinition.Create(GraphicsDevice, IShaderCompiler, Variant, CompileMode)"/>).
+    /// </summary>
+    internal void Bind(GraphicsDevice device, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode, Variant? fallback = null)
     {
         _device = device;
         _backend = device.BackendType;
         _compiler = compiler;
+        _fallback = fallback;
         _axes = axes;
         _combos = VariantCombos.Generate(axes);
         _variants = new Variant?[_combos.Length];
         _programCache = new();
+        _fallbackProgramCache = new();
 
         // The keyword name -> slot mapping is shared by every state; the first combination names every
         // axis exactly once, so it seeds the slots the same way VariantSet does.
@@ -291,6 +300,13 @@ public sealed class ShaderPass
             return cached;
 
         Variant variant = Resolve(_activeIndex);
+        bool isFallback = ReferenceEquals(variant, _fallback);
+
+        // While degraded to the fallback, keep re-resolving (Resolve retries the real compile every
+        // call) but reuse the fallback GraphicsProgram instead of rebuilding it every request.
+        if (isFallback && _fallbackProgramCache.TryGetValue(_activeIndex, out GraphicsProgram? cachedFallback))
+            return cachedFallback;
+
         if (!variant.TryGetDescription(_backend, out ShaderDescription description))
             throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
 
@@ -299,7 +315,7 @@ public sealed class ShaderPass
         description.RasterizerState = State.ToRasterizerState(baseRaster);
 
         GraphicsProgram program = _device!.ResourceFactory.CreateGraphicsProgram(description);
-        _programCache[_activeIndex] = program;
+        (isFallback ? _fallbackProgramCache : _programCache)[_activeIndex] = program;
         return program;
     }
 
@@ -310,6 +326,14 @@ public sealed class ShaderPass
     }
 
 
+    /// <summary>
+    /// Resolves the variant at <paramref name="index"/>: an already-compiled variant if one exists,
+    /// otherwise a fresh compile through the attached compiler. If neither is available - no compiler,
+    /// or the compile itself throws - falls back to <see cref="_fallback"/> instead of propagating the
+    /// failure, as long as the fallback has a compiled description for the active backend. Once a real
+    /// compile succeeds, later calls stop needing the fallback (the result is cached on
+    /// <see cref="_variants"/> by <see cref="Compile"/>).
+    /// </summary>
     private Variant Resolve(int index)
     {
         Variant? existing = _variants[index];
@@ -317,12 +341,24 @@ public sealed class ShaderPass
             return existing;
 
         if (_compiler != null)
-            return Compile(index);
+        {
+            try
+            {
+                return Compile(index);
+            }
+            catch
+            {
+                // Fall through to the fallback below - a failed compile is not fatal on its own.
+            }
+        }
 
         if (existing != null)
             return existing;
 
-        throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend} and no compiler is attached.");
+        if (_fallback != null && _fallback.IsCompiledFor(_backend))
+            return _fallback;
+
+        throw new InvalidOperationException($"The active variant of pass '{Name}' is not compiled for backend {_backend}, no compiler is attached (or the compile failed), and no fallback variant is available.");
     }
 
 
