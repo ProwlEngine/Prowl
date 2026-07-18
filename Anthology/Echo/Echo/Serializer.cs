@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Echo.Logging;
+
 using Prowl.Echo.Formatters;
+
 using System.Collections.Concurrent;
 
 namespace Prowl.Echo;
@@ -152,19 +154,19 @@ public static class Serializer
     {
         return Type.GetTypeCode(type) switch
         {
-            TypeCode.Int32   => new EchoObject((int)value),
-            TypeCode.Single  => new EchoObject((float)value),
-            TypeCode.Double  => new EchoObject((double)value),
+            TypeCode.Int32 => new EchoObject((int)value),
+            TypeCode.Single => new EchoObject((float)value),
+            TypeCode.Double => new EchoObject((double)value),
             TypeCode.Boolean => new EchoObject((bool)value),
-            TypeCode.String  => new EchoObject((string)value),
-            TypeCode.Int64   => new EchoObject((long)value),
-            TypeCode.Byte    => new EchoObject((byte)value),
-            TypeCode.Char    => new EchoObject((byte)(char)value),
-            TypeCode.UInt32  => new EchoObject((uint)value),
-            TypeCode.Int16   => new EchoObject((short)value),
-            TypeCode.UInt64  => new EchoObject((ulong)value),
-            TypeCode.UInt16  => new EchoObject((ushort)value),
-            TypeCode.SByte   => new EchoObject((sbyte)value),
+            TypeCode.String => new EchoObject((string)value),
+            TypeCode.Int64 => new EchoObject((long)value),
+            TypeCode.Byte => new EchoObject((byte)value),
+            TypeCode.Char => new EchoObject((byte)(char)value),
+            TypeCode.UInt32 => new EchoObject((uint)value),
+            TypeCode.Int16 => new EchoObject((short)value),
+            TypeCode.UInt64 => new EchoObject((ulong)value),
+            TypeCode.UInt16 => new EchoObject((ushort)value),
+            TypeCode.SByte => new EchoObject((sbyte)value),
             TypeCode.Decimal => new EchoObject((decimal)value),
             TypeCode.Object when type == typeof(byte[]) => new EchoObject((byte[])value),
             _ => null // DateTime, Guid, TimeSpan etc. — use normal path
@@ -251,7 +253,8 @@ public static class Serializer
 
     private static bool ShouldPreserveType(Type? targetType, Type actualType, SerializationContext context)
     {
-        return context.TypeMode switch {
+        return context.TypeMode switch
+        {
             TypeMode.Aggressive => true,
             TypeMode.None => false,
             TypeMode.Auto => IsTypePreservationNeeded(targetType, actualType, context),
@@ -263,6 +266,8 @@ public static class Serializer
     {
         // Never preserve type for exact matches
         if (targetType == actualType) return false;
+
+        if (targetType != null && Nullable.GetUnderlyingType(targetType) == actualType) return false;
 
         return true;
 
@@ -349,13 +354,13 @@ public static class Serializer
             value.TryGet("$v", out var compactValue))
         {
             var type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
-            return new TypeEnvelope { ActualType = type, Data = compactValue };
+            return new TypeEnvelope { ActualType = ReconcileType(type, targetType), Data = compactValue };
         }
 
         // Handle full type wrapper
         if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
         {
-            var type = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue) ?? targetType;
+            var type = ReconcileType(TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue), targetType) ?? targetType;
 
             // If there's a $value, use that as data
             if (value.TryGet("$value", out var dataValue))
@@ -366,6 +371,19 @@ public static class Serializer
 
         // No type wrapper - use as-is
         return new TypeEnvelope { ActualType = null, Data = value };
+    }
+
+
+    private static Type? ReconcileType(Type? resolved, Type targetType)
+    {
+        if (resolved == null)
+            return null;
+
+        Type effectiveTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (effectiveTarget.IsAssignableFrom(resolved))
+            return resolved;
+
+        return effectiveTarget;
     }
 
     private class TypeEnvelope
