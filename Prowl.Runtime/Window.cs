@@ -265,7 +265,6 @@ public static class Window
             // Pump OS events before opening the frame so handlers that touch the device
             // (e.g. FramebufferResize -> device.ResizeMainWindow) never run while a frame is open.
             InternalWindow.DoEvents();
-            Graphics.FlushPendingReadbacks();
             Update?.Invoke(delta);
             WindowInputHandler?.LateUpdate();
 

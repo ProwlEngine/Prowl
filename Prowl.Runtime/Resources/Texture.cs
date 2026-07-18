@@ -171,25 +171,14 @@ public abstract class Texture : EngineObject
     /// mapping a Texture created with <see cref="TextureUsage.Staging"/>, and a Texture can only be
     /// mapped once the copy into it has actually finished on the GPU.
     /// <para>
-    /// When called outside a frame (the common case - asset saves, editor tooling) this copies the
-    /// requested region into a throwaway staging texture on its own dedicated frame, blocks until the
-    /// GPU has finished it, then maps and copies the result out synchronously; <paramref name="consume"/>
-    /// and <paramref name="onComplete"/> both run before this method returns, and it returns true.
-    /// </para>
-    /// <para>
-    /// When called while a frame is already open (e.g. mid-render, such as a one-shot capture into a
-    /// render target followed by a read-back) Graphite forbids opening a second frame, and the copy
-    /// cannot be waited on/mapped until the frame it lands in actually completes - which cannot happen
-    /// before this method would return, since nothing calls <c>EndFrame</c> until the caller's own stack
-    /// unwinds back into the frame loop. So instead the copy is recorded onto that frame's own command
-    /// stream (piggybacking rather than opening a redundant frame) and the map + <paramref name="consume"/>
-    /// + <paramref name="onComplete"/> are deferred until <see cref="Graphics.FlushPendingReadbacks"/>
-    /// finds the frame complete (drained once per tick, whenever no frame is open); this method then
-    /// returns false immediately without having read anything yet.
+    /// The copy is recorded onto a <see cref="TransferCommandBuffer"/> and submitted via
+    /// <see cref="GraphicsDevice.SubmitAndWait(TransferCommandBuffer)"/>, which blocks the calling
+    /// thread until the GPU has finished it regardless of whether a <see cref="Frame"/> is currently
+    /// open elsewhere. <paramref name="consume"/> and <paramref name="onComplete"/> both run before
+    /// this method returns.
     /// </para>
     /// </summary>
-    /// <returns>True if the read-back completed synchronously before returning; false if it was queued
-    /// to complete on a later tick.</returns>
+    /// <returns>Always true; kept for API compatibility with callers that check completion.</returns>
     private protected bool ReadBackSubresource(TextureDescription stagingDescription, uint width, uint height,
         uint depth, uint srcMipLevel, uint srcArrayLayer, Action<MappedResource> consume, Action onComplete = null)
     {
@@ -197,37 +186,21 @@ public abstract class Texture : EngineObject
         GraphiteTexture staging = device.ResourceFactory.CreateTexture(stagingDescription);
         staging.Name = $"{Name} Readback Staging";
 
-        if (Graphics.CurrentFrame == null)
-        {
-            CommandBuffer cmd = device.ResourceFactory.CreateCommandBuffer();
-            cmd.Name = "Texture Readback";
-            cmd.Begin();
-            cmd.CopyTexture(Handle, 0, 0, 0, srcMipLevel, srcArrayLayer,
-                staging, 0, 0, 0, 0, 0, width, height, depth, 1);
-            cmd.End();
-
-            Frame frame = device.BeginFrame();
-            frame.SubmitCommands(cmd);
-            device.EndFrame(frame);
-            device.WaitForFrame(frame);
-            cmd.Dispose();
-
-            MappedResource mapped = device.Map(staging, MapMode.Read);
-            try { consume(mapped); }
-            finally { device.Unmap(staging); }
-            staging.Dispose();
-            onComplete?.Invoke();
-            return true;
-        }
-
-        CommandBuffer piggybackCmd = Graphics.GetCommandBuffer("Texture Readback");
-        piggybackCmd.CopyTexture(Handle, 0, 0, 0, srcMipLevel, srcArrayLayer,
+        TransferCommandBuffer cmd = device.ResourceFactory.CreateTransferCommandBuffer();
+        cmd.Name = "Texture Readback";
+        cmd.Begin();
+        cmd.CopyTexture(Handle, 0, 0, 0, srcMipLevel, srcArrayLayer,
             staging, 0, 0, 0, 0, 0, width, height, depth, 1);
-        ulong frameId = Graphics.CurrentFrame.FrameId;
-        Graphics.Submit(piggybackCmd);
+        cmd.End();
+        device.SubmitAndWait(cmd);
+        cmd.Dispose();
 
-        Graphics.QueueReadback(staging, frameId, consume, onComplete);
-        return false;
+        MappedResource mapped = device.Map(staging, MapMode.Read);
+        try { consume(mapped); }
+        finally { device.Unmap(staging); }
+        staging.Dispose();
+        onComplete?.Invoke();
+        return true;
     }
 
     /// <summary>Copies one mapped region into <paramref name="destination"/>, honoring <see cref="MappedResource.RowPitch"/>/<see cref="MappedResource.DepthPitch"/> when they don't tightly pack.</summary>

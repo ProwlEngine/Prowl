@@ -112,10 +112,8 @@ public sealed class Cubemap : Texture, ISerializable
     }
 
     /// <summary>
-    /// Read back one face's mip level into <paramref name="destination"/>. See
-    /// <see cref="Texture.ReadBackSubresource"/>: returns true if filled synchronously before
-    /// returning, or false if the read was queued and <paramref name="destination"/> will be filled
-    /// once <paramref name="onComplete"/> fires on a later tick.
+    /// Read back one face's mip level into <paramref name="destination"/>, blocking until the GPU
+    /// read-back completes before returning. Always returns true; kept for API compatibility.
     /// </summary>
     public bool GetFaceData(int face, byte[] destination, int mip = 0, Action onComplete = null)
     {

@@ -98,20 +98,11 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Gets the data of the entire <see cref="Texture2D"/>. A raw pointer's lifetime can't be
-    /// guaranteed past this call, so unlike <see cref="GetData{T}"/> this only works outside a
-    /// frame (see <see cref="ReadBackSubresource"/>); if a frame is currently open it logs a
-    /// warning and leaves <paramref name="ptr"/> untouched.
+    /// Gets the data of the entire <see cref="Texture2D"/>, blocking until the GPU read-back
+    /// completes before returning (see <see cref="ReadBackSubresource"/>).
     /// </summary>
     public unsafe void GetDataPtr(void* ptr)
     {
-        if (Graphics.CurrentFrame != null)
-        {
-            Debug.LogWarning($"Cannot read back '{Name}' into a raw pointer while a frame is being " +
-                "recorded; the pointer isn't guaranteed to stay valid. Use GetData<T> instead, or call outside a frame.");
-            return;
-        }
-
         TextureDescription stagingDescription =
             TextureDescription.Texture2D(Width, Height, 1, 1, ImageFormat, TextureUsage.Staging);
         nint destination = (nint)ptr;
@@ -123,10 +114,8 @@ public sealed class Texture2D : Texture, ISerializable
     }
 
     /// <summary>
-    /// Gets the data of the entire <see cref="Texture2D"/>. See <see cref="ReadBackSubresource"/>:
-    /// returns true if <paramref name="data"/> was filled synchronously before returning, or false
-    /// if the read was queued and <paramref name="data"/> will be filled once <paramref name="onComplete"/>
-    /// fires on a later tick (both null-safe to ignore if the caller doesn't need to know).
+    /// Gets the data of the entire <see cref="Texture2D"/>, blocking until the GPU read-back
+    /// completes before returning. Always returns true; kept for API compatibility.
     /// </summary>
     public unsafe bool GetData<T>(Memory<T> data, Action onComplete = null) where T : unmanaged
     {
