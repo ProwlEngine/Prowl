@@ -183,6 +183,8 @@ public static class Window
         s_deviceOptions = new GraphicsDeviceOptions
         {
             Debug = true,
+            EnableProfiling = true,
+            EnableValidation = true,
             SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = VSync,
             PreferStandardClipSpaceYDirection = true,
@@ -279,6 +281,8 @@ public static class Window
             Graphics.Device.EndFrame(frame);
             Graphics.CurrentFrame = null;
             Graphics.Device.SwapBuffers();
+
+            Rendering.RenderProfiler.FlushPendingCapture();
         }
     }
 
