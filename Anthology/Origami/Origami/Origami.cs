@@ -305,6 +305,24 @@ public static class Origami
         => new ProgressBarBuilder(paper, id, value, Current);
 
     /// <summary>
+    /// Begin building a generic flame graph. Supply a <see cref="FlameNode"/> tree via
+    /// <see cref="FlameGraphBuilder.Root"/> / <see cref="FlameGraphBuilder.Roots"/>, chain modifiers
+    /// (size, value formatter, color function, variant) and call <see cref="FlameGraphBuilder.Show"/>.
+    /// Fully data-agnostic: it references no host-specific types.
+    /// </summary>
+    public static FlameGraphBuilder FlameGraph(Paper paper, string id)
+        => new FlameGraphBuilder(paper, id, Current);
+
+    /// <summary>
+    /// Begin building a generic multi-series line chart. Add one or more <see cref="ChartSeries"/>
+    /// via <see cref="ChartBuilder.Series(ChartSeries)"/>, chain modifiers (size, y range, ticks,
+    /// axis titles, legend, variant) and call <see cref="ChartBuilder.Show"/>. Fully data-agnostic:
+    /// it references no host-specific types and owns its own layout so it never overflows its box.
+    /// </summary>
+    public static ChartBuilder Chart(Paper paper, string id)
+        => new ChartBuilder(paper, id, Current);
+
+    /// <summary>
     /// Begin building an animated spinner. Chain a style modifier
     /// (<see cref="SpinnerBuilder.Arc"/>, <see cref="SpinnerBuilder.Dots"/>,
     /// <see cref="SpinnerBuilder.Pulse"/>) and call <see cref="SpinnerBuilder.Show"/>.
