@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Graphite;
+using Prowl.Graphite.ShaderDef;
 
 using Prowl.Runtime.Resources;
 
@@ -49,6 +50,50 @@ public sealed class RenderContext<TDrawCommand>
     public PropertySet Globals { get; } = new();
 
     internal Dictionary<RenderResourceID, RenderTexture> Resources;
+
+    /// <summary>Profiler recording this execution, or null when profiling is off.</summary>
+    internal RenderProfileRecorder? Profiler;
+
+    /// <summary>Opens a nested timing region inside the current pass. Pair with <see cref="EndSample"/>.</summary>
+    public void BeginSample(string name) => Profiler?.BeginSample(name);
+
+    /// <summary>Closes the most recently opened sample region.</summary>
+    public void EndSample() => Profiler?.EndSample();
+
+    /// <summary>
+    /// Records one draw call into the current pass's profiling report. No-op when profiling is off.
+    /// Mesh/material/shader are captured by asset guid plus display name so the report stays cheap and
+    /// serializable, along with the material's active variant keywords.
+    /// </summary>
+    public void RecordDrawCall(Mesh? mesh, Material? material, int passIndex, int indexCount, int sourceRenderableId)
+    {
+        if (Profiler == null)
+            return;
+
+        Shader? shader = material?.Shader;
+
+        var call = new DrawCallReport
+        {
+            MeshGuid = mesh?.AssetID ?? Guid.Empty,
+            MeshName = mesh?.Name ?? "",
+            MaterialGuid = material?.AssetID ?? Guid.Empty,
+            MaterialName = material?.Name ?? "",
+            ShaderGuid = shader?.AssetID ?? Guid.Empty,
+            ShaderName = shader?.Name ?? "",
+            PassIndex = passIndex,
+            IndexCount = indexCount,
+            InstanceCount = 1,
+            SourceRenderableId = sourceRenderableId,
+        };
+
+        if (material?._localKeywords != null)
+        {
+            foreach (Keyword keyword in material._localKeywords.Values)
+                call.VariantKeywords.Add($"{keyword.Name}={keyword.Value}");
+        }
+
+        Profiler.RecordDrawCall(call);
+    }
 
     /// <summary>Resolves a declared handle to the physical render texture the graph allocated for it.</summary>
     public RenderTexture GetTexture(TextureHandle handle)

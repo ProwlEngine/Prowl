@@ -40,6 +40,11 @@ public class Camera : MonoBehaviour
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
+    /// <summary>Profiling report from this camera's most recent render, or null if it has not rendered.
+    /// Written by the render pipeline; read by the editor's render profiler.</summary>
+    [field: SerializeIgnore]
+    public RenderFrameReport? LastRenderReport { get; internal set; }
+
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
     private float _aspect;

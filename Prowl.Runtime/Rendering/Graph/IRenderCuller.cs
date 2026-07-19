@@ -53,4 +53,13 @@ public interface IRenderCuller<TDrawCommand>
 
     /// <summary>Returns the draw commands matching <paramref name="query"/> from the last <see cref="Cull"/>.</summary>
     IReadOnlyList<TDrawCommand> GetDrawCommands(in DrawCommandQuery query);
+
+    /// <summary>Number of renderables ingested by the last <see cref="Cull"/>.</summary>
+    int RenderablesCollected { get; }
+
+    /// <summary>Number of ingested renderables the last <see cref="Cull"/> culled away.</summary>
+    int RenderablesCulled { get; }
+
+    /// <summary>Number of ingested renderables that survived the last <see cref="Cull"/>.</summary>
+    int RenderablesVisible { get; }
 }

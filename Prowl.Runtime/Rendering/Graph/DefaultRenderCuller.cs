@@ -36,7 +36,25 @@ public sealed class DefaultRenderCuller : IRenderCuller<DrawCommand>
         _viewer = new ViewerData(camera);
         _renderables = renderables ?? (IReadOnlyList<IRenderable>)Array.Empty<IRenderable>();
         _culled = _culling.ComputeCullMask(_renderables, camera.WorldFrustum, camera.CullingMask);
+
+        _culledCount = 0;
+        for (int i = 0; i < _renderables.Count; i++)
+        {
+            if (_culled[i])
+                _culledCount++;
+        }
     }
+
+    private int _culledCount;
+
+    /// <inheritdoc/>
+    public int RenderablesCollected => _renderables.Count;
+
+    /// <inheritdoc/>
+    public int RenderablesCulled => _culledCount;
+
+    /// <inheritdoc/>
+    public int RenderablesVisible => _renderables.Count - _culledCount;
 
     public IReadOnlyList<DrawCommand> GetDrawCommands(in DrawCommandQuery query)
     {
@@ -71,6 +89,7 @@ public sealed class DefaultRenderCuller : IRenderCuller<DrawCommand>
                 Layer = renderable.GetLayer(),
                 Properties = properties,
                 PassIndex = _queryPass[index],
+                SourceRenderableId = index,
             });
         }
 

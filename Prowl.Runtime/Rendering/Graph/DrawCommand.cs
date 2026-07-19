@@ -25,4 +25,7 @@ public struct DrawCommand
 
     /// <summary>Index of the material's shader pass this command draws (resolved from the query tag).</summary>
     public int PassIndex;
+
+    /// <summary>Stable id of the renderable that produced this command, or -1 if unknown.</summary>
+    public int SourceRenderableId;
 }

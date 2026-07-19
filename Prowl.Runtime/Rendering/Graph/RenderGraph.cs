@@ -19,10 +19,18 @@ public sealed class RenderGraph<TDrawCommand>
         public readonly IPass<TDrawCommand> Pass;
         public readonly RenderResourceID MainOutput;
 
-        internal PassNode(IPass<TDrawCommand> pass, RenderResourceID mainOutput)
+        /// <summary>The resources this pass declared as inputs, retained for profiling and wiring.</summary>
+        public readonly RenderResourceID[] Inputs;
+
+        /// <summary>The resources this pass declared as outputs, retained for profiling and wiring.</summary>
+        public readonly RenderResourceID[] Outputs;
+
+        internal PassNode(IPass<TDrawCommand> pass, RenderResourceID mainOutput, RenderResourceID[] inputs, RenderResourceID[] outputs)
         {
             Pass = pass;
             MainOutput = mainOutput;
+            Inputs = inputs;
+            Outputs = outputs;
         }
     }
 
@@ -101,7 +109,7 @@ public sealed class RenderGraph<TDrawCommand>
         for (int i = 0; i < ordered.Length; i++)
         {
             Node n = nodes[ordered[i]];
-            orderedNodes[i] = new PassNode(n.Pass, n.MainOutput);
+            orderedNodes[i] = new PassNode(n.Pass, n.MainOutput, n.Inputs, n.Outputs);
             if (n.MainOutput.IsValid)
                 presentation = n.MainOutput;
         }
