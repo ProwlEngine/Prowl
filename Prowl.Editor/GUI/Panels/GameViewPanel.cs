@@ -213,8 +213,8 @@ public class GameViewPanel : DockPanel
 
                         canvas.SetBrushTexture(capturedRT.MainTexture);
                         canvas.SetBrushTextureTransform(
-                            Transform2D.CreateTranslation(rx, ry + rh) *
-                            Transform2D.CreateScale(rw, -rh));
+                            Transform2D.CreateTranslation(rx, ry) *
+                            Transform2D.CreateScale(rw, rh));
                         canvas.RoundedRectFilled(rx, ry, rw, rh, topRound, topRound, round, round, Color.White);
                         canvas.ClearBrushTexture();
 

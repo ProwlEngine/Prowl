@@ -189,7 +189,8 @@ public class PreviewRenderer : IDisposable
             .BackgroundColor(System.Drawing.Color.FromArgb(255, 38, 38, 42))
             .Rounded(4)
             .StopEventPropagation()
-            .OnDragging((e) => {
+            .OnDragging((e) =>
+            {
                 Float2 delta = e.Delta;
                 _orbitYaw += delta.X * 0.5f;
                 _orbitPitch += delta.Y * 0.5f;
@@ -209,11 +210,10 @@ public class PreviewRenderer : IDisposable
                 float rw = (float)r.Size.X;
                 float rh = (float)r.Size.Y;
 
-                // Flip Y OpenGL RT has Y=0 at bottom
                 canvas.SetBrushTexture(_rt.MainTexture);
                 canvas.SetBrushTextureTransform(
-                    Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry + rh) *
-                    Prowl.Vector.Spatial.Transform2D.CreateScale(rw, -rh));
+                    Prowl.Vector.Spatial.Transform2D.CreateTranslation(rx, ry) *
+                    Prowl.Vector.Spatial.Transform2D.CreateScale(rw, rh));
                 canvas.RoundedRectFilled(rx, ry, rw, rh, 4, 4, 4, 4, new Color32(255, 255, 255, 255));
                 canvas.ClearBrushTexture();
             }));
