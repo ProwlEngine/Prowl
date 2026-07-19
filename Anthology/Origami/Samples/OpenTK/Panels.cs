@@ -109,7 +109,8 @@ namespace OrigamiSample
             }},
             new() { Name = "Data Display", Cards = new[]
             {
-                new CardDef("Table", "data grid", 2), new CardDef("Image Diff", "compare"),
+                new CardDef("Table", "data grid", 2), new CardDef("Image Diff", "compare"), new CardDef("Flame Graph", "profiler", 2),
+                new CardDef("Chart", "line / area", 2),
             }},
             new() { Name = "Structure & Content", Cards = new[]
             {
@@ -256,6 +257,8 @@ namespace OrigamiSample
             "Tooltip" => () => TooltipDemo(P),
             "Table" => () => TableDemo(P),
             "Image Diff" => () => ImageDiffDemo(P),
+            "Flame Graph" => () => FlameGraphDemo(P),
+            "Chart" => () => ChartDemo(P),
             "Label" => () => LabelDemo(P),
             "Header" => () => HeaderDemo(P),
             "Foldout" => () => FoldoutDemo(P),
@@ -1022,6 +1025,113 @@ namespace OrigamiSample
                 }
             }
         }
+
+        // --- Flame Graph (nested timing bars, zoom / pan) ---
+        private void FlameGraphDemo(Paper P)
+        {
+            using (P.Column("fgdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+            {
+                DemoLabel(P, "fgl1", "Frame timing (scroll to zoom, drag to pan, click a bar to focus)");
+                Origami.FlameGraph(P, "fg1")
+                    .Roots(SampleFrameFlame())
+                    .Height(168f)
+                    .RowHeight(30f)
+                    .ValueFormatter(ms => ms.ToString("0.00") + " ms")
+                    .ColorFunction(FlameColor)
+                    .Zoomable()
+                    .Pannable()
+                    .Show();
+            }
+        }
+
+        private static System.Drawing.Color FlameColor(FlameNode node, int depth)
+        {
+            var t = Origami.Current;
+            var palette = new[]
+            {
+                t.Primary.C500, t.Blue.C500, t.Primary.C400, t.Blue.C400,
+                t.Primary.C600, t.Blue.C600, t.Primary.C300, t.Blue.C300,
+            };
+            int idx = Math.Abs(node.Label.GetHashCode()) % palette.Length;
+            return palette[idx];
+        }
+
+        private static IReadOnlyList<FlameNode> SampleFrameFlame()
+        {
+            var shadows = new FlameNode("Shadows", 0.0, 2.10)
+            {
+                Children =
+                {
+                    new FlameNode("Cascade 0", 0.00, 0.90),
+                    new FlameNode("Cascade 1", 0.90, 1.20),
+                },
+            };
+
+            var opaque = new FlameNode("Opaque", 2.10, 7.30)
+            {
+                Children =
+                {
+                    new FlameNode("Skybox", 2.10, 0.60),
+                    new FlameNode("Opaque Geometry", 2.70, 5.90)
+                    {
+                        Children =
+                        {
+                            new FlameNode("Static Meshes", 2.70, 3.70),
+                            new FlameNode("Skinned Meshes", 6.40, 2.20),
+                        },
+                    },
+                    new FlameNode("Gizmos", 8.60, 0.80),
+                },
+            };
+
+            var transparents = new FlameNode("Transparents", 9.40, 1.60)
+            {
+                Children =
+                {
+                    new FlameNode("Grid", 9.40, 0.70),
+                    new FlameNode("Particles", 10.10, 0.90),
+                },
+            };
+
+            var post = new FlameNode("PostProcessing", 11.00, 2.80)
+            {
+                Children =
+                {
+                    new FlameNode("Bloom", 11.00, 1.30),
+                    new FlameNode("Tonemap", 12.30, 1.50),
+                },
+            };
+
+            return new[] { shadows, opaque, transparents, post };
+        }
+
+        // ── Chart (multi-series line / area, generic + data-agnostic) ────────────
+        private void ChartDemo(Paper P)
+        {
+            using (P.Column("chdemo").Width(P.Percent(100)).Height(P.Auto).ColBetween(8).Enter())
+            {
+                DemoLabel(P, "chl1", "Frame time (ms)");
+                Origami.Chart(P, "ch1")
+                    .Height(200f)
+                    .Series("Main Thread", System.Drawing.Color.FromArgb(168, 85, 247), SampleFrameTimes(), fill: true)
+                    .Series("Render Thread", System.Drawing.Color.FromArgb(96, 165, 250), SampleRenderTimes())
+                    .YLabel("ms").XLabel("Frame")
+                    .ValueFormatter(v => v.ToString("0.0"))
+                    .Show();
+            }
+        }
+
+        private static IReadOnlyList<double> SampleFrameTimes() => new[]
+        {
+            14.2, 15.8, 13.9, 16.4, 21.7, 18.1, 14.6, 15.0, 19.3, 22.8,
+            17.5, 15.1, 14.4, 16.9, 20.2, 18.6, 15.3, 14.8, 16.1, 17.9,
+        };
+
+        private static IReadOnlyList<double> SampleRenderTimes() => new[]
+        {
+            9.1, 9.8, 8.7, 10.2, 13.4, 11.5, 9.3, 9.6, 12.0, 14.1,
+            10.8, 9.7, 9.0, 10.5, 12.6, 11.4, 9.6, 9.2, 10.0, 11.1,
+        };
 
         // ── File Dialog (embedded inline browser + modal trigger) ────────────────
         private void FileDialogDemo(Paper P)
