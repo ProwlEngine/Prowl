@@ -3,7 +3,7 @@ Shader "Default/Invalid"
     Pass
     {
         Name "Invalid"
-        Tags { "RenderType" = "Opaque" }
+        Tags { "RenderOrder" = "Opaque" }
         Cull Off
 
         SLANGPROGRAM

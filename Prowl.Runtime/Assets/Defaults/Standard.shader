@@ -3,7 +3,7 @@ Shader "Default/Standard"
     Pass
     {
         Name "Standard"
-        Tags { "RenderType" = "Opaque" }
+        Tags { "RenderOrder" = "Opaque" }
         Cull Off
 
         SLANGPROGRAM
