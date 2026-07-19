@@ -6,6 +6,7 @@ using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
+using Prowl.Graphite;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -42,6 +43,8 @@ public sealed class RenderProfilerPanel : DockPanel
     private ProfilerMode _mode = ProfilerMode.Live;
     private readonly FrameHistoryBuffer _history = new(240);
     private readonly List<RenderFrameReport> _historyList = new();
+    private readonly GraphiteSnapshotHistory _graphiteHistory = new(240);
+    private readonly List<ProfileSnapshot> _graphiteHistoryList = new();
     private readonly RenderGraphView _graphView = new();
     private readonly SnapshotViewer _snapshotViewer = new();
 
@@ -91,7 +94,13 @@ public sealed class RenderProfilerPanel : DockPanel
         var camera = ResolveSelectedCamera();
 
         if (_mode == ProfilerMode.Live && !_paused)
+        {
             RuntimeProfiler.RequestReport();
+
+            GraphicsDevice? device = Graphics.Device;
+            if (device != null)
+                _graphiteHistory.Push(device.GetProfile());
+        }
 
         if (!_paused && camera?.LastRenderReport != null)
             _history.Push(camera.LastRenderReport);
@@ -102,6 +111,7 @@ public sealed class RenderProfilerPanel : DockPanel
 
         RenderFrameReport? shown = _paused ? _history.At(_scrub) : _history.Latest;
         _history.CopyTo(_historyList);
+        _graphiteHistory.CopyTo(_graphiteHistoryList);
 
         using (paper.Column("rp_root").Size(width, height).Enter())
         {
@@ -133,7 +143,7 @@ public sealed class RenderProfilerPanel : DockPanel
                         CountersView.Draw(paper, _historyList, font, width, contentH);
                         break;
                     case ProfilerTab.Graphite:
-                        GraphiteCountersView.Draw(paper, _historyList, font, width, contentH);
+                        GraphiteCountersView.Draw(paper, _graphiteHistoryList, font, width, contentH);
                         break;
                     case ProfilerTab.RenderGraph:
                         _graphView.Draw(paper, shown, font, width, contentH);
@@ -215,6 +225,7 @@ public sealed class RenderProfilerPanel : DockPanel
                     {
                         _selectedCameraId = _cameraOptions[i].id;
                         _history.Clear();
+                        _graphiteHistory.Clear();
                         _scrub = 0;
                     }
                 }, _cameraLabels).Width(UnitValue.Pixels(180)).Height(24).Show();

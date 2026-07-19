@@ -140,12 +140,4 @@ public sealed class FrameCounters
     public int PooledRtCount;
     public long PooledRtBytes;
     public Dictionary<string, double> ExtraCounters = new();
-
-    /// <summary>
-    /// Every Graphite device profiling counter for this frame, flattened to "Group/Bin Unit" keys
-    /// (e.g. "Live/Texture MB", "Allocated/DeviceBuffer Count", "BufferMem/Vertex MB"). Empty when
-    /// the device was created without profiling enabled. Shown in the profiler's Graphite tab,
-    /// grouped by the segment before '/'.
-    /// </summary>
-    public Dictionary<string, double> GraphiteCounters = new();
 }

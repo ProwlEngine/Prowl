@@ -257,37 +257,6 @@ public abstract class RenderPipeline<TDrawCommand> : RenderPipeline
         counters.PooledRtBytes = rtBytes;
         counters.DrawCalls = drawCalls;
         counters.TrianglesApprox = triangles;
-
-        PopulateGraphiteCounters(counters);
-    }
-
-    private static void PopulateGraphiteCounters(FrameCounters counters)
-    {
-        GraphicsDevice? device = Graphics.Device;
-        if (device == null)
-            return;
-
-        ProfileSnapshot p = device.GetProfile();
-        Dictionary<string, double> dict = counters.GraphiteCounters;
-
-        AddBinGroup(dict, "Live", p.Live, includeBytes: true);
-        AddBinGroup(dict, "Allocated", p.Allocated, includeBytes: true);
-        AddBinGroup(dict, "Freed", p.Freed, includeBytes: true);
-        AddBinGroup(dict, "BufferMem", p.BufferMem, includeBytes: true);
-        AddBinGroup(dict, "BufferOps", p.BufferOps, includeBytes: true);
-        AddBinGroup(dict, "Swaps", p.Swaps, includeBytes: false);
-    }
-
-    private static void AddBinGroup<TBin>(Dictionary<string, double> dict, string group, ProfileBinGroup<TBin> bins, bool includeBytes)
-        where TBin : unmanaged, Enum
-    {
-        foreach (TBin bin in Enum.GetValues<TBin>())
-        {
-            ProfileCounter c = bins[bin];
-            dict[$"{group}/{bin} Count"] = c.Count;
-            if (includeBytes)
-                dict[$"{group}/{bin} MB"] = c.Bytes / (1024.0 * 1024.0);
-        }
     }
 
     private void AllocateResources(RenderGraph<TDrawCommand> graph, CameraSnapshot css)
