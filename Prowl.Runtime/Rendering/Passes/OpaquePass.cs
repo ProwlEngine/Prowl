@@ -40,9 +40,13 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
         // holds undefined pool contents, so clear it before anything depth-tests against it.
         cmd.ClearRenderTarget(false, true, default);
 
+        context.BeginSample("Skybox");
         SkyboxRenderer.Render(cmd);
+        context.EndSample();
 
+        context.BeginSample("Opaque Geometry");
         DrawOpaqueGeometry(context, cmd);
+        context.EndSample();
 
         // The depth copy exists only so the gizmo (this pass) and grid (TransparentsPass) shaders can
         // depth-test against the scene. Renders that draw neither - thumbnails, the game view - skip it
@@ -55,7 +59,11 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
         context.SceneDepthCopy = depthCopy;
 
         if (context.Data.DisplayGizmos)
+        {
+            context.BeginSample("Gizmos");
             GizmoRenderer.Render(cmd, depthCopy);
+            context.EndSample();
+        }
     }
 
     /// <summary>Draws every culled renderable whose material has a pass tagged <c>RenderOrder=Opaque</c>.</summary>
@@ -69,6 +77,7 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
         {
             DrawCommand command = commands[i];
             cmd.DrawMesh(command.Mesh, command.Material, command.PassIndex, command.Model, command.Properties);
+            context.RecordDrawCall(command.Mesh, command.Material, command.PassIndex, command.Mesh?.IndexCount ?? 0, command.SourceRenderableId);
         }
     }
 
