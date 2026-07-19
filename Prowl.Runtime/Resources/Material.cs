@@ -270,6 +270,54 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
             }
         }
 
+        Shader? shader = _shader.Res;
+        if (shader != null)
+        {
+            foreach (ShaderProperty prop in shader.Properties)
+            {
+                if (_properties.ContainsKey(prop.Name))
+                    continue;
+
+                switch (prop.PropertyType)
+                {
+                    case ShaderPropertyType.Float:
+                        set.SetFloat(prop.Name, prop.Value.X);
+                        break;
+
+                    case ShaderPropertyType.Int:
+                        set.SetInt(prop.Name, (int)prop.Value.X);
+                        break;
+
+                    case ShaderPropertyType.Vector2:
+                        set.SetFloat2(prop.Name, new Float2(prop.Value.X, prop.Value.Y));
+                        break;
+
+                    case ShaderPropertyType.Vector3:
+                        set.SetFloat3(prop.Name, new Float3(prop.Value.X, prop.Value.Y, prop.Value.Z));
+                        break;
+
+                    case ShaderPropertyType.Vector4:
+                    case ShaderPropertyType.Color:
+                        set.SetFloat4(prop.Name, prop.Value);
+                        break;
+
+                    case ShaderPropertyType.Matrix:
+                        set.SetMatrix(prop.Name, prop.MatrixValue);
+                        break;
+
+                    case ShaderPropertyType.Texture2D:
+                        if (prop.Texture2DValue?.Handle != null)
+                            set.SetTexture(prop.Name, prop.Texture2DValue.Handle, prop.Texture2DValue.Sampler);
+                        break;
+
+                    case ShaderPropertyType.Texture3D:
+                        if (prop.Texture3DValue?.Handle != null)
+                            set.SetTexture(prop.Name, prop.Texture3DValue.Handle, prop.Texture3DValue.Sampler);
+                        break;
+                }
+            }
+        }
+
         return set;
     }
 
