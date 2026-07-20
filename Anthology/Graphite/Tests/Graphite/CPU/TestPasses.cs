@@ -79,3 +79,39 @@ internal static class Desc
 {
     public static GraphTextureDesc Color() => GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm);
 }
+
+/// <summary>No-op present pass for tests that only need to solve/build a graph, not present it.</summary>
+internal sealed class NoOpTestPresentPass : IPresentPass<TestView, int>
+{
+    public string Name => "TestNoOpPresent";
+
+    public void Setup(PresentContextBuilder builder) { }
+
+    public void Present(RenderContext<TestView, int> context) { }
+}
+
+/// <summary>Present pass for testing the solver's handling of declared present inputs and swapchain requests.</summary>
+internal sealed class TestPresentPass : IPresentPass<TestView, int>
+{
+    private readonly (string name, GraphTextureDesc desc)[] _inputs;
+    private readonly bool _requestSwapchain;
+
+    public TestPresentPass(bool requestSwapchain = false, (string, GraphTextureDesc)[]? inputs = null)
+    {
+        _requestSwapchain = requestSwapchain;
+        _inputs = inputs ?? Array.Empty<(string, GraphTextureDesc)>();
+    }
+
+    public string Name => "TestPresent";
+
+    public void Setup(PresentContextBuilder builder)
+    {
+        foreach ((string name, GraphTextureDesc desc) in _inputs)
+            builder.GetInputTexture(name, desc);
+
+        if (_requestSwapchain)
+            builder.RequestSwapchain();
+    }
+
+    public void Present(RenderContext<TestView, int> context) { }
+}
