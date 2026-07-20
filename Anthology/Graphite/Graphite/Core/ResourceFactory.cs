@@ -43,6 +43,14 @@ public abstract partial class ResourceFactory
     public abstract Framebuffer CreateFramebuffer(ref FramebufferDescription description);
 
     /// <summary>
+    /// Creates a new <see cref="RenderTexture"/>: color attachments, optional depth, and the framebuffer
+    /// wrapping them, sized and formatted from <paramref name="description"/>.
+    /// </summary>
+    /// <param name="description">The desired properties of the created bundle.</param>
+    /// <returns>A new <see cref="RenderTexture"/>.</returns>
+    public RenderTexture CreateRenderTexture(in RenderTextureDescription description) => new(Device, description);
+
+    /// <summary>
     /// Creates a new <see cref="Texture"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>

@@ -125,6 +125,16 @@ public sealed partial class PropertySet
         unchecked { _resourceVersion++; }
     }
 
+    /// <summary>
+    /// Binds a <see cref="RenderTexture"/>'s first color texture to the named property slot with an
+    /// optional paired sampler. See <see cref="SetTexture(PropertyID, Texture, Sampler)"/>.
+    /// </summary>
+    public void SetTexture(PropertyID name, RenderTexture renderTexture, Sampler? sampler = null)
+    {
+        ValidationHelpers.RequireNotNull(renderTexture, nameof(renderTexture), nameof(SetTexture));
+        SetTexture(name, renderTexture.ColorTextures[0], sampler);
+    }
+
 
     /// <summary>
     /// Binds a <see cref="Sampler"/> to the named slot independently of any texture.

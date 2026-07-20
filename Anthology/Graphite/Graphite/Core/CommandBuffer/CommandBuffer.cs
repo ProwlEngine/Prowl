@@ -163,6 +163,21 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="fb">Framebuffer.</param>
     private protected abstract void SetFramebufferCore(Framebuffer fb);
 
+    /// <summary>Sets the render texture's framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
+    /// <param name="renderTexture">Render texture whose framebuffer to set.</param>
+    public void SetFramebuffer(RenderTexture renderTexture)
+        => SetFramebuffer(renderTexture.Framebuffer);
+
+    /// <summary>Sets the render texture's framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
+    /// <param name="renderTexture">Render texture whose framebuffer to set.</param>
+    public void SetRenderTarget(RenderTexture renderTexture)
+        => SetFramebuffer(renderTexture.Framebuffer);
+
+    /// <summary>Sets the framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
+    /// <param name="fb">Framebuffer to set.</param>
+    public void SetRenderTarget(Framebuffer fb)
+        => SetFramebuffer(fb);
+
     /// <summary>Clears one color target. Index must be within the framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="clearColor">Clear value.</param>
