@@ -284,6 +284,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
             VkBuffer primary = new(this, _transientInitialSize,
                 BufferUsage.Dynamic | BufferUsage.UniformBuffer);
+            primary.SetTransientWrites(true);
+            primary.Name = $"TransientPrimary[{i}]";
             byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
 
             _slots[i] = new SlotState
@@ -388,7 +390,10 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             }
         }
 
-        return new VkBuffer(this, sizeInBytes, BufferUsage.Dynamic | BufferUsage.UniformBuffer);
+        VkBuffer overflow = new(this, sizeInBytes, BufferUsage.Dynamic | BufferUsage.UniformBuffer);
+        overflow.SetTransientWrites(true);
+        overflow.Name = "TransientOverflow";
+        return overflow;
     }
 
     internal void SubmitCommandBufferInternal(CommandBuffer cl)
