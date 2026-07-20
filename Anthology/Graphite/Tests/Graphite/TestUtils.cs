@@ -18,12 +18,22 @@ public readonly struct TestRenderView : IRenderView
     public uint PixelHeight => 256;
 }
 
+internal sealed class NoOpTestPresentPass : IPresentPass<TestRenderView, object>
+{
+    public string Name => "TestNoOpPresent";
+
+    public void Setup(PresentContextBuilder builder) { }
+
+    public void Present(RenderContext<TestRenderView, object> context) { }
+}
+
 public static class TestGraphExtensions
 {
     public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView, object>> record)
     {
         ExecutionTask task = gd.BeginExecution();
-        RenderGraph<TestRenderView, object> graph = RenderGraph<TestRenderView, object>.Build(Array.Empty<IPass<TestRenderView, object>>());
+        RenderGraph<TestRenderView, object> graph = RenderGraph<TestRenderView, object>.Build(
+            Array.Empty<IPass<TestRenderView, object>>(), new NoOpTestPresentPass());
         var context = new RenderContext<TestRenderView, object>(gd, task, graph, default, null, null);
 
         try
