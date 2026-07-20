@@ -337,6 +337,22 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
+    /// Submits a recorded transfer command buffer without blocking the calling thread. Doesn't touch
+    /// the execution ring or any fences - not tied to a graph execution at all.
+    /// </summary>
+    /// <param name="commandBuffer">Recorded transfer command buffer to submit. Must have had End called already.</param>
+    internal void SubmitTransfer(TransferCommandBuffer commandBuffer)
+    {
+        SubmitAndWait_CheckEnded(commandBuffer);
+        SubmitTransferCore(commandBuffer);
+    }
+
+    private protected virtual void SubmitTransferCore(TransferCommandBuffer commandBuffer)
+    {
+        throw new RenderException($"{GetType().Name} does not support {nameof(SubmitTransfer)}.");
+    }
+
+    /// <summary>
     /// Allocates a transient <see cref="DeviceBufferRange"/> from the currently active frame's bump allocator.
     /// Convenience wrapper over <see cref="Frame.AllocateTransient"/>. A frame must be active.
     /// </summary>

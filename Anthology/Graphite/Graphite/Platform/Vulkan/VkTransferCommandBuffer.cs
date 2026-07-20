@@ -20,6 +20,8 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
     public override GraphicsDevice Device => _gd;
     public override bool IsDisposed => _destroyed;
 
+    internal Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
+
     public override string Name
     {
         get => _name;

@@ -415,6 +415,12 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         SubmitCommandBuffer(cl, 0, null, 0, null, null);
     }
 
+    private protected override void SubmitTransferCore(TransferCommandBuffer commandBuffer)
+    {
+        VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
+        SubmitCommandBuffer(null, vkCb.CommandBuffer, 0, null, 0, null, null);
+    }
+
     /// <summary>
     /// Submits a raw one-shot <see cref="Silk.NET.Vulkan.CommandBuffer"/> to the graphics queue and blocks the
     /// calling thread until it has finished executing on the GPU. Does not touch the Frame ring-buffer or its
