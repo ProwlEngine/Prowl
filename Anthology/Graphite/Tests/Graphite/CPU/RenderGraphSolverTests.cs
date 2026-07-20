@@ -142,4 +142,72 @@ public class RenderGraphSolverTests
         Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("table_b")));
         Assert.Equal(2, graph.Resources.Count);
     }
+
+    [Fact]
+    public void Build_DiamondDependency_OrdersProducerBeforeBothBranchesAndJoinAfterBoth()
+    {
+        var producer = new TestPass("Producer", outputs: new[] { ("diamond_x", Desc.Color()) });
+        var left = new TestPass("Left",
+            inputs: new[] { ("diamond_x", Desc.Color()) },
+            outputs: new[] { ("diamond_y1", Desc.Color()) });
+        var right = new TestPass("Right",
+            inputs: new[] { ("diamond_x", Desc.Color()) },
+            outputs: new[] { ("diamond_y2", Desc.Color()) });
+        var join = new TestPass("Join",
+            inputs: new[] { ("diamond_y1", Desc.Color()), ("diamond_y2", Desc.Color()) },
+            outputs: new[] { ("diamond_out", Desc.Color()) });
+
+        RenderGraph<TestView, int> graph = Build(join, right, left, producer);
+        List<string> order = OrderNames(graph);
+
+        Assert.True(order.IndexOf("Producer") < order.IndexOf("Left"));
+        Assert.True(order.IndexOf("Producer") < order.IndexOf("Right"));
+        Assert.True(order.IndexOf("Left") < order.IndexOf("Join"));
+        Assert.True(order.IndexOf("Right") < order.IndexOf("Join"));
+    }
+
+    [Fact]
+    public void Build_MultipleWritersOfOneResource_ReaderRunsAfterEveryWriter()
+    {
+        var writer1 = new TestPass("Writer1", outputs: new[] { ("fanin_shared", Desc.Color()) });
+        var writer2 = new TestPass("Writer2", outputs: new[] { ("fanin_shared", Desc.Color()) });
+        var reader = new TestPass("Reader",
+            inputs: new[] { ("fanin_shared", Desc.Color()) },
+            outputs: new[] { ("fanin_out", Desc.Color()) });
+
+        RenderGraph<TestView, int> graph = Build(reader, writer2, writer1);
+        List<string> order = OrderNames(graph);
+
+        Assert.True(order.IndexOf("Writer1") < order.IndexOf("Reader"));
+        Assert.True(order.IndexOf("Writer2") < order.IndexOf("Reader"));
+    }
+
+    [Fact]
+    public void Build_PassReadsAndWritesSameResource_SkipsSelfEdgeAndOrdersNeighborsCorrectly()
+    {
+        var upstream = new TestPass("Upstream", outputs: new[] { ("rmw_res", Desc.Color()) });
+        var rmw = new TestPass("RMW",
+            inputs: new[] { ("rmw_res", Desc.Color()) },
+            outputs: new[] { ("rmw_res", Desc.Color()) });
+        var downstream = new TestPass("Downstream",
+            inputs: new[] { ("rmw_res", Desc.Color()) },
+            outputs: new[] { ("rmw_downstream", Desc.Color()) });
+
+        RenderGraph<TestView, int> graph = Build(downstream, rmw, upstream);
+        List<string> order = OrderNames(graph);
+
+        Assert.True(order.IndexOf("Upstream") < order.IndexOf("RMW"));
+        Assert.True(order.IndexOf("RMW") < order.IndexOf("Downstream"));
+    }
+
+    [Fact]
+    public void Build_PassWhoseOutputIsNeverReadAndNotPresentationSource_IsStillExecuted()
+    {
+        var unreferenced = new TestPass("Unreferenced", outputs: new[] { ("cull_unused", Desc.Color()) });
+        var main = new TestPass("Main", outputs: new[] { ("cull_main", Desc.Color()) }, mainOutput: "cull_main");
+
+        RenderGraph<TestView, int> graph = Build(unreferenced, main);
+
+        Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
+    }
 }
