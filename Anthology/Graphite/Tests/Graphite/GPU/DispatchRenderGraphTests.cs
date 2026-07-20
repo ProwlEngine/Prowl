@@ -78,7 +78,7 @@ file sealed class RecordingPresentPass : IPresentPass<DispatchView, int>
         SawSwapchainTarget = target != null;
 
         if (_arm && target != null)
-            context.ArmPresent();
+            context.Present();
     }
 }
 

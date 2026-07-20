@@ -541,7 +541,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             cmd.End();
             context.SubmitCommandBuffer(cmd);
-            context.ArmPresent();
+            context.Present();
         }
     }
 

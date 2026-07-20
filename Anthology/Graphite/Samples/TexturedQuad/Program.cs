@@ -79,7 +79,7 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView, int>
         cmd.End();
 
         context.SubmitCommandBuffer(cmd);
-        context.ArmPresent();
+        context.Present();
     }
 }
 

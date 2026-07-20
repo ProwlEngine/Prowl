@@ -42,7 +42,7 @@ internal sealed class CubeGridPresentPass : IPresentPass<SceneView, int>
         cmd.End();
 
         context.SubmitCommandBuffer(cmd);
-        context.ArmPresent();
+        context.Present();
     }
 
     public void Advance(float dt) => _time += dt;

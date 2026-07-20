@@ -232,7 +232,7 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView, int>
         cmd.End();
 
         context.SubmitCommandBuffer(cmd);
-        context.ArmPresent();
+        context.Present();
     }
 }
 

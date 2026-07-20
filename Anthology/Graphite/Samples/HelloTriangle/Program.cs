@@ -52,7 +52,7 @@ internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
         cmd.End();
 
         context.SubmitCommandBuffer(cmd);
-        context.ArmPresent();
+        context.Present();
     }
 }
 

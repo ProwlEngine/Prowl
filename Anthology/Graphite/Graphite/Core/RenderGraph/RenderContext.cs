@@ -19,7 +19,7 @@ public sealed class RenderContext<TView, TDrawCommand>
     private readonly PropertySet _globals = new();
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
 
-    private bool _presentArmed;
+    private bool _presentRequested;
 
     internal RenderContext(
         GraphicsDevice device,
@@ -41,7 +41,7 @@ public sealed class RenderContext<TView, TDrawCommand>
     public ExecutionTask Task => _task;
 
     /// <summary>True once the present pass has armed the swapchain present.</summary>
-    public bool RequestPresent => _presentArmed;
+    public bool RequestPresent => _presentRequested;
 
     /// <summary>The view being rendered.</summary>
     public TView View => _view;
@@ -126,10 +126,10 @@ public sealed class RenderContext<TView, TDrawCommand>
     public Framebuffer? SwapchainTarget => _graph.PresentRequestsSwapchain ? _device.SwapchainFramebuffer : null;
 
     /// <summary>
-    /// Arms the present so it fires when this dispatch finishes. Call from a present pass after drawing
-    /// to the swapchain target. If nothing arms, view stays offscreen.
+    /// Requests the present so it fires when this dispatch finishes. Call from a present pass after drawing
+    /// to the swapchain target. If nothing requests, view stays offscreen.
     /// </summary>
-    public void ArmPresent() => _presentArmed = true;
+    public void Present() => _presentRequested = true;
 
     /// <summary>Pulls draw commands matching a query from the culler. Empty list if no culler.</summary>
     /// <param name="query">Cull request describing what to pull.</param>
