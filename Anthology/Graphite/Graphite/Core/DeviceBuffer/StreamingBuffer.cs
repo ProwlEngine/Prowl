@@ -12,9 +12,7 @@ namespace Prowl.Graphite;
 /// <see cref="Current"/> each frame; the rotation across the in-flight buffers is handled implicitly.
 /// </para>
 /// <para>
-/// <see cref="Current"/> requires an active frame, since the ring slot is taken from
-/// <see cref="GraphicsDevice.CurrentFrame"/>. Create one via
-/// <see cref="ResourceFactory.CreateStreamingBuffer(BufferDescription)"/>.
+/// Create via ResourceFactory.CreateStreamingBuffer.
 /// </para>
 /// </summary>
 public sealed class StreamingBuffer : IDisposable
@@ -23,17 +21,17 @@ public sealed class StreamingBuffer : IDisposable
     private readonly DeviceBuffer[] _buffers;
 
     /// <summary>
-    /// The total capacity, in bytes, of each backing buffer. This value is fixed upon creation.
+    /// Capacity in bytes of each backing buffer. Fixed at creation.
     /// </summary>
     public uint SizeInBytes { get; }
 
     /// <summary>
-    /// A bitmask indicating how each backing buffer is permitted to be used.
+    /// Bitmask of allowed uses for each backing buffer.
     /// </summary>
     public BufferUsage Usage { get; }
 
     /// <summary>
-    /// The number of backing buffers, equal to <see cref="GraphicsDevice.MaxFramesInFlight"/> at creation time.
+    /// Number of backing buffers, set to MaxExecutingGraphs at creation.
     /// </summary>
     public int BufferCount => _buffers.Length;
 
@@ -49,20 +47,19 @@ public sealed class StreamingBuffer : IDisposable
     }
 
     /// <summary>
-    /// The backing <see cref="DeviceBuffer"/> for the currently active frame's ring slot. Write to and bind this
-    /// buffer for the current frame. Requires an active frame.
+    /// Backing buffer for the execution's ring slot. Write and bind this while recording that execution.
     /// </summary>
-    /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
-    public DeviceBuffer Current => _buffers[_device.CurrentFrame.RingSlot];
+    /// <param name="task">Execution whose ring slot picks the buffer.</param>
+    public DeviceBuffer ForExecution(GraphExecutionTask task) => _buffers[task.RingSlot];
 
     /// <summary>
-    /// Gets the backing <see cref="DeviceBuffer"/> for the given ring slot.
+    /// Backing buffer for a given ring slot.
     /// </summary>
-    /// <param name="ringSlot">The ring slot index, in the range [0, <see cref="BufferCount"/>).</param>
+    /// <param name="ringSlot">Ring slot index, 0 to BufferCount.</param>
     public DeviceBuffer this[uint ringSlot] => _buffers[ringSlot];
 
     /// <summary>
-    /// Sets the debug name of every backing buffer, suffixed with the ring slot index.
+    /// Sets debug name on every backing buffer, suffixed with ring slot index.
     /// </summary>
     public string Name
     {
@@ -74,7 +71,7 @@ public sealed class StreamingBuffer : IDisposable
     }
 
     /// <summary>
-    /// Frees the unmanaged device resources of every backing buffer.
+    /// Frees unmanaged resources of every backing buffer.
     /// </summary>
     public void Dispose()
     {

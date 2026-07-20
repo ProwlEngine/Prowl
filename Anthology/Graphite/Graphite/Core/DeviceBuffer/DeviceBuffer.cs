@@ -3,35 +3,32 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource used to store arbitrary graphics data in various formats.
-/// The size of a <see cref="DeviceBuffer"/> is fixed upon creation, and resizing is not possible.
-/// See <see cref="BufferDescription"/>.
+/// A device resource that stores graphics data. Size is fixed at creation, no resizing.
 /// </summary>
 public abstract partial class DeviceBuffer : DeviceResource, BindableResource, MappableResource, IDisposable
 {
     /// <summary>
-    /// The total capacity, in bytes, of the buffer. This value is fixed upon creation.
+    /// Total capacity in bytes. Fixed at creation.
     /// </summary>
     public abstract uint SizeInBytes { get; }
 
     /// <summary>
-    /// A bitmask indicating how this instance is permitted to be used.
+    /// Bitmask of allowed uses.
     /// </summary>
     public abstract BufferUsage Usage { get; }
 
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// True if disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public abstract void Dispose();
 
@@ -41,7 +38,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     private bool _transientWrites;
 
     /// <summary>
-    /// If reallocations happen again within this many frames of the previous one, a warning is logged.
+    /// Log a warning if reallocations happen again within this many frames.
     /// </summary>
     private const ulong OrphanWarningFrameWindow = 10;
 
@@ -51,8 +48,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     }
 
     /// <summary>
-    /// Marks this buffer as read by the GPU during the given frame. Called at the point a buffer is actually
-    /// bound or referenced for GPU use, not merely recorded.
+    /// Marks the buffer as GPU-read this frame. Call when actually bound/used, not just recorded.
     /// </summary>
     internal void MarkInFlight(GraphicsDevice device, ulong frameId)
     {
@@ -70,10 +66,8 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
         && !_inFlightDevice.IsFrameComplete(_inFlightFrameId);
 
     /// <summary>
-    /// Called before a CPU-side write to this buffer (via <see cref="GraphicsDevice.Map(MappableResource, MapMode)"/>
-    /// or <see cref="GraphicsDevice.UpdateBuffer(DeviceBuffer, uint, IntPtr, uint)"/>). If the buffer's contents may
-    /// still be read by the GPU from an earlier frame, this orphans the underlying native resource and allocates a
-    /// fresh one in its place, so the write cannot race the in-flight GPU read.
+    /// Call before a CPU write to this buffer. If GPU might still be reading it from an earlier frame,
+    /// orphans the native resource and allocates a fresh one so the write can't race the GPU read.
     /// </summary>
     internal void EnsureWritable()
     {
@@ -98,12 +92,10 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     }
 
     /// <summary>
-    /// Recreates this buffer's underlying native resource in place, keeping the same <see cref="DeviceBuffer"/>
-    /// identity. The old native resource must not be freed immediately: it may still be read by the GPU, so its
-    /// disposal must be deferred (via <see cref="GraphicsDevice.DisposeWhenFrameComplete"/>) until
-    /// <paramref name="inFlightFrameId"/> completes.
+    /// Recreates the native resource in place, keeping the same buffer identity. Don't free the old
+    /// resource right away - GPU might still read it, so defer disposal until the frame completes.
     /// </summary>
-    /// <param name="device">The device that last used this buffer.</param>
-    /// <param name="inFlightFrameId">The frame that may still be reading the old native resource.</param>
+    /// <param name="device">Device that last used this buffer.</param>
+    /// <param name="inFlightFrameId">Frame that may still be reading the old resource.</param>
     protected internal abstract void OrphanCore(GraphicsDevice device, ulong inFlightFrameId);
 }

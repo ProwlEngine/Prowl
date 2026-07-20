@@ -7,8 +7,7 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// When true, the profiling layer records counters. Set once from
-    /// <see cref="GraphicsDeviceOptions.EnableProfiling"/> at device creation.
+    /// True means profiling records counters. Set once at device creation.
     /// </summary>
     internal static bool ProfilingEnabled;
 
@@ -57,8 +56,7 @@ public abstract partial class GraphicsDevice
         => new ProfileCounter[Enum.GetValues<TBin>().Length];
 
     /// <summary>
-    /// Records the creation of a resource: bumps the per-frame allocation flow and the live
-    /// resident gauge for the given type.
+    /// Records a resource creation: bumps per-frame allocation flow and live gauge for the type.
     /// </summary>
     internal void RecordAllocation(AllocBin type, long bytes)
     {
@@ -70,10 +68,9 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Records the creation of a buffer: a single <see cref="AllocBin.DeviceBuffer"/> allocation
-    /// (the authoritative, non-double-counted total) plus resident memory under every role gauge
-    /// matching a set <see cref="BufferUsage"/> flag. The role gauges intentionally overlap for
-    /// multi-flag buffers, so they must not be summed; use the DeviceBuffer bin for a real total.
+    /// Records a buffer creation: one DeviceBuffer allocation (the real total, not double-counted)
+    /// plus memory under every matching usage-flag role gauge. Role gauges overlap on purpose for
+    /// multi-flag buffers, don't sum them - use the DeviceBuffer bin for the total.
     /// </summary>
     internal void RecordBufferAllocation(BufferUsage usage, long bytes)
     {
@@ -85,8 +82,7 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Records the destruction of a resource: bumps the per-frame free flow and decrements the
-    /// live resident gauge for the given type.
+    /// Records a resource destruction: bumps per-frame free flow, decrements live gauge for the type.
     /// </summary>
     internal void RecordFree(AllocBin type, long bytes)
     {
@@ -98,9 +94,8 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Records the destruction of a buffer: a single <see cref="AllocBin.DeviceBuffer"/> free
-    /// plus a decrement of resident memory under every role gauge matching a set
-    /// <see cref="BufferUsage"/> flag. Mirrors <see cref="RecordBufferAllocation"/>.
+    /// Records a buffer destruction: one DeviceBuffer free plus a decrement on every matching
+    /// role gauge. Mirrors RecordBufferAllocation.
     /// </summary>
     internal void RecordBufferFree(BufferUsage usage, long bytes)
     {
@@ -111,7 +106,7 @@ public abstract partial class GraphicsDevice
         AddBufferRoles(usage, -1, -bytes);
     }
 
-    /// <summary>Records a buffer data-transfer operation into the per-frame flow.</summary>
+    /// <summary>Records a buffer data-transfer into the per-frame flow.</summary>
     internal void RecordBufferOp(BufferOpBin op, long bytes)
     {
         if (!ProfilingEnabled)
@@ -120,7 +115,7 @@ public abstract partial class GraphicsDevice
         Add(_bufferOps!, (int)op, 1, bytes);
     }
 
-    /// <summary>Records a swapchain event into the per-frame flow.</summary>
+    /// <summary>Records a swapchain event.</summary>
     internal void RecordSwap(SwapBin swap, long bytes)
     {
         if (!ProfilingEnabled)
@@ -130,8 +125,8 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Rotates the per-frame flow accumulators: freezes them into the last-frame view and
-    /// zeroes them for the new frame. Gauges are left untouched.
+    /// Rotates per-execution flow accumulators: freezes into last-execution view, zeroes for the
+    /// new execution. Gauges untouched.
     /// </summary>
     private void BeginFrame_SnapshotFrameCounters()
     {
@@ -149,8 +144,8 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Returns an immutable snapshot of the profiling counters: the last completed frame's flows
-    /// plus the current live gauges. Returns a zeroed snapshot when profiling is disabled.
+    /// Immutable snapshot of profiling counters: last frame's flows plus current live gauges.
+    /// Zeroed snapshot if profiling disabled.
     /// </summary>
     public ProfileSnapshot GetProfile()
     {
@@ -166,7 +161,7 @@ public abstract partial class GraphicsDevice
             new ProfileBinGroup<BufferRoleBin>(Capture(_bufferMem!)));
     }
 
-    /// <summary>Zeroes every profiling counter, including the live gauges and frame history.</summary>
+    /// <summary>Zeroes every profiling counter, gauges and frame history included.</summary>
     public void ResetProfile()
     {
         if (!ProfilingEnabled)

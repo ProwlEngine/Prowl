@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,7 +9,7 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Represents an abstract graphics device, capable of creating device resources and executing commands.
+/// Abstract graphics device. Creates resources and runs commands.
 /// </summary>
 public abstract partial class GraphicsDevice : IDisposable
 {
@@ -22,89 +22,81 @@ public abstract partial class GraphicsDevice : IDisposable
     private DeviceBuffer _nullStructuredRead;
     private DeviceBuffer _nullStructuredReadWrite;
 
-    /// <summary>The maximum number of frames that can be in flight simultaneously.</summary>
-    protected internal uint _maxFramesInFlight;
+    /// <summary>Max graph executions in flight at once.</summary>
+    protected internal uint _maxExecutingGraphs;
 
-    /// <summary>The initial size of each slot's transient bump-allocator buffer, in bytes.</summary>
+    /// <summary>Starting size of each slot's transient bump-allocator buffer, in bytes.</summary>
     protected internal uint _transientInitialSize;
 
-    /// <summary>The soft cap for per-frame transient usage, in bytes.</summary>
+    /// <summary>Soft cap for per-execution transient usage, in bytes.</summary>
     protected internal uint _transientSoftCapBytes;
 
-    /// <summary>The hard cap for per-frame transient usage, in bytes.</summary>
+    /// <summary>Hard cap for per-execution transient usage, in bytes.</summary>
     protected internal uint _transientHardCapBytes;
 
-    /// <summary>Monotonically increasing frame counter; 0 means no frame has ever started.</summary>
-    protected ulong _frameIdCounter;
+    /// <summary>Execution counter, always going up. 0 means nothing has started yet.</summary>
+    protected ulong _executionIdCounter;
 
     /// <summary>The FrameId of the most recently completed frame, updated opportunistically.</summary>
     protected ulong _lastCompletedFrameId;
 
-    /// <summary>Set to true after the soft cap warning has been emitted once.</summary>
+    /// <summary>True once the soft cap warning has fired once.</summary>
     protected internal bool _transientSoftCapWarned;
 
     internal GraphicsDevice() { }
 
     /// <summary>
-    /// Gets the name of the device.
+    /// Device name.
     /// </summary>
     public abstract string DeviceName { get; }
 
     /// <summary>
-    /// Gets the name of the device vendor.
+    /// Device vendor name.
     /// </summary>
     public abstract string VendorName { get; }
 
     /// <summary>
-    /// Gets the API version of the graphics backend.
+    /// API version of the backend.
     /// </summary>
     public abstract GraphicsApiVersion ApiVersion { get; }
 
     /// <summary>
-    /// Gets a value identifying the specific graphics API used by this instance.
+    /// Which graphics API this device is.
     /// </summary>
     public abstract GraphicsBackend BackendType { get; }
 
     /// <summary>
-    /// Gets a value identifying whether texture coordinates begin in the top left corner of a Texture.
-    /// If true, (0, 0) refers to the top-left texel of a Texture. If false, (0, 0) refers to the bottom-left
-    /// texel of a Texture. This property is useful for determining how the output of a Framebuffer should be sampled.
+    /// True if texture (0,0) is top-left. False if it's bottom-left. Matters for sampling framebuffer output.
     /// </summary>
     public abstract bool IsUvOriginTopLeft { get; }
 
     /// <summary>
-    /// Gets a value indicating whether this device's depth values range from 0 to 1.
-    /// If false, depth values instead range from -1 to 1.
+    /// True if depth range is 0 to 1. False means -1 to 1.
     /// </summary>
     public abstract bool IsDepthRangeZeroToOne { get; }
 
     /// <summary>
-    /// Gets a value indicating whether this device's clip space Y values increase from top (-1) to bottom (1).
-    /// If false, clip space Y values instead increase from bottom (-1) to top (1).
+    /// True if clip space Y goes top(-1) to bottom(1). False means bottom(-1) to top(1).
     /// </summary>
     public abstract bool IsClipSpaceYInverted { get; }
 
     /// <summary>
-    /// Gets the <see cref="ResourceFactory"/> controlled by this instance.
+    /// The resource factory this device owns.
     /// </summary>
     public abstract ResourceFactory ResourceFactory { get; }
 
     /// <summary>
-    /// Retrieves the main Swapchain for this device. This property is only valid if the device was created with a main
-    /// Swapchain, and will return null otherwise.
+    /// Main swapchain for this device. Null if the device has no main swapchain.
     /// </summary>
     public abstract Swapchain MainSwapchain { get; }
 
     /// <summary>
-    /// Gets a <see cref="GraphicsDeviceFeatures"/> which enumerates the optional features supported by this instance.
+    /// Optional features this device supports.
     /// </summary>
     public abstract GraphicsDeviceFeatures Features { get; }
 
     /// <summary>
-    /// Gets or sets whether the main Swapchain's <see cref="SwapBuffers()"/> should be synchronized to the window system's
-    /// vertical refresh rate.
-    /// This is equivalent to <see cref="MainSwapchain"/>.<see cref="Swapchain.SyncToVerticalBlank"/>.
-    /// This property cannot be set if this GraphicsDevice was created without a main Swapchain.
+    /// Whether the main swapchain syncs to vertical refresh. Can't set this without a main swapchain.
     /// </summary>
     public virtual bool SyncToVerticalBlank
     {
@@ -117,16 +109,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// The required alignment, in bytes, for uniform buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="PropertySet"/> to a <see cref="CommandBuffer"/> with an overload
-    /// accepting dynamic offsets, each offset must be a multiple of this value.
+    /// Required byte alignment for uniform buffer offsets. Offsets, including dynamic offsets, must be a multiple of this.
     /// </summary>
     public uint UniformBufferMinOffsetAlignment => GetUniformBufferMinOffsetAlignmentCore();
 
     /// <summary>
-    /// The required alignment, in bytes, for structured buffer offsets. <see cref="DeviceBufferRange.Offset"/> must be a
-    /// multiple of this value. When binding a <see cref="PropertySet"/> to a <see cref="CommandBuffer"/> with an overload
-    /// accepting dynamic offsets, each offset must be a multiple of this value.
+    /// Required byte alignment for structured buffer offsets. Offsets, including dynamic offsets, must be a multiple of this.
     /// </summary>
     public uint StructuredBufferMinOffsetAlignment => GetStructuredBufferMinOffsetAlignmentCore();
 
@@ -136,14 +124,7 @@ public abstract partial class GraphicsDevice : IDisposable
     private Frame _currentFrame;
 
     /// <summary>
-    /// Gets the currently active <see cref="Frame"/>.
-    /// <para>
-    /// This is the single guarded entry point for frame access from recording code: when usage
-    /// validation is enabled, reading it while no frame is open throws a
-    /// <see cref="RenderException"/>, so backends never need to null-check before allocating
-    /// transient memory or per-frame resources. Without validation it returns
-    /// <see langword="null"/> if no frame is in progress.
-    /// </para>
+    /// Hard cap on how many graph executions can be in flight at once. Beyond this, BeginGraphExecution blocks until the oldest finishes.
     /// </summary>
     public Frame CurrentFrame
     {
@@ -173,8 +154,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public uint FramesInFlight => (uint)(_frameIdCounter - Volatile.Read(ref _lastCompletedFrameId));
 
     /// <summary>
-    /// Begins a new frame and returns the active <see cref="Frame"/> object.
-    /// If the oldest in-flight ring slot has not yet completed, this method blocks until it does.
+    /// Whether the given execution has finished on the GPU. Advances LastCompletedExecutionId as a side effect.
     /// </summary>
     /// <remarks>
     /// Typical usage:
@@ -413,33 +393,29 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Blocks the calling thread until the given <see cref="Fence"/> becomes signaled, or until a time greater than the
-    /// given TimeSpan has elapsed.
+    /// Blocks until the given fence signals, or until the timeout passes.
     /// </summary>
-    /// <param name="fence">The <see cref="Fence"/> instance to wait on.</param>
-    /// <param name="timeout">A TimeSpan indicating the maximum time to wait on the Fence.</param>
-    /// <returns>True if the Fence was signaled. False if the timeout was reached instead.</returns>
+    /// <param name="fence">Fence to wait on.</param>
+    /// <param name="timeout">Max time to wait.</param>
+    /// <returns>True if signaled, false if timed out.</returns>
     public bool WaitForFence(Fence fence, TimeSpan timeout)
         => WaitForFence(fence, (ulong)timeout.TotalMilliseconds * 1_000_000);
     /// <summary>
-    /// Blocks the calling thread until the given <see cref="Fence"/> becomes signaled, or until a time greater than the
-    /// given TimeSpan has elapsed.
+    /// Blocks until the given fence signals, or until the timeout passes.
     /// </summary>
-    /// <param name="fence">The <see cref="Fence"/> instance to wait on.</param>
-    /// <param name="nanosecondTimeout">A value in nanoseconds, indicating the maximum time to wait on the Fence.</param>
-    /// <returns>True if the Fence was signaled. False if the timeout was reached instead.</returns>
+    /// <param name="fence">Fence to wait on.</param>
+    /// <param name="nanosecondTimeout">Max wait time in nanoseconds.</param>
+    /// <returns>True if signaled, false if timed out.</returns>
     public abstract bool WaitForFence(Fence fence, ulong nanosecondTimeout);
 
     /// <summary>
-    /// Resets the given <see cref="Fence"/> to the unsignaled state.
+    /// Resets the given fence to unsignaled.
     /// </summary>
-    /// <param name="fence">The <see cref="Fence"/> instance to reset.</param>
+    /// <param name="fence">Fence to reset.</param>
     public abstract void ResetFence(Fence fence);
 
     /// <summary>
-    /// Swaps the buffers of the main swapchain and presents the rendered image to the screen.
-    /// This is equivalent to passing <see cref="MainSwapchain"/> to <see cref="SwapBuffers(Swapchain)"/>.
-    /// This method can only be called if this GraphicsDevice was created with a main Swapchain.
+    /// Swaps the main swapchain's buffers and presents to screen. Only works if this device has a main swapchain.
     /// </summary>
     public void SwapBuffers()
     {
@@ -454,7 +430,7 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <summary>
     /// Swaps the buffers of the given swapchain.
     /// </summary>
-    /// <param name="swapchain">The <see cref="Swapchain"/> to swap and present.</param>
+    /// <param name="swapchain">Swapchain to swap and present.</param>
     public void SwapBuffers(Swapchain swapchain)
     {
         SwapBuffersCore(swapchain);
@@ -464,20 +440,15 @@ public abstract partial class GraphicsDevice : IDisposable
     private protected abstract void SwapBuffersCore(Swapchain swapchain);
 
     /// <summary>
-    /// Gets a <see cref="Framebuffer"/> object representing the render targets of the main swapchain.
-    /// This is equivalent to <see cref="MainSwapchain"/>.<see cref="Swapchain.Framebuffer"/>.
-    /// If this GraphicsDevice was created without a main Swapchain, then this returns null.
+    /// The main swapchain's framebuffer. Null if there's no main swapchain.
     /// </summary>
     public Framebuffer? SwapchainFramebuffer => MainSwapchain?.Framebuffer;
 
     /// <summary>
-    /// Notifies this instance that the main window has been resized. This causes the <see cref="SwapchainFramebuffer"/> to
-    /// be appropriately resized and recreated.
-    /// This is equivalent to calling <see cref="MainSwapchain"/>.<see cref="Swapchain.Resize(uint, uint)"/>.
-    /// This method can only be called if this GraphicsDevice was created with a main Swapchain.
+    /// Tells this device the main window was resized, so the swapchain framebuffer gets resized and recreated. Only works if this device has a main swapchain.
     /// </summary>
-    /// <param name="width">The new width of the main window.</param>
-    /// <param name="height">The new height of the main window.</param>
+    /// <param name="width">New window width.</param>
+    /// <param name="height">New window height.</param>
     public void ResizeMainWindow(uint width, uint height)
     {
         if (MainSwapchain == null)
@@ -489,46 +460,47 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// A blocking method that returns when all submitted <see cref="CommandBuffer"/> objects have fully completed
-    /// and all in-flight frames have been signaled as complete.
+    /// Blocks until all submitted command buffers and in-flight graph executions are done. Reclaims every execution slot.
     /// </summary>
-    /// <exception cref="RenderException">Thrown if <see cref="CurrentFrame"/> is not null. Call <see cref="EndFrame()"/> before <see cref="WaitForIdle"/>.</exception>
     public void WaitForIdle()
     {
-        if (_currentFrame != null)
-            throw new RenderException("WaitForIdle cannot be called while a frame is active. Call EndFrame first.");
         WaitForIdleCore();
-        Volatile.Write(ref _lastCompletedFrameId, _frameIdCounter);
+        lock (_executionLock)
+        {
+            Volatile.Write(ref _lastCompletedExecutionId, _executionIdCounter);
+            _activeTasks.Clear();
+            _freeSlots.Clear();
+            for (uint i = 0; i < _maxExecutingGraphs; i++)
+                _freeSlots.Enqueue(i);
+        }
+        FlushExecutionRetiredDisposables();
         FlushDeferredDisposals();
     }
 
     private protected abstract void WaitForIdleCore();
 
     /// <summary>
-    /// Gets the maximum sample count supported by the given <see cref="PixelFormat"/>.
+    /// Max sample count this pixel format supports.
     /// </summary>
-    /// <param name="format">The format to query.</param>
-    /// <param name="depthFormat">Whether the format will be used in a depth texture.</param>
-    /// <returns>A <see cref="TextureSampleCount"/> value representing the maximum count that a <see cref="Texture"/> of that
-    /// format can be created with.</returns>
+    /// <param name="format">Format to check.</param>
+    /// <param name="depthFormat">Whether it's for a depth texture.</param>
+    /// <returns>Max sample count a texture of that format can use.</returns>
     public abstract TextureSampleCount GetSampleCountLimit(PixelFormat format, bool depthFormat);
 
     /// <summary>
-    /// Maps a <see cref="DeviceBuffer"/> or <see cref="Texture"/> into a CPU-accessible data region. For Texture resources, this
-    /// overload maps the first subresource.
+    /// Maps a buffer or texture into CPU-accessible memory. For textures, maps the first subresource.
     /// </summary>
-    /// <param name="resource">The <see cref="DeviceBuffer"/> or <see cref="Texture"/> resource to map.</param>
-    /// <param name="mode">The <see cref="MapMode"/> to use.</param>
-    /// <returns>A <see cref="MappedResource"/> structure describing the mapped data region.</returns>
+    /// <param name="resource">Buffer or texture to map.</param>
+    /// <param name="mode">Map mode to use.</param>
+    /// <returns>The mapped data region.</returns>
     public MappedResource Map(MappableResource resource, MapMode mode) => Map(resource, mode, 0);
     /// <summary>
-    /// Maps a <see cref="DeviceBuffer"/> or <see cref="Texture"/> into a CPU-accessible data region.
+    /// Maps a buffer or texture into CPU-accessible memory.
     /// </summary>
-    /// <param name="resource">The <see cref="DeviceBuffer"/> or <see cref="Texture"/> resource to map.</param>
-    /// <param name="mode">The <see cref="MapMode"/> to use.</param>
-    /// <param name="subresource">The subresource to map. Subresources are indexed first by mip slice, then by array layer.
-    /// For <see cref="DeviceBuffer"/> resources, this parameter must be 0.</param>
-    /// <returns>A <see cref="MappedResource"/> structure describing the mapped data region.</returns>
+    /// <param name="resource">Buffer or texture to map.</param>
+    /// <param name="mode">Map mode to use.</param>
+    /// <param name="subresource">Subresource to map, indexed by mip then array layer. Must be 0 for buffers.</param>
+    /// <returns>The mapped data region.</returns>
     public MappedResource Map(MappableResource resource, MapMode mode, uint subresource)
     {
         Map_CheckResource(resource, mode, subresource);
@@ -542,32 +514,31 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
+    /// Maps the resource. Backend-specific.
     /// </summary>
-    /// <param name="resource"></param>
-    /// <param name="mode"></param>
-    /// <param name="subresource"></param>
-    /// <returns></returns>
+    /// <param name="resource">Resource to map.</param>
+    /// <param name="mode">Map mode.</param>
+    /// <param name="subresource">Subresource index.</param>
+    /// <returns>The mapped data region.</returns>
     protected abstract MappedResource MapCore(MappableResource resource, MapMode mode, uint subresource);
 
     /// <summary>
-    /// Maps a <see cref="DeviceBuffer"/> or <see cref="Texture"/> into a CPU-accessible data region, and returns a structured
-    /// view over that region. For Texture resources, this overload maps the first subresource.
+    /// Maps a buffer or texture into CPU-accessible memory, viewed as a struct type. For textures, maps the first subresource.
     /// </summary>
-    /// <param name="resource">The <see cref="DeviceBuffer"/> or <see cref="Texture"/> resource to map.</param>
-    /// <param name="mode">The <see cref="MapMode"/> to use.</param>
-    /// <typeparam name="T">The blittable value type which mapped data is viewed as.</typeparam>
-    /// <returns>A <see cref="MappedResource"/> structure describing the mapped data region.</returns>
+    /// <param name="resource">Buffer or texture to map.</param>
+    /// <param name="mode">Map mode to use.</param>
+    /// <typeparam name="T">Blittable type to view the data as.</typeparam>
+    /// <returns>The mapped data region.</returns>
     public MappedResourceView<T> Map<T>(MappableResource resource, MapMode mode) where T : unmanaged
         => Map<T>(resource, mode, 0);
     /// <summary>
-    /// Maps a <see cref="DeviceBuffer"/> or <see cref="Texture"/> into a CPU-accessible data region, and returns a structured
-    /// view over that region.
+    /// Maps a buffer or texture into CPU-accessible memory, viewed as a struct type.
     /// </summary>
-    /// <param name="resource">The <see cref="DeviceBuffer"/> or <see cref="Texture"/> resource to map.</param>
-    /// <param name="mode">The <see cref="MapMode"/> to use.</param>
-    /// <param name="subresource">The subresource to map. Subresources are indexed first by mip slice, then by array layer.</param>
-    /// <typeparam name="T">The blittable value type which mapped data is viewed as.</typeparam>
-    /// <returns>A <see cref="MappedResource"/> structure describing the mapped data region.</returns>
+    /// <param name="resource">Buffer or texture to map.</param>
+    /// <param name="mode">Map mode to use.</param>
+    /// <param name="subresource">Subresource to map, indexed by mip then array layer.</param>
+    /// <typeparam name="T">Blittable type to view the data as.</typeparam>
+    /// <returns>The mapped data region.</returns>
     public MappedResourceView<T> Map<T>(MappableResource resource, MapMode mode, uint subresource) where T : unmanaged
     {
         MappedResource mappedResource = Map(resource, mode, subresource);
@@ -575,17 +546,15 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Invalidates a previously-mapped data region for the given <see cref="DeviceBuffer"/> or <see cref="Texture"/>.
-    /// For <see cref="Texture"/> resources, this unmaps the first subresource.
+    /// Unmaps a previously mapped buffer or texture. For textures, unmaps the first subresource.
     /// </summary>
-    /// <param name="resource">The resource to unmap.</param>
+    /// <param name="resource">Resource to unmap.</param>
     public void Unmap(MappableResource resource) => Unmap(resource, 0);
     /// <summary>
-    /// Invalidates a previously-mapped data region for the given <see cref="DeviceBuffer"/> or <see cref="Texture"/>.
+    /// Unmaps a previously mapped buffer or texture.
     /// </summary>
-    /// <param name="resource">The resource to unmap.</param>
-    /// <param name="subresource">The subresource to unmap. Subresources are indexed first by mip slice, then by array layer.
-    /// For <see cref="DeviceBuffer"/> resources, this parameter must be 0.</param>
+    /// <param name="resource">Resource to unmap.</param>
+    /// <param name="subresource">Subresource to unmap, indexed by mip then array layer. Must be 0 for buffers.</param>
     public void Unmap(MappableResource resource, uint subresource)
     {
         UnmapCore(resource, subresource);
@@ -593,29 +562,26 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
+    /// Unmaps the resource. Backend-specific.
     /// </summary>
-    /// <param name="resource"></param>
-    /// <param name="subresource"></param>
+    /// <param name="resource">Resource to unmap.</param>
+    /// <param name="subresource">Subresource index.</param>
     protected abstract void UnmapCore(MappableResource resource, uint subresource);
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data.
+    /// Updates part of a texture with new data.
     /// </summary>
-    /// <param name="texture">The resource to update.</param>
-    /// <param name="source">A pointer to the start of the data to upload. This must point to tightly-packed pixel data for
-    /// the region specified.</param>
-    /// <param name="sizeInBytes">The number of bytes to upload. This value must match the total size of the texture region
-    /// specified.</param>
-    /// <param name="x">The minimum X value of the updated region.</param>
-    /// <param name="y">The minimum Y value of the updated region.</param>
-    /// <param name="z">The minimum Z value of the updated region.</param>
-    /// <param name="width">The width of the updated region, in texels.</param>
-    /// <param name="height">The height of the updated region, in texels.</param>
-    /// <param name="depth">The depth of the updated region, in texels.</param>
-    /// <param name="mipLevel">The mipmap level to update. Must be less than the total number of mipmaps contained in the
-    /// <see cref="Texture"/>.</param>
-    /// <param name="arrayLayer">The array layer to update. Must be less than the total array layer count contained in the
-    /// <see cref="Texture"/>.</param>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Pointer to tightly-packed pixel data for the region.</param>
+    /// <param name="sizeInBytes">Byte count to upload. Must match the region's total size.</param>
+    /// <param name="x">Min X of the updated region.</param>
+    /// <param name="y">Min Y of the updated region.</param>
+    /// <param name="z">Min Z of the updated region.</param>
+    /// <param name="width">Region width in texels.</param>
+    /// <param name="height">Region height in texels.</param>
+    /// <param name="depth">Region depth in texels.</param>
+    /// <param name="mipLevel">Mip level to update. Must be under the texture's mip count.</param>
+    /// <param name="arrayLayer">Array layer to update. Must be under the texture's array layer count.</param>
     public void UpdateTexture(
         Texture texture,
         IntPtr source,
@@ -630,21 +596,18 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data contained in an array
+    /// Updates part of a texture with data from an array.
     /// </summary>
-    /// <param name="texture">The resource to update.</param>
-    /// <param name="source">An array containing the data to upload. This must contain tightly-packed pixel data for the
-    /// region specified.</param>
-    /// <param name="x">The minimum X value of the updated region.</param>
-    /// <param name="y">The minimum Y value of the updated region.</param>
-    /// <param name="z">The minimum Z value of the updated region.</param>
-    /// <param name="width">The width of the updated region, in texels.</param>
-    /// <param name="height">The height of the updated region, in texels.</param>
-    /// <param name="depth">The depth of the updated region, in texels.</param>
-    /// <param name="mipLevel">The mipmap level to update. Must be less than the total number of mipmaps contained in the
-    /// <see cref="Texture"/>.</param>
-    /// <param name="arrayLayer">The array layer to update. Must be less than the total array layer count contained in the
-    /// <see cref="Texture"/>.</param>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Array with tightly-packed pixel data for the region.</param>
+    /// <param name="x">Min X of the updated region.</param>
+    /// <param name="y">Min Y of the updated region.</param>
+    /// <param name="z">Min Z of the updated region.</param>
+    /// <param name="width">Region width in texels.</param>
+    /// <param name="height">Region height in texels.</param>
+    /// <param name="depth">Region depth in texels.</param>
+    /// <param name="mipLevel">Mip level to update. Must be under the texture's mip count.</param>
+    /// <param name="arrayLayer">Array layer to update. Must be under the texture's array layer count.</param>
     public void UpdateTexture<T>(
         Texture texture,
         T[] source,
@@ -656,21 +619,18 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data contained in an array
+    /// Updates part of a texture with data from a span.
     /// </summary>
-    /// <param name="texture">The resource to update.</param>
-    /// <param name="source">A readonly span containing the data to upload. This must contain tightly-packed pixel data for the
-    /// region specified.</param>
-    /// <param name="x">The minimum X value of the updated region.</param>
-    /// <param name="y">The minimum Y value of the updated region.</param>
-    /// <param name="z">The minimum Z value of the updated region.</param>
-    /// <param name="width">The width of the updated region, in texels.</param>
-    /// <param name="height">The height of the updated region, in texels.</param>
-    /// <param name="depth">The depth of the updated region, in texels.</param>
-    /// <param name="mipLevel">The mipmap level to update. Must be less than the total number of mipmaps contained in the
-    /// <see cref="Texture"/>.</param>
-    /// <param name="arrayLayer">The array layer to update. Must be less than the total array layer count contained in the
-    /// <see cref="Texture"/>.</param>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Span with tightly-packed pixel data for the region.</param>
+    /// <param name="x">Min X of the updated region.</param>
+    /// <param name="y">Min Y of the updated region.</param>
+    /// <param name="z">Min Z of the updated region.</param>
+    /// <param name="width">Region width in texels.</param>
+    /// <param name="height">Region height in texels.</param>
+    /// <param name="depth">Region depth in texels.</param>
+    /// <param name="mipLevel">Mip level to update. Must be under the texture's mip count.</param>
+    /// <param name="arrayLayer">Array layer to update. Must be under the texture's array layer count.</param>
     public unsafe void UpdateTexture<T>(
         Texture texture,
         ReadOnlySpan<T> source,
@@ -694,21 +654,18 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data contained in an array
+    /// Updates part of a texture with data from a span.
     /// </summary>
-    /// <param name="texture">The resource to update.</param>
-    /// <param name="source">A readonly span containing the data to upload. This must contain tightly-packed pixel data for the
-    /// region specified.</param>
-    /// <param name="x">The minimum X value of the updated region.</param>
-    /// <param name="y">The minimum Y value of the updated region.</param>
-    /// <param name="z">The minimum Z value of the updated region.</param>
-    /// <param name="width">The width of the updated region, in texels.</param>
-    /// <param name="height">The height of the updated region, in texels.</param>
-    /// <param name="depth">The depth of the updated region, in texels.</param>
-    /// <param name="mipLevel">The mipmap level to update. Must be less than the total number of mipmaps contained in the
-    /// <see cref="Texture"/>.</param>
-    /// <param name="arrayLayer">The array layer to update. Must be less than the total array layer count contained in the
-    /// <see cref="Texture"/>.</param>
+    /// <param name="texture">Texture to update.</param>
+    /// <param name="source">Span with tightly-packed pixel data for the region.</param>
+    /// <param name="x">Min X of the updated region.</param>
+    /// <param name="y">Min Y of the updated region.</param>
+    /// <param name="z">Min Z of the updated region.</param>
+    /// <param name="width">Region width in texels.</param>
+    /// <param name="height">Region height in texels.</param>
+    /// <param name="depth">Region depth in texels.</param>
+    /// <param name="mipLevel">Mip level to update. Must be under the texture's mip count.</param>
+    /// <param name="arrayLayer">Array layer to update. Must be under the texture's array layer count.</param>
     public void UpdateTexture<T>(
         Texture texture,
         Span<T> source,
@@ -728,14 +685,12 @@ public abstract partial class GraphicsDevice : IDisposable
         uint mipLevel, uint arrayLayer);
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/> storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">The value to upload.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Value to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -749,14 +704,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">A reference to the single value to upload.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Reference to the value to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -770,15 +723,13 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">A reference to the first of a series of values to upload.</param>
-    /// <param name="sizeInBytes">The total size of the uploaded data, in bytes.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Reference to the first value in a series to upload.</param>
+    /// <param name="sizeInBytes">Total upload size in bytes.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -793,14 +744,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">An array containing the data to upload.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Array with the data to upload.</param>
     public void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -810,14 +759,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">A readonly span containing the data to upload.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Span with the data to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -830,14 +777,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region with new data. Type T must be blittable.
     /// </summary>
-    /// <typeparam name="T">The type of data to upload.</typeparam>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">A span containing the data to upload.</param>
+    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Span with the data to upload.</param>
     public void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -847,13 +792,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
+    /// Updates a buffer region with new data.
     /// </summary>
-    /// <param name="buffer">The resource to update.</param>
-    /// <param name="bufferOffsetInBytes">An offset, in bytes, from the beginning of the <see cref="DeviceBuffer"/>'s storage, at
-    /// which new data will be uploaded.</param>
-    /// <param name="source">A pointer to the start of the data to upload.</param>
-    /// <param name="sizeInBytes">The total size of the uploaded data, in bytes.</param>
+    /// <param name="buffer">Buffer to update.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset into the buffer to write at.</param>
+    /// <param name="source">Pointer to the data to upload.</param>
+    /// <param name="sizeInBytes">Total upload size in bytes.</param>
     public void UpdateBuffer(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -877,13 +821,12 @@ public abstract partial class GraphicsDevice : IDisposable
     private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
 
     /// <summary>
-    /// Gets whether or not the given <see cref="PixelFormat"/>, <see cref="TextureType"/>, and <see cref="TextureUsage"/>
-    /// combination is supported by this instance.
+    /// Whether this format/type/usage combo is supported.
     /// </summary>
-    /// <param name="format">The PixelFormat to query.</param>
-    /// <param name="type">The TextureType to query.</param>
-    /// <param name="usage">The TextureUsage to query.</param>
-    /// <returns>True if the given combination is supported; false otherwise.</returns>
+    /// <param name="format">Pixel format to check.</param>
+    /// <param name="type">Texture type to check.</param>
+    /// <param name="usage">Texture usage to check.</param>
+    /// <returns>True if supported.</returns>
     public bool GetPixelFormatSupport(
         PixelFormat format,
         TextureType type,
@@ -893,16 +836,13 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Gets whether or not the given <see cref="PixelFormat"/>, <see cref="TextureType"/>, and <see cref="TextureUsage"/>
-    /// combination is supported by this instance, and also gets the device-specific properties supported by this instance.
+    /// Whether this format/type/usage combo is supported, and its device-specific limits.
     /// </summary>
-    /// <param name="format">The PixelFormat to query.</param>
-    /// <param name="type">The TextureType to query.</param>
-    /// <param name="usage">The TextureUsage to query.</param>
-    /// <param name="properties">If the combination is supported, then this parameter describes the limits of a Texture
-    /// created using the given combination of attributes.</param>
-    /// <returns>True if the given combination is supported; false otherwise. If the combination is supported,
-    /// then <paramref name="properties"/> contains the limits supported by this instance.</returns>
+    /// <param name="format">Pixel format to check.</param>
+    /// <param name="type">Texture type to check.</param>
+    /// <param name="usage">Texture usage to check.</param>
+    /// <param name="properties">If supported, the limits for a texture made with this combo.</param>
+    /// <returns>True if supported, with properties filled in.</returns>
     public bool GetPixelFormatSupport(
         PixelFormat format,
         TextureType type,
@@ -919,11 +859,9 @@ public abstract partial class GraphicsDevice : IDisposable
         out PixelFormatProperties properties);
 
     /// <summary>
-    /// Adds the given object to a deferred disposal list, which will be processed when this GraphicsDevice becomes idle.
-    /// This method can be used to safely dispose a device resource which may be in use at the time this method is called,
-    /// but which will no longer be in use when the device is idle.
+    /// Queues the object for disposal once this device goes idle. Use for resources that might still be in use now but won't be by the time the device is idle.
     /// </summary>
-    /// <param name="disposable">An object to dispose when this instance becomes idle.</param>
+    /// <param name="disposable">Object to dispose once idle.</param>
     public void DisposeWhenIdle(IDisposable disposable)
     {
         lock (_deferredDisposalLock)
@@ -945,12 +883,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Performs API-specific disposal of resources controlled by this instance.
+    /// Backend-specific disposal of this device's resources.
     /// </summary>
     protected abstract void PlatformDispose();
 
     /// <summary>
-    /// Creates and caches common device resources after device creation completes.
+    /// Creates and caches common device resources right after device creation.
     /// </summary>
     protected void PostDeviceCreated()
     {
@@ -973,38 +911,32 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Gets a simple point-filtered <see cref="Sampler"/> object owned by this instance.
-    /// This object is created with <see cref="SamplerDescription.Point"/>.
+    /// Point-filtered sampler owned by this device.
     /// </summary>
     public Sampler PointSampler { get; private set; }
 
     /// <summary>
-    /// Gets a simple linear-filtered <see cref="Sampler"/> object owned by this instance.
-    /// This object is created with <see cref="SamplerDescription.Linear"/>.
+    /// Linear-filtered sampler owned by this device.
     /// </summary>
     public Sampler LinearSampler { get; private set; }
 
     /// <summary>
-    /// Gets a 1x1 black transparent <see cref="Texture"/> used as the fallback when a
-    /// <see cref="ResourceKind.TextureReadOnly"/> slot has no matching entry in the merged property table.
+    /// 1x1 black transparent texture used as a fallback when a read-only texture slot has no match in the merged property table.
     /// </summary>
     public Texture NullTexture2D { get; private set; }
 
     /// <summary>
-    /// Gets a 1x1 black transparent read-write <see cref="Texture"/> used as the fallback when a
-    /// <see cref="ResourceKind.TextureReadWrite"/> slot has no matching entry in the merged property table.
+    /// 1x1 black transparent read-write texture used as a fallback when a read-write texture slot has no match in the merged property table.
     /// </summary>
     public Texture NullTextureRW2D { get; private set; }
 
     /// <summary>
-    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a
-    /// <see cref="ResourceKind.UniformBuffer"/> slot has no matching entry in the merged property table.
+    /// 16-byte buffer used as a fallback when a uniform buffer slot has no match in the merged property table.
     /// </summary>
     public DeviceBuffer NullUniform { get; private set; }
 
     /// <summary>
-    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a 
-    /// <see cref="ResourceKind.StructuredBufferReadOnly"/> slot has no matching entry in the merged property table.
+    /// 16-byte buffer used as a fallback when a structured read-only buffer slot has no match in the merged property table.
     /// </summary>
     public DeviceBuffer NullStructured
     {
@@ -1022,8 +954,7 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Gets a 16-byte length <see cref="DeviceBuffer"/> used as the fallback when a 
-    /// <see cref="ResourceKind.StructuredBufferReadWrite"/> slot has no matching entry in the merged property table.
+    /// 16-byte buffer used as a fallback when a structured read-write buffer slot has no match in the merged property table.
     /// </summary>
     public DeviceBuffer NullStructuredRW
     {
@@ -1042,23 +973,17 @@ public abstract partial class GraphicsDevice : IDisposable
 
 
     /// <summary>
-    /// Optional callback invoked at draw/dispatch time when a reflected resource slot has no matching entry
-    /// in the merged property table and a default value is substituted. Null by default (silent).
+    /// Called at draw/dispatch time when a reflected resource slot has no match in the merged property table and gets a default value instead. Null (silent) by default.
     /// </summary>
     public MissingPropertyHandler? OnMissingProperty { get; set; }
 
     /// <summary>
-    /// Callback invoked when this instance wants to surface a non-fatal warning, such as an implicit
-    /// <see cref="DeviceBuffer"/> reallocation or a transient buffer soft cap being exceeded. Writes to
-    /// <see cref="Console.Error"/> by default; assign <see langword="null"/> to silence warnings, or replace it to
-    /// route them elsewhere.
+    /// Called on non-fatal warnings, like an implicit buffer reallocation or hitting the transient soft cap. Writes to Console.Error by default; set null to silence, or replace to reroute.
     /// </summary>
     public GraphicsDeviceWarningHandler? OnWarning { get; set; } = message => Console.Error.WriteLine(message);
 
     /// <summary>
-    /// Gets a simple 4x anisotropic-filtered <see cref="Sampler"/> object owned by this instance.
-    /// This object is created with <see cref="SamplerDescription.Aniso4x"/>.
-    /// This property can only be used when <see cref="GraphicsDeviceFeatures.SamplerAnisotropy"/> is supported.
+    /// 4x anisotropic-filtered sampler owned by this device. Only usable if SamplerAnisotropy is supported.
     /// </summary>
     public Sampler Aniso4xSampler
     {
@@ -1076,13 +1001,12 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// True if this device has been disposed.
     /// </summary>
     public bool IsDisposed => _disposed;
 
     /// <summary>
-    /// Frees unmanaged resources controlled by this device.
-    /// All created child resources must be Disposed prior to calling this method.
+    /// Frees this device's unmanaged resources. All child resources must already be disposed.
     /// </summary>
     public void Dispose()
     {
@@ -1106,11 +1030,10 @@ public abstract partial class GraphicsDevice : IDisposable
 
 #if !EXCLUDE_VULKAN_BACKEND
     /// <summary>
-    /// Tries to get a <see cref="BackendInfoVulkan"/> for this instance. This method will only succeed if this is a Vulkan
-    /// GraphicsDevice.
+    /// Tries to get Vulkan backend info for this device. Only succeeds on a Vulkan device.
     /// </summary>
-    /// <param name="info">If successful, this will contain the <see cref="BackendInfoVulkan"/> for this instance.</param>
-    /// <returns>True if this is a Vulkan GraphicsDevice and the operation was successful. False otherwise.</returns>
+    /// <param name="info">Vulkan backend info if successful.</param>
+    /// <returns>True if this is a Vulkan device and it worked.</returns>
     public virtual bool GetVulkanInfo([NotNullWhen(true)] out BackendInfoVulkan? info)
     {
         info = null;
@@ -1118,10 +1041,9 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Gets a <see cref="BackendInfoVulkan"/> for this instance. This method will only succeed if this is a Vulkan
-    /// GraphicsDevice. Otherwise, this method will throw an exception.
+    /// Gets Vulkan backend info for this device. Only works on a Vulkan device, throws otherwise.
     /// </summary>
-    /// <returns>The <see cref="BackendInfoVulkan"/> for this instance.</returns>
+    /// <returns>Vulkan backend info for this device.</returns>
     public BackendInfoVulkan GetVulkanInfo()
     {
         if (!GetVulkanInfo(out BackendInfoVulkan? info))
@@ -1133,10 +1055,10 @@ public abstract partial class GraphicsDevice : IDisposable
 
 
     /// <summary>
-    /// Checks whether the given <see cref="GraphicsBackend"/> is supported on this system.
+    /// Whether the given backend is supported on this system.
     /// </summary>
-    /// <param name="backend">The GraphicsBackend to check.</param>
-    /// <returns>True if the GraphicsBackend is supported; false otherwise.</returns>
+    /// <param name="backend">Backend to check.</param>
+    /// <returns>True if supported.</returns>
     public static bool IsBackendSupported(GraphicsBackend backend)
     {
         switch (backend)
@@ -1154,44 +1076,44 @@ public abstract partial class GraphicsDevice : IDisposable
 
 #if !EXCLUDE_VULKAN_BACKEND
     /// <summary>
-    /// Creates a new <see cref="GraphicsDevice"/> using Vulkan.
+    /// Creates a new Vulkan graphics device.
     /// </summary>
-    /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-    /// <returns>A new <see cref="GraphicsDevice"/> using the Vulkan API.</returns>
+    /// <param name="options">Common device properties.</param>
+    /// <returns>A new Vulkan graphics device.</returns>
     public static GraphicsDevice CreateVulkan(GraphicsDeviceOptions options)
     {
         return new Vk.VkGraphicsDevice(options, null);
     }
 
     /// <summary>
-    /// Creates a new <see cref="GraphicsDevice"/> using Vulkan.
+    /// Creates a new Vulkan graphics device.
     /// </summary>
-    /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-    /// <param name="vkOptions">The Vulkan-specific options used to create the device.</param>
-    /// <returns>A new <see cref="GraphicsDevice"/> using the Vulkan API.</returns>
+    /// <param name="options">Common device properties.</param>
+    /// <param name="vkOptions">Vulkan-specific creation options.</param>
+    /// <returns>A new Vulkan graphics device.</returns>
     public static GraphicsDevice CreateVulkan(GraphicsDeviceOptions options, VulkanDeviceOptions vkOptions)
     {
         return new Vk.VkGraphicsDevice(options, null, vkOptions);
     }
 
     /// <summary>
-    /// Creates a new <see cref="GraphicsDevice"/> using Vulkan, with a main Swapchain.
+    /// Creates a new Vulkan graphics device with a main swapchain.
     /// </summary>
-    /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-    /// <param name="swapchainDescription">A description of the main Swapchain to create.</param>
-    /// <returns>A new <see cref="GraphicsDevice"/> using the Vulkan API.</returns>
+    /// <param name="options">Common device properties.</param>
+    /// <param name="swapchainDescription">Description of the main swapchain to create.</param>
+    /// <returns>A new Vulkan graphics device.</returns>
     public static GraphicsDevice CreateVulkan(GraphicsDeviceOptions options, SwapchainDescription swapchainDescription)
     {
         return new Vk.VkGraphicsDevice(options, swapchainDescription);
     }
 
     /// <summary>
-    /// Creates a new <see cref="GraphicsDevice"/> using Vulkan, with a main Swapchain.
+    /// Creates a new Vulkan graphics device with a main swapchain.
     /// </summary>
-    /// <param name="options">Describes several common properties of the GraphicsDevice.</param>
-    /// <param name="vkOptions">The Vulkan-specific options used to create the device.</param>
-    /// <param name="swapchainDescription">A description of the main Swapchain to create.</param>
-    /// <returns>A new <see cref="GraphicsDevice"/> using the Vulkan API.</returns>
+    /// <param name="options">Common device properties.</param>
+    /// <param name="vkOptions">Vulkan-specific creation options.</param>
+    /// <param name="swapchainDescription">Description of the main swapchain to create.</param>
+    /// <returns>A new Vulkan graphics device.</returns>
     public static GraphicsDevice CreateVulkan(
         GraphicsDeviceOptions options,
         SwapchainDescription swapchainDescription,

@@ -3,8 +3,7 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// When true, the usage-validation layer performs its correctness checks. Set once from
-    /// <see cref="GraphicsDeviceOptions.EnableValidation"/> at device creation.
+    /// True = validation layer runs its checks. Set once at device creation.
     /// </summary>
     internal static bool ValidationEnabled;
 
