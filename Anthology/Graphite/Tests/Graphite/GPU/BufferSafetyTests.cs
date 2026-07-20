@@ -76,34 +76,33 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
     // Submits a slow dispatch that reads `source`, and returns with the frame ended but still
     // executing on the GPU.
-    private ulong SubmitSlowFrameReading(DeviceBuffer source, DeviceBuffer output, ComputeProgram program)
+    private ExecutionTask SubmitSlowExecutionReading(DeviceBuffer source, DeviceBuffer output, ComputeProgram program)
     {
         PropertySet props = new();
         props.SetInt("Iterations", (int)SpinIterations);
         props.SetBuffer("Source", source, readOnly: false);
         props.SetBuffer("Output", output, readOnly: false);
 
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-        frame.SubmitCommands(cl);
-        ulong id = frame.FrameId;
-        GD.EndFrame(frame);
-        return id;
+        return GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
     }
 
     // Runs enough empty frames to cycle the ring back onto `frameId`'s slot, which is what drains
     // the deferred-disposal queue holding the retired native buffer.
     private void CycleRing()
     {
-        for (uint i = 0; i < GD.MaxFramesInFlight + 1; i++)
+        for (uint i = 0; i < GD.MaxExecutingTasks + 1; i++)
         {
-            Frame frame = GD.BeginFrame();
-            GD.EndFrame(frame);
+            ExecutionTask task = GD.BeginExecution();
+            GD.CompleteExecution(task);
         }
         GD.WaitForIdle();
     }
@@ -118,8 +117,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
@@ -141,8 +140,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
@@ -163,8 +162,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
@@ -183,15 +182,15 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         GD.WaitForIdle();
 
         // The write is not lost: a frame submitted after the orphan binds the fresh resource.
         DeviceBuffer secondOutput = CreateOutputBuffer();
-        SubmitSlowFrameReading(source, secondOutput, program);
+        SubmitSlowExecutionReading(source, secondOutput, program);
         GD.WaitForIdle();
 
         Assert.Equal(NewValue, ReadUInt(secondOutput, 0));
@@ -209,8 +208,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
         long baseline = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
         Assert.Equal(baseline + 1, LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite));
@@ -224,7 +223,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     }
 
     [SkippableFact]
-    public void WriteToBufferInAnOpenFrame_DoesNotOrphan()
+    public void WriteToBufferInAnOpenFrame_Orphans()
     {
         Skip.IfNot(GD.Features.ComputeShader);
         Skip.IfNot(ProfilingEnabled());
@@ -238,25 +237,28 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         props.SetBuffer("Source", source, readOnly: false);
         props.SetBuffer("Output", output, readOnly: false);
 
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(1, 1, 1);
-        cl.End();
+        long before = 0, after = 0;
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.End();
 
-        // Recording marked the buffer in flight, but the frame has not been submitted, so nothing
-        // is actually reading it yet and a write must not force a reallocation.
-        long before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
-        GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
-        long after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
+            // Recording marks the buffer in flight against this execution's id as soon as the
+            // dispatch binds it, independent of whether the command buffer has been submitted
+            // yet, so a write here must orphan just as it would after submission.
+            before = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
+            GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
+            after = LiveBuffersOfRole(BufferRoleBin.StructuredReadWrite);
 
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
-        Assert.Equal(before, after);
+        Assert.Equal(before + 1, after);
     }
 
     [SkippableFact]
@@ -269,7 +271,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        SubmitSlowFrameReading(source, output, program);
+        SubmitSlowExecutionReading(source, output, program);
         GD.WaitForIdle();
 
         // The GPU is done with the buffer, so a write is safe in place.
@@ -306,8 +308,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         DeviceBuffer output = CreateOutputBuffer();
         ComputeProgram program = CreateProbeProgram();
 
-        ulong id = SubmitSlowFrameReading(source, output, program);
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         // TransientWrites is the caller asserting they handle the hazard themselves, so the
         // buffer is never marked in flight and the write goes straight through.
@@ -343,18 +345,18 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         props.SetBuffer("Source", source, readOnly: false);
         props.SetBuffer("Output", output, readOnly: false);
 
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-        frame.SubmitCommands(cl);
-        ulong id = frame.FrameId;
-        GD.EndFrame(frame);
+        ExecutionTask id = GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
 
-        Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+        Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
 
         long before = LiveBuffersOfRole(BufferRoleBin.Uniform);
         MappedResource mapped = GD.Map(paramsBuffer, MapMode.Write);
@@ -386,8 +388,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
             // exists to replace, so the second and later orphans inside the window must warn.
             for (int i = 0; i < 3; i++)
             {
-                ulong id = SubmitSlowFrameReading(source, output, program);
-                Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+                ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+                Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
                 GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
                 GD.WaitForIdle();
             }
@@ -416,8 +418,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
         try
         {
-            ulong id = SubmitSlowFrameReading(source, output, program);
-            Skip.If(GD.IsFrameComplete(id), "GPU completed the frame before the CPU could race it.");
+            ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
+            Skip.If(GD.IsExecutionComplete(id), "GPU completed the frame before the CPU could race it.");
             GD.UpdateBuffer(source, 0, new uint[] { NewValue, 0, 0, 0 });
             GD.WaitForIdle();
         }

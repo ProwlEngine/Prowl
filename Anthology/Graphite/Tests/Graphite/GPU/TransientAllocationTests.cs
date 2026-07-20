@@ -38,22 +38,17 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         uint alignment = GD.UniformBufferMinOffsetAlignment;
 
-        Frame frame = GD.BeginFrame();
-        try
+        GD.RunTestGraph(context =>
         {
             // Deliberately unaligned sizes: the allocator must round the head up each time,
             // otherwise the returned offset is illegal as a dynamic UBO offset.
             foreach (uint size in new uint[] { 1, 7, 33, 100, 255, 3 })
             {
-                DeviceBufferRange range = GD.AllocateTransient(size);
+                DeviceBufferRange range = context.AllocateTransient(size);
                 Assert.Equal(0u, range.Offset % alignment);
             }
-        }
-        finally
-        {
-            GD.EndFrame(frame);
-            GD.WaitForIdle();
-        }
+        });
+        GD.WaitForIdle();
     }
 
     [Fact]
@@ -61,17 +56,12 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         List<DeviceBufferRange> ranges = [];
 
-        Frame frame = GD.BeginFrame();
-        try
+        GD.RunTestGraph(context =>
         {
             for (uint i = 0; i < 64; i++)
-                ranges.Add(GD.AllocateTransient(64 + i));
-        }
-        finally
-        {
-            GD.EndFrame(frame);
-            GD.WaitForIdle();
-        }
+                ranges.Add(context.AllocateTransient(64 + i));
+        });
+        GD.WaitForIdle();
 
         // Every pair sharing a backing buffer must occupy disjoint byte ranges. The existing
         // suite only compares two allocations for an identical offset, which an overlapping
@@ -94,24 +84,26 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         Dictionary<uint, DeviceBuffer> primaryBySlot = [];
 
-        for (uint i = 0; i < GD.MaxFramesInFlight * 2; i++)
+        for (uint i = 0; i < GD.MaxExecutingTasks * 2; i++)
         {
-            Frame frame = GD.BeginFrame();
-            DeviceBufferRange first = GD.AllocateTransient(256);
+            DeviceBufferRange first = default;
+            ExecutionTask task = GD.RunTestGraph(context =>
+            {
+                first = context.AllocateTransient(256);
+                context.AllocateTransient(1024);
+            });
 
             // The bump head restarts at 0 for every frame, so the frame's first allocation is
             // always at offset 0 regardless of how much the previous frame consumed.
             Assert.Equal(0u, first.Offset);
 
             // A ring slot keeps its primary buffer across cycles; it is reused, not reallocated.
-            if (primaryBySlot.TryGetValue(frame.RingSlot, out DeviceBuffer previous))
+            if (primaryBySlot.TryGetValue(task.RingSlot, out DeviceBuffer previous))
                 Assert.Same(previous, first.Buffer);
             else
-                primaryBySlot[frame.RingSlot] = first.Buffer;
+                primaryBySlot[task.RingSlot] = first.Buffer;
 
-            GD.AllocateTransient(1024);
-            GD.EndFrame(frame);
-            GD.WaitForFrame(frame);
+            GD.WaitForExecution(task);
         }
     }
 
@@ -123,20 +115,22 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
         using DeviceBuffer staging = GD.ResourceFactory.CreateBuffer(
             new BufferDescription(sizeof(uint) * 2, BufferUsage.Staging));
 
-        Frame frame = GD.BeginFrame();
-        DeviceBufferRange a = GD.AllocateTransient(sizeof(uint));
-        DeviceBufferRange b = GD.AllocateTransient(sizeof(uint));
+        DeviceBufferRange a = default, b = default;
+        GD.RunTestGraph(context =>
+        {
+            a = context.AllocateTransient(sizeof(uint));
+            b = context.AllocateTransient(sizeof(uint));
 
-        WriteUInt(a, 0xAAAAAAAA);
-        WriteUInt(b, 0xBBBBBBBB);
+            WriteUInt(a, 0xAAAAAAAA);
+            WriteUInt(b, 0xBBBBBBBB);
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
-        cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+            CommandBuffer cl = RF.CreateCommandBuffer();
+            cl.Begin();
+            cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
+            cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<uint> map = GD.Map<uint>(staging, MapMode.Read);
@@ -160,24 +154,19 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
 
-        Frame frame = device.BeginFrame();
-        try
+        device.RunTestGraph(context =>
         {
-            DeviceBufferRange primary = device.AllocateTransient(PrimarySize);
+            DeviceBufferRange primary = context.AllocateTransient(PrimarySize);
             Assert.Equal(0u, primary.Offset);
 
             // The primary is now exactly full, so this must land in a fresh overflow buffer.
-            DeviceBufferRange spilled = device.AllocateTransient(256);
+            DeviceBufferRange spilled = context.AllocateTransient(256);
 
             Assert.NotSame(primary.Buffer, spilled.Buffer);
             Assert.Equal(0u, spilled.Offset);
             Assert.True(spilled.Buffer.SizeInBytes >= 256);
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+        });
+        device.WaitForIdle();
     }
 
     [Fact]
@@ -185,21 +174,16 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
 
-        Frame frame = device.BeginFrame();
-        try
+        device.RunTestGraph(context =>
         {
-            device.AllocateTransient(PrimarySize);
-            DeviceBufferRange spilled = device.AllocateTransient(16);
+            context.AllocateTransient(PrimarySize);
+            DeviceBufferRange spilled = context.AllocateTransient(16);
 
             // Growth rule is max(requested, primary * 2): a small spill still doubles, so the
             // next few allocations do not each spawn another buffer.
             Assert.True(spilled.Buffer.SizeInBytes >= PrimarySize * 2);
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+        });
+        device.WaitForIdle();
     }
 
     [Fact]
@@ -207,20 +191,15 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
 
-        Frame frame = device.BeginFrame();
-        try
+        device.RunTestGraph(context =>
         {
             // A single request no primary could ever satisfy is served by a right-sized overflow.
-            DeviceBufferRange range = device.AllocateTransient(PrimarySize * 4);
+            DeviceBufferRange range = context.AllocateTransient(PrimarySize * 4);
 
             Assert.Equal(0u, range.Offset);
             Assert.True(range.Buffer.SizeInBytes >= PrimarySize * 4);
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+        });
+        device.WaitForIdle();
     }
 
     [Fact]
@@ -228,23 +207,18 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     {
         using GraphicsDevice device = CreateSmallTransientDevice(64 * 1024, 1024 * 1024);
 
-        Frame frame = device.BeginFrame();
-        try
+        device.RunTestGraph(context =>
         {
-            device.AllocateTransient(PrimarySize);
-            DeviceBufferRange first = device.AllocateTransient(64);
-            DeviceBufferRange second = device.AllocateTransient(64);
+            context.AllocateTransient(PrimarySize);
+            DeviceBufferRange first = context.AllocateTransient(64);
+            DeviceBufferRange second = context.AllocateTransient(64);
 
             // Once spilled, the overflow buffer becomes the active one and keeps bump-allocating
             // rather than creating a buffer per allocation.
             Assert.Same(first.Buffer, second.Buffer);
             Assert.True(second.Offset >= first.Offset + first.SizeInBytes);
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+        });
+        device.WaitForIdle();
     }
 
     [Fact]
@@ -255,19 +229,13 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
         // device raises the hard cap to meet the soft cap when the soft cap is the larger one.
         using GraphicsDevice device = CreateSmallTransientDevice(16 * 1024, 16 * 1024);
 
-        Frame frame = device.BeginFrame();
-        try
+        Assert.Throws<RenderException>(() => device.RunTestGraph(context =>
         {
-            device.AllocateTransient(PrimarySize);
-            device.AllocateTransient(PrimarySize * 2);
-
-            Assert.Throws<RenderException>(() => device.AllocateTransient(PrimarySize * 2));
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+            context.AllocateTransient(PrimarySize);
+            context.AllocateTransient(PrimarySize * 2);
+            context.AllocateTransient(PrimarySize * 2);
+        }));
+        device.WaitForIdle();
     }
 
     [Fact]
@@ -278,19 +246,14 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
         List<string> warnings = [];
         device.OnWarning = message => warnings.Add(message);
 
-        Frame frame = device.BeginFrame();
-        try
+        device.RunTestGraph(context =>
         {
-            device.AllocateTransient(PrimarySize);
-            device.AllocateTransient(PrimarySize * 2);
-            device.AllocateTransient(PrimarySize * 2);
-            device.AllocateTransient(PrimarySize * 2);
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+            context.AllocateTransient(PrimarySize);
+            context.AllocateTransient(PrimarySize * 2);
+            context.AllocateTransient(PrimarySize * 2);
+            context.AllocateTransient(PrimarySize * 2);
+        });
+        device.WaitForIdle();
 
         // The soft cap is advisory: it must warn, but latch so it cannot spam a frame loop.
         Assert.Single(warnings);
@@ -307,10 +270,11 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
 
         for (int i = 0; i < 3; i++)
         {
-            Frame frame = device.BeginFrame();
-            device.AllocateTransient(PrimarySize);
-            device.AllocateTransient(PrimarySize * 2);
-            device.EndFrame(frame);
+            device.RunTestGraph(context =>
+            {
+                context.AllocateTransient(PrimarySize);
+                context.AllocateTransient(PrimarySize * 2);
+            });
             device.WaitForIdle();
         }
 

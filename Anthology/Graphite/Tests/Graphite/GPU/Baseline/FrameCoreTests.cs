@@ -2,46 +2,35 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Core-path coverage of the frame/synchronization API that has no upstream equivalent:
-// the BeginFrame/EndFrame lifecycle, transient ring allocation, fences, and disposal.
+// Core-path coverage of the graph-execution/synchronization API that has no upstream equivalent:
+// the BeginExecution/CompleteExecution lifecycle, transient ring allocation, fences,
+// and disposal.
 public abstract class FrameCoreTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void Frame_CompletesAndSignalsFence()
+    public void Execution_CompletesAndSignalsFence()
     {
-        Frame frame = GD.BeginFrame();
-        ulong id = frame.FrameId;
-
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.End();
-        frame.SubmitCommands(cl);
+        ExecutionTask task = GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
 
-        GD.EndFrame(frame);
-        GD.WaitForFrame(id);
+        GD.WaitForExecution(task);
 
-        Assert.True(GD.IsFrameComplete(id));
-        Assert.True(frame.CompletionFence.Signaled);
+        Assert.True(GD.IsExecutionComplete(task));
+        Assert.True(task.CompletionFence.Signaled);
     }
 
     [Fact]
-    public void AllocateTransient_WithinFrame_ReturnsUsableRange()
+    public void AllocateTransient_WithinExecution_ReturnsUsableRange()
     {
-        Frame frame = GD.BeginFrame();
-
-        DeviceBufferRange range = GD.AllocateTransient(256);
+        DeviceBufferRange range = default;
+        ExecutionTask task = GD.RunTestGraph(context => range = context.AllocateTransient(256));
 
         Assert.NotNull(range.Buffer);
         Assert.True(range.SizeInBytes >= 256);
 
-        GD.EndFrame(frame);
-        GD.WaitForFrame(frame);
-    }
-
-    [Fact]
-    public void AllocateTransient_WithoutFrame_Throws()
-    {
-        Assert.Throws<RenderException>(() => GD.AllocateTransient(256));
+        GD.WaitForExecution(task);
     }
 
     [Fact]

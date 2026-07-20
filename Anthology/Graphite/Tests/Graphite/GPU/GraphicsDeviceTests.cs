@@ -8,9 +8,10 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Testbed for the GraphicsDevice + Frame APIs that have no upstream Veldrid equivalent: device
-// identity/features, the BeginFrame/EndFrame ring lifecycle, frames-in-flight throttling,
-// transient ring allocation (including the hard cap), fences, and ShaderProgram lifetime.
+// Testbed for the GraphicsDevice + graph-execution APIs that have no upstream Veldrid equivalent:
+// device identity/features, the BeginExecution/CompleteExecution lifecycle, the
+// MaxExecutingTasks throttle, transient ring allocation (including the hard cap), fences, and
+// ShaderProgram lifetime.
 public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
@@ -20,91 +21,81 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         Assert.Equal(GD.BackendType, GD.ResourceFactory.BackendType);
         Assert.False(string.IsNullOrEmpty(GD.DeviceName));
         Assert.NotNull(GD.Features);
-        Assert.True(GD.MaxFramesInFlight >= 1);
+        Assert.True(GD.MaxExecutingTasks >= 1);
     }
 
     [Fact]
-    public void BeginFrame_AssignsMonotonicIdAndValidRingSlot()
+    public void BeginExecution_AssignsMonotonicIdAndValidRingSlot()
     {
         ulong previousId = 0;
         for (int i = 0; i < 3; i++)
         {
-            Frame frame = GD.BeginFrame();
-            Assert.True(frame.FrameId > previousId);
-            Assert.True(frame.RingSlot < GD.MaxFramesInFlight);
-            Assert.Same(frame, GD.CurrentFrame);
-            previousId = frame.FrameId;
+            ExecutionTask task = GD.BeginExecution();
+            Assert.True(task.Id > previousId);
+            Assert.True(task.RingSlot < GD.MaxExecutingTasks);
+            Assert.Contains(task, GD.ActiveExecutions);
+            previousId = task.Id;
 
-            GD.EndFrame(frame);
-            GD.WaitForFrame(frame);
+            GD.CompleteExecution(task);
+            GD.WaitForExecution(task);
         }
     }
 
     [Fact]
-    public void EndFrame_SignalsCompletionFenceAndAdvancesLastCompleted()
+    public void CompleteExecution_SignalsCompletionFenceAndAdvancesLastCompleted()
     {
-        Frame frame = GD.BeginFrame();
-        ulong id = frame.FrameId;
-
         CommandBuffer cl = RF.CreateCommandBuffer();
         cl.Begin();
         cl.End();
-        frame.SubmitCommands(cl);
 
-        GD.EndFrame(frame);
-        GD.WaitForFrame(id);
+        ExecutionTask task = GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        ulong id = task.Id;
 
-        Assert.True(GD.IsFrameComplete(id));
-        Assert.True(frame.CompletionFence.Signaled);
-        Assert.True(GD.LastCompletedFrameId >= id);
+        GD.WaitForExecution(task);
+
+        Assert.True(GD.IsExecutionComplete(task));
+        Assert.True(task.CompletionFence.Signaled);
+        Assert.True(GD.LastCompletedExecutionId >= id);
     }
 
     [Fact]
-    public void Frames_BeyondRingDepth_DoNotDeadlock()
+    public void Executions_BeyondRingDepth_DoNotDeadlock()
     {
-        // Submitting more frames than the ring depth forces BeginFrame to throttle on the oldest
-        // slot. This must make progress rather than deadlock.
-        ulong lastId = 0;
-        uint frameCount = GD.MaxFramesInFlight * 3 + 1;
-        for (uint i = 0; i < frameCount; i++)
+        // Dispatching more executions than the ring depth forces BeginExecution to throttle on
+        // the oldest slot. This must make progress rather than deadlock.
+        ExecutionTask last = null;
+        uint executionCount = GD.MaxExecutingTasks * 3 + 1;
+        for (uint i = 0; i < executionCount; i++)
         {
-            Frame frame = GD.BeginFrame();
             CommandBuffer cl = RF.CreateCommandBuffer();
             cl.Begin();
             cl.End();
-            frame.SubmitCommands(cl);
-            lastId = frame.FrameId;
-            GD.EndFrame(frame);
+            last = GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
         }
 
         GD.WaitForIdle();
-        Assert.True(GD.IsFrameComplete(lastId));
-        Assert.Equal(0u, GD.FramesInFlight);
+        Assert.True(GD.IsExecutionComplete(last));
+        Assert.Equal(0u, GD.ExecutingTasks);
     }
 
     [Fact]
-    public void AllocateTransient_WithinFrame_ReturnsDistinctRanges()
+    public void AllocateTransient_WithinExecution_ReturnsDistinctRanges()
     {
-        Frame frame = GD.BeginFrame();
-
-        DeviceBufferRange a = GD.AllocateTransient(256);
-        DeviceBufferRange b = GD.AllocateTransient(256);
+        DeviceBufferRange a = default, b = default;
+        ExecutionTask task = GD.RunTestGraph(context =>
+        {
+            a = context.AllocateTransient(256);
+            b = context.AllocateTransient(256);
+        });
 
         Assert.NotNull(a.Buffer);
         Assert.NotNull(b.Buffer);
         Assert.True(a.SizeInBytes >= 256);
         Assert.True(b.SizeInBytes >= 256);
-        // Two allocations in the same frame must not overlap at the same offset in the same buffer.
+        // Two allocations in the same execution must not overlap at the same offset in the same buffer.
         Assert.False(a.Buffer == b.Buffer && a.Offset == b.Offset);
 
-        GD.EndFrame(frame);
-        GD.WaitForFrame(frame);
-    }
-
-    [Fact]
-    public void AllocateTransient_WithoutActiveFrame_Throws()
-    {
-        Assert.Throws<RenderException>(() => GD.AllocateTransient(256));
+        GD.WaitForExecution(task);
     }
 
     [Fact]
@@ -118,16 +109,11 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         };
 
         using GraphicsDevice device = CreateIsolatedDevice(options);
-        Frame frame = device.BeginFrame();
-        try
-        {
-            Assert.Throws<RenderException>(() => device.AllocateTransient(options.TransientBufferHardCapBytes + 1));
-        }
-        finally
-        {
-            device.EndFrame(frame);
-            device.WaitForIdle();
-        }
+
+        Assert.Throws<RenderException>(() =>
+            device.RunTestGraph(context => context.AllocateTransient(options.TransientBufferHardCapBytes + 1)));
+
+        device.WaitForIdle();
     }
 
     private GraphicsDevice CreateIsolatedDevice(GraphicsDeviceOptions options) => GD.BackendType switch
