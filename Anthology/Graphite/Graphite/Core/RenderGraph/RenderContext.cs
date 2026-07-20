@@ -119,10 +119,11 @@ public sealed class RenderContext<TView, TDrawCommand>
     }
 
     /// <summary>
-    /// Gets the swapchain's render target for this view, acquiring the next image lazily. Null if no
-    /// swapchain (offscreen dispatch). Only call this from a present pass.
+    /// The window's swapchain render target for this view. Only populated if the present pass
+    /// requested it via <see cref="PresentContextBuilder.RequestSwapchain"/> during setup; null
+    /// otherwise, including when the device has no swapchain (offscreen dispatch).
     /// </summary>
-    public Framebuffer? RequestSwapchainTarget() => _device.SwapchainFramebuffer;
+    public Framebuffer? SwapchainTarget => _graph.PresentRequestsSwapchain ? _device.SwapchainFramebuffer : null;
 
     /// <summary>
     /// Arms the present so it fires when this dispatch finishes. Call from a present pass after drawing

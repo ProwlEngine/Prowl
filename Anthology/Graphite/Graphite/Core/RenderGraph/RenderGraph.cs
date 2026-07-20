@@ -43,11 +43,24 @@ public sealed class RenderGraph<TView, TDrawCommand>
     /// <summary>Main output of the last pass that set one; the graph's result.</summary>
     public RenderResourceID PresentationSource { get; }
 
-    private RenderGraph(PassNode[] ordered, Dictionary<RenderResourceID, GraphTextureDesc> resources, RenderResourceID presentation)
+    /// <summary>Resources the present pass declared as inputs, kept for profiling and wiring.</summary>
+    public IReadOnlyList<RenderResourceID> PresentInputs { get; }
+
+    /// <summary>True if the present pass requested the window's swapchain target.</summary>
+    public bool PresentRequestsSwapchain { get; }
+
+    private RenderGraph(
+        PassNode[] ordered,
+        Dictionary<RenderResourceID, GraphTextureDesc> resources,
+        RenderResourceID presentation,
+        RenderResourceID[] presentInputs,
+        bool presentRequestsSwapchain)
     {
         OrderedPasses = ordered;
         Resources = resources;
         PresentationSource = presentation;
+        PresentInputs = presentInputs;
+        PresentRequestsSwapchain = presentRequestsSwapchain;
     }
 
     private readonly struct Node(IPass<TView, TDrawCommand> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, RenderResourceID mainOutput)
@@ -59,11 +72,15 @@ public sealed class RenderGraph<TView, TDrawCommand>
     }
 
     /// <summary>
-    /// Builds a solved graph from a pass list. Runs each pass's setup, merges declared resources, links
-    /// writers to readers, topo sorts. Last pass to nominate a main output becomes the presentation
-    /// source. Throws on a dependency cycle.
+    /// Builds a solved graph from a pass list and the pipeline's present pass. Runs each pass's setup,
+    /// merges declared resources, links writers to readers, topo sorts. Last pass to nominate a main
+    /// output becomes the presentation source. The present pass always runs last, so its declared
+    /// inputs are merged into the resource table but do not participate in ordering. Throws on a
+    /// dependency cycle.
     /// </summary>
-    public static RenderGraph<TView, TDrawCommand> Build(IReadOnlyList<IPass<TView, TDrawCommand>> passes)
+    public static RenderGraph<TView, TDrawCommand> Build(
+        IReadOnlyList<IPass<TView, TDrawCommand>> passes,
+        IPresentPass<TView, TDrawCommand> presentPass)
     {
         int count = passes.Count;
         var nodes = new Node[count];
@@ -80,7 +97,7 @@ public sealed class RenderGraph<TView, TDrawCommand>
             var inputs = new RenderResourceID[builder.Inputs.Count];
             for (int r = 0; r < inputs.Length; r++)
             {
-                RenderContextBuilder.ResourceDecl decl = builder.Inputs[r];
+                ResourceDecl decl = builder.Inputs[r];
                 inputs[r] = decl.Id;
                 resources.TryAdd(decl.Id, decl.Desc);
             }
@@ -89,7 +106,7 @@ public sealed class RenderGraph<TView, TDrawCommand>
             bool mainIsOutput = false;
             for (int w = 0; w < outputs.Length; w++)
             {
-                RenderContextBuilder.ResourceDecl decl = builder.Outputs[w];
+                ResourceDecl decl = builder.Outputs[w];
                 outputs[w] = decl.Id;
                 resources.TryAdd(decl.Id, decl.Desc);
                 mainIsOutput |= decl.Id == builder.MainOutput;
@@ -113,7 +130,19 @@ public sealed class RenderGraph<TView, TDrawCommand>
                 presentation = n.MainOutput;
         }
 
-        return new RenderGraph<TView, TDrawCommand>(orderedNodes, resources, presentation);
+        var presentBuilder = new PresentContextBuilder();
+        presentPass.Setup(presentBuilder);
+
+        var presentInputs = new RenderResourceID[presentBuilder.Inputs.Count];
+        for (int r = 0; r < presentInputs.Length; r++)
+        {
+            ResourceDecl decl = presentBuilder.Inputs[r];
+            presentInputs[r] = decl.Id;
+            resources.TryAdd(decl.Id, decl.Desc);
+        }
+
+        return new RenderGraph<TView, TDrawCommand>(
+            orderedNodes, resources, presentation, presentInputs, presentBuilder.RequestsSwapchain);
     }
 
     private static int[] TopologicalSort(Node[] nodes)

@@ -50,7 +50,7 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
         get
         {
             EnsureInitialized();
-            return _graph ??= RenderGraph<TView, TDrawCommand>.Build(_passes);
+            return _graph ??= RenderGraph<TView, TDrawCommand>.Build(_passes, PresentPass);
         }
     }
 

@@ -3,6 +3,12 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.RenderGraph;
 
+internal readonly struct ResourceDecl(RenderResourceID id, GraphTextureDesc desc)
+{
+    public readonly RenderResourceID Id = id;
+    public readonly GraphTextureDesc Desc = desc;
+}
+
 /// <summary>
 /// Handed to a pass's setup so it can declare textures it reads and writes. The graph uses these to
 /// allocate resources and order passes: readers run after their writers. A pass can nominate one output
@@ -10,12 +16,6 @@ namespace Prowl.Graphite.RenderGraph;
 /// </summary>
 public sealed class RenderContextBuilder
 {
-    internal readonly struct ResourceDecl(RenderResourceID id, GraphTextureDesc desc)
-    {
-        public readonly RenderResourceID Id = id;
-        public readonly GraphTextureDesc Desc = desc;
-    }
-
     internal readonly List<ResourceDecl> Inputs = new();
     internal readonly List<ResourceDecl> Outputs = new();
     internal RenderResourceID MainOutput;
