@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Compute coverage on the ComputeProgram + PropertySet + Frame API: a compute pass feeding a
+// Compute coverage on the ComputeProgram + PropertySet + ExecutionTask API: a compute pass feeding a
 // graphics pass through a structured buffer, a compute-written storage texture blitted to a
 // target, 2D-array and 3D storage textures, and indirect dispatch.
 public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
@@ -260,13 +260,14 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
 
     private void Submit(Action<CommandBuffer> record)
     {
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        record(cl);
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            record(cl);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
     }
 }

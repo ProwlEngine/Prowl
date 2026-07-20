@@ -154,17 +154,16 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         PropertySet props = new();
         configure(props, source, destination);
 
-        // The frame must be open while recording: property binding allocates transient memory.
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(Side / 16, Side / 16, 1);
-        cl.End();
-
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(Side / 16, Side / 16, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(destination);

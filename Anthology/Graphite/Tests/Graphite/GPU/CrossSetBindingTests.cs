@@ -86,15 +86,16 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
     private uint[] Run(PropertySet props, DeviceBuffer output, ComputeProgram program)
     {
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         return Read(output);
@@ -198,7 +199,7 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         // Repeated identical bindings hit the descriptor-set cache. A cached set is reused as-is
         // and never rewritten, so a bad identity would surface as a wrong result here.
-        for (int i = 0; i < GD.MaxFramesInFlight * 3; i++)
+        for (int i = 0; i < GD.MaxExecutingTasks * 3; i++)
         {
             uint[] result = Run(BuildProps(output, input, texture), output, program);
             Assert.Equal(777u, result[2]);
@@ -252,17 +253,18 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         // Rebinding between dispatches in a single recording must take effect for the second
         // dispatch rather than both observing whichever set was bound last.
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(BuildProps(firstOutput, input, texture, valueA: 7));
-        cl.Dispatch(1, 1, 1);
-        cl.SetProperties(BuildProps(secondOutput, input, texture, valueA: 8));
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(BuildProps(firstOutput, input, texture, valueA: 7));
+            cl.Dispatch(1, 1, 1);
+            cl.SetProperties(BuildProps(secondOutput, input, texture, valueA: 8));
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         Assert.Equal(7u, Read(firstOutput)[0]);
@@ -312,17 +314,18 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
 
         PropertySet props = BuildProps(output, input, texture, valueA: 4321);
 
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.ClearProperties();
-        cl.SetProperties(BuildProps(output, input, texture, valueA: 1));
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.ClearProperties();
+            cl.SetProperties(BuildProps(output, input, texture, valueA: 1));
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         // The cleared set must not leak back into the dispatch.

@@ -22,16 +22,16 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
         props.SetInt("valueB", 222);
         props.SetBuffer("Output", output, readOnly: false);
 
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetComputeShader(program);
-        cl.SetProperties(props);
-        cl.Dispatch(1, 1, 1);
-        cl.End();
-
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetComputeShader(program);
+            cl.SetProperties(props);
+            cl.Dispatch(1, 1, 1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(output);

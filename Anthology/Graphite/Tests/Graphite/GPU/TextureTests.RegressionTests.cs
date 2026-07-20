@@ -44,7 +44,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         // accidental leakage of B/A into the readback is loud and unambiguous.
         cl.ClearColorTarget(0, new Color(3f, 5f, 999f, 7777f));
         cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
         GD.WaitForIdle();
 
         Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
@@ -52,7 +52,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         cl.Begin();
         cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
         cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
         GD.WaitForIdle();
 
         MappedResourceView<Float2> view = GD.Map<Float2>(staging, MapMode.Read);
@@ -98,7 +98,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         // ever let them leak into the readback.
         cl.ClearColorTarget(0, new Color(1f, 2f, 999f, 7777f));
         cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
         GD.WaitForIdle();
 
         Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
@@ -106,7 +106,7 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
         cl.Begin();
         cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
         cl.End();
-        { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
         GD.WaitForIdle();
 
         MappedResourceView<HalfFloat2> view = GD.Map<HalfFloat2>(staging, MapMode.Read);

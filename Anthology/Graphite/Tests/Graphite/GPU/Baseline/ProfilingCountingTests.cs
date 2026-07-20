@@ -95,8 +95,8 @@ public abstract class ProfilingCountingTests<T> : GraphicsDeviceTestBase<T> wher
         GD.UpdateBuffer(buffer, 0, new byte[256]);
 
         // Flow counters are frozen into the last-frame view at BeginFrame.
-        Frame frame = GD.BeginFrame();
-        GD.EndFrame(frame);
+        ExecutionTask task = GD.BeginExecution();
+        GD.CompleteExecution(task);
 
         ProfileSnapshot p = GD.GetProfile();
         Assert.Equal(1, p.BufferOps[BufferOpBin.Update].Count);
@@ -113,8 +113,8 @@ public abstract class ProfilingCountingTests<T> : GraphicsDeviceTestBase<T> wher
         GD.Map<byte>(staging, MapMode.Write);
         GD.Unmap(staging);
 
-        Frame frame = GD.BeginFrame();
-        GD.EndFrame(frame);
+        ExecutionTask task = GD.BeginExecution();
+        GD.CompleteExecution(task);
 
         ProfileSnapshot p = GD.GetProfile();
         Assert.Equal(1, p.BufferOps[BufferOpBin.Map].Count);
@@ -130,11 +130,11 @@ public abstract class ProfilingCountingTests<T> : GraphicsDeviceTestBase<T> wher
         using DeviceBuffer buffer = GD.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
 
         // First frame captures the allocation flow.
-        GD.EndFrame(GD.BeginFrame());
+        GD.CompleteExecution(GD.BeginExecution());
         Assert.Equal(1, GD.GetProfile().Allocated[AllocBin.DeviceBuffer].Count);
 
         // The next frame has no allocations, so the flow zeroes.
-        GD.EndFrame(GD.BeginFrame());
+        GD.CompleteExecution(GD.BeginExecution());
         Assert.Equal(0, GD.GetProfile().Allocated[AllocBin.DeviceBuffer].Count);
     }
 

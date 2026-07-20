@@ -4,19 +4,19 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// StreamingBuffer is the sanctioned way to rewrite per-frame data without racing the
-// frames-in-flight system: it holds one backing DeviceBuffer per ring slot and exposes the
-// active frame's through Current. This suite covers the rotation contract, the per-slot
-// identity, and the property that actually motivates the type -- writing Current every frame
-// must never orphan, where writing a single shared DeviceBuffer does (see BufferSafetyTests).
+// StreamingBuffer is the sanctioned way to rewrite per-execution data without racing the
+// in-flight system: it holds one backing DeviceBuffer per ring slot and exposes the execution's
+// through ForExecution. This suite covers the rotation contract, the per-slot identity, and the
+// property that actually motivates the type -- writing an execution's backing every dispatch must
+// never orphan, where writing a single shared DeviceBuffer does (see BufferSafetyTests).
 public abstract class StreamingBufferTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
     [Fact]
-    public void BackingBufferCount_MatchesMaxFramesInFlight()
+    public void BackingBufferCount_MatchesMaxExecutingGraphs()
     {
         using StreamingBuffer sb = RF.CreateStreamingBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
 
-        Assert.Equal((int)GD.MaxFramesInFlight, sb.BufferCount);
+        Assert.Equal((int)GD.MaxExecutingTasks, sb.BufferCount);
     }
 
     [Fact]
@@ -45,52 +45,43 @@ public abstract class StreamingBufferTests<T> : GraphicsDeviceTestBase<T> where 
     }
 
     [Fact]
-    public void Current_WithoutActiveFrame_Throws()
+    public void ForExecution_ResolvesToTheExecutionRingSlot()
     {
         using StreamingBuffer sb = RF.CreateStreamingBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
 
-        // Current resolves through GraphicsDevice.CurrentFrame, which requires an open frame.
-        Assert.Throws<RenderException>(() => sb.Current);
-    }
-
-    [Fact]
-    public void Current_TracksTheActiveFrameRingSlot()
-    {
-        using StreamingBuffer sb = RF.CreateStreamingBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
-
-        for (uint i = 0; i < GD.MaxFramesInFlight; i++)
+        for (uint i = 0; i < GD.MaxExecutingTasks; i++)
         {
-            Frame frame = GD.BeginFrame();
-            Assert.Same(sb[frame.RingSlot], sb.Current);
-            GD.EndFrame(frame);
-            GD.WaitForFrame(frame);
+            ExecutionTask task = GD.BeginExecution();
+            Assert.Same(sb[task.RingSlot], sb.ForExecution(task));
+            GD.CompleteExecution(task);
+            GD.WaitForExecution(task);
         }
     }
 
     [Fact]
-    public void Current_RotatesThroughEverySlot_ThenRepeats()
+    public void ForExecution_RotatesThroughEverySlot_ThenRepeats()
     {
         using StreamingBuffer sb = RF.CreateStreamingBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
 
         List<DeviceBuffer> firstCycle = [];
-        for (uint i = 0; i < GD.MaxFramesInFlight; i++)
+        for (uint i = 0; i < GD.MaxExecutingTasks; i++)
         {
-            Frame frame = GD.BeginFrame();
-            firstCycle.Add(sb.Current);
-            GD.EndFrame(frame);
-            GD.WaitForFrame(frame);
+            ExecutionTask task = GD.BeginExecution();
+            firstCycle.Add(sb.ForExecution(task));
+            GD.CompleteExecution(task);
+            GD.WaitForExecution(task);
         }
 
         // A full cycle must visit every backing buffer exactly once.
-        Assert.Equal(GD.MaxFramesInFlight, (uint)new HashSet<DeviceBuffer>(firstCycle).Count);
+        Assert.Equal(GD.MaxExecutingTasks, (uint)new HashSet<DeviceBuffer>(firstCycle).Count);
 
         // The next cycle must land on the same buffers in the same order.
-        for (uint i = 0; i < GD.MaxFramesInFlight; i++)
+        for (uint i = 0; i < GD.MaxExecutingTasks; i++)
         {
-            Frame frame = GD.BeginFrame();
-            Assert.Same(firstCycle[(int)i], sb.Current);
-            GD.EndFrame(frame);
-            GD.WaitForFrame(frame);
+            ExecutionTask task = GD.BeginExecution();
+            Assert.Same(firstCycle[(int)i], sb.ForExecution(task));
+            GD.CompleteExecution(task);
+            GD.WaitForExecution(task);
         }
     }
 
@@ -129,14 +120,14 @@ public abstract class StreamingBufferTests<T> : GraphicsDeviceTestBase<T> where 
         sb.Dispose();
 
         long afterDispose = GD.GetProfile().Live[AllocBin.DeviceBuffer].Count;
-        Assert.Equal(GD.MaxFramesInFlight, (uint)(afterCreate - afterDispose));
+        Assert.Equal(GD.MaxExecutingTasks, (uint)(afterCreate - afterDispose));
     }
 
     [Fact]
-    public void PerFrameWrites_NeverOrphan()
+    public void PerExecutionWrites_NeverOrphan()
     {
-        // The whole point of the type: Current belongs to the ring slot the GPU has already
-        // finished with, so rewriting it every frame is safe and must never trigger the
+        // The whole point of the type: an execution's backing belongs to the ring slot the GPU has
+        // already finished with, so rewriting it every dispatch is safe and must never trigger the
         // implicit-reallocation path. BufferSafetyTests proves a plain DeviceBuffer does orphan
         // under the same access pattern.
         using StreamingBuffer sb = RF.CreateStreamingBuffer(
@@ -148,11 +139,11 @@ public abstract class StreamingBufferTests<T> : GraphicsDeviceTestBase<T> where 
 
         try
         {
-            for (int i = 0; i < GD.MaxFramesInFlight * 4; i++)
+            for (int i = 0; i < GD.MaxExecutingTasks * 4; i++)
             {
-                Frame frame = GD.BeginFrame();
-                GD.UpdateBuffer(sb.Current, 0, new uint[] { (uint)i, 0, 0, 0 });
-                GD.EndFrame(frame);
+                ExecutionTask task = GD.BeginExecution();
+                GD.UpdateBuffer(sb.ForExecution(task), 0, new uint[] { (uint)i, 0, 0, 0 });
+                GD.CompleteExecution(task);
             }
             GD.WaitForIdle();
         }

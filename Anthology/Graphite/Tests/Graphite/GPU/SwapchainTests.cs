@@ -32,8 +32,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
     [Fact]
     public void SwapBuffers_DoesNotThrow()
     {
-        Frame frame = GD.BeginFrame();
-        GD.EndFrame(frame);
+        ExecutionTask task = GD.BeginExecution();
+        GD.CompleteExecution(task);
         GD.SwapBuffers();
         GD.WaitForIdle();
     }
@@ -48,8 +48,8 @@ public abstract class MainSwapchainTests<T> : GraphicsDeviceTestBase<T> where T 
         Assert.InRange(GD.MainSwapchain.Framebuffer.Width, 1u, uint.MaxValue);
         Assert.InRange(GD.MainSwapchain.Framebuffer.Height, 1u, uint.MaxValue);
 
-        Frame frame = GD.BeginFrame();
-        GD.EndFrame(frame);
+        ExecutionTask task = GD.BeginExecution();
+        GD.CompleteExecution(task);
         GD.SwapBuffers();
         GD.WaitForIdle();
     }

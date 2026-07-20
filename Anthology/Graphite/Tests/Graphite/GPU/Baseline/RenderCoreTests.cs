@@ -8,7 +8,7 @@ using Xunit;
 namespace Prowl.Graphite.Tests;
 
 // Core-path render test: draws a colored point through the GraphicsProgram + PropertySet +
-// Frame API and reads the result back. Exercises uint vertex attributes, a uniform block bound
+// ExecutionTask API and reads the result back. Exercises uint vertex attributes, a uniform block bound
 // by name, an offscreen render target, and the frame submission path.
 public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
 {
@@ -53,21 +53,20 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
 
         TestVertexSource source = new(PrimitiveTopology.PointList, [vertexBuffer]);
 
-        // The frame must be open while recording: property binding allocates transient memory.
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetFramebuffer(framebuffer);
-        cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
-        cl.SetFullViewports();
-        cl.SetShader(program);
-        cl.SetVertexSource(source);
-        cl.SetProperties(props);
-        cl.Draw(1);
-        cl.End();
-
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            cl.SetFramebuffer(framebuffer);
+            cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetVertexSource(source);
+            cl.SetProperties(props);
+            cl.Draw(1);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         Texture readback = GetReadback(target);

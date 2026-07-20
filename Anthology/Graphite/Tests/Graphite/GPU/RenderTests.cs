@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Prowl.Graphite.Tests;
 
-// Rasterization coverage on the GraphicsProgram + PropertySet + Frame API: vertex attribute
+// Rasterization coverage on the GraphicsProgram + PropertySet + ExecutionTask API: vertex attribute
 // formats (uint / ushort / normalized ushort / half), blend factor, color write mask, fragment
 // depth writes, texture binding across multiple passes, and rendering into a specific framebuffer
 // array layer. All targets are R32_G32_B32_A32_Float so readbacks can be mapped as Color.
@@ -155,7 +155,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     }
 
     // Shared driver for the point-color format tests. Builds a GraphicsProgram from the given
-    // module, draws one point per vertex through the Frame API, and asserts the resulting pixels.
+    // module, draws one point per vertex through the ExecutionTask API, and asserts the resulting pixels.
     private void DrawColoredPoints<TVertex>(
         string module,
         VertexLayoutDescription layout,
@@ -252,7 +252,7 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
                     Set = 0,
                     Elements =
                     [
-                        new ResourceLayoutElementDescription("Frame", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)
+                        new ResourceLayoutElementDescription("ExecutionTask", ResourceKind.UniformBuffer, ShaderStages.Fragment, 0)
                         {
                             UniformFields = [new UniformBlockField("OutputSize", 0, sizeof(float) * 4, UniformScalarType.Float4)]
                         }
@@ -593,13 +593,14 @@ public abstract class RenderTests<T> : GraphicsDeviceTestBase<T> where T : Graph
     // property binding allocates transient memory at record time.
     private void Submit(Action<CommandBuffer> record)
     {
-        Frame frame = GD.BeginFrame();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        record(cl);
-        cl.End();
-        frame.SubmitCommands(cl);
-        GD.EndFrame(frame);
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.Begin();
+            record(cl);
+            cl.End();
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
     }
 }
