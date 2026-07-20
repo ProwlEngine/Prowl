@@ -5,7 +5,8 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// ID for a shader/program name. Cheap wrapper around a process-wide int.
+/// Interned identifier for a render graph resource name (a declared texture handle).
+/// Cheap value-type wrapper around a process-wide integer minted by an internal interner.
 /// </summary>
 [DebuggerDisplay("{ToString(),nq}")]
 public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormattable
@@ -15,7 +16,7 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
     internal RenderResourceID(int value) { Value = value; }
 
     /// <summary>
-    /// True for any interned ID. False for default.
+    /// True for any ID returned from <see cref="Intern(string)"/>. False for <c>default</c>.
     /// </summary>
     public bool IsValid => Value != 0;
 
@@ -24,19 +25,21 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
         new(static _ => new RenderResourceID(Interlocked.Increment(ref _counter)));
 
     /// <summary>
-    /// Gets the ID for name, minting one if it's new.
+    /// Returns the ID for <paramref name="name"/>, minting one if this is the first time
+    /// this string has been seen.
     /// </summary>
     public static RenderResourceID Intern(string name)
         => s_interner.Intern(name);
 
     /// <summary>
-    /// Slow reverse lookup. Returns the original string for id, or null if not interned.
+    /// Slow reverse lookup. Returns the original string for <paramref name="id"/>, or
+    /// null if no such ID has been interned in this process.
     /// </summary>
     public static string? ToString(RenderResourceID id)
         => s_interner.TryGetKey(id, out string? key) ? key : null;
 
     /// <summary>
-    /// Implicit string-to-ID conversion. Same as Intern.
+    /// Implicit string-to-ID conversion. Equivalent to <see cref="Intern(string)"/>.
     /// </summary>
     public static implicit operator RenderResourceID(string name)
         => Intern(name);
@@ -62,13 +65,14 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
         => a.Value != b.Value;
 
     /// <summary>
-    /// Hot-path safe, doesn't touch the interner. Use the static ToString overload to get the original string.
+    /// Hot-path safe. Does not touch the interner. Use the static <see cref="ToString(RenderResourceID)"/>
+    /// overload to retrieve the original interned string.
     /// </summary>
     public override string ToString()
         => $"RenderResourceID({Value})";
 
     /// <summary>
-    /// IFormattable support. Format and provider are ignored.
+    /// <see cref="IFormattable"/> conformance. Format and provider are ignored.
     /// </summary>
     public string ToString(string? format, IFormatProvider? formatProvider)
         => ToString();
