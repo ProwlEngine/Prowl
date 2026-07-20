@@ -1,10 +1,43 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Graphite.RenderGraph;
+
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
 namespace Prowl.Graphite.Tests;
+
+// A RenderContext is normally only handed to a pass while the render graph executes it. Low-level
+// GPU tests have no passes, so this harness stands up a throwaway single-view graph with no passes
+// and hands the caller its RenderContext directly, giving tests the same recording/submission surface
+// (GetCommandBuffer, SubmitCommandBuffer, AllocateTransient) real passes use.
+public readonly struct TestRenderView : IRenderView
+{
+    public uint PixelWidth => 256;
+    public uint PixelHeight => 256;
+}
+
+public static class TestGraphExtensions
+{
+    public static ExecutionTask RunTestGraph(this GraphicsDevice gd, Action<RenderContext<TestRenderView, object>> record)
+    {
+        ExecutionTask task = gd.BeginExecution();
+        RenderGraph<TestRenderView, object> graph = RenderGraph<TestRenderView, object>.Build(Array.Empty<IPass<TestRenderView, object>>());
+        var context = new RenderContext<TestRenderView, object>(gd, task, graph, default, null, null);
+
+        try
+        {
+            record(context);
+        }
+        finally
+        {
+            gd.CompleteExecution(task);
+        }
+
+        return task;
+    }
+}
 
 // Device/window creation for the test suite. The device-creation switch is duplicated from
 // Samples/Shared/DeviceCreateUtilities so the tests exercise the same path the samples do.
@@ -167,12 +200,10 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
             CommandBuffer cl = RF.CreateCommandBuffer();
-            Frame _f = GD.BeginFrame();
             cl.Begin();
             cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
             cl.End();
-            _f.SubmitCommands(cl);
-            GD.EndFrame(_f);
+            GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
             GD.WaitForIdle();
         }
 
@@ -202,7 +233,7 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
             cl.Begin();
             cl.CopyTexture(texture, readback);
             cl.End();
-            { Frame _f = GD.BeginFrame(); _f.SubmitCommands(cl); GD.EndFrame(_f); }
+            GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
             GD.WaitForIdle();
             return readback;
         }
