@@ -129,15 +129,11 @@ public class GraphiteWindow : IDisposable
     {
         float dpiScale = (float)_window.FramebufferSize.X / _window.Size.X;
 
-        Frame frame = _device.BeginFrame();
-
+        // Paper.EndFrame() drives the renderer, which dispatches the render graph (Scene pass,
+        // then Present pass) and presents.
         _paper.BeginFrame((float)deltaTime, dpiScale);
         PaperDemo.RenderUI();
         _paper.EndFrame();
-
-        frame.SubmitCommands(_renderer.CommandBuffer);
-        _device.EndFrame(frame);
-        _device.SwapBuffers();
     }
 
 

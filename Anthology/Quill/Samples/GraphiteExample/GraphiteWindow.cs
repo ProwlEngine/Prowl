@@ -179,17 +179,11 @@ public class SilkWindow : IDisposable
 
     private void OnRender(double deltaTime)
     {
-        Frame frame = _device.BeginFrame();
-
-        // Prepare canvas and record demo content. Canvas.Render() drives the renderer, which records
-        // the whole pass into its command buffer (clear, draws, present) and leaves it completed.
+        // Prepare canvas and record demo content. Canvas.Render() drives the renderer, which
+        // dispatches the render graph (Scene pass, then Present pass) and presents.
         _canvas.BeginFrame(_window.Size.X, _window.Size.Y);
         _demos[_currentDemoIndex].RenderFrame((float)deltaTime, _viewOffset, _zoom, _rotation);
         _canvas.Render();
-
-        frame.SubmitCommands(_renderer.CommandBuffer);
-        _device.EndFrame(frame);
-        _device.SwapBuffers();
     }
 
 
