@@ -33,9 +33,15 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected readonly PropertySet _activeProperties = new();
 
     /// <summary>
-    /// Gets whether <see cref="End"/> has been called on this <see cref="CommandBuffer"/> since the last
-    /// <see cref="Begin"/> call. Used by the frame system to validate commands before submission.
+    /// The execution task this buffer was rented for. Holds per-execution backend state. Null if not tied to
+    /// any execution (e.g. a one-off copy).
     /// </summary>
+    internal ExecutionTask? Execution { get; set; }
+
+    /// <summary>Id of the bound execution, or 0 if none.</summary>
+    internal ulong ExecutionId => Execution?.Id ?? 0;
+
+    /// <summary>Whether End has been called since the last Begin. Used to validate before submission.</summary>
     internal bool HasEnded { get; private protected set; }
 
 

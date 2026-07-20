@@ -145,8 +145,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Returns a lazily-created full-range <see cref="VkTextureView"/> for <paramref name="texture"/>.
-    /// Views are device-owned and live until <see cref="PlatformDispose"/> is called.
+    /// Gets or creates a full-range view for texture. Device-owned, lives until dispose.
     /// </summary>
     internal VkTextureView GetOrCreateDefaultView(VkTexture texture)
     {
@@ -162,8 +161,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Driver-side <c>VkPipelineCache</c> handle passed to every
-    /// <c>vkCreateGraphicsPipelines</c> call to amortize driver pipeline compile cost.
+    /// VkPipelineCache handle passed to every pipeline create call to speed up compiles.
     /// </summary>
     internal PipelineCache DriverPipelineCache => _driverPipelineCache;
     public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
@@ -261,7 +259,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     public override ResourceFactory ResourceFactory { get; }
 
-    // --------------- Frame lifecycle slot state ---------------
+    // --------------- Execution lifecycle slot state ---------------
 
     private struct SlotState
     {
@@ -270,7 +268,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         public VkBuffer TransientPrimary;
         public byte* TransientMapped;
         public List<VkBuffer> TransientOverflow;
-        public ulong CurrentFrameId;
+        public ulong CurrentExecutionId;
     }
 
     private SlotState[] _slots;
@@ -279,8 +277,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
 
     private void InitializeSlots()
     {
-        _slots = new SlotState[_maxFramesInFlight];
-        for (uint i = 0; i < _maxFramesInFlight; i++)
+        _slots = new SlotState[_maxExecutingTasks];
+        for (uint i = 0; i < _maxExecutingTasks; i++)
         {
             VkFence slotWrapper = new(this, false);
 
@@ -295,25 +293,19 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 TransientPrimary = primary,
                 TransientMapped = mapped,
                 TransientOverflow = [],
-                CurrentFrameId = 0,
+                CurrentExecutionId = 0,
             };
         }
     }
 
-    // --------------- Frame lifecycle implementations ---------------
+    // --------------- Graph execution lifecycle implementations ---------------
 
-    private protected override Frame BeginFrameCore(ulong frameId, uint ringSlot)
+    private protected override ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot)
     {
         ref SlotState slot = ref _slots[ringSlot];
 
-        if (slot.CurrentFrameId != 0)
-        {
-            VkFenceHandle fence = slot.Fence;
-            _vk.WaitForFences(_device, 1, in fence, true, ulong.MaxValue).CheckResult();
-            ulong completed = slot.CurrentFrameId;
-            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), completed));
-        }
-
+        // The base class only hands out a slot whose previous execution has completed and been reclaimed,
+        // so no fence wait is needed here; just recycle the slot's fence and transient memory.
         VkFenceHandle slotFence = slot.Fence;
         _vk.ResetFences(_device, 1, in slotFence).CheckResult();
         slot.FenceWrapper.Reset();
@@ -329,22 +321,22 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
 
         // Age out descriptor sets that have gone unused past the retention window. Safe: anything freed
-        // is older than MaxFramesInFlight frames and therefore already GPU-retired.
+        // is older than MaxExecutingTasks executions and therefore already GPU-retired.
         lock (_descriptorSetCachesLock)
         {
             foreach (VkDescriptorSetCache cache in _descriptorSetCaches)
-                cache.Sweep(frameId, _maxFramesInFlight);
+                cache.Sweep(executionId, _maxExecutingTasks);
         }
 
-        slot.CurrentFrameId = frameId;
+        slot.CurrentExecutionId = executionId;
 
-        return new VkFrame(this, frameId, ringSlot, slot.FenceWrapper,
+        return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
             slot.TransientPrimary, slot.TransientOverflow);
     }
 
-    private protected override void EndFrameCore(Frame frame)
+    private protected override void CompleteExecutionCore(ExecutionTask task)
     {
-        uint ringSlot = frame.RingSlot;
+        uint ringSlot = task.RingSlot;
         VkFenceHandle slotFence = _slots[ringSlot].Fence;
 
         SubmitInfo si = new(sType: StructureType.SubmitInfo);
@@ -357,39 +349,28 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         }
     }
 
-    private protected override bool IsFrameCompleteCore(ulong frameId)
+    private protected override bool IsExecutionCompleteCore(ExecutionTask task)
     {
-        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
-        ref SlotState slot = ref _slots[ringSlot];
+        ref SlotState slot = ref _slots[task.RingSlot];
 
-        if (slot.CurrentFrameId > frameId)
+        // The slot was reused by a newer execution, so this one has definitely finished.
+        if (slot.CurrentExecutionId != task.Id)
             return true;
 
-        if (slot.CurrentFrameId == frameId)
-        {
-            Result status = _vk.GetFenceStatus(_device, slot.Fence);
-            return status == Result.Success;
-        }
-
-        return true;
+        Result status = _vk.GetFenceStatus(_device, slot.Fence);
+        return status == Result.Success;
     }
 
-    private protected override bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout)
+    private protected override bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout)
     {
-        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
-        ref SlotState slot = ref _slots[ringSlot];
+        ref SlotState slot = ref _slots[task.RingSlot];
 
-        if (slot.CurrentFrameId > frameId)
+        if (slot.CurrentExecutionId != task.Id)
             return true;
 
-        if (slot.CurrentFrameId == frameId)
-        {
-            VkFenceHandle fence = slot.Fence;
-            Result result = _vk.WaitForFences(_device, 1, in fence, true, nanosecondTimeout);
-            return result == Result.Success;
-        }
-
-        return true;
+        VkFenceHandle fence = slot.Fence;
+        Result result = _vk.WaitForFences(_device, 1, in fence, true, nanosecondTimeout);
+        return result == Result.Success;
     }
 
     internal VkBuffer CreateTransientBuffer(uint sizeInBytes)
@@ -422,9 +403,8 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Submits a raw one-shot <see cref="Silk.NET.Vulkan.CommandBuffer"/> to the graphics queue and blocks the
-    /// calling thread until it has finished executing on the GPU. Does not touch the Frame ring-buffer or its
-    /// fences: safe to call whether or not a Frame is currently open. Used by <see cref="VkTransferCommandBuffer"/>.
+    /// Submits a one-shot command buffer to the graphics queue and blocks until it finishes on GPU.
+    /// Doesn't touch frame ring-buffer state, safe to call anytime.
     /// </summary>
     internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb)
     {
@@ -850,8 +830,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private static volatile string? _lastValidationError;
 
     /// <summary>
-    /// Checks if a Vulkan validation error was reported and throws if so.
-    /// Called after operations that may trigger validation errors.
+    /// Throws if a Vulkan validation error was reported. Call after ops that could trigger one.
     /// </summary>
     internal static void FlushValidationErrors()
     {

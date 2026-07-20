@@ -1,6 +1,6 @@
 namespace Prowl.Graphite;
 
-public abstract partial class Frame
+public abstract partial class ExecutionTask
 {
     private protected static void SubmitCommands_CheckEnded(CommandBuffer commandList)
     {

@@ -3,10 +3,10 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.Vk;
 
-internal sealed class VkFrame : Frame
+internal sealed class VkExecutionTask : ExecutionTask
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly ulong _frameId;
+    private readonly ulong _id;
     private readonly uint _ringSlot;
 
     private readonly VkFence _slotFenceWrapper;
@@ -16,21 +16,21 @@ internal sealed class VkFrame : Frame
     private uint _activeTransientSize;
     private VkBuffer _activeTransientBuffer;
 
-    public override ulong FrameId => _frameId;
+    public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
     public override Fence CompletionFence => _slotFenceWrapper;
     public override GraphicsDevice Device => _gd;
 
-    internal VkFrame(
+    internal VkExecutionTask(
         VkGraphicsDevice gd,
-        ulong frameId,
+        ulong id,
         uint ringSlot,
         VkFence slotFenceWrapper,
         VkBuffer transientPrimary,
         List<VkBuffer> transientOverflow)
     {
         _gd = gd;
-        _frameId = frameId;
+        _id = id;
         _ringSlot = ringSlot;
         _slotFenceWrapper = slotFenceWrapper;
         _transientPrimary = transientPrimary;
@@ -42,7 +42,7 @@ internal sealed class VkFrame : Frame
 
 
     /// <inheritdoc/>
-    public override void SubmitCommands(CommandBuffer commandList)
+    internal override void SubmitCommandsInternal(CommandBuffer commandList)
     {
         SubmitCommands_CheckEnded(commandList);
         _gd.SubmitCommandBufferInternal(commandList);
@@ -50,7 +50,7 @@ internal sealed class VkFrame : Frame
 
 
     /// <inheritdoc/>
-    public override DeviceBufferRange AllocateTransient(uint sizeInBytes)
+    internal override DeviceBufferRange AllocateTransientInternal(uint sizeInBytes)
     {
         uint alignment = _gd.UniformBufferMinOffsetAlignment;
         uint alignedHead = (_transientHead + alignment - 1) & ~(alignment - 1);
@@ -95,7 +95,7 @@ internal sealed class VkFrame : Frame
         if (!_gd._transientSoftCapWarned && cumulative > _gd._transientSoftCapBytes)
         {
             _gd._transientSoftCapWarned = true;
-            _gd.OnWarning?.Invoke($"[Graphite] Warning: Transient buffer soft cap of {_gd._transientSoftCapBytes} bytes exceeded in frame {_frameId}.");
+            _gd.OnWarning?.Invoke($"[Graphite] Warning: Transient buffer soft cap of {_gd._transientSoftCapBytes} bytes exceeded in execution {_id}.");
         }
     }
 }

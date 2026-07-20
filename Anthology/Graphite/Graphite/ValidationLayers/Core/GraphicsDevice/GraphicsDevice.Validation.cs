@@ -12,19 +12,6 @@ public abstract partial class GraphicsDevice
         ValidationEnabled = options.EnableValidation ?? true;
     }
 
-    private void CurrentFrame_CheckActive()
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if (_currentFrame == null)
-        {
-            throw new RenderException(
-                "This operation requires an active frame, but none is open. Call BeginFrame before " +
-                "recording frame-dependent commands, and submit them before EndFrame.");
-        }
-    }
-
     private static void SubmitAndWait_CheckEnded(TransferCommandBuffer commandBuffer)
     {
         if (!ValidationEnabled)
@@ -37,39 +24,6 @@ public abstract partial class GraphicsDevice
         if (!commandBuffer.HasEnded)
         {
             throw new RenderException("TransferCommandBuffer.End() must be called before submitting.");
-        }
-    }
-
-    private void BeginFrame_CheckNoActive()
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if (_currentFrame != null)
-        {
-            throw new RenderException("BeginFrame called while a frame is already active. Call EndFrame first.");
-        }
-    }
-
-    private void EndFrame_CheckHasActive()
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if (_currentFrame == null)
-        {
-            throw new RenderException("EndFrame called with no active frame. Call BeginFrame first.");
-        }
-    }
-
-    private void EndFrame_CheckIsActive(Frame frame)
-    {
-        if (!ValidationEnabled)
-            return;
-
-        if (CurrentFrame != frame)
-        {
-            throw new RenderException("The specified Frame is not the currently active frame.");
         }
     }
 

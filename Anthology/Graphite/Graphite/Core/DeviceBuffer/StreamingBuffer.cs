@@ -3,13 +3,11 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A buffer intended for data that is rewritten by the CPU every frame, such as per-frame uniform data.
+/// A buffer for data rewritten every execution, like per-view uniforms.
 /// <para>
-/// Writing to a single <see cref="DeviceBuffer"/> every frame races with the frames-in-flight system: the GPU
-/// may still be reading the buffer for a previous frame when the CPU overwrites it. A <see cref="StreamingBuffer"/>
-/// sidesteps this by holding one backing <see cref="DeviceBuffer"/> per frame-in-flight and exposing the buffer
-/// belonging to the currently active frame's ring slot through <see cref="Current"/>. Write to and bind
-/// <see cref="Current"/> each frame; the rotation across the in-flight buffers is handled implicitly.
+/// Writing one buffer every execution races the GPU still reading a previous execution's data.
+/// StreamingBuffer fixes this by keeping one backing buffer per in-flight execution, exposed via
+/// ForExecution. Write and bind that buffer while recording; rotation is automatic.
 /// </para>
 /// <para>
 /// Create via ResourceFactory.CreateStreamingBuffer.
@@ -17,7 +15,6 @@ namespace Prowl.Graphite;
 /// </summary>
 public sealed class StreamingBuffer : IDisposable
 {
-    private readonly GraphicsDevice _device;
     private readonly DeviceBuffer[] _buffers;
 
     /// <summary>
@@ -31,17 +28,16 @@ public sealed class StreamingBuffer : IDisposable
     public BufferUsage Usage { get; }
 
     /// <summary>
-    /// Number of backing buffers, set to MaxExecutingGraphs at creation.
+    /// Number of backing buffers, set to MaxExecutingTasks at creation.
     /// </summary>
     public int BufferCount => _buffers.Length;
 
     internal StreamingBuffer(GraphicsDevice device, ref BufferDescription description)
     {
-        _device = device;
         SizeInBytes = description.SizeInBytes;
         Usage = description.Usage;
 
-        _buffers = new DeviceBuffer[device.MaxFramesInFlight];
+        _buffers = new DeviceBuffer[device.MaxExecutingTasks];
         for (int i = 0; i < _buffers.Length; i++)
             _buffers[i] = device.ResourceFactory.CreateBuffer(ref description);
     }
@@ -50,7 +46,7 @@ public sealed class StreamingBuffer : IDisposable
     /// Backing buffer for the execution's ring slot. Write and bind this while recording that execution.
     /// </summary>
     /// <param name="task">Execution whose ring slot picks the buffer.</param>
-    public DeviceBuffer ForExecution(GraphExecutionTask task) => _buffers[task.RingSlot];
+    public DeviceBuffer ForExecution(ExecutionTask task) => _buffers[task.RingSlot];
 
     /// <summary>
     /// Backing buffer for a given ring slot.

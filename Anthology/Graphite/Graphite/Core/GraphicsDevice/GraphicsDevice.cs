@@ -15,7 +15,7 @@ public abstract partial class GraphicsDevice : IDisposable
 {
     private readonly object _deferredDisposalLock = new();
     private readonly List<IDisposable> _disposables = [];
-    private List<IDisposable>[] _frameRetiredDisposables;
+    private readonly List<(ulong ExecutionId, IDisposable Disposable)> _executionRetiredDisposables = [];
     private Sampler _aniso4xSampler;
     private bool _disposed;
     private readonly object _nullTextureLock = new();
@@ -23,7 +23,7 @@ public abstract partial class GraphicsDevice : IDisposable
     private DeviceBuffer _nullStructuredReadWrite;
 
     /// <summary>Max graph executions in flight at once.</summary>
-    protected internal uint _maxExecutingGraphs;
+    protected internal uint _maxExecutingTasks;
 
     /// <summary>Starting size of each slot's transient bump-allocator buffer, in bytes.</summary>
     protected internal uint _transientInitialSize;
@@ -37,8 +37,12 @@ public abstract partial class GraphicsDevice : IDisposable
     /// <summary>Execution counter, always going up. 0 means nothing has started yet.</summary>
     protected ulong _executionIdCounter;
 
-    /// <summary>The FrameId of the most recently completed frame, updated opportunistically.</summary>
-    protected ulong _lastCompletedFrameId;
+    /// <summary>Id of the last execution known to be done. Updated when convenient.</summary>
+    protected ulong _lastCompletedExecutionId;
+
+    private readonly object _executionLock = new();
+    private readonly List<ExecutionTask> _activeTasks = [];
+    private Queue<uint> _freeSlots;
 
     /// <summary>True once the soft cap warning has fired once.</summary>
     protected internal bool _transientSoftCapWarned;
@@ -121,210 +125,214 @@ public abstract partial class GraphicsDevice : IDisposable
     internal abstract uint GetUniformBufferMinOffsetAlignmentCore();
     internal abstract uint GetStructuredBufferMinOffsetAlignmentCore();
 
-    private Frame _currentFrame;
+    /// <summary>
+    /// Id of the most recent GPU-completed execution. Advances as executions get reclaimed. 0 means nothing done yet.
+    /// </summary>
+    public ulong LastCompletedExecutionId => Volatile.Read(ref _lastCompletedExecutionId);
 
     /// <summary>
-    /// Hard cap on how many graph executions can be in flight at once. Beyond this, BeginGraphExecution blocks until the oldest finishes.
+    /// Hard cap on how many graph executions can be in flight at once. Beyond this, BeginExecution blocks until the oldest finishes.
     /// </summary>
-    public Frame CurrentFrame
+    public uint MaxExecutingTasks => _maxExecutingTasks;
+
+    /// <summary>
+    /// Number of graph executions currently in flight. Reclaims finished ones as a side effect.
+    /// </summary>
+    public uint ExecutingTasks
     {
         get
         {
-            CurrentFrame_CheckActive();
-            return _currentFrame;
+            lock (_executionLock)
+            {
+                ReclaimCompletedExecutions_NoLock();
+                return (uint)_activeTasks.Count;
+            }
         }
     }
 
     /// <summary>
-    /// Gets the <see cref="Frame.FrameId"/> of the most recently GPU-completed frame.
-    /// This value advances opportunistically during <see cref="IsFrameComplete(ulong)"/>,
-    /// <see cref="WaitForFrame(ulong)"/>, and <see cref="BeginFrame"/> calls.
-    /// Returns 0 before any frame has completed.
+    /// Snapshot of in-flight executions, oldest first.
     /// </summary>
-    public ulong LastCompletedFrameId => Volatile.Read(ref _lastCompletedFrameId);
+    public IReadOnlyList<ExecutionTask> ActiveExecutions
+    {
+        get
+        {
+            lock (_executionLock)
+            {
+                ReclaimCompletedExecutions_NoLock();
+                return _activeTasks.ToArray();
+            }
+        }
+    }
 
     /// <summary>
-    /// Gets the maximum number of frames that may be simultaneously in flight on the GPU.
+    /// Starts a new graph execution and returns its handle. Grabs a free ring slot; if all slots are busy, blocks on the oldest execution first.
+    /// <para>
+    /// Frame-less replacement for the old BeginFrame/EndFrame pair. There's no "current" execution - the render graph builds on this directly.
+    /// </para>
     /// </summary>
-    public uint MaxFramesInFlight => _maxFramesInFlight;
+    /// <returns>Handle to the new in-flight execution.</returns>
+    public ExecutionTask BeginExecution()
+    {
+        lock (_executionLock)
+        {
+            ReclaimCompletedExecutions_NoLock();
+
+            if (_freeSlots.Count == 0)
+            {
+                ExecutionTask oldest = _activeTasks[0];
+                WaitForExecutionCore(oldest, ulong.MaxValue);
+                ReclaimCompletedExecutions_NoLock();
+            }
+
+            uint ringSlot = _freeSlots.Dequeue();
+            ulong id = ++_executionIdCounter;
+            SnapshotExecutionCounters();
+
+            ExecutionTask task = BeginExecutionCore(id, ringSlot);
+            _activeTasks.Add(task);
+            return task;
+        }
+    }
 
     /// <summary>
-    /// Gets the number of frames currently in flight (submitted to the GPU but not yet signaled as complete).
+    /// Marks an execution done: its fence signals once submitted work finishes on the GPU. Non-blocking. Stays in flight until the fence fires and the slot is reclaimed. Frame-less replacement for old EndFrame.
     /// </summary>
-    public uint FramesInFlight => (uint)(_frameIdCounter - Volatile.Read(ref _lastCompletedFrameId));
+    /// <param name="task">Execution to complete. Must come from BeginExecution.</param>
+    /// <exception cref="ArgumentNullException">Thrown if task is null.</exception>
+    public void CompleteExecution(ExecutionTask task)
+    {
+        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(CompleteExecution));
+        CompleteExecutionCore(task);
+    }
 
     /// <summary>
     /// Whether the given execution has finished on the GPU. Advances LastCompletedExecutionId as a side effect.
     /// </summary>
-    /// <remarks>
-    /// Typical usage:
-    /// <code>
-    /// Frame frame = device.BeginFrame();
-    /// frame.SubmitCommands(commandBuffer);
-    /// device.EndFrame(frame);
-    /// device.SwapBuffers();
-    /// </code>
-    /// </remarks>
-    /// <returns>The new active <see cref="Frame"/>.</returns>
-    /// <exception cref="RenderException">Thrown if a frame is already active.</exception>
-    public Frame BeginFrame()
+    /// <param name="task">Execution to check.</param>
+    /// <returns>True if complete, false if still in flight.</returns>
+    public bool IsExecutionComplete(ExecutionTask task)
     {
-        BeginFrame_CheckNoActive();
-        BeginFrame_SnapshotFrameCounters();
-
-        ulong frameId = ++_frameIdCounter;
-        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
-        Frame frame = BeginFrameCore(frameId, ringSlot);
-        FlushFrameRetiredDisposables(ringSlot);
-        _currentFrame = frame;
-        return frame;
-    }
-
-    /// <summary>
-    /// Schedules the given object for disposal once the frame identified by <paramref name="frameId"/> has completed
-    /// on the GPU. Unlike <see cref="DisposeWhenIdle"/>, this does not wait for the whole device to go idle: it is
-    /// freed the next time this frame's ring slot is reused, which <see cref="BeginFrame"/> already guarantees means
-    /// the prior occupant of that slot has finished on the GPU.
-    /// </summary>
-    /// <param name="frameId">The frame whose completion should gate disposal.</param>
-    /// <param name="disposable">An object to dispose once <paramref name="frameId"/> has completed.</param>
-    internal void DisposeWhenFrameComplete(ulong frameId, IDisposable disposable)
-    {
-        uint ringSlot = (uint)((frameId - 1) % _maxFramesInFlight);
-        lock (_deferredDisposalLock)
-        {
-            _frameRetiredDisposables[ringSlot].Add(disposable);
-        }
-    }
-
-    private void FlushFrameRetiredDisposables(uint ringSlot)
-    {
-        lock (_deferredDisposalLock)
-        {
-            List<IDisposable> pending = _frameRetiredDisposables[ringSlot];
-            foreach (IDisposable disposable in pending)
-                disposable.Dispose();
-            pending.Clear();
-        }
-    }
-
-    /// <summary>
-    /// Ends the currently active frame and signals the GPU to mark its completion fence.
-    /// Equivalent to <c>EndFrame(CurrentFrame)</c>.
-    /// This method does not block.
-    /// </summary>
-    /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
-    public void EndFrame()
-    {
-        EndFrame_CheckHasActive();
-        EndFrame(_currentFrame);
-    }
-
-    /// <summary>
-    /// Ends the specified frame and signals the GPU to mark its completion fence.
-    /// This method does not block.
-    /// </summary>
-    /// <param name="frame">The frame to end. Must be the currently active frame.</param>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="frame"/> is null.</exception>
-    /// <exception cref="RenderException">Thrown if <paramref name="frame"/> is not the currently active frame.</exception>
-    public void EndFrame(Frame frame)
-    {
-        ValidationHelpers.RequireNotNull(frame, nameof(frame), nameof(EndFrame));
-        EndFrame_CheckIsActive(frame);
-        _currentFrame = null;
-        EndFrameCore(frame);
-    }
-
-    /// <summary>
-    /// Returns whether the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU.
-    /// Also opportunistically advances <see cref="LastCompletedFrameId"/> when new completions are detected.
-    /// </summary>
-    /// <param name="frameId">The frame ID to query. Must be greater than 0 and at most <see cref="LastCompletedFrameId"/> + <see cref="MaxFramesInFlight"/>.</param>
-    /// <returns>True if the frame has completed; false if it is still in flight or currently open.</returns>
-    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is 0 or has not yet been started.</exception>
-    public bool IsFrameComplete(ulong frameId)
-    {
-        if (frameId == 0 || frameId > _frameIdCounter)
-            throw new RenderException($"Cannot query frame {frameId}: it has not been started yet.");
-        if (frameId <= Volatile.Read(ref _lastCompletedFrameId))
-            return true;
-        bool complete = IsFrameCompleteCore(frameId);
+        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(IsExecutionComplete));
+        bool complete = IsExecutionCompleteCore(task);
         if (complete)
-            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), frameId));
+            Volatile.Write(ref _lastCompletedExecutionId, Math.Max(Volatile.Read(ref _lastCompletedExecutionId), task.Id));
         return complete;
     }
 
     /// <summary>
-    /// Returns whether the given <see cref="Frame"/> has completed on the GPU.
+    /// Whether the execution with this id has finished. Used by the transient texture pool for reclaim checks. An id that never started counts as not complete.
     /// </summary>
-    /// <param name="frame">The frame to query.</param>
-    /// <returns>True if the frame has completed; false otherwise.</returns>
-    public bool IsFrameComplete(Frame frame) => IsFrameComplete(frame.FrameId);
-
-    /// <summary>
-    /// Returns whether <paramref name="frameId"/> identifies the currently open (still being recorded) frame.
-    /// A frame in this state has not been submitted yet, so nothing referencing it is actually in flight on
-    /// the GPU, even though it has not "completed" either.
-    /// </summary>
-    internal bool IsFrameOpen(ulong frameId) => _currentFrame != null && _currentFrame.FrameId == frameId;
-
-    /// <summary>
-    /// Blocks the calling thread until the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU.
-    /// </summary>
-    /// <param name="frameId">The frame ID to wait for.</param>
-    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is the currently open frame, is 0, or has not been started.</exception>
-    public void WaitForFrame(ulong frameId)
+    internal bool IsExecutionIdComplete(ulong executionId)
     {
-        if (!WaitForFrame(frameId, ulong.MaxValue))
-            throw new RenderException("The operation timed out before the frame completed.");
+        if (executionId == 0)
+            return true;
+
+        lock (_executionLock)
+        {
+            foreach (ExecutionTask task in _activeTasks)
+            {
+                if (task.Id == executionId)
+                    return IsExecutionCompleteCore(task);
+            }
+
+            // Not in flight: either it started and was already reclaimed (complete), or it was never started.
+            return executionId <= _executionIdCounter;
+        }
     }
 
     /// <summary>
-    /// Blocks the calling thread until the frame with the given <see cref="Frame.FrameId"/> has completed on the GPU,
-    /// or until the timeout elapses.
+    /// Blocks until the given execution finishes on the GPU.
     /// </summary>
-    /// <param name="frameId">The frame ID to wait for.</param>
-    /// <param name="nanosecondTimeout">Maximum time to wait, in nanoseconds. Pass <see cref="ulong.MaxValue"/> for infinite wait.</param>
-    /// <returns>True if the frame completed before the timeout; false otherwise.</returns>
-    /// <exception cref="RenderException">Thrown if <paramref name="frameId"/> is the currently open frame, is 0, or has not been started.</exception>
-    public bool WaitForFrame(ulong frameId, ulong nanosecondTimeout)
+    /// <param name="task">Execution to wait for.</param>
+    public void WaitForExecution(ExecutionTask task)
     {
-        if (frameId == 0 || frameId > _frameIdCounter)
-            throw new RenderException($"Cannot wait on frame {frameId}: it has not been started yet.");
-        if (_currentFrame != null && _currentFrame.FrameId == frameId)
-            throw new RenderException("Cannot wait on the currently open frame. Call EndFrame first.");
-        if (frameId <= Volatile.Read(ref _lastCompletedFrameId))
-            return true;
-        bool completed = WaitForFrameCore(frameId, nanosecondTimeout);
+        if (!WaitForExecution(task, ulong.MaxValue))
+            throw new RenderException("The operation timed out before the execution completed.");
+    }
+
+    /// <summary>
+    /// Blocks until the given execution finishes on the GPU, or until timeout.
+    /// </summary>
+    /// <param name="task">Execution to wait for.</param>
+    /// <param name="nanosecondTimeout">Max wait time in nanoseconds. Use ulong.MaxValue for no timeout.</param>
+    /// <returns>True if it finished before timeout, false otherwise.</returns>
+    public bool WaitForExecution(ExecutionTask task, ulong nanosecondTimeout)
+    {
+        ValidationHelpers.RequireNotNull(task, nameof(task), nameof(WaitForExecution));
+        bool completed = WaitForExecutionCore(task, nanosecondTimeout);
         if (completed)
-            Volatile.Write(ref _lastCompletedFrameId, Math.Max(Volatile.Read(ref _lastCompletedFrameId), frameId));
+            Volatile.Write(ref _lastCompletedExecutionId, Math.Max(Volatile.Read(ref _lastCompletedExecutionId), task.Id));
         return completed;
     }
 
     /// <summary>
-    /// Blocks the calling thread until the given <see cref="Frame"/> has completed on the GPU.
+    /// Disposes the object once the given execution finishes on the GPU. Freed the next time the device reclaims completed executions (next BeginExecution or WaitForIdle).
     /// </summary>
-    /// <param name="frame">The frame to wait for.</param>
-    public void WaitForFrame(Frame frame) => WaitForFrame(frame.FrameId);
+    /// <param name="executionId">Execution whose completion gates the disposal.</param>
+    /// <param name="disposable">Object to dispose once done.</param>
+    internal void DisposeWhenFrameComplete(ulong executionId, IDisposable disposable)
+    {
+        if (executionId == 0)
+        {
+            disposable.Dispose();
+            return;
+        }
+
+        lock (_deferredDisposalLock)
+        {
+            _executionRetiredDisposables.Add((executionId, disposable));
+        }
+    }
+
+    private void ReclaimCompletedExecutions_NoLock()
+    {
+        for (int i = _activeTasks.Count - 1; i >= 0; i--)
+        {
+            ExecutionTask task = _activeTasks[i];
+            if (!IsExecutionCompleteCore(task))
+                continue;
+
+            _activeTasks.RemoveAt(i);
+            _freeSlots.Enqueue(task.RingSlot);
+            Volatile.Write(ref _lastCompletedExecutionId, Math.Max(Volatile.Read(ref _lastCompletedExecutionId), task.Id));
+        }
+
+        FlushExecutionRetiredDisposables();
+    }
+
+    private void FlushExecutionRetiredDisposables()
+    {
+        lock (_deferredDisposalLock)
+        {
+            for (int i = _executionRetiredDisposables.Count - 1; i >= 0; i--)
+            {
+                (ulong executionId, IDisposable disposable) = _executionRetiredDisposables[i];
+                if (!IsExecutionIdCompleteFromReclaim(executionId))
+                    continue;
+
+                _executionRetiredDisposables.RemoveAt(i);
+                disposable.Dispose();
+            }
+        }
+    }
+
+    // Reclaim-time completeness check that does not take _executionLock (the caller already holds it):
+    // an id no longer among the active tasks has been reclaimed and is therefore complete.
+    private bool IsExecutionIdCompleteFromReclaim(ulong executionId)
+    {
+        foreach (ExecutionTask task in _activeTasks)
+        {
+            if (task.Id == executionId)
+                return false;
+        }
+        return true;
+    }
 
     /// <summary>
-    /// Blocks the calling thread until the given <see cref="Frame"/> has completed on the GPU,
-    /// or until the timeout elapses.
+    /// Submits a recorded transfer command buffer right away and blocks until the GPU finishes it. Doesn't touch the execution ring or any fences - not tied to a graph execution at all. For one-off transfer work like readback or streaming uploads.
     /// </summary>
-    /// <param name="frame">The frame to wait for.</param>
-    /// <param name="nanosecondTimeout">Maximum time to wait, in nanoseconds.</param>
-    /// <returns>True if the frame completed before the timeout; false otherwise.</returns>
-    public bool WaitForFrame(Frame frame, ulong nanosecondTimeout) => WaitForFrame(frame.FrameId, nanosecondTimeout);
-
-    /// <summary>
-    /// Submits a recorded <see cref="TransferCommandBuffer"/> for immediate execution and blocks the calling
-    /// thread until the GPU has finished executing it. Unlike <see cref="Frame.SubmitCommands(CommandBuffer)"/>,
-    /// this does not require a <see cref="Frame"/> to be open, and may be called whether or not one is: it does
-    /// not touch the frame ring-buffer or its fences at all. Intended for one-off transfer work such as texture
-    /// read-back or streaming uploads that would otherwise require opening a throwaway Frame.
-    /// </summary>
-    /// <param name="commandBuffer">The recorded <see cref="TransferCommandBuffer"/> to submit. <see cref="TransferCommandBuffer.End"/>
-    /// must have been called on it first.</param>
+    /// <param name="commandBuffer">Recorded transfer command buffer to submit. Must have had End called already.</param>
     public void SubmitAndWait(TransferCommandBuffer commandBuffer)
     {
         SubmitAndWait_CheckEnded(commandBuffer);
@@ -352,37 +360,21 @@ public abstract partial class GraphicsDevice : IDisposable
         throw new RenderException($"{GetType().Name} does not support {nameof(SubmitTransfer)}.");
     }
 
-    /// <summary>
-    /// Allocates a transient <see cref="DeviceBufferRange"/> from the currently active frame's bump allocator.
-    /// Convenience wrapper over <see cref="Frame.AllocateTransient"/>. A frame must be active.
-    /// </summary>
-    /// <param name="sizeInBytes">The number of bytes to allocate.</param>
-    /// <returns>A <see cref="DeviceBufferRange"/> pointing into the frame's transient buffer.</returns>
-    /// <exception cref="RenderException">Thrown if no frame is currently active.</exception>
-    public DeviceBufferRange AllocateTransient(uint sizeInBytes)
-    {
-        if (_currentFrame == null)
-            throw new RenderException("AllocateTransient requires an active frame. Call BeginFrame first.");
-        return _currentFrame.AllocateTransient(sizeInBytes);
-    }
-
-    private protected abstract Frame BeginFrameCore(ulong frameId, uint ringSlot);
-    private protected abstract void EndFrameCore(Frame frame);
-    private protected abstract bool IsFrameCompleteCore(ulong frameId);
-    private protected abstract bool WaitForFrameCore(ulong frameId, ulong nanosecondTimeout);
+    private protected abstract ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot);
+    private protected abstract void CompleteExecutionCore(ExecutionTask task);
+    private protected abstract bool IsExecutionCompleteCore(ExecutionTask task);
+    private protected abstract bool WaitForExecutionCore(ExecutionTask task, ulong nanosecondTimeout);
 
     /// <summary>
-    /// Initializes the frame system options from the given <see cref="GraphicsDeviceOptions"/>.
-    /// Call this before <see cref="PostDeviceCreated"/> in each backend constructor.
+    /// Sets up execution/transient options from the given options. Call before PostDeviceCreated in each backend constructor.
     /// </summary>
-    /// <param name="options">The options to read from.</param>
-    /// <exception cref="RenderException">Thrown if <see cref="GraphicsDeviceOptions.MaxFramesInFlight"/> is 0.</exception>
+    /// <param name="options">Options to read from.</param>
     protected void InitializeFrameOptions(GraphicsDeviceOptions options)
     {
-        _maxFramesInFlight = options.MaxFramesInFlight == 0 ? 3 : options.MaxFramesInFlight;
-        _frameRetiredDisposables = new List<IDisposable>[_maxFramesInFlight];
-        for (int i = 0; i < _frameRetiredDisposables.Length; i++)
-            _frameRetiredDisposables[i] = [];
+        _maxExecutingTasks = options.MaxFramesInFlight == 0 ? 3 : options.MaxFramesInFlight;
+        _freeSlots = new Queue<uint>((int)_maxExecutingTasks);
+        for (uint i = 0; i < _maxExecutingTasks; i++)
+            _freeSlots.Enqueue(i);
         _transientInitialSize = options.TransientBufferInitialSize == 0 ? 4 * 1024 * 1024 : options.TransientBufferInitialSize;
         _transientSoftCapBytes = options.TransientBufferSoftCapBytes == 0 ? 64 * 1024 * 1024 : options.TransientBufferSoftCapBytes;
         _transientHardCapBytes = options.TransientBufferHardCapBytes == 0 ? 256 * 1024 * 1024 : options.TransientBufferHardCapBytes;
@@ -397,9 +389,9 @@ public abstract partial class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Blocks the calling thread until the given <see cref="Fence"/> becomes signaled.
+    /// Blocks until the given fence signals.
     /// </summary>
-    /// <param name="fence">The <see cref="Fence"/> instance to wait on.</param>
+    /// <param name="fence">Fence to wait on.</param>
     public void WaitForFence(Fence fence)
     {
         if (!WaitForFence(fence, ulong.MaxValue))
@@ -486,7 +478,7 @@ public abstract partial class GraphicsDevice : IDisposable
             Volatile.Write(ref _lastCompletedExecutionId, _executionIdCounter);
             _activeTasks.Clear();
             _freeSlots.Clear();
-            for (uint i = 0; i < _maxExecutingGraphs; i++)
+            for (uint i = 0; i < _maxExecutingTasks; i++)
                 _freeSlots.Enqueue(i);
         }
         FlushExecutionRetiredDisposables();
@@ -1033,6 +1025,7 @@ public abstract partial class GraphicsDevice : IDisposable
         _disposed = true;
 
         WaitForIdle();
+        _transientTexturePool?.Dispose();
         PointSampler.Dispose();
         LinearSampler.Dispose();
         NullTexture2D.Dispose();

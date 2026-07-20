@@ -128,7 +128,7 @@ public abstract partial class GraphicsDevice
     /// Rotates per-execution flow accumulators: freezes into last-execution view, zeroes for the
     /// new execution. Gauges untouched.
     /// </summary>
-    private void BeginFrame_SnapshotFrameCounters()
+    private void SnapshotExecutionCounters()
     {
         if (!ProfilingEnabled)
             return;
