@@ -52,18 +52,29 @@ file sealed class RecordingPass : IPass<DispatchView, int>
 file sealed class RecordingPresentPass : IPresentPass<DispatchView, int>
 {
     private readonly bool _arm;
+    private readonly bool _requestSwapchain;
 
-    public RecordingPresentPass(bool arm) => _arm = arm;
+    public RecordingPresentPass(bool arm, bool requestSwapchain = true)
+    {
+        _arm = arm;
+        _requestSwapchain = requestSwapchain;
+    }
 
     public int PresentCount { get; private set; }
     public bool SawSwapchainTarget { get; private set; }
 
     public string Name => "Present";
 
+    public void Setup(PresentContextBuilder builder)
+    {
+        if (_requestSwapchain)
+            builder.RequestSwapchain();
+    }
+
     public void Present(RenderContext<DispatchView, int> context)
     {
         PresentCount++;
-        Framebuffer? target = context.RequestSwapchainTarget();
+        Framebuffer? target = context.SwapchainTarget;
         SawSwapchainTarget = target != null;
 
         if (_arm && target != null)
@@ -194,6 +205,20 @@ public abstract class DispatchRenderGraphPresentTests<T> : GraphicsDeviceTestBas
 
         Assert.Equal(1, present.PresentCount);
         Assert.True(present.SawSwapchainTarget);
+    }
+
+    [Fact]
+    public void Dispatch_PresentPassDidNotRequestSwapchainInSetup_SwapchainTargetIsNullEvenWithAWindow()
+    {
+        RecordingPresentPass present = new(arm: true, requestSwapchain: false);
+        using TestPipeline pipeline = new(present, new RecordingPass());
+        DispatchView[] views = { new(64, 64) };
+
+        GD.DispatchGraph(pipeline, views);
+        GD.WaitForIdle();
+
+        Assert.Equal(1, present.PresentCount);
+        Assert.False(present.SawSwapchainTarget);
     }
 }
 
