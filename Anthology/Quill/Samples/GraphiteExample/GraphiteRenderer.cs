@@ -511,51 +511,59 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         public string Name => "Present";
 
+        public void Setup(PresentContextBuilder builder)
+        {
+            builder.RequestSwapchain();
+        }
+
         public void Present(RenderContext<CanvasView, int> context)
         {
-            Framebuffer? target = context.RequestSwapchainTarget();
-            if (target == null)
-                return;
+            Framebuffer? target = context.SwapchainTarget;
+            {
+                Framebuffer? target = context.RequestSwapchainTarget();
+                if (target == null)
+                    return;
 
-            RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
+                RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
 
-            CommandBuffer cmd = context.GetCommandBuffer(Name);
-            cmd.Begin();
-            cmd.SetFramebuffer(target);
+                CommandBuffer cmd = context.GetCommandBuffer(Name);
+                cmd.Begin();
+                cmd.SetFramebuffer(target);
 
-            _owner._blurPass.SetKeyword(UpsampleOff);
+                _owner._blurPass.SetKeyword(UpsampleOff);
 
-            _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _owner._sampler);
-            _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
-            _properties.SetFloat("offset", 0f);
+                _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _owner._sampler);
+                _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
+                _properties.SetFloat("offset", 0f);
 
-            cmd.SetShader(_owner._blurPass);
-            cmd.SetVertexSource(_fullscreenSource);
-            cmd.SetProperties(_properties);
-            cmd.Draw(3);
+                cmd.SetShader(_owner._blurPass);
+                cmd.SetVertexSource(_fullscreenSource);
+                cmd.SetProperties(_properties);
+                cmd.Draw(3);
 
-            cmd.End();
-            context.SubmitCommandBuffer(cmd);
-            context.ArmPresent();
-        }
-    }
-
-
-    private sealed class CanvasPipeline : RenderPipeline<CanvasView, int>
-    {
-        private readonly ScenePass _scenePass;
-        private readonly PresentPass _presentPass;
-
-        public CanvasPipeline(ScenePass scenePass, PresentPass presentPass)
-        {
-            _scenePass = scenePass;
-            _presentPass = presentPass;
+                cmd.End();
+                context.SubmitCommandBuffer(cmd);
+                context.ArmPresent();
+            }
         }
 
-        protected override void InitializePasses()
+
+        private sealed class CanvasPipeline : RenderPipeline<CanvasView, int>
         {
-            AddPass(_scenePass);
-            SetPresentPass(_presentPass);
+            private readonly ScenePass _scenePass;
+            private readonly PresentPass _presentPass;
+
+            public CanvasPipeline(ScenePass scenePass, PresentPass presentPass)
+            {
+                _scenePass = scenePass;
+                _presentPass = presentPass;
+            }
+
+            protected override void InitializePasses()
+            {
+                AddPass(_scenePass);
+                SetPresentPass(_presentPass);
+            }
         }
     }
 }
