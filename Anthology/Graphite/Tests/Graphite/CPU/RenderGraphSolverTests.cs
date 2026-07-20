@@ -13,7 +13,10 @@ namespace Prowl.Graphite.RenderGraph.Tests;
 public class RenderGraphSolverTests
 {
     private static RenderGraph<TestView, int> Build(params IPass<TestView, int>[] passes)
-        => RenderGraph<TestView, int>.Build(passes);
+        => RenderGraph<TestView, int>.Build(passes, new NoOpTestPresentPass());
+
+    private static RenderGraph<TestView, int> Build(IPresentPass<TestView, int> presentPass, params IPass<TestView, int>[] passes)
+        => RenderGraph<TestView, int>.Build(passes, presentPass);
 
     private static List<string> OrderNames(RenderGraph<TestView, int> graph)
         => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
@@ -209,5 +212,52 @@ public class RenderGraphSolverTests
         RenderGraph<TestView, int> graph = Build(unreferenced, main);
 
         Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
+    }
+
+    [Fact]
+    public void Build_PresentPassRequestsSwapchain_SetsPresentRequestsSwapchainTrue()
+    {
+        var present = new TestPresentPass(requestSwapchain: true);
+
+        RenderGraph<TestView, int> graph = Build(present);
+
+        Assert.True(graph.PresentRequestsSwapchain);
+    }
+
+    [Fact]
+    public void Build_PresentPassDoesNotRequestSwapchain_PresentRequestsSwapchainIsFalse()
+    {
+        var present = new TestPresentPass(requestSwapchain: false);
+
+        RenderGraph<TestView, int> graph = Build(present);
+
+        Assert.False(graph.PresentRequestsSwapchain);
+    }
+
+    [Fact]
+    public void Build_PresentPassDeclaresInputForResourceWrittenByAPass_ResourceKeepsWritersDesc()
+    {
+        var writerDesc = GraphTextureDesc.ViewSized(true, 0.5f);
+        var presentDesc = GraphTextureDesc.ViewSized(false, 0.25f);
+
+        var writer = new TestPass("Writer", outputs: new[] { ("present_in_shared", writerDesc) });
+        var present = new TestPresentPass(inputs: new[] { ("present_in_shared", presentDesc) });
+
+        RenderGraph<TestView, int> graph = Build(present, writer);
+
+        Assert.Contains(RenderResourceID.Intern("present_in_shared"), graph.PresentInputs);
+        GraphTextureDesc merged = graph.Resources[RenderResourceID.Intern("present_in_shared")];
+        Assert.Equal(writerDesc.Scale, merged.Scale);
+        Assert.True(merged.EnableDepth);
+    }
+
+    [Fact]
+    public void Build_PresentPassDeclaresInputForResourceNoPassWrites_IsAddedToResourceTable()
+    {
+        var present = new TestPresentPass(inputs: new[] { ("present_only_resource", Desc.Color()) });
+
+        RenderGraph<TestView, int> graph = Build(present);
+
+        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("present_only_resource")));
     }
 }
