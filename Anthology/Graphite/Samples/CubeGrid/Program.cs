@@ -25,9 +25,11 @@ internal sealed class CubeGridPresentPass : IPresentPass<SceneView, int>
 
     public string Name => "Present";
 
+    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+
     public void Present(RenderContext<SceneView, int> context)
     {
-        Framebuffer? target = context.RequestSwapchainTarget();
+        Framebuffer? target = context.SwapchainTarget;
         if (target == null)
             return;
 

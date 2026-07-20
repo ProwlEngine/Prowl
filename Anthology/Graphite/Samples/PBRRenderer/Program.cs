@@ -51,10 +51,6 @@ internal sealed class ScenePass : IPass<SceneView, int>
 
     public string Name => "Scene";
 
-    // The composite present pass has no Setup of its own to obtain a handle from, so it reads
-    // this directly off the pass that owns the resource, after Setup has populated it.
-    public TextureHandle SceneHandle => _sceneHandle;
-
     public void Advance(float dt) => _angle += dt * 0.5f;
 
     public void Setup(RenderContextBuilder builder)
@@ -156,10 +152,6 @@ internal sealed class BloomUpsamplePass : IPass<SceneView, int>
 
     public string Name => "BloomUpsample";
 
-    // The composite present pass has no Setup of its own to obtain a handle from, so it reads
-    // this directly off the pass that owns the resource, after Setup has populated it.
-    public TextureHandle BloomFullHandle => _bloomFullHandle;
-
     public void Setup(RenderContextBuilder builder)
     {
         _bloomHalfHandle = builder.GetInputTexture("BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
@@ -197,27 +189,33 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView, int>
     private readonly Sampler _sampler;
     private readonly PropertySet _properties = new();
     private readonly CanvasFullscreenSource _fullscreenSource = new();
-    private readonly ScenePass _scenePass;
-    private readonly BloomUpsamplePass _bloomUpPass;
 
-    public CompositePresentPass(GraphicsProgram compositeShader, Sampler sampler, ScenePass scenePass, BloomUpsamplePass bloomUpPass)
+    private TextureHandle _sceneHandle;
+    private TextureHandle _bloomFullHandle;
+
+    public CompositePresentPass(GraphicsProgram compositeShader, Sampler sampler)
     {
         _compositeShader = compositeShader;
         _sampler = sampler;
-        _scenePass = scenePass;
-        _bloomUpPass = bloomUpPass;
     }
 
     public string Name => "Composite";
 
+    public void Setup(PresentContextBuilder builder)
+    {
+        _sceneHandle = builder.GetInputTexture("Scene", GraphTextureDesc.ViewSized());
+        _bloomFullHandle = builder.GetInputTexture("BloomFull", GraphTextureDesc.ViewSized(false, 1f));
+        builder.RequestSwapchain();
+    }
+
     public void Present(RenderContext<SceneView, int> context)
     {
-        Framebuffer? target = context.RequestSwapchainTarget();
+        Framebuffer? target = context.SwapchainTarget;
         if (target == null)
             return;
 
-        RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
-        RenderTexture bloomFull = context.GetRenderTexture(_bloomUpPass.BloomFullHandle);
+        RenderTexture scene = context.GetRenderTexture(_sceneHandle);
+        RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
         cmd.Begin();
@@ -350,7 +348,7 @@ public static class Program
         ScenePass scenePass = new(model, unlitShader, sceneProperties);
         BloomDownsamplePass bloomDown = new(bloomShader, bloomSampler);
         BloomUpsamplePass bloomUp = new(bloomShader, bloomSampler);
-        CompositePresentPass present = new(compositeShader, compositeSampler, scenePass, bloomUp);
+        CompositePresentPass present = new(compositeShader, compositeSampler);
 
         pipeline = new PBRPipeline(scenePass, bloomDown, bloomUp, present);
         views = new[] { new SceneView(600, 600) };
