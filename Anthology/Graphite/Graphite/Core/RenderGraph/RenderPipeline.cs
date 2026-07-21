@@ -6,13 +6,13 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Base class for graph-driven render pipelines. Subclass adds passes and a present pass in
 /// InitializePasses; the pipeline solves them into an ordered graph and runs it per view via ExecuteView.
-/// Optional Culler feeds the scene in as draw commands.
+/// Optional Provider feeds the scene in as draw commands.
 /// </summary>
 public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     where TView : IRenderView
 {
-    /// <summary>Culls the scene into draw commands for the passes. Optional.</summary>
-    public IRenderCuller<TDrawCommand>? Culler { get; set; }
+    /// <summary>Provides draw commands for the passes. Optional.</summary>
+    public IDrawCommandProvider<TDrawCommand>? Provider { get; set; }
 
     private readonly List<IPass<TView, TDrawCommand>> _passes = new();
     private IPresentPass<TView, TDrawCommand>? _presentPass;
@@ -64,7 +64,7 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     }
 
     /// <summary>
-    /// Runs the solved graph for one view. Primes the culler, runs ordered passes with profiler scopes
+    /// Runs the solved graph for one view. Primes the provider, runs ordered passes with profiler scopes
     /// and capture, then runs the present pass. Called once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext<TView, TDrawCommand> context)
@@ -75,7 +75,7 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
         RenderGraph<TView, TDrawCommand> graph = Graph;
         IPassProfiler? profiler = context.Profiler;
 
-        context.Culler?.Initialize(context.View);
+        context.Provider?.Initialize(context.View);
 
         foreach (RenderGraph<TView, TDrawCommand>.PassNode node in graph.OrderedPasses)
         {

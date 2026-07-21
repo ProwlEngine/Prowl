@@ -16,7 +16,7 @@ public enum SortMode
 }
 
 /// <summary>
-/// Base cull request a pass hands to the culler to pull a slice of the scene. Subclass to add your own
+/// Base query a pass hands to the provider to pull a slice of the scene. Subclass to add your own
 /// selection fields (tags, layers) and downcast on receipt.
 /// </summary>
 public abstract class RenderQuery

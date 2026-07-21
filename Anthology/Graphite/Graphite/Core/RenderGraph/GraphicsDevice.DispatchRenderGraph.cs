@@ -29,7 +29,7 @@ public abstract partial class GraphicsDevice
         foreach (T view in views)
         {
             var context = new RenderContext<T, T2>(
-                this, task, graph, view, pipeline.Culler, profiler);
+                this, task, graph, view, pipeline.Provider, profiler);
 
             pipeline.ExecuteView(context);
             present |= context.RequestPresent;

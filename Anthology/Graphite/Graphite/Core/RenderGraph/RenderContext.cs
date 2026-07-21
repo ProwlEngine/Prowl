@@ -5,7 +5,7 @@ namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
 /// Per-view render context passed to passes and the present pass. Fresh per view. Holds the view, the
-/// culler, command buffers, transient textures, and resolved render targets for this execution.
+/// draw command provider, command buffers, transient textures, and resolved render targets for this execution.
 /// </summary>
 public sealed class RenderContext<TView, TDrawCommand>
     where TView : IRenderView
@@ -14,7 +14,7 @@ public sealed class RenderContext<TView, TDrawCommand>
     private readonly ExecutionTask _task;
     private readonly RenderGraph<TView, TDrawCommand> _graph;
     private readonly TView _view;
-    private readonly IRenderCuller<TDrawCommand>? _culler;
+    private readonly IDrawCommandProvider<TDrawCommand>? _provider;
     private readonly IPassProfiler? _profiler;
     private readonly PropertySet _globals = new();
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
@@ -26,14 +26,14 @@ public sealed class RenderContext<TView, TDrawCommand>
         ExecutionTask task,
         RenderGraph<TView, TDrawCommand> graph,
         TView view,
-        IRenderCuller<TDrawCommand>? culler,
+        IDrawCommandProvider<TDrawCommand>? provider,
         IPassProfiler? profiler)
     {
         _device = device;
         _task = task;
         _graph = graph;
         _view = view;
-        _culler = culler;
+        _provider = provider;
         _profiler = profiler;
     }
 
@@ -46,8 +46,8 @@ public sealed class RenderContext<TView, TDrawCommand>
     /// <summary>The view being rendered.</summary>
     public TView View => _view;
 
-    /// <summary>Culler holding this view's culled scene, or null if the pipeline has none.</summary>
-    public IRenderCuller<TDrawCommand>? Culler => _culler;
+    /// <summary>Provider holding this view's draw commands, or null if the pipeline has none.</summary>
+    public IDrawCommandProvider<TDrawCommand>? Provider => _provider;
 
     /// <summary>Global shader properties for this view (view matrices, time, ambient, etc).</summary>
     public PropertySet Globals => _globals;
@@ -132,10 +132,10 @@ public sealed class RenderContext<TView, TDrawCommand>
     /// </summary>
     public void Present() => _presentRequested = true;
 
-    /// <summary>Pulls draw commands matching a query from the culler. Empty list if no culler.</summary>
-    /// <param name="query">Cull request describing what to pull.</param>
+    /// <summary>Pulls draw commands matching a query from the provider. Empty list if no provider.</summary>
+    /// <param name="query">Query describing what to pull.</param>
     public IReadOnlyList<TDrawCommand> GetDrawCommands(RenderQuery query)
-        => _culler?.GetDrawCommands(query) ?? Array.Empty<TDrawCommand>();
+        => _provider?.GetDrawCommands(query) ?? Array.Empty<TDrawCommand>();
 
     /// <summary>Opens a nested timing region in the current pass. Pair with EndSample.</summary>
     /// <param name="name">Name of the sample.</param>
