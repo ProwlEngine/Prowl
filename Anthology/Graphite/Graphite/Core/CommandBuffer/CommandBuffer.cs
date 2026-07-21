@@ -50,6 +50,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// </summary>
     internal ExecutionTask? Execution { get; set; }
 
+    /// <summary>The pass this buffer was rented during, for profiler execution-timing reports. Null outside a pass.</summary>
+    internal PassInfo? Pass { get; set; }
+
     /// <summary>Id of the bound execution, or 0 if none.</summary>
     internal ulong ExecutionId => Execution?.Id ?? 0;
 

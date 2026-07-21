@@ -102,7 +102,9 @@ public abstract class RenderPipeline<TView> : IDisposable
                     profiler.RecordPassRead(passInfo, input, context.ResolveForProfiler(input));
             }
 
+            context.SetCurrentPass(passInfo);
             node.Pass.Render(context);
+            context.SetCurrentPass(null);
 
             profiler?.EndPass(passInfo);
             if (profiler != null)

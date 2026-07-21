@@ -16,6 +16,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
     private Silk.NET.Vulkan.CommandBuffer _cb;
     private bool _destroyed;
     private string _name;
+    private QueryPool? _pendingTimingPool;
 
     public override GraphicsDevice Device => _gd;
     public override bool IsDisposed => _destroyed;
@@ -58,17 +59,28 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
         };
         _gd.Vk.BeginCommandBuffer(_cb, in beginInfo).CheckResult();
         HasEnded = false;
+        _pendingTimingPool = _gd.BeginTiming(_cb);
     }
 
     public override void End()
     {
+        _gd.EndTiming(_cb, _pendingTimingPool);
         _gd.Vk.EndCommandBuffer(_cb).CheckResult();
         HasEnded = true;
     }
 
+    // Reads and clears the timing pool End() wrote into, for the submission path to attach to
+    // this specific submission.
+    internal QueryPool? TakePendingTimingPool()
+    {
+        QueryPool? pool = _pendingTimingPool;
+        _pendingTimingPool = null;
+        return pool;
+    }
+
     internal void SubmitAndWait()
     {
-        _gd.SubmitAndWaitTransfer(_cb);
+        _gd.SubmitAndWaitTransfer(_cb, TakePendingTimingPool(), _name);
     }
 
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)

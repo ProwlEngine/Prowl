@@ -19,6 +19,7 @@ public sealed class RenderContext<TView>
     private readonly List<CommandBuffer> _pendingCommandBuffers = new();
 
     private bool _presentRequested;
+    private PassInfo? _currentPass;
 
     internal RenderContext(
         GraphicsDevice device,
@@ -44,6 +45,9 @@ public sealed class RenderContext<TView>
     /// <summary>The device's profiler, or null if none is attached.</summary>
     public IProfiler? Profiler => _device.Profiler;
 
+    /// <summary>Sets the pass currently rendering, stamped onto command buffers rented from here on. Null outside a pass.</summary>
+    internal void SetCurrentPass(in PassInfo? pass) => _currentPass = pass;
+
     /// <summary>
     /// Rents a command buffer for this pass to record into. The buffer is already begun and ready to record;
     /// submit it back through <see cref="SubmitCommandBuffer"/> when done. Do not begin or end it yourself.
@@ -54,6 +58,7 @@ public sealed class RenderContext<TView>
         CommandBuffer cb = _device.RentGraphCommandBuffer();
 
         cb.Execution = _task;
+        cb.Pass = _currentPass;
         _task.TrackRentedCommandBuffer(cb);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
