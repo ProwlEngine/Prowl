@@ -86,10 +86,10 @@ public class LineRenderer : MonoBehaviour, IRenderable
         }
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         if (Material.Res != null && Points != null && Points.Count >= 2)
-            renderables.Add(this);
+            culler.Add(this);
     }
 
     private bool PointsEqual(List<Float3> a, List<Float3> b)

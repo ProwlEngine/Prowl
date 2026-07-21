@@ -270,12 +270,10 @@ public static class Window
             WindowInputHandler?.LateUpdate();
 
             // No ambient frame anymore - each camera/Paper dispatch opens and closes its own
-            // execution via Device.DispatchGraph (see CameraPipelineRunner, PaperRenderer), including
+            // execution via Device.DispatchGraph (see Scene.Render/Camera.Render, PaperRenderer), including
             // its own SwapBuffers when it presents. Render/PostRender just drive that per-view work.
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
-
-            Rendering.RenderProfiler.FlushPendingCapture();
         }
     }
 

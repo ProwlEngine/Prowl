@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Test;
 public sealed class RenderCollectProbe : MonoBehaviour
 {
     public int Calls;
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) => Calls++;
+    public override void OnRenderCollect(SceneCuller culler) => Calls++;
 }
 
 /// <summary>Records DrawGizmos invocations.</summary>
@@ -37,7 +37,7 @@ public class RegistryRenderTests : RuntimeTestBase
         var probe = go.AddComponent<RenderCollectProbe>();
         scene.Add(go);
 
-        scene.CollectRenderables(null!, new List<IRenderable>(), new List<IRenderableLight>());
+        scene.CollectRenderables();
 
         Assert.Equal(1, probe.Calls);
     }
@@ -51,7 +51,7 @@ public class RegistryRenderTests : RuntimeTestBase
         scene.Add(go);
         probe.Enabled = false;
 
-        scene.CollectRenderables(null!, new List<IRenderable>(), new List<IRenderableLight>());
+        scene.CollectRenderables();
 
         Assert.Equal(0, probe.Calls);
     }
@@ -65,7 +65,7 @@ public class RegistryRenderTests : RuntimeTestBase
         var probe = go.AddComponent<RenderCollectProbe>();
         scene.Add(go);
 
-        scene.CollectRenderables(null!, new List<IRenderable>(), new List<IRenderableLight>());
+        scene.CollectRenderables();
 
         Assert.Equal(1, probe.Calls);
     }

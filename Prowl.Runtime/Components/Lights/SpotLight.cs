@@ -25,9 +25,9 @@ public class SpotLight : Light
     public float SpotAngle = 45.0f; // Outer cone angle in degrees
     public float InnerSpotAngle = 30.0f; // Inner cone angle in degrees for smooth falloff
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
-        lights.Add(this);
+        culler.Add(this);
     }
 
     public override void DrawGizmos()

@@ -23,9 +23,9 @@ public class PointLight : Light
     public Resolution ShadowResolution = Resolution._256;
     public float Range = 10.0f;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
-        lights.Add(this);
+        culler.Add(this);
     }
 
     public override void DrawGizmos()

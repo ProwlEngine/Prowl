@@ -43,7 +43,7 @@ public class MeshRenderer : MonoBehaviour
     // The command buffer snapshots these at encode time, so mutating them next frame is safe.
     [System.NonSerialized] private PropertySet[] _propCache;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         var mesh = Mesh.Res;
         if (mesh == null || Materials.Count == 0) return;
@@ -83,7 +83,7 @@ public class MeshRenderer : MonoBehaviour
             if (mesh.HasBlendShapes)
                 props.SetInt("morphActiveCount", 0);
 
-            renderables.Add(new MeshRenderable(
+            culler.Add(new MeshRenderable(
                 mesh, mat, world,
                 GameObject.LayerIndex, props, subMeshIndex: subCount > 1 ? s : -1));
         }

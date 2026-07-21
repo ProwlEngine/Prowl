@@ -21,13 +21,13 @@ namespace Prowl.Runtime;
 
 public class EchoLogger : IEchoLogger
 {
-    public void Debug(string message) => Prowl.Runtime.Debug.Log(message);
+    public void Debug(string message) => Runtime.Debug.Log(message);
 
-    public void Error(string message, Exception? exception = null) => Prowl.Runtime.Debug.LogError(message);
+    public void Error(string message, Exception? exception = null) => Runtime.Debug.LogError(message);
 
-    public void Info(string message) => Prowl.Runtime.Debug.Log(message);
+    public void Info(string message) => Runtime.Debug.Log(message);
 
-    public void Warning(string message) => Prowl.Runtime.Debug.LogWarning(message);
+    public void Warning(string message) => Runtime.Debug.LogWarning(message);
 }
 
 public abstract class Game
@@ -35,7 +35,7 @@ public abstract class Game
     private TimeData time = new();
     private float fixedTimeAccumulator = 0.0f;
 
-    private PaperRenderer _paperRenderer;
+    private readonly PaperPipeline _uiPipeline = new();
     private Paper _paper;
     private int frameCounter;
 
@@ -76,9 +76,9 @@ public abstract class Game
             var fbSize = Window.InternalWindow.FramebufferSize;
             var winSize = Window.InternalWindow.Size;
 
-            _paperRenderer = new PaperRenderer();
-            _paperRenderer.Initialize(fbSize.X, fbSize.Y);
-            _paper = new Paper(_paperRenderer, winSize.X, winSize.Y, new Prowl.Quill.FontAtlasSettings());
+            _uiPipeline.Initialize(fbSize.X, fbSize.Y);
+
+            _paper = new Paper(_uiPipeline, winSize.X, winSize.Y, new Quill.FontAtlasSettings());
             _paper.SetClipboardHandler(new RuntimeClipboardHandler());
             // Apply the hovered element's requested cursor to the OS window.
             _paper.OnCursorChange += c => Input.SetCursorShape(c);
@@ -133,11 +133,6 @@ public abstract class Game
             {
                 Scene? currentScene = Scene.Current;
 
-                // === Start Graphics ===
-                // Graphite no longer allows recording a bare command buffer outside a pipeline dispatch,
-                // so the old manual swapchain clears here are gone - the camera pipeline's present pass
-                // and Paper's present pass now own writing the swapchain outright, each frame.
-
                 BeginRender();
 
                 OnRender(currentScene);
@@ -155,6 +150,10 @@ public abstract class Game
                 EndGui(_paper);
 
                 _paper.EndFrame();
+
+                // Standalone pipeline: dispatches and presents Paper's UI directly to the swapchain,
+                // independent of any scene camera's own render/present.
+                _uiPipeline.Execute();
 
                 // === End Graphics ===
 
@@ -180,7 +179,7 @@ public abstract class Game
 
         Window.FramebufferResize += (size) =>
         {
-            _paperRenderer.UpdateProjection(size.X, size.Y);
+            _uiPipeline.UpdateProjection(size.X, size.Y);
         };
 
         Window.Closing += () =>
@@ -354,7 +353,7 @@ public abstract class Game
     /// <see cref="Window.ContentScale"/>. Quill's <c>TransformPoint</c> multiplies every vertex
     /// by <c>DisplayFramebufferScale</c>, so vertices span <c>[0, winSize × cs]</c> =
     /// <c>[0, fbSize]</c>, exactly matching the orthographic projection set up by
-    /// <see cref="PaperRenderer.UpdateProjection"/>.
+    /// <see cref="GUI.PaperRenderer{TView}.UpdateProjection"/>.
     /// <para>
     /// A widget declared <c>Width(100)</c> occupies 100 logical points = 100 physical pixels at
     /// 1× DPI and 200 physical pixels at 2× (Retina) DPI the same physical size on screen

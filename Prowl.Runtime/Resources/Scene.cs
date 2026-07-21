@@ -108,6 +108,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary>Per-scene registry of components that implement per-frame callbacks. Drives Update.</summary>
     internal SceneComponentRegistry ComponentRegistry => _componentRegistry;
 
+    /// <summary>Registry every active IRenderable/IRenderableLight submits itself into during
+    /// <see cref="CollectRenderables"/>. The render pipeline reads this directly.</summary>
+    [field: SerializeIgnore]
+    public SceneCuller Culler { get; } = new();
+
     [SerializeIgnore]
     private bool _isActive = false;
 
@@ -653,13 +658,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Collects render data from all active components for the given camera.
-    /// Components add their renderables and lights to the provided lists.
+    /// Refreshes <see cref="Culler"/> for this frame: clears it, then runs every active component's
+    /// render-collect callback so it can submit its renderables/lights back in.
     /// </summary>
-    public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public void CollectRenderables()
     {
         EnsureNotDisposed();
-        _componentRegistry.RunRenderCollect(camera, renderables, lights);
+        Culler.Clear();
+        _componentRegistry.RunRenderCollect(Culler);
     }
 
     /// <summary>
@@ -693,7 +699,6 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public bool Render(RenderTexture? target = null)
     {
         EnsureNotDisposed();
-        // Renderables are now collected per-camera inside pipeline.Render()
 
         // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a
         // child camera once per active ancestor - Distinct() prevents rendering it multiple times.
@@ -704,23 +709,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (Cameras.Count == 0)
             return false;
 
-        foreach (Camera? cam in Cameras)
+        // Cameras with no target of their own draw into the caller's target, if one was given.
+        var camerasUsingSharedTarget = new List<Camera>();
+        if (target.IsValid())
         {
-            RenderPipeline pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
-
-            // If we have a target and the Camera doesnt, draw into the target
-            if (target.IsValid() && cam.Target.IsNotValid())
+            foreach (Camera cam in Cameras)
             {
-                cam.Target = target;
-                pipeline.Render(cam, new());
-                cam.Target = null;
-            }
-            else
-            {
-                // Have no target or the camera has its own target
-                pipeline.Render(cam, new());
+                if (cam.Target.IsNotValid())
+                {
+                    cam.Target = target;
+                    camerasUsingSharedTarget.Add(cam);
+                }
             }
         }
+
+        CollectRenderables();
+
+        var views = Cameras.Select(cam => CameraView.From(cam, new RenderingData())).ToList();
+        Graphics.Device.DispatchGraph(RenderPipelineManager.Current, views);
+        foreach (CameraView view in views)
+            view.Camera.SavePreviousViewProjectionMatrix();
+
+        foreach (Camera cam in camerasUsingSharedTarget)
+            cam.Target = null;
 
         return true;
     }

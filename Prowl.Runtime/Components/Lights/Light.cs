@@ -55,9 +55,9 @@ public abstract class Light : MonoBehaviour, IRenderableLight
     public int ShadowSlot { get; internal set; } = -1;
 
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
-        lights.Add(this);
+        culler.Add(this);
     }
 
     public virtual int GetLayer() => GameObject.LayerIndex;

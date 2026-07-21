@@ -3,9 +3,12 @@
 
 using Prowl.Echo;
 using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 
 namespace Prowl.Runtime;
 
@@ -35,15 +38,9 @@ public class Camera : MonoBehaviour
     //public Rect Viewrect = new(0, 0, 1, 1); // Not Implemented
     public int Depth = -1;
 
-    public RenderPipeline? Pipeline;
     public RenderTexture? Target;
     public bool HDR = false;
     public float RenderScale = 1.0f;
-
-    /// <summary>Profiling report from this camera's most recent render, or null if it has not rendered.
-    /// Written by the render pipeline; read by the editor's render profiler.</summary>
-    [field: SerializeIgnore]
-    public RenderFrameReport? LastRenderReport { get; internal set; }
 
     public bool IsOrthographic => ProjectionMode == ProjectionType.Orthographic;
 
@@ -164,8 +161,11 @@ public class Camera : MonoBehaviour
 
     public void Render(in RenderingData? data = null)
     {
-        RenderPipeline pipeline = Pipeline ?? DefaultRenderPipeline.Default;
-        pipeline.Render(this, data ?? new());
+        Scene?.CollectRenderables();
+
+        CameraView view = CameraView.From(this, data ?? new());
+        Graphics.Device.DispatchGraph(RenderPipelineManager.Current, new[] { view });
+        SavePreviousViewProjectionMatrix();
     }
 
     public RenderTexture? UpdateRenderData()

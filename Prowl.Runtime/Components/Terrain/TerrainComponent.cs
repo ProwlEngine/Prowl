@@ -144,10 +144,32 @@ public class TerrainComponent : MonoBehaviour
     public Float3 WorldToTerrain(Float3 worldPoint) =>
         Float4x4.TransformPoint(worldPoint, Transform.WorldToLocalMatrix);
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    /// <summary>The scene's primary rendering camera: the enabled camera with the highest Depth.
+    /// Terrain LOD is picked against this camera's position, since collection is scene-wide rather
+    /// than per-camera.</summary>
+    private static Camera? ResolveMainCamera(Scene? scene)
+    {
+        if (scene == null) return null;
+
+        Camera? best = null;
+        foreach (GameObject go in scene.ActiveObjects)
+        {
+            Camera? c = go.GetComponent<Camera>();
+            if (c == null || !c.EnabledInHierarchy) continue;
+            if (best == null || c.Depth > best.Depth) best = c;
+        }
+        return best;
+    }
+
+    public override void OnRenderCollect(SceneCuller culler)
     {
         var terrainData = Data.Res;
         if (terrainData == null) return;
+
+        Camera? camera = ResolveMainCamera(GameObject.Scene);
+        if (camera == null) return;
+
+        var renderables = new List<IRenderable>();
 
         float terrainSize = terrainData.Size;
         Float4x4 terrainToWorld = Transform.LocalToWorldMatrix;
@@ -254,6 +276,9 @@ public class TerrainComponent : MonoBehaviour
 
         // Trees
         _treeRenderer?.CollectRenderables(terrainData, this, camera, TreeDistance, renderables);
+
+        foreach (IRenderable renderable in renderables)
+            culler.Add(renderable);
     }
 
     public override void DrawGizmos()

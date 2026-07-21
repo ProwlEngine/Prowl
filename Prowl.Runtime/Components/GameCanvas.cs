@@ -200,13 +200,13 @@ public class GameCanvas : MonoBehaviour
     /// Overlay/Camera canvases ignore this hook - they are pulled by
     /// <see cref="UIRenderTree.CollectFor"/> from the pipeline directly.
     /// </summary>
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> _)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         if (RenderMode != RenderMode.WorldSpace) return;
         RebuildIfDirty();
         Tree.RefreshTransforms();
         foreach (UIRenderItem it in Tree.Items)
-            renderables.Add(it);
+            culler.Add(it);
     }
 
     // ============================================================

@@ -157,7 +157,7 @@ public class ParticleSystemComponent : MonoBehaviour
         }
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         if (_particles.Count <= 0 || Material.Res == null || _quadMesh == null) return;
 
@@ -169,6 +169,7 @@ public class ParticleSystemComponent : MonoBehaviour
         _properties.SetInt("_ObjectID", InstanceID);
 
         // Create batched instanced renderables
+        var renderables = new List<IRenderable>();
         InstancedMeshRenderable.CreateBatched(
             renderables,
             _quadMesh,
@@ -181,9 +182,16 @@ public class ParticleSystemComponent : MonoBehaviour
             _properties,
             _bounds
         );
+        foreach (IRenderable renderable in renderables)
+            culler.Add(renderable);
 
         if (Light.Enabled)
+        {
+            var lights = new List<IRenderableLight>();
             CollectParticleLights(lights);
+            foreach (IRenderableLight light in lights)
+                culler.Add(light);
+        }
     }
 
     /// <summary>

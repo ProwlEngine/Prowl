@@ -743,9 +743,9 @@ public class GizmoBuilder
 
         private readonly PrimitiveTopology _topology;
 
-        private StreamingBuffer? _positions;
-        private StreamingBuffer? _colors;
-        private StreamingBuffer? _indices;
+        private DeviceBuffer? _positions;
+        private DeviceBuffer? _colors;
+        private DeviceBuffer? _indices;
 
         private uint _positionCapacity;
         private uint _colorCapacity;
@@ -786,9 +786,9 @@ public class GizmoBuilder
             EnsureBuffer(ref _colors, ref _colorCapacity, (uint)(vertexCount * 16), BufferUsage.VertexBuffer | BufferUsage.Dynamic);
             EnsureBuffer(ref _indices, ref _indexCapacity, _indexCount * sizeof(uint), BufferUsage.IndexBuffer | BufferUsage.Dynamic);
 
-            _boundPositions = _positions!.Current;
-            _boundColors = _colors!.Current;
-            _boundIndices = _indices!.Current;
+            _boundPositions = _positions!;
+            _boundColors = _colors!;
+            _boundIndices = _indices!;
 
             // Dynamic buffers are host-visible and persistently mapped, so the device write copies straight
             // into mapped GPU memory with no staging buffer or copy command (unlike CommandBuffer.UpdateBuffer).
@@ -811,7 +811,7 @@ public class GizmoBuilder
             return true;
         }
 
-        private static void EnsureBuffer(ref StreamingBuffer? buffer, ref uint capacity, uint sizeInBytes, BufferUsage usage)
+        private static void EnsureBuffer(ref DeviceBuffer? buffer, ref uint capacity, uint sizeInBytes, BufferUsage usage)
         {
             if (buffer != null && sizeInBytes <= capacity)
                 return;
@@ -823,7 +823,7 @@ public class GizmoBuilder
             if (buffer != null)
                 Graphics.DisposeDeferred(buffer);
             uint newCapacity = (uint)(sizeInBytes * 1.5f) + 256;
-            buffer = Graphics.Device.ResourceFactory.CreateStreamingBuffer(new BufferDescription(newCapacity, usage));
+            buffer = Graphics.Device.ResourceFactory.CreateBuffer(new BufferDescription(newCapacity, usage) { TransientWrites = true });
             buffer.Name = $"Gizmo {usage}";
             capacity = newCapacity;
         }

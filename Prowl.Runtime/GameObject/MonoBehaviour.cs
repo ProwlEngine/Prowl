@@ -312,12 +312,11 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public virtual void LateUpdate() { }
 
     /// <summary>
-    /// Called every frame per camera to collect render data.
-    /// Always called regardless of play mode.
-    /// Components add their renderables/lights to the provided lists.
-    /// Camera is provided for LOD and distance-based decisions.
+    /// Called once per frame to collect render data (not per-camera - the scene's render state is
+    /// camera-agnostic). Always called regardless of play mode. Submit renderables/lights into the
+    /// provided culler via <see cref="SceneCuller.Add"/>.
     /// </summary>
-    public virtual void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights) { }
+    public virtual void OnRenderCollect(SceneCuller culler) { }
 
     /// <summary>
     /// Called for rendering and handling GUI gizmos.

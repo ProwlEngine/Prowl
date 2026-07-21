@@ -238,10 +238,14 @@ public sealed class VoxelPlanet : MonoBehaviour
         }
     }
 
-    public override void OnRenderCollect(Camera renderCamera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
-        if (rootNode != null)
-            rootNode.Collect(renderables);
+        if (rootNode == null) return;
+
+        var renderables = new List<IRenderable>();
+        rootNode.Collect(renderables);
+        foreach (IRenderable renderable in renderables)
+            culler.Add(renderable);
     }
 
     public override void DrawGizmos()

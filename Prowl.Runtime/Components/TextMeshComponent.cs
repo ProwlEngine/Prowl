@@ -113,7 +113,7 @@ public class TextMeshComponent : MonoBehaviour
         _dirty = true;
     }
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         // The shared atlas can grow (new glyph / pixel-size), which shifts every glyph's UVs; rebuild
         // when that happens, when a property changed, or when the mesh hasn't been built yet.
@@ -140,7 +140,7 @@ public class TextMeshComponent : MonoBehaviour
         _props.SetVector("_Offset", Float2.Zero);
         _props.SetInt("_ObjectID", InstanceID);
 
-        renderables.Add(new MeshRenderable(_mesh, mat, Transform.LocalToWorldMatrix, GameObject.LayerIndex, _props));
+        culler.Add(new MeshRenderable(_mesh, mat, Transform.LocalToWorldMatrix, GameObject.LayerIndex, _props));
     }
 
     // ============================================================

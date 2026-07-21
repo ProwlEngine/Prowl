@@ -151,12 +151,12 @@ internal sealed class SceneComponentRegistry
 
     // ---- Rendering / gizmo / GUI callbacks (always run, even in edit mode; not gameplay-gated) ----
 
-    public void RunRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public void RunRenderCollect(SceneCuller culler)
     {
         foreach (MonoBehaviour c in _renderCollect.Snapshot())
         {
             if (c.IsDisposed || !c.EnabledInHierarchy) continue;
-            try { c.OnRenderCollect(camera, renderables, lights); }
+            try { c.OnRenderCollect(culler); }
             catch (Exception ex) { Debug.LogError($"[{c.GameObject?.Name}/{c.GetType().Name}] OnRenderCollect threw: {ex.Message}\n{ex.StackTrace}"); }
         }
     }

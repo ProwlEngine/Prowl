@@ -51,7 +51,7 @@ public class SpriteRenderer : MonoBehaviour
     public static Material DefaultSpriteMaterial =>
         s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Sprite));
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
         Sprite? sprite = Sprite.Res;
         if (sprite == null) return;
@@ -84,7 +84,7 @@ public class SpriteRenderer : MonoBehaviour
         if (SortingOrder != 0)
             world *= Float4x4.CreateTranslation(new Float3(0, 0, SortingOrder * SortBias));
 
-        renderables.Add(new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props));
+        culler.Add(new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props));
     }
 
     private void EnsureMesh(Sprite sprite, Texture2D tex)

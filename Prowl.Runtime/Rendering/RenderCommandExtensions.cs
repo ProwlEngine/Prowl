@@ -4,11 +4,13 @@
 using System.Linq;
 
 using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using GraphiteIndexFormat = Prowl.Graphite.IndexFormat;
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 
 namespace Prowl.Runtime.Rendering;
 
@@ -240,13 +242,13 @@ public static class RenderCommandExtensions
 
     /// <summary>
     /// Performs a fullscreen material blit from <paramref name="source"/> into
-    /// <paramref name="destination"/>. Uses the default Blit material when <paramref name="material"/>
-    /// is null, and binds <c>source.MainTexture</c> as <c>_MainTex</c>.
+    /// <paramref name="destination"/>, binding <c>source.MainTexture</c> as <c>_MainTex</c>.
     /// </summary>
-    public static void Blit(this CommandBuffer cmd, RenderTexture source, RenderTexture destination, Material? material = null, int pass = 0, bool restoreTarget = false, bool clear = false)
+    public static void Blit(this CommandBuffer cmd, RenderTexture source, RenderTexture destination, Material material, int pass = 0, bool restoreTarget = false, bool clear = false)
     {
-        Material mat = material ?? RenderPipeline.GetBlitMaterial();
+        Material mat = material;
         Shader? shader = mat.Shader;
+
         if (shader == null) return;
 
         ShaderPass? shaderPass = shader.GetPass(pass);
@@ -276,9 +278,9 @@ public static class RenderCommandExtensions
     /// Performs a fullscreen material blit into <paramref name="destination"/>. The source texture
     /// must already be bound on <paramref name="material"/> (e.g. as <c>_MainTex</c>).
     /// </summary>
-    public static void Blit(this CommandBuffer cmd, RenderTexture destination, Material? material, int pass = 0)
+    public static void Blit(this CommandBuffer cmd, RenderTexture destination, Material material, int pass = 0)
     {
-        Material mat = material ?? RenderPipeline.GetBlitMaterial();
+        Material mat = material;
         Shader? shader = mat.Shader;
         if (shader == null) return;
 
@@ -292,6 +294,51 @@ public static class RenderCommandExtensions
         cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(mat.BuildPropertySet());
+        cmd.Draw(3, 1, 0, 0);
+    }
+
+    private static Sampler? s_blitSampler;
+    private static Sampler GetBlitSampler()
+    {
+        if (s_blitSampler != null) return s_blitSampler;
+        s_blitSampler = Graphics.Device.ResourceFactory.CreateSampler(new SamplerDescription
+        {
+            AddressModeU = SamplerAddressMode.Clamp,
+            AddressModeV = SamplerAddressMode.Clamp,
+            AddressModeW = SamplerAddressMode.Clamp,
+            Filter = SamplerFilter.MinPoint_MagPoint_MipPoint,
+        });
+        s_blitSampler.Name = "RenderCommandExtensions Blit Sampler";
+        return s_blitSampler;
+    }
+
+    /// <summary>
+    /// Performs a fullscreen material blit from a raw Graphite <paramref name="sourceTexture"/> (e.g. a
+    /// graph-resolved <c>Prowl.Graphite.RenderGraph.RenderTexture</c>'s color attachment) into
+    /// <paramref name="destination"/>. Used where a pass only has a graph-native texture handle, not a
+    /// Prowl <see cref="RenderTexture"/> - most passes stay on the <see cref="RenderTexture"/> overload
+    /// above; this exists for e.g. present passes blitting into the swapchain.
+    /// </summary>
+    public static void Blit(this CommandBuffer cmd, Prowl.Graphite.Texture sourceTexture, Framebuffer? destination, Material material, int pass = 0)
+    {
+        Material mat = material;
+        Shader? shader = mat.Shader;
+        if (shader == null) return;
+
+        ShaderPass? shaderPass = shader.GetPass(pass);
+        if (shaderPass == null) return;
+
+        shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
+
+        cmd.SetRenderTarget(destination);
+
+        PropertySet props = mat.BuildPropertySet();
+        if (sourceTexture != null)
+            props.SetTexture("_MainTex", sourceTexture, GetBlitSampler());
+
+        cmd.SetShader(shaderPass);
+        cmd.SetVertexSource(s_fullscreenSource);
+        cmd.SetProperties(props);
         cmd.Draw(3, 1, 0, 0);
     }
 

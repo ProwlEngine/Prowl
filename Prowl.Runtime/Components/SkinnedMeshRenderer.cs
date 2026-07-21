@@ -463,7 +463,7 @@ public class SkinnedMeshRenderer : MonoBehaviour
     [System.NonSerialized] private Float4x4 _prevWorld;
     [System.NonSerialized] private bool _hasPrevWorld;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
     }
 }

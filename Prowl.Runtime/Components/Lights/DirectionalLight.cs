@@ -31,9 +31,9 @@ public class DirectionalLight : Light
 
     public float ShadowDistance = 70f;
 
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    public override void OnRenderCollect(SceneCuller culler)
     {
-        lights.Add(this);
+        culler.Add(this);
     }
 
     public override void DrawGizmos()
