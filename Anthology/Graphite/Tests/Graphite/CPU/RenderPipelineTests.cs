@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Prowl.Graphite.RenderGraph.Tests;
 
-file sealed class CountingPass : IPass<TestView, int>
+file sealed class CountingPass : IPass<TestView>
 {
     public int SetupCount { get; private set; }
 
@@ -16,19 +16,19 @@ file sealed class CountingPass : IPass<TestView, int>
         builder.GetOutputTexture("pipeline_counting_out", Desc.Color());
     }
 
-    public void Render(RenderContext<TestView, int> context) { }
+    public void Render(RenderContext<TestView> context) { }
 }
 
-file sealed class NoOpPresentPass : IPresentPass<TestView, int>
+file sealed class NoOpPresentPass : IPresentPass<TestView>
 {
     public string Name => "Present";
 
     public void Setup(PresentContextBuilder builder) { }
 
-    public void Present(RenderContext<TestView, int> context) { }
+    public void Present(RenderContext<TestView> context) { }
 }
 
-file sealed class CountingPresentPass : IPresentPass<TestView, int>
+file sealed class CountingPresentPass : IPresentPass<TestView>
 {
     public int SetupCount { get; private set; }
 
@@ -36,15 +36,15 @@ file sealed class CountingPresentPass : IPresentPass<TestView, int>
 
     public void Setup(PresentContextBuilder builder) => SetupCount++;
 
-    public void Present(RenderContext<TestView, int> context) { }
+    public void Present(RenderContext<TestView> context) { }
 }
 
-file sealed class CountingPipeline : RenderPipeline<TestView, int>
+file sealed class CountingPipeline : RenderPipeline<TestView>
 {
     private readonly CountingPass _pass;
-    private readonly IPresentPass<TestView, int> _present;
+    private readonly IPresentPass<TestView> _present;
 
-    public CountingPipeline(CountingPass pass, IPresentPass<TestView, int>? present = null)
+    public CountingPipeline(CountingPass pass, IPresentPass<TestView>? present = null)
     {
         _pass = pass;
         _present = present ?? new NoOpPresentPass();
@@ -77,8 +77,8 @@ public class RenderPipelineTests
     {
         CountingPipeline pipeline = new(new CountingPass());
 
-        RenderGraph<TestView, int> first = pipeline.Graph;
-        RenderGraph<TestView, int> second = pipeline.Graph;
+        RenderGraph<TestView> first = pipeline.Graph;
+        RenderGraph<TestView> second = pipeline.Graph;
 
         Assert.Same(first, second);
     }

@@ -26,7 +26,7 @@ file readonly struct DispatchView : IRenderView
     public uint PixelHeight { get; }
 }
 
-file sealed class RecordingPass : IPass<DispatchView, int>
+file sealed class RecordingPass : IPass<DispatchView>
 {
     private readonly bool _rentTransient;
 
@@ -39,7 +39,7 @@ file sealed class RecordingPass : IPass<DispatchView, int>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<DispatchView, int> context)
+    public void Render(RenderContext<DispatchView> context)
     {
         RenderCount++;
         ViewWidths.Add(context.View.PixelWidth);
@@ -49,7 +49,7 @@ file sealed class RecordingPass : IPass<DispatchView, int>
     }
 }
 
-file sealed class RecordingPresentPass : IPresentPass<DispatchView, int>
+file sealed class RecordingPresentPass : IPresentPass<DispatchView>
 {
     private readonly bool _arm;
     private readonly bool _requestSwapchain;
@@ -71,7 +71,7 @@ file sealed class RecordingPresentPass : IPresentPass<DispatchView, int>
             builder.RequestSwapchain();
     }
 
-    public void Present(RenderContext<DispatchView, int> context)
+    public void Present(RenderContext<DispatchView> context)
     {
         PresentCount++;
         Framebuffer? target = context.SwapchainTarget;
@@ -82,12 +82,12 @@ file sealed class RecordingPresentPass : IPresentPass<DispatchView, int>
     }
 }
 
-file sealed class TestPipeline : RenderPipeline<DispatchView, int>
+file sealed class TestPipeline : RenderPipeline<DispatchView>
 {
-    private readonly IPresentPass<DispatchView, int> _present;
-    private readonly IPass<DispatchView, int>[] _passes;
+    private readonly IPresentPass<DispatchView> _present;
+    private readonly IPass<DispatchView>[] _passes;
 
-    public TestPipeline(IPresentPass<DispatchView, int> present, params IPass<DispatchView, int>[] passes)
+    public TestPipeline(IPresentPass<DispatchView> present, params IPass<DispatchView>[] passes)
     {
         _present = present;
         _passes = passes;
@@ -95,7 +95,7 @@ file sealed class TestPipeline : RenderPipeline<DispatchView, int>
 
     protected override void InitializePasses()
     {
-        foreach (IPass<DispatchView, int> pass in _passes)
+        foreach (IPass<DispatchView> pass in _passes)
             AddPass(pass);
 
         SetPresentPass(_present);

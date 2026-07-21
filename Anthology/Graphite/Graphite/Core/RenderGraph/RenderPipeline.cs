@@ -6,17 +6,13 @@ namespace Prowl.Graphite.RenderGraph;
 /// <summary>
 /// Base class for graph-driven render pipelines. Subclass adds passes and a present pass in
 /// InitializePasses; the pipeline solves them into an ordered graph and runs it per view via ExecuteView.
-/// Optional Provider feeds the scene in as draw commands.
 /// </summary>
-public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
+public abstract class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
 {
-    /// <summary>Provides draw commands for the passes. Optional.</summary>
-    public IDrawCommandProvider<TDrawCommand>? Provider { get; set; }
-
-    private readonly List<IPass<TView, TDrawCommand>> _passes = new();
-    private IPresentPass<TView, TDrawCommand>? _presentPass;
-    private RenderGraph<TView, TDrawCommand>? _graph;
+    private readonly List<IPass<TView>> _passes = new();
+    private IPresentPass<TView>? _presentPass;
+    private RenderGraph<TView>? _graph;
     private bool _initialized;
 
     /// <summary>
@@ -26,15 +22,15 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     protected abstract void InitializePasses();
 
     /// <summary>Adds a pass. Call from InitializePasses.</summary>
-    protected void AddPass(IPass<TView, TDrawCommand> pass)
+    protected void AddPass(IPass<TView> pass)
         => _passes.Add(pass ?? throw new ArgumentNullException(nameof(pass)));
 
     /// <summary>Sets the required present pass. Call from InitializePasses.</summary>
-    protected void SetPresentPass(IPresentPass<TView, TDrawCommand> presentPass)
+    protected void SetPresentPass(IPresentPass<TView> presentPass)
         => _presentPass = presentPass ?? throw new ArgumentNullException(nameof(presentPass));
 
     /// <summary>The present pass, resolved after init. Throws if none was set.</summary>
-    public IPresentPass<TView, TDrawCommand> PresentPass
+    public IPresentPass<TView> PresentPass
     {
         get
         {
@@ -45,12 +41,12 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     }
 
     /// <summary>The solved graph, built on first use from the added passes.</summary>
-    public RenderGraph<TView, TDrawCommand> Graph
+    public RenderGraph<TView> Graph
     {
         get
         {
             EnsureInitialized();
-            return _graph ??= RenderGraph<TView, TDrawCommand>.Build(_passes, PresentPass);
+            return _graph ??= RenderGraph<TView>.Build(_passes, PresentPass);
         }
     }
 
@@ -64,20 +60,18 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     }
 
     /// <summary>
-    /// Runs the solved graph for one view. Primes the provider, runs ordered passes with profiler scopes
-    /// and capture, then runs the present pass. Called once per view per dispatch.
+    /// Runs the solved graph for one view. Runs ordered passes with profiler scopes and capture,
+    /// then runs the present pass. Called once per view per dispatch.
     /// </summary>
-    public void ExecuteView(RenderContext<TView, TDrawCommand> context)
+    public void ExecuteView(RenderContext<TView> context)
     {
         if (context == null)
             throw new ArgumentNullException(nameof(context));
 
-        RenderGraph<TView, TDrawCommand> graph = Graph;
+        RenderGraph<TView> graph = Graph;
         IPassProfiler? profiler = context.Profiler;
 
-        context.Provider?.Initialize(context.View);
-
-        foreach (RenderGraph<TView, TDrawCommand>.PassNode node in graph.OrderedPasses)
+        foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
         {
             profiler?.BeginSample(node.Pass.Name);
             node.Pass.Render(context);
@@ -90,7 +84,7 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
         PresentPass.Present(context);
     }
 
-    private static void CapturePassOutputs(RenderContext<TView, TDrawCommand> context, IPassProfiler profiler, RenderGraph<TView, TDrawCommand>.PassNode node)
+    private static void CapturePassOutputs(RenderContext<TView> context, IPassProfiler profiler, RenderGraph<TView>.PassNode node)
     {
         if (node.Outputs == null || node.Outputs.Length == 0)
             return;
@@ -107,7 +101,7 @@ public abstract class RenderPipeline<TView, TDrawCommand> : IDisposable
     /// <summary>Disposes passes and the present pass that are disposable.</summary>
     public virtual void Dispose()
     {
-        foreach (IPass<TView, TDrawCommand> pass in _passes)
+        foreach (IPass<TView> pass in _passes)
             (pass as IDisposable)?.Dispose();
 
         (_presentPass as IDisposable)?.Dispose();

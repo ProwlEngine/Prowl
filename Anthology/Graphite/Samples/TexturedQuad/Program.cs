@@ -23,7 +23,7 @@ internal readonly struct SceneView : IRenderView
 
 // Three draws sharing one shader but switching PropertySets, no dependencies between passes: present
 // clears and draws straight into the swapchain.
-internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView, int>
+internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
 {
     private readonly GraphicsProgram _shader;
     private readonly Mesh _leftQuad;
@@ -51,7 +51,7 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView, int>
 
     public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
 
-    public void Present(RenderContext<SceneView, int> context)
+    public void Present(RenderContext<SceneView> context)
     {
         Framebuffer? target = context.SwapchainTarget;
         if (target == null)
@@ -84,11 +84,11 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView, int>
 }
 
 
-internal sealed class TexturedQuadPipeline : RenderPipeline<SceneView, int>
+internal sealed class TexturedQuadPipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView, int> _present;
+    private readonly IPresentPass<SceneView> _present;
 
-    public TexturedQuadPipeline(IPresentPass<SceneView, int> present) => _present = present;
+    public TexturedQuadPipeline(IPresentPass<SceneView> present) => _present = present;
 
     protected override void InitializePasses() => SetPresentPass(_present);
 }

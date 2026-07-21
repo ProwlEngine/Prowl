@@ -20,7 +20,7 @@ internal readonly struct SceneView : IRenderView
 
 // The whole demo is one draw, so it needs no offscreen passes to order or textures to share between
 // passes: the present pass alone clears and draws straight into the swapchain target.
-internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
+internal sealed class TrianglePresentPass : IPresentPass<SceneView>
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
@@ -35,7 +35,7 @@ internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
 
     public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
 
-    public void Present(RenderContext<SceneView, int> context)
+    public void Present(RenderContext<SceneView> context)
     {
         Framebuffer? target = context.SwapchainTarget;
         if (target == null)
@@ -57,11 +57,11 @@ internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
 }
 
 
-internal sealed class TrianglePipeline : RenderPipeline<SceneView, int>
+internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView, int> _present;
+    private readonly IPresentPass<SceneView> _present;
 
-    public TrianglePipeline(IPresentPass<SceneView, int> present) => _present = present;
+    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
 
     protected override void InitializePasses() => SetPresentPass(_present);
 }

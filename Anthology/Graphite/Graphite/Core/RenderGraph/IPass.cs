@@ -4,7 +4,7 @@ namespace Prowl.Graphite.RenderGraph;
 /// A single pass in a pipeline. Declares its texture in/out once via Setup so the graph can
 /// order it and resolve/share dependencies. Pipeline calls Render when it executes.
 /// </summary>
-public interface IPass<TView, TDrawCommand>
+public interface IPass<TView>
     where TView : IRenderView
 {
     /// <summary>Pass name for debugging.</summary>
@@ -14,5 +14,5 @@ public interface IPass<TView, TDrawCommand>
     void Setup(RenderContextBuilder builder);
 
     /// <summary>Records this pass's rendering. Resolve textures with context.GetRenderTexture.</summary>
-    void Render(RenderContext<TView, TDrawCommand> context);
+    void Render(RenderContext<TView> context);
 }

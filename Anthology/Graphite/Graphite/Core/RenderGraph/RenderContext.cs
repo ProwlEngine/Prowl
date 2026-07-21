@@ -4,17 +4,16 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Per-view render context passed to passes and the present pass. Fresh per view. Holds the view, the
-/// draw command provider, command buffers, transient textures, and resolved render targets for this execution.
+/// Per-view render context passed to passes and the present pass. Fresh per view. Holds the view,
+/// command buffers, transient textures, and resolved render targets for this execution.
 /// </summary>
-public sealed class RenderContext<TView, TDrawCommand>
+public sealed class RenderContext<TView>
     where TView : IRenderView
 {
     private readonly GraphicsDevice _device;
     private readonly ExecutionTask _task;
-    private readonly RenderGraph<TView, TDrawCommand> _graph;
+    private readonly RenderGraph<TView> _graph;
     private readonly TView _view;
-    private readonly IDrawCommandProvider<TDrawCommand>? _provider;
     private readonly IPassProfiler? _profiler;
     private readonly PropertySet _globals = new();
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
@@ -24,16 +23,14 @@ public sealed class RenderContext<TView, TDrawCommand>
     internal RenderContext(
         GraphicsDevice device,
         ExecutionTask task,
-        RenderGraph<TView, TDrawCommand> graph,
+        RenderGraph<TView> graph,
         TView view,
-        IDrawCommandProvider<TDrawCommand>? provider,
         IPassProfiler? profiler)
     {
         _device = device;
         _task = task;
         _graph = graph;
         _view = view;
-        _provider = provider;
         _profiler = profiler;
     }
 
@@ -45,9 +42,6 @@ public sealed class RenderContext<TView, TDrawCommand>
 
     /// <summary>The view being rendered.</summary>
     public TView View => _view;
-
-    /// <summary>Provider holding this view's draw commands, or null if the pipeline has none.</summary>
-    public IDrawCommandProvider<TDrawCommand>? Provider => _provider;
 
     /// <summary>Global shader properties for this view (view matrices, time, ambient, etc).</summary>
     public PropertySet Globals => _globals;
@@ -132,22 +126,12 @@ public sealed class RenderContext<TView, TDrawCommand>
     /// </summary>
     public void Present() => _presentRequested = true;
 
-    /// <summary>Pulls draw commands matching a query from the provider. Empty list if no provider.</summary>
-    /// <param name="query">Query describing what to pull.</param>
-    public IReadOnlyList<TDrawCommand> GetDrawCommands(RenderQuery query)
-        => _provider?.GetDrawCommands(query) ?? Array.Empty<TDrawCommand>();
-
     /// <summary>Opens a nested timing region in the current pass. Pair with EndSample.</summary>
     /// <param name="name">Name of the sample.</param>
     public void BeginSample(string name) => _profiler?.BeginSample(name);
 
     /// <summary>Closes the most recently opened sample region.</summary>
     public void EndSample() => _profiler?.EndSample();
-
-    /// <summary>Records one draw call for profiling. No-op if profiling is off.</summary>
-    /// <param name="indexCount">Indices drawn.</param>
-    /// <param name="instanceCount">Instances drawn.</param>
-    public void RecordDrawCall(int indexCount, int instanceCount = 1) => _profiler?.RecordDrawCall(indexCount, instanceCount);
 
     private RenderTextureDescription ToTransientDesc(in GraphTextureDesc desc)
     {

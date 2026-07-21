@@ -28,7 +28,7 @@ internal readonly struct SceneView : IRenderView
 // upsample) over it into "BloomFull", and finally composites Scene + BloomFull to the swapchain. The
 // graph orders the four passes from their declared texture reads/writes; nothing here manually tracks
 // dependency order.
-internal sealed class ScenePass : IPass<SceneView, int>
+internal sealed class ScenePass : IPass<SceneView>
 {
     private readonly ModelAsset _model;
     private readonly GraphicsProgram _shader;
@@ -56,7 +56,7 @@ internal sealed class ScenePass : IPass<SceneView, int>
     public void Setup(RenderContextBuilder builder)
         => _sceneHandle = builder.GetOutputTexture("Scene", GraphTextureDesc.ViewSized());
 
-    public void Render(RenderContext<SceneView, int> context)
+    public void Render(RenderContext<SceneView> context)
     {
         float radius = Math.Max(_distance, 0.001f);
         Float3 eye = _center + new Float3(MathF.Sin(_angle), 0.35f, MathF.Cos(_angle)) * _distance;
@@ -83,7 +83,7 @@ internal sealed class ScenePass : IPass<SceneView, int>
 }
 
 
-internal sealed class BloomDownsamplePass : IPass<SceneView, int>
+internal sealed class BloomDownsamplePass : IPass<SceneView>
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -108,7 +108,7 @@ internal sealed class BloomDownsamplePass : IPass<SceneView, int>
         _bloomHalfHandle = builder.GetOutputTexture("BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
     }
 
-    public void Render(RenderContext<SceneView, int> context)
+    public void Render(RenderContext<SceneView> context)
     {
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
@@ -133,7 +133,7 @@ internal sealed class BloomDownsamplePass : IPass<SceneView, int>
 }
 
 
-internal sealed class BloomUpsamplePass : IPass<SceneView, int>
+internal sealed class BloomUpsamplePass : IPass<SceneView>
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -158,7 +158,7 @@ internal sealed class BloomUpsamplePass : IPass<SceneView, int>
         _bloomFullHandle = builder.GetOutputTexture("BloomFull", GraphTextureDesc.ViewSized(false, 1f));
     }
 
-    public void Render(RenderContext<SceneView, int> context)
+    public void Render(RenderContext<SceneView> context)
     {
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
@@ -183,7 +183,7 @@ internal sealed class BloomUpsamplePass : IPass<SceneView, int>
 }
 
 
-internal sealed class CompositePresentPass : IPresentPass<SceneView, int>
+internal sealed class CompositePresentPass : IPresentPass<SceneView>
 {
     private readonly GraphicsProgram _compositeShader;
     private readonly Sampler _sampler;
@@ -208,7 +208,7 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView, int>
         builder.RequestSwapchain();
     }
 
-    public void Present(RenderContext<SceneView, int> context)
+    public void Present(RenderContext<SceneView> context)
     {
         Framebuffer? target = context.SwapchainTarget;
         if (target == null)
@@ -255,7 +255,7 @@ internal readonly struct CanvasFullscreenSource : IVertexSource
 }
 
 
-internal sealed class PBRPipeline : RenderPipeline<SceneView, int>
+internal sealed class PBRPipeline : RenderPipeline<SceneView>
 {
     private readonly ScenePass _scene;
     private readonly BloomDownsamplePass _bloomDown;

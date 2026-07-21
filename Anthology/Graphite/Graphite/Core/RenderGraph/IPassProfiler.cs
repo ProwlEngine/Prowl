@@ -13,9 +13,6 @@ public interface IPassProfiler
     /// <summary>Closes the last sample.</summary>
     void EndSample();
 
-    /// <summary>Records one draw call in the current pass's report.</summary>
-    void RecordDrawCall(int indexCount, int instanceCount);
-
     /// <summary>If true, pipeline calls Capture after each pass.</summary>
     bool RequestCapture { get; }
 

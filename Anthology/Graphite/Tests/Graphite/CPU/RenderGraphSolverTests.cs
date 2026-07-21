@@ -12,13 +12,13 @@ namespace Prowl.Graphite.RenderGraph.Tests;
 
 public class RenderGraphSolverTests
 {
-    private static RenderGraph<TestView, int> Build(params IPass<TestView, int>[] passes)
-        => RenderGraph<TestView, int>.Build(passes, new NoOpTestPresentPass());
+    private static RenderGraph<TestView> Build(params IPass<TestView>[] passes)
+        => RenderGraph<TestView>.Build(passes, new NoOpTestPresentPass());
 
-    private static RenderGraph<TestView, int> Build(IPresentPass<TestView, int> presentPass, params IPass<TestView, int>[] passes)
-        => RenderGraph<TestView, int>.Build(passes, presentPass);
+    private static RenderGraph<TestView> Build(IPresentPass<TestView> presentPass, params IPass<TestView>[] passes)
+        => RenderGraph<TestView>.Build(passes, presentPass);
 
-    private static List<string> OrderNames(RenderGraph<TestView, int> graph)
+    private static List<string> OrderNames(RenderGraph<TestView> graph)
         => graph.OrderedPasses.Select(n => n.Pass.Name).ToList();
 
     [Fact]
@@ -30,7 +30,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("topo_shared", Desc.Color()) },
             outputs: new[] { ("topo_readerOut", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(reader, writer);
+        RenderGraph<TestView> graph = Build(reader, writer);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Writer") < order.IndexOf("Reader"));
@@ -47,7 +47,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("chain_b", Desc.Color()) },
             outputs: new[] { ("chain_c", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(c, b, a);
+        RenderGraph<TestView> graph = Build(c, b, a);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("A") < order.IndexOf("B"));
@@ -60,7 +60,7 @@ public class RenderGraphSolverTests
         var a = new TestPass("A", outputs: new[] { ("indep_a", Desc.Color()) });
         var b = new TestPass("B", outputs: new[] { ("indep_b", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(a, b);
+        RenderGraph<TestView> graph = Build(a, b);
 
         Assert.Equal(new[] { "A", "B" }, OrderNames(graph).ToArray());
     }
@@ -90,7 +90,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("merge_shared", second) },
             outputs: new[] { ("merge_readerOut", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(writer, reader);
+        RenderGraph<TestView> graph = Build(writer, reader);
 
         RenderResourceID id = RenderResourceID.Intern("merge_shared");
         GraphTextureDesc merged = graph.Resources[id];
@@ -110,7 +110,7 @@ public class RenderGraphSolverTests
             outputs: new[] { ("present_second", Desc.Color()) },
             mainOutput: "present_second");
 
-        RenderGraph<TestView, int> graph = Build(second, first);
+        RenderGraph<TestView> graph = Build(second, first);
 
         Assert.Equal(RenderResourceID.Intern("present_second"), graph.PresentationSource);
     }
@@ -120,7 +120,7 @@ public class RenderGraphSolverTests
     {
         var a = new TestPass("A", outputs: new[] { ("nopresent_a", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(a);
+        RenderGraph<TestView> graph = Build(a);
 
         Assert.False(graph.PresentationSource.IsValid);
     }
@@ -139,7 +139,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("table_a", Desc.Color()) },
             outputs: new[] { ("table_b", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(a, b);
+        RenderGraph<TestView> graph = Build(a, b);
 
         Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("table_a")));
         Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("table_b")));
@@ -160,7 +160,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("diamond_y1", Desc.Color()), ("diamond_y2", Desc.Color()) },
             outputs: new[] { ("diamond_out", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(join, right, left, producer);
+        RenderGraph<TestView> graph = Build(join, right, left, producer);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Producer") < order.IndexOf("Left"));
@@ -178,7 +178,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("fanin_shared", Desc.Color()) },
             outputs: new[] { ("fanin_out", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(reader, writer2, writer1);
+        RenderGraph<TestView> graph = Build(reader, writer2, writer1);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Writer1") < order.IndexOf("Reader"));
@@ -196,7 +196,7 @@ public class RenderGraphSolverTests
             inputs: new[] { ("rmw_res", Desc.Color()) },
             outputs: new[] { ("rmw_downstream", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(downstream, rmw, upstream);
+        RenderGraph<TestView> graph = Build(downstream, rmw, upstream);
         List<string> order = OrderNames(graph);
 
         Assert.True(order.IndexOf("Upstream") < order.IndexOf("RMW"));
@@ -209,7 +209,7 @@ public class RenderGraphSolverTests
         var unreferenced = new TestPass("Unreferenced", outputs: new[] { ("cull_unused", Desc.Color()) });
         var main = new TestPass("Main", outputs: new[] { ("cull_main", Desc.Color()) }, mainOutput: "cull_main");
 
-        RenderGraph<TestView, int> graph = Build(unreferenced, main);
+        RenderGraph<TestView> graph = Build(unreferenced, main);
 
         Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
     }
@@ -219,7 +219,7 @@ public class RenderGraphSolverTests
     {
         var present = new TestPresentPass(requestSwapchain: true);
 
-        RenderGraph<TestView, int> graph = Build(present);
+        RenderGraph<TestView> graph = Build(present);
 
         Assert.True(graph.PresentRequestsSwapchain);
     }
@@ -229,7 +229,7 @@ public class RenderGraphSolverTests
     {
         var present = new TestPresentPass(requestSwapchain: false);
 
-        RenderGraph<TestView, int> graph = Build(present);
+        RenderGraph<TestView> graph = Build(present);
 
         Assert.False(graph.PresentRequestsSwapchain);
     }
@@ -243,7 +243,7 @@ public class RenderGraphSolverTests
         var writer = new TestPass("Writer", outputs: new[] { ("present_in_shared", writerDesc) });
         var present = new TestPresentPass(inputs: new[] { ("present_in_shared", presentDesc) });
 
-        RenderGraph<TestView, int> graph = Build(present, writer);
+        RenderGraph<TestView> graph = Build(present, writer);
 
         Assert.Contains(RenderResourceID.Intern("present_in_shared"), graph.PresentInputs);
         GraphTextureDesc merged = graph.Resources[RenderResourceID.Intern("present_in_shared")];
@@ -256,7 +256,7 @@ public class RenderGraphSolverTests
     {
         var present = new TestPresentPass(inputs: new[] { ("present_only_resource", Desc.Color()) });
 
-        RenderGraph<TestView, int> graph = Build(present);
+        RenderGraph<TestView> graph = Build(present);
 
         Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("present_only_resource")));
     }

@@ -19,13 +19,13 @@ internal readonly struct SceneView : IRenderView
 
 
 // One draw, no dependencies between passes: present clears and draws straight into the swapchain.
-internal sealed class CubePresentPass : IPresentPass<SceneView, int>
+internal sealed class CubePresentPass : IPresentPass<SceneView>
 {
     public string Name => "Present";
 
     public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
 
-    public void Present(RenderContext<SceneView, int> context)
+    public void Present(RenderContext<SceneView> context)
     {
         Framebuffer? target = context.SwapchainTarget;
         if (target == null)
@@ -45,7 +45,7 @@ internal sealed class CubePresentPass : IPresentPass<SceneView, int>
 }
 
 
-internal sealed class CubePipeline : RenderPipeline<SceneView, int>
+internal sealed class CubePipeline : RenderPipeline<SceneView>
 {
     protected override void InitializePasses() => SetPresentPass(new CubePresentPass());
 }

@@ -27,7 +27,7 @@ file readonly struct ResourceView : IRenderView
     public uint PixelHeight { get; }
 }
 
-file sealed class ResolvingPass : IPass<ResourceView, int>
+file sealed class ResolvingPass : IPass<ResourceView>
 {
     private readonly RenderResourceID _id;
     private readonly GraphTextureDesc _desc;
@@ -51,34 +51,34 @@ file sealed class ResolvingPass : IPass<ResourceView, int>
     public void Setup(RenderContextBuilder builder)
         => _handle = _isOutput ? builder.GetOutputTexture(_id, _desc) : builder.GetInputTexture(_id, _desc);
 
-    public void Render(RenderContext<ResourceView, int> context)
+    public void Render(RenderContext<ResourceView> context)
     {
         for (int i = 0; i < _resolvesPerRender; i++)
             Resolved.Add(context.GetRenderTexture(_handle));
     }
 }
 
-file sealed class UndeclaredResolvePass : IPass<ResourceView, int>
+file sealed class UndeclaredResolvePass : IPass<ResourceView>
 {
     public string Name => "UndeclaredResolve";
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView, int> context)
+    public void Render(RenderContext<ResourceView> context)
         => context.GetRenderTexture(new TextureHandle(RenderResourceID.Intern("resourcetest_undeclared")));
 }
 
-file sealed class DefaultHandleResolvePass : IPass<ResourceView, int>
+file sealed class DefaultHandleResolvePass : IPass<ResourceView>
 {
     public string Name => "DefaultHandleResolve";
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView, int> context)
+    public void Render(RenderContext<ResourceView> context)
         => context.GetRenderTexture(default);
 }
 
-file sealed class TwoOutputPass : IPass<ResourceView, int>
+file sealed class TwoOutputPass : IPass<ResourceView>
 {
     private readonly RenderResourceID _a;
     private readonly RenderResourceID _b;
@@ -100,10 +100,10 @@ file sealed class TwoOutputPass : IPass<ResourceView, int>
         builder.GetOutputTexture(_b, _desc);
     }
 
-    public void Render(RenderContext<ResourceView, int> context) { }
+    public void Render(RenderContext<ResourceView> context) { }
 }
 
-file sealed class ZeroOutputPass : IPass<ResourceView, int>
+file sealed class ZeroOutputPass : IPass<ResourceView>
 {
     public ZeroOutputPass(string name) => Name = name;
 
@@ -111,10 +111,10 @@ file sealed class ZeroOutputPass : IPass<ResourceView, int>
 
     public void Setup(RenderContextBuilder builder) { }
 
-    public void Render(RenderContext<ResourceView, int> context) { }
+    public void Render(RenderContext<ResourceView> context) { }
 }
 
-file sealed class RequestingPresentPass : IPresentPass<ResourceView, int>
+file sealed class RequestingPresentPass : IPresentPass<ResourceView>
 {
     public bool SawSwapchainTarget { get; private set; }
 
@@ -122,11 +122,11 @@ file sealed class RequestingPresentPass : IPresentPass<ResourceView, int>
 
     public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
 
-    public void Present(RenderContext<ResourceView, int> context)
+    public void Present(RenderContext<ResourceView> context)
         => SawSwapchainTarget = context.SwapchainTarget != null;
 }
 
-file sealed class NonRequestingPresentPass : IPresentPass<ResourceView, int>
+file sealed class NonRequestingPresentPass : IPresentPass<ResourceView>
 {
     public bool SawSwapchainTarget { get; private set; }
 
@@ -134,20 +134,20 @@ file sealed class NonRequestingPresentPass : IPresentPass<ResourceView, int>
 
     public void Setup(PresentContextBuilder builder) { }
 
-    public void Present(RenderContext<ResourceView, int> context)
+    public void Present(RenderContext<ResourceView> context)
         => SawSwapchainTarget = context.SwapchainTarget != null;
 }
 
-file sealed class NoOpPresentPass : IPresentPass<ResourceView, int>
+file sealed class NoOpPresentPass : IPresentPass<ResourceView>
 {
     public string Name => "Present";
 
     public void Setup(PresentContextBuilder builder) { }
 
-    public void Present(RenderContext<ResourceView, int> context) { }
+    public void Present(RenderContext<ResourceView> context) { }
 }
 
-file sealed class ReadingPresentPass : IPresentPass<ResourceView, int>
+file sealed class ReadingPresentPass : IPresentPass<ResourceView>
 {
     private readonly RenderResourceID _id;
     private readonly GraphTextureDesc _desc;
@@ -165,7 +165,7 @@ file sealed class ReadingPresentPass : IPresentPass<ResourceView, int>
 
     public void Setup(PresentContextBuilder builder) => _handle = builder.GetInputTexture(_id, _desc);
 
-    public void Present(RenderContext<ResourceView, int> context) => Resolved = context.GetRenderTexture(_handle);
+    public void Present(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
 
 file sealed class RecordingProfiler : IPassProfiler
@@ -178,8 +178,6 @@ file sealed class RecordingProfiler : IPassProfiler
 
     public void EndSample() { }
 
-    public void RecordDrawCall(int indexCount, int instanceCount) { }
-
     public void Capture(IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
     {
         transfer.Begin();
@@ -188,14 +186,14 @@ file sealed class RecordingProfiler : IPassProfiler
     }
 }
 
-file sealed class ResourceTestPipeline : RenderPipeline<ResourceView, int>
+file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>
 {
-    private readonly IPresentPass<ResourceView, int> _present;
-    private readonly IPass<ResourceView, int>[] _passes;
+    private readonly IPresentPass<ResourceView> _present;
+    private readonly IPass<ResourceView>[] _passes;
 
-    public ResourceTestPipeline(params IPass<ResourceView, int>[] passes) : this(new NoOpPresentPass(), passes) { }
+    public ResourceTestPipeline(params IPass<ResourceView>[] passes) : this(new NoOpPresentPass(), passes) { }
 
-    public ResourceTestPipeline(IPresentPass<ResourceView, int> present, params IPass<ResourceView, int>[] passes)
+    public ResourceTestPipeline(IPresentPass<ResourceView> present, params IPass<ResourceView>[] passes)
     {
         _present = present;
         _passes = passes;
@@ -203,7 +201,7 @@ file sealed class ResourceTestPipeline : RenderPipeline<ResourceView, int>
 
     protected override void InitializePasses()
     {
-        foreach (IPass<ResourceView, int> pass in _passes)
+        foreach (IPass<ResourceView> pass in _passes)
             AddPass(pass);
 
         SetPresentPass(_present);

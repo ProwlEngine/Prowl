@@ -21,7 +21,7 @@ internal readonly struct TestView : IRenderView
 }
 
 /// <summary>Pass for testing the solver. Declares given input/output resource names.</summary>
-internal sealed class TestPass : IPass<TestView, int>
+internal sealed class TestPass : IPass<TestView>
 {
     private readonly (string name, GraphTextureDesc desc)[] _inputs;
     private readonly (string name, GraphTextureDesc desc)[] _outputs;
@@ -57,11 +57,11 @@ internal sealed class TestPass : IPass<TestView, int>
             builder.SetMainOutput(main);
     }
 
-    public void Render(RenderContext<TestView, int> context) { }
+    public void Render(RenderContext<TestView> context) { }
 }
 
 /// <summary>Pass that nominates a main output it only declared as input, to test the solver's guard.</summary>
-internal sealed class MisdeclaredMainOutputPass : IPass<TestView, int>
+internal sealed class MisdeclaredMainOutputPass : IPass<TestView>
 {
     public string Name => "Misdeclared";
 
@@ -72,7 +72,7 @@ internal sealed class MisdeclaredMainOutputPass : IPass<TestView, int>
         builder.SetMainOutput(onlyInput);
     }
 
-    public void Render(RenderContext<TestView, int> context) { }
+    public void Render(RenderContext<TestView> context) { }
 }
 
 internal static class Desc
@@ -81,17 +81,17 @@ internal static class Desc
 }
 
 /// <summary>No-op present pass for tests that only need to solve/build a graph, not present it.</summary>
-internal sealed class NoOpTestPresentPass : IPresentPass<TestView, int>
+internal sealed class NoOpTestPresentPass : IPresentPass<TestView>
 {
     public string Name => "TestNoOpPresent";
 
     public void Setup(PresentContextBuilder builder) { }
 
-    public void Present(RenderContext<TestView, int> context) { }
+    public void Present(RenderContext<TestView> context) { }
 }
 
 /// <summary>Present pass for testing the solver's handling of declared present inputs and swapchain requests.</summary>
-internal sealed class TestPresentPass : IPresentPass<TestView, int>
+internal sealed class TestPresentPass : IPresentPass<TestView>
 {
     private readonly (string name, GraphTextureDesc desc)[] _inputs;
     private readonly bool _requestSwapchain;
@@ -113,5 +113,5 @@ internal sealed class TestPresentPass : IPresentPass<TestView, int>
             builder.RequestSwapchain();
     }
 
-    public void Present(RenderContext<TestView, int> context) { }
+    public void Present(RenderContext<TestView> context) { }
 }

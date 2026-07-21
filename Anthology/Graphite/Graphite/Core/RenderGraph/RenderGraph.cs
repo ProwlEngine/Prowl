@@ -7,14 +7,14 @@ namespace Prowl.Graphite.RenderGraph;
 /// A solved render graph: passes ordered so readers run after writers, plus the merged resource table
 /// and the resource presented as the result. Built from the passes a pipeline adds.
 /// </summary>
-public sealed class RenderGraph<TView, TDrawCommand>
+public sealed class RenderGraph<TView>
     where TView : IRenderView
 {
     /// <summary>A pass and the resource it nominated as main output.</summary>
     public readonly struct PassNode
     {
         /// <summary>The pass this node runs.</summary>
-        public readonly IPass<TView, TDrawCommand> Pass;
+        public readonly IPass<TView> Pass;
 
         /// <summary>Resource nominated as main output, or default if none.</summary>
         public readonly RenderResourceID MainOutput;
@@ -25,7 +25,7 @@ public sealed class RenderGraph<TView, TDrawCommand>
         /// <summary>Resources declared as outputs, kept for profiling and wiring.</summary>
         public readonly RenderResourceID[] Outputs;
 
-        internal PassNode(IPass<TView, TDrawCommand> pass, RenderResourceID mainOutput, RenderResourceID[] inputs, RenderResourceID[] outputs)
+        internal PassNode(IPass<TView> pass, RenderResourceID mainOutput, RenderResourceID[] inputs, RenderResourceID[] outputs)
         {
             Pass = pass;
             MainOutput = mainOutput;
@@ -63,9 +63,9 @@ public sealed class RenderGraph<TView, TDrawCommand>
         PresentRequestsSwapchain = presentRequestsSwapchain;
     }
 
-    private readonly struct Node(IPass<TView, TDrawCommand> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, RenderResourceID mainOutput)
+    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, RenderResourceID mainOutput)
     {
-        public readonly IPass<TView, TDrawCommand> Pass = pass;
+        public readonly IPass<TView> Pass = pass;
         public readonly RenderResourceID[] Inputs = inputs;
         public readonly RenderResourceID[] Outputs = outputs;
         public readonly RenderResourceID MainOutput = mainOutput;
@@ -78,9 +78,9 @@ public sealed class RenderGraph<TView, TDrawCommand>
     /// inputs are merged into the resource table but do not participate in ordering. Throws on a
     /// dependency cycle.
     /// </summary>
-    public static RenderGraph<TView, TDrawCommand> Build(
-        IReadOnlyList<IPass<TView, TDrawCommand>> passes,
-        IPresentPass<TView, TDrawCommand> presentPass)
+    public static RenderGraph<TView> Build(
+        IReadOnlyList<IPass<TView>> passes,
+        IPresentPass<TView> presentPass)
     {
         int count = passes.Count;
         var nodes = new Node[count];
@@ -89,7 +89,7 @@ public sealed class RenderGraph<TView, TDrawCommand>
         var builder = new RenderContextBuilder();
         for (int i = 0; i < count; i++)
         {
-            IPass<TView, TDrawCommand> pass = passes[i];
+            IPass<TView> pass = passes[i];
 
             builder.Reset();
             pass.Setup(builder);
@@ -141,7 +141,7 @@ public sealed class RenderGraph<TView, TDrawCommand>
             resources.TryAdd(decl.Id, decl.Desc);
         }
 
-        return new RenderGraph<TView, TDrawCommand>(
+        return new RenderGraph<TView>(
             orderedNodes, resources, presentation, presentInputs, presentBuilder.RequestsSwapchain);
     }
 
