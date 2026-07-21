@@ -1032,6 +1032,7 @@ public abstract partial class GraphicsDevice : IDisposable
 
         WaitForIdle();
         _transientTexturePool?.Dispose();
+        _transientBufferPool?.Dispose();
         PointSampler.Dispose();
         LinearSampler.Dispose();
         NullTexture2D.Dispose();

@@ -167,21 +167,6 @@ public abstract partial class ResourceFactory
     protected abstract DeviceBuffer CreateBufferCore(ref BufferDescription description);
 
     /// <summary>
-    /// Creates a new <see cref="StreamingBuffer"/>: a set of <see cref="GraphicsDevice.MaxFramesInFlight"/> backing
-    /// buffers, each described by <paramref name="description"/>, exposed as a single per-frame buffer. Use this for
-    /// data that is rewritten by the CPU every frame, such as per-frame uniform data.
-    /// </summary>
-    /// <param name="description">The desired properties of each backing buffer.</param>
-    /// <returns>A new <see cref="StreamingBuffer"/>.</returns>
-    public StreamingBuffer CreateStreamingBuffer(BufferDescription description) => CreateStreamingBuffer(ref description);
-    /// <inheritdoc cref="CreateStreamingBuffer(BufferDescription)"/>
-    public StreamingBuffer CreateStreamingBuffer(ref BufferDescription description)
-    {
-        CreateBuffer_CheckDescription(ref description);
-        return new StreamingBuffer(Device, ref description);
-    }
-
-    /// <summary>
     /// Creates a new <see cref="Sampler"/>.
     /// </summary>
     /// <param name="description">The desired properties of the created object.</param>

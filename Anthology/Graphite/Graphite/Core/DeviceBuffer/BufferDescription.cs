@@ -37,7 +37,8 @@ public struct BufferDescription : IEquatable<BufferDescription>
     /// <see cref="GraphicsDevice.UpdateBuffer(DeviceBuffer, uint, IntPtr, uint)"/>) while a previous frame may still
     /// be reading it will no longer be reported as an error. This accepts a possible one-frame tear in exchange for
     /// being able to update a single buffer in place. Use this for buffers that are only updated occasionally and
-    /// where a brief flicker is acceptable; prefer a <see cref="StreamingBuffer"/> when tearing is not acceptable.
+    /// where a brief flicker is acceptable; rent a transient graph buffer per execution when tearing is not
+    /// acceptable.
     /// Has no effect in builds without usage validation.
     /// </summary>
     public bool TransientWrites;

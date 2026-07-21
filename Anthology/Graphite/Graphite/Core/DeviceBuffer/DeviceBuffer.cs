@@ -80,7 +80,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
             device.OnWarning?.Invoke(
                 $"DeviceBuffer '{Name}' was implicitly reallocated {executionId - _lastOrphanExecutionId} executions after its previous reallocation. " +
                 "This buffer is being written to while still in flight on the GPU, which forces a hidden reallocation on every such write. " +
-                "If this buffer is rewritten every execution, use a StreamingBuffer instead.");
+                "If this buffer is rewritten every execution, rent a transient graph buffer per execution instead.");
         }
 
         OrphanCore(device, executionId);
