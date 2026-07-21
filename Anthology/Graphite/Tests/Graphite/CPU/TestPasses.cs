@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Collections.Generic;
 
 using Prowl.Graphite;
 using Prowl.Graphite.RenderGraph;
@@ -20,56 +19,59 @@ internal readonly struct TestView : IRenderView
     public uint PixelHeight { get; }
 }
 
-/// <summary>Pass for testing the solver. Declares given input/output resource names.</summary>
+/// <summary>Pass for testing the solver. Declares given input names and output textures.</summary>
 internal sealed class TestPass : IPass<TestView>
 {
-    private readonly (string name, GraphTextureDesc desc)[] _inputs;
+    private readonly string[] _inputs;
     private readonly (string name, GraphTextureDesc desc)[] _outputs;
-    private readonly string? _mainOutput;
 
     public TestPass(string name,
-        (string, GraphTextureDesc)[]? inputs = null,
-        (string, GraphTextureDesc)[]? outputs = null,
-        string? mainOutput = null)
+        string[]? inputs = null,
+        (string, GraphTextureDesc)[]? outputs = null)
     {
         Name = name;
-        _inputs = inputs ?? Array.Empty<(string, GraphTextureDesc)>();
+        _inputs = inputs ?? Array.Empty<string>();
         _outputs = outputs ?? Array.Empty<(string, GraphTextureDesc)>();
-        _mainOutput = mainOutput;
     }
 
     public string Name { get; }
 
     public void Setup(RenderContextBuilder builder)
     {
-        foreach ((string name, GraphTextureDesc desc) in _inputs)
-            builder.GetInputTexture(name, desc);
+        foreach (string name in _inputs)
+            builder.GetInputTexture(name);
 
-        TextureHandle main = default;
         foreach ((string name, GraphTextureDesc desc) in _outputs)
-        {
-            TextureHandle handle = builder.GetOutputTexture(name, desc);
-            if (_mainOutput != null && name == _mainOutput)
-                main = handle;
-        }
-
-        if (_mainOutput != null)
-            builder.SetMainOutput(main);
+            builder.GetOutputTexture(name, desc);
     }
 
     public void Render(RenderContext<TestView> context) { }
 }
 
-/// <summary>Pass that nominates a main output it only declared as input, to test the solver's guard.</summary>
-internal sealed class MisdeclaredMainOutputPass : IPass<TestView>
+/// <summary>Pass that reads and writes buffer resources, for testing buffer ordering.</summary>
+internal sealed class TestBufferPass : IPass<TestView>
 {
-    public string Name => "Misdeclared";
+    private readonly string[] _inputs;
+    private readonly (string name, GraphBufferDesc desc)[] _outputs;
+
+    public TestBufferPass(string name,
+        string[]? inputs = null,
+        (string, GraphBufferDesc)[]? outputs = null)
+    {
+        Name = name;
+        _inputs = inputs ?? Array.Empty<string>();
+        _outputs = outputs ?? Array.Empty<(string, GraphBufferDesc)>();
+    }
+
+    public string Name { get; }
 
     public void Setup(RenderContextBuilder builder)
     {
-        TextureHandle onlyInput = builder.GetInputTexture("SomeInput", Desc.Color());
-        builder.GetOutputTexture("SomeOutput", Desc.Color());
-        builder.SetMainOutput(onlyInput);
+        foreach (string name in _inputs)
+            builder.GetInputBuffer(name);
+
+        foreach ((string name, GraphBufferDesc desc) in _outputs)
+            builder.GetOutputBuffer(name, desc);
     }
 
     public void Render(RenderContext<TestView> context) { }
@@ -78,6 +80,7 @@ internal sealed class MisdeclaredMainOutputPass : IPass<TestView>
 internal static class Desc
 {
     public static GraphTextureDesc Color() => GraphTextureDesc.ViewSized(false, 1f, PixelFormat.R8_G8_B8_A8_UNorm);
+    public static GraphBufferDesc Storage() => GraphBufferDesc.Structured(16, 4);
 }
 
 /// <summary>No-op present pass for tests that only need to solve/build a graph, not present it.</summary>
@@ -93,21 +96,21 @@ internal sealed class NoOpTestPresentPass : IPresentPass<TestView>
 /// <summary>Present pass for testing the solver's handling of declared present inputs and swapchain requests.</summary>
 internal sealed class TestPresentPass : IPresentPass<TestView>
 {
-    private readonly (string name, GraphTextureDesc desc)[] _inputs;
+    private readonly string[] _inputs;
     private readonly bool _requestSwapchain;
 
-    public TestPresentPass(bool requestSwapchain = false, (string, GraphTextureDesc)[]? inputs = null)
+    public TestPresentPass(bool requestSwapchain = false, string[]? inputs = null)
     {
         _requestSwapchain = requestSwapchain;
-        _inputs = inputs ?? Array.Empty<(string, GraphTextureDesc)>();
+        _inputs = inputs ?? Array.Empty<string>();
     }
 
     public string Name => "TestPresent";
 
     public void Setup(PresentContextBuilder builder)
     {
-        foreach ((string name, GraphTextureDesc desc) in _inputs)
-            builder.GetInputTexture(name, desc);
+        foreach (string name in _inputs)
+            builder.GetInputTexture(name);
 
         if (_requestSwapchain)
             builder.RequestSwapchain();

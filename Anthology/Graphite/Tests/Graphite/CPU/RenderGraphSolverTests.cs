@@ -27,7 +27,7 @@ public class RenderGraphSolverTests
         var writer = new TestPass("Writer",
             outputs: new[] { ("topo_shared", Desc.Color()) });
         var reader = new TestPass("Reader",
-            inputs: new[] { ("topo_shared", Desc.Color()) },
+            inputs: new[] { "topo_shared" },
             outputs: new[] { ("topo_readerOut", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(reader, writer);
@@ -41,10 +41,10 @@ public class RenderGraphSolverTests
     {
         var a = new TestPass("A", outputs: new[] { ("chain_a", Desc.Color()) });
         var b = new TestPass("B",
-            inputs: new[] { ("chain_a", Desc.Color()) },
+            inputs: new[] { "chain_a" },
             outputs: new[] { ("chain_b", Desc.Color()) });
         var c = new TestPass("C",
-            inputs: new[] { ("chain_b", Desc.Color()) },
+            inputs: new[] { "chain_b" },
             outputs: new[] { ("chain_c", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(c, b, a);
@@ -69,66 +69,59 @@ public class RenderGraphSolverTests
     public void Build_CyclicDependency_Throws()
     {
         var a = new TestPass("A",
-            inputs: new[] { ("cycle_x", Desc.Color()) },
+            inputs: new[] { "cycle_x" },
             outputs: new[] { ("cycle_y", Desc.Color()) });
         var b = new TestPass("B",
-            inputs: new[] { ("cycle_y", Desc.Color()) },
+            inputs: new[] { "cycle_y" },
             outputs: new[] { ("cycle_x", Desc.Color()) });
 
         Assert.Throws<InvalidOperationException>(() => Build(a, b));
     }
 
     [Fact]
-    public void Build_FirstDeclarationWins_ForResourceMerge()
+    public void Build_InputWithNoProducer_Throws()
     {
-        GraphTextureDesc first = GraphTextureDesc.ViewSized(true, 0.5f);
-        GraphTextureDesc second = GraphTextureDesc.ViewSized(false, 0.25f);
+        var reader = new TestPass("Orphan",
+            inputs: new[] { "never_produced" },
+            outputs: new[] { ("orphan_out", Desc.Color()) });
 
-        var writer = new TestPass("Writer",
-            outputs: new[] { ("merge_shared", first) });
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(reader));
+        Assert.Contains("Orphan", ex.Message);
+        Assert.Contains("never_produced", ex.Message);
+    }
+
+    [Fact]
+    public void Build_CentrallyDeclaredResource_SatisfiesInput()
+    {
         var reader = new TestPass("Reader",
-            inputs: new[] { ("merge_shared", second) },
-            outputs: new[] { ("merge_readerOut", Desc.Color()) });
+            inputs: new[] { "central_shared" },
+            outputs: new[] { ("central_out", Desc.Color()) });
 
-        RenderGraph<TestView> graph = Build(writer, reader);
+        var central = new GraphResource[]
+        {
+            new GraphTextureResource(RenderResourceID.Intern("central_shared"), Desc.Color())
+        };
 
-        RenderResourceID id = RenderResourceID.Intern("merge_shared");
-        GraphTextureDesc merged = graph.Resources[id];
+        RenderGraph<TestView> graph = RenderGraph<TestView>.Build(
+            new IPass<TestView>[] { reader }, new NoOpTestPresentPass(), central);
 
-        Assert.Equal(first.Scale, merged.Scale);
-        Assert.True(merged.EnableDepth);
+        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("central_shared")));
+        Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Reader");
     }
 
     [Fact]
-    public void Build_Presentation_IsLastMainOutputInExecutionOrder()
+    public void Build_BufferProducerBeforeBufferReader()
     {
-        var first = new TestPass("First",
-            outputs: new[] { ("present_first", Desc.Color()) },
-            mainOutput: "present_first");
-        var second = new TestPass("Second",
-            inputs: new[] { ("present_first", Desc.Color()) },
-            outputs: new[] { ("present_second", Desc.Color()) },
-            mainOutput: "present_second");
+        var producer = new TestBufferPass("Compute",
+            outputs: new[] { ("light_grid", Desc.Storage()) });
+        var reader = new TestBufferPass("Shade",
+            inputs: new[] { "light_grid" });
 
-        RenderGraph<TestView> graph = Build(second, first);
+        RenderGraph<TestView> graph = Build(reader, producer);
+        List<string> order = OrderNames(graph);
 
-        Assert.Equal(RenderResourceID.Intern("present_second"), graph.PresentationSource);
-    }
-
-    [Fact]
-    public void Build_NoMainOutputSet_PresentationIsInvalid()
-    {
-        var a = new TestPass("A", outputs: new[] { ("nopresent_a", Desc.Color()) });
-
-        RenderGraph<TestView> graph = Build(a);
-
-        Assert.False(graph.PresentationSource.IsValid);
-    }
-
-    [Fact]
-    public void Build_MainOutputNotDeclaredAsOutput_Throws()
-    {
-        Assert.Throws<InvalidOperationException>(() => Build(new MisdeclaredMainOutputPass()));
+        Assert.True(order.IndexOf("Compute") < order.IndexOf("Shade"));
+        Assert.IsType<GraphBufferResource>(graph.Resources[RenderResourceID.Intern("light_grid")]);
     }
 
     [Fact]
@@ -136,7 +129,7 @@ public class RenderGraphSolverTests
     {
         var a = new TestPass("A", outputs: new[] { ("table_a", Desc.Color()) });
         var b = new TestPass("B",
-            inputs: new[] { ("table_a", Desc.Color()) },
+            inputs: new[] { "table_a" },
             outputs: new[] { ("table_b", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(a, b);
@@ -151,13 +144,13 @@ public class RenderGraphSolverTests
     {
         var producer = new TestPass("Producer", outputs: new[] { ("diamond_x", Desc.Color()) });
         var left = new TestPass("Left",
-            inputs: new[] { ("diamond_x", Desc.Color()) },
+            inputs: new[] { "diamond_x" },
             outputs: new[] { ("diamond_y1", Desc.Color()) });
         var right = new TestPass("Right",
-            inputs: new[] { ("diamond_x", Desc.Color()) },
+            inputs: new[] { "diamond_x" },
             outputs: new[] { ("diamond_y2", Desc.Color()) });
         var join = new TestPass("Join",
-            inputs: new[] { ("diamond_y1", Desc.Color()), ("diamond_y2", Desc.Color()) },
+            inputs: new[] { "diamond_y1", "diamond_y2" },
             outputs: new[] { ("diamond_out", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(join, right, left, producer);
@@ -175,7 +168,7 @@ public class RenderGraphSolverTests
         var writer1 = new TestPass("Writer1", outputs: new[] { ("fanin_shared", Desc.Color()) });
         var writer2 = new TestPass("Writer2", outputs: new[] { ("fanin_shared", Desc.Color()) });
         var reader = new TestPass("Reader",
-            inputs: new[] { ("fanin_shared", Desc.Color()) },
+            inputs: new[] { "fanin_shared" },
             outputs: new[] { ("fanin_out", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(reader, writer2, writer1);
@@ -190,10 +183,10 @@ public class RenderGraphSolverTests
     {
         var upstream = new TestPass("Upstream", outputs: new[] { ("rmw_res", Desc.Color()) });
         var rmw = new TestPass("RMW",
-            inputs: new[] { ("rmw_res", Desc.Color()) },
+            inputs: new[] { "rmw_res" },
             outputs: new[] { ("rmw_res", Desc.Color()) });
         var downstream = new TestPass("Downstream",
-            inputs: new[] { ("rmw_res", Desc.Color()) },
+            inputs: new[] { "rmw_res" },
             outputs: new[] { ("rmw_downstream", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(downstream, rmw, upstream);
@@ -204,14 +197,37 @@ public class RenderGraphSolverTests
     }
 
     [Fact]
-    public void Build_PassWhoseOutputIsNeverReadAndNotPresentationSource_IsStillExecuted()
+    public void Build_PassWhoseOutputIsNeverRead_IsStillExecuted()
     {
         var unreferenced = new TestPass("Unreferenced", outputs: new[] { ("cull_unused", Desc.Color()) });
-        var main = new TestPass("Main", outputs: new[] { ("cull_main", Desc.Color()) }, mainOutput: "cull_main");
+        var main = new TestPass("Main", outputs: new[] { ("cull_main", Desc.Color()) });
 
         RenderGraph<TestView> graph = Build(unreferenced, main);
 
         Assert.Contains(graph.OrderedPasses, n => n.Pass.Name == "Unreferenced");
+    }
+
+    [Fact]
+    public void TextureResource_TransientDefaultsToClear_HistoryDefaultsToLoad()
+    {
+        var transient = new GraphTextureResource(RenderResourceID.Intern("ops_transient"), Desc.Color(), 0);
+        var history = new GraphTextureResource(RenderResourceID.Intern("ops_history"), Desc.Color(), 1);
+
+        Assert.Equal(LoadAction.Clear, transient.Ops.Color.Load);
+        Assert.Equal(LoadAction.Clear, transient.Ops.Depth.Load);
+        Assert.Equal(LoadAction.Load, history.Ops.Color.Load);
+        Assert.Equal(LoadAction.Load, history.Ops.Depth.Load);
+    }
+
+    [Fact]
+    public void TextureResource_ExplicitOps_OverrideLifetimeDefault()
+    {
+        var resource = new GraphTextureResource(
+            RenderResourceID.Intern("ops_explicit"), Desc.Color(), 0,
+            new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Discard));
+
+        Assert.Equal(LoadAction.Load, resource.Ops.Color.Load);
+        Assert.Equal(StoreAction.DontCare, resource.Ops.Depth.Store);
     }
 
     [Fact]
@@ -238,26 +254,24 @@ public class RenderGraphSolverTests
     public void Build_PresentPassDeclaresInputForResourceWrittenByAPass_ResourceKeepsWritersDesc()
     {
         var writerDesc = GraphTextureDesc.ViewSized(true, 0.5f);
-        var presentDesc = GraphTextureDesc.ViewSized(false, 0.25f);
 
         var writer = new TestPass("Writer", outputs: new[] { ("present_in_shared", writerDesc) });
-        var present = new TestPresentPass(inputs: new[] { ("present_in_shared", presentDesc) });
+        var present = new TestPresentPass(inputs: new[] { "present_in_shared" });
 
         RenderGraph<TestView> graph = Build(present, writer);
 
         Assert.Contains(RenderResourceID.Intern("present_in_shared"), graph.PresentInputs);
-        GraphTextureDesc merged = graph.Resources[RenderResourceID.Intern("present_in_shared")];
-        Assert.Equal(writerDesc.Scale, merged.Scale);
-        Assert.True(merged.EnableDepth);
+        var merged = (GraphTextureResource)graph.Resources[RenderResourceID.Intern("present_in_shared")];
+        Assert.Equal(writerDesc.Scale, merged.Description.Scale);
+        Assert.True(merged.Description.EnableDepth);
     }
 
     [Fact]
-    public void Build_PresentPassDeclaresInputForResourceNoPassWrites_IsAddedToResourceTable()
+    public void Build_PresentPassDeclaresInputForResourceNoPassWrites_Throws()
     {
-        var present = new TestPresentPass(inputs: new[] { ("present_only_resource", Desc.Color()) });
+        var present = new TestPresentPass(inputs: new[] { "present_only_resource" });
 
-        RenderGraph<TestView> graph = Build(present);
-
-        Assert.True(graph.Resources.ContainsKey(RenderResourceID.Intern("present_only_resource")));
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => Build(present));
+        Assert.Contains("present_only_resource", ex.Message);
     }
 }
