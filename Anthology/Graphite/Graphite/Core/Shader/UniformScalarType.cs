@@ -1,40 +1,39 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Scalar, vector, or matrix type of a single field inside a uniform block. Used by
-/// <see cref="UniformBlockField"/> to describe per-field layout for property-driven binding.
+/// Type of a single field in a uniform block, for per-field layout in property-driven binding.
 /// </summary>
 public enum UniformScalarType : byte
 {
-    /// <summary>Single 32-bit float.</summary>
+    /// <summary>1 float.</summary>
     Float1,
-    /// <summary>Two 32-bit floats.</summary>
+    /// <summary>2 floats.</summary>
     Float2,
-    /// <summary>Three 32-bit floats.</summary>
+    /// <summary>3 floats.</summary>
     Float3,
-    /// <summary>Four 32-bit floats.</summary>
+    /// <summary>4 floats.</summary>
     Float4,
 
-    /// <summary>Single 32-bit int.</summary>
+    /// <summary>1 int.</summary>
     Int1,
-    /// <summary>Two 32-bit ints.</summary>
+    /// <summary>2 ints.</summary>
     Int2,
-    /// <summary>Three 32-bit ints.</summary>
+    /// <summary>3 ints.</summary>
     Int3,
-    /// <summary>Four 32-bit ints.</summary>
+    /// <summary>4 ints.</summary>
     Int4,
 
-    /// <summary>Single 64-bit double.</summary>
+    /// <summary>1 double.</summary>
     Double1,
-    /// <summary>Two 64-bit doubles.</summary>
+    /// <summary>2 doubles.</summary>
     Double2,
-    /// <summary>Three 64-bit doubles.</summary>
+    /// <summary>3 doubles.</summary>
     Double3,
-    /// <summary>Four 64-bit doubles.</summary>
+    /// <summary>4 doubles.</summary>
     Double4,
 
-    /// <summary>4x4 column-major matrix of 32-bit floats.</summary>
+    /// <summary>4x4 float matrix, column-major.</summary>
     Float4x4,
-    /// <summary>4x4 column-major matrix of 64-bit doubles.</summary>
+    /// <summary>4x4 double matrix, column-major.</summary>
     Double4x4,
 }

@@ -3,35 +3,32 @@ using System;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Base tracker for a graph resource. Holds the stable interned identity passes reference by ID so the
-/// graph can order producers before consumers. Concrete resources (texture, buffer, imported) derive from
-/// this and carry their own strict description type; shared identity and ordering machinery live here.
+/// Base graph resource tracker. Holds the interned ID passes use to order producers before consumers.
 /// </summary>
 public abstract class GraphResource
 {
-    /// <summary>Stable interned identity used to reference this resource across passes.</summary>
+    /// <summary>ID for this resource across passes.</summary>
     public RenderResourceID Id { get; }
 
     private protected GraphResource(RenderResourceID id) => Id = id;
 
-    /// <summary>Disposes any physical resources this graph resource owns. Imported resources own nothing.</summary>
+    /// <summary>Disposes owned physical resources. No-op for imported resources.</summary>
     internal virtual void DisposeOwned() { }
 }
 
 /// <summary>
-/// A texture graph resource. With a history depth of zero it is a plain per-execution transient; with a
-/// history depth of N it owns a persistent ring of N+1 physical copies rotated one step per execution, so a
-/// pass can read older executions' results (temporal reprojection, TAA history).
+/// Texture graph resource. History depth 0 = plain transient. Depth N = ring of N+1 copies rotated per
+/// execution, so passes can read older frames' results (TAA, reprojection).
 /// </summary>
 public sealed class GraphTextureResource : GraphResource
 {
-    /// <summary>How this texture is sized and formatted when allocated.</summary>
+    /// <summary>Size/format used on allocation.</summary>
     public GraphTextureDesc Description { get; }
 
-    /// <summary>Number of prior executions readable by age. Zero means a plain transient with no history.</summary>
+    /// <summary>Prior executions readable by age. 0 = no history.</summary>
     public int HistoryDepth { get; }
 
-    /// <summary>Load/store operations a raster pass applies when it binds this as its target.</summary>
+    /// <summary>Load/store ops applied when bound as a raster target.</summary>
     public TargetLoadStoreOps Ops { get; }
 
     private RenderTexture[]? _ring;
@@ -87,15 +84,15 @@ public sealed class GraphTextureResource : GraphResource
 }
 
 /// <summary>
-/// A buffer graph resource. With a history depth of zero it is a plain per-execution transient; with a
-/// history depth of N it owns a persistent ring of N+1 physical copies rotated one step per execution.
+/// Buffer graph resource. History depth 0 = plain transient. Depth N = ring of N+1 copies rotated per
+/// execution.
 /// </summary>
 public sealed class GraphBufferResource : GraphResource
 {
-    /// <summary>Size and usage of the buffer when allocated.</summary>
+    /// <summary>Size/usage used on allocation.</summary>
     public GraphBufferDesc Description { get; }
 
-    /// <summary>Number of prior executions readable by age. Zero means a plain transient with no history.</summary>
+    /// <summary>Prior executions readable by age. 0 = no history.</summary>
     public int HistoryDepth { get; }
 
     private DeviceBuffer[]? _ring;
@@ -154,16 +151,15 @@ public sealed class GraphBufferResource : GraphResource
 }
 
 /// <summary>
-/// An externally-owned texture imported into the graph so it participates in ordering and resolution. The
-/// caller keeps ownership; the graph never disposes it. The backend transitions it implicitly on first use,
-/// so its incoming layout is respected.
+/// Externally-owned texture imported into the graph. Caller keeps ownership, graph never disposes it.
+/// Backend transitions it implicitly on first use, respecting incoming layout.
 /// </summary>
 public sealed class GraphImportedTextureResource : GraphResource
 {
-    /// <summary>The external render target this resource resolves to.</summary>
+    /// <summary>External render target this resolves to.</summary>
     public RenderTexture Texture { get; }
 
-    /// <summary>Load/store operations a raster pass applies when it binds this as its target. Loads by default.</summary>
+    /// <summary>Load/store ops applied when bound as a raster target. Loads by default.</summary>
     public TargetLoadStoreOps Ops { get; }
 
     internal GraphImportedTextureResource(RenderResourceID id, RenderTexture texture, TargetLoadStoreOps? ops = null) : base(id)

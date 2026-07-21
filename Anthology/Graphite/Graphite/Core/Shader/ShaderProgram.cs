@@ -4,8 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Base device resource shared by every shader program kind. Holds the resource layouts and the
-/// disposal/identity contract common to <see cref="GraphicsProgram"/> and <see cref="ComputeProgram"/>.
+/// Base for all shader program kinds. Holds resource layouts plus shared disposal/identity contract.
 /// </summary>
 public abstract class ShaderProgram : DeviceResource, IDisposable
 {
@@ -20,15 +19,14 @@ public abstract class ShaderProgram : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// The resource layouts declared by this program.
+    /// Resource layouts declared by this program.
     /// </summary>
     public IReadOnlyList<ResourceLayoutDescription> ResourceLayouts => _resourceLayouts;
 
     internal ResourceLayoutDescription[] ResourceLayoutsArray => _resourceLayouts;
 
     /// <summary>
-    /// Precomputed per-set binding metadata, indexed parallel to <see cref="ResourceLayoutsArray"/>.
-    /// Built once at construction from the resource layouts.
+    /// Precomputed per-set binding metadata, parallel to ResourceLayoutsArray. Built once at construction.
     /// </summary>
     internal SetBindingMetadata[] BindingMetadata => _bindingMetadata;
 
@@ -53,18 +51,17 @@ public abstract class ShaderProgram : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, for graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// Whether this instance is disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public abstract void Dispose();
 }

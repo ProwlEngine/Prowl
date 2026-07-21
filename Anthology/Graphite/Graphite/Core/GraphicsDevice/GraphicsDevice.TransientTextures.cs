@@ -21,21 +21,19 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Rents a render-texture bundle from the transient pool and returns its primary color attachment.
+    /// Rents a transient render-texture bundle, returns its first color attachment.
     /// <para>
-    /// Backing textures come from a device-level free-list keyed by desc, and survive across executions:
-    /// once the rent-time execution finishes on GPU, the bundle goes back to the free-list and a later
-    /// rent with an equal desc reuses it. A bundle still in flight is never handed to another caller.
+    /// Backed by a device free-list keyed by desc. Bundle returns to the pool once the
+    /// rent-time execution finishes on GPU; never handed out while still in flight.
     /// </para>
     /// <para>
-    /// Returned texture has RenderTarget | Sampled usage. To render the whole bundle (all color
-    /// plus depth), rent the framebuffer instead via RentTransientFramebuffer.
+    /// Texture has RenderTarget | Sampled usage. Need the whole bundle? Use RentTransientFramebuffer.
     /// </para>
     /// </summary>
-    /// <param name="task">Execution renting the bundle; it returns to the free-list once this completes on GPU.</param>
-    /// <param name="desc">Bundle to rent. Needs at least one color format.</param>
-    /// <returns>Primary (first) color attachment of the rented bundle.</returns>
-    /// <exception cref="RenderException">Thrown if desc has no color attachments.</exception>
+    /// <param name="task">Execution renting the bundle. Returns to pool once it finishes on GPU.</param>
+    /// <param name="desc">Bundle desc. Needs at least one color format.</param>
+    /// <returns>First color attachment.</returns>
+    /// <exception cref="RenderException">No color attachments in desc.</exception>
     public Texture RentTransientTexture(ExecutionTask task, in RenderTextureDescription desc)
     {
         if (desc.ColorFormats.Length == 0)
@@ -45,30 +43,29 @@ public abstract partial class GraphicsDevice
     }
 
     /// <summary>
-    /// Rents a render-texture bundle from the transient pool and returns its framebuffer.
+    /// Rents a transient render-texture bundle, returns its framebuffer.
     /// <para>
-    /// Shares the same free-list as RentTransientTexture. Attachments are reachable through
-    /// Framebuffer.ColorTargets and Framebuffer.DepthTarget.
+    /// Same free-list as RentTransientTexture. Attachments are Framebuffer.ColorTargets / DepthTarget.
     /// </para>
     /// </summary>
-    /// <param name="task">Execution renting the bundle; it returns to the free-list once this completes on GPU.</param>
-    /// <param name="desc">Bundle to rent.</param>
+    /// <param name="task">Execution renting the bundle. Returns to pool once it finishes on GPU.</param>
+    /// <param name="desc">Bundle desc.</param>
     /// <returns>Framebuffer of the rented bundle.</returns>
-    /// <exception cref="RenderException">Thrown if desc has no attachments at all.</exception>
+    /// <exception cref="RenderException">No attachments in desc.</exception>
     public Framebuffer RentTransientFramebuffer(ExecutionTask task, in RenderTextureDescription desc)
     {
         return RentTransientBundle(task, desc).Texture.Framebuffer;
     }
 
     /// <summary>
-    /// Rents a render-texture bundle from the transient pool.
+    /// Rents a transient render-texture bundle.
     /// <para>
-    /// Shares the same free-list as RentTransientTexture and RentTransientFramebuffer. Bind Framebuffer
-    /// to render into the bundle, or bind ColorTextures/DepthTexture directly to sample from it.
+    /// Same free-list as RentTransientTexture/RentTransientFramebuffer. Bind Framebuffer to render
+    /// into it, or bind ColorTextures/DepthTexture to sample from it.
     /// </para>
     /// </summary>
-    /// <param name="task">Execution renting the bundle; it returns to the free-list once this completes on GPU.</param>
-    /// <param name="desc">Bundle to rent.</param>
+    /// <param name="task">Execution renting the bundle. Returns to pool once it finishes on GPU.</param>
+    /// <param name="desc">Bundle desc.</param>
     /// <returns>The rented RenderTexture.</returns>
     public RenderTexture RentTransientRenderTexture(ExecutionTask task, in RenderTextureDescription desc)
     {

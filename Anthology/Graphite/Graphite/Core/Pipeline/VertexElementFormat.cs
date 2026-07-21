@@ -1,132 +1,132 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// The format of an individual vertex element.
+/// Vertex element data format.
 /// </summary>
 public enum VertexElementFormat : byte
 {
     /// <summary>
-    /// One 32-bit floating point value.
+    /// 1x float32.
     /// </summary>
     Float1,
     /// <summary>
-    /// Two 32-bit floating point values.
+    /// 2x float32.
     /// </summary>
     Float2,
     /// <summary>
-    /// Three 32-bit floating point values.
+    /// 3x float32.
     /// </summary>
     Float3,
     /// <summary>
-    /// Four 32-bit floating point values.
+    /// 4x float32.
     /// </summary>
     Float4,
     /// <summary>
-    /// Two 8-bit unsigned normalized integers.
+    /// 2x uint8, normalized.
     /// </summary>
     Byte2_Norm,
     /// <summary>
-    /// Two 8-bit unisgned integers.
+    /// 2x uint8.
     /// </summary>
     Byte2,
     /// <summary>
-    /// Four 8-bit unsigned normalized integers.
+    /// 4x uint8, normalized.
     /// </summary>
     Byte4_Norm,
     /// <summary>
-    /// Four 8-bit unsigned integers.
+    /// 4x uint8.
     /// </summary>
     Byte4,
     /// <summary>
-    /// Two 8-bit signed normalized integers.
+    /// 2x int8, normalized.
     /// </summary>
     SByte2_Norm,
     /// <summary>
-    /// Two 8-bit signed integers.
+    /// 2x int8.
     /// </summary>
     SByte2,
     /// <summary>
-    /// Four 8-bit signed normalized integers.
+    /// 4x int8, normalized.
     /// </summary>
     SByte4_Norm,
     /// <summary>
-    /// Four 8-bit signed integers.
+    /// 4x int8.
     /// </summary>
     SByte4,
     /// <summary>
-    /// Two 16-bit unsigned normalized integers.
+    /// 2x uint16, normalized.
     /// </summary>
     UShort2_Norm,
     /// <summary>
-    /// Two 16-bit unsigned integers.
+    /// 2x uint16.
     /// </summary>
     UShort2,
     /// <summary>
-    /// Four 16-bit unsigned normalized integers.
+    /// 4x uint16, normalized.
     /// </summary>
     UShort4_Norm,
     /// <summary>
-    /// Four 16-bit unsigned integers.
+    /// 4x uint16.
     /// </summary>
     UShort4,
     /// <summary>
-    /// Two 16-bit signed normalized integers.
+    /// 2x int16, normalized.
     /// </summary>
     Short2_Norm,
     /// <summary>
-    /// Two 16-bit signed integers.
+    /// 2x int16.
     /// </summary>
     Short2,
     /// <summary>
-    /// Four 16-bit signed normalized integers.
+    /// 4x int16, normalized.
     /// </summary>
     Short4_Norm,
     /// <summary>
-    /// Four 16-bit signed integers.
+    /// 4x int16.
     /// </summary>
     Short4,
     /// <summary>
-    /// One 32-bit unsigned integer.
+    /// 1x uint32.
     /// </summary>
     UInt1,
     /// <summary>
-    /// Two 32-bit unsigned integers.
+    /// 2x uint32.
     /// </summary>
     UInt2,
     /// <summary>
-    /// Three 32-bit unsigned integers.
+    /// 3x uint32.
     /// </summary>
     UInt3,
     /// <summary>
-    /// Four 32-bit unsigned integers.
+    /// 4x uint32.
     /// </summary>
     UInt4,
     /// <summary>
-    /// One 32-bit signed integer.
+    /// 1x int32.
     /// </summary>
     Int1,
     /// <summary>
-    /// Two 32-bit signed integers.
+    /// 2x int32.
     /// </summary>
     Int2,
     /// <summary>
-    /// Three 32-bit signed integers.
+    /// 3x int32.
     /// </summary>
     Int3,
     /// <summary>
-    /// Four 32-bit signed integers.
+    /// 4x int32.
     /// </summary>
     Int4,
     /// <summary>
-    /// One 16-bit floating point value.
+    /// 1x float16.
     /// </summary>
     Half1,
     /// <summary>
-    /// Two 16-bit floating point values.
+    /// 2x float16.
     /// </summary>
     Half2,
     /// <summary>
-    /// Four 16-bit floating point values.
+    /// 4x float16.
     /// </summary>
     Half4,
 }

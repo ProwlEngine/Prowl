@@ -1,25 +1,24 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// An addressing mode for texture coordinates.
+/// Texture coordinate addressing mode.
 /// </summary>
 public enum SamplerAddressMode : byte
 {
     /// <summary>
-    /// Texture coordinates are wrapped upon overflow.
+    /// Wraps on overflow.
     /// </summary>
     Wrap,
     /// <summary>
-    /// Texture coordinates are mirrored upon overflow.
+    /// Mirrors on overflow.
     /// </summary>
     Mirror,
     /// <summary>
-    /// Texture coordinates are clamped to the maximum or minimum values upon overflow.
+    /// Clamps to min/max on overflow.
     /// </summary>
     Clamp,
     /// <summary>
-    /// Texture coordinates that overflow return the predefined border color defined in
-    /// <see cref="SamplerDescription.BorderColor"/>.
+    /// Returns the sampler's border color on overflow.
     /// </summary>
     Border,
 }

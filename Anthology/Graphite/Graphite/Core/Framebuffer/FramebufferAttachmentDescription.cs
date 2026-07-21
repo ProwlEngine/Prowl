@@ -3,49 +3,38 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a single attachment (color or depth) for a <see cref="Framebuffer"/>.
+/// One attachment (color or depth) for a Framebuffer.
 /// </summary>
 public partial struct FramebufferAttachmentDescription : IEquatable<FramebufferAttachmentDescription>
 {
     /// <summary>
-    /// The target texture to render into. For color attachments, this resource must have been created with the
-    /// <see cref="TextureUsage.RenderTarget"/> flag. For depth attachments, this resource must have been created with the
-    /// <see cref="TextureUsage.DepthStencil"/> flag.
+    /// Texture to render into. Color needs RenderTarget usage flag, depth needs DepthStencil flag.
     /// </summary>
     public Texture Target;
     /// <summary>
-    /// The array layer to render to. This value must be less than <see cref="Texture.ArrayLayers"/> in the target
-    /// <see cref="Texture"/>.
+    /// Array layer to render to. Must be less than the texture's array layer count.
     /// </summary>
     public uint ArrayLayer;
     /// <summary>
-    /// The mip level to render to. This value must be less than <see cref="Texture.MipLevels"/> in the target
-    /// <see cref="Texture"/>.
+    /// Mip level to render to. Must be less than the texture's mip level count.
     /// </summary>
     public uint MipLevel;
 
     /// <summary>
-    /// Constructs a new FramebufferAttachmentDescription.
+    /// Makes a new attachment description.
     /// </summary>
-    /// <param name="target">The target texture to render into. For color attachments, this resource must have been created
-    /// with the <see cref="TextureUsage.RenderTarget"/> flag. For depth attachments, this resource must have been created
-    /// with the <see cref="TextureUsage.DepthStencil"/> flag.</param>
-    /// <param name="arrayLayer">The array layer to render to. This value must be less than <see cref="Texture.ArrayLayers"/>
-    /// in the target <see cref="Texture"/>.</param>
+    /// <param name="target">Texture to render into. Color needs RenderTarget flag, depth needs DepthStencil flag.</param>
+    /// <param name="arrayLayer">Array layer to render to. Must be less than the texture's layer count.</param>
     public FramebufferAttachmentDescription(Texture target, uint arrayLayer)
         : this(target, arrayLayer, 0)
     { }
 
     /// <summary>
-    /// Constructs a new FramebufferAttachmentDescription.
+    /// Makes a new attachment description.
     /// </summary>
-    /// <param name="target">The target texture to render into. For color attachments, this resource must have been created
-    /// with the <see cref="TextureUsage.RenderTarget"/> flag. For depth attachments, this resource must have been created
-    /// with the <see cref="TextureUsage.DepthStencil"/> flag.</param>
-    /// <param name="arrayLayer">The array layer to render to. This value must be less than <see cref="Texture.ArrayLayers"/>
-    /// in the target <see cref="Texture"/>.</param>
-    /// <param name="mipLevel">The mip level to render to. This value must be less than <see cref="Texture.MipLevels"/> in
-    /// the target <see cref="Texture"/>.</param>
+    /// <param name="target">Texture to render into. Color needs RenderTarget flag, depth needs DepthStencil flag.</param>
+    /// <param name="arrayLayer">Array layer to render to. Must be less than the texture's layer count.</param>
+    /// <param name="mipLevel">Mip level to render to. Must be less than the texture's mip count.</param>
     public FramebufferAttachmentDescription(Texture target, uint arrayLayer, uint mipLevel)
     {
         FramebufferAttachmentDescription_CheckLayerAndMip(target, arrayLayer, mipLevel);
@@ -55,19 +44,19 @@ public partial struct FramebufferAttachmentDescription : IEquatable<FramebufferA
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements and all array elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(FramebufferAttachmentDescription other)
     {
         return Target.Equals(other.Target) && ArrayLayer.Equals(other.ArrayLayer) && MipLevel.Equals(other.MipLevel);
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>32-bit hash code.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(Target.GetHashCode(), ArrayLayer.GetHashCode(), MipLevel.GetHashCode());

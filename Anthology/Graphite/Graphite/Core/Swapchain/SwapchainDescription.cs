@@ -3,51 +3,44 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a <see cref="Swapchain"/>, for creation via a <see cref="ResourceFactory"/>.
+/// Describes a Swapchain for creation via a ResourceFactory.
 /// </summary>
 public struct SwapchainDescription : IEquatable<SwapchainDescription>
 {
     /// <summary>
-    /// The <see cref="SwapchainSource"/> which will be used as the target of rendering operations.
-    /// This is a window-system-specific object which differs by platform.
+    /// Rendering target, platform-specific window handle.
     /// </summary>
     public SwapchainSource Source;
 
     /// <summary>
-    /// The initial width of the Swapchain surface.
+    /// Initial surface width.
     /// </summary>
     public uint Width;
     /// <summary>
-    /// The initial height of the Swapchain surface.
+    /// Initial surface height.
     /// </summary>
     public uint Height;
     /// <summary>
-    /// The optional format of the depth target of the Swapchain's Framebuffer.
-    /// If non-null, this must be a valid depth Texture format.
-    /// If null, then no depth target will be created.
+    /// Optional depth target format. Null means no depth target.
     /// </summary>
     public PixelFormat? DepthFormat;
     /// <summary>
-    /// Indicates whether presentation of the Swapchain will be synchronized to the window system's vertical refresh rate.
+    /// Whether presentation syncs to vblank.
     /// </summary>
     public bool SyncToVerticalBlank;
     /// <summary>
-    /// Indicates whether the color target of the Swapchain will use an sRGB PixelFormat.
+    /// Whether the color target uses an sRGB format.
     /// </summary>
     public bool ColorSrgb;
 
     /// <summary>
-    /// Constructs a new SwapchainDescription.
+    /// Makes a SwapchainDescription.
     /// </summary>
-    /// <param name="source">The <see cref="SwapchainSource"/> which will be used as the target of rendering operations.
-    /// This is a window-system-specific object which differs by platform.</param>
-    /// <param name="width">The initial width of the Swapchain surface.</param>
-    /// <param name="height">The initial height of the Swapchain surface.</param>
-    /// <param name="depthFormat">The optional format of the depth target of the Swapchain's Framebuffer.
-    /// If non-null, this must be a valid depth Texture format.
-    /// If null, then no depth target will be created.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether presentation of the Swapchain will be synchronized to the window
-    /// system's vertical refresh rate.</param>
+    /// <param name="source">Rendering target, platform-specific window handle.</param>
+    /// <param name="width">Initial surface width.</param>
+    /// <param name="height">Initial surface height.</param>
+    /// <param name="depthFormat">Optional depth target format. Null means no depth target.</param>
+    /// <param name="syncToVerticalBlank">Whether presentation syncs to vblank.</param>
     public SwapchainDescription(
         SwapchainSource source,
         uint width,
@@ -64,18 +57,14 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     }
 
     /// <summary>
-    /// Constructs a new SwapchainDescription.
+    /// Makes a SwapchainDescription.
     /// </summary>
-    /// <param name="source">The <see cref="SwapchainSource"/> which will be used as the target of rendering operations.
-    /// This is a window-system-specific object which differs by platform.</param>
-    /// <param name="width">The initial width of the Swapchain surface.</param>
-    /// <param name="height">The initial height of the Swapchain surface.</param>
-    /// <param name="depthFormat">The optional format of the depth target of the Swapchain's Framebuffer.
-    /// If non-null, this must be a valid depth Texture format.
-    /// If null, then no depth target will be created.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether presentation of the Swapchain will be synchronized to the window
-    /// system's vertical refresh rate.</param>
-    /// <param name="colorSrgb">Indicates whether the color target of the Swapchain will use an sRGB PixelFormat.</param>
+    /// <param name="source">Rendering target, platform-specific window handle.</param>
+    /// <param name="width">Initial surface width.</param>
+    /// <param name="height">Initial surface height.</param>
+    /// <param name="depthFormat">Optional depth target format. Null means no depth target.</param>
+    /// <param name="syncToVerticalBlank">Whether presentation syncs to vblank.</param>
+    /// <param name="colorSrgb">Whether the color target uses an sRGB format.</param>
     public SwapchainDescription(
         SwapchainSource source,
         uint width,
@@ -95,8 +84,8 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if equal.</returns>
     public readonly bool Equals(SwapchainDescription other)
     {
         return Source.Equals(other.Source)
@@ -108,9 +97,9 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>32-bit hash.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(

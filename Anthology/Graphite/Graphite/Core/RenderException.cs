@@ -3,30 +3,30 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Represents errors that occur in the Prowl.Graphite library.
+/// Error from Prowl.Graphite.
 /// </summary>
 public class RenderException : Exception
 {
     /// <summary>
-    /// Constructs a new RenderException.
+    /// New RenderException.
     /// </summary>
     public RenderException()
     {
     }
 
     /// <summary>
-    /// Constructs a new RenderException with the given message.
+    /// New RenderException with a message.
     /// </summary>
-    /// <param name="message">The exception message.</param>
+    /// <param name="message">Exception message.</param>
     public RenderException(string message) : base(message)
     {
     }
 
     /// <summary>
-    /// Constructs a new RenderException with the given message and inner exception.
+    /// New RenderException with a message and inner exception.
     /// </summary>
-    /// <param name="message">The exception message.</param>
-    /// <param name="innerException">The inner exception.</param>
+    /// <param name="message">Exception message.</param>
+    /// <param name="innerException">Inner exception.</param>
     public RenderException(string message, Exception innerException) : base(message, innerException)
     {
     }

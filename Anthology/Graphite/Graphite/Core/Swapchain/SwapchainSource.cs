@@ -4,16 +4,14 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A platform-specific object representing a renderable surface.
-/// A SwapchainSource can be created with one of several static factory methods.
-/// A SwapchainSource is used to describe a Swapchain (see <see cref="SwapchainDescription"/>).
+/// Platform-specific renderable surface. Build via the static factory methods. Used to describe a swapchain.
 /// </summary>
 public abstract class SwapchainSource
 {
     internal SwapchainSource() { }
 
     /// <summary>
-    /// Creates a Vulkan swapchain source from an <see cref="IVkSurface"/> interface, typically acquired from a Silk.NET window.
+    /// Builds a Vulkan swapchain source from a Silk.NET surface.
     /// </summary>
     public static SwapchainSource CreateVulkan(IVkSurface surface)
         => new VkSurfaceSwapchainSource(surface);

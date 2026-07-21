@@ -3,47 +3,46 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a transient render-texture bundle rented from the device pool.
+/// Transient render-texture bundle rented from the device pool.
 /// <para>
-/// A bundle is color attachments plus maybe a depth attachment, same size and sample count.
-/// Equal descriptions share the same free-list.
+/// Color attachments plus maybe depth, same size and sample count. Equal descs share a free-list.
 /// </para>
 /// </summary>
 public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescription>
 {
     /// <summary>
-    /// Width of every attachment, in texels.
+    /// Width in texels.
     /// </summary>
     public uint Width { get; }
 
     /// <summary>
-    /// Height of every attachment, in texels.
+    /// Height in texels.
     /// </summary>
     public uint Height { get; }
 
     /// <summary>
-    /// Format of each color attachment, in order. Never null; empty means depth-only bundle.
+    /// Format per color attachment, in order. Never null; empty = depth-only.
     /// </summary>
     public PixelFormat[] ColorFormats { get; }
 
     /// <summary>
-    /// True if the bundle has a depth attachment.
+    /// Has a depth attachment.
     /// </summary>
     public bool Depth { get; }
 
     /// <summary>
-    /// Sample count of every attachment in the bundle.
+    /// Sample count for every attachment.
     /// </summary>
     public TextureSampleCount SampleCount { get; }
 
     /// <summary>
-    /// Makes a new desc.
+    /// New desc.
     /// </summary>
     /// <param name="width">Width in texels.</param>
     /// <param name="height">Height in texels.</param>
-    /// <param name="colorFormats">Format of each color attachment, in order. Null/empty means depth-only.</param>
-    /// <param name="depth">True if the bundle has a depth attachment.</param>
-    /// <param name="sampleCount">Sample count of every attachment.</param>
+    /// <param name="colorFormats">Format per color attachment. Null/empty = depth-only.</param>
+    /// <param name="depth">Has a depth attachment.</param>
+    /// <param name="sampleCount">Sample count for every attachment.</param>
     public RenderTextureDescription(
         uint width,
         uint height,
@@ -59,13 +58,13 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     }
 
     /// <summary>
-    /// Makes a new single-color desc.
+    /// New single-color desc.
     /// </summary>
     /// <param name="width">Width in texels.</param>
     /// <param name="height">Height in texels.</param>
-    /// <param name="colorFormat">Format of the single color attachment.</param>
-    /// <param name="depth">True if the bundle has a depth attachment.</param>
-    /// <param name="sampleCount">Sample count of every attachment.</param>
+    /// <param name="colorFormat">Format of the color attachment.</param>
+    /// <param name="depth">Has a depth attachment.</param>
+    /// <param name="sampleCount">Sample count for every attachment.</param>
     public RenderTextureDescription(
         uint width,
         uint height,
@@ -77,7 +76,7 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     }
 
     /// <summary>
-    /// Equal if dimensions, sample count, depth flag, and color formats all match.
+    /// Equal if dims, sample count, depth flag, and color formats all match.
     /// </summary>
     /// <param name="other">Instance to compare to.</param>
     /// <returns>True if equal.</returns>
@@ -102,14 +101,14 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     }
 
     /// <summary>
-    /// Equality against a boxed instance.
+    /// Equality vs a boxed instance.
     /// </summary>
     /// <param name="obj">Instance to compare to.</param>
     /// <returns>True if equal.</returns>
     public override bool Equals(object? obj) => obj is RenderTextureDescription other && Equals(other);
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     /// <returns>Hash code.</returns>
     public override int GetHashCode()
@@ -125,12 +124,12 @@ public readonly struct RenderTextureDescription : IEquatable<RenderTextureDescri
     }
 
     /// <summary>
-    /// Equality operator.
+    /// Equal.
     /// </summary>
     public static bool operator ==(RenderTextureDescription left, RenderTextureDescription right) => left.Equals(right);
 
     /// <summary>
-    /// Inequality operator.
+    /// Not equal.
     /// </summary>
     public static bool operator !=(RenderTextureDescription left, RenderTextureDescription right) => !left.Equals(right);
 }

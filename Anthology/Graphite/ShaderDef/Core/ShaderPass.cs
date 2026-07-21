@@ -6,29 +6,27 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// A pass that encapsulates render state, identification metadata, and source shader files, plus its
-/// runtime variant set once the owning <see cref="ShaderDefinition"/> has been created for a device.
+/// Render state, id metadata, source shaders, plus the variant set once its ShaderDefinition is created for a device.
 /// </summary>
 public sealed class ShaderPass
 {
     /// <summary>
-    /// The name of this pass, or blank if no name was defined.
+    /// Pass name, blank if none.
     /// </summary>
     public string Name = "";
 
     /// <summary>
-    /// The tag key-value pairs for this pass, defined in source as a list of: <code>{ "Key" = "Value" "Key2" = "Value2" }</code>
+    /// Tag key-value pairs, from source like <code>{ "Key" = "Value" "Key2" = "Value2" }</code>
     /// </summary>
     public Dictionary<string, string>? Tags = null;
 
     /// <summary>
-    /// The pass state, encapsulating rasterizer settings, blend, depth, stencil, and more.
+    /// Rasterizer, blend, depth, stencil, and other pass state.
     /// </summary>
     public required PassState State;
 
     /// <summary>
-    /// The raw Slang source embedded between SLANGPROGRAM and ENDSLANG. Slang derives its own
-    /// entrypoints, so no explicit vertex/fragment stages are declared here.
+    /// Raw Slang source between SLANGPROGRAM and ENDSLANG. Slang finds its own entrypoints, no stages declared here.
     /// </summary>
     public required string InlineSlang;
 
@@ -52,9 +50,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Binds this pass to a device. <paramref name="fallback"/> is the variant every unresolved request
-    /// falls back to (required whenever <paramref name="compiler"/> is non-null - see
-    /// <see cref="ShaderDefinition.Create(GraphicsDevice, IShaderCompiler, Variant, CompileMode)"/>).
+    /// Binds this pass to a device. fallback is used for unresolved requests, required if compiler is set.
     /// </summary>
     internal void Bind(GraphicsDevice device, VariantSpace[] axes, Variant[] known, IShaderCompiler? compiler, CompileMode mode, Variant? fallback = null)
     {
@@ -98,8 +94,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// The variant selected by the current keyword state, compiling it on demand if a compiler is
-    /// attached. Valid only after the owning shader has been created.
+    /// Current variant, compiled on demand if a compiler is attached. Only valid after create.
     /// </summary>
     public Variant ActiveVariant
     {
@@ -112,12 +107,12 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// The total number of variant combinations in this pass's axis space.
+    /// Total variant combos in this pass's axis space.
     /// </summary>
     public int Count { get { EnsureCreated(); return _combos.Length; } }
 
     /// <summary>
-    /// The number of variants currently compiled for the device backend.
+    /// Variants compiled for the device backend.
     /// </summary>
     public int CompiledCount
     {
@@ -135,8 +130,7 @@ public sealed class ShaderPass
     }
 
     /// <summary>
-    /// The number of variant slots currently populated with a variant, regardless of which backends
-    /// it was compiled for.
+    /// Variant slots populated, any backend.
     /// </summary>
     public int AvailableCount
     {
@@ -154,12 +148,12 @@ public sealed class ShaderPass
     }
 
     /// <summary>
-    /// True if a compiler is attached and can compile missing variants.
+    /// True if a compiler is attached.
     /// </summary>
     public bool HasCompiler => _compiler != null;
 
     /// <summary>
-    /// True if every variant slot is populated, regardless of which backend it was compiled for.
+    /// True if every variant slot is populated, any backend.
     /// </summary>
     public bool AllAvailable
     {
@@ -176,7 +170,7 @@ public sealed class ShaderPass
     }
 
     /// <summary>
-    /// True if every variant is compiled for the device backend and ready to bind with no compiler.
+    /// True if every variant is compiled for the device backend, ready to bind with no compiler.
     /// </summary>
     public bool AllCompiled
     {
@@ -194,8 +188,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets a keyword on the current selection and re-resolves the active variant.
-    /// Throws if the keyword's name is not a variant axis of this pass.
+    /// Sets a keyword and re-resolves the active variant. Throws if name isn't a variant axis here.
     /// </summary>
     public void SetKeyword(Keyword keyword)
     {
@@ -208,9 +201,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets several keywords on the current selection and re-resolves the active variant.
-    /// Validates every keyword first, then applies them atomically. Throws if any keyword's name is
-    /// not a variant axis of this pass.
+    /// Sets several keywords atomically and re-resolves the active variant. Validates all first, throws if any name isn't a variant axis here.
     /// </summary>
     public void SetKeywords(params Keyword[] keywords)
     {
@@ -229,8 +220,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets a keyword if its name is a variant axis of this pass, re-resolving the active variant.
-    /// Returns <c>false</c> without changing anything if the keyword's name is unknown.
+    /// Sets a keyword if its name is a known axis, re-resolves active variant. Returns false and does nothing if unknown.
     /// </summary>
     public bool TrySetKeyword(Keyword keyword)
     {
@@ -244,8 +234,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Sets several keywords if all their names are variant axes of this pass, re-resolving the active
-    /// variant. Returns <c>false</c> without changing anything if any keyword's name is unknown.
+    /// Sets several keywords if all names are known axes, re-resolves active variant. Returns false and does nothing if any is unknown.
     /// </summary>
     public bool TrySetKeywords(params Keyword[] keywords)
     {
@@ -265,7 +254,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Compiles every variant for the device backend. Requires an attached compiler.
+    /// Compiles every variant for the device backend. Needs a compiler attached.
     /// </summary>
     public void CompileAll()
     {
@@ -327,12 +316,7 @@ public sealed class ShaderPass
 
 
     /// <summary>
-    /// Resolves the variant at <paramref name="index"/>: an already-compiled variant if one exists,
-    /// otherwise a fresh compile through the attached compiler. If neither is available - no compiler,
-    /// or the compile itself throws - falls back to <see cref="_fallback"/> instead of propagating the
-    /// failure, as long as the fallback has a compiled description for the active backend. Once a real
-    /// compile succeeds, later calls stop needing the fallback (the result is cached on
-    /// <see cref="_variants"/> by <see cref="Compile"/>).
+    /// Resolves variant at index: use existing compiled one, or compile fresh. Falls back to fallback variant on no compiler or compile failure, if fallback has a compiled description for this backend.
     /// </summary>
     private Variant Resolve(int index)
     {

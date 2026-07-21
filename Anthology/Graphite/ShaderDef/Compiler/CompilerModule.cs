@@ -4,14 +4,14 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// Provides modular compilation for specific target backends/platforms with differing reflection and binding rules.
+/// Per-backend compilation with its own reflection/binding rules.
 /// </summary>
 public interface CompilerModule
 {
     internal TargetDescription Target { get; }
 
     /// <summary>
-    /// The graphics backend this compiler targets.
+    /// Target backend.
     /// </summary>
     public GraphicsBackend Backend { get; }
 

@@ -3,10 +3,8 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Handed to a pass's setup so it can declare the resources it reads and writes. The graph uses these to
-/// allocate resources and order passes: readers run after their writers. Inputs are declared by ID only -
-/// the pass that outputs a resource (or a central pipeline declaration) owns its description, so a reader
-/// never restates it.
+/// Lets a pass declare reads/writes during setup. Graph uses this to allocate resources and order passes
+/// (readers after writers). Inputs are ID only - the writer owns the description.
 /// </summary>
 public sealed class RenderContextBuilder
 {
@@ -19,7 +17,7 @@ public sealed class RenderContextBuilder
         Outputs.Clear();
     }
 
-    /// <summary>Declares a texture this pass samples. The producing pass or a central declaration owns its description.</summary>
+    /// <summary>Declares a texture this pass samples. Writer owns the description.</summary>
     public TextureHandle GetInputTexture(RenderResourceID id)
     {
         Inputs.Add(id);
@@ -27,9 +25,8 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a texture this pass renders into. Creates the resource if not already declared. A non-zero
-    /// history depth makes it a persistent versioned resource: the graph keeps a ring of history+1 physical
-    /// copies and rotates the current one each execution, so reads can resolve prior executions by age.
+    /// Declares a texture this pass renders into, creating it if new. Non-zero history makes it a ring buffer
+    /// of history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>
     public TextureHandle GetOutputTexture(RenderResourceID id, GraphTextureDesc desc, int history = 0, TargetLoadStoreOps? ops = null)
     {
@@ -38,8 +35,7 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Imports an externally-owned render target into the graph under the given ID so passes can read it and
-    /// order around it. The caller keeps ownership; the graph never disposes it.
+    /// Imports an external render target under an ID so passes can read/order around it. Caller keeps ownership.
     /// </summary>
     public TextureHandle ImportTexture(RenderResourceID id, RenderTexture existing)
     {
@@ -47,7 +43,7 @@ public sealed class RenderContextBuilder
         return new TextureHandle(id);
     }
 
-    /// <summary>Declares a buffer this pass reads. The producing pass or a central declaration owns its description.</summary>
+    /// <summary>Declares a buffer this pass reads. Writer owns the description.</summary>
     public BufferHandle GetInputBuffer(RenderResourceID id)
     {
         Inputs.Add(id);
@@ -55,9 +51,8 @@ public sealed class RenderContextBuilder
     }
 
     /// <summary>
-    /// Declares a buffer this pass writes. Creates the resource if not already declared. A non-zero history
-    /// depth makes it a persistent versioned resource: the graph keeps a ring of history+1 physical copies
-    /// and rotates the current one each execution, so reads can resolve prior executions by age.
+    /// Declares a buffer this pass writes, creating it if new. Non-zero history makes it a ring buffer of
+    /// history+1 copies, rotated each execution so reads can pull prior frames by age.
     /// </summary>
     public BufferHandle GetOutputBuffer(RenderResourceID id, GraphBufferDesc desc, int history = 0)
     {

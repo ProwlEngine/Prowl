@@ -34,9 +34,7 @@ internal struct KeywordState
 
 
     /// <summary>
-    /// Applies a keyword to the matching slot. Returns <c>false</c> (leaving the state unchanged)
-    /// when the keyword's name is not part of this set, so callers can report unknown keywords
-    /// instead of throwing.
+    /// Sets a keyword in its slot. Returns false and leaves state unchanged if name isn't in this set.
     /// </summary>
     public bool SetKeyword(Keyword keyword)
     {
@@ -54,8 +52,7 @@ internal struct KeywordState
 
 
     /// <summary>
-    /// Counts how many keyword slots hold the same value as <paramref name="other"/>. Used to pick
-    /// the closest compiled variant when no exact match exists.
+    /// Counts matching slot values against other. Used to find closest variant when no exact match.
     /// </summary>
     public readonly int MatchScore(KeywordState other)
     {

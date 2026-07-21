@@ -2,39 +2,29 @@
 
 namespace Prowl.Graphite;
 
-/// <summary>
-/// Describes an individual output attachment and its format.
-/// </summary>
+/// <summary>One output attachment's format.</summary>
 public struct OutputAttachmentDescription : IEquatable<OutputAttachmentDescription>
 {
-    /// <summary>
-    /// The format of the <see cref="Texture"/> attachment.
-    /// </summary>
+    /// <summary>Attachment's texture format.</summary>
     public PixelFormat Format;
 
-    /// <summary>
-    /// Constructs a new <see cref="OutputAttachmentDescription"/>.
-    /// </summary>
-    /// <param name="format">THe format of the <see cref="Texture"/> attachment.</param>
+    /// <summary>Makes a description.</summary>
+    /// <param name="format">Attachment format.</param>
     public OutputAttachmentDescription(PixelFormat format)
     {
         Format = format;
     }
 
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <summary>Field equality.</summary>
+    /// <param name="other">Instance to compare.</param>
+    /// <returns>True if equal.</returns>
     public readonly bool Equals(OutputAttachmentDescription other)
     {
         return Format == other.Format;
     }
 
-    /// <summary>
-    /// Returns the hash code for this instance.
-    /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <summary>Hash code.</summary>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
     {
         return (int)Format;

@@ -5,9 +5,7 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Vulkan implementation of <see cref="TransferCommandBuffer"/>. Owns its own dedicated <see cref="CommandPool"/>
-/// so that recording and submission never touch the Frame ring-buffer or its per-slot fences. Submission
-/// blocks the calling thread until the GPU has finished executing the recorded commands.
+/// Vulkan TransferCommandBuffer. Owns its own CommandPool so it never touches the frame ring-buffer or its fences. Submit blocks until GPU finishes.
 /// </summary>
 internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 {

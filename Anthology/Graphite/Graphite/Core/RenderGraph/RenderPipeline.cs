@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Base class for graph-driven render pipelines. Subclass adds passes and a present pass in
-/// InitializePasses; the pipeline solves them into an ordered graph and runs it per view via ExecuteView.
+/// Base class for graph-driven render pipelines. Subclass adds passes and a present pass in InitializePasses;
+/// gets solved into an ordered graph and run per view via ExecuteView.
 /// </summary>
 public abstract class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
@@ -17,8 +17,8 @@ public abstract class RenderPipeline<TView> : IDisposable
     private bool _initialized;
 
     /// <summary>
-    /// Runs once, lazily, before first execution. Override to add passes and set the present pass.
-    /// Pass read/write declarations decide execution order.
+    /// Runs once lazily before first execution. Override to add passes and set the present pass.
+    /// Read/write declarations decide order.
     /// </summary>
     protected abstract void InitializePasses();
 
@@ -31,20 +31,18 @@ public abstract class RenderPipeline<TView> : IDisposable
         => _presentPass = presentPass ?? throw new ArgumentNullException(nameof(presentPass));
 
     /// <summary>
-    /// Declares a texture resource centrally, independent of any pass, so many passes can reference it by ID
-    /// without one of them having to own its description. Call from InitializePasses.
+    /// Declares a texture resource centrally so passes can reference it by ID with no owner. Call from InitializePasses.
     /// </summary>
-    /// <param name="id">Resource ID passes reference.</param>
-    /// <param name="desc">Description used to allocate the texture.</param>
+    /// <param name="id">ID passes reference.</param>
+    /// <param name="desc">Allocation description.</param>
     protected void DeclareTexture(RenderResourceID id, GraphTextureDesc desc)
         => _centralResources.Add(new GraphTextureResource(id, desc));
 
     /// <summary>
-    /// Declares a buffer resource centrally, independent of any pass, so many passes can reference it by ID
-    /// without one of them having to own its description. Call from InitializePasses.
+    /// Declares a buffer resource centrally so passes can reference it by ID with no owner. Call from InitializePasses.
     /// </summary>
-    /// <param name="id">Resource ID passes reference.</param>
-    /// <param name="desc">Description used to allocate the buffer.</param>
+    /// <param name="id">ID passes reference.</param>
+    /// <param name="desc">Allocation description.</param>
     protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)
         => _centralResources.Add(new GraphBufferResource(id, desc));
 
@@ -79,8 +77,8 @@ public abstract class RenderPipeline<TView> : IDisposable
     }
 
     /// <summary>
-    /// Runs the solved graph for one view. Runs ordered passes with profiler scopes and capture,
-    /// then runs the present pass. Called once per view per dispatch.
+    /// Runs the solved graph for one view: ordered passes with profiler scopes and capture, then present.
+    /// Once per view per dispatch.
     /// </summary>
     public void ExecuteView(RenderContext<TView> context)
     {

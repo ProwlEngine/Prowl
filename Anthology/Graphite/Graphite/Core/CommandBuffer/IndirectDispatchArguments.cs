@@ -1,20 +1,20 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// A structure describing the format expected by indirect dispatch commands contained in an indirect <see cref="DeviceBuffer"/>.
+/// Format expected by indirect dispatch commands in an indirect buffer.
 /// </summary>
 public struct IndirectDispatchArguments
 {
     /// <summary>
-    /// The X group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
+    /// X group count, same as Dispatch's.
     /// </summary>
     public uint GroupCountX;
     /// <summary>
-    /// The Y group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
+    /// Y group count, same as Dispatch's.
     /// </summary>
     public uint GroupCountY;
     /// <summary>
-    /// The Z group count, as if passed to the <see cref="CommandBuffer.Dispatch(uint, uint, uint)"/> method.
+    /// Z group count, same as Dispatch's.
     /// </summary>
     public uint GroupCountZ;
 }

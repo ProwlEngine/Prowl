@@ -1,16 +1,16 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// The format of index data used in a <see cref="DeviceBuffer"/>.
+/// Index data format for a DeviceBuffer.
 /// </summary>
 public enum IndexFormat : byte
 {
     /// <summary>
-    /// Each index is a 16-bit unsigned integer (System.UInt16).
+    /// 16-bit unsigned indices.
     /// </summary>
     UInt16,
     /// <summary>
-    /// Each index is a 32-bit unsigned integer (System.UInt32).
+    /// 32-bit unsigned indices.
     /// </summary>
     UInt32,
 }

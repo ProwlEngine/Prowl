@@ -3,34 +3,34 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes how stencil tests are performed in a <see cref="GraphicsProgram"/>'s depth-stencil state.
+/// Stencil test behavior for a program's depth-stencil state.
 /// </summary>
 public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription>
 {
     /// <summary>
-    /// The operation performed on samples that fail the stencil test.
+    /// Op on stencil fail.
     /// </summary>
     public StencilOperation Fail;
     /// <summary>
-    /// The operation performed on samples that pass the stencil test.
+    /// Op on stencil pass.
     /// </summary>
     public StencilOperation Pass;
     /// <summary>
-    /// The operation performed on samples that pass the stencil test but fail the depth test.
+    /// Op on stencil pass, depth fail.
     /// </summary>
     public StencilOperation DepthFail;
     /// <summary>
-    /// The comparison operator used in the stencil test.
+    /// Stencil comparison op.
     /// </summary>
     public ComparisonKind Comparison;
 
     /// <summary>
-    /// Constructs a new StencilBehaviorDescription.
+    /// Makes a StencilBehaviorDescription.
     /// </summary>
-    /// <param name="fail">The operation performed on samples that fail the stencil test.</param>
-    /// <param name="pass">The operation performed on samples that pass the stencil test.</param>
-    /// <param name="depthFail">The operation performed on samples that pass the stencil test but fail the depth test.</param>
-    /// <param name="comparison">The comparison operator used in the stencil test.</param>
+    /// <param name="fail">Op on stencil fail.</param>
+    /// <param name="pass">Op on stencil pass.</param>
+    /// <param name="depthFail">Op on stencil pass, depth fail.</param>
+    /// <param name="comparison">Stencil comparison op.</param>
     public StencilBehaviorDescription(
         StencilOperation fail,
         StencilOperation pass,
@@ -46,17 +46,17 @@ public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(StencilBehaviorDescription other)
     {
         return Fail == other.Fail && Pass == other.Pass && DepthFail == other.DepthFail && Comparison == other.Comparison;
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine((int)Fail, (int)Pass, (int)DepthFail, (int)Comparison);

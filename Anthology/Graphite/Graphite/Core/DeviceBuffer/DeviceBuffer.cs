@@ -3,32 +3,32 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource that stores graphics data. Size is fixed at creation, no resizing.
+/// Device resource storing graphics data. Fixed size, no resizing.
 /// </summary>
 public abstract partial class DeviceBuffer : DeviceResource, BindableResource, MappableResource, IDisposable
 {
     /// <summary>
-    /// Total capacity in bytes. Fixed at creation.
+    /// Capacity in bytes. Fixed at creation.
     /// </summary>
     public abstract uint SizeInBytes { get; }
 
     /// <summary>
-    /// Bitmask of allowed uses.
+    /// Allowed uses bitmask.
     /// </summary>
     public abstract BufferUsage Usage { get; }
 
     /// <summary>
-    /// Debug name, shows up in graphics debuggers.
+    /// Debug name.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// True if disposed.
+    /// Disposed?
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources.
+    /// Frees unmanaged resources.
     /// </summary>
     public abstract void Dispose();
 
@@ -38,7 +38,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     private bool _transientWrites;
 
     /// <summary>
-    /// Log a warning if reallocations happen again within this many executions.
+    /// Warn if reallocated again within this many executions.
     /// </summary>
     private const ulong OrphanWarningExecutionWindow = 10;
 
@@ -48,7 +48,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     }
 
     /// <summary>
-    /// Marks the buffer as GPU-read by this execution. Call when actually bound/used, not just recorded.
+    /// Marks buffer as GPU-read by this execution. Call on actual bind/use, not just record.
     /// </summary>
     internal void MarkInFlight(GraphicsDevice device, ulong executionId)
     {
@@ -65,8 +65,8 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
         && !_inFlightDevice.IsExecutionIdComplete(_inFlightExecutionId);
 
     /// <summary>
-    /// Call before a CPU write to this buffer. If GPU might still be reading it from an earlier execution,
-    /// orphans the native resource and allocates a fresh one so the write can't race the GPU read.
+    /// Call before a CPU write. If GPU might still be reading it, orphans the native resource and
+    /// allocates a fresh one so the write can't race the read.
     /// </summary>
     internal void EnsureWritable()
     {
@@ -91,10 +91,10 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     }
 
     /// <summary>
-    /// Recreates the native resource in place, keeping the same buffer identity. Don't free the old
-    /// resource right away - GPU might still read it, so defer disposal until the execution completes.
+    /// Recreates native resource in place, same buffer identity. Don't free the old one yet - GPU might
+    /// still read it, defer disposal until that execution completes.
     /// </summary>
-    /// <param name="device">Device that last used this buffer.</param>
-    /// <param name="inFlightExecutionId">Execution that may still be reading the old resource.</param>
+    /// <param name="device">Device last using this buffer.</param>
+    /// <param name="inFlightExecutionId">Execution that may still read the old resource.</param>
     protected internal abstract void OrphanCore(GraphicsDevice device, ulong inFlightExecutionId);
 }

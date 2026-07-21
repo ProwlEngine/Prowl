@@ -3,27 +3,24 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes the layout of <see cref="BindableResource"/> objects for a <see cref="GraphicsProgram"/>.
+/// Layout of bindable resources for a GraphicsProgram.
 /// </summary>
 public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 {
     /// <summary>
-    /// The descriptor set index for this layout. Maps to the Vulkan descriptor set number
-    /// (or the equivalent DX12 register space). Ignored on backends that do not use sets.
+    /// Descriptor set index (Vulkan set / DX12 register space). Ignored on backends without sets.
     /// </summary>
     public uint Set;
 
     /// <summary>
-    /// An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties of each resource
-    /// element in the <see cref="PropertySet"/>.
+    /// Per-element layout descriptions for the resources in this set.
     /// </summary>
     public ResourceLayoutElementDescription[] Elements;
 
     /// <summary>
-    /// Constructs a new ResourceLayoutDescription with a default set index of 0.
+    /// New ResourceLayoutDescription, set index 0.
     /// </summary>
-    /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
-    /// of each resource element in the <see cref="PropertySet"/>.</param>
+    /// <param name="elements">Per-element layout descriptions.</param>
     public ResourceLayoutDescription(params ResourceLayoutElementDescription[] elements)
     {
         Set = 0;
@@ -31,11 +28,10 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     }
 
     /// <summary>
-    /// Constructs a new ResourceLayoutDescription with an explicit set index.
+    /// New ResourceLayoutDescription with explicit set index.
     /// </summary>
-    /// <param name="set">The descriptor set index (Vulkan set / DX12 register space).</param>
-    /// <param name="elements">An array of <see cref="ResourceLayoutElementDescription"/> objects, describing the properties
-    /// of each resource element in the <see cref="PropertySet"/>.</param>
+    /// <param name="set">Descriptor set index (Vulkan set / DX12 register space).</param>
+    /// <param name="elements">Per-element layout descriptions.</param>
     public ResourceLayoutDescription(uint set, params ResourceLayoutElementDescription[] elements)
     {
         Set = set;
@@ -45,15 +41,15 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all array elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if everything matches.</returns>
     public readonly bool Equals(ResourceLayoutDescription other)
         => Set == other.Set && Util.ArrayEqualsEquatable(Elements, other.Elements);
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
         => HashCode.Combine(Set, Elements.ArrayHash());
 

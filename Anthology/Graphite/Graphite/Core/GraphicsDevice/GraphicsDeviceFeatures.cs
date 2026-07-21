@@ -1,94 +1,80 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Enumerates the optional features supported by a given <see cref="GraphicsDevice"/>.
+/// Optional features a device supports.
 /// </summary>
 public class GraphicsDeviceFeatures
 {
     /// <summary>
-    /// Indicates whether Compute Shaders can be used.
+    /// Compute shaders usable.
     /// </summary>
     public bool ComputeShader { get; }
     /// <summary>
-    /// Indicates whether Geometry Shaders can be used.
+    /// Geometry shaders usable.
     /// </summary>
     public bool GeometryShader { get; }
     /// <summary>
-    /// Indicates whether Tessellation Shaders can be used.
+    /// Tessellation shaders usable.
     /// </summary>
     public bool TessellationShaders { get; }
     /// <summary>
-    /// Indicates whether multiple independent viewports can be set simultaneously.
-    /// If this is not supported, then only the first Viewport index will be used for all render outputs.
+    /// Multiple viewports can be set at once. If not, only viewport 0 is used for all outputs.
     /// </summary>
     public bool MultipleViewports { get; }
     /// <summary>
-    /// Indicates whether <see cref="SamplerDescription.LodBias"/> can be non-zero.
-    /// If false, it is an error to attempt to use a non-zero bias value.
+    /// Sampler LodBias can be non-zero. Otherwise non-zero bias is an error.
     /// </summary>
     public bool SamplerLodBias { get; }
     /// <summary>
-    /// Indicates whether a non-zero "vertexStart" value can be used in
-    /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, int, uint)"/>.
+    /// Non-zero vertexStart allowed in Draw/DrawIndexed.
     /// </summary>
     public bool DrawBaseVertex { get; }
     /// <summary>
-    /// Indicates whether a non-zero "instanceStart" value can be used in
-    /// <see cref="CommandBuffer.Draw(uint, uint, uint, uint)"/> and
-    /// <see cref="CommandBuffer.DrawIndexed(uint, uint, int, uint)"/>.
+    /// Non-zero instanceStart allowed in Draw/DrawIndexed.
     /// </summary>
     public bool DrawBaseInstance { get; }
     /// <summary>
-    /// Indicates whether indirect draw commands can be issued.
+    /// Indirect draw commands supported.
     /// </summary>
     public bool DrawIndirect { get; }
     /// <summary>
-    /// Indicates whether indirect draw structures stored in an Indirect DeviceBuffer can contain
-    /// a non-zero FirstInstance value.
+    /// Indirect draw structs can have non-zero FirstInstance.
     /// </summary>
     public bool DrawIndirectBaseInstance { get; }
     /// <summary>
-    /// Indicates whether <see cref="SamplerFilter.Anisotropic"/> is supported.
+    /// Anisotropic sampler filter supported.
     /// </summary>
     public bool SamplerAnisotropy { get; }
     /// <summary>
-    /// Indicates whether <see cref="RasterizerStateDescription.DepthClipEnabled"/> can be set to false.
+    /// DepthClipEnabled can be set false.
     /// </summary>
     public bool DepthClipDisable { get; }
     /// <summary>
-    /// Indicates whether a <see cref="Texture"/> can be created with <see cref="TextureType.Texture1D"/>.
+    /// 1D textures supported.
     /// </summary>
     public bool Texture1D { get; }
     /// <summary>
-    /// Indicates whether a <see cref="BlendStateDescription"/> can be used which has multiple different
-    /// <see cref="BlendAttachmentDescription"/> values for each attachment. If false, all attachments must have the same
-    /// blend state.
+    /// Per-attachment blend state supported. Otherwise all attachments share one blend state.
     /// </summary>
     public bool IndependentBlend { get; }
     /// <summary>
-    /// Indicates whether <see cref="BufferUsage.StructuredBufferReadOnly"/> and
-    /// <see cref="BufferUsage.StructuredBufferReadWrite"/> can be used. If false, structured buffers cannot be created.
+    /// Structured buffers (read-only/read-write) supported. Otherwise cannot create them.
     /// </summary>
     public bool StructuredBuffer { get; }
     /// <summary>
-    /// Indicates whether a <see cref="TextureView"/> can be created which does not view the full set of mip levels and array
-    /// layers contained in its target Texture, or uses a different <see cref="PixelFormat"/> from the underlying Texture.
+    /// TextureView can view a subset of mips/layers or use a different format than its target texture.
     /// </summary>
     public bool SubsetTextureView { get; }
     /// <summary>
-    /// Indicates whether <see cref="CommandBuffer"/> instances created with this device support the
-    /// <see cref="CommandBuffer.PushDebugGroup(string)"/>, <see cref="CommandBuffer.PopDebugGroup"/>, and
-    /// <see cref="CommandBuffer.InsertDebugMarker(string)"/> methods. If not, these methods will have no effect.
+    /// CommandBuffer debug markers (PushDebugGroup/PopDebugGroup/InsertDebugMarker) actually do something. Otherwise they're no-ops.
     /// </summary>
     public bool CommandBufferDebugMarkers { get; }
     /// <summary>
-    /// Indicates whether uniform and structured buffers can be bound with an offset and a size. If false, buffer resources
-    /// must be bound with their full range.
+    /// Uniform/structured buffers can bind with offset+size. Otherwise must bind full range.
     /// </summary>
     public bool BufferRangeBinding { get; }
     /// <summary>
-    /// Indicates whether 64-bit floating point integers can be used in shaders.
+    /// 64-bit floats usable in shaders.
     /// </summary>
     public bool ShaderFloat64 { get; }
 

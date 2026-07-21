@@ -3,21 +3,18 @@ using System;
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Composite cache key used by <see cref="VkGraphicsProgram"/>'s per-program pipeline cache to
-/// resolve a graphics <see cref="Silk.NET.Vulkan.Pipeline"/> at draw time.
+/// Composite key for the program's pipeline cache, resolves a pipeline at draw time.
 /// </summary>
 /// <remarks>
-/// The owning program already determines every piece of program-owned pipeline state (blend,
-/// depth-stencil, rasterizer, vertex layouts, resource layouts, descriptor set layouts, pipeline
-/// layout, and shader modules), so the key only needs the per-draw varying state.
-/// <see cref="Outputs"/> and <see cref="Topology"/> are compared by value.
+/// Program already owns blend, depth-stencil, rasterizer, layouts, and shader modules,
+/// so the key only needs per-draw varying state. Outputs and Topology compared by value.
 /// </remarks>
 internal readonly struct VkPipelineCacheKey : IEquatable<VkPipelineCacheKey>
 {
-    /// <summary>The render target output description for the pipeline.</summary>
+    /// <summary>Render target output description.</summary>
     public readonly OutputDescription Outputs;
 
-    /// <summary>The primitive topology baked into the pipeline.</summary>
+    /// <summary>Primitive topology baked into the pipeline.</summary>
     public readonly PrimitiveTopology Topology;
 
     public VkPipelineCacheKey(OutputDescription outputs, PrimitiveTopology topology)

@@ -11,10 +11,8 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// Discovers variant axes from the Slang reflection tree. An axis is an extern field tagged with the
-/// <c>[VariantAxis]</c> attribute; its value space is derived from the field's type (an enum's cases,
-/// or true/false for a bool). This is purely a reflection concern - it does not generate or compile
-/// any variant permutations.
+/// Finds variant axes in the Slang reflection tree. An axis is an extern field marked [VariantAxis];
+/// values come from the field type (enum cases, or bool true/false). Reflection only, no codegen.
 /// </summary>
 internal static class VariantReflection
 {
@@ -22,9 +20,8 @@ internal static class VariantReflection
 
 
     /// <summary>
-    /// Collects the variant axes visible to the compilation of <paramref name="requiredModule"/>.
-    /// <paramref name="linkedModules"/> receives the required module plus any other loaded module that
-    /// declares an extern matching a discovered axis, so those modules are linked into every variant.
+    /// Collects variant axes visible when compiling requiredModule. linkedModules gets the required
+    /// module plus any other loaded module declaring a matching extern, so those get linked in too.
     /// </summary>
     public static List<VariantSpace> CollectVariantSpaces(Session session, Module requiredModule, out List<Module> linkedModules)
     {

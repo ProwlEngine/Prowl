@@ -5,26 +5,24 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// A single shader variant: one fixed combination of keyword values, plus whatever backend shader
-/// descriptions it has been compiled for. Pure data - it never references the compiler, so a variant
-/// can be serialized and later bound with no compiler dependency.
+/// One fixed keyword combination plus whatever backend shader descriptions it's compiled for. Pure
+/// data, no compiler reference, so it can be serialized and bound standalone.
 /// </summary>
 public sealed class Variant
 {
     /// <summary>
-    /// The fixed keyword combination this variant represents.
+    /// This variant's fixed keyword combination.
     /// </summary>
     public Keyword[] Keywords;
 
     /// <summary>
-    /// The compiled shader description for each backend this variant has been compiled for. May be
-    /// empty (not yet compiled), partial (some backends), or full.
+    /// Compiled description per backend. May be empty, partial, or full.
     /// </summary>
     public (GraphicsBackend Backend, ShaderDescription Description)[] Compiled;
 
 
     /// <summary>
-    /// Creates an empty, uncompiled variant.
+    /// Makes an empty, uncompiled variant.
     /// </summary>
     public Variant()
     {
@@ -34,7 +32,7 @@ public sealed class Variant
 
 
     /// <summary>
-    /// Creates a variant with a fixed keyword combination and a set of already-compiled backends.
+    /// Makes a variant with fixed keywords and already-compiled backends.
     /// </summary>
     public Variant(Keyword[] keywords, (GraphicsBackend Backend, ShaderDescription Description)[] compiled)
     {
@@ -44,7 +42,7 @@ public sealed class Variant
 
 
     /// <summary>
-    /// True if this variant holds a compiled description for the given backend.
+    /// True if compiled for the given backend.
     /// </summary>
     public bool IsCompiledFor(GraphicsBackend backend)
     {
@@ -59,7 +57,7 @@ public sealed class Variant
 
 
     /// <summary>
-    /// Gets the compiled description for the given backend, if one has been compiled.
+    /// Gets the compiled description for the backend, if any.
     /// </summary>
     public bool TryGetDescription(GraphicsBackend backend, out ShaderDescription description)
     {

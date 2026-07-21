@@ -30,7 +30,7 @@ public struct MaterialInfo
     public Texture? MetallicRoughnessTexture;
     public Texture? EmissiveTexture;
 
-    /// <summary>CPU-side RGBA bytes for <see cref="AlbedoTexture"/>, kept for lightmap baking. Null when there is no albedo texture.</summary>
+    /// <summary>Albedo RGBA bytes on CPU, for lightmap baking. Null if no albedo texture.</summary>
     public TextureBlob? AlbedoBlob;
 }
 

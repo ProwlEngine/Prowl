@@ -3,44 +3,41 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a <see cref="TextureView"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a TextureView for creation via ResourceFactory.
 /// </summary>
 public struct TextureViewDescription : IEquatable<TextureViewDescription>
 {
     /// <summary>
-    /// The desired target <see cref="Texture"/>.
+    /// Target texture.
     /// </summary>
     public Texture Target;
     /// <summary>
-    /// The base mip level visible in the view. Must be less than <see cref="Texture.MipLevels"/>.
+    /// Base mip level in the view. Must be less than target's MipLevels.
     /// </summary>
     public uint BaseMipLevel;
     /// <summary>
-    /// The number of mip levels visible in the view.
+    /// Mip levels visible in the view.
     /// </summary>
     public uint MipLevels;
     /// <summary>
-    /// The base array layer visible in the view.
+    /// Base array layer in the view.
     /// </summary>
     public uint BaseArrayLayer;
     /// <summary>
-    /// The number of array layers visible in the view.
+    /// Array layers visible in the view.
     /// </summary>
     public uint ArrayLayers;
     /// <summary>
-    /// An optional <see cref="PixelFormat"/> which specifies how the data within <see cref="Target"/> will be viewed.
-    /// If this value is null, then the created TextureView will use the same <see cref="PixelFormat"/> as the target
-    /// <see cref="Texture"/>. If not null, this format must be "compatible" with the target Texture's. For uncompressed
-    /// formats, the overall size and number of components in this format must be equal to the underlying format. For
-    /// compressed formats, it is only possible to use the same PixelFormat or its sRGB/non-sRGB counterpart.
+    /// Optional format override for the view. Null means use the target's format. If set, must be
+    /// compatible with the target's format: same size/component count for uncompressed, same or
+    /// sRGB-counterpart for compressed.
     /// </summary>
     public PixelFormat? Format;
 
     /// <summary>
     /// Constructs a new TextureViewDescription.
     /// </summary>
-    /// <param name="target">The desired target <see cref="Texture"/>. This <see cref="Texture"/> must have been created
-    /// with the <see cref="TextureUsage.Sampled"/> usage flag.</param>
+    /// <param name="target">Target texture. Must have been created with the Sampled usage flag.</param>
     public TextureViewDescription(Texture target)
     {
         Target = target;
@@ -54,12 +51,8 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     /// <summary>
     /// Constructs a new TextureViewDescription.
     /// </summary>
-    /// <param name="target">The desired target <see cref="Texture"/>. This <see cref="Texture"/> must have been created
-    /// with the <see cref="TextureUsage.Sampled"/> usage flag.</param>
-    /// <param name="format">Specifies how the data within the target Texture will be viewed.
-    /// This format must be "compatible" with the target Texture's. For uncompressed formats, the overall size and number of
-    /// components in this format must be equal to the underlying format. For compressed formats, it is only possible to use
-    /// the same PixelFormat or its sRGB/non-sRGB counterpart.</param>
+    /// <param name="target">Target texture. Must have been created with the Sampled usage flag.</param>
+    /// <param name="format">Format override. Must be compatible with the target's format.</param>
     public TextureViewDescription(Texture target, PixelFormat format)
     {
         Target = target;
@@ -73,12 +66,11 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     /// <summary>
     /// Constructs a new TextureViewDescription.
     /// </summary>
-    /// <param name="target">The desired target <see cref="Texture"/>.</param>
-    /// <param name="baseMipLevel">The base mip level visible in the view. Must be less than <see cref="Texture.MipLevels"/>.
-    /// </param>
-    /// <param name="mipLevels">The number of mip levels visible in the view.</param>
-    /// <param name="baseArrayLayer">The base array layer visible in the view.</param>
-    /// <param name="arrayLayers">The number of array layers visible in the view.</param>
+    /// <param name="target">Target texture.</param>
+    /// <param name="baseMipLevel">Base mip level. Must be less than target's MipLevels.</param>
+    /// <param name="mipLevels">Mip levels visible in the view.</param>
+    /// <param name="baseArrayLayer">Base array layer.</param>
+    /// <param name="arrayLayers">Array layers visible in the view.</param>
     public TextureViewDescription(Texture target, uint baseMipLevel, uint mipLevels, uint baseArrayLayer, uint arrayLayers)
     {
         Target = target;
@@ -92,16 +84,12 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     /// <summary>
     /// Constructs a new TextureViewDescription.
     /// </summary>
-    /// <param name="target">The desired target <see cref="Texture"/>.</param>
-    /// <param name="format">Specifies how the data within the target Texture will be viewed.
-    /// This format must be "compatible" with the target Texture's. For uncompressed formats, the overall size and number of
-    /// components in this format must be equal to the underlying format. For compressed formats, it is only possible to use
-    /// the same PixelFormat or its sRGB/non-sRGB counterpart.</param>
-    /// <param name="baseMipLevel">The base mip level visible in the view. Must be less than <see cref="Texture.MipLevels"/>.
-    /// </param>
-    /// <param name="mipLevels">The number of mip levels visible in the view.</param>
-    /// <param name="baseArrayLayer">The base array layer visible in the view.</param>
-    /// <param name="arrayLayers">The number of array layers visible in the view.</param>
+    /// <param name="target">Target texture.</param>
+    /// <param name="format">Format override. Must be compatible with the target's format.</param>
+    /// <param name="baseMipLevel">Base mip level. Must be less than target's MipLevels.</param>
+    /// <param name="mipLevels">Mip levels visible in the view.</param>
+    /// <param name="baseArrayLayer">Base array layer.</param>
+    /// <param name="arrayLayers">Array layers visible in the view.</param>
     public TextureViewDescription(Texture target, PixelFormat format, uint baseMipLevel, uint mipLevels, uint baseArrayLayer, uint arrayLayers)
     {
         Target = target;
@@ -115,8 +103,8 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare to.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(TextureViewDescription other)
     {
         return Target.Equals(other.Target)
@@ -128,9 +116,9 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(

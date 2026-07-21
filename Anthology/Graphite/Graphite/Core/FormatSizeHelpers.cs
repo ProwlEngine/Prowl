@@ -3,18 +3,15 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Format extension utility for byte size of graphics formats.
+/// Byte size lookups for graphics formats.
 /// </summary>
 public static class FormatSizeHelpers
 {
     /// <summary>
-    /// Given a pixel format, returns the number of bytes required to store
-    /// a single pixel.
-    /// Compressed formats may not be used with this method as the number of
-    /// bytes per pixel is variable.
+    /// Bytes per pixel. Uncompressed formats only, compressed sizes vary.
     /// </summary>
-    /// <param name="format">An uncompressed pixel format</param>
-    /// <returns>The number of bytes required to store a single pixel in the given format</returns>
+    /// <param name="format">Uncompressed pixel format.</param>
+    /// <returns>Bytes per pixel.</returns>
     public static uint GetSizeInBytes(this PixelFormat format)
     {
         switch (format)
@@ -99,11 +96,10 @@ public static class FormatSizeHelpers
     }
 
     /// <summary>
-    /// Given a vertex element format, returns the number of bytes required
-    /// to store an element in that format.
+    /// Bytes per vertex element in this format.
     /// </summary>
-    /// <param name="format">A vertex element format</param>
-    /// <returns>The number of bytes required to store an element in the given format</returns>
+    /// <param name="format">Vertex element format.</param>
+    /// <returns>Bytes per element.</returns>
     public static uint GetSizeInBytes(this VertexElementFormat format)
     {
         switch (format)

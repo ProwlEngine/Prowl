@@ -13,12 +13,9 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// A Slang-based <see cref="IShaderCompiler"/>. Wraps the native Slang compiler with platform-specific
-/// codegen and variant discovery, slotting into a <see cref="ShaderDefinition"/> to supply and compile
-/// variants on demand or all at once.
+/// Slang-based shader compiler. Wraps native Slang for codegen and variant discovery per ShaderDefinition.
 /// <para>
-/// If compiling a heavy workload with a large set of shaders, it is best to reuse a single compiler to
-/// preserve cached loaded modules.
+/// Reuse one instance for heavy workloads to keep module cache hot.
 /// </para>
 /// </summary>
 public sealed class SlangShaderCompiler : IShaderCompiler
@@ -82,7 +79,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// The platform compilation modules registered on this compiler.
+    /// Registered platform compilation modules.
     /// </summary>
     public ReadOnlyCollection<CompilerModule> Modules => _modules.AsReadOnly();
 
@@ -106,7 +103,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// Registers a platform module. Cannot de-register a module.
+    /// Registers a platform module. No way to unregister.
     /// </summary>
     public void RegisterModule(CompilerModule module)
     {
@@ -115,7 +112,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// Gets the index for a specific module in the registered module list.
+    /// Index of a module in the registered list.
     /// </summary>
     public int GetModuleIndex(CompilerModule module)
     {
@@ -124,7 +121,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// Registers a diagnostic handler delegate to read all compiler error/warning logs. If unset, uses <see cref="Console.WriteLine()"/>
+    /// Sets the handler for compiler error/warning logs. Defaults to Console.WriteLine.
     /// </summary>
     public void RegisterDiagnosticHandler(DiagnosticHandler handler)
     {
@@ -133,11 +130,11 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// Begins a compilation session. Any modules imported or loaded during compilation will remain imported or loaded until this instance is done being used.
+    /// Starts a compilation session. Imported/loaded modules stick around until this instance is done.
     /// </summary>
-    /// <param name="searchPaths">Directories searched when resolving imported modules.</param>
-    /// <param name="provider">Optional callback that supplies module source bytes for a given path.</param>
-    /// <param name="pragmas">Optional preprocessor macro name/value pairs applied to the session.</param>
+    /// <param name="searchPaths">Dirs to search for imported modules.</param>
+    /// <param name="provider">Optional callback for module source bytes by path.</param>
+    /// <param name="pragmas">Optional preprocessor macro name/value pairs.</param>
     public void BeginSession(DirectoryInfo[] searchPaths, Func<string, Memory<byte>?>? provider = null, (string, string)[]? pragmas = null)
     {
         SessionDescription sessionDesc = new()
@@ -157,7 +154,7 @@ public sealed class SlangShaderCompiler : IShaderCompiler
 
 
     /// <summary>
-    /// Ends this compilation session. Modules and diagnostic handlers are preserved if <see cref="BeginSession"/> is invoked again.
+    /// Ends the session. Modules and diagnostic handler survive a later BeginSession.
     /// </summary>
     public void EndSession()
     {

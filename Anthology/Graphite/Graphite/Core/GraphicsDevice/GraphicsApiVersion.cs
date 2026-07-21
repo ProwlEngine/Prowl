@@ -2,43 +2,43 @@
 
 
 /// <summary>
-/// The precise version of the graphics API that was loaded by a GraphicsDevice.
+/// Exact graphics API version loaded by a GraphicsDevice.
 /// </summary>
 public readonly struct GraphicsApiVersion
 {
     /// <summary>
-    /// An unknown API version.
+    /// Unknown API version.
     /// </summary>
     public static GraphicsApiVersion Unknown => default;
 
     /// <summary>
-    /// The major version (X.x.x.x) of the loaded API.
+    /// Major version (X.x.x.x).
     /// </summary>
     public int Major { get; }
 
     /// <summary>
-    /// The minor (x.X.x.x) version of the loaded API.
+    /// Minor version (x.X.x.x).
     /// </summary>
     public int Minor { get; }
 
     /// <summary>
-    /// The subminor (x.x.X.x) version of the loaded API.
+    /// Subminor version (x.x.X.x).
     /// </summary>
     public int Subminor { get; }
 
     /// <summary>
-    /// The patch (x.x.x.X) version of the loaded API.
+    /// Patch version (x.x.x.X).
     /// </summary>
     public int Patch { get; }
 
     /// <summary>
-    /// Returns true when this graphics API has any nonzero version numbers, and as such has been initialized.
+    /// True if any version number is nonzero, i.e. initialized.
     /// </summary>
     public bool IsKnown => Major != 0 && Minor != 0 && Subminor != 0 && Patch != 0;
 
 
     /// <summary>
-    /// Creates a <see cref="GraphicsApiVersion"/> from the given patch info.
+    /// Builds from major/minor/subminor/patch.
     /// </summary>
     public GraphicsApiVersion(int major, int minor, int subminor, int patch)
     {
@@ -49,7 +49,7 @@ public readonly struct GraphicsApiVersion
     }
 
     /// <summary>
-    /// Returns a string of the API version in (major.minor.subminor.patch) format.
+    /// String as major.minor.subminor.patch.
     /// </summary>
     public override string ToString()
     {

@@ -1,20 +1,12 @@
 ﻿namespace Prowl.Graphite;
 
-/// <summary>
-/// Indicates which face will be culled.
-/// </summary>
+/// <summary>Which face gets culled.</summary>
 public enum FaceCullMode : byte
 {
-    /// <summary>
-    /// The back face.
-    /// </summary>
+    /// <summary>Back face.</summary>
     Back,
-    /// <summary>
-    /// The front face.
-    /// </summary>
+    /// <summary>Front face.</summary>
     Front,
-    /// <summary>
-    /// No face culling.
-    /// </summary>
+    /// <summary>No culling.</summary>
     None,
 }

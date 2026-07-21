@@ -12,7 +12,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The MSL compiler module for the Metal backend.
+/// MSL compiler for Metal backend.
 /// </summary>
 public class MetalCompiler : CompilerModule
 {
@@ -26,7 +26,7 @@ public class MetalCompiler : CompilerModule
 
 
     /// <summary>
-    /// Creates a new instance of <see cref="MetalCompiler"/>.
+    /// Creates a MetalCompiler.
     /// </summary>
     public MetalCompiler(string profileString = "metal_2_0")
     {

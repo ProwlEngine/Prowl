@@ -1,40 +1,38 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes the properties that are supported for a particular combination of <see cref="PixelFormat"/>,
-/// <see cref="TextureType"/>, and <see cref="TextureUsage"/> by a <see cref="GraphicsDevice"/>.
-/// See <see cref="GraphicsDevice.GetPixelFormatSupport(PixelFormat, TextureType, TextureUsage, out PixelFormatProperties)"/>.
+/// Supported properties for a pixel format + texture type + usage combo on a device.
 /// </summary>
 public readonly struct PixelFormatProperties
 {
     /// <summary>
-    /// The maximum supported width.
+    /// Max width.
     /// </summary>
     public readonly uint MaxWidth;
     /// <summary>
-    /// The maximum supported height.
+    /// Max height.
     /// </summary>
     public readonly uint MaxHeight;
     /// <summary>
-    /// The maximum supported depth.
+    /// Max depth.
     /// </summary>
     public readonly uint MaxDepth;
     /// <summary>
-    /// The maximum supported number of mipmap levels.
+    /// Max mip levels.
     /// </summary>
     public readonly uint MaxMipLevels;
     /// <summary>
-    /// The maximum supported number of array layers.
+    /// Max array layers.
     /// </summary>
     public readonly uint MaxArrayLayers;
 
     private readonly uint _sampleCounts;
 
     /// <summary>
-    /// Gets a value indicating whether or not the given <see cref="TextureSampleCount"/> is supported.
+    /// Whether the sample count is supported.
     /// </summary>
-    /// <param name="count">The <see cref="TextureSampleCount"/> to query.</param>
-    /// <returns>True if the sample count is supported; false otherwise.</returns>
+    /// <param name="count">Sample count to check.</param>
+    /// <returns>True if supported.</returns>
     public readonly bool IsSampleCountSupported(TextureSampleCount count)
     {
         int bit = (int)count;

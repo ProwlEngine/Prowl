@@ -18,36 +18,33 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     private readonly Dictionary<ShaderStages, string> _entryPoints = [];
 
     /// <summary>
-    /// Descriptor-set layouts indexed by set index (0..maxSet). Empty-DSL for gaps.
+    /// Descriptor-set layouts by set index. Empty DSL fills gaps.
     /// </summary>
     internal readonly DescriptorSetLayout[] DescriptorSetLayouts;
 
     /// <summary>
-    /// Per-set descriptor resource counts, indexed parallel to <see cref="DescriptorSetLayouts"/>.
-    /// Used to size the per-frame descriptor pool allocation.
+    /// Per-set descriptor resource counts, parallel to DescriptorSetLayouts. Sizes the per-frame pool.
     /// </summary>
     internal readonly DescriptorResourceCounts[] PerSetCounts;
 
     internal readonly PipelineLayout PipelineLayout;
 
-    /// <summary>Total number of UNIFORM_BUFFER_DYNAMIC bindings across all sets.</summary>
+    /// <summary>Total UNIFORM_BUFFER_DYNAMIC bindings across all sets.</summary>
     internal readonly int TotalDynamicUboCount;
 
-    /// <summary>Total number of set slots (max set index + 1).</summary>
+    /// <summary>Set slot count (max set index + 1).</summary>
     internal readonly uint ResourceSetCount;
 
     internal readonly ResourceRefCount RefCount;
 
     /// <summary>
-    /// Per-program, cross-frame cache of descriptor sets, content-addressed by their bound resources.
+    /// Cross-frame descriptor set cache, content-addressed by bound resources.
     /// </summary>
     internal readonly VkDescriptorSetCache DescriptorCache;
 
     /// <summary>
-    /// Per-program cache of resolved graphics pipelines, keyed on
-    /// <c>(OutputDescription, PrimitiveTopology)</c>. Lookup and factory invocation are guarded by
-    /// <see cref="_pipelineCacheLock"/> so <c>vkCreateGraphicsPipelines</c> never runs twice
-    /// concurrently for the same key.
+    /// Cache of resolved pipelines keyed on (OutputDescription, PrimitiveTopology). Lock guards against
+    /// double vkCreateGraphicsPipelines for the same key.
     /// </summary>
     private readonly Dictionary<VkPipelineCacheKey, VkPipelineCacheEntry> _pipelineCache = [];
     private readonly object _pipelineCacheLock = new();
@@ -61,8 +58,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
 
     /// <summary>
-    /// Returns the cached pipeline entry for <paramref name="key"/>, building and inserting one if
-    /// missing. The compatibility render pass and pipeline handle live for the program's lifetime.
+    /// Gets the cached pipeline for key, building and inserting one if missing. Lives for the program's lifetime.
     /// </summary>
     internal VkPipelineCacheEntry GetOrAddPipeline(in VkPipelineCacheKey key)
     {

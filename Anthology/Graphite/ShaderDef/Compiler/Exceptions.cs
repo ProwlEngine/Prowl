@@ -8,27 +8,25 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The exception that is thrown when ShaderDef encounters invalid syntax
-/// while parsing a shader definition document.
+/// Thrown on invalid syntax while parsing a shader definition document.
 /// </summary>
 /// <remarks>
-/// Additionaly provides line and column position.
+/// Includes line and column.
 /// </remarks>
 public sealed class ParseException : Exception
 {
     /// <summary>
-    /// The line in source where the parser failed.
+    /// Line where the parser failed.
     /// </summary>
     public int Line { get; }
 
     /// <summary>
-    /// The column in source where the parser failed.
+    /// Column where the parser failed.
     /// </summary>
     public int Column { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="ParseException"/> class
-    /// with the specified error message and source location.
+    /// Makes a ParseException with message and source location.
     /// </summary>
     public ParseException(string message, int line, int column)
         : base($"{message} at line {line}, column {column}.")

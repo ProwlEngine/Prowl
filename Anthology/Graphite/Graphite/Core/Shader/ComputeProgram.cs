@@ -1,10 +1,7 @@
 
 namespace Prowl.Graphite;
 
-/// <summary>
-/// A device resource encapsulating a single compute shader program.
-/// See <see cref="ComputeDescription"/>.
-/// </summary>
+/// <summary>Device resource for a single compute shader program.</summary>
 public abstract class ComputeProgram : ShaderProgram
 {
     private readonly uint _threadGroupSizeX;
@@ -19,18 +16,12 @@ public abstract class ComputeProgram : ShaderProgram
         _threadGroupSizeZ = description.ThreadGroupSizeZ;
     }
 
-    /// <summary>
-    /// The X dimension of the thread group size.
-    /// </summary>
+    /// <summary>Thread group size X.</summary>
     public uint ThreadGroupSizeX => _threadGroupSizeX;
 
-    /// <summary>
-    /// The Y dimension of the thread group size.
-    /// </summary>
+    /// <summary>Thread group size Y.</summary>
     public uint ThreadGroupSizeY => _threadGroupSizeY;
 
-    /// <summary>
-    /// The Z dimension of the thread group size.
-    /// </summary>
+    /// <summary>Thread group size Z.</summary>
     public uint ThreadGroupSizeZ => _threadGroupSizeZ;
 }

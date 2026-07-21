@@ -114,7 +114,7 @@ internal unsafe partial class VkCommandBuffer
         public List<VkBuffer> BuffersUsed { get; } = [];
         public HashSet<ResourceRefCount> Resources { get; } = [];
 
-        /// <summary>Unique id of the recording currently using this info; stamps retained resources.</summary>
+        /// <summary>Id of the recording using this; stamps retained resources.</summary>
         public ulong RecordingId;
 
         public void Clear()

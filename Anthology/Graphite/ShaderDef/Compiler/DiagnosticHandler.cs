@@ -4,6 +4,6 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// A handler for any error, warning or log message produced when compiling shaders.
+/// Handles error/warning/log messages from shader compilation.
 /// </summary>
 public delegate void DiagnosticHandler(DiagnosticInfo diagnostics);

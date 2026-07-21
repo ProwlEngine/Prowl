@@ -5,11 +5,10 @@ using Prowl.Vector;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A user-owned set of named shader resources and uniforms to bind and upload before or during a draw.
-/// Each PropertySet is applied to a current active set on the command buffer, with the last applied set 
-/// overwriting any previous values with its own.
+/// User-owned named shader resources/uniforms to bind and upload for a draw. Applied to the command
+/// buffer's active set; last applied wins.
 /// <para>
-/// <see cref="PropertySet"/> is not internally synchronized. Upload at your own risk.
+/// Not thread-safe. Upload at your own risk.
 /// </para>
 /// </summary>
 public sealed partial class PropertySet
@@ -21,15 +20,15 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Initializes a new, empty PropertySet with a capacity of 0.
+    /// Empty PropertySet, 0 capacity.
     /// </summary>
     public PropertySet() : this(0)
     {
     }
 
 
-    /// <summary>Initializes an empty <see cref="PropertySet"/> with the given initial entry capacity.</summary>
-    /// <param name="initialEntryCapacity">The initial dictionary capacity.</param>
+    /// <summary>Empty PropertySet with given entry capacity.</summary>
+    /// <param name="initialEntryCapacity">Initial dictionary capacity.</param>
     public PropertySet(int initialEntryCapacity)
     {
         _entries = new(initialEntryCapacity);
@@ -37,59 +36,55 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Tracked resource version counter. Incremented whenever any resource setter
-    /// (<see cref="SetBuffer(PropertyID,DeviceBuffer,bool)"/>, <see cref="SetTexture(PropertyID,Texture,Sampler)"/>,
-    /// <see cref="SetSampler(PropertyID,Sampler)"/>) is called.
-    /// Uniform updates (any scalar value) do not increment this.
+    /// Bumps on any resource setter call (buffer/texture/sampler). Uniform scalar writes don't bump it.
     /// </summary>
     public uint ResourceVersion => _resourceVersion;
 
 
     /// <summary>
-    /// Monotonic version bumped on any mutation of this set, including uniform scalar writes.
-    /// A superset of <see cref="ResourceVersion"/>: unchanged <see cref="Version"/> between two reads
-    /// guarantees no entry changed. Used to skip redundant re-merges of an unchanged set.
+    /// Bumps on any mutation, including uniform writes. Superset of ResourceVersion; unchanged means
+    /// nothing changed. Used to skip re-merging an unchanged set.
     /// </summary>
     internal uint Version => _version;
 
 
-    /// <summary>Number of entries currently stored in this set.</summary>
+    /// <summary>Entry count.</summary>
     public int EntryCount => _entries.Count;
 
 
     internal Dictionary<PropertyID, PropertyEntry> Entries => _entries;
 
 
-    /// <summary>Sets a <c>float</c> uniform field.</summary>
+    /// <summary>Sets a float uniform.</summary>
     public void SetFloat(PropertyID name, float v) => WriteUniform(name, v, UniformScalarType.Float1);
-    /// <summary>Sets a <c>float2</c> uniform field.</summary>
+    /// <summary>Sets a float2 uniform.</summary>
     public void SetFloat2(PropertyID name, Float2 v) => WriteUniform(name, v, UniformScalarType.Float2);
-    /// <summary>Sets a <c>float3</c> uniform field.</summary>
+    /// <summary>Sets a float3 uniform.</summary>
     public void SetFloat3(PropertyID name, Float3 v) => WriteUniform(name, v, UniformScalarType.Float3);
-    /// <summary>Sets a <c>float4</c> uniform field.</summary>
+    /// <summary>Sets a float4 uniform.</summary>
     public void SetFloat4(PropertyID name, Float4 v) => WriteUniform(name, v, UniformScalarType.Float4);
 
-    /// <summary>Sets an <c>int</c> uniform field.</summary>
+    /// <summary>Sets an int uniform.</summary>
     public void SetInt(PropertyID name, int v) => WriteUniform(name, v, UniformScalarType.Int1);
-    /// <summary>Sets an <c>int2</c> uniform field.</summary>
+    /// <summary>Sets an int2 uniform.</summary>
     public void SetInt2(PropertyID name, Int2 v) => WriteUniform(name, v, UniformScalarType.Int2);
-    /// <summary>Sets an <c>int3</c> uniform field.</summary>
+    /// <summary>Sets an int3 uniform.</summary>
     public void SetInt3(PropertyID name, Int3 v) => WriteUniform(name, v, UniformScalarType.Int3);
-    /// <summary>Sets an <c>int4</c> uniform field.</summary>
+    /// <summary>Sets an int4 uniform.</summary>
     public void SetInt4(PropertyID name, Int4 v) => WriteUniform(name, v, UniformScalarType.Int4);
 
-    /// <summary>Sets a <c>double</c> uniform field.</summary>
+    /// <summary>Sets a double uniform.</summary>
     public void SetDouble(PropertyID name, double v) => WriteUniform(name, v, UniformScalarType.Double1);
-    /// <summary>Sets a <c>double2</c> uniform field.</summary>
+    /// <summary>Sets a double2 uniform.</summary>
     public void SetDouble2(PropertyID name, Double2 v) => WriteUniform(name, v, UniformScalarType.Double2);
-    /// <summary>Sets a <c>double3</c> uniform field.</summary>
+    /// <summary>Sets a double3 uniform.</summary>
     public void SetDouble3(PropertyID name, Double3 v) => WriteUniform(name, v, UniformScalarType.Double3);
-    /// <summary>Sets a <c>double4</c> uniform field.</summary>
+    /// <summary>Sets a double4 uniform.</summary>
     public void SetDouble4(PropertyID name, Double4 v) => WriteUniform(name, v, UniformScalarType.Double4);
 
-    /// <summary>Sets a <c>float4x4</c> matrix uniform field.</summary>
+    /// <summary>Sets a float4x4 matrix uniform.</summary>
     public void SetMatrix(PropertyID name, Float4x4 v) => WriteUniform(name, v, UniformScalarType.Float4x4);
-    /// <summary>Sets a <c>double4x4</c> matrix uniform field.</summary>
+    /// <summary>Sets a double4x4 matrix uniform.</summary>
     public void SetDoubleMatrix(PropertyID name, Double4x4 v) => WriteUniform(name, v, UniformScalarType.Double4x4);
 
 
@@ -101,10 +96,9 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a <see cref="DeviceBuffer"/> to the named property slot. Covers both
-    /// <see cref="ResourceKind.UniformBuffer"/> (whole-buffer path) and structured-buffer kinds;
-    /// if <paramref name="readOnly"/> is false, the buffer (if uniform) will have its uniforms set by the binder.
-    /// if <paramref name="readOnly"/> is true, it'll simply bind the buffer - this is the default.
+    /// Binds a buffer to the named slot. Covers whole-uniform-buffer and structured-buffer paths. If
+    /// readOnly is false and the buffer's a uniform buffer, the binder sets its uniforms; if true (default),
+    /// just binds it.
     /// </summary>
     public void SetBuffer(PropertyID name, DeviceBufferRange range, bool readOnly = true)
     {
@@ -123,9 +117,8 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a <see cref="Texture"/> to the named property slot with an optional paired sampler. The sampler
-    /// is applied to the matched sampler slot (see <see cref="CommandBuffer.SetProperties"/> remarks).
-    /// When <paramref name="sampler"/> is null, <see cref="GraphicsDevice.LinearSampler"/> is used.
+    /// Binds a texture to the named slot with an optional sampler. Sampler goes to the matched sampler
+    /// slot. Null sampler uses the default linear sampler.
     /// </summary>
     public void SetTexture(PropertyID name, TextureView view, Sampler? sampler = null)
     {
@@ -135,8 +128,7 @@ public sealed partial class PropertySet
     }
 
     /// <summary>
-    /// Binds a <see cref="RenderTexture"/>'s first color texture to the named property slot with an
-    /// optional paired sampler. See <see cref="SetTexture(PropertyID, Texture, Sampler)"/>.
+    /// Binds a render texture's first color texture to the named slot with an optional sampler.
     /// </summary>
     public void SetTexture(PropertyID name, RenderTexture renderTexture, Sampler? sampler = null)
     {
@@ -146,7 +138,7 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Binds a <see cref="Sampler"/> to the named slot independently of any texture.
+    /// Binds a sampler to the named slot, independent of any texture.
     /// </summary>
     public void SetSampler(PropertyID name, Sampler sampler)
     {
@@ -157,7 +149,7 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Removes all entries from this set and increments the resource version counter.
+    /// Clears all entries and bumps the resource version.
     /// </summary>
     public void Clear()
     {
@@ -167,7 +159,7 @@ public sealed partial class PropertySet
 
 
     /// <summary>
-    /// Applies another property set's values to this property set. Overwrites any properties in this set with the other set's properties.
+    /// Merges another set into this one, overwriting matching entries.
     /// </summary>
     public void ApplyOther(PropertySet other)
     {

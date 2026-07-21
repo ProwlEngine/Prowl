@@ -13,9 +13,7 @@ using VkImageLayout = Silk.NET.Vulkan.ImageLayout;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Exposes Vulkan-specific functionality,
-/// useful for interoperating with native components which interface directly with Vulkan.
-/// Can only be used on <see cref="GraphicsBackend.Vulkan"/>.
+/// Vulkan-specific stuff, for interop with native code that touches Vulkan directly. Vulkan backend only.
 /// </summary>
 public class BackendInfoVulkan
 {
@@ -32,62 +30,39 @@ public class BackendInfoVulkan
         _deviceExtensions = new Lazy<ReadOnlyCollection<ExtensionProperties>>(EnumerateDeviceExtensions);
     }
 
-    /// <summary>
-    /// Gets the underlying VkInstance used by the GraphicsDevice.
-    /// </summary>
+    /// <summary>The VkInstance handle.</summary>
     public IntPtr Instance => _gd.Instance.Handle;
 
-    /// <summary>
-    /// Gets the underlying VkDevice used by the GraphicsDevice.
-    /// </summary>
+    /// <summary>The VkDevice handle.</summary>
     public IntPtr Device => _gd.Device.Handle;
 
-    /// <summary>
-    /// Gets the underlying VkPhysicalDevice used by the GraphicsDevice.
-    /// </summary>
+    /// <summary>The VkPhysicalDevice handle.</summary>
     public IntPtr PhysicalDevice => _gd.PhysicalDevice.Handle;
 
-    /// <summary>
-    /// Gets the VkQueue which is used by the GraphicsDevice to submit graphics work.
-    /// </summary>
+    /// <summary>The graphics VkQueue handle.</summary>
     public IntPtr GraphicsQueue => _gd.GraphicsQueue.Handle;
 
-    /// <summary>
-    /// Gets the queue family index of the graphics VkQueue.
-    /// </summary>
+    /// <summary>Queue family index of the graphics queue.</summary>
     public uint GraphicsQueueFamilyIndex => _gd.GraphicsQueueIndex;
 
-    /// <summary>
-    /// Gets the driver name of the device. May be null.
-    /// </summary>
+    /// <summary>Driver name. Can be null.</summary>
     public string DriverName => _gd.DriverName;
 
-    /// <summary>
-    /// Gets the driver information of the device. May be null.
-    /// </summary>
+    /// <summary>Driver info string. Can be null.</summary>
     public string DriverInfo => _gd.DriverInfo;
 
-    /// <summary>
-    /// A marshaled list of all the Vulkan instance layers available, such as attachable validation or debug layers (<see href="https://docs.vulkan.org/guide/latest/layers.html"/>)
-    /// </summary>
+    /// <summary>Available Vulkan instance layers (validation/debug layers etc).</summary>
     public ReadOnlyCollection<string> AvailableInstanceLayers => _instanceLayers.Value;
 
-    /// <summary>
-    /// A marshaled list of all the Vulkan instance extensions available, such as platform surface extensions (<see href="https://docs.vulkan.org/spec/latest/chapters/extensions.html"/>)
-    /// </summary>
+    /// <summary>Available Vulkan instance extensions (platform surface extensions etc).</summary>
     public ReadOnlyCollection<string> AvailableInstanceExtensions => _instanceExtensions;
 
-    /// <summary>
-    /// A marshaled list of all the vulkan device extensions available.
-    /// </summary>
+    /// <summary>Available Vulkan device extensions.</summary>
     public ReadOnlyCollection<ExtensionProperties> AvailableDeviceExtensions => _deviceExtensions.Value;
 
-    /// <summary>
-    /// Overrides the current VkImageLayout tracked by the given Texture. This should be used when a VkImage is created by
-    /// an external library to inform Prowl.Graphite about its initial layout.
-    /// </summary>
-    /// <param name="texture">The Texture whose currently-tracked VkImageLayout will be overridden.</param>
-    /// <param name="layout">The new VkImageLayout value.</param>
+    /// <summary>Overrides the tracked layout for a Texture. Use when an external lib creates the VkImage and we need to know its initial layout.</summary>
+    /// <param name="texture">Texture to override.</param>
+    /// <param name="layout">New layout.</param>
     public void OverrideImageLayout(Texture texture, uint layout)
     {
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
@@ -100,12 +75,9 @@ public class BackendInfoVulkan
         }
     }
 
-    /// <summary>
-    /// Gets the underlying VkImage wrapped by the given Prowl.Graphite Texture. This method can not be used on Textures with
-    /// TextureUsage.Staging.
-    /// </summary>
-    /// <param name="texture">The Texture whose underlying VkImage will be returned.</param>
-    /// <returns>The underlying VkImage for the given Texture.</returns>
+    /// <summary>Gets the VkImage behind a Texture. Not usable on staging textures.</summary>
+    /// <param name="texture">Texture to get the VkImage for.</param>
+    /// <returns>The VkImage handle.</returns>
     public ulong GetVkImage(Texture texture)
     {
         VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
@@ -119,11 +91,9 @@ public class BackendInfoVulkan
         return vkTexture.OptimalDeviceImage.Handle;
     }
 
-    /// <summary>
-    /// Transitions the given Texture's underlying VkImage into a new layout.
-    /// </summary>
-    /// <param name="texture">The Texture whose underlying VkImage will be transitioned.</param>
-    /// <param name="layout">The new VkImageLayout value.</param>
+    /// <summary>Transitions a Texture's VkImage to a new layout.</summary>
+    /// <param name="texture">Texture to transition.</param>
+    /// <param name="layout">New layout.</param>
     public void TransitionImageLayout(Texture texture, uint layout)
     {
         _gd.TransitionImageLayout(Util.AssertSubtype<Texture, VkTexture>(texture), (VkImageLayout)layout);
@@ -143,19 +113,13 @@ public class BackendInfoVulkan
         return new ReadOnlyCollection<ExtensionProperties>(GraphiteProps);
     }
 
-    /// <summary>
-    /// A description for a physical device-specific extension functionality, such as raytracing or mesh shaders.
-    /// </summary>
+    /// <summary>Describes a device extension, e.g. raytracing or mesh shaders.</summary>
     public readonly struct ExtensionProperties
     {
-        /// <summary>
-        /// The name of the extension, such as VK_KHR_swapchain, VK_KHR_ray_tracing_pipeline
-        /// </summary>
+        /// <summary>Extension name, e.g. VK_KHR_swapchain.</summary>
         public readonly string Name;
 
-        /// <summary>
-        /// The implemented spec version of this extension.
-        /// </summary>
+        /// <summary>Spec version implemented.</summary>
         public readonly uint SpecVersion;
 
 

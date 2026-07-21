@@ -5,8 +5,7 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Interned identifier for a shader resource binding name or uniform buffer field (uniform, texture, sampler, etc.)
-/// Cheap value-type wrapper around a process-wide integer minted by an internal interner.
+/// Interned ID for a shader binding name or uniform field. Cheap wrapper around a process-wide int.
 /// </summary>
 [DebuggerDisplay("{ToString(),nq}")]
 public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
@@ -16,7 +15,7 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
     internal PropertyID(int value) { Value = value; }
 
     /// <summary>
-    /// True for any ID returned from <see cref="Intern(string)"/>. False for <c>default</c>.
+    /// True if interned. False for default.
     /// </summary>
     public bool IsValid => Value != 0;
 
@@ -25,20 +24,18 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
         new(static _ => new PropertyID(Interlocked.Increment(ref _counter)));
 
     /// <summary>
-    /// Returns the ID for <paramref name="name"/>, minting one if this is the first time
-    /// this string has been seen.
+    /// Gets or mints the ID for name.
     /// </summary>
     public static PropertyID Intern(string name) => s_interner.Intern(name);
 
     /// <summary>
-    /// Slow reverse lookup. Returns the original string for <paramref name="id"/>, or
-    /// null if no such ID has been interned in this process.
+    /// Slow reverse lookup. Original string for id, or null if never interned.
     /// </summary>
     public static string? ToString(PropertyID id)
         => s_interner.TryGetKey(id, out string? key) ? key : null;
 
     /// <summary>
-    /// Implicit string-to-ID conversion. Equivalent to <see cref="Intern(string)"/>.
+    /// Implicit string-to-ID conversion. Same as Intern.
     /// </summary>
     public static implicit operator PropertyID(string name) => Intern(name);
 
@@ -63,14 +60,13 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
         => a.Value != b.Value;
 
     /// <summary>
-    /// Hot-path safe. Does not touch the interner. Use the static <see cref="ToString(PropertyID)"/>
-    /// overload to retrieve the original interned string.
+    /// Hot-path safe, doesn't touch the interner. Use static ToString(id) for the original string.
     /// </summary>
     public override string ToString()
         => $"ResourceID({Value})";
 
     /// <summary>
-    /// <see cref="IFormattable"/> conformance. Format and provider are ignored.
+    /// IFormattable conformance. Format and provider ignored.
     /// </summary>
     public string ToString(string? format, IFormatProvider? formatProvider)
         => ToString();

@@ -5,53 +5,42 @@ using System.Runtime.InteropServices;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A restricted device resource for recording buffer/texture transfer commands (updates, copies, and
-/// mipmap generation) that can be submitted whether or not a <see cref="Frame"/> is currently open.
+/// Records buffer/texture transfer commands (update, copy, mipmap gen), submittable with or without an open frame.
 /// <para>
-/// Unlike <see cref="CommandBuffer"/>, a <see cref="TransferCommandBuffer"/> does not support draw/dispatch
-/// commands, framebuffer state, or property binding: it exists solely to move data to and from
-/// <see cref="DeviceBuffer"/> and <see cref="Texture"/> resources outside of the frame ring-buffer system.
-/// This makes it safe to use for one-off operations such as texture read-back or streaming uploads that
-/// would otherwise require opening a throwaway <see cref="Frame"/>.
+/// No draw/dispatch, no framebuffer state, no property binding - just moves data outside the frame ring-buffer.
+/// Good for one-off stuff like readback or streaming uploads without opening a throwaway frame.
 /// </para>
 /// <para>
-/// Obtain one via <see cref="ResourceFactory.CreateTransferCommandBuffer"/>. Submit with
-/// <see cref="GraphicsDevice.SubmitAndWait(TransferCommandBuffer)"/>, which blocks the calling thread until
-/// the GPU has finished executing the recorded commands. A <see cref="TransferCommandBuffer"/> may be reused
-/// for multiple Begin/End/SubmitAndWait cycles.
+/// Get one from ResourceFactory.CreateTransferCommandBuffer. Submit with GraphicsDevice.SubmitAndWait, which
+/// blocks until the GPU finishes. Reusable across multiple Begin/End/SubmitAndWait cycles.
 /// </para>
-/// <see cref="TransferCommandBuffer"/> instances are not thread-safe; access must be externally synchronized.
+/// Not thread-safe, sync externally.
 /// </summary>
 public abstract partial class TransferCommandBuffer : DeviceResource, IDisposable
 {
     /// <summary>
-    /// Gets whether <see cref="End"/> has been called on this instance since the last <see cref="Begin"/> call.
-    /// Used by <see cref="GraphicsDevice.SubmitAndWait(TransferCommandBuffer)"/> to validate before submission.
+    /// True if End was called since the last Begin. Used by SubmitAndWait to validate before submission.
     /// </summary>
     internal bool HasEnded { get; private protected set; }
 
     /// <summary>
-    /// Gets the <see cref="GraphicsDevice"/> that owns this instance.
+    /// Owning device.
     /// </summary>
     public abstract GraphicsDevice Device { get; }
 
     /// <summary>
-    /// Puts this <see cref="TransferCommandBuffer"/> into the initial state.
-    /// This function must be called before other commands can be issued.
-    /// Begin must only be called if it has not been previously called, if <see cref="End"/> has been called,
-    /// or if <see cref="GraphicsDevice.SubmitAndWait(TransferCommandBuffer)"/> has been called on this instance.
+    /// Resets to initial state. Call before issuing other commands. Only valid if never called before, or after End
+    /// or SubmitAndWait.
     /// </summary>
     public abstract void Begin();
 
     /// <summary>
-    /// Completes this list of transfer commands, putting it into an executable state.
-    /// This function must only be called after <see cref="Begin"/> has been called.
+    /// Finishes recording, makes the command list executable. Must be called after Begin.
     /// </summary>
     public abstract void End();
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region. T must be blittable.
     /// </summary>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
@@ -66,8 +55,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
-    /// This function must be used with a blittable value type <typeparamref name="T"/>.
+    /// Updates a buffer region. T must be blittable.
     /// </summary>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
@@ -81,7 +69,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// Updates a <see cref="DeviceBuffer"/> region with new data.
+    /// Updates a buffer region.
     /// </summary>
     public void UpdateBuffer(
         DeviceBuffer buffer,
@@ -105,7 +93,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data.
+    /// Updates part of a texture.
     /// </summary>
     public unsafe void UpdateTexture<T>(
         Texture texture,
@@ -122,7 +110,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// Updates a portion of a <see cref="Texture"/> resource with new data.
+    /// Updates part of a texture.
     /// </summary>
     public void UpdateTexture(
         Texture texture,
@@ -144,8 +132,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
         uint mipLevel, uint arrayLayer);
 
     /// <summary>
-    /// Copies a region from the source <see cref="DeviceBuffer"/> to another region in the destination
-    /// <see cref="DeviceBuffer"/>.
+    /// Copies a region from one buffer to another.
     /// </summary>
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
@@ -163,7 +150,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     private protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
 
     /// <summary>
-    /// Copies all subresources from one <see cref="Texture"/> to another.
+    /// Copies all subresources from one texture to another.
     /// </summary>
     public void CopyTexture(Texture source, Texture destination)
     {
@@ -183,7 +170,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// Copies one subresource from one <see cref="Texture"/> to another.
+    /// Copies one subresource from one texture to another.
     /// </summary>
     public void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
@@ -199,7 +186,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// Copies a region from one <see cref="Texture"/> into another.
+    /// Copies a region from one texture into another.
     /// </summary>
     public void CopyTexture(
         Texture source,
@@ -251,9 +238,7 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
         uint layerCount);
 
     /// <summary>
-    /// Generates mipmaps for the given <see cref="Texture"/>. The largest mipmap is used to generate all of the
-    /// lower mipmap levels contained in the Texture. The target Texture must have been created with
-    /// <see cref="TextureUsage"/>.<see cref="TextureUsage.GenerateMipmaps"/>.
+    /// Generates lower mip levels from the largest mip. Texture must be created with TextureUsage.GenerateMipmaps.
     /// </summary>
     public void GenerateMipmaps(Texture texture)
     {
@@ -272,18 +257,17 @@ public abstract partial class TransferCommandBuffer : DeviceResource, IDisposabl
     private protected abstract void GenerateMipmapsCore(Texture texture);
 
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and
-    /// other tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// True if disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public abstract void Dispose();
 }

@@ -17,10 +17,10 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
     private readonly VkGraphicsDevice _gd;
     private readonly ShaderModule _module;
 
-    /// <summary>Descriptor-set layouts indexed by set index. Empty-DSL for gaps.</summary>
+    /// <summary>DSLs by set index. Empty DSL for gaps.</summary>
     internal readonly DescriptorSetLayout[] DescriptorSetLayouts;
 
-    /// <summary>Per-set descriptor resource counts parallel to <see cref="DescriptorSetLayouts"/>.</summary>
+    /// <summary>Per-set resource counts, parallel to DescriptorSetLayouts.</summary>
     internal readonly DescriptorResourceCounts[] PerSetCounts;
 
     internal readonly PipelineLayout PipelineLayout;
@@ -30,7 +30,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
     internal readonly ResourceRefCount RefCount;
 
     /// <summary>
-    /// Per-program, cross-frame cache of descriptor sets, content-addressed by their bound resources.
+    /// Cross-frame descriptor set cache for this program, keyed by bound resources.
     /// </summary>
     internal readonly VkDescriptorSetCache DescriptorCache;
 

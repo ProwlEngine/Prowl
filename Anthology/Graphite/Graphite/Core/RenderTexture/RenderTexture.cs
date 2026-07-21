@@ -3,11 +3,9 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A physical render-texture bundle: color attachments, optional depth, and the framebuffer wrapping
-/// them, sized and formatted from a RenderTextureDescription.
+/// Color/depth attachments plus framebuffer, sized from a RenderTextureDescription.
 /// <para>
-/// Bind Framebuffer to render into the bundle, or bind ColorTextures/DepthTexture directly to sample
-/// from it in a later pass.
+/// Bind Framebuffer to render into it, or bind ColorTextures/DepthTexture to sample from it later.
 /// </para>
 /// <para>
 /// Create via ResourceFactory.CreateRenderTexture.
@@ -17,16 +15,16 @@ public sealed class RenderTexture : IDisposable
 {
     private const PixelFormat DepthFormat = PixelFormat.D24_UNorm_S8_UInt;
 
-    /// <summary>Description this bundle was created from.</summary>
+    /// <summary>Desc this was built from.</summary>
     public RenderTextureDescription Desc { get; }
 
-    /// <summary>Color attachments, in order. Never null; empty means depth-only.</summary>
+    /// <summary>Color attachments in order. Empty means depth-only.</summary>
     public Texture[] ColorTextures { get; }
 
-    /// <summary>Depth attachment, or null if the desc has none.</summary>
+    /// <summary>Depth attachment, null if none.</summary>
     public Texture? DepthTexture { get; }
 
-    /// <summary>Framebuffer wrapping ColorTextures and DepthTexture.</summary>
+    /// <summary>Framebuffer wrapping the attachments.</summary>
     public Framebuffer Framebuffer { get; }
 
     internal RenderTexture(GraphicsDevice device, in RenderTextureDescription desc)
@@ -60,7 +58,7 @@ public sealed class RenderTexture : IDisposable
         Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures));
     }
 
-    /// <summary>Sets debug name on the framebuffer and every backing texture.</summary>
+    /// <summary>Sets debug name on framebuffer and all textures.</summary>
     public string Name
     {
         set
@@ -73,7 +71,7 @@ public sealed class RenderTexture : IDisposable
         }
     }
 
-    /// <summary>Frees unmanaged resources of the framebuffer and every backing texture.</summary>
+    /// <summary>Disposes framebuffer and all textures.</summary>
     public void Dispose()
     {
         Framebuffer.Dispose();

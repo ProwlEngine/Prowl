@@ -5,34 +5,32 @@ using System.Diagnostics;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource used to control which color and depth textures are rendered to.
-/// See <see cref="FramebufferDescription"/>.
+/// Device resource controlling which color and depth textures get rendered to.
 /// </summary>
 public abstract class Framebuffer : DeviceResource, IDisposable
 {
     /// <summary>
-    /// Gets the depth attachment associated with this instance. May be null if no depth texture is used.
+    /// Depth attachment. Null if no depth texture.
     /// </summary>
     public virtual FramebufferAttachment? DepthTarget { get; }
 
     /// <summary>
-    /// Gets the collection of color attachments associated with this instance. May be empty.
+    /// Color attachments. May be empty.
     /// </summary>
     public virtual IReadOnlyList<FramebufferAttachment> ColorTargets { get; }
 
     /// <summary>
-    /// Gets an <see cref="Prowl.Graphite.OutputDescription"/> which describes the number and formats of the depth and color targets
-    /// in this instance.
+    /// Number and formats of the depth and color targets.
     /// </summary>
     public virtual OutputDescription OutputDescription { get; }
 
     /// <summary>
-    /// Gets the width of the <see cref="Framebuffer"/>.
+    /// Width.
     /// </summary>
     public virtual uint Width { get; }
 
     /// <summary>
-    /// Gets the height of the <see cref="Framebuffer"/>.
+    /// Height.
     /// </summary>
     public virtual uint Height { get; }
 
@@ -86,18 +84,17 @@ public abstract class Framebuffer : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Name for identifying this in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// Whether this has been disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public abstract void Dispose();
 }

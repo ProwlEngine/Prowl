@@ -4,40 +4,37 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// Represents a variant space defined within a ShaderDef document.
+/// A variant space declared in a ShaderDef document.
 /// </summary>
 public readonly struct VariantSpace
 {
     /// <summary>
-    /// The name of the variant symbol in source.
+    /// Variant symbol name in source.
     /// </summary>
     public string Name { get; }
 
     /// <summary>
-    /// The declared type of the variant symbol in source.
+    /// Declared type of the variant symbol.
     /// </summary>
     public string DeclType { get; }
 
     /// <summary>
-    /// The set of possible values defined for this variant space. These are the bare runtime keyword
-    /// values (for example an enum case name such as "Realtime", or "true"/"false" for a bool axis).
+    /// Possible values for this axis. Bare runtime keywords, e.g. an enum case like "Realtime" or "true"/"false" for bool.
     /// </summary>
     public IReadOnlyList<string> Values { get; }
 
     /// <summary>
-    /// Whether this axis is backed by an enum type. Enum values must be qualified with the enum type
-    /// name when emitted into a specialization module (for example "Lighting.Realtime").
+    /// True if enum-backed. Enum values need the enum type prefix when emitted, e.g. "Lighting.Realtime".
     /// </summary>
     public bool IsEnum { get; }
 
     /// <summary>
-    /// The name of the module that declares <see cref="DeclType"/>, or <c>null</c> for builtin types
-    /// such as bool. A specialization module must import this module to reference the type.
+    /// Module declaring DeclType, or null for builtins like bool. Must be imported to reference the type.
     /// </summary>
     public string? TypeModule { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="VariantSpace"/> struct.
+    /// Makes a VariantSpace.
     /// </summary>
     public VariantSpace(string name, string declType, IReadOnlyList<string> values, bool isEnum = false, string? typeModule = null)
     {

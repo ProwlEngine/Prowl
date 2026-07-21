@@ -3,38 +3,36 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a single compiled shader stage that forms part of a <see cref="ShaderDescription"/>.
+/// One compiled shader stage, part of a ShaderDescription.
 /// </summary>
 public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
 {
     /// <summary>
-    /// The shader stage this entry describes.
+    /// Which stage this is.
     /// </summary>
     public ShaderStages Stage;
 
     /// <summary>
-    /// An array containing the raw shader bytes for this stage.
-    /// For Vulkan shaders, this array must contain SPIR-V bytecode.
+    /// Raw shader bytes. Vulkan needs SPIR-V.
     /// </summary>
     public byte[] ShaderBytes;
 
     /// <summary>
-    /// The name of the entry point function in the shader module for this stage.
+    /// Entry point function name.
     /// </summary>
     public string EntryPoint;
 
     /// <summary>
-    /// Indicates whether the shader should be debuggable. Only effective when <see cref="ShaderBytes"/> contains
-    /// shader code that will be compiled.
+    /// Debuggable shader. Only matters if ShaderBytes gets compiled.
     /// </summary>
     public bool Debug;
 
     /// <summary>
-    /// Constructs a new <see cref="ShaderStageDescription"/>.
+    /// New stage description.
     /// </summary>
-    /// <param name="stage">The shader stage.</param>
-    /// <param name="shaderBytes">An array containing the raw shader bytes.</param>
-    /// <param name="entryPoint">The name of the entry point function in the shader module.</param>
+    /// <param name="stage">The stage.</param>
+    /// <param name="shaderBytes">Raw shader bytes.</param>
+    /// <param name="entryPoint">Entry point function name.</param>
     public ShaderStageDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint)
     {
         Stage = stage;
@@ -44,12 +42,12 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     }
 
     /// <summary>
-    /// Constructs a new <see cref="ShaderStageDescription"/>.
+    /// New stage description.
     /// </summary>
-    /// <param name="stage">The shader stage.</param>
-    /// <param name="shaderBytes">An array containing the raw shader bytes.</param>
-    /// <param name="entryPoint">The name of the entry point function in the shader module.</param>
-    /// <param name="debug">Whether the shader should be debuggable.</param>
+    /// <param name="stage">The stage.</param>
+    /// <param name="shaderBytes">Raw shader bytes.</param>
+    /// <param name="entryPoint">Entry point function name.</param>
+    /// <param name="debug">Debuggable shader.</param>
     public ShaderStageDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint, bool debug)
     {
         Stage = stage;
@@ -59,7 +57,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
     public readonly bool Equals(ShaderStageDescription other)
     {
@@ -70,7 +68,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code.
     /// </summary>
     public override readonly int GetHashCode()
     {

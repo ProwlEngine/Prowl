@@ -133,7 +133,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Gets or creates a full-range view for texture. Device-owned, lives until dispose.
+    /// Gets or creates full-range view for texture. Device-owned, lives til dispose.
     /// </summary>
     internal VkTextureView GetOrCreateDefaultView(VkTexture texture)
     {
@@ -149,7 +149,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// VkPipelineCache handle passed to every pipeline create call to speed up compiles.
+    /// VkPipelineCache handle passed to every pipeline create call, speeds up compiles.
     /// </summary>
     internal PipelineCache DriverPipelineCache => _driverPipelineCache;
     public vkCmdDebugMarkerBeginEXT_t MarkerBegin => _markerBegin;
@@ -429,7 +429,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         }
     }
 
-    /// <summary>Test/diagnostic hook: number of distinct graph command-buffer instances ever allocated.</summary>
+    /// <summary>Test hook: total distinct graph command buffers ever allocated.</summary>
     internal int PooledGraphCommandBufferCount
     {
         get { lock (_graphCommandBufferPoolLock) { return _allGraphCommandBuffers.Count; } }
@@ -529,7 +529,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     }
 
     /// <summary>
-    /// Throws if a Vulkan validation error was reported. Call after ops that could trigger one.
+    /// Throws if Vulkan reported a validation error. Call after ops that could trigger one.
     /// </summary>
     internal static void FlushValidationErrors()
     {

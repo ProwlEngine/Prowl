@@ -6,28 +6,27 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// The parsed representation of a shaderdef shader description, plus the runtime binding to a device
-/// and (optionally) a compiler once one of the <c>Create</c> overloads has been called.
+/// Parsed shaderdef shader, plus runtime binding to a device/compiler once Create is called.
 /// </summary>
 public sealed class ShaderDefinition
 {
     /// <summary>
-    /// The identifier name of this shader. Required and never null.
+    /// Shader name. Required, never null.
     /// </summary>
     public string? Name;
 
     /// <summary>
-    /// Metadata for a fallback shader name that a renderer can use. Empty if none is defined.
+    /// Fallback shader name for renderers. Empty if none.
     /// </summary>
     public string? Fallback;
 
     /// <summary>
-    /// A list of default properties requested by the markup for shader resources or uniforms.
+    /// Default properties requested by markup for resources/uniforms.
     /// </summary>
     public ShaderProperty[]? Properties;
 
     /// <summary>
-    /// A list of executable render passes present in the shader.
+    /// Render passes in the shader.
     /// </summary>
     public ShaderPass[]? Passes;
 
@@ -35,29 +34,24 @@ public sealed class ShaderDefinition
     private bool _created;
 
     /// <summary>
-    /// True once this shader has been created for a device.
+    /// True once created for a device.
     /// </summary>
     public bool IsCreated => _created;
 
 
     /// <summary>
-    /// Binds this shader to a device with no compiler and no known variants. Passes can only be
-    /// resolved once variants are supplied some other way (e.g. loading a snapshot separately) -
-    /// mainly useful for structural inspection before any rendering happens.
+    /// Binds to a device with no compiler and no known variants. Passes only resolve once variants
+    /// come from elsewhere (e.g. a snapshot). Mostly for structural inspection pre-render.
     /// </summary>
     public void Create(GraphicsDevice device, CompileMode mode = CompileMode.OnDemand)
         => BindAll(device, null, mode, null);
 
 
     /// <summary>
-    /// Binds this shader to a device, discovering each pass's variant axes through
-    /// <paramref name="compiler"/>. With <see cref="CompileMode.OnDemand"/> variants compile as they
-    /// are requested; with <see cref="CompileMode.All"/> every variant compiles up front. Whenever a
-    /// requested variant isn't compiled - because it hasn't been requested yet, or because compiling
-    /// it failed - every pass falls back to <paramref name="fallback"/> instead of throwing, until a
-    /// real compile of that variant succeeds. If <paramref name="fallback"/> itself has no compiled
-    /// description for the active backend, resolving still throws: a fallback is required, not
-    /// optional, whenever a compiler is attached.
+    /// Binds to a device, discovering each pass's variant axes via the compiler. OnDemand compiles
+    /// variants as requested; All compiles everything up front. If a requested variant isn't compiled
+    /// yet or failed, falls back to the fallback variant instead of throwing. Fallback must itself
+    /// have a compiled description for the active backend, or resolving throws anyway.
     /// </summary>
     public void Create(GraphicsDevice device, IShaderCompiler compiler, Variant fallback, CompileMode mode = CompileMode.OnDemand)
     {
@@ -84,20 +78,17 @@ public sealed class ShaderDefinition
 
 
     /// <summary>
-    /// Binds this shader to a device from a previously captured <see cref="ShaderSnapshot"/>, without a
-    /// compiler. Only variants already present in the snapshot can ever be resolved; requesting any
-    /// other variant throws.
+    /// Binds to a device from a captured snapshot, no compiler. Only variants already in the
+    /// snapshot resolve; anything else throws.
     /// </summary>
     public void Create(GraphicsDevice device, ShaderSnapshot snapshot)
         => BindFromSnapshot(device, snapshot, null, null);
 
 
     /// <summary>
-    /// Binds this shader to a device from a previously captured <see cref="ShaderSnapshot"/>, allowing
-    /// missing or wrong-backend variants to be compiled dynamically through <paramref name="compiler"/>.
-    /// As with the compiler-attached <see cref="Create(GraphicsDevice, IShaderCompiler, Variant, CompileMode)"/>
-    /// overload, <paramref name="fallback"/> is required and used whenever a requested variant isn't
-    /// compiled yet or fails to compile.
+    /// Binds to a device from a captured snapshot, allowing missing or wrong-backend variants to
+    /// compile dynamically via the compiler. Fallback is required, same as the compiler-attached
+    /// Create overload.
     /// </summary>
     public void Create(GraphicsDevice device, ShaderSnapshot snapshot, IShaderCompiler compiler, Variant fallback)
     {
@@ -127,8 +118,8 @@ public sealed class ShaderDefinition
 
 
     /// <summary>
-    /// Captures the current axes and compiled variants of every pass into a serialization-friendly
-    /// snapshot. Only populated variants are captured.
+    /// Captures every pass's axes and compiled variants into a serializable snapshot. Only
+    /// populated variants are captured.
     /// </summary>
     public ShaderSnapshot Snapshot()
     {
@@ -143,8 +134,7 @@ public sealed class ShaderDefinition
     }
 
 
-    /// <summary>True if <paramref name="pass"/> carries <paramref name="tag"/>, optionally matching a
-    /// specific value.</summary>
+    /// <summary>True if pass carries tag, optionally matching a specific value.</summary>
     public static bool PassHasTag(ShaderPass pass, string tag, string? tagValue = null)
     {
         if (pass.Tags != null && pass.Tags.TryGetValue(tag, out string value))
@@ -154,7 +144,7 @@ public sealed class ShaderDefinition
     }
 
     /// <summary>
-    /// Looks up a pass's index by its name, or -1 if no pass has that name.
+    /// Pass index by name, or -1 if not found.
     /// </summary>
     public int GetPassIndex(string passName)
     {
@@ -169,14 +159,13 @@ public sealed class ShaderDefinition
     }
 
     /// <summary>
-    /// Looks up a pass by its name.
+    /// Pass by name.
     /// </summary>
     public ShaderPass GetPass(string passName)
         => Passes![GetPassIndex(passName)];
 
     /// <summary>
-    /// Returns the index of the first pass carrying <paramref name="tag"/>, optionally matching a
-    /// specific value, or null if none do.
+    /// Index of first pass carrying tag, optionally matching a specific value. Null if none.
     /// </summary>
     public int? GetPassWithTag(string tag, string? tagValue = null)
     {
@@ -191,8 +180,7 @@ public sealed class ShaderDefinition
     }
 
     /// <summary>
-    /// Returns the indices of every pass carrying <paramref name="tag"/>, optionally matching a
-    /// specific value.
+    /// Indices of every pass carrying tag, optionally matching a specific value.
     /// </summary>
     public List<int> GetPassesWithTag(string tag, string? tagValue = null)
     {

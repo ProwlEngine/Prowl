@@ -1,15 +1,14 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Callback invoked by a backend when, at draw or dispatch time, a reflected resource slot has no matching
-/// entry in the merged property table and a kind-specific default is substituted.
+/// Fires when a reflected resource slot has no entry in the merged property table; a default gets substituted.
 /// </summary>
-/// <param name="shader">The <see cref="GraphicsProgram"/> being bound, or null if this is a compute dispatch.</param>
-/// <param name="compute">The <see cref="ComputeProgram"/> being bound, or null if this is a graphics draw.</param>
-/// <param name="name">The reflected name of the missing resource element.</param>
-/// <param name="expectedKind">The <see cref="ResourceKind"/> the shader declares for this element.</param>
-/// <param name="set">The descriptor-set or register-space index this element belongs to.</param>
-/// <param name="bindingIndex">The binding / register index within the set.</param>
+/// <param name="shader">Program being bound, null if compute dispatch.</param>
+/// <param name="compute">Compute program being bound, null if graphics draw.</param>
+/// <param name="name">Name of the missing resource.</param>
+/// <param name="expectedKind">Resource kind the shader expects.</param>
+/// <param name="set">Descriptor-set / register-space index.</param>
+/// <param name="bindingIndex">Binding / register index in the set.</param>
 public delegate void MissingPropertyHandler(
     GraphicsProgram? shader,
     ComputeProgram? compute,

@@ -3,24 +3,16 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A bindable device resource which controls how texture values are sampled within a shader.
-/// See <see cref="SamplerDescription"/>.
+/// Bindable device resource controlling how a texture is sampled in a shader.
 /// </summary>
 public abstract class Sampler : DeviceResource, BindableResource, IDisposable
 {
-    /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
-    /// </summary>
+    /// <summary>Debug name, shows up in graphics debuggers.</summary>
     public abstract string Name { get; set; }
 
-    /// <summary>
-    /// A bool indicating whether this instance has been disposed.
-    /// </summary>
+    /// <summary>True if disposed.</summary>
     public abstract bool IsDisposed { get; }
 
-    /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
-    /// </summary>
+    /// <summary>Frees unmanaged device resources.</summary>
     public abstract void Dispose();
 }

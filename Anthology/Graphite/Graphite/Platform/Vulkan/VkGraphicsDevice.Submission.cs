@@ -28,8 +28,7 @@ internal unsafe partial class VkGraphicsDevice
     }
 
     /// <summary>
-    /// Submits a one-shot command buffer to the graphics queue and blocks until it finishes on GPU.
-    /// Doesn't touch frame ring-buffer state, safe to call anytime.
+    /// Submits a one-shot command buffer, blocks until GPU finishes. Doesn't touch frame ring-buffer state, safe anytime.
     /// </summary>
     internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb, QueryPool? timingPool, string bufferName)
     {

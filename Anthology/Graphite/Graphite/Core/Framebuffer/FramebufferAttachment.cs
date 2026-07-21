@@ -1,28 +1,28 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Represents a single output of a <see cref="Framebuffer"/>. May be a color or depth attachment.
+/// One framebuffer output. Color or depth.
 /// </summary>
 public readonly struct FramebufferAttachment
 {
     /// <summary>
-    /// The target <see cref="Texture"/> which will be rendered to.
+    /// Texture being rendered to.
     /// </summary>
     public Texture Target { get; }
     /// <summary>
-    /// The target array layer.
+    /// Target array layer.
     /// </summary>
     public uint ArrayLayer { get; }
     /// <summary>
-    /// The target mip level.
+    /// Target mip level.
     /// </summary>
     public uint MipLevel { get; }
 
     /// <summary>
-    /// Constructs a new FramebufferAttachment.
+    /// New attachment, mip 0.
     /// </summary>
-    /// <param name="target">The target <see cref="Texture"/> which will be rendered to.</param>
-    /// <param name="arrayLayer">The target array layer.</param>
+    /// <param name="target">Texture to render to.</param>
+    /// <param name="arrayLayer">Target array layer.</param>
     public FramebufferAttachment(Texture target, uint arrayLayer)
     {
         Target = target;
@@ -31,11 +31,11 @@ public readonly struct FramebufferAttachment
     }
 
     /// <summary>
-    /// Constructs a new FramebufferAttachment.
+    /// New attachment.
     /// </summary>
-    /// <param name="target">The target <see cref="Texture"/> which will be rendered to.</param>
-    /// <param name="arrayLayer">The target array layer.</param>
-    /// <param name="mipLevel">The target mip level.</param>
+    /// <param name="target">Texture to render to.</param>
+    /// <param name="arrayLayer">Target array layer.</param>
+    /// <param name="mipLevel">Target mip level.</param>
     public FramebufferAttachment(Texture target, uint arrayLayer, uint mipLevel)
     {
         Target = target;

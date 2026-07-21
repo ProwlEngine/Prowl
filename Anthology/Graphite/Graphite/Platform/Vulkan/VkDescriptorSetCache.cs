@@ -6,17 +6,14 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Per-shader, cross-frame cache of descriptor sets keyed by the identity of the resources written
-/// into them. A cache hit means the set's contents are byte-identical, so a cached set is reused
-/// as-is and never rewritten -- which sidesteps the frames-in-flight write hazard entirely.
+/// Cross-frame cache of descriptor sets keyed by resource identity. Cache hit = byte-identical
+/// contents, so it's reused as-is, never rewritten -- avoids the frames-in-flight write hazard.
 ///
-/// Because the identity includes a UBO's backing buffer handle, a set that binds a per-frame
-/// transient UBO naturally gets one entry per ring slot, each reused every MaxFramesInFlight frames
-/// once steady state is reached.
+/// Identity includes the UBO buffer handle, so a per-frame transient UBO naturally gets one entry
+/// per ring slot, reused every MaxFramesInFlight frames at steady state.
 ///
-/// Eviction keeps the <see cref="WarmFloorPerSet"/> most-recently-used entries per set index resident
-/// and frees any entry beyond that floor once it has gone unused for longer than the retention window
-/// (the frames-in-flight count). That same window guarantees a freed set is already GPU-retired.
+/// Eviction keeps the WarmFloorPerSet most-recent entries per set index resident, frees anything
+/// older than the retention window (frames-in-flight count). That window guarantees GPU-retired.
 /// </summary>
 internal sealed class VkDescriptorSetCache
 {
@@ -49,7 +46,7 @@ internal sealed class VkDescriptorSetCache
         gd.RegisterDescriptorSetCache(this);
     }
 
-    /// <summary>Returns the cached set for the given resource identity, refreshing its last-used time.</summary>
+    /// <summary>Returns the cached set for the identity, refreshes last-used time.</summary>
     public bool TryGet(ReadOnlySpan<ulong> identity, ulong frameId, out DescriptorSet set)
     {
         if (_lookup.TryGetValue(identity, out Entry? entry))
@@ -63,8 +60,7 @@ internal sealed class VkDescriptorSetCache
     }
 
     /// <summary>
-    /// Allocates a new set for a cache miss and records it. The caller is responsible for writing the
-    /// descriptors into the returned set.
+    /// Allocates a new set for a cache miss and records it. Caller writes the descriptors in.
     /// </summary>
     public DescriptorSet Allocate(
         int setIdx, DescriptorSetLayout layout, in DescriptorResourceCounts counts,
@@ -92,9 +88,8 @@ internal sealed class VkDescriptorSetCache
     }
 
     /// <summary>
-    /// Frees entries that have gone unused for longer than <paramref name="retention"/> frames, keeping
-    /// the <see cref="WarmFloorPerSet"/> most-recently-used entries per set index resident regardless.
-    /// Anything freed here is older than the retention window, so it is guaranteed GPU-retired.
+    /// Frees entries unused longer than retention frames, always keeps the WarmFloorPerSet most-recent
+    /// entries per set index. Anything freed here is guaranteed GPU-retired.
     /// </summary>
     public void Sweep(ulong currentFrameId, uint retention)
     {
@@ -122,7 +117,7 @@ internal sealed class VkDescriptorSetCache
         _evictScratch.Clear();
     }
 
-    /// <summary>Frees every cached set and destroys the backing pool. Called on program disposal.</summary>
+    /// <summary>Frees every cached set, destroys the pool. Called on program disposal.</summary>
     public void Destroy()
     {
         _gd.UnregisterDescriptorSetCache(this);

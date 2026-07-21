@@ -19,7 +19,7 @@ internal readonly struct TestView : IRenderView
     public uint PixelHeight { get; }
 }
 
-/// <summary>Pass for testing the solver. Declares given input names and output textures.</summary>
+/// <summary>Test pass for the solver. Declares given input names and output textures.</summary>
 internal sealed class TestPass : IPass<TestView>
 {
     private readonly string[] _inputs;
@@ -48,7 +48,7 @@ internal sealed class TestPass : IPass<TestView>
     public void Render(RenderContext<TestView> context) { }
 }
 
-/// <summary>Pass that reads and writes buffer resources, for testing buffer ordering.</summary>
+/// <summary>Test pass reading/writing buffers, for testing buffer ordering.</summary>
 internal sealed class TestBufferPass : IPass<TestView>
 {
     private readonly string[] _inputs;
@@ -83,7 +83,7 @@ internal static class Desc
     public static GraphBufferDesc Storage() => GraphBufferDesc.Structured(16, 4);
 }
 
-/// <summary>No-op present pass for tests that only need to solve/build a graph, not present it.</summary>
+/// <summary>No-op present pass, for tests that only need to build a graph, not present.</summary>
 internal sealed class NoOpTestPresentPass : IPresentPass<TestView>
 {
     public string Name => "TestNoOpPresent";
@@ -93,7 +93,7 @@ internal sealed class NoOpTestPresentPass : IPresentPass<TestView>
     public void Present(RenderContext<TestView> context) { }
 }
 
-/// <summary>Present pass for testing the solver's handling of declared present inputs and swapchain requests.</summary>
+/// <summary>Test present pass, for testing declared present inputs and swapchain requests.</summary>
 internal sealed class TestPresentPass : IPresentPass<TestView>
 {
     private readonly string[] _inputs;

@@ -3,29 +3,25 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a <see cref="Framebuffer"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a framebuffer for creation via ResourceFactory.
 /// </summary>
 public struct FramebufferDescription : IEquatable<FramebufferDescription>
 {
     /// <summary>
-    /// The depth texture, which must have been created with <see cref="TextureUsage.DepthStencil"/> usage flags.
-    /// May be null.
+    /// Depth texture, needs DepthStencil usage flag. Null allowed.
     /// </summary>
     public FramebufferAttachmentDescription? DepthTarget;
 
     /// <summary>
-    /// An array of color textures, all of which must have been created with <see cref="TextureUsage.RenderTarget"/>
-    /// usage flags. May be null or empty.
+    /// Color textures, need RenderTarget usage flag. Null or empty allowed.
     /// </summary>
     public FramebufferAttachmentDescription[] ColorTargets;
 
     /// <summary>
-    /// Constructs a new <see cref="FramebufferDescription"/>.
+    /// Makes a new FramebufferDescription.
     /// </summary>
-    /// <param name="depthTarget">The depth texture, which must have been created with
-    /// <see cref="TextureUsage.DepthStencil"/> usage flags. May be null.</param>
-    /// <param name="colorTargets">An array of color textures, all of which must have been created with
-    /// <see cref="TextureUsage.RenderTarget"/> usage flags. May be null or empty.</param>
+    /// <param name="depthTarget">Depth texture, needs DepthStencil usage flag. Null allowed.</param>
+    /// <param name="colorTargets">Color textures, need RenderTarget usage flag. Null or empty allowed.</param>
     public FramebufferDescription(Texture? depthTarget, params Texture[] colorTargets)
     {
         if (depthTarget != null)
@@ -44,11 +40,10 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     }
 
     /// <summary>
-    /// Constructs a new <see cref="FramebufferDescription"/>.
+    /// Makes a new FramebufferDescription.
     /// </summary>
-    /// <param name="depthTarget">A description of the depth attachment. May be null if no depth attachment will be used.</param>
-    /// <param name="colorTargets">An array of descriptions of color attachments. May be empty if no color attachments will
-    /// be used.</param>
+    /// <param name="depthTarget">Depth attachment. Null if none.</param>
+    /// <param name="colorTargets">Color attachments. Empty if none.</param>
     public FramebufferDescription(
         FramebufferAttachmentDescription? depthTarget,
         FramebufferAttachmentDescription[] colorTargets)
@@ -60,17 +55,17 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements and all array elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if everything matches.</returns>
     public readonly bool Equals(FramebufferDescription other)
     {
         return Util.NullableEquals(DepthTarget, other.DepthTarget) && Util.ArrayEqualsEquatable(ColorTargets, other.ColorTargets);
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>32-bit hash.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(DepthTarget.GetHashCode(), ColorTargets.ArrayHash());

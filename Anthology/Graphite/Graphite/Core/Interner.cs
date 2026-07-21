@@ -5,20 +5,18 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Produces the next interned value given the previous one.
-/// Implementations should be atomic if the owning <see cref="Interner{TKey, TInternedValue}"/>
-/// is used concurrently.
+/// Produces the next interned value from the previous one. Must be atomic if the interner is used
+/// concurrently.
 /// </summary>
 public delegate T IncrementDelegate<T>(T previous);
 
 /// <summary>
-/// Process-wide, lock-free table that maps arbitrary keys to compact, monotonically
-/// issued interned values. Intended for collapsing repeated string identifiers
-/// (resource names, vertex semantics, etc.) into cheap value-type IDs.
+/// Process-wide lock-free table mapping keys to compact, monotonically issued interned values.
+/// For collapsing repeated string IDs (resource names, vertex semantics) into cheap value IDs.
 /// </summary>
-/// <typeparam name="TKey">Key type. Must be non-null and provide a sensible equality/hash.</typeparam>
+/// <typeparam name="TKey">Key type. Non-null, needs sane equality/hash.</typeparam>
 /// <typeparam name="TInternedValue">
-/// Issued value type. Must be an equatable value type so it can be stored and compared cheaply.
+/// Issued value type. Must be equatable value type for cheap storage/comparison.
 /// </typeparam>
 public sealed class Interner<TKey, TInternedValue>
     where TKey : notnull
@@ -29,9 +27,8 @@ public sealed class Interner<TKey, TInternedValue>
     private TInternedValue _last;
 
     /// <summary>
-    /// Creates a new interner. The supplied <paramref name="increment"/> delegate is invoked
-    /// every time a previously unseen key is interned; it receives the most recently issued
-    /// value and returns the next one.
+    /// New interner. Increment delegate fires on each unseen key, given the last issued value,
+    /// returns the next.
     /// </summary>
     public Interner(IncrementDelegate<TInternedValue> increment)
     {
@@ -39,8 +36,7 @@ public sealed class Interner<TKey, TInternedValue>
     }
 
     /// <summary>
-    /// Returns the interned value for <paramref name="key"/>, minting a new one via the
-    /// increment delegate if the key has not been seen before.
+    /// Gets the interned value for a key, minting one if unseen.
     /// </summary>
     public TInternedValue Intern(TKey key)
     {
@@ -56,8 +52,7 @@ public sealed class Interner<TKey, TInternedValue>
     }
 
     /// <summary>
-    /// Reverse lookup. Linear scan of the forward map; intended for debug and explicit
-    /// reverse-lookup paths only. Returns true and sets <paramref name="key"/> on hit.
+    /// Reverse lookup. Linear scan, debug/explicit use only. True and sets key on hit.
     /// </summary>
     public bool TryGetKey(TInternedValue value, out TKey key)
     {

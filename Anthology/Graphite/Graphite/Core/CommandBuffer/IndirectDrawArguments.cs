@@ -1,24 +1,24 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// A structure describing the format expected by indirect draw commands contained in an indirect <see cref="DeviceBuffer"/>.
+/// Format expected by indirect draw commands in an indirect buffer.
 /// </summary>
 public struct IndirectDrawArguments
 {
     /// <summary>
-    /// The number of vertices to draw.
+    /// Vertex count.
     /// </summary>
     public uint VertexCount;
     /// <summary>
-    /// The number of instances to draw.
+    /// Instance count.
     /// </summary>
     public uint InstanceCount;
     /// <summary>
-    /// The first vertex to draw. Subsequent vertices are incremented by 1.
+    /// First vertex index.
     /// </summary>
     public uint FirstVertex;
     /// <summary>
-    /// The first instance to draw. Subsequent instances are incrmented by 1.
+    /// First instance index.
     /// </summary>
     public uint FirstInstance;
 }

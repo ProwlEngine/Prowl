@@ -3,35 +3,21 @@
 namespace Prowl.Graphite;
 
 
-/// <summary>
-/// A synchronization primitive which allows the GPU to communicate when submitted work items have finished executing.
-/// </summary>
+/// <summary>Sync primitive: GPU signals it when submitted work finishes.</summary>
 public abstract class Fence : DeviceResource, IDisposable
 {
-    /// <summary>
-    /// Gets a value indicating whether the Fence is currently signaled. A Fence is signaled after a CommandBuffer finishes
-    /// execution after it was submitted with a Fence instance.
-    /// </summary>
+    /// <summary>True once the submitted CommandBuffer finishes executing.</summary>
     public abstract bool Signaled { get; }
 
-    /// <summary>
-    /// Sets this instance to the unsignaled state.
-    /// </summary>
+    /// <summary>Resets to unsignaled.</summary>
     public abstract void Reset();
 
-    /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
-    /// </summary>
+    /// <summary>Debug name, for graphics debuggers.</summary>
     public abstract string Name { get; set; }
 
-    /// <summary>
-    /// A bool indicating whether this instance has been disposed.
-    /// </summary>
+    /// <summary>True if disposed.</summary>
     public abstract bool IsDisposed { get; }
 
-    /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
-    /// </summary>
+    /// <summary>Frees unmanaged device resources.</summary>
     public abstract void Dispose();
 }

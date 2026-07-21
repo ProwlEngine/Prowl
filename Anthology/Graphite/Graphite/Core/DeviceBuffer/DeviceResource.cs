@@ -1,14 +1,12 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// A resource owned by a <see cref="GraphicsDevice"/>, which can be given a string identifier for debugging and
-/// informational purposes.
+/// A GraphicsDevice-owned resource with a debug name.
 /// </summary>
 public interface DeviceResource
 {
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     string Name { get; set; }
 }

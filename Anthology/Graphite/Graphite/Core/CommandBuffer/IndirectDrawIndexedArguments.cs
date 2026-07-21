@@ -1,29 +1,16 @@
 ﻿namespace Prowl.Graphite;
 
-/// <summary>
-/// A structure describing the format expected by indirect, indexed draw commands contained in an indirect
-/// <see cref="DeviceBuffer"/>.
-/// </summary>
+/// <summary>Layout of one indexed indirect draw command in an indirect buffer.</summary>
 public struct IndirectDrawIndexedArguments
 {
-    /// <summary>
-    /// The number of indices to use in the indexed draw.
-    /// </summary>
+    /// <summary>Index count for the draw.</summary>
     public uint IndexCount;
-    /// <summary>
-    /// The number of instances to draw.
-    /// </summary>
+    /// <summary>Instance count.</summary>
     public uint InstanceCount;
-    /// <summary>
-    /// The value which is used as the start of the indices used for the draw.
-    /// </summary>
+    /// <summary>Start index.</summary>
     public uint FirstIndex;
-    /// <summary>
-    /// An offset which is added to each vertex element referenced by the index <see cref="DeviceBuffer"/>.
-    /// </summary>
+    /// <summary>Offset added to each referenced vertex.</summary>
     public int VertexOffset;
-    /// <summary>
-    /// The first instance to draw. Subsequent instances (if InstanceCount > 1) are incremented by 1.
-    /// </summary>
+    /// <summary>First instance ID; later instances increment by 1.</summary>
     public uint FirstInstance;
 }

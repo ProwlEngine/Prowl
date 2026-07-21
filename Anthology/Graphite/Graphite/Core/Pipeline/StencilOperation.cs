@@ -1,41 +1,40 @@
-﻿namespace Prowl.Graphite;
+namespace Prowl.Graphite;
 
 /// <summary>
-/// Identifies an action taken on samples that pass or fail the stencil test.
+/// Action taken on samples that pass or fail the stencil test.
 /// </summary>
 public enum StencilOperation : byte
 {
     /// <summary>
-    /// Keep the existing value.
+    /// Keep existing value.
     /// </summary>
     Keep,
     /// <summary>
-    /// Sets the value to 0.
+    /// Set to 0.
     /// </summary>
     Zero,
     /// <summary>
-    /// Replaces the existing value with <see cref="DepthStencilStateDescription.StencilReference"/>.
+    /// Replace with stencil reference.
     /// </summary>
     Replace,
     /// <summary>
-    /// Increments the existing value and clamps it to the maximum representable unsigned value.
+    /// Increment, clamp to max unsigned value.
     /// </summary>
     IncrementAndClamp,
     /// <summary>
-    /// Decrements the existing value and clamps it to 0.
+    /// Decrement, clamp to 0.
     /// </summary>
     DecrementAndClamp,
     /// <summary>
-    /// Bitwise-inverts the existing value.
+    /// Bitwise invert.
     /// </summary>
     Invert,
     /// <summary>
-    /// Increments the existing value and wraps it to 0 when it exceeds the maximum representable unsigned value.
+    /// Increment, wrap to 0 past max unsigned value.
     /// </summary>
     IncrementAndWrap,
     /// <summary>
-    /// Decrements the existing value and wraps it to the maximum representable unsigned value if it would be reduced below
-    /// 0.
+    /// Decrement, wrap to max unsigned value if it'd go below 0.
     /// </summary>
     DecrementAndWrap,
 }

@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A bitmask representing a set of shader stages.
+/// Bitmask of shader stages.
 /// </summary>
 [Flags]
 public enum ShaderStages : byte
@@ -13,27 +13,27 @@ public enum ShaderStages : byte
     /// </summary>
     None = 0,
     /// <summary>
-    /// The vertex shader stage.
+    /// Vertex stage.
     /// </summary>
     Vertex = 1 << 0,
     /// <summary>
-    /// The geometry shader stage.
+    /// Geometry stage.
     /// </summary>
     Geometry = 1 << 1,
     /// <summary>
-    /// The tessellation control (or hull) shader stage.
+    /// Tessellation control (hull) stage.
     /// </summary>
     TessellationControl = 1 << 2,
     /// <summary>
-    /// The tessellation evaluation (or domain) shader stage.
+    /// Tessellation evaluation (domain) stage.
     /// </summary>
     TessellationEvaluation = 1 << 3,
     /// <summary>
-    /// The fragment (or pixel) shader stage.
+    /// Fragment (pixel) stage.
     /// </summary>
     Fragment = 1 << 4,
     /// <summary>
-    /// The compute shader stage.
+    /// Compute stage.
     /// </summary>
     Compute = 1 << 5,
 }

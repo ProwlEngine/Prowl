@@ -3,8 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource used to store arbitrary image data in a specific format.
-/// See <see cref="TextureDescription"/>.
+/// Device resource holding image data in some format.
 /// </summary>
 public abstract class Texture : DeviceResource, MappableResource, IDisposable, BindableResource
 {
@@ -12,61 +11,58 @@ public abstract class Texture : DeviceResource, MappableResource, IDisposable, B
     private TextureView _fullTextureView;
 
     /// <summary>
-    /// Calculates the subresource index, given a mipmap level and array layer.
+    /// Gets subresource index from mip level and array layer.
     /// </summary>
-    /// <param name="mipLevel">The mip level. This should be less than <see cref="MipLevels"/>.</param>
-    /// <param name="arrayLayer">The array layer. This should be less than <see cref="ArrayLayers"/>.</param>
-    /// <returns>The subresource index.</returns>
+    /// <param name="mipLevel">Mip level, must be less than MipLevels.</param>
+    /// <param name="arrayLayer">Array layer, must be less than ArrayLayers.</param>
+    /// <returns>Subresource index.</returns>
     public uint CalculateSubresource(uint mipLevel, uint arrayLayer)
     {
         return arrayLayer * MipLevels + mipLevel;
     }
 
     /// <summary>
-    /// The format of individual texture elements stored in this instance.
+    /// Pixel format of texture elements.
     /// </summary>
     public abstract PixelFormat Format { get; }
     /// <summary>
-    /// The total width of this instance, in texels.
+    /// Width in texels.
     /// </summary>
     public abstract uint Width { get; }
     /// <summary>
-    /// The total height of this instance, in texels.
+    /// Height in texels.
     /// </summary>
     public abstract uint Height { get; }
     /// <summary>
-    /// The total depth of this instance, in texels.
+    /// Depth in texels.
     /// </summary>
     public abstract uint Depth { get; }
     /// <summary>
-    /// The total number of mipmap levels in this instance.
+    /// Mipmap level count.
     /// </summary>
     public abstract uint MipLevels { get; }
     /// <summary>
-    /// The total number of array layers in this instance.
+    /// Array layer count.
     /// </summary>
     public abstract uint ArrayLayers { get; }
     /// <summary>
-    /// The usage flags given when this instance was created. This property controls how this instance is permitted to be
-    /// used, and it is an error to attempt to use the Texture outside of those contexts.
+    /// Usage flags from creation. Using outside these contexts is an error.
     /// </summary>
     public abstract TextureUsage Usage { get; }
     /// <summary>
-    /// The <see cref="TextureType"/> of this instance.
+    /// Texture type.
     /// </summary>
     public abstract TextureType Type { get; }
     /// <summary>
-    /// The number of samples in this instance. If this returns any value other than <see cref="TextureSampleCount.Count1"/>,
-    /// then this instance is a multipsample texture.
+    /// Sample count. Anything other than 1 means multisample.
     /// </summary>
     public abstract TextureSampleCount SampleCount { get; }
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// Whether this has been disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
@@ -89,7 +85,7 @@ public abstract class Texture : DeviceResource, MappableResource, IDisposable, B
     }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public virtual void Dispose()
     {

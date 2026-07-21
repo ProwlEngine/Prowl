@@ -4,9 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource encapsulating a complete graphics shader program: all stages plus the pipeline-level state owned by
-/// the program (blend / depth / rasterizer / vertex layouts / resource layouts).
-/// See <see cref="ShaderDescription"/>.
+/// Full graphics shader program: all stages plus pipeline state (blend, depth, rasterizer, vertex/resource layouts).
 /// </summary>
 public abstract class GraphicsProgram : ShaderProgram
 {
@@ -17,9 +15,9 @@ public abstract class GraphicsProgram : ShaderProgram
     private readonly VertexLayoutDescription[] _vertexLayouts;
 
     /// <summary>
-    /// Constructs a new <see cref="GraphicsProgram"/> from the supplied description.
+    /// Builds a program from a description.
     /// </summary>
-    /// <param name="description">The description that drives program creation.</param>
+    /// <param name="description">Drives creation.</param>
     internal GraphicsProgram(ref ShaderDescription description)
         : base(description.ResourceLayouts)
     {
@@ -36,27 +34,27 @@ public abstract class GraphicsProgram : ShaderProgram
     }
 
     /// <summary>
-    /// The shader stages present in this program, in the order they appeared in the description.
+    /// Stages in this program, in description order.
     /// </summary>
     public IReadOnlyList<ShaderStages> Stages => _stages;
 
     /// <summary>
-    /// The blend state owned by this program.
+    /// This program's blend state.
     /// </summary>
     public BlendStateDescription BlendState => _blendState;
 
     /// <summary>
-    /// The depth/stencil state owned by this program.
+    /// This program's depth/stencil state.
     /// </summary>
     public DepthStencilStateDescription DepthStencilState => _depthStencilState;
 
     /// <summary>
-    /// The rasterizer state owned by this program.
+    /// This program's rasterizer state.
     /// </summary>
     public RasterizerStateDescription RasterizerState => _rasterizerState;
 
     /// <summary>
-    /// The vertex input layouts declared by this program.
+    /// Vertex input layouts declared by this program.
     /// </summary>
     public IReadOnlyList<VertexLayoutDescription> VertexLayouts => _vertexLayouts;
 

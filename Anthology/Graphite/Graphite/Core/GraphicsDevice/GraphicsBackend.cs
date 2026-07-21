@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// The specific graphics API used by the <see cref="GraphicsDevice"/>.
+/// Graphics API used by the device.
 /// </summary>
 public enum GraphicsBackend : byte
 {

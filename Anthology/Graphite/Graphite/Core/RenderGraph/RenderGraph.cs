@@ -3,23 +3,20 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.RenderGraph;
 
-/// <summary>
-/// A solved render graph: passes ordered so readers run after writers, plus the merged resource table.
-/// Built from the passes a pipeline adds and any resources the pipeline declares centrally.
-/// </summary>
+/// <summary>Solved render graph: passes ordered readers-after-writers, plus merged resource table. Built from a pipeline's passes and centrally declared resources.</summary>
 public sealed class RenderGraph<TView> : IDisposable
     where TView : IRenderView
 {
-    /// <summary>A pass and the resources it declared.</summary>
+    /// <summary>A pass plus its declared resources.</summary>
     public readonly struct PassNode
     {
-        /// <summary>The pass this node runs.</summary>
+        /// <summary>The pass.</summary>
         public readonly IPass<TView> Pass;
 
-        /// <summary>Resources declared as inputs, kept for profiling and wiring.</summary>
+        /// <summary>Declared inputs, for profiling/wiring.</summary>
         public readonly RenderResourceID[] Inputs;
 
-        /// <summary>Resources declared as outputs, kept for profiling and wiring.</summary>
+        /// <summary>Declared outputs, for profiling/wiring.</summary>
         public readonly RenderResourceID[] Outputs;
 
         internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs)
@@ -30,16 +27,16 @@ public sealed class RenderGraph<TView> : IDisposable
         }
     }
 
-    /// <summary>Passes in execution order (topo sorted, ties broken by insertion order).</summary>
+    /// <summary>Passes in exec order (topo sorted, ties by insertion order).</summary>
     public IReadOnlyList<PassNode> OrderedPasses { get; }
 
-    /// <summary>All declared resources keyed by ID (first declaration of an ID wins).</summary>
+    /// <summary>All declared resources by ID (first declaration wins).</summary>
     public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
-    /// <summary>Resources the present pass declared as inputs, kept for profiling and wiring.</summary>
+    /// <summary>Present pass's declared inputs, for profiling/wiring.</summary>
     public IReadOnlyList<RenderResourceID> PresentInputs { get; }
 
-    /// <summary>True if the present pass requested the window's swapchain target.</summary>
+    /// <summary>True if present pass wants the window's swapchain target.</summary>
     public bool PresentRequestsSwapchain { get; }
 
     private RenderGraph(
@@ -54,7 +51,7 @@ public sealed class RenderGraph<TView> : IDisposable
         PresentRequestsSwapchain = presentRequestsSwapchain;
     }
 
-    /// <summary>Disposes the physical resources any history resource in this graph owns.</summary>
+    /// <summary>Disposes physical resources owned by any history resource here.</summary>
     public void Dispose()
     {
         foreach (GraphResource resource in Resources.Values)
@@ -69,11 +66,7 @@ public sealed class RenderGraph<TView> : IDisposable
     }
 
     /// <summary>
-    /// Builds a solved graph from a pass list, the pipeline's present pass, and any centrally declared
-    /// resources. Runs each pass's setup, collects declared resources, links writers to readers by ID, and
-    /// topo sorts. The present pass always runs last, so its declared inputs are recorded but do not
-    /// participate in ordering. Every input ID must be produced by some pass output or a central
-    /// declaration; an input referencing an ID nothing produces throws. Also throws on a dependency cycle.
+    /// Builds the solved graph: runs pass setup, links writers to readers by ID, topo sorts. Present pass always runs last, so its inputs are recorded but not ordered. Throws if an input has no producer, or on a dependency cycle.
     /// </summary>
     public static RenderGraph<TView> Build(
         IReadOnlyList<IPass<TView>> passes,

@@ -3,34 +3,32 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A bindable device resource which provides a shader with access to a sampled <see cref="Texture"/> object.
-/// See <see cref="TextureViewDescription"/>.
+/// Bindable resource giving a shader sampled access to a texture.
 /// </summary>
 public abstract class TextureView : BindableResource, DeviceResource, IDisposable
 {
     /// <summary>
-    /// The target <see cref="Texture"/> object to be sampled via this instance.
+    /// The texture being sampled.
     /// </summary>
     public Texture Target { get; }
     /// <summary>
-    /// The base mip level visible in the view.
+    /// First visible mip level.
     /// </summary>
     public uint BaseMipLevel { get; }
     /// <summary>
-    /// The number of mip levels visible in the view.
+    /// Visible mip level count.
     /// </summary>
     public uint MipLevels { get; }
     /// <summary>
-    /// The base array layer visible in the view.
+    /// First visible array layer.
     /// </summary>
     public uint BaseArrayLayer { get; }
     /// <summary>
-    /// The number of array layers visible in the view.
+    /// Visible array layer count.
     /// </summary>
     public uint ArrayLayers { get; }
     /// <summary>
-    /// The format used to interpret the contents of the target Texture. This may be different from the target Texture's
-    /// true storage format, but it will be the same size.
+    /// Format to read the target texture as. Can differ from the texture's real format, same size only.
     /// </summary>
     public PixelFormat Format { get; }
 
@@ -45,18 +43,17 @@ public abstract class TextureView : BindableResource, DeviceResource, IDisposabl
     }
 
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
 
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// True if disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees the underlying device resources.
     /// </summary>
     public abstract void Dispose();
 }

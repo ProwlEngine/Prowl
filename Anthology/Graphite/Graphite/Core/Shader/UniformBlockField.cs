@@ -3,25 +3,23 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a single scalar/vector/matrix field inside a uniform block. Stage 7's
-/// <c>PropertySet</c> writes property values into a transient uniform buffer at <see cref="Offset"/>
-/// using a writer keyed by <see cref="Type"/>.
+/// One scalar/vector/matrix field in a uniform block. PropertySet writes into the buffer at Offset using a writer keyed by Type.
 /// </summary>
 public readonly struct UniformBlockField : IEquatable<UniformBlockField>
 {
-    /// <summary>Interned name of the field. Implicit conversion from <see cref="string"/> is supported.</summary>
+    /// <summary>Interned field name. Implicitly converts from string.</summary>
     public readonly PropertyID Name;
 
-    /// <summary>Byte offset from the start of the containing uniform buffer.</summary>
+    /// <summary>Byte offset in the uniform buffer.</summary>
     public readonly uint Offset;
 
-    /// <summary>Byte size occupied by the field; must equal the natural size of <see cref="Type"/>.</summary>
+    /// <summary>Byte size, must match Type's natural size.</summary>
     public readonly uint Size;
 
-    /// <summary>Scalar type used to interpret writes into the field.</summary>
+    /// <summary>Scalar type for writes.</summary>
     public readonly UniformScalarType Type;
 
-    /// <summary>Constructs a field with the supplied interned name.</summary>
+    /// <summary>Builds a field with an interned name.</summary>
     public UniformBlockField(PropertyID name, uint offset, uint size, UniformScalarType type)
     {
         Name = name;
@@ -30,7 +28,7 @@ public readonly struct UniformBlockField : IEquatable<UniformBlockField>
         Type = type;
     }
 
-    /// <summary>Convenience overload that interns <paramref name="name"/> implicitly.</summary>
+    /// <summary>Interns name implicitly.</summary>
     public UniformBlockField(string name, uint offset, uint size, UniformScalarType type)
         : this((PropertyID)name, offset, size, type)
     {

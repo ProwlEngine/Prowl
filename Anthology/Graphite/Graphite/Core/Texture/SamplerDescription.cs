@@ -3,67 +3,64 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a <see cref="Sampler"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a sampler for creation via ResourceFactory.
 /// </summary>
 public struct SamplerDescription : IEquatable<SamplerDescription>
 {
     /// <summary>
-    /// The <see cref="SamplerAddressMode"/> mode to use for the U (or S) coordinate.
+    /// Address mode for U (S) coordinate.
     /// </summary>
     public SamplerAddressMode AddressModeU;
     /// <summary>
-    /// The <see cref="SamplerAddressMode"/> mode to use for the V (or T) coordinate.
+    /// Address mode for V (T) coordinate.
     /// </summary>
     public SamplerAddressMode AddressModeV;
     /// <summary>
-    /// The <see cref="SamplerAddressMode"/> mode to use for the W (or R) coordinate.
+    /// Address mode for W (R) coordinate.
     /// </summary>
     public SamplerAddressMode AddressModeW;
     /// <summary>
-    /// The filter used when sampling.
+    /// Filter used when sampling.
     /// </summary>
     public SamplerFilter Filter;
     /// <summary>
-    /// An optional value controlling the kind of comparison to use when sampling. If null, comparison sampling is not used.
+    /// Comparison kind for comparison sampling. Null = off.
     /// </summary>
     public ComparisonKind? ComparisonKind;
     /// <summary>
-    /// The maximum anisotropy of the filter, when <see cref="SamplerFilter.Anisotropic"/> is used, or otherwise ignored.
+    /// Max anisotropy. Only matters with anisotropic filtering, ignored otherwise.
     /// </summary>
     public uint MaximumAnisotropy;
     /// <summary>
-    /// The minimum level of detail.
+    /// Min LOD.
     /// </summary>
     public uint MinimumLod;
     /// <summary>
-    /// The maximum level of detail.
+    /// Max LOD.
     /// </summary>
     public uint MaximumLod;
     /// <summary>
-    /// The level of detail bias.
+    /// LOD bias.
     /// </summary>
     public int LodBias;
     /// <summary>
-    /// The constant color that is sampled when <see cref="SamplerAddressMode.Border"/> is used, or otherwise ignored.
+    /// Border color, only used with Border address mode.
     /// </summary>
     public SamplerBorderColor BorderColor;
 
     /// <summary>
-    /// Constructs a new SamplerDescription.
+    /// Makes a new SamplerDescription.
     /// </summary>
-    /// <param name="addressModeU">The <see cref="SamplerAddressMode"/> mode to use for the U (or R) coordinate.</param>
-    /// <param name="addressModeV">The <see cref="SamplerAddressMode"/> mode to use for the V (or S) coordinate.</param>
-    /// <param name="addressModeW">The <see cref="SamplerAddressMode"/> mode to use for the W (or T) coordinate.</param>
-    /// <param name="filter">The filter used when sampling.</param>
-    /// <param name="comparisonKind">An optional value controlling the kind of comparison to use when sampling. If null,
-    /// comparison sampling is not used.</param>
-    /// <param name="maximumAnisotropy">The maximum anisotropy of the filter, when <see cref="SamplerFilter.Anisotropic"/> is
-    /// used, or otherwise ignored.</param>
-    /// <param name="minimumLod">The minimum level of detail.</param>
-    /// <param name="maximumLod">The maximum level of detail.</param>
-    /// <param name="lodBias">The level of detail bias.</param>
-    /// <param name="borderColor">The constant color that is sampled when <see cref="SamplerAddressMode.Border"/> is used, or
-    /// otherwise ignored.</param>
+    /// <param name="addressModeU">Address mode for U (R) coordinate.</param>
+    /// <param name="addressModeV">Address mode for V (S) coordinate.</param>
+    /// <param name="addressModeW">Address mode for W (T) coordinate.</param>
+    /// <param name="filter">Filter used when sampling.</param>
+    /// <param name="comparisonKind">Comparison kind for comparison sampling. Null = off.</param>
+    /// <param name="maximumAnisotropy">Max anisotropy. Only matters with anisotropic filtering.</param>
+    /// <param name="minimumLod">Min LOD.</param>
+    /// <param name="maximumLod">Max LOD.</param>
+    /// <param name="lodBias">LOD bias.</param>
+    /// <param name="borderColor">Border color, only used with Border address mode.</param>
     public SamplerDescription(
         SamplerAddressMode addressModeU,
         SamplerAddressMode addressModeV,
@@ -89,7 +86,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     }
 
     /// <summary>
-    /// Describes a common point-filter sampler, with wrapping address mode.
+    /// Point-filter, wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -113,7 +110,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     };
 
     /// <summary>
-    /// Describes a common linear-filter sampler, with wrapping address mode.
+    /// Linear-filter, wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -137,7 +134,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     };
 
     /// <summary>
-    /// Describes a common 4x-anisotropic-filter sampler, with wrapping address mode.
+    /// 4x-anisotropic, wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -163,8 +160,8 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(SamplerDescription other)
     {
         return AddressModeU == other.AddressModeU
@@ -180,9 +177,9 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(

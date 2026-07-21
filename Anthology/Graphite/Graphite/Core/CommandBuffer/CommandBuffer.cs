@@ -10,11 +10,8 @@ using Prowl.Vector;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Records graphics commands for later execution by the device. Acquired from a
-/// <see cref="RenderGraph.RenderContext{TView}"/> (which begins it) and submitted back through the same
-/// context (which ends and queues it); passes never begin or end it themselves. Not thread-safe. Some
-/// commands need stuff bound first (framebuffer, shader, vertex source) - see each method. Can't run twice
-/// without a reset in between.
+/// Records GPU commands. Rented/begun and ended/submitted by the render context, not by passes. Not thread-safe.
+/// Some commands need state bound first. Needs a reset before reuse.
 /// </summary>
 public abstract partial class CommandBuffer : DeviceResource, IDisposable
 {
@@ -32,34 +29,28 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected uint _currentIndexCount;
 
 
-    /// <summary>Merged property table for this buffer. Backend reads it at draw time.</summary>
+    /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
-    /// <summary>
-    /// Monotonic epoch bumped whenever <see cref="_activeProperties"/> changes (a merge or clear).
-    /// The backend uses it to skip per-draw property work when nothing has changed since the last draw.
-    /// </summary>
+    /// <summary>Bumps every time active properties change. Backend uses it to skip redundant work.</summary>
     private protected uint _activePropertiesEpoch;
 
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
-    /// <summary>
-    /// The execution task this buffer was rented for. Holds per-execution backend state. Null if not tied to
-    /// any execution (e.g. a one-off copy).
-    /// </summary>
+    /// <summary>Execution this buffer was rented for. Null for one-off stuff not tied to an execution.</summary>
     internal ExecutionTask? Execution { get; set; }
 
-    /// <summary>The pass this buffer was rented during, for profiler execution-timing reports. Null outside a pass.</summary>
+    /// <summary>Pass this buffer was rented during, for profiler timing. Null outside a pass.</summary>
     internal PassInfo? Pass { get; set; }
 
-    /// <summary>Id of the bound execution, or 0 if none.</summary>
+    /// <summary>Bound execution's id, or 0.</summary>
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
-    /// <summary>Reports a resource-set/descriptor bind to the owning device's profiler, if any.</summary>
+    /// <summary>Reports a resource-set bind to the profiler, if any.</summary>
     internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Profiler?.RecordResourceSetBind(setCount);
 
-    /// <summary>Whether End has been called since the last Begin. Used to validate before submission.</summary>
+    /// <summary>True if End was called since last Begin.</summary>
     internal bool HasEnded { get; private protected set; }
 
 
@@ -84,23 +75,16 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         unchecked { _activePropertiesEpoch++; }
     }
 
-    /// <summary>
-    /// Resets to the initial state and starts recording. Called by the render context when the buffer is
-    /// rented; passes never call this.
-    /// </summary>
+    /// <summary>Resets and starts recording. Render context calls this on rent, not passes.</summary>
     internal abstract void Begin();
 
-    /// <summary>
-    /// Finishes recording, makes the buffer executable. Called by the render context when the buffer is
-    /// submitted; passes never call this.
-    /// </summary>
+    /// <summary>Finishes recording, makes buffer executable. Render context calls this on submit, not passes.</summary>
     internal abstract void End();
 
     /// <summary>
-    /// Sets the active shader for rendering. Must be compatible with the bound framebuffer and buffers.
-    /// Rebinds - previously bound resource sets get invalidated and need re-binding.
+    /// Sets active shader. Must match bound framebuffer/buffers. Invalidates bound resource sets, rebind after.
     /// </summary>
-    /// <param name="program">The shader to set.</param>
+    /// <param name="program">Shader to set.</param>
     public void SetShader(GraphicsProgram program)
     {
         ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
@@ -119,10 +103,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
 
-    /// <summary>
-    /// Sets the active compute shader. Rebinds - previously bound compute resource sets get invalidated.
-    /// </summary>
-    /// <param name="program">The compute shader to set.</param>
+    /// <summary>Sets active compute shader. Invalidates bound compute resource sets.</summary>
+    /// <param name="program">Compute shader to set.</param>
     public void SetComputeShader(ComputeProgram program)
     {
         ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
@@ -135,11 +117,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
 
-    /// <summary>
-    /// Binds vertex buffers, index buffer, and topology for the next draws. Fully replaces the old source,
-    /// nothing carries over.
-    /// </summary>
-    /// <param name="source">Source to bind. Can't be null - use an empty one if you need no vertex source.</param>
+    /// <summary>Binds vertex/index buffers and topology for next draws. Fully replaces old source.</summary>
+    /// <param name="source">Source to bind. Not null, use an empty one for none.</param>
     public void SetVertexSource(IVertexSource source)
     {
         SetVertexSource_CheckNonNull(source);
@@ -150,13 +129,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void SetVertexSourceCore(IVertexSource source);
 
     /// <summary>
-    /// Merges the given properties into the bind table. Last write by name wins. Sticks around until
-    /// ClearProperties or Begin.
-    /// <para>
-    /// Calling this twice with the same unchanged set is a no-op, it's tracked and skipped.
-    /// </para>
+    /// Merges properties into bind table, last write wins, sticks until ClearProperties or Begin.
+    /// <para>Same unchanged set twice in a row is a no-op.</para>
     /// </summary>
-    /// <param name="properties">Property set to merge in.</param>
+    /// <param name="properties">Set to merge in.</param>
     public void SetProperties(PropertySet properties)
     {
         ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
@@ -173,14 +149,12 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetPropertiesCore(properties);
     }
 
-    /// <summary>Backend-specific work when a property set gets merged in. Base class already updated its table.</summary>
+    /// <summary>Backend work for a property merge. Base class table already updated.</summary>
     private protected abstract void SetPropertiesCore(PropertySet properties);
 
     /// <summary>
-    /// Clears all merged property state. No GPU calls made.
-    /// <para>
-    /// Begin calls this for you.
-    /// </para>
+    /// Clears all merged properties. No GPU calls.
+    /// <para>Begin does this for you.</para>
     /// </summary>
     public void ClearProperties()
     {
@@ -191,12 +165,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         ClearPropertiesCore();
     }
 
-    /// <summary>Backend-specific work when property state is cleared.</summary>
+    /// <summary>Backend work for clearing properties.</summary>
     private protected abstract void ClearPropertiesCore();
 
-    /// <summary>
-    /// Sets the framebuffer to render to. Must match the active shader's output attachment count and formats.
-    /// </summary>
+    /// <summary>Sets render target framebuffer. Must match active shader's output count/formats.</summary>
     /// <param name="fb">Framebuffer to set.</param>
     public void SetFramebuffer(Framebuffer fb)
     {
@@ -210,26 +182,26 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>API-specific framebuffer handling.</summary>
+    /// <summary>Backend framebuffer set.</summary>
     /// <param name="fb">Framebuffer.</param>
     private protected abstract void SetFramebufferCore(Framebuffer fb);
 
-    /// <summary>Sets the render texture's framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
-    /// <param name="renderTexture">Render texture whose framebuffer to set.</param>
+    /// <summary>Sets render texture's framebuffer as render target.</summary>
+    /// <param name="renderTexture">Render texture.</param>
     public void SetFramebuffer(RenderTexture renderTexture)
         => SetFramebuffer(renderTexture.Framebuffer);
 
-    /// <summary>Sets the render texture's framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
-    /// <param name="renderTexture">Render texture whose framebuffer to set.</param>
+    /// <summary>Sets render texture's framebuffer as render target.</summary>
+    /// <param name="renderTexture">Render texture.</param>
     public void SetRenderTarget(RenderTexture renderTexture)
         => SetFramebuffer(renderTexture.Framebuffer);
 
-    /// <summary>Sets the framebuffer to render to. See <see cref="SetFramebuffer(Framebuffer)"/>.</summary>
+    /// <summary>Sets framebuffer as render target.</summary>
     /// <param name="fb">Framebuffer to set.</param>
     public void SetRenderTarget(Framebuffer fb)
         => SetFramebuffer(fb);
 
-    /// <summary>Clears one color target. Index must be within the framebuffer's color attachment count.</summary>
+    /// <summary>Clears one color target. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="clearColor">Clear value.</param>
     public void ClearColorTarget(uint index, Color clearColor)
@@ -240,14 +212,14 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void ClearColorTargetCore(uint index, Color clearColor);
 
-    /// <summary>Clears the depth-stencil target. Framebuffer needs a depth attachment. Stencil cleared to 0.</summary>
+    /// <summary>Clears depth-stencil target, stencil to 0. Needs a depth attachment.</summary>
     /// <param name="depth">Depth clear value.</param>
     public void ClearDepthStencil(float depth)
     {
         ClearDepthStencil(depth, 0);
     }
 
-    /// <summary>Clears the depth-stencil target. Framebuffer needs a depth attachment.</summary>
+    /// <summary>Clears depth-stencil target. Needs a depth attachment.</summary>
     /// <param name="depth">Depth clear value.</param>
     /// <param name="stencil">Stencil clear value.</param>
     public void ClearDepthStencil(float depth, byte stencil)
@@ -258,7 +230,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void ClearDepthStencilCore(float depth, byte stencil);
 
-    /// <summary>Sets all viewports to cover the whole framebuffer.</summary>
+    /// <summary>Sets all viewports to cover whole framebuffer.</summary>
     public void SetFullViewports()
     {
         CheckFramebuffer(nameof(SetFullViewports));
@@ -268,7 +240,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
             SetViewport(index, new Viewport(0, 0, _framebuffer.Width, _framebuffer.Height, 0, 1));
     }
 
-    /// <summary>Sets one viewport to cover the whole framebuffer.</summary>
+    /// <summary>Sets one viewport to cover whole framebuffer.</summary>
     /// <param name="index">Color target index.</param>
     public void SetFullViewport(uint index)
     {
@@ -276,17 +248,17 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetViewport(index, new Viewport(0, 0, _framebuffer!.Width, _framebuffer.Height, 0, 1));
     }
 
-    /// <summary>Sets the viewport at the given index. Index must be within the framebuffer's color attachment count.</summary>
+    /// <summary>Sets viewport at index. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="viewport">New viewport.</param>
     public void SetViewport(uint index, Viewport viewport) => SetViewport(index, ref viewport);
 
-    /// <summary>Sets the viewport at the given index. Index must be within the framebuffer's color attachment count.</summary>
+    /// <summary>Sets viewport at index. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
     /// <param name="viewport">New viewport.</param>
     public abstract void SetViewport(uint index, ref Viewport viewport);
 
-    /// <summary>Sets all scissor rects to cover the whole framebuffer.</summary>
+    /// <summary>Sets all scissor rects to cover whole framebuffer.</summary>
     public void SetFullScissorRects()
     {
         CheckFramebuffer(nameof(SetFullScissorRects));
@@ -298,7 +270,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Sets one scissor rect to cover the whole framebuffer.</summary>
+    /// <summary>Sets one scissor rect to cover whole framebuffer.</summary>
     /// <param name="index">Color target index.</param>
     public void SetFullScissorRect(uint index)
     {
@@ -306,23 +278,23 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetScissorRect(index, 0, 0, _framebuffer!.Width, _framebuffer.Height);
     }
 
-    /// <summary>Sets the scissor rect at the given index. Index must be within the framebuffer's color attachment count.</summary>
+    /// <summary>Sets scissor rect at index. Index must be within framebuffer's color attachment count.</summary>
     /// <param name="index">Color target index.</param>
-    /// <param name="x">X of the rect.</param>
-    /// <param name="y">Y of the rect.</param>
-    /// <param name="width">Width of the rect.</param>
-    /// <param name="height">Height of the rect.</param>
+    /// <param name="x">Rect X.</param>
+    /// <param name="y">Rect Y.</param>
+    /// <param name="width">Rect width.</param>
+    /// <param name="height">Rect height.</param>
     public abstract void SetScissorRect(uint index, uint x, uint y, uint width, uint height);
 
-    /// <summary>Draws using the currently bound state. No index buffer used.</summary>
+    /// <summary>Draws with current bound state, no index buffer.</summary>
     /// <param name="vertexCount">Vertex count.</param>
     public void Draw(uint vertexCount) => Draw(vertexCount, 1, 0, 0);
 
-    /// <summary>Draws using the currently bound state. No index buffer used.</summary>
+    /// <summary>Draws with current bound state, no index buffer.</summary>
     /// <param name="vertexCount">Vertex count.</param>
     /// <param name="instanceCount">Instance count.</param>
-    /// <param name="vertexStart">First vertex to draw.</param>
-    /// <param name="instanceStart">First instance value.</param>
+    /// <param name="vertexStart">First vertex.</param>
+    /// <param name="instanceStart">First instance.</param>
     public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
         Draw_PreDrawValidation();
@@ -334,14 +306,14 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
 
-    /// <summary>Draws indexed primitives using the currently bound state.</summary>
+    /// <summary>Draws indexed primitives with current bound state.</summary>
     public void DrawIndexed() => DrawIndexed(1, 0, 0, 0);
 
-    /// <summary>Draws indexed primitives using the currently bound state.</summary>
+    /// <summary>Draws indexed primitives with current bound state.</summary>
     /// <param name="instanceCount">Instance count.</param>
-    /// <param name="indexStart">Indices to skip in the index buffer.</param>
-    /// <param name="vertexOffset">Value added to each index read from the index buffer.</param>
-    /// <param name="instanceStart">First instance value.</param>
+    /// <param name="indexStart">Indices to skip in index buffer.</param>
+    /// <param name="vertexOffset">Added to each index read.</param>
+    /// <param name="instanceStart">First instance.</param>
     public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
     {
         DrawIndexed_CheckIndexBuffer();
@@ -356,11 +328,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
 
-    /// <summary>Issues indirect draw commands read from the given buffer. Data must match IndirectDrawArguments layout.</summary>
-    /// <param name="indirectBuffer">Buffer to read from. Needs the IndirectBuffer usage flag.</param>
-    /// <param name="offset">Byte offset into the buffer to start reading. Must be a multiple of 4.</param>
-    /// <param name="drawCount">Number of draw commands to issue.</param>
-    /// <param name="stride">Byte stride between draw commands. Multiple of 4, bigger than IndirectDrawArguments.</param>
+    /// <summary>Issues indirect draws from buffer. Data must match IndirectDrawArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
+    /// <param name="drawCount">Draw commands to issue.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawArguments.</param>
     public unsafe void DrawIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
         DrawIndirect_CheckSupport();
@@ -383,11 +355,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="stride">Byte stride.</param>
     private protected abstract void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
 
-    /// <summary>Issues indirect indexed draw commands read from the given buffer. Data must match IndirectDrawIndexedArguments layout.</summary>
-    /// <param name="indirectBuffer">Buffer to read from. Needs the IndirectBuffer usage flag.</param>
-    /// <param name="offset">Byte offset into the buffer to start reading. Must be a multiple of 4.</param>
-    /// <param name="drawCount">Number of draw commands to issue.</param>
-    /// <param name="stride">Byte stride between draw commands. Multiple of 4, bigger than IndirectDrawIndexedArguments.</param>
+    /// <summary>Issues indirect indexed draws from buffer. Data must match IndirectDrawIndexedArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
+    /// <param name="drawCount">Draw commands to issue.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawIndexedArguments.</param>
     public unsafe void DrawIndexedIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
     {
         DrawIndirect_CheckSupport();
@@ -410,10 +382,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="stride">Byte stride.</param>
     private protected abstract void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
 
-    /// <summary>Dispatches a compute operation using the currently bound compute state.</summary>
-    /// <param name="groupCountX">Thread group count, X.</param>
-    /// <param name="groupCountY">Thread group count, Y.</param>
-    /// <param name="groupCountZ">Thread group count, Z.</param>
+    /// <summary>Dispatches compute with current bound state.</summary>
+    /// <param name="groupCountX">Thread group count X.</param>
+    /// <param name="groupCountY">Thread group count Y.</param>
+    /// <param name="groupCountZ">Thread group count Z.</param>
     public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
         DispatchCore(groupCountX, groupCountY, groupCountZ);
@@ -424,9 +396,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
 
-    /// <summary>Issues an indirect compute dispatch read from the given buffer. Data must match IndirectDispatchArguments layout.</summary>
-    /// <param name="indirectBuffer">Buffer to read from. Needs the IndirectBuffer usage flag.</param>
-    /// <param name="offset">Byte offset into the buffer to start reading. Must be a multiple of 4.</param>
+    /// <summary>Issues indirect compute dispatch from buffer. Data must match IndirectDispatchArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
     public void DispatchIndirect(DeviceBuffer indirectBuffer, uint offset)
     {
         DrawIndirect_CheckBuffer(indirectBuffer);
@@ -443,24 +415,24 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="offset">Byte offset.</param>
     private protected abstract void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset);
 
-    /// <summary>Resolves a multisampled texture into a non-multisampled one.</summary>
-    /// <param name="source">Source. Must be multisampled (sample count > 1).</param>
-    /// <param name="destination">Destination. Must not be multisampled (sample count == 1).</param>
+    /// <summary>Resolves multisampled texture into non-multisampled one.</summary>
+    /// <param name="source">Source, sample count > 1.</param>
+    /// <param name="destination">Destination, sample count 1.</param>
     public void ResolveTexture(Texture source, Texture destination)
     {
         ResolveTexture_CheckSampleCounts(source, destination);
         ResolveTextureCore(source, destination);
     }
 
-    /// <summary>Resolves a multisampled texture into a non-multisampled one.</summary>
-    /// <param name="source">Source. Must be multisampled (sample count > 1).</param>
-    /// <param name="destination">Destination. Must not be multisampled (sample count == 1).</param>
+    /// <summary>Resolves multisampled texture into non-multisampled one.</summary>
+    /// <param name="source">Source, sample count > 1.</param>
+    /// <param name="destination">Destination, sample count 1.</param>
     protected abstract void ResolveTextureCore(Texture source, Texture destination);
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
     /// <param name="source">Value to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
@@ -474,11 +446,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Reference to the value to upload.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Ref to value to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -491,12 +463,12 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Reference to the first value in a series to upload.</param>
-    /// <param name="sizeInBytes">Total upload size in bytes.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Ref to first value in series.</param>
+    /// <param name="sizeInBytes">Total upload bytes.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -510,11 +482,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Array of data to upload.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Array to upload.</param>
     public void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -523,11 +495,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         UpdateBuffer(buffer, bufferOffsetInBytes, (ReadOnlySpan<T>)source);
     }
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Read-only span of data to upload.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Read-only span to upload.</param>
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -539,11 +511,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Updates a buffer region with new data. T must be blittable.</summary>
-    /// <typeparam name="T">Data type to upload.</typeparam>
+    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Span of data to upload.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Span to upload.</param>
     public void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -552,11 +524,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         UpdateBuffer(buffer, bufferOffsetInBytes, (ReadOnlySpan<T>)source);
     }
 
-    /// <summary>Updates a buffer region with new data.</summary>
+    /// <summary>Updates buffer region.</summary>
     /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset into the buffer.</param>
-    /// <param name="source">Pointer to the data to upload.</param>
-    /// <param name="sizeInBytes">Total upload size in bytes.</param>
+    /// <param name="bufferOffsetInBytes">Byte offset.</param>
+    /// <param name="source">Pointer to data.</param>
+    /// <param name="sizeInBytes">Total upload bytes.</param>
     public void UpdateBuffer(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
@@ -583,11 +555,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         IntPtr source,
         uint sizeInBytes);
 
-    /// <summary>Copies a region from one buffer to another.</summary>
+    /// <summary>Copies a region between buffers.</summary>
     /// <param name="source">Source buffer.</param>
-    /// <param name="sourceOffset">Byte offset into source where the copy starts.</param>
+    /// <param name="sourceOffset">Source start offset.</param>
     /// <param name="destination">Destination buffer.</param>
-    /// <param name="destinationOffset">Byte offset into destination where the copy starts.</param>
+    /// <param name="destinationOffset">Destination start offset.</param>
     /// <param name="sizeInBytes">Bytes to copy.</param>
     public void CopyBuffer(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes)
     {
@@ -610,11 +582,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="sizeInBytes">Bytes to copy.</param>
     private protected abstract void CopyBufferCore(DeviceBuffer source, uint sourceOffset, DeviceBuffer destination, uint destinationOffset, uint sizeInBytes);
 
-    /// <summary>Array layer count for a texture, counting cubemap faces (6 per layer).</summary>
+    /// <summary>Array layer count, counting cubemap faces (6 per layer).</summary>
     private static uint GetEffectiveArrayLayers(Texture texture)
         => ValidationHelpers.GetEffectiveArrayLayers(texture);
 
-    /// <summary>Copies all subresources from one texture to another.</summary>
+    /// <summary>Copies all subresources between textures.</summary>
     /// <param name="source">Source texture.</param>
     /// <param name="destination">Destination texture.</param>
     public void CopyTexture(Texture source, Texture destination)
@@ -634,11 +606,11 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         }
     }
 
-    /// <summary>Copies one subresource from one texture to another.</summary>
+    /// <summary>Copies one subresource between textures.</summary>
     /// <param name="source">Source texture.</param>
     /// <param name="destination">Destination texture.</param>
-    /// <param name="mipLevel">Mip level to copy.</param>
-    /// <param name="arrayLayer">Array layer to copy.</param>
+    /// <param name="mipLevel">Mip level.</param>
+    /// <param name="arrayLayer">Array layer.</param>
     public void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
     {
         CopyTexture_CheckNotNull(source, destination);
@@ -652,23 +624,23 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
             1);
     }
 
-    /// <summary>Copies a region from one texture to another.</summary>
+    /// <summary>Copies a region between textures.</summary>
     /// <param name="source">Source texture.</param>
-    /// <param name="srcX">Source region X.</param>
-    /// <param name="srcY">Source region Y.</param>
-    /// <param name="srcZ">Source region Z.</param>
+    /// <param name="srcX">Source X.</param>
+    /// <param name="srcY">Source Y.</param>
+    /// <param name="srcZ">Source Z.</param>
     /// <param name="srcMipLevel">Source mip level.</param>
-    /// <param name="srcBaseArrayLayer">First source array layer.</param>
+    /// <param name="srcBaseArrayLayer">First source layer.</param>
     /// <param name="destination">Destination texture.</param>
-    /// <param name="dstX">Destination region X.</param>
-    /// <param name="dstY">Destination region Y.</param>
-    /// <param name="dstZ">Destination region Z.</param>
+    /// <param name="dstX">Destination X.</param>
+    /// <param name="dstY">Destination Y.</param>
+    /// <param name="dstZ">Destination Z.</param>
     /// <param name="dstMipLevel">Destination mip level.</param>
-    /// <param name="dstBaseArrayLayer">First destination array layer.</param>
-    /// <param name="width">Region width in texels.</param>
-    /// <param name="height">Region height in texels.</param>
-    /// <param name="depth">Region depth in texels.</param>
-    /// <param name="layerCount">Array layers to copy.</param>
+    /// <param name="dstBaseArrayLayer">First destination layer.</param>
+    /// <param name="width">Region width, texels.</param>
+    /// <param name="height">Region height, texels.</param>
+    /// <param name="depth">Region depth, texels.</param>
+    /// <param name="layerCount">Layers to copy.</param>
     public void CopyTexture(
         Texture source,
         uint srcX, uint srcY, uint srcZ,
@@ -708,21 +680,21 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     /// <summary>Backend texture copy.</summary>
     /// <param name="source">Source texture.</param>
-    /// <param name="srcX">Source region X.</param>
-    /// <param name="srcY">Source region Y.</param>
-    /// <param name="srcZ">Source region Z.</param>
+    /// <param name="srcX">Source X.</param>
+    /// <param name="srcY">Source Y.</param>
+    /// <param name="srcZ">Source Z.</param>
     /// <param name="srcMipLevel">Source mip level.</param>
-    /// <param name="srcBaseArrayLayer">First source array layer.</param>
+    /// <param name="srcBaseArrayLayer">First source layer.</param>
     /// <param name="destination">Destination texture.</param>
-    /// <param name="dstX">Destination region X.</param>
-    /// <param name="dstY">Destination region Y.</param>
-    /// <param name="dstZ">Destination region Z.</param>
+    /// <param name="dstX">Destination X.</param>
+    /// <param name="dstY">Destination Y.</param>
+    /// <param name="dstZ">Destination Z.</param>
     /// <param name="dstMipLevel">Destination mip level.</param>
-    /// <param name="dstBaseArrayLayer">First destination array layer.</param>
-    /// <param name="width">Region width in texels.</param>
-    /// <param name="height">Region height in texels.</param>
-    /// <param name="depth">Region depth in texels.</param>
-    /// <param name="layerCount">Array layers to copy.</param>
+    /// <param name="dstBaseArrayLayer">First destination layer.</param>
+    /// <param name="width">Region width, texels.</param>
+    /// <param name="height">Region height, texels.</param>
+    /// <param name="depth">Region depth, texels.</param>
+    /// <param name="layerCount">Layers to copy.</param>
     private protected abstract void CopyTextureCore(
         Texture source,
         uint srcX, uint srcY, uint srcZ,
@@ -735,10 +707,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         uint width, uint height, uint depth,
         uint layerCount);
 
-    /// <summary>
-    /// Generates mipmaps from the top level, overwriting lower levels. Texture needs the GenerateMipmaps usage flag.
-    /// </summary>
-    /// <param name="texture">Texture to generate mipmaps for. Needs the GenerateMipmaps usage flag.</param>
+    /// <summary>Generates mipmaps from top level, overwrites lower levels. Needs GenerateMipmaps usage flag.</summary>
+    /// <param name="texture">Texture to mipmap. Needs GenerateMipmaps usage flag.</param>
     public void GenerateMipmaps(Texture texture)
     {
         if ((texture.Usage & TextureUsage.GenerateMipmaps) == 0)
@@ -755,11 +725,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void GenerateMipmapsCore(Texture texture);
 
-    /// <summary>
-    /// Pushes a debug group, for grouping/filtering commands in debug tools. Can nest. Every push needs a
-    /// matching pop.
-    /// </summary>
-    /// <param name="name">Group name, shown in debug tools.</param>
+    /// <summary>Pushes a debug group for grouping commands in debug tools. Nestable. Every push needs a pop.</summary>
+    /// <param name="name">Group name shown in debug tools.</param>
     public void PushDebugGroup(string name)
     {
         PushDebugGroupCore(name);
@@ -767,7 +734,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void PushDebugGroupCore(string name);
 
-    /// <summary>Pops the current debug group. Only call after a matching push.</summary>
+    /// <summary>Pops current debug group. Only after a matching push.</summary>
     public void PopDebugGroup()
     {
         PopDebugGroupCore();
@@ -775,8 +742,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void PopDebugGroupCore();
 
-    /// <summary>Inserts a debug marker at the current position, for spotting points of interest in debug tools.</summary>
-    /// <param name="name">Marker name, shown in debug tools.</param>
+    /// <summary>Inserts a debug marker for spotting points of interest in debug tools.</summary>
+    /// <param name="name">Marker name shown in debug tools.</param>
     public void InsertDebugMarker(string name)
     {
         InsertDebugMarkerCore(name);
@@ -784,10 +751,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
 
     private protected abstract void InsertDebugMarkerCore(string name);
 
-    /// <summary>Name for identifying this instance in debug tools.</summary>
+    /// <summary>Name shown in debug tools.</summary>
     public abstract string Name { get; set; }
 
-    /// <summary>Whether this instance has been disposed.</summary>
+    /// <summary>True if disposed.</summary>
     public abstract bool IsDisposed { get; }
 
     /// <summary>Frees unmanaged resources.</summary>

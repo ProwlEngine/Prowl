@@ -11,7 +11,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// A static parser for shaderdef markdown files, producing the core data types.
+/// Parses shaderdef markdown files into the core data types.
 /// </summary>
 public static class ShaderParser
 {
@@ -102,7 +102,7 @@ public static class ShaderParser
 
 
     /// <summary>
-    /// Parses a full .shaderdef markdown file.
+    /// Parses a full .shaderdef file.
     /// </summary>
     public static ShaderDefinition Parse(string source)
     {
@@ -460,7 +460,7 @@ public static class ShaderParser
 
 
     /// <summary>
-    /// Parses a pass state as an unordered list of blend, depth, stencil, and raster commands.
+    /// Parses pass state: unordered blend, depth, stencil, raster commands.
     /// </summary>
     public static PassState ParsePassState(string source)
     {
@@ -537,7 +537,7 @@ public static class ShaderParser
 
 
     /// <summary>
-    /// Parses a single property: Name("Display Name", Type) = Value
+    /// Parses one property: Name("Display Name", Type) = Value
     /// </summary>
     public static ShaderProperty ParseProperty(string source)
     {

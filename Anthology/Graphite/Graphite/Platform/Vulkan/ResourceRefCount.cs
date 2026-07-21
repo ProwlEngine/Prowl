@@ -9,8 +9,7 @@ internal partial class ResourceRefCount
     private int _refCount;
 
     /// <summary>
-    /// Id of the command-buffer recording that last retained this resource in its staging set. Lets the
-    /// recorder retain each distinct resource once per recording instead of re-adding it on every draw.
+    /// Id of the last recording that staged this resource. Lets the recorder retain it once per recording, not per draw.
     /// </summary>
     public ulong StagingMark;
 

@@ -2,44 +2,43 @@ using System;
 
 namespace Prowl.Graphite.RenderGraph;
 
-/// <summary>How a graph resource's pixel size is decided at execution time.</summary>
+/// <summary>How a graph resource's pixel size gets decided at execution time.</summary>
 public enum TextureSizeMode
 {
-    /// <summary>Sized as a fraction of the view's pixel size.</summary>
+    /// <summary>Fraction of the view's pixel size.</summary>
     ViewRelative,
 
-    /// <summary>Fixed width x height in pixels.</summary>
+    /// <summary>Fixed width x height.</summary>
     Explicit
 }
 
 /// <summary>
-/// Describes a texture a pass reads or writes. Passes sharing the same resource ID share one physical
-/// target; first declaration's description wins, so a writer should own it.
+/// A texture a pass reads or writes. Same resource ID shares one physical target; first declaration wins, writer should own it.
 /// </summary>
 public struct GraphTextureDesc
 {
-    /// <summary>How pixel size is decided at execution time.</summary>
+    /// <summary>How size gets decided at execution.</summary>
     public TextureSizeMode SizeMode;
 
-    /// <summary>Fraction of view's pixel size, used when SizeMode is view-relative.</summary>
+    /// <summary>Scale of view size, used when view-relative.</summary>
     public float Scale;
 
-    /// <summary>Fixed width in pixels, used when SizeMode is explicit.</summary>
+    /// <summary>Fixed width, used when explicit.</summary>
     public int Width;
 
-    /// <summary>Fixed height in pixels, used when SizeMode is explicit.</summary>
+    /// <summary>Fixed height, used when explicit.</summary>
     public int Height;
 
-    /// <summary>Color attachment formats, one per render target.</summary>
+    /// <summary>Color formats, one per target.</summary>
     public PixelFormat[] ColorFormats;
 
-    /// <summary>Whether the resource has a depth attachment.</summary>
+    /// <summary>Has a depth attachment.</summary>
     public bool EnableDepth;
 
     private static PixelFormat[] DefaultFormats(PixelFormat[] formats)
         => formats is { Length: > 0 } ? formats : new[] { PixelFormat.R8_G8_B8_A8_UNorm };
 
-    /// <summary>A resource sized as a scale of the view's pixel size.</summary>
+    /// <summary>Resource sized as a scale of the view.</summary>
     public static GraphTextureDesc ViewSized(bool depth = true, float scale = 1f, params PixelFormat[] formats) => new()
     {
         SizeMode = TextureSizeMode.ViewRelative,
@@ -48,7 +47,7 @@ public struct GraphTextureDesc
         EnableDepth = depth
     };
 
-    /// <summary>A resource with fixed pixel size, independent of the view.</summary>
+    /// <summary>Resource with fixed pixel size, view-independent.</summary>
     public static GraphTextureDesc Sized(int width, int height, bool depth = true, params PixelFormat[] formats) => new()
     {
         SizeMode = TextureSizeMode.Explicit,
@@ -59,7 +58,7 @@ public struct GraphTextureDesc
         EnableDepth = depth
     };
 
-    /// <summary>Resolves concrete pixel size for a view of the given size.</summary>
+    /// <summary>Resolves concrete pixel size for a view.</summary>
     public readonly (int width, int height) Resolve(uint viewWidth, uint viewHeight)
     {
         if (SizeMode == TextureSizeMode.Explicit)

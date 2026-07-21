@@ -8,7 +8,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The HLSL compiler module.
+/// HLSL compiler module.
 /// </summary>
 public class DXCompiler : CompilerModule
 {
@@ -22,7 +22,7 @@ public class DXCompiler : CompilerModule
 
 
     /// <summary>
-    /// Creates a new instance of <see cref="DXCompiler"/>
+    /// Makes a new DXCompiler.
     /// </summary>
     public DXCompiler(string profileString = "sm_5_0")
     {

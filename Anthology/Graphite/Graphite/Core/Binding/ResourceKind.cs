@@ -1,46 +1,39 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// The kind of a <see cref="BindableResource"/> object.
+/// Kind of a bindable resource.
 /// </summary>
 public enum ResourceKind : byte
 {
     /// <summary>
-    /// A <see cref="DeviceBuffer"/> accessed as a uniform buffer. A subset of a buffer can be bound using a
-    /// <see cref="DeviceBufferRange"/>.
+    /// Buffer bound as a uniform buffer. Can bind a subset via a buffer range.
     /// </summary>
     UniformBuffer,
 
     /// <summary>
-    /// A <see cref="DeviceBuffer"/> accessed as a read-only storage buffer. A subset of a buffer can be bound using a
-    /// <see cref="DeviceBufferRange"/>.
+    /// Buffer bound as a read-only storage buffer. Can bind a subset via a buffer range.
     /// </summary>
     StructuredBufferReadOnly,
 
     /// <summary>
-    /// A <see cref="DeviceBuffer"/> accessed as a read-write storage buffer. A subset of a buffer can be bound using a
-    /// <see cref="DeviceBufferRange"/>.
+    /// Buffer bound as a read-write storage buffer. Can bind a subset via a buffer range.
     /// </summary>
     StructuredBufferReadWrite,
 
     /// <summary>
-    /// A read-only <see cref="Texture"/>, accessed through a Texture or <see cref="TextureView"/>.
-    /// <remarks>Binding a <see cref="Texture"/> to a resource slot expecting a TextureReadWrite is equivalent to binding a
-    /// <see cref="TextureView"/> that covers the full mip and array layer range, with the original Texture's
-    /// <see cref="PixelFormat"/>.</remarks>
+    /// Read-only texture, via a Texture or TextureView.
+    /// <remarks>Binding a Texture to a ReadWrite slot is same as binding a full-range TextureView in the same format.</remarks>
     /// </summary>
     TextureReadOnly,
 
     /// <summary>
-    /// A read-write <see cref="Texture"/>, accessed through a Texture or <see cref="TextureView"/>.
+    /// Read-write texture, via a Texture or TextureView.
     /// </summary>
-    /// <remarks>Binding a <see cref="Texture"/> to a resource slot expecting a TextureReadWrite is equivalent to binding a
-    /// <see cref="TextureView"/> that covers the full mip and array layer range, with the original Texture's
-    /// <see cref="PixelFormat"/>.</remarks>
+    /// <remarks>Binding a Texture to a ReadWrite slot is same as binding a full-range TextureView in the same format.</remarks>
     TextureReadWrite,
 
     /// <summary>
-    /// A <see cref="Graphite.Sampler"/>.
+    /// A sampler.
     /// </summary>
     Sampler,
 }

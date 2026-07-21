@@ -3,36 +3,30 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes the layout of vertex data in a single <see cref="DeviceBuffer"/> used as a vertex buffer.
+/// Layout of vertex data in a vertex buffer.
 /// </summary>
 public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
 {
     /// <summary>
-    /// The shader attribute index assigned to the first element of this layout. Subsequent
-    /// elements are assigned <c>Location + 1</c>, <c>Location + 2</c>, ... — on Vulkan
-    /// this is the <c>VkVertexInputAttributeDescription.location</c>. This does <b>not</b> identify the vertex buffer
-    /// binding slot; the slot is determined by the layout's index in
-    /// <see cref="GraphicsProgram.VertexLayouts"/>, which is what
-    /// <see cref="IVertexSource.ResolveSlot"/>'s <c>layoutSlot</c>
-    /// parameter receives.
+    /// Shader attribute index of the first element; rest increment by 1 (Vulkan location). Not the buffer binding
+    /// slot - that's the layout's index in VertexLayouts, passed as layoutSlot to ResolveSlot.
     /// </summary>
     public uint Location;
     /// <summary>
-    /// The number of bytes in between successive elements in the <see cref="DeviceBuffer"/>.
+    /// Bytes between successive elements in the buffer.
     /// </summary>
     public uint Stride;
     /// <summary>
-    /// An array of <see cref="VertexElementDescription"/> objects, each describing a single element of vertex data.
+    /// One entry per vertex element.
     /// </summary>
     public VertexElementDescription[] Elements;
     /// <summary>
-    /// A value controlling how often data for instances is advanced for this layout. For per-vertex elements, this value
-    /// should be 0.
+    /// Instance advance rate. 0 for per-vertex elements.
     /// </summary>
     public uint InstanceStepRate;
 
     /// <summary>
-    /// Constructs a new VertexLayoutDescription.
+    /// Makes a VertexLayoutDescription.
     /// </summary>
     public VertexLayoutDescription(uint location, uint stride, params VertexElementDescription[] elements)
     {
@@ -43,7 +37,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     }
 
     /// <summary>
-    /// Constructs a new VertexLayoutDescription.
+    /// Makes a VertexLayoutDescription.
     /// </summary>
     public VertexLayoutDescription(uint location, uint stride, uint instanceStepRate, params VertexElementDescription[] elements)
     {
@@ -54,7 +48,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     }
 
     /// <summary>
-    /// Constructs a new VertexLayoutDescription. The stride is assumed to be the sum of the size of all elements.
+    /// Makes a VertexLayoutDescription. Stride is computed as the sum of element sizes.
     /// </summary>
     public VertexLayoutDescription(uint location, params VertexElementDescription[] elements)
     {
@@ -90,7 +84,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
     public override readonly int GetHashCode()
     {

@@ -3,38 +3,37 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a <see cref="ComputeProgram"/>, for creation using a <see cref="ResourceFactory"/>.
+/// Describes a compute program, for creation via ResourceFactory.
 /// </summary>
 public struct ComputeDescription : IEquatable<ComputeDescription>
 {
     /// <summary>
-    /// The compute stage description. <see cref="ShaderStageDescription.Stage"/> must be
-    /// <see cref="ShaderStages.Compute"/>.
+    /// Compute stage description. Stage must be Compute.
     /// </summary>
     public ShaderStageDescription Stage;
 
     /// <summary>
-    /// The resource layouts declared by this compute program.
+    /// Resource layouts this program declares.
     /// </summary>
     public ResourceLayoutDescription[] ResourceLayouts;
 
     /// <summary>
-    /// The X dimension of the thread group size.
+    /// Thread group size, X.
     /// </summary>
     public uint ThreadGroupSizeX;
 
     /// <summary>
-    /// The Y dimension of the thread group size.
+    /// Thread group size, Y.
     /// </summary>
     public uint ThreadGroupSizeY;
 
     /// <summary>
-    /// The Z dimension of the thread group size.
+    /// Thread group size, Z.
     /// </summary>
     public uint ThreadGroupSizeZ;
 
     /// <summary>
-    /// Constructs a new <see cref="ComputeDescription"/>.
+    /// Constructs a new instance.
     /// </summary>
     public ComputeDescription(
         ShaderStageDescription stage,
@@ -51,7 +50,7 @@ public struct ComputeDescription : IEquatable<ComputeDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
     public bool Equals(ComputeDescription other)
     {
@@ -63,7 +62,7 @@ public struct ComputeDescription : IEquatable<ComputeDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code.
     /// </summary>
     public override readonly int GetHashCode()
     {

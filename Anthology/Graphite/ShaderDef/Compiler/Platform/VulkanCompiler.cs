@@ -12,7 +12,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The SPIR-V compiler module for all Vulkan backends.
+/// SPIR-V compiler for Vulkan backends.
 /// </summary>
 public class VulkanCompiler : CompilerModule
 {
@@ -26,7 +26,7 @@ public class VulkanCompiler : CompilerModule
 
 
     /// <summary>
-    /// Creates a new instance of <see cref="VulkanCompiler"/>.
+    /// Creates a VulkanCompiler.
     /// </summary>
     public VulkanCompiler(string profileString = "spirv_1_5")
     {

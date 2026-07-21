@@ -6,12 +6,11 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Pool of render-texture bundles, keyed by desc, reclaimed when the owning execution's fence signals.
 /// <para>
-/// Textures survive across executions. When the owning execution finishes on GPU, the bundle goes
-/// back to its free-list instead of being destroyed, so a later rent with the same desc reuses it.
-/// Reclaim is lazy, happens on next rent, no dedicated thread.
+/// Textures survive across executions. Finished bundles go back to the free-list instead of being
+/// destroyed. Reclaim is lazy, on next rent, no dedicated thread.
 /// </para>
 /// <para>
-/// One lock guards the free-list. Concurrent Rent calls never get the same bundle.
+/// One lock guards the free-list. Concurrent rents never get the same bundle.
 /// </para>
 /// </summary>
 internal sealed class TransientTexturePool : IDisposable
@@ -28,7 +27,7 @@ internal sealed class TransientTexturePool : IDisposable
     }
 
     /// <summary>
-    /// Rents a bundle matching desc. Returns to the free-list once executionId completes.
+    /// Rents a bundle matching desc. Goes back to the free-list once executionId completes.
     /// </summary>
     public PooledBundle Rent(in RenderTextureDescription desc, ulong executionId)
     {
@@ -103,14 +102,14 @@ internal sealed class TransientTexturePool : IDisposable
     }
 
     /// <summary>
-    /// A pooled RenderTexture plus the execution that currently owns it.
+    /// A pooled RenderTexture and the execution that owns it.
     /// </summary>
     internal sealed class PooledBundle
     {
         public RenderTexture Texture { get; }
         public RenderTextureDescription Desc => Texture.Desc;
 
-        /// <summary>Execution that owns this bundle. 0 means free.</summary>
+        /// <summary>Owning execution. 0 means free.</summary>
         public ulong RentedExecutionId;
 
         public PooledBundle(RenderTexture texture)

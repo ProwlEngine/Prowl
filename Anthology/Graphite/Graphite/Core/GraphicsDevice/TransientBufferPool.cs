@@ -3,15 +3,13 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Pool of device buffers, keyed by description, reclaimed when the owning execution's fence signals.
+/// Pool of device buffers keyed by description, reclaimed when the owning execution's fence signals.
 /// <para>
-/// Buffers survive across executions. When the owning execution finishes on GPU, the buffer goes back to
-/// its free-list instead of being destroyed, so a later rent with the same description reuses it. Reclaim
-/// is lazy, happening on the next rent, with no dedicated thread.
+/// Buffers survive across executions. Once the GPU finishes, the buffer goes back to the
+/// free-list instead of being destroyed, so a later rent reuses it. Reclaim is lazy, on next rent,
+/// no dedicated thread.
 /// </para>
-/// <para>
-/// One lock guards the free-list, so concurrent Rent calls never get the same buffer.
-/// </para>
+/// <para>One lock guards the free-list, so concurrent rents never collide.</para>
 /// </summary>
 internal sealed class TransientBufferPool : System.IDisposable
 {
@@ -26,7 +24,7 @@ internal sealed class TransientBufferPool : System.IDisposable
         _device = device;
     }
 
-    /// <summary>Rents a buffer matching desc. Returns to the free-list once executionId completes.</summary>
+    /// <summary>Rents a buffer matching desc. Goes back to free-list once executionId completes.</summary>
     public DeviceBuffer Rent(in BufferDescription desc, ulong executionId)
     {
         if (desc.SizeInBytes == 0)

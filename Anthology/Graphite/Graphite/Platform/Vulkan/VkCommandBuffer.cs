@@ -25,8 +25,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private bool _destroyed;
 
     /// <summary>
-    /// True when this instance is not mid-recording and can be reset and handed out again. A buffer left
-    /// begun-but-not-ended cannot be recycled (its next Begin would throw) and must be disposed instead.
+    /// True if not mid-recording, so it can be reset and reused. Begun-but-not-ended cannot recycle, must dispose instead.
     /// </summary>
     internal bool CanRecycle => !_commandBufferBegun && !_destroyed;
 

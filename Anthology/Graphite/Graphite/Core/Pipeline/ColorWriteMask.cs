@@ -2,39 +2,25 @@ using System;
 
 namespace Prowl.Graphite;
 
-/// <summary>
-/// A color bitmask representing the components which can be written to.
-/// </summary>
+/// <summary>Bitmask of writable color components.</summary>
 [Flags]
 public enum ColorWriteMask
 {
-    /// <summary>
-    /// No color component will be written to.
-    /// </summary>
+    /// <summary>Write nothing.</summary>
     None,
 
-    /// <summary>
-    /// The red component will be written to.
-    /// </summary>
+    /// <summary>Write red.</summary>
     Red = 1 << 0,
 
-    /// <summary>
-    /// The green component will be written to.
-    /// </summary>
+    /// <summary>Write green.</summary>
     Green = 1 << 1,
 
-    /// <summary>
-    /// The blue component will be written to.
-    /// </summary>
+    /// <summary>Write blue.</summary>
     Blue = 1 << 2,
 
-    /// <summary>
-    /// The alpha component will be written to.
-    /// </summary>
+    /// <summary>Write alpha.</summary>
     Alpha = 1 << 3,
 
-    /// <summary>
-    /// All color components will be written to.
-    /// </summary>
+    /// <summary>Write everything.</summary>
     All = Red | Green | Blue | Alpha,
 }

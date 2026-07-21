@@ -3,15 +3,14 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Builds and tears down the descriptor-set-layout + pipeline-layout state shared by
-/// <see cref="VkGraphicsProgram"/> and <see cref="VkComputeProgram"/>. They derive from different
-/// core bases, so this is shared by composition rather than inheritance.
+/// Shared descriptor-set-layout and pipeline-layout builder for graphics and compute programs.
+/// Composition not inheritance since they derive from different bases.
 /// </summary>
 internal static unsafe partial class VkDescriptorLayoutBuilder
 {
     /// <summary>
-    /// Creates one descriptor-set layout per declared set (empty layouts fill gaps), the owning
-    /// pipeline layout, and the per-set resource counts for the supplied resource layouts.
+    /// Builds one descriptor-set layout per declared set (gaps filled with empty layouts), the
+    /// pipeline layout, and per-set resource counts.
     /// </summary>
     public static (
         DescriptorSetLayout[] DescriptorSetLayouts,
@@ -59,8 +58,8 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
     }
 
     /// <summary>
-    /// Destroys the pipeline layout and every descriptor-set layout built by <see cref="Build"/>,
-    /// including the shared empty layout. The caller owns disposal of pipelines and shader modules.
+    /// Destroys the pipeline layout and all descriptor-set layouts from Build, including the empty
+    /// one. Caller still owns disposing pipelines and shader modules.
     /// </summary>
     public static void Destroy(
         VkGraphicsDevice gd,
@@ -129,9 +128,8 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
     }
 
     /// <summary>
-    /// Vulkan descriptor type for a <see cref="ResourceKind"/>. Uniform buffers are always dynamic;
-    /// textures use separate image/sampler descriptors unless flagged
-    /// <see cref="ResourceLayoutElementOptions.CombinedImageSampler"/>, which binds as one combined descriptor.
+    /// Maps a resource kind to its Vulkan descriptor type. Uniform buffers are always dynamic;
+    /// textures are separate image/sampler unless CombinedImageSampler is flagged.
     /// </summary>
     private static DescriptorType GetDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options) => kind switch
     {

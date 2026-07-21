@@ -1,86 +1,73 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// A structure describing several common properties of a GraphicsDevice.
+/// Common GraphicsDevice config.
 /// </summary>
 public struct GraphicsDeviceOptions
 {
     /// <summary>
-    /// Indicates whether the GraphicsDevice will support debug features, provided they are supported by the host system.
+    /// Enable debug features if the host supports them.
     /// </summary>
     public bool Debug;
     /// <summary>
-    /// Indicates whether the Graphicsdevice will include a "main" Swapchain. If this value is true, then the GraphicsDevice
-    /// must be created with one of the overloads that provides Swapchain source information.
+    /// True = device gets a main Swapchain. Then must use a ctor overload that gives swapchain source info.
     /// </summary>
     public bool HasMainSwapchain;
     /// <summary>
-    /// An optional <see cref="PixelFormat"/> to be used for the depth buffer of the swapchain. If this value is null, then
-    /// no depth buffer will be present on the swapchain.
+    /// Depth buffer format for the swapchain. Null = no depth buffer.
     /// </summary>
     public PixelFormat? SwapchainDepthFormat;
     /// <summary>
-    /// Indicates whether the main Swapchain will be synchronized to the window system's vertical refresh rate.
+    /// Sync main Swapchain to vblank.
     /// </summary>
     public bool SyncToVerticalBlank;
     /// <summary>
-    /// Indicates whether a 0-to-1 depth range mapping is preferred.
+    /// Prefer 0-to-1 depth range.
     /// </summary>
     public bool PreferDepthRangeZeroToOne;
     /// <summary>
-    /// Indicates whether a bottom-to-top-increasing clip space Y direction is preferred. For Vulkan, this is not the
-    /// default, and may not be available on all systems.
+    /// Prefer bottom-to-top clip space Y. Not default on Vulkan, not always available.
     /// </summary>
     public bool PreferStandardClipSpaceYDirection;
     /// <summary>
-    /// Indicates whether the main Swapchain should use an sRGB format. This value is only used in cases where the properties
-    /// of the main SwapChain are not explicitly specified with a <see cref="SwapchainDescription"/>. If they are, then the
-    /// value of <see cref="SwapchainDescription.ColorSrgb"/> will supercede the value specified here.
+    /// Use sRGB for main Swapchain. Only applies when swapchain isn't explicitly described elsewhere; an explicit ColorSrgb wins.
     /// </summary>
     public bool SwapchainSrgbFormat;
 
     /// <summary>
-    /// The maximum number of frames that may be simultaneously in flight on the GPU.
-    /// Must be greater than zero; if 0, a default of 3 is used at device creation.
+    /// Max frames in flight on GPU. Must be > 0; 0 means default 3.
     /// </summary>
     public uint MaxFramesInFlight;
 
     /// <summary>
-    /// The initial size in bytes of each per-slot transient bump-allocator buffer.
-    /// If 0, the device defaults to 4 MB.
+    /// Initial size in bytes of each per-slot transient bump-allocator buffer. 0 = default 4 MB.
     /// </summary>
     public uint TransientBufferInitialSize;
 
     /// <summary>
-    /// A soft cap in bytes for the total transient memory allocated in a single frame.
-    /// Exceeding this limit logs a one-shot warning per device. If 0, the device defaults to 64 MB.
+    /// Soft cap in bytes for total transient memory per frame. Over this logs a one-shot warning. 0 = default 64 MB.
     /// </summary>
     public uint TransientBufferSoftCapBytes;
 
     /// <summary>
-    /// A hard cap in bytes for the total transient memory allocated in a single frame.
-    /// Exceeding this limit throws a <see cref="RenderException"/>. If 0, the device defaults to 256 MB.
+    /// Hard cap in bytes for total transient memory per frame. Over this throws. 0 = default 256 MB.
     /// </summary>
     public uint TransientBufferHardCapBytes;
 
     /// <summary>
-    /// Indicates whether the GraphicsDevice runs its usage-validation layer, which performs extra
-    /// correctness checks on API calls and throws a <see cref="RenderException"/> on misuse.
-    /// If null, the device defaults to enabled.
+    /// Run the usage-validation layer (extra correctness checks, throws on misuse). Null = enabled by default.
     /// </summary>
     public bool? EnableValidation;
 
     /// <summary>
-    /// The profiler this device reports events to, or null for no profiling. Graphite does not
-    /// ship a default implementation - supply your own <see cref="IProfiler"/> to observe events.
+    /// Profiler to report events to, or null for none. No default impl shipped - bring your own.
     /// </summary>
     public IProfiler? Profiler;
 
     /// <summary>
-    /// Constructs a new GraphicsDeviceOptions for a device with no main Swapchain.
+    /// Options for a device with no main Swapchain.
     /// </summary>
-    /// <param name="debug">Indicates whether the GraphicsDevice will support debug features, provided they are supported by
-    /// the host system.</param>
+    /// <param name="debug">Enable debug features if host supports them.</param>
     public GraphicsDeviceOptions(bool debug)
     {
         Debug = debug;
@@ -93,14 +80,11 @@ public struct GraphicsDeviceOptions
     }
 
     /// <summary>
-    /// Constructs a new GraphicsDeviceOptions for a device with a main Swapchain.
+    /// Options for a device with a main Swapchain.
     /// </summary>
-    /// <param name="debug">Indicates whether the GraphicsDevice will enable debug features, provided they are supported by
-    /// the host system.</param>
-    /// <param name="swapchainDepthFormat">An optional <see cref="PixelFormat"/> to be used for the depth buffer of the
-    /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
-    /// vertical refresh rate.</param>
+    /// <param name="debug">Enable debug features if host supports them.</param>
+    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
+    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
     public GraphicsDeviceOptions(bool debug, PixelFormat? swapchainDepthFormat, bool syncToVerticalBlank)
     {
         Debug = debug;
@@ -113,15 +97,12 @@ public struct GraphicsDeviceOptions
     }
 
     /// <summary>
-    /// Constructs a new GraphicsDeviceOptions for a device with a main Swapchain.
+    /// Options for a device with a main Swapchain.
     /// </summary>
-    /// <param name="debug">Indicates whether the GraphicsDevice will enable debug features, provided they are supported by
-    /// the host system.</param>
-    /// <param name="swapchainDepthFormat">An optional <see cref="PixelFormat"/> to be used for the depth buffer of the
-    /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
-    /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
+    /// <param name="debug">Enable debug features if host supports them.</param>
+    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
+    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
+    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
     public GraphicsDeviceOptions(
         bool debug,
         PixelFormat? swapchainDepthFormat,
@@ -138,17 +119,14 @@ public struct GraphicsDeviceOptions
     }
 
     /// <summary>
-    /// Constructs a new GraphicsDeviceOptions for a device with a main Swapchain.
+    /// Options for a device with a main Swapchain.
     /// </summary>
-    /// <param name="debug">Indicates whether the GraphicsDevice will enable debug features, provided they are supported by
-    /// the host system.</param>
-    /// <param name="swapchainDepthFormat">An optional <see cref="PixelFormat"/> to be used for the depth buffer of the
-    /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
-    /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
-    /// <param name="preferStandardClipSpaceYDirection">Indicates whether a bottom-to-top-increasing clip space Y direction
-    /// is preferred. For Vulkan, this is not the default, and is not available on all systems.</param>
+    /// <param name="debug">Enable debug features if host supports them.</param>
+    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
+    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
+    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
+    /// <param name="preferStandardClipSpaceYDirection">Prefer bottom-to-top clip space Y. Not default on Vulkan, not always
+    /// available.</param>
     public GraphicsDeviceOptions(
         bool debug,
         PixelFormat? swapchainDepthFormat,
@@ -166,21 +144,16 @@ public struct GraphicsDeviceOptions
     }
 
     /// <summary>
-    /// Constructs a new GraphicsDeviceOptions for a device with a main Swapchain.
+    /// Options for a device with a main Swapchain.
     /// </summary>
-    /// <param name="debug">Indicates whether the GraphicsDevice will enable debug features, provided they are supported by
-    /// the host system.</param>
-    /// <param name="swapchainDepthFormat">An optional <see cref="PixelFormat"/> to be used for the depth buffer of the
-    /// swapchain. If this value is null, then no depth buffer will be present on the swapchain.</param>
-    /// <param name="syncToVerticalBlank">Indicates whether the main Swapchain will be synchronized to the window system's
-    /// vertical refresh rate.</param>
-    /// <param name="preferDepthRangeZeroToOne">Indicates whether a 0-to-1 depth range mapping is preferred.</param>
-    /// <param name="preferStandardClipSpaceYDirection">Indicates whether a bottom-to-top-increasing clip space Y direction
-    /// is preferred. For Vulkan, this is not the default, and is not available on all systems.</param>
-    /// <param name="swapchainSrgbFormat">Indicates whether the main Swapchain should use an sRGB format. This value is only
-    /// used in cases where the properties of the main SwapChain are not explicitly specified with a
-    /// <see cref="SwapchainDescription"/>. If they are, then the value of <see cref="SwapchainDescription.ColorSrgb"/> will
-    /// supercede the value specified here.</param>
+    /// <param name="debug">Enable debug features if host supports them.</param>
+    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
+    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
+    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
+    /// <param name="preferStandardClipSpaceYDirection">Prefer bottom-to-top clip space Y. Not default on Vulkan, not always
+    /// available.</param>
+    /// <param name="swapchainSrgbFormat">Use sRGB for main Swapchain. Only applies when swapchain isn't explicitly described
+    /// elsewhere; an explicit ColorSrgb wins.</param>
     public GraphicsDeviceOptions(
         bool debug,
         PixelFormat? swapchainDepthFormat,

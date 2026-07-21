@@ -13,7 +13,7 @@ internal partial class VkDescriptorPoolManager
     private readonly object _lock = new();
     private readonly bool _freeDescriptorSets;
 
-    /// <summary>Creates a pool manager for long-lived descriptor sets (supports per-set free).</summary>
+    /// <summary>Pool manager for long-lived descriptor sets, supports per-set free.</summary>
     public VkDescriptorPoolManager(VkGraphicsDevice gd)
     {
         _gd = gd;
@@ -21,7 +21,7 @@ internal partial class VkDescriptorPoolManager
         _pools.Add(CreateNewPool());
     }
 
-    /// <summary>Creates a per-frame pool manager whose sets are reclaimed wholesale by <see cref="ResetAll"/>.</summary>
+    /// <summary>Per-frame pool manager, sets reclaimed wholesale by ResetAll.</summary>
     public VkDescriptorPoolManager(VkGraphicsDevice gd, bool freeDescriptorSets)
     {
         _gd = gd;
@@ -30,8 +30,7 @@ internal partial class VkDescriptorPoolManager
     }
 
     /// <summary>
-    /// Resets every <c>VkDescriptorPool</c> in this manager, invalidating all previously allocated sets.
-    /// Used at frame-begin time to reclaim all sets from the previous frame occupying this ring slot.
+    /// Resets all pools, invalidating all allocated sets. Call at frame-begin to reclaim last frame's ring slot.
     /// </summary>
     public void ResetAll()
     {

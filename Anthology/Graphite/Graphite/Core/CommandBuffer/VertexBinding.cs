@@ -3,29 +3,26 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// The resolved vertex buffer binding for a single layout slot returned from
-/// <see cref="IVertexSource.ResolveSlot"/>. The stride is owned by the bound
-/// <see cref="GraphicsProgram"/>'s <see cref="VertexLayoutDescription"/> and is not
-/// carried on this struct.
+/// Resolved vertex buffer binding for one layout slot, from ResolveSlot. Stride lives on the bound
+/// program's layout, not here.
 /// </summary>
 public readonly struct VertexBinding : IEquatable<VertexBinding>
 {
     /// <summary>
-    /// The <see cref="DeviceBuffer"/> to bind for the slot. Must be non-null and
-    /// must have been created with <see cref="BufferUsage.VertexBuffer"/>.
+    /// Buffer to bind. Must be non-null, created with VertexBuffer usage.
     /// </summary>
     public readonly DeviceBuffer Buffer;
 
     /// <summary>
-    /// The byte offset from the start of <see cref="Buffer"/> at which vertex data begins.
+    /// Byte offset into Buffer where vertex data starts.
     /// </summary>
     public readonly uint Offset;
 
     /// <summary>
-    /// Constructs a new <see cref="VertexBinding"/>.
+    /// Makes a VertexBinding.
     /// </summary>
-    /// <param name="buffer">The <see cref="DeviceBuffer"/> to bind for the slot.</param>
-    /// <param name="offset">The byte offset from the start of <paramref name="buffer"/>.</param>
+    /// <param name="buffer">Buffer to bind.</param>
+    /// <param name="offset">Byte offset into buffer.</param>
     public VertexBinding(DeviceBuffer buffer, uint offset = 0)
     {
         Buffer = buffer;
@@ -44,9 +41,9 @@ public readonly struct VertexBinding : IEquatable<VertexBinding>
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Buffer, Offset);
 
-    /// <summary>Equality operator.</summary>
+    /// <summary>Equality op.</summary>
     public static bool operator ==(VertexBinding a, VertexBinding b) => a.Equals(b);
 
-    /// <summary>Inequality operator.</summary>
+    /// <summary>Inequality op.</summary>
     public static bool operator !=(VertexBinding a, VertexBinding b) => !a.Equals(b);
 }

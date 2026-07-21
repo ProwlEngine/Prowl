@@ -1,35 +1,35 @@
 namespace Prowl.Graphite.RenderGraph;
 
-/// <summary>What happens to an attachment's existing contents when a pass begins rendering to it.</summary>
+/// <summary>What to do with an attachment's contents when a pass starts rendering to it.</summary>
 public enum LoadAction
 {
-    /// <summary>Clear to a value supplied at record time.</summary>
+    /// <summary>Clear to a value given at record time.</summary>
     Clear,
 
-    /// <summary>Preserve the attachment's existing contents.</summary>
+    /// <summary>Keep existing contents.</summary>
     Load,
 
-    /// <summary>Contents are undefined; the pass fully overwrites them.</summary>
+    /// <summary>Undefined; pass overwrites everything.</summary>
     DontCare
 }
 
-/// <summary>What happens to an attachment's contents when a pass finishes rendering to it.</summary>
+/// <summary>What to do with an attachment's contents when a pass finishes rendering to it.</summary>
 public enum StoreAction
 {
-    /// <summary>Keep the rendered contents.</summary>
+    /// <summary>Keep rendered contents.</summary>
     Store,
 
-    /// <summary>Discard the contents; nothing later reads them.</summary>
+    /// <summary>Discard; nobody reads it later.</summary>
     DontCare
 }
 
-/// <summary>Load and store operations for one attachment.</summary>
+/// <summary>Load/store ops for one attachment.</summary>
 public struct AttachmentOps
 {
-    /// <summary>How existing contents are treated when rendering begins.</summary>
+    /// <summary>Load behavior.</summary>
     public LoadAction Load;
 
-    /// <summary>How rendered contents are treated when rendering ends.</summary>
+    /// <summary>Store behavior.</summary>
     public StoreAction Store;
 
     /// <summary>Load/store pair.</summary>
@@ -39,23 +39,23 @@ public struct AttachmentOps
         Store = store;
     }
 
-    /// <summary>Clear on load, store on end - the usual transient target.</summary>
+    /// <summary>Clear then store. Usual transient target.</summary>
     public static AttachmentOps Cleared => new(LoadAction.Clear, StoreAction.Store);
 
-    /// <summary>Load on begin, store on end - the usual persistent/history/imported target.</summary>
+    /// <summary>Load then store. Usual persistent/history/imported target.</summary>
     public static AttachmentOps Loaded => new(LoadAction.Load, StoreAction.Store);
 
-    /// <summary>Discard on both ends.</summary>
+    /// <summary>Discard both ends.</summary>
     public static AttachmentOps Discard => new(LoadAction.DontCare, StoreAction.DontCare);
 }
 
-/// <summary>Load/store operations for a render target's color attachments and its depth attachment.</summary>
+/// <summary>Load/store ops for a target's color and depth attachments.</summary>
 public struct TargetLoadStoreOps
 {
-    /// <summary>Operations applied to every color attachment.</summary>
+    /// <summary>Ops for every color attachment.</summary>
     public AttachmentOps Color;
 
-    /// <summary>Operations applied to the depth attachment, if any.</summary>
+    /// <summary>Ops for depth attachment, if any.</summary>
     public AttachmentOps Depth;
 
     /// <summary>Load/store pair for color and depth.</summary>
@@ -65,7 +65,7 @@ public struct TargetLoadStoreOps
         Depth = depth;
     }
 
-    /// <summary>The lifetime-driven default: transient targets clear, persistent targets load.</summary>
+    /// <summary>Default by lifetime: transient clears, persistent loads.</summary>
     public static TargetLoadStoreOps ForLifetime(bool persistent)
         => persistent
             ? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded)

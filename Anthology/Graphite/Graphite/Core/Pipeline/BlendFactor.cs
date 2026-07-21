@@ -1,56 +1,56 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Controls the influence of components in a blend operation.
+/// How components get weighted in a blend op.
 /// </summary>
 public enum BlendFactor : byte
 {
     /// <summary>
-    /// Each component is multiplied by 0.
+    /// Multiply by 0.
     /// </summary>
     Zero,
     /// <summary>
-    /// Each component is multiplied by 1.
+    /// Multiply by 1.
     /// </summary>
     One,
     /// <summary>
-    /// Each component is multiplied by the source alpha component.
+    /// Multiply by source alpha.
     /// </summary>
     SourceAlpha,
     /// <summary>
-    /// Each component is multiplied by (1 - source alpha).
+    /// Multiply by 1 - source alpha.
     /// </summary>
     InverseSourceAlpha,
     /// <summary>
-    /// Each component is multiplied by the destination alpha component.
+    /// Multiply by destination alpha.
     /// </summary>
     DestinationAlpha,
     /// <summary>
-    /// Each component is multiplied by (1 - destination alpha).
+    /// Multiply by 1 - destination alpha.
     /// </summary>
     InverseDestinationAlpha,
     /// <summary>
-    /// Each component is multiplied by the matching component of the source color.
+    /// Multiply by matching source color component.
     /// </summary>
     SourceColor,
     /// <summary>
-    /// Each component is multiplied by (1 - the matching component of the source color).
+    /// Multiply by 1 - matching source color component.
     /// </summary>
     InverseSourceColor,
     /// <summary>
-    /// Each component is multiplied by the matching component of the destination color.
+    /// Multiply by matching destination color component.
     /// </summary>
     DestinationColor,
     /// <summary>
-    /// Each component is multiplied by (1 - the matching component of the destination color).
+    /// Multiply by 1 - matching destination color component.
     /// </summary>
     InverseDestinationColor,
     /// <summary>
-    /// Each component is multiplied by the matching component in constant factor specified in <see cref="BlendStateDescription.BlendFactor"/>.
+    /// Multiply by matching component of the blend constant.
     /// </summary>
     BlendFactor,
     /// <summary>
-    /// Each component is multiplied by (1 - the matching component in constant factor specified in <see cref="BlendStateDescription.BlendFactor"/>).
+    /// Multiply by 1 - matching component of the blend constant.
     /// </summary>
     InverseBlendFactor,
 }

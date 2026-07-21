@@ -1,28 +1,28 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Determines how a sequence of vertices is interepreted by the rasterizer.
+/// How the rasterizer reads a vertex sequence.
 /// </summary>
 public enum PrimitiveTopology : byte
 {
     /// <summary>
-    /// A list of isolated, 3-element triangles.
+    /// Isolated triangles, 3 verts each.
     /// </summary>
     TriangleList,
     /// <summary>
-    /// A series of connected triangles.
+    /// Connected triangles.
     /// </summary>
     TriangleStrip,
     /// <summary>
-    /// A series of isolated, 2-element line segments.
+    /// Isolated line segments, 2 verts each.
     /// </summary>
     LineList,
     /// <summary>
-    /// A series of connected line segments.
+    /// Connected line segments.
     /// </summary>
     LineStrip,
     /// <summary>
-    /// A series of isolated points.
+    /// Isolated points.
     /// </summary>
     PointList,
 }

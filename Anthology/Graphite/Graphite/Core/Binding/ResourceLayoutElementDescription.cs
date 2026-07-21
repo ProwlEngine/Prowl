@@ -3,55 +3,48 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes an individual resource element in a <see cref="PropertySet"/>.
+/// One resource element in a PropertySet.
 /// </summary>
 public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElementDescription>
 {
     /// <summary>
-    /// The interned name of the element. Implicit conversion from <see cref="string"/> is supported.
+    /// Interned element name. Implicitly converts from string.
     /// </summary>
     public PropertyID Name;
 
     /// <summary>
-    /// The kind of resource.
+    /// Resource kind.
     /// </summary>
     public ResourceKind Kind;
 
     /// <summary>
-    /// The <see cref="ShaderStages"/> in which this element is used.
+    /// Shader stages this element is used in.
     /// </summary>
     public ShaderStages Stages;
 
     /// <summary>
-    /// The binding index for a resource.
-    /// Corresponds to Vulkan binding.
-    /// Corresponds to Metal index.
-    /// Corresponds to DX11/DX12 register slot within its kind.
+    /// Binding index. Vulkan binding, Metal index, or DX11/DX12 register slot within its kind.
     /// </summary>
     public int BindingIndex;
 
     /// <summary>
-    /// Miscellaneous resource options for this element. 
-    /// At the moment, this can be used to specify if a buffer should read from dynamic offsets.
+    /// Misc options. Currently just controls dynamic offset support.
     /// </summary>
     public ResourceLayoutElementOptions Options;
 
     /// <summary>
-    /// In-shader uniform name, historically resolved by the OpenGL backend. Unused by the currently
-    /// registered backends (Vulkan). Defaults to <see cref="Name"/>.
+    /// In-shader uniform name, for the old OpenGL backend. Unused on Vulkan. Defaults to Name.
     /// </summary>
     public string GLUniformName;
 
     /// <summary>
-    /// Fields of this uniform block, looked up by <see cref="UniformBlockField.Name"/> and bound by
-    /// offset/size. Order is insignificant. Empty unless <see cref="Kind"/> is
-    /// <see cref="ResourceKind.UniformBuffer"/>.
+    /// Uniform block fields, matched by name, bound by offset/size. Order doesn't matter. Empty unless Kind is UniformBuffer.
     /// </summary>
     public UniformBlockField[] UniformFields;
 
 
     /// <summary>
-    /// Constructs an element from name, kind, stages used in, and platform binding index.
+    /// Name, kind, stages, binding index.
     /// </summary>
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex)
     {
@@ -66,7 +59,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
 
     /// <summary>
-    /// Constructs an element from name, kind, stages used in, platform binding index, and additional dynamic binding options.
+    /// Name, kind, stages, binding index, plus options.
     /// </summary>
     public ResourceLayoutElementDescription(string name, ResourceKind kind, ShaderStages stages, int bindingIndex, ResourceLayoutElementOptions options)
     {
@@ -81,7 +74,7 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
 
     /// <summary>
-    /// Constructs a fully-specified element including the in-shader uniform name and per-field UBO metadata.
+    /// Full ctor: also sets GL uniform name and per-field UBO metadata.
     /// </summary>
     public ResourceLayoutElementDescription(
         PropertyID name,
@@ -131,31 +124,23 @@ public struct ResourceLayoutElementDescription : IEquatable<ResourceLayoutElemen
 
 
 /// <summary>
-/// Miscellaneous options for an element in a <see cref="PropertySet"/>.
+/// Misc options for a PropertySet element.
 /// </summary>
 [Flags]
 public enum ResourceLayoutElementOptions
 {
     /// <summary>
-    /// No special options.
+    /// Nothing special.
     /// </summary>
     None = 0,
 
     /// <summary>
-    /// Can be applied to a buffer type resource (<see cref="ResourceKind.StructuredBufferReadOnly"/>,
-    /// <see cref="ResourceKind.StructuredBufferReadWrite"/>, or <see cref="ResourceKind.UniformBuffer"/>), allowing it to be
-    /// bound with a dynamic offset via <see cref="PropertySet"/>.
-    /// Offsets specified this way must be a multiple of
-    /// <see cref="GraphicsDevice.UniformBufferMinOffsetAlignment"/> or
-    /// <see cref="GraphicsDevice.StructuredBufferMinOffsetAlignment"/>, depending on the kind of resource.
+    /// Lets a buffer resource (structured RO/RW or uniform) bind with a dynamic offset. Offset must be a multiple of the device's min offset alignment for that kind.
     /// </summary>
     DynamicBinding = 1 << 0,
 
     /// <summary>
-    /// Marks a <see cref="ResourceKind.TextureReadOnly"/> element that came from a combined
-    /// texture-sampler type (e.g. Slang's <c>Sampler2D&lt;&gt;</c>). On Vulkan it binds as a single
-    /// combined image-sampler descriptor, sourcing its sampler from the paired
-    /// <see cref="PropertySet.SetTexture(PropertyID,Texture,Sampler)"/> call.
+    /// Marks a read-only texture element from a combined texture-sampler type (e.g. Slang Sampler2D). Binds as one combined image-sampler on Vulkan, sampler comes from the paired SetTexture call.
     /// </summary>
     CombinedImageSampler = 1 << 1,
 }

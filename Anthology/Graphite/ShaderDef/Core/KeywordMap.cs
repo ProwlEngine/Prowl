@@ -75,10 +75,7 @@ internal sealed class KeywordMap
 
 
     /// <summary>
-    /// Returns the exact variant for <paramref name="state"/> if one was compiled, otherwise the
-    /// compiled variant that shares the most keyword slots with it. Always returns a valid index
-    /// (there is at least one variant), so a requested combination that was never compiled degrades
-    /// to the closest available variant instead of failing.
+    /// Exact match if compiled, else closest variant by shared keyword slots. Never fails, always returns a valid index.
     /// </summary>
     public int FindNearest(KeywordState state)
     {

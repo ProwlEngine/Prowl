@@ -3,36 +3,34 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A <see cref="BindableResource"/> that represents a section of a <see cref="DeviceBuffer"/>. This can be used in place of
-/// a <see cref="DeviceBuffer"/> when bound via a <see cref="PropertySet"/> to make only a subset of the Buffer available to
-/// shaders.
+/// A slice of a buffer. Bind it via PropertySet instead of the whole buffer to expose only part of it to shaders.
 /// </summary>
 public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange>
 {
     /// <summary>
-    /// The underlying <see cref="DeviceBuffer"/> that this range refers to.
+    /// Buffer this range points into.
     /// </summary>
     public DeviceBuffer Buffer;
     /// <summary>
-    /// The offset, in bytes, from the beginning of the buffer that this range starts at.
+    /// Byte offset from the start of the buffer.
     /// </summary>
     public uint Offset;
     /// <summary>
-    /// The total number of bytes that this range encompasses.
+    /// Size of the range in bytes.
     /// </summary>
     public uint SizeInBytes;
 
     /// <summary>
-    /// Whether or not this buffer range is a view into the entire buffer.
+    /// True if this range covers the whole buffer.
     /// </summary>
     public readonly bool IsFullRange => Offset == 0 && SizeInBytes == Buffer.SizeInBytes;
 
     /// <summary>
-    /// Constructs a new <see cref="DeviceBufferRange"/>.
+    /// New DeviceBufferRange.
     /// </summary>
-    /// <param name="buffer">The underlying <see cref="DeviceBuffer"/> that this range will refer to.</param>
-    /// <param name="offset">The offset, in bytes, from the beginning of the buffer that this range will start at.</param>
-    /// <param name="sizeInBytes">The total number of bytes that this range will encompass.</param>
+    /// <param name="buffer">Buffer to slice.</param>
+    /// <param name="offset">Byte offset into the buffer.</param>
+    /// <param name="sizeInBytes">Size of the range in bytes.</param>
     public DeviceBufferRange(DeviceBuffer buffer, uint offset, uint sizeInBytes)
     {
         Buffer = buffer;
@@ -43,17 +41,17 @@ public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if everything matches.</returns>
     public readonly bool Equals(DeviceBufferRange other)
     {
         return Buffer == other.Buffer && Offset.Equals(other.Offset) && SizeInBytes.Equals(other.SizeInBytes);
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
     {
         int bufferHash = Buffer?.GetHashCode() ?? 0;

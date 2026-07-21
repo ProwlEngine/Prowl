@@ -28,8 +28,7 @@ internal static class ValidationHelpers
     }
 
     /// <summary>
-    /// Returns the number of array layers a <see cref="Texture"/> occupies, accounting for the six faces
-    /// contributed by each layer of a <see cref="TextureUsage.Cubemap"/>.
+    /// Array layer count for a texture, x6 for cubemap faces.
     /// </summary>
     internal static uint GetEffectiveArrayLayers(Texture texture)
         => (texture.Usage & TextureUsage.Cubemap) != 0 ? texture.ArrayLayers * 6 : texture.ArrayLayers;

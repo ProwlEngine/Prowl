@@ -1,28 +1,24 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// A structure describing Vulkan-specific device creation options.
+/// Vulkan-specific device creation options.
 /// </summary>
 public struct VulkanDeviceOptions
 {
     /// <summary>
-    /// An array of required Vulkan instance extensions. Entries in this array will be enabled in the GraphicsDevice's
-    /// created VkInstance.
+    /// Required instance extensions, enabled on the created VkInstance.
     /// </summary>
     public string[] InstanceExtensions;
     /// <summary>
-    /// An array of required Vulkan device extensions. Entries in this array will be enabled in the GraphicsDevice's
-    /// created VkDevice.
+    /// Required device extensions, enabled on the created VkDevice.
     /// </summary>
     public string[] DeviceExtensions;
 
     /// <summary>
-    /// Constructs a new VulkanDeviceOptions.
+    /// Makes a VulkanDeviceOptions.
     /// </summary>
-    /// <param name="instanceExtensions">An array of required Vulkan instance extensions. Entries in this array will be
-    /// enabled in the GraphicsDevice's created VkInstance.</param>
-    /// <param name="deviceExtensions">An array of required Vulkan device extensions. Entries in this array will be enabled
-    /// in the GraphicsDevice's created VkDevice.</param>
+    /// <param name="instanceExtensions">Required instance extensions, enabled on the VkInstance.</param>
+    /// <param name="deviceExtensions">Required device extensions, enabled on the VkDevice.</param>
     public VulkanDeviceOptions(string[] instanceExtensions, string[] deviceExtensions)
     {
         InstanceExtensions = instanceExtensions;

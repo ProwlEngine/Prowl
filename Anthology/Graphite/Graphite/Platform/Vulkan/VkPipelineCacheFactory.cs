@@ -7,9 +7,7 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Builds a <see cref="VkPipelineCacheEntry"/> from a <see cref="VkGraphicsProgram"/> and a
-/// <see cref="VkPipelineCacheKey"/>. Builds a Vulkan graphics pipeline for the given program /
-/// framebuffer / topology key. Called lazily from the program's per-program cache at draw time.
+/// Builds a Vulkan pipeline cache entry for a given program/framebuffer/topology key. Called lazily from the program's per-program cache at draw time.
 /// </summary>
 internal static unsafe class VkPipelineCacheFactory
 {

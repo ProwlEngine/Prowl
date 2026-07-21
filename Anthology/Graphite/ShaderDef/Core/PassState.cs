@@ -2,7 +2,7 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// A defined set of all possible render state options, encapsulating rasterizer settings, blend, depth, stencil, multisampling, and write masks.
+/// All render state options: rasterizer, blend, depth, stencil, multisampling, write masks.
 /// </summary>
 public class PassState
 {
@@ -58,8 +58,7 @@ public class PassState
 
 
     /// <summary>
-    /// Collapses the blend-related fields into a single-attachment <see cref="BlendStateDescription"/>, overlaying any
-    /// explicitly parsed values onto the given base description.
+    /// Merges blend fields into a single-attachment blend state, overwriting the base where set.
     /// </summary>
     public BlendStateDescription ToBlendState(BlendStateDescription baseState)
     {
@@ -83,8 +82,7 @@ public class PassState
 
 
     /// <summary>
-    /// Collapses the depth and stencil fields into a <see cref="DepthStencilStateDescription"/>, overlaying any explicitly
-    /// parsed values onto the given base description.
+    /// Merges depth and stencil fields into a state, overwriting the base where set.
     /// </summary>
     public DepthStencilStateDescription ToDepthStencilState(DepthStencilStateDescription baseState)
     {
@@ -116,8 +114,7 @@ public class PassState
 
 
     /// <summary>
-    /// Collapses the rasterizer fields into a <see cref="RasterizerStateDescription"/>, overlaying any explicitly parsed
-    /// values onto the given base description.
+    /// Merges rasterizer fields into a state, overwriting the base where set.
     /// </summary>
     public RasterizerStateDescription ToRasterizerState(RasterizerStateDescription baseState)
     {
@@ -132,7 +129,7 @@ public class PassState
 
 
     /// <summary>
-    /// Merges two <see cref="PassState"/> objects into a single merged <see cref="PassState"/> with values being overwritten on <paramref name="other"/>
+    /// Merges this and other into a new PassState. This wins where set, other fills the rest.
     /// </summary>
     public PassState Apply(PassState other)
     {

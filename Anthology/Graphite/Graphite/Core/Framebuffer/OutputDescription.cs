@@ -4,28 +4,28 @@ using System.Diagnostics;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a set of output attachments and their formats.
+/// A set of output attachments and their formats.
 /// </summary>
 public struct OutputDescription : IEquatable<OutputDescription>
 {
     /// <summary>
-    /// A description of the depth attachment, or null if none exists.
+    /// Depth attachment, or null if none.
     /// </summary>
     public OutputAttachmentDescription? DepthAttachment;
     /// <summary>
-    /// An array of attachment descriptions, one for each color attachment. May be empty.
+    /// Color attachment descriptions, one per color attachment. Can be empty.
     /// </summary>
     public OutputAttachmentDescription[] ColorAttachments;
     /// <summary>
-    /// The number of samples in each target attachment.
+    /// Samples per target attachment.
     /// </summary>
     public TextureSampleCount SampleCount;
 
     /// <summary>
-    /// Constructs a new <see cref="OutputDescription"/>.
+    /// New OutputDescription.
     /// </summary>
-    /// <param name="depthAttachment">A description of the depth attachment.</param>
-    /// <param name="colorAttachments">An array of descriptions of each color attachment.</param>
+    /// <param name="depthAttachment">Depth attachment.</param>
+    /// <param name="colorAttachments">Color attachment descriptions.</param>
     public OutputDescription(OutputAttachmentDescription? depthAttachment, params OutputAttachmentDescription[] colorAttachments)
     {
         DepthAttachment = depthAttachment;
@@ -34,11 +34,11 @@ public struct OutputDescription : IEquatable<OutputDescription>
     }
 
     /// <summary>
-    /// Constructs a new <see cref="OutputDescription"/>.
+    /// New OutputDescription.
     /// </summary>
-    /// <param name="depthAttachment">A description of the depth attachment.</param>
-    /// <param name="colorAttachments">An array of descriptions of each color attachment.</param>
-    /// <param name="sampleCount">The number of samples in each target attachment.</param>
+    /// <param name="depthAttachment">Depth attachment.</param>
+    /// <param name="colorAttachments">Color attachment descriptions.</param>
+    /// <param name="sampleCount">Samples per target attachment.</param>
     public OutputDescription(
         OutputAttachmentDescription? depthAttachment,
         OutputAttachmentDescription[] colorAttachments,
@@ -71,8 +71,8 @@ public struct OutputDescription : IEquatable<OutputDescription>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements and all array elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if everything matches.</returns>
     public readonly bool Equals(OutputDescription other)
     {
         return DepthAttachment.GetValueOrDefault().Equals(other.DepthAttachment.GetValueOrDefault())
@@ -81,9 +81,9 @@ public struct OutputDescription : IEquatable<OutputDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(

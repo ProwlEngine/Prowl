@@ -1,40 +1,40 @@
-﻿namespace Prowl.Graphite;
+namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes how new values are compared with existing values in a depth or stencil comparison.
+/// How new values compare against existing values in a depth/stencil test.
 /// </summary>
 public enum ComparisonKind : byte
 {
     /// <summary>
-    /// The comparison never succeeds.
+    /// Never succeeds.
     /// </summary>
     Never,
     /// <summary>
-    /// The comparison succeeds when the new value is less than the existing value.
+    /// Succeeds if new &lt; existing.
     /// </summary>
     Less,
     /// <summary>
-    /// The comparison succeeds when the new value is equal to the existing value.
+    /// Succeeds if new == existing.
     /// </summary>
     Equal,
     /// <summary>
-    /// The comparison succeeds when the new value is less than or equal to the existing value.
+    /// Succeeds if new &lt;= existing.
     /// </summary>
     LessEqual,
     /// <summary>
-    /// The comparison succeeds when the new value is greater than the existing value.
+    /// Succeeds if new &gt; existing.
     /// </summary>
     Greater,
     /// <summary>
-    /// The comparison succeeds when the new value is not equal to the existing value.
+    /// Succeeds if new != existing.
     /// </summary>
     NotEqual,
     /// <summary>
-    /// The comparison succeeds when the new value is greater than or equal to the existing value.
+    /// Succeeds if new &gt;= existing.
     /// </summary>
     GreaterEqual,
     /// <summary>
-    /// The comparison always succeeds.
+    /// Always succeeds.
     /// </summary>
     Always,
 }

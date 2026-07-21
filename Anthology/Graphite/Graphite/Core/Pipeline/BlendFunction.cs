@@ -1,28 +1,28 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Controls how the source and destination factors are combined in a blend operation.
+/// How source and destination blend factors combine.
 /// </summary>
 public enum BlendFunction : byte
 {
     /// <summary>
-    /// Source and destination are added.
+    /// src + dst.
     /// </summary>
     Add,
     /// <summary>
-    /// Destination is subtracted from source.
+    /// src - dst.
     /// </summary>
     Subtract,
     /// <summary>
-    /// Source is subtracted from destination.
+    /// dst - src.
     /// </summary>
     ReverseSubtract,
     /// <summary>
-    /// The minimum of source and destination is selected.
+    /// min(src, dst).
     /// </summary>
     Minimum,
     /// <summary>
-    /// The maximum of source and destination is selected.
+    /// max(src, dst).
     /// </summary>
     Maximum,
 }

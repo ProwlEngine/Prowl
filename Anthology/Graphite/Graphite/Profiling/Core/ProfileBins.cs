@@ -1,151 +1,150 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Resource types passed to <see cref="IProfiler.Allocate"/> / <see cref="IProfiler.Free"/>.
+/// Resource types for Allocate/Free.
 /// </summary>
 public enum AllocBin
 {
     /// <summary>
-    /// Bin index for <see cref="Graphite.DeviceBuffer"/>.
+    /// Bin for DeviceBuffer.
     /// </summary>
     DeviceBuffer,
 
     /// <summary>
-    /// Bin index for <see cref="Graphite.Texture"/>.
+    /// Bin for Texture.
     /// </summary>
     Texture,
 
     /// <summary>
-    /// Bin index for <see cref="Graphite.TextureView"/>.
+    /// Bin for TextureView.
     /// </summary>
     TextureView,
 
     /// <summary>
-    /// Bin index for <see cref="Graphite.Sampler"/>.
+    /// Bin for Sampler.
     /// </summary>
     Sampler,
 
     /// <summary>
-    /// Bin index for <see cref="Graphite.Framebuffer"/>.
+    /// Bin for Framebuffer.
     /// </summary>
     Framebuffer,
 
     /// <summary>
-    /// Bin index for Vulkan pipelines.
+    /// Bin for Vulkan pipelines.
     /// </summary>
     Pipeline,
 
     /// <summary>
-    /// Bin index for <see cref="ShaderProgram"/>.
+    /// Bin for ShaderProgram.
     /// </summary>
     Shader,
 
     /// <summary>
-    /// Bin index for Vulkan resource layouts.
+    /// Bin for Vulkan resource layouts.
     /// </summary>
     ResourceLayout,
 
     /// <summary>
-    /// Bin index for Vulkan descriptor sets.
+    /// Bin for Vulkan descriptor sets.
     /// </summary>
     ResourceSet,
 
     /// <summary>
-    /// Bin index for <see cref="Graphite.CommandBuffer"/>.
+    /// Bin for CommandBuffer.
     /// </summary>
     CommandBuffer
 }
 
 /// <summary>
-/// Buffer data-transfer operations passed to <see cref="IProfiler.Record"/>.
+/// Buffer transfer ops for Record.
 /// </summary>
 public enum BufferOpBin
 {
     /// <summary>
-    /// Bin index for all <see cref="GraphicsDevice.Map(MappableResource, MapMode)"/> operations.
+    /// Bin for all Map ops.
     /// </summary>
     Map,
 
     /// <summary>
-    /// Bin index for all <see cref="GraphicsDevice.Unmap(MappableResource)"/> operations.
+    /// Bin for all Unmap ops.
     /// </summary>
     Unmap,
 
     /// <summary>
-    /// Bin index for all <see cref="CommandBuffer.UpdateBuffer"/> operations.
+    /// Bin for all UpdateBuffer ops.
     /// </summary>
     Update,
 
     /// <summary>
-    /// Bin index for all <see cref="CommandBuffer.CopyBuffer"/> operations.
+    /// Bin for all CopyBuffer ops.
     /// </summary>
     Copy
 }
 
 /// <summary>
-/// Swapchain events passed to <see cref="IProfiler.RecordSwap"/>.
+/// Swapchain events for RecordSwap.
 /// </summary>
 public enum SwapBin
 {
     /// <summary>
-    /// A swapchain present event, such as <see cref="GraphicsDevice.SwapBuffers()"/>
+    /// A present event, e.g. SwapBuffers.
     /// </summary>
     Present,
 
     /// <summary>
-    /// A swapchain resize event, such as <see cref="Swapchain.Resize(uint, uint)"/>
+    /// A resize event, e.g. Swapchain.Resize.
     /// </summary>
     Resize,
 
     /// <summary>
-    /// A swapchain acquire event. Mostly relevant for multiple Vulkan present mode types.
+    /// An acquire event. Mostly matters for Vulkan's multiple present modes.
     /// </summary>
     Acquire
 }
 
 /// <summary>
-/// Buffer roles passed to <see cref="IProfiler.AllocateMemory"/> / <see cref="IProfiler.FreeMemory"/>,
-/// reporting resident bytes per usage.
+/// Buffer roles for AllocateMemory/FreeMemory, tracks resident bytes per usage.
 /// </summary>
 public enum BufferRoleBin
 {
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.VertexBuffer"/>
+    /// Bin for VertexBuffer usage.
     /// </summary>
     Vertex,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.IndexBuffer"/>
+    /// Bin for IndexBuffer usage.
     /// </summary>
     Index,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.UniformBuffer"/>
+    /// Bin for UniformBuffer usage.
     /// </summary>
     Uniform,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.StructuredBufferReadOnly"/>
+    /// Bin for StructuredBufferReadOnly usage.
     /// </summary>
     StructuredReadOnly,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.StructuredBufferReadWrite"/>
+    /// Bin for StructuredBufferReadWrite usage.
     /// </summary>
     StructuredReadWrite,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.IndirectBuffer"/>
+    /// Bin for IndirectBuffer usage.
     /// </summary>
     Indirect,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.Staging"/>
+    /// Bin for Staging usage.
     /// </summary>
     Staging,
 
     /// <summary>
-    /// Bin index for buffers created with <see cref="BufferUsage.Dynamic"/>
+    /// Bin for Dynamic usage.
     /// </summary>
     Dynamic
 }

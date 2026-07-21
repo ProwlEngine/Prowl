@@ -12,7 +12,7 @@ namespace Prowl.Graphite.ShaderDef.Compiler;
 
 
 /// <summary>
-/// The WGSL compiler module for all WebGPU backends.
+/// WGSL compiler for WebGPU backends.
 /// </summary>
 public class WebGPUCompiler : CompilerModule
 {
@@ -25,7 +25,7 @@ public class WebGPUCompiler : CompilerModule
     public GraphicsBackend Backend => throw new NotImplementedException("WebGPU backend does not exist.");
 
     /// <summary>
-    /// Creates a new instance of <see cref="WebGPUCompiler"/>
+    /// New WebGPUCompiler.
     /// </summary>
     /// <param name="profileString"></param>
     public WebGPUCompiler(string profileString = "wgsl_1_0")

@@ -1,27 +1,12 @@
 namespace Prowl.Graphite;
 
-/// <summary>
-/// Precomputed, immutable per-set binding metadata derived once at program build time from a
-/// <see cref="ResourceLayoutDescription"/>. Lets the per-draw binder avoid work that only depends on
-/// the static layout: gathering dynamic UBO offsets in binding order, and pairing samplers with
-/// their same-named texture element.
-/// </summary>
+/// <summary>Per-set binding metadata, precomputed once at program build so the per-draw binder skips redundant layout work.</summary>
 internal sealed class SetBindingMetadata
 {
-    /// <summary>
-    /// Element indices (into the set's <see cref="ResourceLayoutDescription.Elements"/>) of every
-    /// <see cref="ResourceKind.UniformBuffer"/> element, sorted ascending by
-    /// <see cref="ResourceLayoutElementDescription.BindingIndex"/>. Vulkan requires dynamic offsets
-    /// in binding-number order; this is that order, computed once.
-    /// </summary>
+    /// <summary>UBO element indices, sorted by binding index. Vulkan needs dynamic offsets in this order.</summary>
     public readonly int[] SortedUboElementIndices;
 
-    /// <summary>
-    /// Per element index: true if a texture element (read-only or read-write) in the same set shares
-    /// this element's <see cref="ResourceLayoutElementDescription.Name"/>. Lets sampler resolution
-    /// (a standalone sampler paired with a texture, or a combined image-sampler element) source its
-    /// sampler from the <c>SetTexture(name, _, sampler)</c> entry without scanning the set each draw.
-    /// </summary>
+    /// <summary>Per element: true if some texture element in the set shares its name. Speeds up sampler lookup.</summary>
     public readonly bool[] HasSameNamedTexture;
 
     private SetBindingMetadata(int[] sortedUboElementIndices, bool[] hasSameNamedTexture)
@@ -30,7 +15,7 @@ internal sealed class SetBindingMetadata
         HasSameNamedTexture = hasSameNamedTexture;
     }
 
-    /// <summary>Builds the metadata array, one entry per set, indexed parallel to <paramref name="layouts"/>.</summary>
+    /// <summary>Builds metadata, one entry per set, parallel to layouts.</summary>
     public static SetBindingMetadata[] Build(ResourceLayoutDescription[] layouts)
     {
         SetBindingMetadata[] result = new SetBindingMetadata[layouts.Length];

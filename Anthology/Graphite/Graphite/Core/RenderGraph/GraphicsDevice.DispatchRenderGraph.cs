@@ -7,10 +7,10 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Dispatches a pipeline for the given views as one graph execution.
+    /// Runs a pipeline for the given views as one graph execution.
     /// </summary>
     /// <param name="pipeline">Pipeline to run.</param>
-    /// <param name="views">Views to render, one execution per view. Must not be null.</param>
+    /// <param name="views">Views to render, one execution each. Not null.</param>
     public ExecutionTask DispatchGraph<T>(
         RenderPipeline<T> pipeline,
         IReadOnlyList<T> views)

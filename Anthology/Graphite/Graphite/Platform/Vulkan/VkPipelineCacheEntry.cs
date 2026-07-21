@@ -1,29 +1,28 @@
 namespace Prowl.Graphite.Vk;
 
 /// <summary>
-/// Resolved Vulkan pipeline + companion data cached by <see cref="VkGraphicsProgram"/>'s per-program pipeline cache.
+/// Resolved Vulkan pipeline plus data cached by the program's pipeline cache.
 /// </summary>
 /// <remarks>
-/// <see cref="PipelineLayout"/>, <see cref="ResourceSetCount"/>, and <see cref="DynamicOffsetsCount"/>
-/// are copied from the source <see cref="VkGraphicsProgram"/> so the draw hot path is a single
-/// field read rather than a chained property dereference. They are invariant for the program's
-/// lifetime, so caching them in the entry is safe.
+/// Layout, set count, and offset count are copied from the source program so
+/// the draw hot path is a plain field read, not a chain of dereferences. Invariant
+/// for the program's life, so safe to cache here.
 /// </remarks>
 internal readonly struct VkPipelineCacheEntry
 {
-    /// <summary>The resolved graphics pipeline handle owned by the cache.</summary>
+    /// <summary>Graphics pipeline handle owned by the cache.</summary>
     public readonly Silk.NET.Vulkan.Pipeline Pipeline;
 
-    /// <summary>The compatibility render pass created for <c>vkCreateGraphicsPipelines</c>.</summary>
+    /// <summary>Compatibility render pass for pipeline creation.</summary>
     public readonly Silk.NET.Vulkan.RenderPass CompatRenderPass;
 
-    /// <summary>The shader program's pipeline layout (owned by the program, not this entry).</summary>
+    /// <summary>Program's pipeline layout. Owned by the program, not this entry.</summary>
     public readonly Silk.NET.Vulkan.PipelineLayout PipelineLayout;
 
-    /// <summary>Number of descriptor set slots in the pipeline layout.</summary>
+    /// <summary>Descriptor set slot count in the layout.</summary>
     public readonly uint ResourceSetCount;
 
-    /// <summary>Total number of dynamic offsets across all sets in the pipeline layout.</summary>
+    /// <summary>Total dynamic offsets across all sets.</summary>
     public readonly int DynamicOffsetsCount;
 
     public VkPipelineCacheEntry(

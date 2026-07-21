@@ -3,7 +3,7 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// The profiler attached to this device, or null if none was supplied. Set once at construction.
+    /// Attached profiler, null if none. Set once at construction.
     /// </summary>
     public IProfiler? Profiler { get; private set; }
 
@@ -43,7 +43,7 @@ public abstract partial class GraphicsDevice
         }
     }
 
-    /// <summary>Records a buffer creation: the DeviceBuffer allocation plus the matching role gauges.</summary>
+    /// <summary>Records a buffer creation: DeviceBuffer allocation plus role gauges.</summary>
     internal void RecordBufferAllocation(BufferUsage usage, long bytes)
     {
         if (Profiler is not { } profiler)
@@ -53,7 +53,7 @@ public abstract partial class GraphicsDevice
         ForEachBufferRole(usage, bytes, profiler, allocate: true);
     }
 
-    /// <summary>Records a buffer destruction: the DeviceBuffer free plus the matching role gauges.</summary>
+    /// <summary>Records a buffer destruction: DeviceBuffer free plus role gauges.</summary>
     internal void RecordBufferFree(BufferUsage usage, long bytes)
     {
         if (Profiler is not { } profiler)

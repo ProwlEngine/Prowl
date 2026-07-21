@@ -3,37 +3,34 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A device resource providing the ability to present rendered images to a visible surface.
-/// See <see cref="SwapchainDescription"/>.
+/// Presents rendered images to a visible surface.
 /// </summary>
 public abstract class Swapchain : DeviceResource, IDisposable
 {
     /// <summary>
-    /// Gets a <see cref="Framebuffer"/> representing the render targets of this instance.
+    /// Framebuffer for this instance's render targets.
     /// </summary>
     public abstract Framebuffer Framebuffer { get; }
     /// <summary>
-    /// Resizes the renderable Textures managed by this instance to the given dimensions.
+    /// Resizes the swapchain's textures.
     /// </summary>
-    /// <param name="width">The new width of the Swapchain.</param>
-    /// <param name="height">The new height of the Swapchain.</param>
+    /// <param name="width">New width.</param>
+    /// <param name="height">New height.</param>
     public abstract void Resize(uint width, uint height);
     /// <summary>
-    /// Gets or sets whether presentation of this Swapchain will be synchronized to the window system's vertical refresh
-    /// rate.
+    /// Whether presentation syncs to vblank.
     /// </summary>
     public abstract bool SyncToVerticalBlank { get; set; }
     /// <summary>
-    /// A string identifying this instance. Can be used to differentiate between objects in graphics debuggers and other
-    /// tools.
+    /// Debug name, shows up in graphics debuggers.
     /// </summary>
     public abstract string Name { get; set; }
     /// <summary>
-    /// A bool indicating whether this instance has been disposed.
+    /// Whether this has been disposed.
     /// </summary>
     public abstract bool IsDisposed { get; }
     /// <summary>
-    /// Frees unmanaged device resources controlled by this instance.
+    /// Frees unmanaged device resources.
     /// </summary>
     public abstract void Dispose();
 }

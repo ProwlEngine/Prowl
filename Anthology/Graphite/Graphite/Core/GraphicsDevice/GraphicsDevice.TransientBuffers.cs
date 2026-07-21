@@ -23,15 +23,13 @@ public abstract partial class GraphicsDevice
     /// <summary>
     /// Rents a device buffer from the transient pool.
     /// <para>
-    /// Backing buffers come from a device-level free-list keyed by description and survive across
-    /// executions: once the rent-time execution finishes on GPU, the buffer goes back to the free-list and
-    /// a later rent with an equal description reuses it. A buffer still in flight is never handed to another
-    /// caller.
+    /// Free-list keyed by description, shared across executions. Buffer returns to the free-list once
+    /// its execution finishes on GPU. Never reused while still in flight.
     /// </para>
     /// </summary>
-    /// <param name="task">Execution renting the buffer; it returns to the free-list once this completes on GPU.</param>
+    /// <param name="task">Execution renting the buffer. Returns to pool when it finishes on GPU.</param>
     /// <param name="desc">Buffer to rent.</param>
-    /// <returns>The rented device buffer.</returns>
+    /// <returns>The rented buffer.</returns>
     public DeviceBuffer RentTransientBuffer(ExecutionTask task, in BufferDescription desc)
     {
         ValidationHelpers.RequireNotNull(task, nameof(task), nameof(RentTransientBuffer));

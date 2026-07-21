@@ -3,44 +3,44 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a 3-dimensional region.
+/// A 3D region.
 /// </summary>
 public struct Viewport : IEquatable<Viewport>
 {
     /// <summary>
-    /// The minimum X value.
+    /// Min X.
     /// </summary>
     public float X;
     /// <summary>
-    /// The minimum Y value.
+    /// Min Y.
     /// </summary>
     public float Y;
     /// <summary>
-    /// The width.
+    /// Width.
     /// </summary>
     public float Width;
     /// <summary>
-    /// The height.
+    /// Height.
     /// </summary>
     public float Height;
     /// <summary>
-    /// The minimum depth.
+    /// Min depth.
     /// </summary>
     public float MinDepth;
     /// <summary>
-    /// The maximum depth.
+    /// Max depth.
     /// </summary>
     public float MaxDepth;
 
     /// <summary>
-    /// Constructs a new Viewport.
+    /// Makes a Viewport.
     /// </summary>
-    /// <param name="x">The minimum X value.</param>
-    /// <param name="y">The minimum Y value.</param>
-    /// <param name="width">The width.</param>
-    /// <param name="height">The height.</param>
-    /// <param name="minDepth">The minimum depth.</param>
-    /// <param name="maxDepth">The maximum depth.</param>
+    /// <param name="x">Min X.</param>
+    /// <param name="y">Min Y.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="minDepth">Min depth.</param>
+    /// <param name="maxDepth">Max depth.</param>
     public Viewport(float x, float y, float width, float height, float minDepth, float maxDepth)
     {
         X = x;
@@ -54,8 +54,8 @@ public struct Viewport : IEquatable<Viewport>
     /// <summary>
     /// Element-wise equality.
     /// </summary>
-    /// <param name="other">The instance to compare to.</param>
-    /// <returns>True if all elements are equal; false otherswise.</returns>
+    /// <param name="other">Instance to compare against.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(Viewport other)
     {
         return X.Equals(other.X) && Y.Equals(other.Y)
@@ -64,9 +64,9 @@ public struct Viewport : IEquatable<Viewport>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
-    /// <returns>A 32-bit signed integer that is the hash code for this instance.</returns>
+    /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(

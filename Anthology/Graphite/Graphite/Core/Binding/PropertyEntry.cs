@@ -16,8 +16,7 @@ internal enum PropertyEntryKind : byte
 
 
 /// <summary>
-/// A single entry stored inside a PropertySet. Carries either a uniform scalar/vector/matrix
-/// payload or a managed reference to a GPU resource.
+/// One PropertySet entry. Holds either a uniform scalar/vector/matrix payload or a ref to a GPU resource.
 /// </summary>
 internal sealed class PropertyEntry
 {

@@ -5,35 +5,35 @@ namespace Prowl.Graphite.ShaderDef;
 
 
 /// <summary>
-/// A string-initialized (Key, Value) pair internally interned to an (int, int) pair for fast indexing and hashing.
+/// Key-value pair interned to int pair for fast hashing.
 /// </summary>
 public readonly struct Keyword : IEquatable<Keyword>
 {
     private static Interner<string, int> s_keywordInterner = new((x) => x + 1);
 
     /// <summary>
-    /// The string key of this keyword.
+    /// String key.
     /// </summary>
     public readonly string Name;
 
     /// <summary>
-    /// The interned name ID for this keyword. Used for hashing and fast comparisons.
+    /// Interned name ID, for hashing/comparison.
     /// </summary>
     public readonly int NameId;
 
     /// <summary>
-    /// The string value of this keyword.
+    /// String value.
     /// </summary>
     public readonly string Value;
 
     /// <summary>
-    /// The interned value ID for this keyword. Used for hashing and fast comparisons.
+    /// Interned value ID, for hashing/comparison.
     /// </summary>
     public readonly int ValueId;
 
 
     /// <summary>
-    /// Initializes a keyword from a name-value pair.
+    /// Builds keyword from name-value pair.
     /// </summary>
     public Keyword(string name, string value)
     {
@@ -45,7 +45,7 @@ public readonly struct Keyword : IEquatable<Keyword>
 
 
     /// <summary>
-    /// The FNV hash of the interned name and value interned integers.
+    /// FNV hash of the interned name/value ints.
     /// </summary>
     public ulong LongHash()
     {

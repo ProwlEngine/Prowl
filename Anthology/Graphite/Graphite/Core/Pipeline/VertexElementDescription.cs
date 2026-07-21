@@ -3,38 +3,33 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a single element of a vertex.
+/// Describes one vertex element.
 /// </summary>
 public struct VertexElementDescription : IEquatable<VertexElementDescription>
 {
     /// <summary>
-    /// The user-facing interned name of the element. For attributes reflected from a shader this is
-    /// the <i>blended</i> HLSL semantic (semantic name plus index, e.g. <c>UV0</c>), so lookups are
-    /// stable across backends. HLSL-based backends bind with <see cref="HlslSemanticName"/> and the
-    /// element's location rather than this name. Implicit conversion from <see cref="string"/> is supported.
+    /// Interned name, stable across backends. For reflected attributes this is semantic name + index
+    /// (e.g. UV0). HLSL backends bind via HlslSemanticName + location instead. Implicit string conversion works.
     /// </summary>
     public VertexAttributeID Name;
 
     /// <summary>
-    /// The format of the element.
+    /// Element format.
     /// </summary>
     public VertexElementFormat Format;
 
     /// <summary>
-    /// The offset in bytes from the beginning of the vertex.
+    /// Byte offset from vertex start.
     /// </summary>
     public uint Offset;
 
     /// <summary>
-    /// The raw HLSL semantic name with no index (e.g. <c>UV</c>), used by HLSL-based backends as the
-    /// <c>SemanticName</c>; the semantic index comes from the element's location. Mirrors how
-    /// <see cref="ResourceLayoutElementDescription.GLUniformName"/> carries the in-shader GL name.
-    /// Defaults to the name the element was constructed with.
+    /// Raw HLSL semantic name, no index (e.g. UV). Index comes from location. Defaults to the ctor name.
     /// </summary>
     public string HlslSemanticName;
 
     /// <summary>
-    /// Constructs a new VertexElementDescription describing a per-vertex element.
+    /// Makes a per-vertex element description.
     /// </summary>
     public VertexElementDescription(string name, VertexElementFormat format)
     {
@@ -45,7 +40,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     }
 
     /// <summary>
-    /// Constructs a new VertexElementDescription.
+    /// Makes a new VertexElementDescription.
     /// </summary>
     public VertexElementDescription(string name, VertexElementFormat format, uint offset)
     {
@@ -67,7 +62,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     }
 
     /// <summary>
-    /// Returns the hash code for this instance.
+    /// Hash code for this instance.
     /// </summary>
     public override readonly int GetHashCode()
     {
