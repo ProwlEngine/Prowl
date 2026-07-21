@@ -341,7 +341,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         BindVertexBuffersFromSource();
         indirectBuffer.MarkInFlight(_gd, ExecutionId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+        AddStagingResource(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
     }
 
@@ -352,7 +352,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         BindIndexBufferFromSource();
         indirectBuffer.MarkInFlight(_gd, ExecutionId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+        AddStagingResource(vkBuffer.RefCount);
         _gd.Vk.CmdDrawIndexedIndirect(_cb, vkBuffer.DeviceBuffer, offset, drawCount, stride);
     }
 
@@ -376,7 +376,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             buffers[slot] = vkBuffer.DeviceBuffer;
             offsets[slot] = binding.Offset;
 
-            _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+            AddStagingResource(vkBuffer.RefCount);
         }
 
         _gd.Vk.CmdBindVertexBuffers(_cb, 0u, (uint)count, buffers, offsets);
@@ -392,7 +392,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
         _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+        AddStagingResource(vkBuffer.RefCount);
     }
 
     private void PreDrawCommand()
@@ -493,7 +493,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         indirectBuffer.MarkInFlight(_gd, ExecutionId);
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
-        _currentStagingInfo.Resources.Add(vkBuffer.RefCount);
+        AddStagingResource(vkBuffer.RefCount);
         _gd.Vk.CmdDispatchIndirect(_cb, vkBuffer.DeviceBuffer, offset);
     }
 
@@ -505,9 +505,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
 
         VkTexture vkSource = Util.AssertSubtype<Texture, VkTexture>(source);
-        _currentStagingInfo.Resources.Add(vkSource.RefCount);
+        AddStagingResource(vkSource.RefCount);
         VkTexture vkDestination = Util.AssertSubtype<Texture, VkTexture>(destination);
-        _currentStagingInfo.Resources.Add(vkDestination.RefCount);
+        AddStagingResource(vkDestination.RefCount);
         ImageAspectFlags aspectFlags = ((source.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil)
             ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
             : ImageAspectFlags.ColorBit;
@@ -590,11 +590,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         Util.EnsureArrayMinimumSize(ref _clearValues, clearValueCount + 1); // Leave an extra space for the depth value (tracked separately).
         Util.ClearArray(_validColorClearValues);
         Util.EnsureArrayMinimumSize(ref _validColorClearValues, clearValueCount);
-        _currentStagingInfo.Resources.Add(vkFB.RefCount);
+        AddStagingResource(vkFB.RefCount);
 
         if (fb is VkSwapchainFramebuffer scFB)
         {
-            _currentStagingInfo.Resources.Add(scFB.Swapchain.RefCount);
+            AddStagingResource(scFB.Swapchain.RefCount);
         }
     }
 
@@ -733,7 +733,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
         _currentShaderProgram = sp;
         _hasResolvedPipeline = false;
-        _currentStagingInfo.Resources.Add(sp.RefCount);
+        AddStagingResource(sp.RefCount);
     }
 
     private protected override void SetComputeShaderCore(ComputeProgram program)
@@ -741,7 +741,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         VkComputeProgram cp = Util.AssertSubtype<ComputeProgram, VkComputeProgram>(program);
         _currentComputeProgram = cp;
         _gd.Vk.CmdBindPipeline(_cb, PipelineBindPoint.Compute, cp.DevicePipeline);
-        _currentStagingInfo.Resources.Add(cp.RefCount);
+        AddStagingResource(cp.RefCount);
     }
 
     private protected override void SetPropertiesCore(PropertySet properties) { }
@@ -1311,9 +1311,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         destination.MarkInFlight(_gd, ExecutionId);
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
-        _currentStagingInfo.Resources.Add(srcVkBuffer.RefCount);
+        AddStagingResource(srcVkBuffer.RefCount);
         VkBuffer dstVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(destination);
-        _currentStagingInfo.Resources.Add(dstVkBuffer.RefCount);
+        AddStagingResource(dstVkBuffer.RefCount);
 
         BufferCopy region = new()
         {
@@ -1367,9 +1367,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             width, height, depth, layerCount);
 
         VkTexture srcVkTexture = Util.AssertSubtype<Texture, VkTexture>(source);
-        _currentStagingInfo.Resources.Add(srcVkTexture.RefCount);
+        AddStagingResource(srcVkTexture.RefCount);
         VkTexture dstVkTexture = Util.AssertSubtype<Texture, VkTexture>(destination);
-        _currentStagingInfo.Resources.Add(dstVkTexture.RefCount);
+        AddStagingResource(dstVkTexture.RefCount);
     }
 
     internal static void CopyTextureCore_VkCommandBuffer(
@@ -1686,7 +1686,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         EnsureNoRenderPass();
         VkTexture vkTex = Util.AssertSubtype<Texture, VkTexture>(texture);
-        _currentStagingInfo.Resources.Add(vkTex.RefCount);
+        AddStagingResource(vkTex.RefCount);
 
         GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex);
     }
@@ -1915,11 +1915,28 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         public List<VkBuffer> BuffersUsed { get; } = [];
         public HashSet<ResourceRefCount> Resources { get; } = [];
+
+        /// <summary>Unique id of the recording currently using this info; stamps retained resources.</summary>
+        public ulong RecordingId;
+
         public void Clear()
         {
             BuffersUsed.Clear();
             Resources.Clear();
         }
+    }
+
+    private static ulong s_nextRecordingId = 1;
+
+    // Retains a resource for the current recording, but only once: a resource already stamped with this
+    // recording's id is known to be in the staging set, so the (hashed) set insertion is skipped.
+    private void AddStagingResource(ResourceRefCount rc)
+    {
+        ulong id = _currentStagingInfo.RecordingId;
+        if (rc.StagingMark == id)
+            return;
+        rc.StagingMark = id;
+        _currentStagingInfo.Resources.Add(rc);
     }
 
     private StagingResourceInfo GetStagingResourceInfo()
@@ -1938,6 +1955,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
                 ret = new StagingResourceInfo();
             }
 
+            ret.RecordingId = System.Threading.Interlocked.Increment(ref s_nextRecordingId);
             return ret;
         }
     }

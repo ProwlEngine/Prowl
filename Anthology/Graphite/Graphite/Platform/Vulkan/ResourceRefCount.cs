@@ -8,6 +8,12 @@ internal partial class ResourceRefCount
     private readonly Action _disposeAction;
     private int _refCount;
 
+    /// <summary>
+    /// Id of the command-buffer recording that last retained this resource in its staging set. Lets the
+    /// recorder retain each distinct resource once per recording instead of re-adding it on every draw.
+    /// </summary>
+    public ulong StagingMark;
+
     public ResourceRefCount(Action disposeAction)
     {
         _disposeAction = disposeAction;
