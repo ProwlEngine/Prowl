@@ -56,7 +56,6 @@ public class PreviewRenderer : IDisposable
         _cameraGo = new GameObject("PreviewCamera");
         _cameraGo.HideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         _camera = _cameraGo.AddComponent<Camera>();
-        _camera.Pipeline = _pipeline;
         _camera.FieldOfView = 35f;
         _camera.NearClipPlane = 0.01f;
         _camera.FarClipPlane = 100f;
@@ -160,7 +159,12 @@ public class PreviewRenderer : IDisposable
     {
         if (_rt == null) return;
 
-        CameraPipelineRunner.Render(_camera, new RenderingData { DisplayGrid = ShowGrid });
+        // Each PreviewRenderer dispatches its own isolated pipeline instance directly (not the shared
+        // RenderPipelineManager.Current) - see the field comment on _pipeline.
+        _scene.CollectRenderables();
+        CameraView view = CameraView.From(_camera, new RenderingData { DisplayGrid = ShowGrid });
+        Graphics.Device.DispatchGraph(_pipeline, new[] { view });
+        _camera.SavePreviousViewProjectionMatrix();
     }
 
     /// <summary>Resize the preview render target.</summary>
