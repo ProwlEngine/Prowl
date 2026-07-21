@@ -25,17 +25,10 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     private const uint OldValue = 0x11111111;
     private const uint NewValue = 0x22222222;
 
-    private bool ProfilingEnabled()
-    {
-        GD.ResetProfile();
-        using DeviceBuffer probe = GD.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.UniformBuffer));
-        return GD.GetProfile().Live[AllocBin.DeviceBuffer].Count > 0;
-    }
-
     // Counts live native buffers carrying a given role. The all-buffers gauge is unusable here:
     // UpdateBuffer allocates pooled staging buffers of its own, which would swamp the +1 an
     // orphan contributes. Roles isolate the buffer under test from that traffic.
-    private long LiveBuffersOfRole(BufferRoleBin role) => GD.GetProfile().BufferMem[role].Count;
+    private long LiveBuffersOfRole(BufferRoleBin role) => Profiler.Memory(role);
 
     private ComputeProgram CreateProbeProgram()
     {
@@ -109,7 +102,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void WriteToInFlightBuffer_OrphansTheNativeResource()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -198,7 +190,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void OrphanedBuffer_RetiredResourceIsFreedOnceTheRingCycles()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -224,7 +215,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void WriteToBufferInAnOpenFrame_Orphans()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -261,7 +251,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void WriteToBufferFromACompletedFrame_DoesNotOrphan()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer source = CreateSourceBuffer();
         DeviceBuffer output = CreateOutputBuffer();
@@ -281,7 +270,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     [SkippableFact]
     public void WriteToNeverBoundBuffer_DoesNotOrphan()
     {
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer buffer = CreateSourceBuffer();
 
@@ -298,7 +286,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void TransientWritesBuffer_OptsOutOfOrphaning()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         DeviceBuffer source = CreateSourceBuffer(transientWrites: true);
         DeviceBuffer output = CreateOutputBuffer();
@@ -322,7 +309,6 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
     public void MapWrite_OnInFlightBuffer_AlsoOrphans()
     {
         Skip.IfNot(GD.Features.ComputeShader);
-        Skip.IfNot(ProfilingEnabled());
 
         // Map(Write) is the other entry point into EnsureWritable and must be guarded exactly
         // like UpdateBuffer. Mapping needs Dynamic, which cannot be combined with a read-write

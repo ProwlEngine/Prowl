@@ -212,22 +212,43 @@ file sealed class ReadingPresentPass : IPresentPass<ResourceView>
     public void Present(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
 
-file sealed class RecordingProfiler : IPassProfiler
+file sealed class RecordingProfiler : IProfiler
 {
     public bool RequestCapture { get; set; }
 
     public List<int> Captures { get; } = new();
 
+    public void Allocate(AllocBin type, long bytes) { }
+    public void Free(AllocBin type, long bytes) { }
+    public void AllocateMemory(BufferRoleBin role, long bytes) { }
+    public void FreeMemory(BufferRoleBin role, long bytes) { }
+    public void Record(BufferOpBin op, long bytes) { }
+    public void RecordSwap(SwapBin evt, long bytes) { }
+
+    public void BeginPass(in PassInfo pass) { }
+    public void EndPass(in PassInfo pass) { }
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved) { }
+
     public void BeginSample(string name) { }
 
     public void EndSample() { }
 
-    public void Capture(IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
+    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
     {
         transfer.Begin();
         transfer.End();
         Captures.Add(passOutputs.Count);
     }
+
+    public void RecordDraw(in DrawCallInfo info) { }
+    public void RecordDispatch(in DispatchCallInfo info) { }
+    public void RecordPipelineSwitch(in PipelineBindInfo info) { }
+    public void RecordResourceSetBind(uint setCount) { }
+    public void RecordBarrier(BarrierBin kind, uint count) { }
+    public void RecordSubmit(in ProfilerSubmitInfo info) { }
+
+    public bool RequestExecutionTiming => false;
+    public void RecordExecutionTime(PassInfo? pass, string bufferName, bool isTransfer, double milliseconds) { }
 }
 
 file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>
@@ -388,8 +409,14 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
         using ResourceTestPipeline pipeline = new(zeroOutputs, twoOutputs);
         RecordingProfiler profiler = new() { RequestCapture = true };
 
-        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) }, profiler);
-        GD.WaitForIdle();
+        using GraphicsDevice profiledDevice = GD.BackendType switch
+        {
+            GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true) { Profiler = profiler }),
+            _ => throw new NotSupportedException(),
+        };
+
+        profiledDevice.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        profiledDevice.WaitForIdle();
 
         Assert.Single(profiler.Captures);
         Assert.Equal(2, profiler.Captures[0]);

@@ -41,35 +41,6 @@ public class RenderMSTracker
             fpsTime = 0;
             Console.WriteLine($"Rolling Render MS: {smoothedDelta}. (FPS - not accounting swapchain/windowing): {1000.0f / smoothedDelta}");
         }
-
-        /*
-        string text = $"Rolling Render MS: {smoothedDelta}. (FPS - not accounting swapchain/windowing): {1000.0f / smoothedDelta}\n";
-
-        ProfileSnapshot snapshot = gd.GetProfile();
-
-        text += LogBin("Allocated", snapshot.Allocated);
-        text += LogBin("Buffer Memory", snapshot.BufferMem);
-        text += LogBin("Buffer Operations", snapshot.BufferOps);
-        text += LogBin("Freed", snapshot.Freed);
-        text += LogBin("Live", snapshot.Live);
-        text += LogBin("Swaps", snapshot.Swaps);
-
-        Update(text);
-        */
-    }
-
-
-    public string LogBin<T>(string groupName, ProfileBinGroup<T> group) where T : unmanaged, Enum
-    {
-        string log = $"{groupName}:\n";
-
-        foreach (T value in Enum.GetValues<T>())
-        {
-            ProfileCounter o = group[value];
-            log += $"\t{value}: Bytes ({o.Bytes}), Count ({o.Count})\n";
-        }
-
-        return log;
     }
 
 

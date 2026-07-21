@@ -22,7 +22,7 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
 
     private GraphicsDevice CreateIsolatedDevice() => GD.BackendType switch
     {
-        GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true) { EnableProfiling = true }),
+        GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true)),
         _ => throw new NotSupportedException(),
     };
 

@@ -34,7 +34,7 @@ public static class TestGraphExtensions
         ExecutionTask task = gd.BeginExecution();
         RenderGraph<TestRenderView> graph = RenderGraph<TestRenderView>.Build(
             Array.Empty<IPass<TestRenderView>>(), new NoOpTestPresentPass());
-        var context = new RenderContext<TestRenderView>(gd, task, graph, default, null);
+        var context = new RenderContext<TestRenderView>(gd, task, graph, default);
 
         try
         {
@@ -55,16 +55,17 @@ public static class TestGraphExtensions
 // creators build a window.
 public static class TestUtils
 {
-    private static readonly GraphicsDeviceOptions s_headlessOptions = new(true) { EnableProfiling = true };
-    private static readonly GraphicsDeviceOptions s_swapchainOptions = new(true, PixelFormat.R16_UNorm, false) { EnableProfiling = true };
+    // Each device gets its own profiler instance - state must not leak across devices/tests.
+    private static GraphicsDeviceOptions HeadlessOptions() => new(true) { Profiler = new TestCountingProfiler() };
+    private static GraphicsDeviceOptions SwapchainOptions() => new(true, PixelFormat.R16_UNorm, false) { Profiler = new TestCountingProfiler() };
 
     public static GraphicsDevice CreateVulkanDevice()
-        => GraphicsDevice.CreateVulkan(s_headlessOptions);
+        => GraphicsDevice.CreateVulkan(HeadlessOptions());
 
     public static void CreateVulkanDeviceWithSwapchain(out IWindow window, out GraphicsDevice gd)
     {
         window = CreateWindow(GraphicsBackend.Vulkan);
-        gd = CreateDevice(window, s_swapchainOptions, GraphicsBackend.Vulkan);
+        gd = CreateDevice(window, SwapchainOptions(), GraphicsBackend.Vulkan);
     }
 
     // Creates a hidden, initialized window for the given backend. Initialize() performs the
@@ -193,6 +194,9 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
     public ResourceFactory RF => _factory;
     public IWindow Window => _window;
 
+    // Non-null for every device TestUtils builds - see HeadlessOptions/SwapchainOptions.
+    public TestCountingProfiler Profiler => (TestCountingProfiler)_gd.Profiler!;
+
     public GraphicsDeviceTestBase()
     {
         Activator.CreateInstance<T>().CreateGraphicsDevice(out _window, out _gd);
@@ -280,4 +284,68 @@ public class VulkanDeviceCreatorWithMainSwapchain : GraphicsDeviceCreator
     {
         TestUtils.CreateVulkanDeviceWithSwapchain(out window, out gd);
     }
+}
+
+// Minimal IProfiler that reproduces just enough of the old built-in counters (live allocation
+// gauge, buffer-role memory gauge) for tests that assert on resource lifetime, e.g. orphaning in
+// BufferSafetyTests. Everything else Graphite might report is a no-op; Graphite no longer ships
+// any counting profiler of its own, so tests that need one bring their own.
+public sealed class TestCountingProfiler : IProfiler
+{
+    private readonly long[] _live = new long[Enum.GetValues<AllocBin>().Length];
+    private readonly long[] _bufferMem = new long[Enum.GetValues<BufferRoleBin>().Length];
+    private readonly object _lock = new();
+
+    public long Live(AllocBin bin)
+    {
+        lock (_lock) return _live[(int)bin];
+    }
+
+    public long Memory(BufferRoleBin bin)
+    {
+        lock (_lock) return _bufferMem[(int)bin];
+    }
+
+    public void Allocate(AllocBin type, long bytes)
+    {
+        lock (_lock) _live[(int)type]++;
+    }
+
+    public void Free(AllocBin type, long bytes)
+    {
+        lock (_lock) _live[(int)type]--;
+    }
+
+    public void AllocateMemory(BufferRoleBin role, long bytes)
+    {
+        lock (_lock) _bufferMem[(int)role]++;
+    }
+
+    public void FreeMemory(BufferRoleBin role, long bytes)
+    {
+        lock (_lock) _bufferMem[(int)role]--;
+    }
+
+    public void Record(BufferOpBin op, long bytes) { }
+    public void RecordSwap(SwapBin evt, long bytes) { }
+
+    public void BeginPass(in PassInfo pass) { }
+    public void EndPass(in PassInfo pass) { }
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved) { }
+
+    public void BeginSample(string name) { }
+    public void EndSample() { }
+
+    public bool RequestCapture => false;
+    public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
+
+    public void RecordDraw(in DrawCallInfo info) { }
+    public void RecordDispatch(in DispatchCallInfo info) { }
+    public void RecordPipelineSwitch(in PipelineBindInfo info) { }
+    public void RecordResourceSetBind(uint setCount) { }
+    public void RecordBarrier(BarrierBin kind, uint count) { }
+    public void RecordSubmit(in ProfilerSubmitInfo info) { }
+
+    public bool RequestExecutionTiming => false;
+    public void RecordExecutionTime(PassInfo? pass, string bufferName, bool isTransfer, double milliseconds) { }
 }

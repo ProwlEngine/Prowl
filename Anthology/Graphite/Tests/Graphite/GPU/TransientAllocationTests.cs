@@ -27,7 +27,6 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
     private GraphicsDevice CreateSmallTransientDevice(uint softCap, uint hardCap)
         => CreateIsolatedDevice(new GraphicsDeviceOptions(true)
         {
-            EnableProfiling = true,
             TransientBufferInitialSize = PrimarySize,
             TransientBufferSoftCapBytes = softCap,
             TransientBufferHardCapBytes = hardCap,
