@@ -48,8 +48,8 @@
     still in flight retires its native resource behind a stable managed identity, and the retired
     resource is freed once the ring cycles. Also covers the `TransientWrites` opt-out and the
     repeat-reallocation warning.
-  - `StreamingBufferTests` - per-ring-slot rotation, and the property that motivates the type:
-    rewriting `Current` every execution never orphans.
+  - `BufferResourceTests` - graph buffer resources: writer/reader resolving one transient buffer, and
+    a compute pass writing a graph buffer copied back for verification.
   - `BufferTests` / `TextureTests` (+ `TextureTests.RegressionTests`) - buffer and texture
     creation, mapping, and copy behavior, plus a dedicated file for regressions guarding specific
     fixed bugs.

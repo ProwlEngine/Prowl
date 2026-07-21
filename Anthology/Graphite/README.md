@@ -10,7 +10,8 @@ Graphite started life as a modified and butchered version of NeoVeldrid, and by 
 - A monolithic `ShaderProgram` model that bundles shader and pipeline state, with per-backend shader compilation handled internally.
 - A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules.
 - A declarative render graph (`RenderPipeline`, `IPass`, `IPresentPass`) that orders passes from their
-  declared texture reads/writes and resolves shared render targets automatically.
+  declared texture and buffer reads/writes and resolves shared, transient, and history resources
+  automatically.
 - A frame-less `ExecutionTask` ring for CPU/GPU synchronization, with per-execution transient
   (bump-allocated) GPU memory.
 - Runtime-toggleable validation and profiling layers, controlled via `GraphicsDeviceOptions`.
@@ -41,7 +42,7 @@ internal readonly struct SceneView : IRenderView
     public uint PixelHeight { get; }
 }
 
-internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
+internal sealed class TrianglePresentPass : IPresentPass<SceneView>
 {
     private readonly Mesh _triangle;
     private readonly GraphicsProgram _shader;
@@ -56,32 +57,31 @@ internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
 
     public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
 
-    public void Present(RenderContext<SceneView, int> context)
+    public void Present(RenderContext<SceneView> context)
     {
         Framebuffer? target = context.SwapchainTarget;
         if (target == null)
             return;
 
+        // The command buffer is already begun; submitting it ends and queues it.
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.Begin();
         cmd.SetFramebuffer(target);
         cmd.ClearDepthStencil(1, 0);
         cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
-        cmd.End();
 
         context.SubmitCommandBuffer(cmd);
         context.Present();
     }
 }
 
-internal sealed class TrianglePipeline : RenderPipeline<SceneView, int>
+internal sealed class TrianglePipeline : RenderPipeline<SceneView>
 {
-    private readonly IPresentPass<SceneView, int> _present;
+    private readonly IPresentPass<SceneView> _present;
 
-    public TrianglePipeline(IPresentPass<SceneView, int> present) => _present = present;
+    public TrianglePipeline(IPresentPass<SceneView> present) => _present = present;
 
     protected override void InitializePasses() => SetPresentPass(_present);
 }
@@ -306,37 +306,57 @@ The allocator is governed by:
 ### Render graph and pass lifetime
 
 Rendering is no longer "record commands into a `CommandBuffer` yourself each frame" - it's a
-declarative graph of passes over a `RenderPipeline<TView, TDrawCommand>`:
+declarative graph of passes over a `RenderPipeline<TView>`:
 
-- **`IPass<TView, TDrawCommand>`** - a single offscreen pass. `Setup(RenderContextBuilder)` runs once
-  (lazily, on first use) and declares the graph textures the pass reads and writes via
-  `GetInputTexture`/`GetOutputTexture`; a pass may nominate one of its outputs as its `SetMainOutput`.
-  `Render(RenderContext<TView, TDrawCommand>)` runs every dispatch and records the pass's actual work.
-- **`IPresentPass<TView, TDrawCommand>`** - the one required, terminal pass. `Setup(PresentContextBuilder)`
-  declares the textures it reads from the graph and whether it needs the window's swapchain this run
+- **`IPass<TView>`** - a single offscreen pass. `Setup(RenderContextBuilder)` runs once (lazily, on
+  first use) and declares the resources the pass reads and writes: `GetInputTexture(id)` /
+  `GetInputBuffer(id)` reference a resource by ID only (the producer owns the description), while
+  `GetOutputTexture(id, desc)` / `GetOutputBuffer(id, desc)` declare a resource this pass produces.
+  `Render(RenderContext<TView>)` runs every dispatch and records the pass's actual work.
+- **`RasterPass<TView>`** - a convenience base for the common raster pass. Declare the render target in
+  `Setup` with `SetTarget(builder, id, desc)` (or `SetTargets` for a multi-format MRT target), then in
+  `Render` rent a command buffer, call `BindTarget(context, cmd)` to bind the target and apply its
+  declared load/clear ops, record draws, and submit. Raw `IPass` remains the low-level escape hatch.
+- **`IPresentPass<TView>`** - the one required, terminal pass. `Setup(PresentContextBuilder)` declares
+  the resources it reads from the graph and whether it needs the window's swapchain this run
   (`RequestSwapchain()`). `Present(...)` runs after every other pass; grab `context.SwapchainTarget`,
   draw into it, and call `context.Present()` to arm the present. Do nothing to stay offscreen.
-- **`RenderPipeline<TView, TDrawCommand>`** - subclass and override `InitializePasses()` to call
-  `AddPass` for each `IPass` and `SetPresentPass` once. The pipeline lazily solves the declared passes
-  into a `RenderGraph` the first time it runs: passes are topologically sorted so readers run after
-  their writers, and the resource nominated by the last pass to call `SetMainOutput` becomes the
-  graph's presentation source. A dependency cycle throws.
+- **`RenderPipeline<TView>`** - subclass and override `InitializePasses()` to call `AddPass` for each
+  `IPass` and `SetPresentPass` once. It may also declare shared resources centrally with
+  `DeclareTexture(id, desc)` / `DeclareBuffer(id, desc)` so many passes can reference them by ID
+  without one owning the description. The pipeline lazily solves the declared passes into a
+  `RenderGraph` the first time it runs: passes are topologically sorted so readers run after their
+  writers. Every input ID must be produced by some pass output or a central declaration, otherwise
+  build throws; a dependency cycle throws too.
+- **Command buffers** - obtained only from the context (`context.GetCommandBuffer(name)`), which begins
+  the buffer, and submitted only through the same context (`context.SubmitCommandBuffer(cmd)`), which
+  ends and queues it. Passes never call `Begin`/`End`. A buffer rented but never submitted is released
+  and logs a warning. Submitted buffers retire through the execution ring's fence; passes never block.
 - **`GraphTextureDesc`** - describes a graph texture: view-relative (`GraphTextureDesc.ViewSized`,
   scaled off `IRenderView.PixelWidth`/`PixelHeight`) or fixed-size (`GraphTextureDesc.Sized`), plus
-  color formats and whether it has a depth attachment. Passes sharing a resource ID share one
-  physical target; the first pass to declare an ID wins its description.
-- **`TextureHandle`** - the opaque handle a pass gets back from `RenderContextBuilder`/`PresentContextBuilder`
-  during setup; resolve it to a real `RenderTexture` during rendering via `context.GetRenderTexture(handle)`.
+  color formats and whether it has a depth attachment.
+- **`GraphBufferDesc`** - describes a graph buffer by size and usage (`GraphBufferDesc.Structured`,
+  `.Uniform`, or `.Of`); a structured buffer is distinct from a uniform or vertex buffer. Buffer
+  resources are transient (rented per execution) like textures.
+- **Load/store ops** - an output declaration carries `TargetLoadStoreOps` (per-attachment `LoadAction`
+  Clear/Load/DontCare and `StoreAction` Store/DontCare). The default follows lifetime: transient
+  targets Clear, persistent/history/imported targets Load. `RasterPass.BindTarget` applies them; clear
+  values are supplied at record time.
+- **History and imported resources** - `GetOutputTexture(id, desc, history: N)` (and the buffer form)
+  makes a persistent versioned resource: the graph keeps a ring of `N+1` physical copies and rotates
+  the current one each execution. Resolve by age with `context.GetRenderTexture(handle, framesAgo: k)`
+  (`framesAgo: 0` is the current write target) - the basis for TAA history and temporal reprojection.
+  `builder.ImportTexture(id, existing)` brings an externally-owned render target into the graph; the
+  caller keeps ownership.
+- **`TextureHandle` / `BufferHandle`** - the opaque handles a pass gets back from the builder during
+  setup; resolve them to a real `RenderTexture` / `DeviceBuffer` during rendering via
+  `context.GetRenderTexture(handle)` / `context.GetRenderBuffer(handle)`.
 - **`IRenderView`** - the minimal size contract (`PixelWidth`/`PixelHeight`) a pipeline's view type must
   implement so view-relative textures can be sized; add richer per-view data (matrices, frustum) on
-  top in your own type.
-- **`IDrawCommandProvider<TDrawCommand>`** / **`IRenderable`** / **`RenderQuery`** - the optional seam between
-  scene and framework. `Provider.Initialize(view)` runs once per view; passes then pull slices of
-  draw commands on demand via `context.GetDrawCommands(query)`, where `RenderQuery` carries a
-  `SortMode` and an optional `FrustumOverride` (e.g. for a shadow pass culling from a light instead
-  of the camera).
-- **`IPassProfiler`** - optional per-dispatch hooks (`BeginSample`/`EndSample`, `RecordDrawCall`, and
-  a `RequestCapture`/`Capture` pair the pipeline calls between passes to copy pass outputs to an
+  top in your own type. How a pass obtains and issues its draws is entirely up to the pass body; the
+  graph does not model draw commands, culling, or sorting.
+- **`IPassProfiler`** - optional per-dispatch hooks (`BeginSample`/`EndSample`, and a
+  `RequestCapture`/`Capture` pair the pipeline calls between passes to copy pass outputs to an
   intermediate texture for inspection).
 
 Dispatch a pipeline against a list of views with `GraphicsDevice.DispatchGraph`:
