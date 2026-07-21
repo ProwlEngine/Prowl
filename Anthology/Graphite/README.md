@@ -1,29 +1,93 @@
 # Prowl.Graphite
 
-A cross-platform, low-level graphics and compute abstraction for .NET, with backends for Vulkan and Direct3D 11. Graphite powers the rendering layer of the Prowl Game Engine and can be used to build high-performance 2D and 3D games, simulations, tools, and other graphical applications.
+A cross-platform, low-level graphics and compute abstraction for .NET, with a Vulkan backend. Graphite powers the rendering layer of the Prowl Game Engine and can be used to build high-performance 2D and 3D games, simulations, tools, and other graphical applications.
 
 Graphite started life as a modified and butchered version of NeoVeldrid, and by extension Veldrid, but has diverged far enough in its setup and API surface that it is now considered a separate library rather than a fork. See [API Differences](#api-differences) for the systems that intentionally break from upstream Veldrid.
 
 ## Features
 
-- A single, unified API over Vulkan and Direct3D 11.
-- macOS support via MoltenVK (Vulkan-over-Metal translation).
+- A Vulkan backend, with macOS support via MoltenVK (Vulkan-over-Metal translation).
 - A monolithic `ShaderProgram` model that bundles shader and pipeline state, with per-backend shader compilation handled internally.
-- A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules (Vulkan sets/bindings, D3D registers).
-- A built-in frames-in-flight ring with per-frame transient (bump-allocated) GPU memory.
-- Opt-in, zero-cost-when-disabled validation and profiling layers, toggled at compile time.
-- Per-backend build trimming, so unused backends can be excluded entirely from the build.
+- A string/id-driven `PropertySet` resource binding system that hides per-backend binding rules.
+- A declarative render graph (`RenderPipeline`, `IPass`, `IPresentPass`) that orders passes from their
+  declared texture reads/writes and resolves shared render targets automatically.
+- A frame-less `ExecutionTask` ring for CPU/GPU synchronization, with per-execution transient
+  (bump-allocated) GPU memory.
+- Runtime-toggleable validation and profiling layers, controlled via `GraphicsDeviceOptions`.
 
 ## Requirements
 
 - .NET 10 (`net10.0`).
-- A GPU and driver supporting one of the target backends.
+- A GPU and driver supporting Vulkan.
 - [Silk.NET](https://github.com/dotnet/Silk.NET) 2.23.0 (pulled in transitively; provides the native bindings).
 - [Prowl.Vector](https://www.nuget.org/packages/Prowl.Vector) 2.1.0 for vector and matrix math.
 
 ## Quick Start
 
-Create a `GraphicsDevice`, record commands into a `CommandBuffer`, and present inside a frame:
+Rendering is built around a render graph: a `RenderPipeline` owns a list of `IPass`es plus one required
+`IPresentPass`, and a `GraphicsDevice` dispatches that pipeline against a list of views. The simplest
+possible pipeline has no offscreen passes at all, and draws straight into the swapchain from its present pass:
+
+```cs
+internal readonly struct SceneView : IRenderView
+{
+    public SceneView(uint width, uint height)
+    {
+        PixelWidth = width;
+        PixelHeight = height;
+    }
+
+    public uint PixelWidth { get; }
+    public uint PixelHeight { get; }
+}
+
+internal sealed class TrianglePresentPass : IPresentPass<SceneView, int>
+{
+    private readonly Mesh _triangle;
+    private readonly GraphicsProgram _shader;
+
+    public TrianglePresentPass(Mesh triangle, GraphicsProgram shader)
+    {
+        _triangle = triangle;
+        _shader = shader;
+    }
+
+    public string Name => "Present";
+
+    public void Setup(PresentContextBuilder builder) => builder.RequestSwapchain();
+
+    public void Present(RenderContext<SceneView, int> context)
+    {
+        Framebuffer? target = context.SwapchainTarget;
+        if (target == null)
+            return;
+
+        CommandBuffer cmd = context.GetCommandBuffer("Triangle");
+        cmd.Begin();
+        cmd.SetFramebuffer(target);
+        cmd.ClearDepthStencil(1, 0);
+        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        cmd.SetShader(_shader);
+        cmd.SetVertexSource(_triangle);
+        cmd.DrawIndexed();
+        cmd.End();
+
+        context.SubmitCommandBuffer(cmd);
+        context.Present();
+    }
+}
+
+internal sealed class TrianglePipeline : RenderPipeline<SceneView, int>
+{
+    private readonly IPresentPass<SceneView, int> _present;
+
+    public TrianglePipeline(IPresentPass<SceneView, int> present) => _present = present;
+
+    protected override void InitializePasses() => SetPresentPass(_present);
+}
+```
+
+Creating a device and dispatching the pipeline each frame:
 
 ```cs
 GraphicsDeviceOptions options = new()
@@ -34,42 +98,29 @@ GraphicsDeviceOptions options = new()
     PreferStandardClipSpaceYDirection = true
 };
 
-// Backend-specific factories: GraphicsDevice.CreateVulkan / CreateD3D11.
 GraphicsDevice device = GraphicsDevice.CreateVulkan(options, swapchainDescription, vulkanOptions);
 
 GraphicsProgram shader = /* load + create a ShaderProgram */;
 Mesh triangle = /* create vertex/index buffers */;
-CommandBuffer buffer = device.ResourceFactory.CreateCommandBuffer();
+TrianglePipeline pipeline = new(new TrianglePresentPass(triangle, shader));
+SceneView[] views = { new SceneView(600, 600) };
 
-// Per-frame render loop:
-Frame frame = device.BeginFrame();
-
-buffer.Begin();
-buffer.SetFramebuffer(device.SwapchainFramebuffer);
-buffer.ClearDepthStencil(1, 0);
-buffer.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
-buffer.SetShader(shader);
-buffer.SetVertexSource(triangle);
-buffer.DrawIndexed();
-buffer.End();
-
-frame.SubmitCommands(buffer);
-device.EndFrame(frame);
-device.SwapBuffers();
+// Per-frame render loop: builds an ExecutionTask internally, runs the pipeline for every view, and
+// swaps buffers if any view's present pass requested it.
+device.DispatchGraph(pipeline, views);
 ```
 
-The [`Samples/`](Samples) directory contains complete, runnable versions of this loop (window creation, shader loading, and mesh setup included).
+The [`Samples/`](Samples) directory contains complete, runnable versions of this and larger graphs
+(window creation, shader loading, and mesh setup included).
 
 ## Backends
 
 | Backend       | Windows | Linux | macOS |
 |---------------|:-------:|:-----:|:-----:|
-| Direct3D 11   | Yes     | -     | -     |
 | Vulkan        | Yes     | Yes   | Yes (via MoltenVK) |
 
 A device is created through the backend-specific factory methods on `GraphicsDevice`
-(`CreateVulkan`, `CreateD3D11`). The `GraphicsBackend` enum enumerates the
-available backends.
+(`CreateVulkan`). The `GraphicsBackend` enum enumerates the available backends.
 
 ## Building
 
@@ -81,34 +132,30 @@ dotnet build Prowl.Graphite.slnx
 
 ### Build configuration flags
 
-Several MSBuild properties control which optional systems are compiled in. They can be set on the
-command line (`-p:Flag=true`) or in `Directory.Build.props`.
+One MSBuild property controls backend trimming. It can be set on the command line
+(`-p:ExcludeVulkan=true`) or in `Directory.Build.props`.
 
-| Property            | Default | Effect                                                        |
-|---------------------|---------|---------------------------------------------------------------|
-| `DisableValidation` | `false` | When unset, defines `VALIDATE_USAGE` and compiles in the validation layers. |
-| `DisableProfiling`  | `false` | When unset, defines `PROFILE_USAGE` and compiles in the profiling layers.   |
-| `ExcludeVulkan`     | `false` | Excludes the Vulkan backend (and its Silk.NET packages) from the build.     |
-| `ExcludeD3D11`      | `false` | Excludes the Direct3D 11 backend from the build.              |
-
-Backend exclusion is also surfaced as `ExcludeVulkan` / `ExcludeD3D11`
-properties in the root `Directory.Build.props`, and each maps to a corresponding
-`EXCLUDE_*_BACKEND` compiler symbol.
+| Property        | Default | Effect                                                                                                      |
+|-----------------|---------|--------------------------------------------------------------------------------------------------------------------|
+| `ExcludeVulkan` | `false` | Excludes the Vulkan backend (and its Silk.NET packages) from the build, defining `EXCLUDE_VULKAN_BACKEND`. |
 
 ## Validation and Profiling Layers
 
-Graphite ships two optional, compile-time-gated layers that mirror the core source tree:
+Graphite ships two optional layers that mirror the core source tree, toggled at runtime through
+`GraphicsDeviceOptions` rather than at compile time:
 
-- **Validation** (`VALIDATE_USAGE`, on by default): extra argument and state checks that throw
-  descriptive exceptions on misuse. Validation lives under `Graphite/ValidationLayers`, mirroring
-  the structure of `Graphite/Core` and `Graphite/Platform`.
-- **Profiling** (`PROFILE_USAGE`, on by default): allocation and command counters collected by the
-  `GraphicsDevice`. Profiling lives under `Graphite/Profiling`, mirroring the same structure.
+- **Validation** (`GraphicsDeviceOptions.EnableValidation`, defaults to enabled when `null`): extra
+  argument and state checks that throw descriptive exceptions on misuse. Validation lives under
+  `Graphite/ValidationLayers`, mirroring the structure of `Graphite/Core` and `Graphite/Platform`,
+  and every check is gated behind `GraphicsDevice.ValidationEnabled`.
+- **Profiling** (`GraphicsDeviceOptions.EnableProfiling`, defaults to disabled when `null`):
+  allocation and command counters collected by the `GraphicsDevice` and readable through
+  `GraphicsDevice.GetProfile()`. Profiling lives under `Graphite/Profiling`, mirroring the same
+  structure, and every counter is gated behind `GraphicsDevice.ProfilingEnabled`.
 
-Both layers are written so that every method carries a `[Conditional]` attribute, meaning the
-compiler strips the bodies *and* the call sites entirely when the corresponding symbol is not
-defined. Disable them (`-p:DisableValidation=true` / `-p:DisableProfiling=true`) for release builds
-to remove all overhead.
+Both settings are read once at device creation and apply for the device's lifetime. Leave
+`EnableValidation` on during development; disable it for release builds where the extra checks
+aren't needed. `EnableProfiling` stays off unless you're actively reading `GetProfile()`.
 
 ## API Differences
 
@@ -192,8 +239,8 @@ propertySet.SetTexture(internedId, MainTextureObject, MainTextureSampler);
 // SetSampler binds a sampler independently of any texture.
 propertySet.SetSampler("SecondaryTexture_SamplerObject", SecondarySampler);
 
-// Transient uniform properties. Transient uniforms are owned by the buffered frames-in-flight
-// system, and are automatically allocated and disposed.
+// Transient uniform properties. Transient uniforms are owned by the execution ring's transient
+// allocator, and are automatically allocated and disposed.
 propertySet.SetFloat("FloatProperty", 10.3f);
 propertySet.SetMatrix("MatrixProperty", ObjectMatrix);
 
@@ -209,57 +256,110 @@ propertySet.SetBuffer("UBOBuffer", MyUBOBuffer, readOnly: true);
 propertySet.SetBuffer("UBOBuffer", MyUBOBuffer, readOnly: false);
 ```
 
-### Frames-in-flight system
+### Execution ring
 
-Graphite has a built-in frames-in-flight ring rather than leaving CPU/GPU synchronization to the
-caller. Work is submitted through `Frame` objects obtained from the `GraphicsDevice`, and the
-device transparently throttles the CPU so that no more than `MaxFramesInFlight` frames are ever
-queued ahead of the GPU.
+Veldrid leaves CPU/GPU synchronization entirely to the caller: `GraphicsDevice.SubmitCommands`
+takes an optional `Fence` you own, and any double/triple buffering (which command list or resource
+generation is safe to reuse) is the caller's responsibility to track by hand.
 
-A frame is a single unit of GPU work with a monotonic id, a ring slot, and a completion fence:
+Graphite builds a frames-in-flight ring into the device instead, addressed through `ExecutionTask`.
+`GraphicsDevice.BeginExecution()` grabs a free ring slot (blocking on the oldest in-flight task if
+all slots are busy) and hands back an `ExecutionTask`; `CompleteExecution` closes it out
+non-blockingly, and the ring's own fence tells you when it's safe to reuse that slot again. In
+practice you rarely call these directly - `GraphicsDevice.DispatchGraph` does it for you around a
+`RenderPipeline` run:
 
 ```cs
-Frame frame = device.BeginFrame();   // Blocks if the oldest ring slot is still in flight.
-frame.SubmitCommands(commandBuffer);
-device.EndFrame(frame);              // Signals the frame's completion fence; does not block.
+ExecutionTask task = device.BeginExecution();  // Blocks if the oldest ring slot is still in flight.
+// ... rent command buffers via a RenderContext, submit them ...
+device.CompleteExecution(task);                // Signals the task's completion fence; does not block.
 device.SwapBuffers();
 ```
 
 Key pieces:
 
-- `GraphicsDevice.MaxFramesInFlight` - the ring depth. Configured via
+- `GraphicsDevice.MaxExecutingTasks` - the ring depth. Configured via
   `GraphicsDeviceOptions.MaxFramesInFlight` (defaults to `3` when left `0`).
-- `BeginFrame` / `EndFrame` - open and close the active frame. `BeginFrame` blocks only when the
-  ring slot it is about to reuse has not yet completed on the GPU.
-- `Frame.FrameId` / `Frame.RingSlot` - a monotonic id (starting at 1; 0 is the "no frame"
-  sentinel) and the `[0, MaxFramesInFlight)` slot it occupies.
-- `Frame.CompletionFence` - owned and recycled by the frame system. Do not reset it or hold the
-  reference past the next `BeginFrame` for the same ring slot.
-- `IsFrameComplete` / `WaitForFrame` / `LastCompletedFrameId` / `FramesInFlight` - poll, block on,
-  or query frame completion. These also opportunistically advance the device's notion of the last
-  completed frame.
+- `BeginExecution` / `CompleteExecution` - open and close an execution. `BeginExecution` blocks only
+  when the ring slot it is about to reuse has not yet completed on the GPU.
+- `ExecutionTask.Id` / `ExecutionTask.RingSlot` - a monotonic id (starting at 1; 0 is the "none"
+  sentinel) and the `[0, MaxExecutingTasks)` slot it occupies.
+- `ExecutionTask.CompletionFence` - owned and recycled by the ring. Do not reset it or hold the
+  reference past the next `BeginExecution` for the same ring slot.
+- `IsExecutionComplete` / `WaitForExecution` / `LastCompletedExecutionId` / `ExecutingTasks` /
+  `ActiveExecutions` - poll, block on, or query execution completion. These also opportunistically
+  advance the device's notion of the last completed execution.
 
-#### Transient (per-frame) memory
+#### Transient (per-execution) memory
 
-Each ring slot owns a bump-allocated transient buffer. `Frame.AllocateTransient(sizeInBytes)` (or
-the `GraphicsDevice.AllocateTransient` convenience wrapper) hands back a `DeviceBufferRange` that
-is valid for GPU use until the frame's completion fence signals, after which the memory is
-recycled. This is what backs transient `PropertySet` uniforms. The allocator is governed by:
+Each ring slot owns a bump-allocated transient buffer. `RenderContext.AllocateTransient(sizeInBytes)`
+hands back a `DeviceBufferRange` that is valid for GPU use until the execution's completion fence
+signals, after which the memory is recycled. This is what backs transient `PropertySet` uniforms.
+The allocator is governed by:
 
 | Option                          | Default | Behavior                                                          |
 |---------------------------------|---------|-------------------------------------------------------------------|
 | `TransientBufferInitialSize`    | 4 MB    | Initial size of each per-slot transient buffer.                   |
-| `TransientBufferSoftCapBytes`   | 64 MB   | Per-frame soft cap; exceeding it logs a one-shot warning.         |
-| `TransientBufferHardCapBytes`   | 256 MB  | Per-frame hard cap; exceeding it throws a `RenderException`.      |
+| `TransientBufferSoftCapBytes`   | 64 MB   | Per-execution soft cap; exceeding it logs a one-shot warning.     |
+| `TransientBufferHardCapBytes`   | 256 MB  | Per-execution hard cap; exceeding it throws a `RenderException`.  |
+
+### Render graph and pass lifetime
+
+Rendering is no longer "record commands into a `CommandBuffer` yourself each frame" - it's a
+declarative graph of passes over a `RenderPipeline<TView, TDrawCommand>`:
+
+- **`IPass<TView, TDrawCommand>`** - a single offscreen pass. `Setup(RenderContextBuilder)` runs once
+  (lazily, on first use) and declares the graph textures the pass reads and writes via
+  `GetInputTexture`/`GetOutputTexture`; a pass may nominate one of its outputs as its `SetMainOutput`.
+  `Render(RenderContext<TView, TDrawCommand>)` runs every dispatch and records the pass's actual work.
+- **`IPresentPass<TView, TDrawCommand>`** - the one required, terminal pass. `Setup(PresentContextBuilder)`
+  declares the textures it reads from the graph and whether it needs the window's swapchain this run
+  (`RequestSwapchain()`). `Present(...)` runs after every other pass; grab `context.SwapchainTarget`,
+  draw into it, and call `context.Present()` to arm the present. Do nothing to stay offscreen.
+- **`RenderPipeline<TView, TDrawCommand>`** - subclass and override `InitializePasses()` to call
+  `AddPass` for each `IPass` and `SetPresentPass` once. The pipeline lazily solves the declared passes
+  into a `RenderGraph` the first time it runs: passes are topologically sorted so readers run after
+  their writers, and the resource nominated by the last pass to call `SetMainOutput` becomes the
+  graph's presentation source. A dependency cycle throws.
+- **`GraphTextureDesc`** - describes a graph texture: view-relative (`GraphTextureDesc.ViewSized`,
+  scaled off `IRenderView.PixelWidth`/`PixelHeight`) or fixed-size (`GraphTextureDesc.Sized`), plus
+  color formats and whether it has a depth attachment. Passes sharing a resource ID share one
+  physical target; the first pass to declare an ID wins its description.
+- **`TextureHandle`** - the opaque handle a pass gets back from `RenderContextBuilder`/`PresentContextBuilder`
+  during setup; resolve it to a real `RenderTexture` during rendering via `context.GetRenderTexture(handle)`.
+- **`IRenderView`** - the minimal size contract (`PixelWidth`/`PixelHeight`) a pipeline's view type must
+  implement so view-relative textures can be sized; add richer per-view data (matrices, frustum) on
+  top in your own type.
+- **`IRenderCuller<TDrawCommand>`** / **`IRenderable`** / **`RenderQuery`** - the optional seam between
+  scene and framework. `Culler.Initialize(view)` runs once per view; passes then pull slices of
+  draw commands on demand via `context.GetDrawCommands(query)`, where `RenderQuery` carries a
+  `SortMode` and an optional `FrustumOverride` (e.g. for a shadow pass culling from a light instead
+  of the camera).
+- **`IPassProfiler`** - optional per-dispatch hooks (`BeginSample`/`EndSample`, `RecordDrawCall`, and
+  a `RequestCapture`/`Capture` pair the pipeline calls between passes to copy pass outputs to an
+  intermediate texture for inspection).
+
+Dispatch a pipeline against a list of views with `GraphicsDevice.DispatchGraph`:
+
+```cs
+device.DispatchGraph(pipeline, views, profiler: null);
+```
+
+This opens one `ExecutionTask`, runs `RenderPipeline.ExecuteView` (ordered passes, then the present
+pass) for every view, completes the execution, and calls `SwapBuffers()` if any view's present pass
+requested a present.
 
 ## Samples
 
 Runnable samples live under [`Samples/`](Samples) and share common setup (windowing, shader and
 model loading) through the `Shared` project:
 
-- `HelloTriangle` - the minimal render loop.
+- `HelloTriangle` - the minimal render loop: one present pass, no offscreen passes.
 - `TexturedQuad` - texture and sampler binding.
 - `Cube` / `CubeGrid` - 3D transforms and instancing-style draws.
+- `PBRRenderer` - a multi-pass render graph: an offscreen "Scene" pass, a two-step bloom
+  (downsample/upsample), and a present pass that composites Scene + bloom to the swapchain. The
+  graph orders the four passes from their declared texture reads/writes.
 
 Run one with, for example:
 
@@ -271,10 +371,10 @@ dotnet run --project Samples/HelloTriangle
 
 Tests live under [`Tests/`](Tests) and are split into CPU tests (pure value-type tests, run in
 parallel) and GPU tests (which share one device per backend and run serialized). GPU shaders are
-authored in Slang (`.slang`) under `Tests/Shaders` and compiled to per-backend bytecode at runtime
-(SPIR-V for Vulkan, HLSL for D3D11); there are no checked-in compiled shaders.
+authored in Slang (`.slang`) under `Tests/Shaders` and compiled to SPIR-V for Vulkan at runtime;
+there are no checked-in compiled shaders.
 See [`Tests/README.md`](Tests/README.md) for the current suite layout and the in-progress
-migration of older suites onto the `GraphicsProgram` / `PropertySet` / `Frame` API.
+migration of older suites onto the `GraphicsProgram` / `PropertySet` / `ExecutionTask` API.
 
 ```sh
 dotnet test Tests/Prowl.Graphite.Tests.csproj
