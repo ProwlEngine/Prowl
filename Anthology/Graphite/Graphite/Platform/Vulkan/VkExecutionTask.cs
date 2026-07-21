@@ -12,6 +12,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly VkFence _slotFenceWrapper;
     private readonly VkBuffer _transientPrimary;
     private readonly List<VkBuffer> _transientOverflow;
+    private readonly List<VkCommandBuffer> _rentedCommandBuffers;
     private uint _transientHead;
     private uint _activeTransientSize;
     private VkBuffer _activeTransientBuffer;
@@ -27,7 +28,8 @@ internal sealed class VkExecutionTask : ExecutionTask
         uint ringSlot,
         VkFence slotFenceWrapper,
         VkBuffer transientPrimary,
-        List<VkBuffer> transientOverflow)
+        List<VkBuffer> transientOverflow,
+        List<VkCommandBuffer> rentedCommandBuffers)
     {
         _gd = gd;
         _id = id;
@@ -35,9 +37,17 @@ internal sealed class VkExecutionTask : ExecutionTask
         _slotFenceWrapper = slotFenceWrapper;
         _transientPrimary = transientPrimary;
         _transientOverflow = transientOverflow;
+        _rentedCommandBuffers = rentedCommandBuffers;
 
         _activeTransientBuffer = transientPrimary;
         _activeTransientSize = transientPrimary.SizeInBytes;
+    }
+
+
+    /// <inheritdoc/>
+    internal override void TrackRentedCommandBuffer(CommandBuffer commandBuffer)
+    {
+        _rentedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandBuffer));
     }
 
 

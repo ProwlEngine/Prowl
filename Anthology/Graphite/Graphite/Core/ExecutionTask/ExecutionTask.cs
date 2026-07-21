@@ -26,6 +26,13 @@ public abstract partial class ExecutionTask
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
 
     /// <summary>
+    /// Records that a command buffer was rented for this execution so the owning execution can reclaim it
+    /// once its GPU work retires. Backends without pooling may ignore this.
+    /// </summary>
+    /// <param name="commandBuffer">The command buffer rented via the render context.</param>
+    internal virtual void TrackRentedCommandBuffer(CommandBuffer commandBuffer) { }
+
+    /// <summary>
     /// Allocates a transient uniform buffer range from this task's bump allocator. Valid until the
     /// completion fence signals, then recycled.
     /// </summary>

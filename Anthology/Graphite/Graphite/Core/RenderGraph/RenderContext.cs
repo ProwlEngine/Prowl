@@ -59,9 +59,10 @@ public sealed class RenderContext<TView, TDrawCommand>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
     {
-        CommandBuffer cb = _device.ResourceFactory.CreateCommandBuffer();
+        CommandBuffer cb = _device.RentGraphCommandBuffer();
 
         cb.Execution = _task;
+        _task.TrackRentedCommandBuffer(cb);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
 

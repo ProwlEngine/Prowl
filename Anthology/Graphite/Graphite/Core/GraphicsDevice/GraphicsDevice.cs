@@ -90,6 +90,12 @@ public abstract partial class GraphicsDevice : IDisposable
     public abstract ResourceFactory ResourceFactory { get; }
 
     /// <summary>
+    /// Rents a command buffer for a render-graph pass to record into. Backends that pool command
+    /// buffers hand out a recycled, reset instance; the default simply creates a fresh one.
+    /// </summary>
+    internal virtual CommandBuffer RentGraphCommandBuffer() => ResourceFactory.CreateCommandBuffer();
+
+    /// <summary>
     /// Main swapchain for this device. Null if the device has no main swapchain.
     /// </summary>
     public abstract Swapchain MainSwapchain { get; }

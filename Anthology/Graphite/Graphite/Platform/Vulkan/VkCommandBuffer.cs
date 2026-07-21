@@ -24,6 +24,12 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private Silk.NET.Vulkan.CommandBuffer _cb;
     private bool _destroyed;
 
+    /// <summary>
+    /// True when this instance is not mid-recording and can be reset and handed out again. A buffer left
+    /// begun-but-not-ended cannot be recycled (its next Begin would throw) and must be disposed instead.
+    /// </summary>
+    internal bool CanRecycle => !_commandBufferBegun && !_destroyed;
+
     private bool _commandBufferBegun;
     private bool _commandBufferEnded;
     private Rect2D[] _scissorRects = Array.Empty<Rect2D>();

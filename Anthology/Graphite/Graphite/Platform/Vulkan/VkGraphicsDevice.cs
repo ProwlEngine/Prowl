@@ -64,6 +64,13 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
     private Stack<SharedCommandPool> _sharedGraphicsCommandPools = new();
     private VkDescriptorPoolManager _descriptorPoolManager;
 
+    // Pool of recyclable graph command buffers. Rented by render-graph passes and returned once their
+    // GPU work retires, so a pass no longer allocates a fresh command pool + buffers every frame.
+    private readonly object _graphCommandBufferPoolLock = new();
+    private readonly Stack<VkCommandBuffer> _freeGraphCommandBuffers = new();
+    private readonly List<VkCommandBuffer> _allGraphCommandBuffers = [];
+    private bool _graphCommandBuffersDisposed;
+
     // Live per-shader descriptor-set caches, swept each frame to enforce the retention window even for
     // shaders that have stopped rendering. Registration may come from asset-load threads, so guarded.
     private readonly List<VkDescriptorSetCache> _descriptorSetCaches = [];
@@ -268,6 +275,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         public VkBuffer TransientPrimary;
         public byte* TransientMapped;
         public List<VkBuffer> TransientOverflow;
+        public List<VkCommandBuffer> RentedCommandBuffers;
         public ulong CurrentExecutionId;
     }
 
@@ -295,6 +303,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
                 TransientPrimary = primary,
                 TransientMapped = mapped,
                 TransientOverflow = [],
+                RentedCommandBuffers = [],
                 CurrentExecutionId = 0,
             };
         }
@@ -322,6 +331,14 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
             slot.TransientOverflow.Clear();
         }
 
+        // The slot's previous execution is complete, so its rented command buffers can be reclaimed.
+        if (slot.RentedCommandBuffers.Count > 0)
+        {
+            foreach (VkCommandBuffer rented in slot.RentedCommandBuffers)
+                ReturnGraphCommandBuffer(rented);
+            slot.RentedCommandBuffers.Clear();
+        }
+
         // Age out descriptor sets that have gone unused past the retention window. Safe: anything freed
         // is older than MaxExecutingTasks executions and therefore already GPU-retired.
         lock (_descriptorSetCachesLock)
@@ -333,7 +350,7 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         slot.CurrentExecutionId = executionId;
 
         return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
-            slot.TransientPrimary, slot.TransientOverflow);
+            slot.TransientPrimary, slot.TransientOverflow, slot.RentedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)
@@ -394,6 +411,50 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         overflow.SetTransientWrites(true);
         overflow.Name = "TransientOverflow";
         return overflow;
+    }
+
+    internal override CommandBuffer RentGraphCommandBuffer()
+    {
+        lock (_graphCommandBufferPoolLock)
+        {
+            if (_freeGraphCommandBuffers.Count > 0)
+                return _freeGraphCommandBuffers.Pop();
+        }
+
+        CommandBufferDescription desc = new();
+        VkCommandBuffer cb = new(this, ref desc);
+        lock (_graphCommandBufferPoolLock)
+        {
+            _allGraphCommandBuffers.Add(cb);
+        }
+        return cb;
+    }
+
+    // Returns a rented graph command buffer once its owning execution has retired (GPU-complete). Clean
+    // buffers go back to the free list for reuse; a buffer left mid-recording can't be reset, so dispose it.
+    internal void ReturnGraphCommandBuffer(VkCommandBuffer cb)
+    {
+        lock (_graphCommandBufferPoolLock)
+        {
+            if (_graphCommandBuffersDisposed)
+                return;
+
+            if (cb.CanRecycle)
+            {
+                _freeGraphCommandBuffers.Push(cb);
+            }
+            else
+            {
+                _allGraphCommandBuffers.Remove(cb);
+                cb.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Test/diagnostic hook: number of distinct graph command-buffer instances ever allocated.</summary>
+    internal int PooledGraphCommandBufferCount
+    {
+        get { lock (_graphCommandBufferPoolLock) { return _allGraphCommandBuffers.Count; } }
     }
 
     internal void SubmitCommandBufferInternal(CommandBuffer cl)
@@ -1279,6 +1340,15 @@ internal unsafe class VkGraphicsDevice : GraphicsDevice
         if (_debugCallbackFunc.Handle != default)
         {
             _extDebugReport?.DestroyDebugReportCallback(_instance, _debugCallbackHandle, null);
+        }
+
+        lock (_graphCommandBufferPoolLock)
+        {
+            _graphCommandBuffersDisposed = true;
+            foreach (VkCommandBuffer cb in _allGraphCommandBuffers)
+                cb.Dispose();
+            _allGraphCommandBuffers.Clear();
+            _freeGraphCommandBuffers.Clear();
         }
 
         _descriptorPoolManager.DestroyAll();
