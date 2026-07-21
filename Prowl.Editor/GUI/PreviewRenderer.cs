@@ -7,6 +7,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
+
 namespace Prowl.Editor.GUI;
 
 /// <summary>
@@ -158,10 +160,7 @@ public class PreviewRenderer : IDisposable
     {
         if (_rt == null) return;
 
-        _camera.UpdateRenderData();
-
-        var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
-        pipeline.Render(_camera, new RenderingData { DisplayGrid = ShowGrid });
+        CameraPipelineRunner.Render(_camera, new RenderingData { DisplayGrid = ShowGrid });
     }
 
     /// <summary>Resize the preview render target.</summary>

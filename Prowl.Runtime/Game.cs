@@ -15,6 +15,8 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
 
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
+
 namespace Prowl.Runtime;
 
 public class EchoLogger : IEchoLogger
@@ -132,29 +134,15 @@ public abstract class Game
                 Scene? currentScene = Scene.Current;
 
                 // === Start Graphics ===
-
-                {
-                    var frameStart = Graphics.GetCommandBuffer("Frame Start");
-                    frameStart.SetRenderTarget(null);
-                    frameStart.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    frameStart.ClearRenderTarget(true, true, new Color(0, 0, 0, 1));
-                    Graphics.Submit(frameStart);
-                }
-
-                // === End of Start Graphics ===
+                // Graphite no longer allows recording a bare command buffer outside a pipeline dispatch,
+                // so the old manual swapchain clears here are gone - the camera pipeline's present pass
+                // and Paper's present pass now own writing the swapchain outright, each frame.
 
                 BeginRender();
 
                 OnRender(currentScene);
 
                 EndRender();
-
-                {
-                    var preGui = Graphics.GetCommandBuffer("Pre-GUI");
-                    preGui.SetRenderTarget(null);
-                    preGui.SetViewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
-                    Graphics.Submit(preGui);
-                }
 
                 // Sync Paper's logical resolution + DPI to the window each frame.
                 PreparePaperFrame();
@@ -169,8 +157,6 @@ public abstract class Game
                 _paper.EndFrame();
 
                 // === End Graphics ===
-
-                RenderTexture.UpdatePool();
 
                 Graphics.FlushDeferredDisposes();
 

@@ -136,8 +136,7 @@ public abstract class Texture : EngineObject
     {
         // Defer the GPU handle's disposal: it may still be bound by an in-flight frame (e.g. the UI
         // drawing this texture while it is reimported). Freeing it now is a use-after-free that
-        // stalls the device on SwapBuffers. Drop any queued mipmap pass against it first.
-        Graphics.CancelMipmapGeneration(Handle);
+        // stalls the device on SwapBuffers.
         Graphics.DisposeDeferred(Handle);
         Graphics.DisposeDeferred(Sampler);
     }

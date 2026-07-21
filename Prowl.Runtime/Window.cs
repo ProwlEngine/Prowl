@@ -183,7 +183,6 @@ public static class Window
         s_deviceOptions = new GraphicsDeviceOptions
         {
             Debug = true,
-            EnableProfiling = true,
             EnableValidation = true,
             SwapchainDepthFormat = Graphite.PixelFormat.D24_UNorm_S8_UInt,
             SyncToVerticalBlank = VSync,
@@ -270,17 +269,11 @@ public static class Window
             Update?.Invoke(delta);
             WindowInputHandler?.LateUpdate();
 
-            Frame frame = Graphics.Device.BeginFrame();
-            Graphics.CurrentFrame = frame;
-
+            // No ambient frame anymore - each camera/Paper dispatch opens and closes its own
+            // execution via Device.DispatchGraph (see CameraPipelineRunner, PaperRenderer), including
+            // its own SwapBuffers when it presents. Render/PostRender just drive that per-view work.
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
-
-            Graphics.SubmitPendingMipmaps(frame);
-
-            Graphics.Device.EndFrame(frame);
-            Graphics.CurrentFrame = null;
-            Graphics.Device.SwapBuffers();
 
             Rendering.RenderProfiler.FlushPendingCapture();
         }

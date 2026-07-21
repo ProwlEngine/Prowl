@@ -17,6 +17,7 @@ using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
 using Color = System.Drawing.Color;
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
 // Aliased to avoid clashing with Prowl.PaperUI types used elsewhere in this file.
 using RuntimeEventSystem = Prowl.Runtime.UI.EventSystem;
 

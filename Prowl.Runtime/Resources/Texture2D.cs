@@ -146,7 +146,6 @@ public sealed class Texture2D : Texture, ISerializable
         Height = height;
 
         // Old handle may still be in flight; defer its disposal to avoid a use-after-free stall.
-        Graphics.CancelMipmapGeneration(Handle);
         Graphics.DisposeDeferred(Handle);
 
         uint mipLevels = _generateMipmaps ? ComputeMipLevels(width, height) : 1;
