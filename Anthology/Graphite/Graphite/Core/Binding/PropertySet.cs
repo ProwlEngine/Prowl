@@ -17,6 +17,7 @@ public sealed partial class PropertySet
     private readonly Dictionary<PropertyID, PropertyEntry> _entries;
 
     private uint _resourceVersion;
+    private uint _version;
 
 
     /// <summary>
@@ -42,6 +43,14 @@ public sealed partial class PropertySet
     /// Uniform updates (any scalar value) do not increment this.
     /// </summary>
     public uint ResourceVersion => _resourceVersion;
+
+
+    /// <summary>
+    /// Monotonic version bumped on any mutation of this set, including uniform scalar writes.
+    /// A superset of <see cref="ResourceVersion"/>: unchanged <see cref="Version"/> between two reads
+    /// guarantees no entry changed. Used to skip redundant re-merges of an unchanged set.
+    /// </summary>
+    internal uint Version => _version;
 
 
     /// <summary>Number of entries currently stored in this set.</summary>
@@ -101,7 +110,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(range.Buffer, nameof(range), nameof(SetBuffer));
         GetOrCreate(name).SetBuffer(range, readOnly);
-        unchecked { _resourceVersion++; }
+        unchecked { _resourceVersion++; _version++; }
     }
 
 
@@ -110,7 +119,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(texture, nameof(texture), nameof(SetTexture));
         GetOrCreate(name).SetTexture(texture, null, sampler);
-        unchecked { _resourceVersion++; }
+        unchecked { _resourceVersion++; _version++; }
     }
 
     /// <summary>
@@ -122,7 +131,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(view, nameof(view), nameof(SetTexture));
         GetOrCreate(name).SetTexture(null, view, sampler);
-        unchecked { _resourceVersion++; }
+        unchecked { _resourceVersion++; _version++; }
     }
 
     /// <summary>
@@ -143,7 +152,7 @@ public sealed partial class PropertySet
     {
         ValidationHelpers.RequireNotNull(sampler, nameof(sampler), nameof(SetSampler));
         GetOrCreate(name).SetSampler(sampler);
-        unchecked { _resourceVersion++; }
+        unchecked { _resourceVersion++; _version++; }
     }
 
 
@@ -153,7 +162,7 @@ public sealed partial class PropertySet
     public void Clear()
     {
         _entries.Clear();
-        unchecked { _resourceVersion++; }
+        unchecked { _resourceVersion++; _version++; }
     }
 
 
@@ -175,11 +184,15 @@ public sealed partial class PropertySet
         }
 
         if (dirtyResources) unchecked { _resourceVersion++; }
+        unchecked { _version++; }
     }
 
 
     private void WriteUniform<T>(PropertyID key, T value, UniformScalarType type) where T : unmanaged
-        => GetOrCreate(key).WriteUniform(value, type);
+    {
+        GetOrCreate(key).WriteUniform(value, type);
+        unchecked { _version++; }
+    }
 
 
     private PropertyEntry GetOrCreate(PropertyID key)

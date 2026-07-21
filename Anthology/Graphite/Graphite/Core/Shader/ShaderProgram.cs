@@ -10,11 +10,13 @@ namespace Prowl.Graphite;
 public abstract class ShaderProgram : DeviceResource, IDisposable
 {
     private readonly ResourceLayoutDescription[] _resourceLayouts;
+    private readonly SetBindingMetadata[] _bindingMetadata;
 
     internal ShaderProgram(ResourceLayoutDescription[] resourceLayouts)
     {
         _resourceLayouts = Util.ShallowClone(resourceLayouts) ?? Array.Empty<ResourceLayoutDescription>();
         DeepCloneUniformFields(_resourceLayouts);
+        _bindingMetadata = SetBindingMetadata.Build(_resourceLayouts);
     }
 
     /// <summary>
@@ -23,6 +25,12 @@ public abstract class ShaderProgram : DeviceResource, IDisposable
     public IReadOnlyList<ResourceLayoutDescription> ResourceLayouts => _resourceLayouts;
 
     internal ResourceLayoutDescription[] ResourceLayoutsArray => _resourceLayouts;
+
+    /// <summary>
+    /// Precomputed per-set binding metadata, indexed parallel to <see cref="ResourceLayoutsArray"/>.
+    /// Built once at construction from the resource layouts.
+    /// </summary>
+    internal SetBindingMetadata[] BindingMetadata => _bindingMetadata;
 
     private protected static void DeepCloneUniformFields(ResourceLayoutDescription[] layouts)
     {

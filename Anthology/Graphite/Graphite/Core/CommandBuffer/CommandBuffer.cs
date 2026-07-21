@@ -33,6 +33,15 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected readonly PropertySet _activeProperties = new();
 
     /// <summary>
+    /// Monotonic epoch bumped whenever <see cref="_activeProperties"/> changes (a merge or clear).
+    /// The backend uses it to skip per-draw property work when nothing has changed since the last draw.
+    /// </summary>
+    private protected uint _activePropertiesEpoch;
+
+    private PropertySet? _lastAppliedSource;
+    private uint _lastAppliedSourceVersion;
+
+    /// <summary>
     /// The execution task this buffer was rented for. Holds per-execution backend state. Null if not tied to
     /// any execution (e.g. a one-off copy).
     /// </summary>
@@ -61,6 +70,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _framebufferOutputs = null;
         _currentVertexSource = null;
         _activeProperties.Clear();
+        _lastAppliedSource = null;
+        _lastAppliedSourceVersion = 0;
+        unchecked { _activePropertiesEpoch++; }
     }
 
     /// <summary>
@@ -127,7 +139,16 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public void SetProperties(PropertySet properties)
     {
         ValidationHelpers.RequireNotNull(properties, nameof(properties), nameof(SetProperties));
+
+        // Re-applying the very same set with no changes since is a no-op: the merge is idempotent
+        // when nothing else was applied in between, so skip it and leave the epoch untouched.
+        if (ReferenceEquals(properties, _lastAppliedSource) && properties.Version == _lastAppliedSourceVersion)
+            return;
+
         _activeProperties.ApplyOther(properties);
+        _lastAppliedSource = properties;
+        _lastAppliedSourceVersion = properties.Version;
+        unchecked { _activePropertiesEpoch++; }
         SetPropertiesCore(properties);
     }
 
@@ -143,6 +164,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     public void ClearProperties()
     {
         _activeProperties.Clear();     // bump merged resource version
+        _lastAppliedSource = null;
+        _lastAppliedSourceVersion = 0;
+        unchecked { _activePropertiesEpoch++; }
         ClearPropertiesCore();
     }
 
