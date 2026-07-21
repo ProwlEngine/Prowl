@@ -248,7 +248,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // needed mid-draw. The blur mip chain is scratch state private to this pass: its iteration count
     // varies per draw call at render time, so it can't be expressed as fixed graph resources declared
     // once in Setup.
-    private sealed class ScenePass : IPass<CanvasView, int>
+    private sealed class ScenePass : IPass<CanvasView>
     {
         private readonly GraphiteRenderer _owner;
 
@@ -258,10 +258,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         private Canvas _canvas;
         private IReadOnlyList<DrawCall> _drawCalls;
 
-        private StreamingBuffer _activeVbo;
-        private uint _vboCapacity;
-        private StreamingBuffer _activeEbo;
-        private uint _eboCapacity;
+        private DeviceBuffer _activeVbo;
+        private DeviceBuffer _activeEbo;
 
         private readonly PropertySet _properties = new();
         private readonly CanvasVertexSource _fullscreenSource = new();
@@ -285,14 +283,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public void Setup(RenderContextBuilder builder)
             => _sceneHandle = builder.GetOutputTexture("Scene", GraphTextureDesc.ViewSized(false, 1f, TargetFormat));
 
-        public void Render(RenderContext<CanvasView, int> context)
+        public void Render(RenderContext<CanvasView> context)
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
 
             bool hasGeometry = _drawCalls.Count > 0 && _canvas.Vertices.Count > 0 && _canvas.Indices.Count > 0;
 
             CommandBuffer cmd = context.GetCommandBuffer(Name);
-            cmd.Begin();
 
             // Upload geometry before binding a framebuffer: buffer uploads must happen outside a render pass.
             if (hasGeometry)
@@ -314,7 +311,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
                 }
             }
 
-            cmd.End();
             context.SubmitCommandBuffer(cmd);
         }
 
@@ -324,27 +320,15 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             Vertex[] vertices = [.. _canvas.Vertices];
             uint[] indices = [.. _canvas.Indices];
 
-            EnsureBuffer(ref _activeVbo, ref _vboCapacity, (uint)(vertices.Length * Vertex.SizeInBytes), BufferUsage.VertexBuffer);
-            EnsureBuffer(ref _activeEbo, ref _eboCapacity, (uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer);
+            _activeVbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(vertices.Length * Vertex.SizeInBytes), BufferUsage.VertexBuffer));
+            _activeEbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer));
 
-            cmd.UpdateBuffer(_activeVbo.ForExecution(task), 0, vertices);
-            cmd.UpdateBuffer(_activeEbo.ForExecution(task), 0, indices);
+            cmd.UpdateBuffer(_activeVbo, 0, vertices);
+            cmd.UpdateBuffer(_activeEbo, 0, indices);
         }
 
 
-        private void EnsureBuffer(ref StreamingBuffer buffer, ref uint capacity, uint sizeInBytes, BufferUsage usage)
-        {
-            if (buffer != null && sizeInBytes <= capacity)
-                return;
-
-            buffer?.Dispose();
-            uint newCapacity = (uint)(sizeInBytes * 1.5f) + 256;
-            buffer = _owner._gl.ResourceFactory.CreateStreamingBuffer(new BufferDescription(newCapacity, usage));
-            capacity = newCapacity;
-        }
-
-
-        private void ProcessDrawCall(CommandBuffer cmd, RenderContext<CanvasView, int> context, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
+        private void ProcessDrawCall(CommandBuffer cmd, RenderContext<CanvasView> context, RenderTexture scene, DrawCall drawCall, int indexOffset, float dpiScale)
         {
             Brush brush = drawCall.Brush;
             float blur = brush.BackdropBlur;
@@ -392,8 +376,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             CanvasVertexSource source = new()
             {
-                VertexBuffer = _activeVbo.ForExecution(context.Task),
-                IndexBuffer = _activeEbo.ForExecution(context.Task),
+                VertexBuffer = _activeVbo,
+                IndexBuffer = _activeEbo,
                 IndexCount = (uint)drawCall.ElementCount
             };
 
@@ -486,9 +470,6 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public void DisposeResources()
         {
             DisposeBlurTargets();
-
-            _activeVbo?.Dispose();
-            _activeEbo?.Dispose();
         }
     }
 
@@ -496,7 +477,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     // Blits the graph's "Scene" texture to the swapchain, reusing the blur shader at zero offset as a
     // plain fullscreen copy. Depends on Scene through the declared texture handle: the graph runs
     // ScenePass first because this pass reads what that one writes.
-    private sealed class PresentPass : IPresentPass<CanvasView, int>
+    private sealed class PresentPass : IPresentPass<CanvasView>
     {
         private readonly GraphiteRenderer _owner;
         private readonly ScenePass _scenePass;
@@ -516,54 +497,49 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             builder.RequestSwapchain();
         }
 
-        public void Present(RenderContext<CanvasView, int> context)
+        public void Present(RenderContext<CanvasView> context)
         {
             Framebuffer? target = context.SwapchainTarget;
-            {
-                Framebuffer? target = context.RequestSwapchainTarget();
-                if (target == null)
-                    return;
+            if (target == null)
+                return;
 
-                RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
+            RenderTexture scene = context.GetRenderTexture(_scenePass.SceneHandle);
 
-                CommandBuffer cmd = context.GetCommandBuffer(Name);
-                cmd.Begin();
-                cmd.SetFramebuffer(target);
+            CommandBuffer cmd = context.GetCommandBuffer(Name);
+            cmd.SetFramebuffer(target);
 
-                _owner._blurPass.SetKeyword(UpsampleOff);
+            _owner._blurPass.SetKeyword(UpsampleOff);
 
-                _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _owner._sampler);
-                _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
-                _properties.SetFloat("offset", 0f);
+            _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _owner._sampler);
+            _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
+            _properties.SetFloat("offset", 0f);
 
-                cmd.SetShader(_owner._blurPass);
-                cmd.SetVertexSource(_fullscreenSource);
-                cmd.SetProperties(_properties);
-                cmd.Draw(3);
+            cmd.SetShader(_owner._blurPass);
+            cmd.SetVertexSource(_fullscreenSource);
+            cmd.SetProperties(_properties);
+            cmd.Draw(3);
 
-                cmd.End();
-                context.SubmitCommandBuffer(cmd);
-                context.Present();
-            }
+            context.SubmitCommandBuffer(cmd);
+            context.Present();
+        }
+    }
+
+
+    private sealed class CanvasPipeline : RenderPipeline<CanvasView>
+    {
+        private readonly ScenePass _scenePass;
+        private readonly PresentPass _presentPass;
+
+        public CanvasPipeline(ScenePass scenePass, PresentPass presentPass)
+        {
+            _scenePass = scenePass;
+            _presentPass = presentPass;
         }
 
-
-        private sealed class CanvasPipeline : RenderPipeline<CanvasView, int>
+        protected override void InitializePasses()
         {
-            private readonly ScenePass _scenePass;
-            private readonly PresentPass _presentPass;
-
-            public CanvasPipeline(ScenePass scenePass, PresentPass presentPass)
-            {
-                _scenePass = scenePass;
-                _presentPass = presentPass;
-            }
-
-            protected override void InitializePasses()
-            {
-                AddPass(_scenePass);
-                SetPresentPass(_presentPass);
-            }
+            AddPass(_scenePass);
+            SetPresentPass(_presentPass);
         }
     }
 }
