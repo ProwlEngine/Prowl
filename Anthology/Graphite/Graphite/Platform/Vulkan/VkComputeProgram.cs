@@ -6,8 +6,14 @@ using VkPipelineHandle = Silk.NET.Vulkan.Pipeline;
 
 namespace Prowl.Graphite.Vk;
 
-internal unsafe partial class VkComputeProgram : ComputeProgram
+internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorProgram
 {
+    DescriptorSetLayout[] IVkDescriptorProgram.DescriptorSetLayouts => DescriptorSetLayouts;
+    DescriptorResourceCounts[] IVkDescriptorProgram.PerSetCounts => PerSetCounts;
+    PipelineLayout IVkDescriptorProgram.PipelineLayout => PipelineLayout;
+    uint IVkDescriptorProgram.ResourceSetCount => ResourceSetCount;
+    VkDescriptorSetCache IVkDescriptorProgram.DescriptorCache => DescriptorCache;
+
     private readonly VkGraphicsDevice _gd;
     private readonly ShaderModule _module;
 

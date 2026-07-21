@@ -5,8 +5,14 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-internal unsafe partial class VkGraphicsProgram : GraphicsProgram
+internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptorProgram
 {
+    DescriptorSetLayout[] IVkDescriptorProgram.DescriptorSetLayouts => DescriptorSetLayouts;
+    DescriptorResourceCounts[] IVkDescriptorProgram.PerSetCounts => PerSetCounts;
+    PipelineLayout IVkDescriptorProgram.PipelineLayout => PipelineLayout;
+    uint IVkDescriptorProgram.ResourceSetCount => ResourceSetCount;
+    VkDescriptorSetCache IVkDescriptorProgram.DescriptorCache => DescriptorCache;
+
     private readonly VkGraphicsDevice _gd;
     private readonly Dictionary<ShaderStages, ShaderModule> _modules = [];
     private readonly Dictionary<ShaderStages, string> _entryPoints = [];
