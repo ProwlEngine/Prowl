@@ -45,7 +45,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private VkPipelineCacheEntry _currentResolvedPipeline;
     private bool _hasResolvedPipeline;
     private PrimitiveTopology _resolvedTopology;
-    private uint _currentIndexCount;
 
     private bool _newFramebuffer; // Render pass cycle state
 
@@ -253,7 +252,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
     }
 
-    public override void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+    private protected override void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ)
     {
         PreDispatchCommand();
 

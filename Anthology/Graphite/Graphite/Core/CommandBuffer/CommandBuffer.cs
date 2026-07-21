@@ -29,6 +29,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected ComputeProgram? _computeProgram;
 
     private protected IVertexSource? _currentVertexSource;
+    private protected uint _currentIndexCount;
 
 
     /// <summary>Merged property table for this buffer. Backend reads it at draw time.</summary>
@@ -99,6 +100,15 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         ValidationHelpers.RequireNotNullRender(program, nameof(GraphicsProgram), nameof(SetShader));
         SetShaderCore(program);
         _shaderProgram = program;
+
+        if (Execution?.Device.Profiler is { } profiler)
+        {
+            ShaderStages stages = ShaderStages.None;
+            foreach (ShaderStages stage in program.Stages)
+                stages |= stage;
+
+            profiler.RecordPipelineSwitch(new PipelineBindInfo(program.Name, isCompute: false, stages));
+        }
     }
 
     private protected abstract void SetShaderCore(GraphicsProgram program);
@@ -112,6 +122,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         ValidationHelpers.RequireNotNullRender(program, nameof(ComputeProgram), nameof(SetComputeShader));
         SetComputeShaderCore(program);
         _computeProgram = program;
+
+        Execution?.Device.Profiler?.RecordPipelineSwitch(
+            new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute));
     }
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
@@ -308,6 +321,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     {
         Draw_PreDrawValidation();
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
+
+        Execution?.Device.Profiler?.RecordDraw(
+            new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false));
     }
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
@@ -327,6 +343,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndexed_CheckBaseVertexInstance(vertexOffset, instanceStart);
 
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
+
+        Execution?.Device.Profiler?.RecordDraw(
+            new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false));
     }
 
     private protected abstract void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
@@ -345,6 +364,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         Draw_PreDrawValidation();
 
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
+
+        Execution?.Device.Profiler?.RecordDraw(
+            new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
     }
 
 
@@ -369,6 +391,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         Draw_PreDrawValidation();
 
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
+
+        Execution?.Device.Profiler?.RecordDraw(
+            new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
     }
 
 
@@ -383,7 +408,15 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <param name="groupCountX">Thread group count, X.</param>
     /// <param name="groupCountY">Thread group count, Y.</param>
     /// <param name="groupCountZ">Thread group count, Z.</param>
-    public abstract void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ);
+    public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+    {
+        DispatchCore(groupCountX, groupCountY, groupCountZ);
+
+        Execution?.Device.Profiler?.RecordDispatch(
+            new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
+    }
+
+    private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
 
     /// <summary>Issues an indirect compute dispatch read from the given buffer. Data must match IndirectDispatchArguments layout.</summary>
     /// <param name="indirectBuffer">Buffer to read from. Needs the IndirectBuffer usage flag.</param>
@@ -393,6 +426,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndirect_CheckBuffer(indirectBuffer);
         DrawIndirect_CheckOffset(offset);
         DispatchIndirectCore(indirectBuffer, offset);
+
+        Execution?.Device.Profiler?.RecordDispatch(
+            new DispatchCallInfo(0, 0, 0, isIndirect: true));
     }
 
 
