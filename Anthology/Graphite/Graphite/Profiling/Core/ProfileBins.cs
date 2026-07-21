@@ -1,9 +1,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Resource types tracked by the allocation bins. Used for the per-frame
-/// <see cref="ProfileSnapshot.Allocated"/> / <see cref="ProfileSnapshot.Freed"/> flows
-/// and the persistent <see cref="ProfileSnapshot.Live"/> gauge.
+/// Resource types passed to <see cref="IProfiler.Allocate"/> / <see cref="IProfiler.Free"/>.
 /// </summary>
 public enum AllocBin
 {
@@ -59,7 +57,7 @@ public enum AllocBin
 }
 
 /// <summary>
-/// Buffer data-transfer operations tracked per frame by <see cref="ProfileSnapshot.BufferOps"/>.
+/// Buffer data-transfer operations passed to <see cref="IProfiler.Record"/>.
 /// </summary>
 public enum BufferOpBin
 {
@@ -85,7 +83,7 @@ public enum BufferOpBin
 }
 
 /// <summary>
-/// Swapchain events tracked per frame by <see cref="ProfileSnapshot.Swaps"/>.
+/// Swapchain events passed to <see cref="IProfiler.RecordSwap"/>.
 /// </summary>
 public enum SwapBin
 {
@@ -106,7 +104,7 @@ public enum SwapBin
 }
 
 /// <summary>
-/// Buffer roles tracked by the persistent <see cref="ProfileSnapshot.BufferMem"/> gauge,
+/// Buffer roles passed to <see cref="IProfiler.AllocateMemory"/> / <see cref="IProfiler.FreeMemory"/>,
 /// reporting resident bytes per usage.
 /// </summary>
 public enum BufferRoleBin

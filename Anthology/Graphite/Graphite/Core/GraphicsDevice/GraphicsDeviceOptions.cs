@@ -71,11 +71,10 @@ public struct GraphicsDeviceOptions
     public bool? EnableValidation;
 
     /// <summary>
-    /// Indicates whether the GraphicsDevice runs its profiling layer, which records per-frame
-    /// allocation and data-transfer counters readable through <see cref="GraphicsDevice.GetProfile"/>.
-    /// If null, the device defaults to disabled.
+    /// The profiler this device reports events to, or null for no profiling. Graphite does not
+    /// ship a default implementation - supply your own <see cref="IProfiler"/> to observe events.
     /// </summary>
-    public bool? EnableProfiling;
+    public IProfiler? Profiler;
 
     /// <summary>
     /// Constructs a new GraphicsDeviceOptions for a device with no main Swapchain.

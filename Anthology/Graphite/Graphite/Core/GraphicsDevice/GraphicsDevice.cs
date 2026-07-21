@@ -193,7 +193,6 @@ public abstract partial class GraphicsDevice : IDisposable
 
             uint ringSlot = _freeSlots.Dequeue();
             ulong id = ++_executionIdCounter;
-            SnapshotExecutionCounters();
 
             ExecutionTask task = BeginExecutionCore(id, ringSlot);
             _activeTasks.Add(task);
@@ -343,6 +342,8 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         SubmitAndWait_CheckEnded(commandBuffer);
         SubmitAndWaitCore(commandBuffer);
+
+        Profiler?.RecordSubmit(new ProfilerSubmitInfo(SubmitKind.Transfer, commandBuffer.Name, 1));
     }
 
     private protected virtual void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
@@ -359,6 +360,8 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         SubmitAndWait_CheckEnded(commandBuffer);
         SubmitTransferCore(commandBuffer);
+
+        Profiler?.RecordSubmit(new ProfilerSubmitInfo(SubmitKind.Transfer, commandBuffer.Name, 1));
     }
 
     private protected virtual void SubmitTransferCore(TransferCommandBuffer commandBuffer)
@@ -448,7 +451,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void SwapBuffers(Swapchain swapchain)
     {
         SwapBuffersCore(swapchain);
-        RecordSwap(SwapBin.Present, 0);
+        Profiler?.RecordSwap(SwapBin.Present, 0);
     }
 
     private protected abstract void SwapBuffersCore(Swapchain swapchain);
@@ -523,7 +526,7 @@ public abstract partial class GraphicsDevice : IDisposable
             mapBuffer.EnsureWritable();
 
         MappedResource mapped = MapCore(resource, mode, subresource);
-        RecordBufferOp(BufferOpBin.Map, mapped.SizeInBytes);
+        Profiler?.Record(BufferOpBin.Map, mapped.SizeInBytes);
         return mapped;
     }
 
@@ -572,7 +575,7 @@ public abstract partial class GraphicsDevice : IDisposable
     public void Unmap(MappableResource resource, uint subresource)
     {
         UnmapCore(resource, subresource);
-        RecordBufferOp(BufferOpBin.Unmap, 0);
+        Profiler?.Record(BufferOpBin.Unmap, 0);
     }
 
     /// <summary>
@@ -606,7 +609,7 @@ public abstract partial class GraphicsDevice : IDisposable
     {
         UpdateTexture_CheckParameters(texture, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
         UpdateTextureCore(texture, source, sizeInBytes, x, y, z, width, height, depth, mipLevel, arrayLayer);
-        RecordBufferOp(BufferOpBin.Update, sizeInBytes);
+        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
     }
 
     /// <summary>
@@ -829,7 +832,7 @@ public abstract partial class GraphicsDevice : IDisposable
         }
         buffer.EnsureWritable();
         UpdateBufferCore(buffer, bufferOffsetInBytes, source, sizeInBytes);
-        RecordBufferOp(BufferOpBin.Update, sizeInBytes);
+        Profiler?.Record(BufferOpBin.Update, sizeInBytes);
     }
 
     private protected abstract void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes);
