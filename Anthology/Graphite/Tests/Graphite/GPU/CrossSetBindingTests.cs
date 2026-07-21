@@ -89,11 +89,9 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -256,13 +254,11 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(BuildProps(firstOutput, input, texture, valueA: 7));
             cl.Dispatch(1, 1, 1);
             cl.SetProperties(BuildProps(secondOutput, input, texture, valueA: 8));
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -317,13 +313,11 @@ public abstract class CrossSetBindingTests<T> : GraphicsDeviceTestBase<T> where 
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.ClearProperties();
             cl.SetProperties(BuildProps(output, input, texture, valueA: 1));
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

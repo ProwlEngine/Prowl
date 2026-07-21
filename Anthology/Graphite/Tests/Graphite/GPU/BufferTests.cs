@@ -121,11 +121,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         DeviceBuffer dst = CreateBuffer(1024, BufferUsage.Staging);
 
-        CommandBuffer copyCL = RF.CreateCommandBuffer();
-        copyCL.Begin();
-        copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
-        copyCL.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(copyCL));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer copyCL = context.GetCommandBuffer();
+            copyCL.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
+            context.SubmitCommandBuffer(copyCL);
+        });
         GD.WaitForIdle();
         src.Dispose();
 
@@ -151,16 +152,17 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
                 .Select(i => RF.CreateBuffer(new BufferDescription(1024, BufferUsage.UniformBuffer)))
                 .ToArray();
 
-            CommandBuffer copyCL = RF.CreateCommandBuffer();
-            copyCL.Begin();
-            copyCL.CopyBuffer(src, 0, dsts[0], 0, src.SizeInBytes);
-            for (int i = 0; i < chainLength - 1; i++)
+            GD.RunTestGraph(context =>
             {
-                copyCL.CopyBuffer(dsts[i], 0, dsts[i + 1], 0, src.SizeInBytes);
-            }
-            copyCL.CopyBuffer(dsts[dsts.Length - 1], 0, finalDst, 0, src.SizeInBytes);
-            copyCL.End();
-            GD.RunTestGraph(context => context.SubmitCommandBuffer(copyCL));
+                CommandBuffer copyCL = context.GetCommandBuffer();
+                copyCL.CopyBuffer(src, 0, dsts[0], 0, src.SizeInBytes);
+                for (int i = 0; i < chainLength - 1; i++)
+                {
+                    copyCL.CopyBuffer(dsts[i], 0, dsts[i + 1], 0, src.SizeInBytes);
+                }
+                copyCL.CopyBuffer(dsts[dsts.Length - 1], 0, finalDst, 0, src.SizeInBytes);
+                context.SubmitCommandBuffer(copyCL);
+            });
             GD.WaitForIdle();
 
             MappedResourceView<int> view = GD.Map<int>(finalDst, MapMode.Read);
@@ -219,11 +221,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, 208).Select(i => (byte)(i * 150)).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyBuffer(src, 0, dst, 0, src.SizeInBytes);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
         MappedResource readMap = GD.Map(dst, MapMode.Read);
         for (int i = 0; i < readMap.SizeInBytes; i++)
@@ -242,20 +245,23 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(dynamic, 0, initialData);
 
         byte[] replacementData = Enumerable.Repeat((byte)255, 512).ToArray();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.UpdateBuffer(dynamic, 512, replacementData);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.UpdateBuffer(dynamic, 512, replacementData);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer dst = RF.CreateBuffer(
             new BufferDescription(1024, BufferUsage.Staging));
 
-        cl.Begin();
-        cl.CopyBuffer(dynamic, 0, dst, 0, dynamic.SizeInBytes);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyBuffer(dynamic, 0, dst, 0, dynamic.SizeInBytes);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<byte> readView = GD.Map<byte>(dst, MapMode.Read);
@@ -286,11 +292,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
             new BufferDescription(1024, BufferUsage.Staging));
         byte[] data = Enumerable.Range(0, 1024).Select(i => (byte)i).ToArray();
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.UpdateBuffer(staging, 0, data);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.UpdateBuffer(staging, 0, data);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<byte> readView = GD.Map<byte>(staging, MapMode.Read);
@@ -332,11 +339,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         byte[] data = Enumerable.Range(0, (int)srcBufferSize).Select(i => (byte)i).ToArray();
         GD.UpdateBuffer(src, 0, data);
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.CopyBuffer(src, srcCopyOffset, dst, dstCopyOffset, copySize);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyBuffer(src, srcCopyOffset, dst, dstCopyOffset, copySize);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(dst);
@@ -358,11 +366,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     {
         DeviceBuffer buffer = CreateBuffer(bufferSize, usage);
         byte[] data = Enumerable.Range(0, (int)dataSize).Select(i => (byte)i).ToArray();
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.UpdateBuffer(buffer, offset, data);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.UpdateBuffer(buffer, offset, data);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
@@ -402,14 +411,15 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
     public void UpdateUniform_Offset_CommandBuffer(BufferUsage usage)
     {
         DeviceBuffer buffer = CreateBuffer(128, usage);
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
         Float4x4 mat1 = new(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
-        cl.UpdateBuffer(buffer, 0, ref mat1);
         Float4x4 mat2 = new(2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2);
-        cl.UpdateBuffer(buffer, 64, ref mat2);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.UpdateBuffer(buffer, 0, ref mat1);
+            cl.UpdateBuffer(buffer, 64, ref mat2);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(buffer);
@@ -476,11 +486,12 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
         GD.UpdateBuffer(src, 0, initialDataSrc);
         GD.UpdateBuffer(dst, 0, initialDataDst);
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.CopyBuffer(src, 0, dst, 0, 0);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyBuffer(src, 0, dst, 0, 0);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         DeviceBuffer readback = GetReadback(dst);
@@ -518,14 +529,15 @@ public abstract class BufferTestBase<T> : GraphicsDeviceTestBase<T> where T : Gr
 
         if (useCommandBufferUpdate)
         {
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
-            fixed (byte* dataPtr = otherData)
+            GD.RunTestGraph(context =>
             {
-                cl.UpdateBuffer(buffer, 0, (IntPtr)dataPtr, 0);
-            }
-            cl.End();
-            GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+                CommandBuffer cl = context.GetCommandBuffer();
+                fixed (byte* dataPtr = otherData)
+                {
+                    cl.UpdateBuffer(buffer, 0, (IntPtr)dataPtr, 0);
+                }
+                context.SubmitCommandBuffer(cl);
+            });
             GD.WaitForIdle();
         }
         else

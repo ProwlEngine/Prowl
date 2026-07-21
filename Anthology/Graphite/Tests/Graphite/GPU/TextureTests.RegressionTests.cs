@@ -35,24 +35,27 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R32_G32_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetFramebuffer(fb);
-        // 999f and 7777f are deliberately distinctive sentinels for the B and A channels.
-        // The target is R32_G32_Float, so by the contract those two values must be ignored
-        // and every pixel must read back as exactly (3, 5). The sentinels ensure that any
-        // accidental leakage of B/A into the readback is loud and unambiguous.
-        cl.ClearColorTarget(0, new Color(3f, 5f, 999f, 7777f));
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetFramebuffer(fb);
+            // 999f and 7777f are deliberately distinctive sentinels for the B and A channels.
+            // The target is R32_G32_Float, so by the contract those two values must be ignored
+            // and every pixel must read back as exactly (3, 5). The sentinels ensure that any
+            // accidental leakage of B/A into the readback is loud and unambiguous.
+            cl.ClearColorTarget(0, new Color(3f, 5f, 999f, 7777f));
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
             width, height, 1, 1, PixelFormat.R32_G32_Float, TextureUsage.Staging));
-        cl.Begin();
-        cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<Float2> view = GD.Map<Float2>(staging, MapMode.Read);
@@ -71,7 +74,6 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             GD.Unmap(staging);
         }
 
-        cl.Dispose();
         fb.Dispose();
         staging.Dispose();
         target.Dispose();
@@ -87,26 +89,29 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             width, height, 1, 1, PixelFormat.R16_G16_Float, TextureUsage.RenderTarget));
         Framebuffer fb = RF.CreateFramebuffer(new FramebufferDescription(null, target));
 
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.SetFramebuffer(fb);
-        // 999f and 7777f are deliberately distinctive sentinels for the B and A channels:
-        // the target is R16_G16_Float, so by the contract those two values must be ignored
-        // and every pixel must read back as exactly (1, 2). All four values are exactly
-        // representable in IEEE-754 binary16, so the float32 -> float16 narrowing the clear
-        // path performs is lossless and would faithfully preserve the sentinels if a bug
-        // ever let them leak into the readback.
-        cl.ClearColorTarget(0, new Color(1f, 2f, 999f, 7777f));
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetFramebuffer(fb);
+            // 999f and 7777f are deliberately distinctive sentinels for the B and A channels:
+            // the target is R16_G16_Float, so by the contract those two values must be ignored
+            // and every pixel must read back as exactly (1, 2). All four values are exactly
+            // representable in IEEE-754 binary16, so the float32 -> float16 narrowing the clear
+            // path performs is lossless and would faithfully preserve the sentinels if a bug
+            // ever let them leak into the readback.
+            cl.ClearColorTarget(0, new Color(1f, 2f, 999f, 7777f));
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         Texture staging = RF.CreateTexture(TextureDescription.Texture2D(
             width, height, 1, 1, PixelFormat.R16_G16_Float, TextureUsage.Staging));
-        cl.Begin();
-        cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
-        cl.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.CopyTexture(target, 0, 0, 0, 0, 0, staging, 0, 0, 0, 0, 0, width, height, 1, 1);
+            context.SubmitCommandBuffer(cl);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<HalfFloat2> view = GD.Map<HalfFloat2>(staging, MapMode.Read);
@@ -126,7 +131,6 @@ public abstract partial class TextureTestBase<T> where T : GraphicsDeviceCreator
             GD.Unmap(staging);
         }
 
-        cl.Dispose();
         fb.Dispose();
         staging.Dispose();
         target.Dispose();

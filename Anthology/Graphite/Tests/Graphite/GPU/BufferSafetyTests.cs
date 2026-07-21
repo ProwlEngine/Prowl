@@ -86,11 +86,9 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         return GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
     }
@@ -241,11 +239,9 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            cl.End();
 
             // Recording marks the buffer in flight against this execution's id as soon as the
             // dispatch binds it, independent of whether the command buffer has been submitted
@@ -348,11 +344,9 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         ExecutionTask id = GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
 
@@ -384,8 +378,8 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
 
         try
         {
-            // Rewriting an in-flight buffer every frame is the pathological pattern StreamingBuffer
-            // exists to replace, so the second and later orphans inside the window must warn.
+            // Rewriting an in-flight buffer every frame is the pathological pattern transient graph
+            // buffers exist to replace, so the second and later orphans inside the window must warn.
             for (int i = 0; i < 3; i++)
             {
                 ExecutionTask id = SubmitSlowExecutionReading(source, output, program);
@@ -400,7 +394,7 @@ public abstract class BufferSafetyTests<T> : GraphicsDeviceTestBase<T> where T :
         }
 
         Assert.NotEmpty(warnings);
-        Assert.Contains("StreamingBuffer", warnings[0]);
+        Assert.Contains("transient graph buffer", warnings[0]);
     }
 
     [SkippableFact]

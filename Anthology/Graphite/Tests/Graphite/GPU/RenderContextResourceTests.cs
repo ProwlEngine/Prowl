@@ -49,7 +49,7 @@ file sealed class ResolvingPass : IPass<ResourceView>
     public List<RenderTexture> Resolved { get; } = new();
 
     public void Setup(RenderContextBuilder builder)
-        => _handle = _isOutput ? builder.GetOutputTexture(_id, _desc) : builder.GetInputTexture(_id, _desc);
+        => _handle = _isOutput ? builder.GetOutputTexture(_id, _desc) : builder.GetInputTexture(_id);
 
     public void Render(RenderContext<ResourceView> context)
     {
@@ -114,6 +114,52 @@ file sealed class ZeroOutputPass : IPass<ResourceView>
     public void Render(RenderContext<ResourceView> context) { }
 }
 
+file sealed class HistoryResolvingPass : IPass<ResourceView>
+{
+    private readonly RenderResourceID _id;
+    private readonly GraphTextureDesc _desc;
+    private TextureHandle _handle;
+
+    public HistoryResolvingPass(RenderResourceID id, GraphTextureDesc desc)
+    {
+        _id = id;
+        _desc = desc;
+    }
+
+    public string Name => "History";
+
+    public List<RenderTexture> Current { get; } = new();
+    public List<RenderTexture> Previous { get; } = new();
+
+    public void Setup(RenderContextBuilder builder) => _handle = builder.GetOutputTexture(_id, _desc, history: 1);
+
+    public void Render(RenderContext<ResourceView> context)
+    {
+        Current.Add(context.GetRenderTexture(_handle, 0));
+        Previous.Add(context.GetRenderTexture(_handle, 1));
+    }
+}
+
+file sealed class ImportingPass : IPass<ResourceView>
+{
+    private readonly RenderResourceID _id;
+    private readonly RenderTexture _external;
+    private TextureHandle _handle;
+
+    public ImportingPass(RenderResourceID id, RenderTexture external)
+    {
+        _id = id;
+        _external = external;
+    }
+
+    public string Name => "Import";
+    public RenderTexture? Resolved { get; private set; }
+
+    public void Setup(RenderContextBuilder builder) => _handle = builder.ImportTexture(_id, _external);
+
+    public void Render(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
+}
+
 file sealed class RequestingPresentPass : IPresentPass<ResourceView>
 {
     public bool SawSwapchainTarget { get; private set; }
@@ -150,20 +196,18 @@ file sealed class NoOpPresentPass : IPresentPass<ResourceView>
 file sealed class ReadingPresentPass : IPresentPass<ResourceView>
 {
     private readonly RenderResourceID _id;
-    private readonly GraphTextureDesc _desc;
     private TextureHandle _handle;
 
-    public ReadingPresentPass(RenderResourceID id, GraphTextureDesc desc)
+    public ReadingPresentPass(RenderResourceID id)
     {
         _id = id;
-        _desc = desc;
     }
 
     public string Name => "ReadingPresent";
 
     public RenderTexture? Resolved { get; private set; }
 
-    public void Setup(PresentContextBuilder builder) => _handle = builder.GetInputTexture(_id, _desc);
+    public void Setup(PresentContextBuilder builder) => _handle = builder.GetInputTexture(_id);
 
     public void Present(RenderContext<ResourceView> context) => Resolved = context.GetRenderTexture(_handle);
 }
@@ -352,11 +396,44 @@ public abstract class RenderContextResourceTests<T> : GraphicsDeviceTestBase<T> 
     }
 
     [Fact]
+    public void GetRenderTexture_HistoryResource_ThisFramesPreviousEqualsLastFramesCurrent()
+    {
+        HistoryResolvingPass pass = new(RenderResourceID.Intern("resourcetest_history"), ColorDesc());
+        using ResourceTestPipeline pipeline = new(pass);
+
+        for (int frame = 0; frame < 3; frame++)
+        {
+            ExecutionTask task = GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+            GD.WaitForExecution(task);
+        }
+
+        for (int frame = 0; frame < 3; frame++)
+            Assert.NotSame(pass.Current[frame], pass.Previous[frame]);
+
+        Assert.Same(pass.Current[0], pass.Previous[1]);
+        Assert.Same(pass.Current[1], pass.Previous[2]);
+    }
+
+    [Fact]
+    public void ImportTexture_ResolvesToTheExternalTexture()
+    {
+        RenderTexture external = RF.CreateRenderTexture(new RenderTextureDescription(
+            64, 64, new[] { PixelFormat.R8_G8_B8_A8_UNorm }, false, TextureSampleCount.Count1));
+        ImportingPass pass = new(RenderResourceID.Intern("resourcetest_imported"), external);
+        using ResourceTestPipeline pipeline = new(pass);
+
+        GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });
+        GD.WaitForIdle();
+
+        Assert.Same(external, pass.Resolved);
+    }
+
+    [Fact]
     public void PresentPass_DeclaresInputInSetup_ResolvesToSameInstanceAsWriter()
     {
         RenderResourceID id = RenderResourceID.Intern("resourcetest_present_reads_graph");
         ResolvingPass writer = new("Writer", id, ColorDesc());
-        ReadingPresentPass present = new(id, ColorDesc());
+        ReadingPresentPass present = new(id);
         using ResourceTestPipeline pipeline = new(present, writer);
 
         GD.DispatchGraph(pipeline, new ResourceView[] { new(64, 64) });

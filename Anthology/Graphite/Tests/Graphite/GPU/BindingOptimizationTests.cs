@@ -32,7 +32,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -43,7 +42,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -71,7 +69,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -82,7 +79,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -110,7 +106,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             for (int i = 0; i < n; i++)
             {
@@ -122,7 +117,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
                 cl.SetProperties(props);
                 cl.Dispatch(1, 1, 1);
             }
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -157,7 +151,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Black);
             cl.SetFullViewports();
@@ -166,7 +159,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             cl.SetProperties(props);
             for (int i = 0; i < 5; i++)
                 cl.Draw(4);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
 
@@ -194,8 +186,6 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
             GD.RunTestGraph(context =>
             {
                 CommandBuffer cl = context.GetCommandBuffer();
-                cl.Begin();
-                cl.End();
                 context.SubmitCommandBuffer(cl);
             });
             GD.WaitForIdle();

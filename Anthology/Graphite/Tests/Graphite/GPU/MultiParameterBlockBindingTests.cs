@@ -25,11 +25,9 @@ public abstract class MultiParameterBlockBindingTests<T> : GraphicsDeviceTestBas
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(1, 1, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

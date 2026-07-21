@@ -49,6 +49,18 @@ file sealed class RecordingPass : IPass<DispatchView>
     }
 }
 
+file sealed class LeakingCommandBufferPass : IPass<DispatchView>
+{
+    public string Name => "Leaking";
+
+    public void Setup(RenderContextBuilder builder) { }
+
+    public void Render(RenderContext<DispatchView> context)
+    {
+        context.GetCommandBuffer("Leaked");
+    }
+}
+
 file sealed class RecordingPresentPass : IPresentPass<DispatchView>
 {
     private readonly bool _arm;
@@ -172,6 +184,27 @@ public abstract class DispatchRenderGraphTests<T> : GraphicsDeviceTestBase<T> wh
         }
 
         Assert.Equal((int)iterations, pass.RenderCount);
+    }
+
+    [Fact]
+    public void Dispatch_PassRentsCommandBufferWithoutSubmitting_WarnsOnce()
+    {
+        List<string> warnings = new();
+        GraphicsDeviceWarningHandler? previous = GD.OnWarning;
+        GD.OnWarning = message => warnings.Add(message);
+        try
+        {
+            using TestPipeline pipeline = new(new RecordingPresentPass(arm: false), new LeakingCommandBufferPass());
+            GD.DispatchGraph(pipeline, new DispatchView[] { new(64, 64) });
+            GD.WaitForIdle();
+        }
+        finally
+        {
+            GD.OnWarning = previous;
+        }
+
+        Assert.Single(warnings);
+        Assert.Contains("Leaking", warnings[0]);
     }
 
     [Fact]

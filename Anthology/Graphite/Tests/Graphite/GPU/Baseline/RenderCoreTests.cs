@@ -56,7 +56,6 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetFramebuffer(framebuffer);
             cl.ClearColorTarget(0, new Color(0, 0, 0, 1));
             cl.SetFullViewports();
@@ -64,7 +63,6 @@ public abstract class RenderCoreTests<T> : GraphicsDeviceTestBase<T> where T : G
             cl.SetVertexSource(source);
             cl.SetProperties(props);
             cl.Draw(1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

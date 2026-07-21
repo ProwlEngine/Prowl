@@ -201,11 +201,9 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         {
             fb = GD.RentTransientFramebuffer(context.Task, desc);
 
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
+            CommandBuffer cl = context.GetCommandBuffer();
             cl.SetFramebuffer(fb);
             cl.ClearColorTarget(0, Color.Red);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();
@@ -214,11 +212,12 @@ public abstract class TransientTexturePoolTests<T> : GraphicsDeviceTestBase<T> w
         Texture staging = RF.CreateTexture(
             TextureDescription.Texture2D(size, size, 1, 1, ColorFormat, TextureUsage.Staging));
 
-        CommandBuffer copy = RF.CreateCommandBuffer();
-        copy.Begin();
-        copy.CopyTexture(colorTarget, staging);
-        copy.End();
-        GD.RunTestGraph(context => context.SubmitCommandBuffer(copy));
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer copy = context.GetCommandBuffer();
+            copy.CopyTexture(colorTarget, staging);
+            context.SubmitCommandBuffer(copy);
+        });
         GD.WaitForIdle();
 
         MappedResourceView<Color> view = GD.Map<Color>(staging, MapMode.Read);

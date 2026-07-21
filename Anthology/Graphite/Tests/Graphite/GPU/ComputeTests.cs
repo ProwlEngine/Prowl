@@ -263,9 +263,7 @@ public abstract class ComputeTests<T> : GraphicsDeviceTestBase<T> where T : Grap
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             record(cl);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

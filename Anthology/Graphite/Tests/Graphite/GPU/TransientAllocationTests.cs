@@ -124,11 +124,9 @@ public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> wh
             WriteUInt(a, 0xAAAAAAAA);
             WriteUInt(b, 0xBBBBBBBB);
 
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
+            CommandBuffer cl = context.GetCommandBuffer();
             cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
             cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

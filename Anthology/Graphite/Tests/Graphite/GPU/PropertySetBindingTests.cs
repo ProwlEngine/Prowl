@@ -157,11 +157,9 @@ public abstract class PropertySetBindingTests<T> : GraphicsDeviceTestBase<T> whe
         GD.RunTestGraph(context =>
         {
             CommandBuffer cl = context.GetCommandBuffer();
-            cl.Begin();
             cl.SetComputeShader(program);
             cl.SetProperties(props);
             cl.Dispatch(Side / 16, Side / 16, 1);
-            cl.End();
             context.SubmitCommandBuffer(cl);
         });
         GD.WaitForIdle();

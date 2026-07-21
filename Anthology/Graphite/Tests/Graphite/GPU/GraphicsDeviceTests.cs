@@ -44,11 +44,11 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void CompleteExecution_SignalsCompletionFenceAndAdvancesLastCompleted()
     {
-        CommandBuffer cl = RF.CreateCommandBuffer();
-        cl.Begin();
-        cl.End();
-
-        ExecutionTask task = GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+        ExecutionTask task = GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            context.SubmitCommandBuffer(cl);
+        });
         ulong id = task.Id;
 
         GD.WaitForExecution(task);
@@ -67,10 +67,11 @@ public abstract class GraphicsDeviceTests<T> : GraphicsDeviceTestBase<T> where T
         uint executionCount = GD.MaxExecutingTasks * 3 + 1;
         for (uint i = 0; i < executionCount; i++)
         {
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
-            cl.End();
-            last = GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+            last = GD.RunTestGraph(context =>
+            {
+                CommandBuffer cl = context.GetCommandBuffer();
+                context.SubmitCommandBuffer(cl);
+            });
         }
 
         GD.WaitForIdle();

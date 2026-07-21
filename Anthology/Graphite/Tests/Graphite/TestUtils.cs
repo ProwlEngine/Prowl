@@ -209,11 +209,12 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
         else
         {
             readback = RF.CreateBuffer(new BufferDescription(buffer.SizeInBytes, BufferUsage.Staging));
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
-            cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
-            cl.End();
-            GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+            GD.RunTestGraph(context =>
+            {
+                CommandBuffer cl = context.GetCommandBuffer();
+                cl.CopyBuffer(buffer, 0, readback, 0, buffer.SizeInBytes);
+                context.SubmitCommandBuffer(cl);
+            });
             GD.WaitForIdle();
         }
 
@@ -239,11 +240,12 @@ public abstract class GraphicsDeviceTestBase<T> : IDisposable where T : Graphics
                 texture.Format,
                 TextureUsage.Staging, texture.Type);
             Texture readback = RF.CreateTexture(ref desc);
-            CommandBuffer cl = RF.CreateCommandBuffer();
-            cl.Begin();
-            cl.CopyTexture(texture, readback);
-            cl.End();
-            GD.RunTestGraph(context => context.SubmitCommandBuffer(cl));
+            GD.RunTestGraph(context =>
+            {
+                CommandBuffer cl = context.GetCommandBuffer();
+                cl.CopyTexture(texture, readback);
+                context.SubmitCommandBuffer(cl);
+            });
             GD.WaitForIdle();
             return readback;
         }
