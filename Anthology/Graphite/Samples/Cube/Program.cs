@@ -32,13 +32,10 @@ internal sealed class CubePresentPass : IPresentPass<SceneView>
             return;
 
         CommandBuffer cmd = context.GetCommandBuffer("Cube");
-        cmd.Begin();
         cmd.SetFramebuffer(target);
         cmd.ClearDepthStencil(1, 0);
         cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         Cube.Draw(cmd);
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
         context.Present();
     }

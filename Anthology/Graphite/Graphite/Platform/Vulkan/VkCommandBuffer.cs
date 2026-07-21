@@ -81,7 +81,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     internal uint ActivePropertiesEpoch => _activePropertiesEpoch;
     internal void QueuePreDrawSampledImage(VkTexture tex) => _preDrawSampledImages.Add(tex);
 
-    public override void Begin()
+    internal override void Begin()
     {
         if (_commandBufferBegun)
         {
@@ -328,7 +328,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
     }
 
-    public override void End()
+    internal override void End()
     {
         if (!_commandBufferBegun)
         {

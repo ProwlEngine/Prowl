@@ -42,15 +42,12 @@ internal sealed class TrianglePresentPass : IPresentPass<SceneView>
             return;
 
         CommandBuffer cmd = context.GetCommandBuffer("Triangle");
-        cmd.Begin();
         cmd.SetFramebuffer(target);
         cmd.ClearDepthStencil(1, 0);
         cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_triangle);
         cmd.DrawIndexed();
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
         context.Present();
     }

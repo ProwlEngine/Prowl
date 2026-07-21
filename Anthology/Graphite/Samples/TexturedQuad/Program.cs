@@ -58,7 +58,6 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
             return;
 
         CommandBuffer cmd = context.GetCommandBuffer("TexturedQuad");
-        cmd.Begin();
         cmd.SetFramebuffer(target);
         cmd.ClearDepthStencil(1, 0);
         cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
@@ -75,8 +74,6 @@ internal sealed class TexturedQuadPresentPass : IPresentPass<SceneView>
         cmd.SetProperties(_midProperties);
         cmd.SetVertexSource(_midQuad);
         cmd.DrawIndexed();
-
-        cmd.End();
 
         context.SubmitCommandBuffer(cmd);
         context.Present();

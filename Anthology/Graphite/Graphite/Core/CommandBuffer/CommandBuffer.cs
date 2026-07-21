@@ -10,9 +10,11 @@ using Prowl.Vector;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Records graphics commands for later execution by the device. Call Begin before recording, End when done,
-/// then submit. Not thread-safe. Some commands need stuff bound first (framebuffer, shader, vertex source) -
-/// see each method. Can't run twice without a reset in between.
+/// Records graphics commands for later execution by the device. Acquired from a
+/// <see cref="RenderGraph.RenderContext{TView}"/> (which begins it) and submitted back through the same
+/// context (which ends and queues it); passes never begin or end it themselves. Not thread-safe. Some
+/// commands need stuff bound first (framebuffer, shader, vertex source) - see each method. Can't run twice
+/// without a reset in between.
 /// </summary>
 public abstract partial class CommandBuffer : DeviceResource, IDisposable
 {
@@ -76,16 +78,16 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// Resets to the initial state. Call before issuing commands. Only call this if you haven't already, or
-    /// after End, or after submitting.
+    /// Resets to the initial state and starts recording. Called by the render context when the buffer is
+    /// rented; passes never call this.
     /// </summary>
-    public abstract void Begin();
+    internal abstract void Begin();
 
     /// <summary>
-    /// Finishes recording, makes the buffer executable. Only call after Begin. Calling twice in a row without
-    /// a Begin in between is an error.
+    /// Finishes recording, makes the buffer executable. Called by the render context when the buffer is
+    /// submitted; passes never call this.
     /// </summary>
-    public abstract void End();
+    internal abstract void End();
 
     /// <summary>
     /// Sets the active shader for rendering. Must be compatible with the bound framebuffer and buffers.

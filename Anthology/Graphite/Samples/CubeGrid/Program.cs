@@ -34,13 +34,10 @@ internal sealed class CubeGridPresentPass : IPresentPass<SceneView>
             return;
 
         CommandBuffer cmd = context.GetCommandBuffer("CubeGrid");
-        cmd.Begin();
         cmd.SetFramebuffer(target);
         cmd.ClearDepthStencil(1, 0);
         cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         CubeGrid.Draw(_time, cmd);
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
         context.Present();
     }
