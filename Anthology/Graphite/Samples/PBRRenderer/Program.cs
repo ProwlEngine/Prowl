@@ -289,7 +289,7 @@ public static class Program
         {
             Debug = false,
             SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SyncToVerticalBlank = true,
+            SyncToVerticalBlank = false,
             PreferStandardClipSpaceYDirection = true
         };
 
