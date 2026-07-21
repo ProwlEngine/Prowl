@@ -14,7 +14,6 @@ public sealed class RenderContext<TView>
     private readonly ExecutionTask _task;
     private readonly RenderGraph<TView> _graph;
     private readonly TView _view;
-    private readonly IPassProfiler? _profiler;
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
     private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
     private readonly List<CommandBuffer> _pendingCommandBuffers = new();
@@ -25,14 +24,12 @@ public sealed class RenderContext<TView>
         GraphicsDevice device,
         ExecutionTask task,
         RenderGraph<TView> graph,
-        TView view,
-        IPassProfiler? profiler)
+        TView view)
     {
         _device = device;
         _task = task;
         _graph = graph;
         _view = view;
-        _profiler = profiler;
     }
 
     /// <summary>The execution this context records into.</summary>
@@ -44,8 +41,8 @@ public sealed class RenderContext<TView>
     /// <summary>The view being rendered.</summary>
     public TView View => _view;
 
-    /// <summary>Profiler for this execution, or null if profiling is off.</summary>
-    public IPassProfiler? Profiler => _profiler;
+    /// <summary>The device's profiler, or null if none is attached.</summary>
+    public IProfiler? Profiler => _device.Profiler;
 
     /// <summary>
     /// Rents a command buffer for this pass to record into. The buffer is already begun and ready to record;
@@ -243,10 +240,16 @@ public sealed class RenderContext<TView>
 
     /// <summary>Opens a nested timing region in the current pass. Pair with EndSample.</summary>
     /// <param name="name">Name of the sample.</param>
-    public void BeginSample(string name) => _profiler?.BeginSample(name);
+    public void BeginSample(string name) => _device.Profiler?.BeginSample(name);
 
     /// <summary>Closes the most recently opened sample region.</summary>
-    public void EndSample() => _profiler?.EndSample();
+    public void EndSample() => _device.Profiler?.EndSample();
+
+    /// <summary>Resolves a declared texture handle to the DeviceResource the profiler should see for a pass read.</summary>
+    internal DeviceResource ResolveForProfiler(RenderResourceID resource)
+        => IsTextureResource(resource)
+            ? GetRenderTexture(new TextureHandle(resource)).Framebuffer
+            : GetRenderBuffer(new BufferHandle(resource));
 
     private RenderTextureDescription ToTransientDesc(in GraphTextureDesc desc)
     {

@@ -11,11 +11,9 @@ public abstract partial class GraphicsDevice
     /// </summary>
     /// <param name="pipeline">Pipeline to run.</param>
     /// <param name="views">Views to render, one execution per view. Must not be null.</param>
-    /// <param name="profiler">Optional profiler to record this execution.</param>
     public ExecutionTask DispatchGraph<T>(
         RenderPipeline<T> pipeline,
-        IReadOnlyList<T> views,
-        IPassProfiler? profiler = null)
+        IReadOnlyList<T> views)
         where T : IRenderView
     {
         ValidationHelpers.RequireNotNull(pipeline, nameof(pipeline), nameof(DispatchGraph));
@@ -29,7 +27,7 @@ public abstract partial class GraphicsDevice
         foreach (T view in views)
         {
             var context = new RenderContext<T>(
-                this, task, graph, view, profiler);
+                this, task, graph, view);
 
             pipeline.ExecuteView(context);
             present |= context.RequestPresent;

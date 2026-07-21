@@ -88,24 +88,40 @@ public abstract class RenderPipeline<TView> : IDisposable
             throw new ArgumentNullException(nameof(context));
 
         RenderGraph<TView> graph = Graph;
-        IPassProfiler? profiler = context.Profiler;
+        IProfiler? profiler = context.Profiler;
 
+        int index = 0;
         foreach (RenderGraph<TView>.PassNode node in graph.OrderedPasses)
         {
-            profiler?.BeginSample(node.Pass.Name);
+            var passInfo = new PassInfo(node.Pass.Name, index++, node.Inputs, node.Outputs);
+
+            profiler?.BeginPass(passInfo);
+            if (profiler != null)
+            {
+                foreach (RenderResourceID input in node.Inputs)
+                    profiler.RecordPassRead(passInfo, input, context.ResolveForProfiler(input));
+            }
+
             node.Pass.Render(context);
-            profiler?.EndSample();
+
+            profiler?.EndPass(passInfo);
+            if (profiler != null)
+            {
+                foreach (RenderResourceID output in node.Outputs)
+                    profiler.RecordPassRead(passInfo, output, context.ResolveForProfiler(output));
+            }
+
             context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);
 
             if (profiler != null && profiler.RequestCapture)
-                CapturePassOutputs(context, profiler, node);
+                CapturePassOutputs(context, profiler, passInfo, node);
         }
 
         PresentPass.Present(context);
         context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
     }
 
-    private static void CapturePassOutputs(RenderContext<TView> context, IPassProfiler profiler, RenderGraph<TView>.PassNode node)
+    private static void CapturePassOutputs(RenderContext<TView> context, IProfiler profiler, in PassInfo passInfo, RenderGraph<TView>.PassNode node)
     {
         if (node.Outputs == null || node.Outputs.Length == 0)
             return;
@@ -122,7 +138,7 @@ public abstract class RenderPipeline<TView> : IDisposable
 
         Framebuffer[] outputs = framebuffers.ToArray();
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
-        profiler.Capture(outputs, transfer);
+        profiler.Capture(passInfo, outputs, transfer);
         context.SubmitTransferCommandBuffer(transfer);
     }
 
