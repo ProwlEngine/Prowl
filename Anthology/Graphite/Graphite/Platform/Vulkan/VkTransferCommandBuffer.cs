@@ -119,6 +119,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
             1, in barrier,
             0, null,
             0, null);
+        _gd.Profiler?.RecordBarrier(BarrierBin.BufferTransition, 1);
     }
 
     private protected override void CopyTextureCore(

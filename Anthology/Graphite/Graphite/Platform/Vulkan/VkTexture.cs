@@ -354,6 +354,7 @@ internal unsafe partial class VkTexture : Texture
                 aspectMask,
                 _imageLayouts[CalculateSubresource(baseMipLevel, baseArrayLayer)],
                 newLayout);
+            _gd.Profiler?.RecordBarrier(BarrierBin.TextureTransition, 1);
 
             for (uint level = 0; level < levelCount; level++)
             {
@@ -408,6 +409,7 @@ internal unsafe partial class VkTexture : Texture
                         aspectMask,
                         oldLayout,
                         newLayout);
+                    _gd.Profiler?.RecordBarrier(BarrierBin.TextureTransition, 1);
 
                     _imageLayouts[subresource] = newLayout;
                 }

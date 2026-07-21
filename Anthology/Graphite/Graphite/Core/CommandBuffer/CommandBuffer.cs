@@ -53,6 +53,9 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Id of the bound execution, or 0 if none.</summary>
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
+    /// <summary>Reports a resource-set/descriptor bind to the owning device's profiler, if any.</summary>
+    internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Profiler?.RecordResourceSetBind(setCount);
+
     /// <summary>Whether End has been called since the last Begin. Used to validate before submission.</summary>
     internal bool HasEnded { get; private protected set; }
 

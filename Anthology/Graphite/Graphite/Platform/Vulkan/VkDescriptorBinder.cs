@@ -180,6 +180,7 @@ internal unsafe sealed class VkDescriptorBinder
         }
 
         _gd.Vk.CmdBindDescriptorSets(cb, bindPoint, pipelineLayout, 0, setCount, sets, (uint)d, dynOffsets);
+        _cbOwner.RecordResourceSetBind(setCount);
     }
 
     private void EnsureBindCacheFor(ShaderProgram program, int setCount)

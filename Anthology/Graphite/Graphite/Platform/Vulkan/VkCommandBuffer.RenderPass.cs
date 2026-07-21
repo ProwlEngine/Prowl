@@ -240,5 +240,6 @@ internal unsafe partial class VkCommandBuffer
             null,
             0,
             null);
+        _gd.Profiler?.RecordBarrier(BarrierBin.MemoryBarrier, 1);
     }
 }
