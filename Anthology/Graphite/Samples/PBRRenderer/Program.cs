@@ -28,7 +28,7 @@ internal readonly struct SceneView : IRenderView
 // upsample) over it into "BloomFull", and finally composites Scene + BloomFull to the swapchain. The
 // graph orders the four passes from their declared texture reads/writes; nothing here manually tracks
 // dependency order.
-internal sealed class ScenePass : IPass<SceneView>
+internal sealed class ScenePass : RasterPass<SceneView>
 {
     private readonly ModelAsset _model;
     private readonly GraphicsProgram _shader;
@@ -47,16 +47,14 @@ internal sealed class ScenePass : IPass<SceneView>
         _distance = Float3.Length(model.Bounds.Extents) * 3.0f;
     }
 
-    private TextureHandle _sceneHandle;
-
-    public string Name => "Scene";
+    public override string Name => "Scene";
 
     public void Advance(float dt) => _angle += dt * 0.5f;
 
-    public void Setup(RenderContextBuilder builder)
-        => _sceneHandle = builder.GetOutputTexture("Scene", GraphTextureDesc.ViewSized());
+    public override void Setup(RenderContextBuilder builder)
+        => SetTarget(builder, "Scene", GraphTextureDesc.ViewSized());
 
-    public void Render(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
         float radius = Math.Max(_distance, 0.001f);
         Float3 eye = _center + new Float3(MathF.Sin(_angle), 0.35f, MathF.Cos(_angle)) * _distance;
@@ -65,25 +63,18 @@ internal sealed class ScenePass : IPass<SceneView>
         Float4x4 view = Float4x4.CreateLookAt(eye, _center, Float3.UnitY);
         _properties.SetMatrix("MatrixMVP", projection * view);
 
-        RenderTexture scene = context.GetRenderTexture(_sceneHandle);
-
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.Begin();
-        cmd.SetFramebuffer(scene.Framebuffer);
-        cmd.ClearDepthStencil(1, 0);
-        cmd.ClearColorTarget(0, new Color(0.10f, 0.12f, 0.16f, 1.0f));
+        BindTarget(context, cmd, new Color(0.10f, 0.12f, 0.16f, 1.0f));
         cmd.SetShader(_shader);
         cmd.SetVertexSource(_model.Mesh);
         cmd.SetProperties(_properties);
         cmd.DrawIndexed();
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
     }
 }
 
 
-internal sealed class BloomDownsamplePass : IPass<SceneView>
+internal sealed class BloomDownsamplePass : RasterPass<SceneView>
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -100,22 +91,21 @@ internal sealed class BloomDownsamplePass : IPass<SceneView>
     private TextureHandle _sceneHandle;
     private TextureHandle _bloomHalfHandle;
 
-    public string Name => "BloomDownsample";
+    public override string Name => "BloomDownsample";
 
-    public void Setup(RenderContextBuilder builder)
+    public override void Setup(RenderContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene", GraphTextureDesc.ViewSized());
-        _bloomHalfHandle = builder.GetOutputTexture("BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
+        _sceneHandle = builder.GetInputTexture("Scene");
+        _bloomHalfHandle = SetTarget(builder, "BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
     }
 
-    public void Render(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
         RenderTexture scene = context.GetRenderTexture(_sceneHandle);
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.Begin();
-        cmd.SetFramebuffer(bloomHalf.Framebuffer);
+        BindTarget(context, cmd);
 
         _bloomShader.SetKeyword(UpsampleOff);
         _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _sampler);
@@ -126,14 +116,12 @@ internal sealed class BloomDownsamplePass : IPass<SceneView>
         cmd.SetVertexSource(_fullscreenSource);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
     }
 }
 
 
-internal sealed class BloomUpsamplePass : IPass<SceneView>
+internal sealed class BloomUpsamplePass : RasterPass<SceneView>
 {
     private readonly ShaderPass _bloomShader;
     private readonly Sampler _sampler;
@@ -150,22 +138,21 @@ internal sealed class BloomUpsamplePass : IPass<SceneView>
     private TextureHandle _bloomHalfHandle;
     private TextureHandle _bloomFullHandle;
 
-    public string Name => "BloomUpsample";
+    public override string Name => "BloomUpsample";
 
-    public void Setup(RenderContextBuilder builder)
+    public override void Setup(RenderContextBuilder builder)
     {
-        _bloomHalfHandle = builder.GetInputTexture("BloomHalf", GraphTextureDesc.ViewSized(false, 0.5f));
-        _bloomFullHandle = builder.GetOutputTexture("BloomFull", GraphTextureDesc.ViewSized(false, 1f));
+        _bloomHalfHandle = builder.GetInputTexture("BloomHalf");
+        _bloomFullHandle = SetTarget(builder, "BloomFull", GraphTextureDesc.ViewSized(false, 1f));
     }
 
-    public void Render(RenderContext<SceneView> context)
+    public override void Render(RenderContext<SceneView> context)
     {
         RenderTexture bloomHalf = context.GetRenderTexture(_bloomHalfHandle);
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.Begin();
-        cmd.SetFramebuffer(bloomFull.Framebuffer);
+        BindTarget(context, cmd);
 
         _bloomShader.SetKeyword(UpsampleOn);
         _properties.SetTexture("sourceTexture", bloomHalf.ColorTextures[0], _sampler);
@@ -176,8 +163,6 @@ internal sealed class BloomUpsamplePass : IPass<SceneView>
         cmd.SetVertexSource(_fullscreenSource);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
     }
 }
@@ -203,8 +188,8 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
 
     public void Setup(PresentContextBuilder builder)
     {
-        _sceneHandle = builder.GetInputTexture("Scene", GraphTextureDesc.ViewSized());
-        _bloomFullHandle = builder.GetInputTexture("BloomFull", GraphTextureDesc.ViewSized(false, 1f));
+        _sceneHandle = builder.GetInputTexture("Scene");
+        _bloomFullHandle = builder.GetInputTexture("BloomFull");
         builder.RequestSwapchain();
     }
 
@@ -218,7 +203,6 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
         RenderTexture bloomFull = context.GetRenderTexture(_bloomFullHandle);
 
         CommandBuffer cmd = context.GetCommandBuffer(Name);
-        cmd.Begin();
         cmd.SetFramebuffer(target);
 
         _properties.SetTexture("sceneTexture", scene.ColorTextures[0], _sampler);
@@ -229,8 +213,6 @@ internal sealed class CompositePresentPass : IPresentPass<SceneView>
         cmd.SetVertexSource(_fullscreenSource);
         cmd.SetProperties(_properties);
         cmd.Draw(3);
-        cmd.End();
-
         context.SubmitCommandBuffer(cmd);
         context.Present();
     }
