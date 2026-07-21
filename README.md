@@ -168,15 +168,16 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 Getting Prowl up and running is super easy!
 
+### Prerequisites
+
+* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+
 ## Releases
 
 > **Note**: Prowl is now at **1.0-preview**, grab it from the [Releases page](https://github.com/ProwlEngine/Prowl/releases). Projects made with older, pre-1.0-preview versions of Prowl are not compatible and cannot be migrated.
 
 ## Build from source
 
-### Prerequisites
-
-* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 
 ### Installation
 
