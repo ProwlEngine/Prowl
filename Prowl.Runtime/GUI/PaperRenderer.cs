@@ -6,12 +6,14 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Graphite;
+using Prowl.Graphite.RenderGraph;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Quill;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Texture = Prowl.Graphite.Texture;
+using RenderTexture = Prowl.Graphite.RenderTexture;
 using IndexFormat = Prowl.Graphite.IndexFormat;
 using Prowl.Echo;
 
@@ -20,8 +22,24 @@ namespace Prowl.Runtime.GUI;
 /// <summary>
 /// Renders a Quill <see cref="Canvas"/> with Prowl.Graphite. Ported from the Paper GraphiteRenderer sample,
 /// but using Prowl <see cref="Texture2D"/> for canvas textures and offline-compiled shader blobs.
+/// <para>
+/// Is itself a graph pass (<see cref="IPass{TView}"/>), generic over the host view type, so it can be
+/// added via <c>AddPass</c> into any existing <see cref="Graphite.RenderPipeline{TView}"/> that wants
+/// Paper's UI drawn as part of its own graph. Its scene texture and backdrop-blur ping-pong chain are
+/// declared as regular graph outputs in <see cref="Setup"/> and resolved fresh from the render context
+/// each execution (<see cref="Render"/>) - never manually created here. A host's own present/compositing
+/// pass reads the drawn UI back by declaring <see cref="SceneResourceId"/> as a graph input and resolving
+/// it the same way, then compositing it with <see cref="CompositeInto"/> wherever it wants. When there is
+/// no existing pipeline to inject into (editor UI, the pre-render project launcher), use
+/// <see cref="Rendering.PaperPipeline"/> instead, which wraps a <see cref="PaperRenderer{TView}"/> and a
+/// present pass into a small standalone pipeline.
+/// </para>
+/// <para>
+/// <see cref="RenderCalls"/> just stashes the canvas/draw-call list - it does not dispatch a graph itself,
+/// whatever pipeline this is added to decides when <see cref="Render"/> runs.
+/// </para>
 /// </summary>
-public class PaperRenderer : ICanvasRenderer
+public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : IRenderView
 {
     private struct CanvasVertexSource : IVertexSource
     {
@@ -43,52 +61,88 @@ public class PaperRenderer : ICanvasRenderer
         }
     }
 
+    /// <summary>Number of backdrop-blur downsample/upsample levels the graph declares scratch textures for.</summary>
+    public const int MaxBlurLevels = 6;
+
     private GraphicsDevice _device;
 
     public bool SupportsBackdropBlur => true;
 
-    /// <summary>
-    /// When set, Present() renders into this framebuffer instead of the swapchain.
-    /// WorldCanvas sets this to its own render texture so Paper renders off-screen.
-    /// </summary>
-    public Framebuffer? PresentTarget { get; set; }
+    public string Name => "Paper UI";
 
-    private CommandBuffer _buffer;
+    /// <summary>Pixel width last passed to <see cref="Initialize"/> or <see cref="UpdateProjection"/>.</summary>
+    public int PixelWidth => _fbWidth;
+
+    /// <summary>Pixel height last passed to <see cref="Initialize"/> or <see cref="UpdateProjection"/>.</summary>
+    public int PixelHeight => _fbHeight;
+
+    /// <summary>
+    /// Graph resource ID this pass draws Paper's UI into. A host pipeline's present (or compositing) pass
+    /// declares this as an input to read the result back.
+    /// </summary>
+    public RenderResourceID SceneResourceId => _sceneId;
+
+    private readonly RenderResourceID _sceneId;
+    private readonly RenderResourceID[] _blurIds = new RenderResourceID[MaxBlurLevels];
+    private readonly RenderResourceID _vboId;
+    private readonly RenderResourceID _eboId;
+
+    private readonly uint _vertexBufferBytes;
+    private readonly uint _indexBufferBytes;
+
+    private TextureHandle _sceneHandle;
+    private readonly TextureHandle[] _blurHandles = new TextureHandle[MaxBlurLevels];
+    private BufferHandle _vboHandle;
+    private BufferHandle _eboHandle;
+
+    private Canvas _pendingCanvas;
+    private IReadOnlyList<DrawCall> _pendingDrawCalls;
 
     private GraphicsProgram _shader;
     private ShaderPass _blurPass;
     private GraphicsProgram _blurProgramOff;
     private GraphicsProgram _blurProgramOn;
+    private GraphicsProgram _compositeProgram;
 
     private Float4x4 _projection;
     private Texture2D _defaultTexture;
     private Sampler _sampler;
 
-    private StreamingBuffer _activeVbo;
-    private uint _vboCapacity;
-    private StreamingBuffer _activeEbo;
-    private uint _eboCapacity;
-
     private readonly PropertySet _properties = new();
     private CanvasVertexSource _fullscreenSource;
 
-    private Texture _sceneTex;
-    private Framebuffer _sceneFB;
-
-    private const int MaxBlurLevels = 6;
-    private readonly Texture[] _blurTex = new Texture[MaxBlurLevels];
-    private readonly Framebuffer[] _blurFB = new Framebuffer[MaxBlurLevels];
-    private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
-
     private int _fbWidth;
     private int _fbHeight;
-    private int _targetW;
-    private int _targetH;
 
-    private const PixelFormat TargetFormat = PixelFormat.R8_G8_B8_A8_UNorm;
-    private static readonly Color s_clearColor = new(0f, 0f, 0f, 1f);
+    // Transparent: the scene texture is composited (premultiplied-alpha) over whatever a host present
+    // pass is drawing underneath it, so undrawn pixels must contribute nothing.
+    private static readonly Color s_clearColor = new(0f, 0f, 0f, 0f);
     private static readonly Keyword s_upsampleOn = new("Upsample", "true");
     private static readonly Keyword s_upsampleOff = new("Upsample", "false");
+
+    /// <param name="vertexBufferBytes">
+    /// Fixed byte capacity of the graph-declared vertex buffer this pass draws from. Graph buffers are
+    /// sized once (in <see cref="Setup"/>), not per frame, so this needs to be big enough for the most
+    /// complex UI this renderer will ever draw in one frame. Defaults to 12 MiB (~600K vertices).
+    /// </param>
+    /// <param name="indexBufferBytes">
+    /// Fixed byte capacity of the graph-declared index buffer. Defaults to 2.5 MiB (~650K indices).
+    /// </param>
+    /// <param name="resourceId">
+    /// Graph resource ID root for this renderer's scene/blur/vertex/index resources. Only needs changing
+    /// if more than one <see cref="PaperRenderer{TView}"/> is added to the same pipeline.
+    /// </param>
+    public PaperRenderer(uint vertexBufferBytes = 12u * 1024 * 1024, uint indexBufferBytes = 2_621_440u, string resourceId = "_PaperScene")
+    {
+        _vertexBufferBytes = vertexBufferBytes;
+        _indexBufferBytes = indexBufferBytes;
+
+        _sceneId = resourceId;
+        _vboId = $"{resourceId}Vbo";
+        _eboId = $"{resourceId}Ebo";
+        for (int i = 0; i < _blurIds.Length; i++)
+            _blurIds[i] = $"{resourceId}Blur{i}";
+    }
 
     public void Initialize(int width, int height)
     {
@@ -96,8 +150,6 @@ public class PaperRenderer : ICanvasRenderer
 
         CreateShaderPrograms();
 
-        _buffer = _device.ResourceFactory.CreateCommandBuffer();
-        _buffer.Name = "PaperRenderer";
         _sampler = _device.ResourceFactory.CreateSampler(new SamplerDescription
         {
             AddressModeU = SamplerAddressMode.Clamp,
@@ -160,6 +212,27 @@ public class PaperRenderer : ICanvasRenderer
         _blurPass = blur.Definition.Passes![0];
         _blurProgramOff = BuildBlurProgram(s_upsampleOff);
         _blurProgramOn = BuildBlurProgram(s_upsampleOn);
+        _compositeProgram = BuildCompositeProgram(oneMinusSrcAlphaBlend);
+    }
+
+    /// <summary>
+    /// Same shader as the non-upsampling blur pass (plain texture sample, offset=0 in
+    /// <see cref="CompositeInto"/> means no blur), but with premultiplied-alpha blending enabled instead
+    /// of disabled, since <see cref="CompositeInto"/> draws the scene texture over a host's existing
+    /// framebuffer content rather than overwriting it.
+    /// </summary>
+    private GraphicsProgram BuildCompositeProgram(BlendStateDescription blend)
+    {
+        _blurPass.SetKeyword(s_upsampleOff);
+        ShaderDescription desc = ResolveDescription(_blurPass);
+
+        desc.BlendState = blend;
+        desc.DepthStencilState = DepthStencilStateDescription.Disabled;
+        desc.RasterizerState = new RasterizerStateDescription(FaceCullMode.None, FrontFace.Clockwise, true, false);
+
+        GraphicsProgram program = _device.ResourceFactory.CreateGraphicsProgram(desc);
+        program.Name = "PaperRenderer Composite Shader";
+        return program;
     }
 
     private GraphicsProgram BuildBlurProgram(Keyword upsample)
@@ -225,73 +298,176 @@ public class PaperRenderer : ICanvasRenderer
         tex.SetData(new Memory<byte>(data), bounds.Min.X, bounds.Min.Y, (uint)bounds.Size.X, (uint)bounds.Size.Y);
     }
 
+    /// <summary>
+    /// Stashes the canvas and draw calls for the next <see cref="Render"/> call. Does not dispatch a graph
+    /// itself - whatever pipeline this pass is added to decides when that runs.
+    /// </summary>
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
-        _buffer.Begin();
+        _pendingCanvas = canvas;
+        _pendingDrawCalls = drawCalls;
+    }
 
-        EnsureTargets(_fbWidth, _fbHeight);
+    public void Setup(RenderContextBuilder builder)
+    {
+        _sceneHandle = builder.GetOutputTexture(_sceneId, GraphTextureDesc.ViewSized(depth: false));
+
+        for (int i = 0; i < _blurHandles.Length; i++)
+            _blurHandles[i] = builder.GetOutputTexture(_blurIds[i], GraphTextureDesc.ViewSized(depth: false, scale: 1f / (1 << (i + 1))));
+
+        _vboHandle = builder.GetOutputBuffer(_vboId, GraphBufferDesc.Of(_vertexBufferBytes, BufferUsage.VertexBuffer));
+        _eboHandle = builder.GetOutputBuffer(_eboId, GraphBufferDesc.Of(_indexBufferBytes, BufferUsage.IndexBuffer));
+    }
+
+    /// <summary>
+    /// Draws the canvas stashed by <see cref="RenderCalls"/> into the graph-pooled scene texture, using a
+    /// graph-pooled vertex/index buffer pair and backdrop-blur ping-pong chain (all declared in
+    /// <see cref="Setup"/>, resolved here, never manually created). Does not present or touch any
+    /// framebuffer beyond its own scene texture - use <see cref="CompositeInto"/> for that.
+    /// </summary>
+    public void Render(RenderContext<TView> context)
+    {
+        Canvas canvas = _pendingCanvas;
+        IReadOnlyList<DrawCall> drawCalls = _pendingDrawCalls;
+
+        RenderTexture sceneRT = context.GetRenderTexture(_sceneHandle);
+        RenderTexture ResolveBlur(int level) => context.GetRenderTexture(_blurHandles[level]);
+        DeviceBuffer vbo = context.GetRenderBuffer(_vboHandle);
+        DeviceBuffer ebo = context.GetRenderBuffer(_eboHandle);
+
+        CommandBuffer cmd = context.GetCommandBuffer("Paper");
 
         bool hasGeometry = drawCalls.Count > 0 && canvas.Vertices.Count > 0 && canvas.Indices.Count > 0;
 
+        int includedDrawCalls = drawCalls.Count;
+        int vertexCount = canvas.Vertices.Count;
+        int indexCount = canvas.Indices.Count;
+
+        if (hasGeometry)
+        {
+            uint neededVertexBytes = (uint)(vertexCount * Vertex.SizeInBytes);
+            uint neededIndexBytes = (uint)(indexCount * sizeof(uint));
+
+            if (neededVertexBytes > _vertexBufferBytes || neededIndexBytes > _indexBufferBytes)
+            {
+                includedDrawCalls = ClampToCapacity(canvas, drawCalls, out vertexCount, out indexCount);
+
+                Debug.LogWarning(
+                    $"PaperRenderer: canvas geometry ({canvas.Vertices.Count} vertices = {neededVertexBytes}B, " +
+                    $"{canvas.Indices.Count} indices = {neededIndexBytes}B) exceeds the configured buffer capacity " +
+                    $"({_vertexBufferBytes}B vertex / {_indexBufferBytes}B index) - drawing only the first " +
+                    $"{includedDrawCalls}/{drawCalls.Count} draw calls this frame ({vertexCount} vertices, " +
+                    $"{indexCount} indices). Construct this PaperRenderer with larger vertexBufferBytes/indexBufferBytes.");
+
+                hasGeometry = includedDrawCalls > 0 && vertexCount > 0 && indexCount > 0;
+            }
+        }
+
         // Upload geometry before binding a framebuffer: buffer uploads must happen outside a render pass.
         if (hasGeometry)
-            UploadGeometry(canvas);
+            UploadGeometry(cmd, canvas, vertexCount, indexCount, vbo, ebo);
 
-        _buffer.SetFramebuffer(_sceneFB);
-        _buffer.ClearColorTarget(0, s_clearColor);
+        cmd.SetFramebuffer(sceneRT.Framebuffer);
+        cmd.ClearColorTarget(0, s_clearColor);
 
         if (hasGeometry)
         {
             int indexOffset = 0;
-            foreach (DrawCall drawCall in drawCalls)
+            for (int i = 0; i < includedDrawCalls; i++)
             {
-                ProcessDrawCall(drawCall, indexOffset, (float)canvas.FramebufferScale);
+                DrawCall drawCall = drawCalls[i];
+                ProcessDrawCall(cmd, drawCall, indexOffset, (float)canvas.FramebufferScale, sceneRT, ResolveBlur, vbo, ebo);
                 indexOffset += drawCall.ElementCount;
             }
         }
 
-        // Present the offscreen scene to the swapchain.
-        Present();
-
-        _buffer.End();
-
-        Graphics.CurrentFrame?.SubmitCommands(_buffer);
+        context.SubmitCommandBuffer(cmd);
     }
 
-    private void UploadGeometry(Canvas canvas)
+    /// <summary>
+    /// Finds the longest prefix of <paramref name="drawCalls"/> whose vertex/index usage fits within this
+    /// renderer's configured buffer capacity, so an over-budget canvas still gets a partial draw instead
+    /// of none. A draw call is only included whole - never split - so its indices always resolve against
+    /// vertices already included in <paramref name="vertexCount"/>.
+    /// </summary>
+    private int ClampToCapacity(Canvas canvas, IReadOnlyList<DrawCall> drawCalls, out int vertexCount, out int indexCount)
     {
-        Vertex[] vertices = [.. canvas.Vertices];
-        uint[] indices = [.. canvas.Indices];
+        int maxVertices = (int)(_vertexBufferBytes / Vertex.SizeInBytes);
+        int maxIndices = (int)(_indexBufferBytes / sizeof(uint));
 
-        EnsureBuffer(ref _activeVbo, ref _vboCapacity, (uint)(vertices.Length * Vertex.SizeInBytes), BufferUsage.VertexBuffer);
-        EnsureBuffer(ref _activeEbo, ref _eboCapacity, (uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer);
+        int includedDrawCalls = 0;
+        int includedIndices = 0;
+        int maxVertexIndex = -1;
 
-        _buffer.UpdateBuffer(_activeVbo.Current, 0, vertices);
-        _buffer.UpdateBuffer(_activeEbo.Current, 0, indices);
+        foreach (DrawCall drawCall in drawCalls)
+        {
+            int nextIndices = includedIndices + drawCall.ElementCount;
+            if (nextIndices > maxIndices)
+                break;
+
+            int nextMaxVertexIndex = maxVertexIndex;
+            for (int i = includedIndices; i < nextIndices; i++)
+                nextMaxVertexIndex = Math.Max(nextMaxVertexIndex, (int)canvas.Indices[i]);
+
+            if (nextMaxVertexIndex + 1 > maxVertices)
+                break;
+
+            includedIndices = nextIndices;
+            maxVertexIndex = nextMaxVertexIndex;
+            includedDrawCalls++;
+        }
+
+        vertexCount = maxVertexIndex + 1;
+        indexCount = includedIndices;
+        return includedDrawCalls;
     }
 
-    private void EnsureBuffer(ref StreamingBuffer buffer, ref uint capacity, uint sizeInBytes, BufferUsage usage)
+    /// <summary>
+    /// Composites an already-resolved scene texture (see <see cref="Render"/> / <see cref="SceneResourceId"/>)
+    /// over <paramref name="target"/> (the swapchain framebuffer, or any other render target a host
+    /// pipeline's present pass wants to composite Paper's UI onto), using premultiplied-alpha blending so
+    /// whatever <paramref name="target"/> already holds shows through where the UI didn't draw.
+    /// </summary>
+    public void CompositeInto(CommandBuffer cmd, Texture sceneTexture, Framebuffer target)
     {
-        if (buffer != null && sizeInBytes <= capacity)
-            return;
+        cmd.SetFramebuffer(target);
 
-        buffer?.Dispose();
-        uint newCapacity = (uint)(sizeInBytes * 1.5f) + 256;
-        buffer = _device.ResourceFactory.CreateStreamingBuffer(new BufferDescription(newCapacity, usage));
-        buffer.Name = $"Paper {usage}";
-        capacity = newCapacity;
+        _properties.SetTexture("sourceTexture", sceneTexture, _sampler);
+        _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
+        _properties.SetFloat("offset", 0f);
+
+        cmd.SetShader(_compositeProgram);
+        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetProperties(_properties);
+        cmd.Draw(3);
     }
 
-    private void ProcessDrawCall(DrawCall drawCall, int indexOffset, float dpiScale)
+    private static void UploadGeometry(CommandBuffer cmd, Canvas canvas, int vertexCount, int indexCount, DeviceBuffer vbo, DeviceBuffer ebo)
+    {
+        Vertex[] vertices = new Vertex[vertexCount];
+        for (int i = 0; i < vertexCount; i++)
+            vertices[i] = canvas.Vertices[i];
+
+        uint[] indices = new uint[indexCount];
+        for (int i = 0; i < indexCount; i++)
+            indices[i] = canvas.Indices[i];
+
+        cmd.UpdateBuffer(vbo, 0, vertices);
+        cmd.UpdateBuffer(ebo, 0, indices);
+    }
+
+    private void ProcessDrawCall(
+        CommandBuffer cmd, DrawCall drawCall, int indexOffset, float dpiScale,
+        RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur, DeviceBuffer vbo, DeviceBuffer ebo)
     {
         Brush brush = drawCall.Brush;
         float blur = brush.BackdropBlur;
 
-        // Backdrop blur: blur the scene drawn so far into _blurTex[0], then composite the shape over it.
+        // Backdrop blur: blur the scene drawn so far into blur level 0, then composite the shape over it.
         if (blur > 0f)
         {
-            RenderBackdropBlur(blur);
-            _buffer.SetFramebuffer(_sceneFB);
+            RenderBackdropBlur(cmd, blur, sceneRT, resolveBlur);
+            cmd.SetFramebuffer(sceneRT.Framebuffer);
         }
 
         Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
@@ -327,22 +503,22 @@ public class PaperRenderer : ICanvasRenderer
 
         // backdropTexture always needs a bound sampler; use the blurred scene when blurring, else any texture.
         if (blur > 0f)
-            _properties.SetTexture("backdropTexture", _blurTex[0], _sampler);
+            _properties.SetTexture("backdropTexture", resolveBlur(0).ColorTextures[0], _sampler);
         else
             _properties.SetTexture("backdropTexture", texture.Handle, texture.Sampler);
 
         CanvasVertexSource source = new()
         {
-            VertexBuffer = _activeVbo.Current,
-            IndexBuffer = _activeEbo.Current,
+            VertexBuffer = vbo,
+            IndexBuffer = ebo,
             IndexCount = (uint)drawCall.ElementCount,
         };
 
-        _buffer.SetShader(_shader);
-        _buffer.SetVertexSource(source);
-        _buffer.SetProperties(_properties);
+        cmd.SetShader(_shader);
+        cmd.SetVertexSource(source);
+        cmd.SetProperties(_properties);
 
-        _buffer.DrawIndexed(1, (uint)indexOffset, 0, 0);
+        cmd.DrawIndexed(1, (uint)indexOffset, 0, 0);
     }
 
     /// <summary>
@@ -356,115 +532,53 @@ public class PaperRenderer : ICanvasRenderer
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }
 
-    private void RenderBackdropBlur(float radius)
+    private void RenderBackdropBlur(CommandBuffer cmd, float radius, RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur)
     {
         ComputeBlurParams(radius, out int iterations, out float offset);
 
         // Downsample pass
-        BlurPass(_sceneTex, new Int2(_targetW, _targetH), 0, false, offset);
+        BlurPass(cmd, sceneRT.ColorTextures[0], TexelSize(sceneRT), resolveBlur, 0, false, offset);
         for (int i = 0; i < iterations; i++)
-            BlurPass(_blurTex[i], _blurSize[i], i + 1, false, offset);
+            BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i + 1, false, offset);
 
         // Upsample pass
         for (int i = iterations; i > 0; i--)
-            BlurPass(_blurTex[i], _blurSize[i], i - 1, true, offset);
+            BlurPass(cmd, resolveBlur(i).ColorTextures[0], TexelSize(resolveBlur(i)), resolveBlur, i - 1, true, offset);
     }
 
-    private void BlurPass(Texture source, Int2 sourceSize, int dstLevel, bool upsample, float offset)
+    private static Int2 TexelSize(RenderTexture rt) => new((int)rt.Desc.Width, (int)rt.Desc.Height);
+
+    private void BlurPass(CommandBuffer cmd, Texture source, Int2 sourceSize, Func<int, RenderTexture> resolveBlur, int dstLevel, bool upsample, float offset)
     {
-        Int2 dstSize = _blurSize[dstLevel];
+        RenderTexture dst = resolveBlur(dstLevel);
+        Int2 dstSize = TexelSize(dst);
         Int2 basis = upsample ? dstSize : sourceSize;
 
-        _buffer.SetFramebuffer(_blurFB[dstLevel]);
+        cmd.SetFramebuffer(dst.Framebuffer);
 
         _properties.SetTexture("sourceTexture", source, _sampler);
         _properties.SetFloat2("halfPixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
         _properties.SetFloat("offset", offset);
 
-        _buffer.SetShader(upsample ? _blurProgramOn : _blurProgramOff);
-        _buffer.SetVertexSource(_fullscreenSource);
-        _buffer.SetProperties(_properties);
-        _buffer.Draw(3);
-    }
-
-    private void Present()
-    {
-        _buffer.SetFramebuffer(PresentTarget ?? _device.SwapchainFramebuffer!);
-
-        _properties.SetTexture("sourceTexture", _sceneTex, _sampler);
-        _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
-        _properties.SetFloat("offset", 0f);
-
-        _buffer.SetShader(_blurProgramOff);
-        _buffer.SetVertexSource(_fullscreenSource);
-        _buffer.SetProperties(_properties);
-        _buffer.Draw(3);
-    }
-
-    private void EnsureTargets(int width, int height)
-    {
-        if (_sceneTex != null && _targetW == width && _targetH == height)
-            return;
-
-        DisposeTargets();
-
-        TextureDescription sceneDesc = TextureDescription.Texture2D((uint)width, (uint)height, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget);
-        _sceneTex = _device.ResourceFactory.CreateTexture(sceneDesc);
-        _sceneTex.Name = "PaperRenderer Scene Texture";
-        _sceneFB = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _sceneTex));
-        _sceneFB.Name = "PaperRenderer Scene Framebuffer";
-
-        for (int i = 0; i < MaxBlurLevels; i++)
-        {
-            int w = Math.Max(1, width >> (i + 1));
-            int h = Math.Max(1, height >> (i + 1));
-            _blurSize[i] = new Int2(w, h);
-
-            TextureDescription blurDesc = TextureDescription.Texture2D((uint)w, (uint)h, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget);
-            _blurTex[i] = _device.ResourceFactory.CreateTexture(blurDesc);
-            _blurTex[i].Name = $"PaperRenderer Blur Texture {i}";
-            _blurFB[i] = _device.ResourceFactory.CreateFramebuffer(new FramebufferDescription(null, _blurTex[i]));
-            _blurFB[i].Name = $"PaperRenderer Blur Framebuffer {i}";
-        }
-
-        _targetW = width;
-        _targetH = height;
+        cmd.SetShader(upsample ? _blurProgramOn : _blurProgramOff);
+        cmd.SetVertexSource(_fullscreenSource);
+        cmd.SetProperties(_properties);
+        cmd.Draw(3);
     }
 
     private static Float4 ToFloat4(Color32 color)
         => new(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
-    private void DisposeTargets()
-    {
-        _sceneFB?.Dispose();
-        _sceneTex?.Dispose();
-        _sceneFB = null;
-        _sceneTex = null;
-
-        for (int i = 0; i < MaxBlurLevels; i++)
-        {
-            _blurFB[i]?.Dispose();
-            _blurTex[i]?.Dispose();
-            _blurFB[i] = null;
-            _blurTex[i] = null;
-        }
-    }
-
     public void Cleanup()
     {
-        DisposeTargets();
-
-        _activeVbo?.Dispose();
-        _activeEbo?.Dispose();
-
         _sampler?.Dispose();
         _shader?.Dispose();
 
         _blurProgramOff?.Dispose();
         _blurProgramOn?.Dispose();
+        _compositeProgram?.Dispose();
 
         _defaultTexture?.Dispose();
-        _buffer?.Dispose();
     }
 
     public void Dispose()
