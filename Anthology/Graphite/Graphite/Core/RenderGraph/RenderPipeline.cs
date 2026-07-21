@@ -11,6 +11,7 @@ public abstract class RenderPipeline<TView> : IDisposable
     where TView : IRenderView
 {
     private readonly List<IPass<TView>> _passes = new();
+    private readonly List<GraphResource> _centralResources = new();
     private IPresentPass<TView>? _presentPass;
     private RenderGraph<TView>? _graph;
     private bool _initialized;
@@ -29,6 +30,24 @@ public abstract class RenderPipeline<TView> : IDisposable
     protected void SetPresentPass(IPresentPass<TView> presentPass)
         => _presentPass = presentPass ?? throw new ArgumentNullException(nameof(presentPass));
 
+    /// <summary>
+    /// Declares a texture resource centrally, independent of any pass, so many passes can reference it by ID
+    /// without one of them having to own its description. Call from InitializePasses.
+    /// </summary>
+    /// <param name="id">Resource ID passes reference.</param>
+    /// <param name="desc">Description used to allocate the texture.</param>
+    protected void DeclareTexture(RenderResourceID id, GraphTextureDesc desc)
+        => _centralResources.Add(new GraphTextureResource(id, desc));
+
+    /// <summary>
+    /// Declares a buffer resource centrally, independent of any pass, so many passes can reference it by ID
+    /// without one of them having to own its description. Call from InitializePasses.
+    /// </summary>
+    /// <param name="id">Resource ID passes reference.</param>
+    /// <param name="desc">Description used to allocate the buffer.</param>
+    protected void DeclareBuffer(RenderResourceID id, GraphBufferDesc desc)
+        => _centralResources.Add(new GraphBufferResource(id, desc));
+
     /// <summary>The present pass, resolved after init. Throws if none was set.</summary>
     public IPresentPass<TView> PresentPass
     {
@@ -46,7 +65,7 @@ public abstract class RenderPipeline<TView> : IDisposable
         get
         {
             EnsureInitialized();
-            return _graph ??= RenderGraph<TView>.Build(_passes, PresentPass);
+            return _graph ??= RenderGraph<TView>.Build(_passes, PresentPass, _centralResources);
         }
     }
 
@@ -76,12 +95,14 @@ public abstract class RenderPipeline<TView> : IDisposable
             profiler?.BeginSample(node.Pass.Name);
             node.Pass.Render(context);
             profiler?.EndSample();
+            context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);
 
             if (profiler != null && profiler.RequestCapture)
                 CapturePassOutputs(context, profiler, node);
         }
 
         PresentPass.Present(context);
+        context.ReclaimUnsubmittedCommandBuffers(PresentPass.Name);
     }
 
     private static void CapturePassOutputs(RenderContext<TView> context, IPassProfiler profiler, RenderGraph<TView>.PassNode node)
@@ -89,10 +110,17 @@ public abstract class RenderPipeline<TView> : IDisposable
         if (node.Outputs == null || node.Outputs.Length == 0)
             return;
 
-        var outputs = new Framebuffer[node.Outputs.Length];
-        for (int i = 0; i < outputs.Length; i++)
-            outputs[i] = context.GetRenderTexture(new TextureHandle(node.Outputs[i])).Framebuffer;
+        var framebuffers = new List<Framebuffer>(node.Outputs.Length);
+        foreach (RenderResourceID output in node.Outputs)
+        {
+            if (context.IsTextureResource(output))
+                framebuffers.Add(context.GetRenderTexture(new TextureHandle(output)).Framebuffer);
+        }
 
+        if (framebuffers.Count == 0)
+            return;
+
+        Framebuffer[] outputs = framebuffers.ToArray();
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
         profiler.Capture(outputs, transfer);
         context.SubmitTransferCommandBuffer(transfer);
@@ -105,6 +133,8 @@ public abstract class RenderPipeline<TView> : IDisposable
             (pass as IDisposable)?.Dispose();
 
         (_presentPass as IDisposable)?.Dispose();
+
+        _graph?.Dispose();
 
         GC.SuppressFinalize(this);
     }

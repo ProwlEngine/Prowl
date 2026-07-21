@@ -4,20 +4,17 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// A solved render graph: passes ordered so readers run after writers, plus the merged resource table
-/// and the resource presented as the result. Built from the passes a pipeline adds.
+/// A solved render graph: passes ordered so readers run after writers, plus the merged resource table.
+/// Built from the passes a pipeline adds and any resources the pipeline declares centrally.
 /// </summary>
-public sealed class RenderGraph<TView>
+public sealed class RenderGraph<TView> : IDisposable
     where TView : IRenderView
 {
-    /// <summary>A pass and the resource it nominated as main output.</summary>
+    /// <summary>A pass and the resources it declared.</summary>
     public readonly struct PassNode
     {
         /// <summary>The pass this node runs.</summary>
         public readonly IPass<TView> Pass;
-
-        /// <summary>Resource nominated as main output, or default if none.</summary>
-        public readonly RenderResourceID MainOutput;
 
         /// <summary>Resources declared as inputs, kept for profiling and wiring.</summary>
         public readonly RenderResourceID[] Inputs;
@@ -25,10 +22,9 @@ public sealed class RenderGraph<TView>
         /// <summary>Resources declared as outputs, kept for profiling and wiring.</summary>
         public readonly RenderResourceID[] Outputs;
 
-        internal PassNode(IPass<TView> pass, RenderResourceID mainOutput, RenderResourceID[] inputs, RenderResourceID[] outputs)
+        internal PassNode(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs)
         {
             Pass = pass;
-            MainOutput = mainOutput;
             Inputs = inputs;
             Outputs = outputs;
         }
@@ -37,11 +33,8 @@ public sealed class RenderGraph<TView>
     /// <summary>Passes in execution order (topo sorted, ties broken by insertion order).</summary>
     public IReadOnlyList<PassNode> OrderedPasses { get; }
 
-    /// <summary>All declared resources and their alloc description (first declaration wins).</summary>
-    public IReadOnlyDictionary<RenderResourceID, GraphTextureDesc> Resources { get; }
-
-    /// <summary>Main output of the last pass that set one; the graph's result.</summary>
-    public RenderResourceID PresentationSource { get; }
+    /// <summary>All declared resources keyed by ID (first declaration of an ID wins).</summary>
+    public IReadOnlyDictionary<RenderResourceID, GraphResource> Resources { get; }
 
     /// <summary>Resources the present pass declared as inputs, kept for profiling and wiring.</summary>
     public IReadOnlyList<RenderResourceID> PresentInputs { get; }
@@ -51,40 +44,51 @@ public sealed class RenderGraph<TView>
 
     private RenderGraph(
         PassNode[] ordered,
-        Dictionary<RenderResourceID, GraphTextureDesc> resources,
-        RenderResourceID presentation,
+        Dictionary<RenderResourceID, GraphResource> resources,
         RenderResourceID[] presentInputs,
         bool presentRequestsSwapchain)
     {
         OrderedPasses = ordered;
         Resources = resources;
-        PresentationSource = presentation;
         PresentInputs = presentInputs;
         PresentRequestsSwapchain = presentRequestsSwapchain;
     }
 
-    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs, RenderResourceID mainOutput)
+    /// <summary>Disposes the physical resources any history resource in this graph owns.</summary>
+    public void Dispose()
+    {
+        foreach (GraphResource resource in Resources.Values)
+            resource.DisposeOwned();
+    }
+
+    private readonly struct Node(IPass<TView> pass, RenderResourceID[] inputs, RenderResourceID[] outputs)
     {
         public readonly IPass<TView> Pass = pass;
         public readonly RenderResourceID[] Inputs = inputs;
         public readonly RenderResourceID[] Outputs = outputs;
-        public readonly RenderResourceID MainOutput = mainOutput;
     }
 
     /// <summary>
-    /// Builds a solved graph from a pass list and the pipeline's present pass. Runs each pass's setup,
-    /// merges declared resources, links writers to readers, topo sorts. Last pass to nominate a main
-    /// output becomes the presentation source. The present pass always runs last, so its declared
-    /// inputs are merged into the resource table but do not participate in ordering. Throws on a
-    /// dependency cycle.
+    /// Builds a solved graph from a pass list, the pipeline's present pass, and any centrally declared
+    /// resources. Runs each pass's setup, collects declared resources, links writers to readers by ID, and
+    /// topo sorts. The present pass always runs last, so its declared inputs are recorded but do not
+    /// participate in ordering. Every input ID must be produced by some pass output or a central
+    /// declaration; an input referencing an ID nothing produces throws. Also throws on a dependency cycle.
     /// </summary>
     public static RenderGraph<TView> Build(
         IReadOnlyList<IPass<TView>> passes,
-        IPresentPass<TView> presentPass)
+        IPresentPass<TView> presentPass,
+        IReadOnlyList<GraphResource>? centralResources = null)
     {
         int count = passes.Count;
         var nodes = new Node[count];
-        var resources = new Dictionary<RenderResourceID, GraphTextureDesc>();
+        var resources = new Dictionary<RenderResourceID, GraphResource>();
+
+        if (centralResources != null)
+        {
+            foreach (GraphResource resource in centralResources)
+                resources.TryAdd(resource.Id, resource);
+        }
 
         var builder = new RenderContextBuilder();
         for (int i = 0; i < count; i++)
@@ -96,38 +100,17 @@ public sealed class RenderGraph<TView>
 
             var inputs = new RenderResourceID[builder.Inputs.Count];
             for (int r = 0; r < inputs.Length; r++)
-            {
-                ResourceDecl decl = builder.Inputs[r];
-                inputs[r] = decl.Id;
-                resources.TryAdd(decl.Id, decl.Desc);
-            }
+                inputs[r] = builder.Inputs[r];
 
             var outputs = new RenderResourceID[builder.Outputs.Count];
-            bool mainIsOutput = false;
             for (int w = 0; w < outputs.Length; w++)
             {
-                ResourceDecl decl = builder.Outputs[w];
-                outputs[w] = decl.Id;
-                resources.TryAdd(decl.Id, decl.Desc);
-                mainIsOutput |= decl.Id == builder.MainOutput;
+                GraphResource output = builder.Outputs[w];
+                outputs[w] = output.Id;
+                resources.TryAdd(output.Id, output);
             }
 
-            if (builder.HasMainOutput && !mainIsOutput)
-                throw new InvalidOperationException($"Pass '{pass.Name}' set a main output that it did not declare as an output texture.");
-
-            nodes[i] = new Node(pass, inputs, outputs, builder.HasMainOutput ? builder.MainOutput : default);
-        }
-
-        int[] ordered = TopologicalSort(nodes);
-
-        var orderedNodes = new PassNode[ordered.Length];
-        RenderResourceID presentation = default;
-        for (int i = 0; i < ordered.Length; i++)
-        {
-            Node n = nodes[ordered[i]];
-            orderedNodes[i] = new PassNode(n.Pass, n.MainOutput, n.Inputs, n.Outputs);
-            if (n.MainOutput.IsValid)
-                presentation = n.MainOutput;
+            nodes[i] = new Node(pass, inputs, outputs);
         }
 
         var presentBuilder = new PresentContextBuilder();
@@ -135,14 +118,47 @@ public sealed class RenderGraph<TView>
 
         var presentInputs = new RenderResourceID[presentBuilder.Inputs.Count];
         for (int r = 0; r < presentInputs.Length; r++)
+            presentInputs[r] = presentBuilder.Inputs[r];
+
+        ValidateInputsHaveProducers(nodes, presentPass.Name, presentInputs, resources);
+
+        int[] ordered = TopologicalSort(nodes);
+
+        var orderedNodes = new PassNode[ordered.Length];
+        for (int i = 0; i < ordered.Length; i++)
         {
-            ResourceDecl decl = presentBuilder.Inputs[r];
-            presentInputs[r] = decl.Id;
-            resources.TryAdd(decl.Id, decl.Desc);
+            Node n = nodes[ordered[i]];
+            orderedNodes[i] = new PassNode(n.Pass, n.Inputs, n.Outputs);
         }
 
         return new RenderGraph<TView>(
-            orderedNodes, resources, presentation, presentInputs, presentBuilder.RequestsSwapchain);
+            orderedNodes, resources, presentInputs, presentBuilder.RequestsSwapchain);
+    }
+
+    private static void ValidateInputsHaveProducers(
+        Node[] nodes,
+        string presentPassName,
+        RenderResourceID[] presentInputs,
+        Dictionary<RenderResourceID, GraphResource> resources)
+    {
+        foreach (Node node in nodes)
+        {
+            foreach (RenderResourceID input in node.Inputs)
+            {
+                if (!resources.ContainsKey(input))
+                    throw new InvalidOperationException(
+                        $"Pass '{node.Pass.Name}' reads resource '{RenderResourceID.ToString(input)}' but no pass " +
+                        "outputs it and it is not declared centrally on the pipeline.");
+            }
+        }
+
+        foreach (RenderResourceID input in presentInputs)
+        {
+            if (!resources.ContainsKey(input))
+                throw new InvalidOperationException(
+                    $"Present pass '{presentPassName}' reads resource '{RenderResourceID.ToString(input)}' but no " +
+                    "pass outputs it and it is not declared centrally on the pipeline.");
+        }
     }
 
     private static int[] TopologicalSort(Node[] nodes)
@@ -200,7 +216,7 @@ public sealed class RenderGraph<TView>
             }
 
             if (next < 0)
-                throw new InvalidOperationException("Render graph has a cyclic texture dependency and cannot be ordered.");
+                throw new InvalidOperationException("Render graph has a cyclic resource dependency and cannot be ordered.");
 
             scheduled[next] = true;
             order[emitted++] = next;

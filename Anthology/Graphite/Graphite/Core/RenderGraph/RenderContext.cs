@@ -15,8 +15,9 @@ public sealed class RenderContext<TView>
     private readonly RenderGraph<TView> _graph;
     private readonly TView _view;
     private readonly IPassProfiler? _profiler;
-    private readonly PropertySet _globals = new();
     private readonly Dictionary<RenderResourceID, RenderTexture> _resolved = new();
+    private readonly Dictionary<RenderResourceID, DeviceBuffer> _resolvedBuffers = new();
+    private readonly List<CommandBuffer> _pendingCommandBuffers = new();
 
     private bool _presentRequested;
 
@@ -43,13 +44,13 @@ public sealed class RenderContext<TView>
     /// <summary>The view being rendered.</summary>
     public TView View => _view;
 
-    /// <summary>Global shader properties for this view (view matrices, time, ambient, etc).</summary>
-    public PropertySet Globals => _globals;
-
     /// <summary>Profiler for this execution, or null if profiling is off.</summary>
     public IPassProfiler? Profiler => _profiler;
 
-    /// <summary>Rents a command buffer for this pass to record into.</summary>
+    /// <summary>
+    /// Rents a command buffer for this pass to record into. The buffer is already begun and ready to record;
+    /// submit it back through <see cref="SubmitCommandBuffer"/> when done. Do not begin or end it yourself.
+    /// </summary>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
     {
@@ -60,12 +61,41 @@ public sealed class RenderContext<TView>
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;
 
+        cb.Begin();
+        _pendingCommandBuffers.Add(cb);
+
         return cb;
     }
 
-    /// <summary>Submits a recorded command buffer.</summary>
+    /// <summary>Ends and submits a recorded command buffer rented from this context.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
-    public void SubmitCommandBuffer(CommandBuffer cmd) => _task.SubmitCommandsInternal(cmd);
+    public void SubmitCommandBuffer(CommandBuffer cmd)
+    {
+        _pendingCommandBuffers.Remove(cmd);
+        cmd.End();
+        _task.SubmitCommandsInternal(cmd);
+    }
+
+    /// <summary>
+    /// Warns for and releases any command buffer rented from this context during the named scope but never
+    /// submitted. The buffer stays begun-but-unsubmitted, so the execution ring disposes it when its slot
+    /// recycles. Called by the pipeline after each pass and the present pass.
+    /// </summary>
+    /// <param name="scopeName">Pass name used in the warning message.</param>
+    internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
+    {
+        if (_pendingCommandBuffers.Count == 0)
+            return;
+
+        foreach (CommandBuffer cb in _pendingCommandBuffers)
+        {
+            _device.OnWarning?.Invoke(
+                $"Command buffer '{cb.Name}' rented by pass '{scopeName}' was never submitted. " +
+                "Rent a command buffer only when you intend to submit it through the render context.");
+        }
+
+        _pendingCommandBuffers.Clear();
+    }
 
     /// <summary>Rents a transfer command buffer for this execution, restricted to buffer/texture copies.</summary>
     /// <param name="name">Optional debug name.</param>
@@ -95,22 +125,107 @@ public sealed class RenderContext<TView>
     public Texture GetTransientTexture(in GraphTextureDesc desc)
         => _device.RentTransientTexture(_task, ToTransientDesc(desc));
 
-    /// <summary>Resolves a declared handle to its allocated render target.</summary>
+    /// <summary>Resolves a declared texture handle to its current allocated render target.</summary>
     /// <param name="handle">Handle from the builder during setup.</param>
-    public RenderTexture GetRenderTexture(TextureHandle handle)
+    public RenderTexture GetRenderTexture(TextureHandle handle) => GetRenderTexture(handle, 0);
+
+    /// <summary>
+    /// Resolves a declared texture handle by age. <paramref name="framesAgo"/> 0 is the current write target;
+    /// higher values resolve prior executions' copies of a history resource, up to its declared depth.
+    /// </summary>
+    /// <param name="handle">Handle from the builder during setup.</param>
+    /// <param name="framesAgo">How many executions back to resolve; 0 is the current write target.</param>
+    public RenderTexture GetRenderTexture(TextureHandle handle, int framesAgo)
     {
         if (!handle.IsValid)
             throw new ArgumentException("Cannot resolve a default texture handle.", nameof(handle));
 
-        if (_resolved.TryGetValue(handle.Id, out RenderTexture? existing))
+        if (framesAgo == 0 && _resolved.TryGetValue(handle.Id, out RenderTexture? existing))
             return existing;
 
-        if (!_graph.Resources.TryGetValue(handle.Id, out GraphTextureDesc desc))
+        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
             throw new InvalidOperationException($"Texture handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
 
-        RenderTexture renderTexture = _device.RentTransientRenderTexture(_task, ToTransientDesc(desc));
-        _resolved[handle.Id] = renderTexture;
-        return renderTexture;
+        switch (resource)
+        {
+            case GraphImportedTextureResource imported:
+                if (framesAgo != 0)
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), "An imported texture has no history.");
+                _resolved[handle.Id] = imported.Texture;
+                return imported.Texture;
+
+            case GraphTextureResource { HistoryDepth: 0 } textureResource:
+                if (framesAgo != 0)
+                    throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(handle.Id)}' was not declared with history.");
+                RenderTexture rented = _device.RentTransientRenderTexture(_task, ToTransientDesc(textureResource.Description));
+                _resolved[handle.Id] = rented;
+                return rented;
+
+            case GraphTextureResource historyResource:
+                RenderTexture copy = historyResource.ResolveHistory(_device, _task.Id, framesAgo, ToTransientDesc(historyResource.Description));
+                if (framesAgo == 0)
+                    _resolved[handle.Id] = copy;
+                return copy;
+
+            default:
+                throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a texture. Resolve it with GetRenderBuffer.");
+        }
+    }
+
+    /// <summary>Resolves a declared buffer handle to its current allocated device buffer.</summary>
+    /// <param name="handle">Handle from the builder during setup.</param>
+    public DeviceBuffer GetRenderBuffer(BufferHandle handle) => GetRenderBuffer(handle, 0);
+
+    /// <summary>
+    /// Resolves a declared buffer handle by age. <paramref name="framesAgo"/> 0 is the current write target;
+    /// higher values resolve prior executions' copies of a history resource, up to its declared depth.
+    /// </summary>
+    /// <param name="handle">Handle from the builder during setup.</param>
+    /// <param name="framesAgo">How many executions back to resolve; 0 is the current write target.</param>
+    public DeviceBuffer GetRenderBuffer(BufferHandle handle, int framesAgo)
+    {
+        if (!handle.IsValid)
+            throw new ArgumentException("Cannot resolve a default buffer handle.", nameof(handle));
+
+        if (framesAgo == 0 && _resolvedBuffers.TryGetValue(handle.Id, out DeviceBuffer? existing))
+            return existing;
+
+        if (!_graph.Resources.TryGetValue(handle.Id, out GraphResource? resource))
+            throw new InvalidOperationException($"Buffer handle '{RenderResourceID.ToString(handle.Id)}' was not declared by any pass in this graph.");
+
+        if (resource is not GraphBufferResource bufferResource)
+            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(handle.Id)}' is not a buffer. Resolve it with GetRenderTexture.");
+
+        if (bufferResource.HistoryDepth == 0)
+        {
+            if (framesAgo != 0)
+                throw new ArgumentOutOfRangeException(nameof(framesAgo), $"Resource '{RenderResourceID.ToString(handle.Id)}' was not declared with history.");
+            DeviceBuffer rented = _device.RentTransientBuffer(_task, bufferResource.Description.ToBufferDescription());
+            _resolvedBuffers[handle.Id] = rented;
+            return rented;
+        }
+
+        DeviceBuffer copy = bufferResource.ResolveHistory(_device, _task.Id, framesAgo, bufferResource.Description.ToBufferDescription());
+        if (framesAgo == 0)
+            _resolvedBuffers[handle.Id] = copy;
+        return copy;
+    }
+
+    internal bool IsTextureResource(RenderResourceID id)
+        => _graph.Resources.TryGetValue(id, out GraphResource? resource)
+            && resource is GraphTextureResource or GraphImportedTextureResource;
+
+    internal TargetLoadStoreOps GetTargetOps(RenderResourceID id)
+    {
+        if (!_graph.Resources.TryGetValue(id, out GraphResource? resource))
+            throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' was not declared by any pass in this graph.");
+
+        return resource switch
+        {
+            GraphTextureResource texture => texture.Ops,
+            GraphImportedTextureResource imported => imported.Ops,
+            _ => throw new InvalidOperationException($"Resource '{RenderResourceID.ToString(id)}' is not a render target.")
+        };
     }
 
     /// <summary>
