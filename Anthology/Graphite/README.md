@@ -330,8 +330,8 @@ declarative graph of passes over a `RenderPipeline<TView, TDrawCommand>`:
 - **`IRenderView`** - the minimal size contract (`PixelWidth`/`PixelHeight`) a pipeline's view type must
   implement so view-relative textures can be sized; add richer per-view data (matrices, frustum) on
   top in your own type.
-- **`IRenderCuller<TDrawCommand>`** / **`IRenderable`** / **`RenderQuery`** - the optional seam between
-  scene and framework. `Culler.Initialize(view)` runs once per view; passes then pull slices of
+- **`IDrawCommandProvider<TDrawCommand>`** / **`IRenderable`** / **`RenderQuery`** - the optional seam between
+  scene and framework. `Provider.Initialize(view)` runs once per view; passes then pull slices of
   draw commands on demand via `context.GetDrawCommands(query)`, where `RenderQuery` carries a
   `SortMode` and an optional `FrustumOverride` (e.g. for a shadow pass culling from a light instead
   of the camera).
