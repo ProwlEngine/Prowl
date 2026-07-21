@@ -7,20 +7,20 @@ internal unsafe partial class VkComputeProgram
 
     private void Constructor_RecordAllocations(ShaderStageDescription stage)
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         _profiledShaderBytes = stage.ShaderBytes.Length;
-        _gd.RecordAllocation(AllocBin.Shader, _profiledShaderBytes);
-        _gd.RecordAllocation(AllocBin.Pipeline, 0);
+        profiler.Allocate(AllocBin.Shader, _profiledShaderBytes);
+        profiler.Allocate(AllocBin.Pipeline, 0);
     }
 
     private void DisposeCore_RecordFrees()
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
-        _gd.RecordFree(AllocBin.Shader, _profiledShaderBytes);
-        _gd.RecordFree(AllocBin.Pipeline, 0);
+        profiler.Free(AllocBin.Shader, _profiledShaderBytes);
+        profiler.Free(AllocBin.Pipeline, 0);
     }
 }

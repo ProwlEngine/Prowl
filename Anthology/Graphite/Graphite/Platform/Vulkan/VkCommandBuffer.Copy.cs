@@ -36,7 +36,7 @@ internal unsafe partial class VkCommandBuffer
         };
 
         _gd.Vk.CmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, in region);
-        _gd.RecordBufferOp(BufferOpBin.Copy, sizeInBytes);
+        _gd.Profiler?.Record(BufferOpBin.Copy, sizeInBytes);
 
         bool needToProtectUniform = destination.Usage.HasFlag(BufferUsage.UniformBuffer);
 

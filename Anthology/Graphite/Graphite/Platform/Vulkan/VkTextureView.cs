@@ -75,7 +75,7 @@ internal unsafe partial class VkTextureView : TextureView
         _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, out _imageView);
         RefCount = new ResourceRefCount(DisposeCore);
 
-        _gd.RecordAllocation(AllocBin.TextureView, 0);
+        _gd.Profiler?.Allocate(AllocBin.TextureView, 0);
     }
 
     public override string Name
@@ -99,7 +99,7 @@ internal unsafe partial class VkTextureView : TextureView
         {
             _destroyed = true;
             _gd.Vk.DestroyImageView(_gd.Device, ImageView, null);
-            _gd.RecordFree(AllocBin.TextureView, 0);
+            _gd.Profiler?.Free(AllocBin.TextureView, 0);
         }
     }
 }

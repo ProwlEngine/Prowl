@@ -73,7 +73,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         if (emptyDescriptorSetLayout.Handle != 0)
         {
             gd.Vk.DestroyDescriptorSetLayout(gd.Device, emptyDescriptorSetLayout, null);
-            gd.RecordFree(AllocBin.ResourceLayout, 0);
+            gd.Profiler?.Free(AllocBin.ResourceLayout, 0);
         }
 
         foreach (DescriptorSetLayout dsl in descriptorSetLayouts)
@@ -81,7 +81,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             if (dsl.Handle != 0 && dsl.Handle != emptyDescriptorSetLayout.Handle)
             {
                 gd.Vk.DestroyDescriptorSetLayout(gd.Device, dsl, null);
-                gd.RecordFree(AllocBin.ResourceLayout, 0);
+                gd.Profiler?.Free(AllocBin.ResourceLayout, 0);
             }
         }
     }
@@ -123,7 +123,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             PBindings = bindings,
         };
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
-        gd.RecordAllocation(AllocBin.ResourceLayout, 0);
+        gd.Profiler?.Allocate(AllocBin.ResourceLayout, 0);
 
         return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage, combinedImageSampler));
     }
@@ -170,7 +170,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
             PBindings = null,
         };
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
-        gd.RecordAllocation(AllocBin.ResourceLayout, 0);
+        gd.Profiler?.Allocate(AllocBin.ResourceLayout, 0);
         return dsl;
     }
 }

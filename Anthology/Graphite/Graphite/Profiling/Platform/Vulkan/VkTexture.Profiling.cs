@@ -7,18 +7,18 @@ internal unsafe partial class VkTexture
 
     private void Constructor_RecordAllocation(long bytes)
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         _profiledBytes = bytes;
-        _gd.RecordAllocation(AllocBin.Texture, bytes);
+        profiler.Allocate(AllocBin.Texture, bytes);
     }
 
     private void DisposeCore_RecordFree()
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
-        _gd.RecordFree(AllocBin.Texture, _profiledBytes);
+        profiler.Free(AllocBin.Texture, _profiledBytes);
     }
 }

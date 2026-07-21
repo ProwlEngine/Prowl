@@ -96,7 +96,7 @@ internal unsafe partial class VkSwapchain : Swapchain
 
     public override void Resize(uint width, uint height)
     {
-        _gd.RecordSwap(SwapBin.Resize, 0);
+        _gd.Profiler?.RecordSwap(SwapBin.Resize, 0);
         RecreateAndReacquire(width, height);
     }
 
@@ -120,7 +120,7 @@ internal unsafe partial class VkSwapchain : Swapchain
             &imageIndex);
         _currentImageIndex = imageIndex;
         _framebuffer.SetImageIndex(_currentImageIndex);
-        _gd.RecordSwap(SwapBin.Acquire, 0);
+        _gd.Profiler?.RecordSwap(SwapBin.Acquire, 0);
         if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
         {
             CreateSwapchain(_framebuffer.Width, _framebuffer.Height);

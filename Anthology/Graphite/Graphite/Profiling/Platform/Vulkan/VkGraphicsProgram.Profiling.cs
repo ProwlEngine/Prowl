@@ -7,7 +7,7 @@ internal unsafe partial class VkGraphicsProgram
 
     private void Constructor_RecordShaderAllocation(ShaderStageDescription[] stages)
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         long bytes = 0;
@@ -15,16 +15,16 @@ internal unsafe partial class VkGraphicsProgram
             bytes += stages[i].ShaderBytes.Length;
 
         _profiledShaderBytes = bytes;
-        _gd.RecordAllocation(AllocBin.Shader, bytes);
+        profiler.Allocate(AllocBin.Shader, bytes);
     }
 
     private void DisposeCore_RecordFrees(int pipelineCount)
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
-        _gd.RecordFree(AllocBin.Shader, _profiledShaderBytes);
+        profiler.Free(AllocBin.Shader, _profiledShaderBytes);
         for (int i = 0; i < pipelineCount; i++)
-            _gd.RecordFree(AllocBin.Pipeline, 0);
+            profiler.Free(AllocBin.Pipeline, 0);
     }
 }

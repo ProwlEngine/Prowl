@@ -46,7 +46,7 @@ internal unsafe partial class VkSampler : Sampler
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);
         RefCount = new ResourceRefCount(DisposeCore);
 
-        _gd.RecordAllocation(AllocBin.Sampler, 0);
+        _gd.Profiler?.Allocate(AllocBin.Sampler, 0);
     }
 
     public override string Name
@@ -70,7 +70,7 @@ internal unsafe partial class VkSampler : Sampler
         {
             _gd.Vk.DestroySampler(_gd.Device, _sampler, null);
             _disposed = true;
-            _gd.RecordFree(AllocBin.Sampler, 0);
+            _gd.Profiler?.Free(AllocBin.Sampler, 0);
         }
     }
 }

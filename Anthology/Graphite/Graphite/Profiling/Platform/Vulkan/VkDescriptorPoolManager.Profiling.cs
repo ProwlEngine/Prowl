@@ -8,29 +8,29 @@ internal partial class VkDescriptorPoolManager
 
     private void Allocate_RecordAllocation()
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         _profiledLiveSets++;
-        _gd.RecordAllocation(AllocBin.ResourceSet, 0);
+        profiler.Allocate(AllocBin.ResourceSet, 0);
     }
 
     private void Free_RecordFree()
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         _profiledLiveSets--;
-        _gd.RecordFree(AllocBin.ResourceSet, 0);
+        profiler.Free(AllocBin.ResourceSet, 0);
     }
 
     private void ResetAll_RecordFrees()
     {
-        if (!GraphicsDevice.ProfilingEnabled)
+        if (_gd.Profiler is not { } profiler)
             return;
 
         for (long i = 0; i < _profiledLiveSets; i++)
-            _gd.RecordFree(AllocBin.ResourceSet, 0);
+            profiler.Free(AllocBin.ResourceSet, 0);
         _profiledLiveSets = 0;
     }
 }

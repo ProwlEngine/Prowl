@@ -257,7 +257,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         }
         AttachmentCount += (uint)ColorTargets.Count;
 
-        _gd.RecordAllocation(AllocBin.Framebuffer, 0);
+        _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
     }
 
     public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
@@ -331,7 +331,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             }
 
             _destroyed = true;
-            _gd.RecordFree(AllocBin.Framebuffer, 0);
+            _gd.Profiler?.Free(AllocBin.Framebuffer, 0);
         }
     }
 }

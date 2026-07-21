@@ -73,7 +73,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
 
             entry = VkPipelineCacheFactory.Build(_gd, this, in key);
             _pipelineCache.Add(key, entry);
-            _gd.RecordAllocation(AllocBin.Pipeline, 0);
+            _gd.Profiler?.Allocate(AllocBin.Pipeline, 0);
             return entry;
         }
     }
