@@ -13,7 +13,7 @@ namespace Prowl.Echo;
 public class TypeEnvelope
 {
     public string? TypeInfo { get; set; }
-    public required EchoObject Data { get; set; }
+    public EchoObject Data { get; set; }
     public bool IsTypePreserved => TypeInfo != null;
 }
 

@@ -1,17 +1,5 @@
-
-<<<<<<< TODO: Unmerged change from project 'Photonic(net9.0)', Before:
 using Prowl.Vector;
-=======
-// This file is part of the Prowl Game Engine
-// Licensed under the MIT License. See the LICENSE file in the project root for details.
-
-using Prowl.Vector;
->>>>>>> After
-// This file is part of the Prowl Game Engine
-// Licensed under the MIT License. See the LICENSE file in the project root for details.
-
 using Prowl.Photonic.Scene.Lights;
-using Prowl.Vector;
 
 namespace Prowl.Photonic;
 

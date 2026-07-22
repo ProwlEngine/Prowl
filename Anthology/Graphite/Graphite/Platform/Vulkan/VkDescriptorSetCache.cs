@@ -25,7 +25,7 @@ internal sealed class VkDescriptorSetCache
     {
         public DescriptorAllocationToken Token;
         public DescriptorResourceCounts Counts;
-        public required ulong[] Identity;
+        public ulong[] Identity;
         public int SetIdx;
         public ulong LastUsedFrameId;
     }

@@ -13,8 +13,8 @@ internal class InsetOp
 {
     internal class EdgeInfo
     {
-        public required GeometryData.Vertex V1 { get; set; }
-        public required GeometryData.Vertex V2 { get; set; }
+        public GeometryData.Vertex V1 { get; set; }
+        public GeometryData.Vertex V2 { get; set; }
         public int UsageCount { get; set; }
         public bool IsBoundary => UsageCount == 1;
 
@@ -39,7 +39,7 @@ internal class InsetOp
 
     internal class VertexInfo
     {
-        public required GeometryData.Vertex Vertex { get; set; }
+        public GeometryData.Vertex Vertex { get; set; }
         public List<GeometryData.Face> Faces { get; set; } = new List<GeometryData.Face>();
         public HashSet<GeometryData.Vertex> SharedEdgeNeighbors { get; set; } = new HashSet<GeometryData.Vertex>();
         public Float3 TargetPosition { get; set; }
@@ -48,12 +48,12 @@ internal class InsetOp
 
     internal class FaceData
     {
-        public required GeometryData.Face OriginalFace { get; set; }
-        public required List<GeometryData.Vertex> Vertices { get; set; }
+        public GeometryData.Face OriginalFace { get; set; }
+        public List<GeometryData.Vertex> Vertices { get; set; }
         public Float3 FaceCenter { get; set; }
-        public required Dictionary<string, GeometryData.AttributeValue> FaceAttributes { get; set; }
-        public required List<Dictionary<string, GeometryData.AttributeValue>> LoopAttributes { get; set; }
-        public required Dictionary<GeometryData.Vertex, GeometryData.Vertex> PerFaceMapping { get; set; }
+        public Dictionary<string, GeometryData.AttributeValue> FaceAttributes { get; set; }
+        public List<Dictionary<string, GeometryData.AttributeValue>> LoopAttributes { get; set; }
+        public Dictionary<GeometryData.Vertex, GeometryData.Vertex> PerFaceMapping { get; set; }
     }
 
 

@@ -5,28 +5,28 @@ namespace Prowl.Echo.Test;
 
 public class Player
 {
-    public required string Name;
+    public string Name;
     public int Health;
     public int MaxHealth;
     public float PositionX;
     public float PositionY;
     public float PositionZ;
-    public required List<string> Inventory;
-    public required Dictionary<string, int> Stats;
+    public List<string> Inventory;
+    public Dictionary<string, int> Stats;
 }
 
 public class DeltaComplexObject
 {
     public int Id;
-    public required string Name;
-    public required List<int> Numbers;
-    public required Dictionary<string, string> Properties;
-    public required DeltaNestedObject Nested;
+    public string Name;
+    public List<int> Numbers;
+    public Dictionary<string, string> Properties;
+    public DeltaNestedObject Nested;
 }
 
 public class DeltaNestedObject
 {
-    public required string Value;
+    public string Value;
     public int Count;
 }
 

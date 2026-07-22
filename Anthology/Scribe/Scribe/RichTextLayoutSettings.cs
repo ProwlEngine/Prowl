@@ -12,11 +12,11 @@ namespace Prowl.Scribe;
 public class RichTextLayoutSettings
 {
     // --- Font set ---
-    public required FontFile RegularFont;
-    public required FontFile BoldFont;
-    public required FontFile ItalicFont;
-    public required FontFile BoldItalicFont;
-    public required FontFile MonoFont;
+    public FontFile RegularFont;
+    public FontFile BoldFont;
+    public FontFile ItalicFont;
+    public FontFile BoldItalicFont;
+    public FontFile MonoFont;
 
     // --- Base text styling ---
     public float PixelSize = 16f;

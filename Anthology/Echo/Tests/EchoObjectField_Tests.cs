@@ -5,14 +5,14 @@ namespace Prowl.Echo.Test;
 
 public class FakeComponent
 {
-    public required string Name;
+    public string Name;
     public int Priority;
     public float Speed;
 }
 
 public class FakeGameObject
 {
-    public required string Name;
+    public string Name;
     public bool IsActive;
     public List<FakeComponent> Components = new();
     public Dictionary<string, string> Tags = new();
@@ -21,21 +21,21 @@ public class FakeGameObject
 public class PrefabAsset
 {
     public int Id;
-    public required string PrefabName;
-    public required EchoObject GameObjectData;
+    public string PrefabName;
+    public EchoObject GameObjectData;
 }
 
 public class SceneAsset
 {
-    public required string SceneName;
+    public string SceneName;
     public List<EchoObject> GameObjects = new();
 }
 
 public class PrefabWithMetadata
 {
     public int Version;
-    public required string Author;
-    public required EchoObject Data;
+    public string Author;
+    public EchoObject Data;
     public Dictionary<string, EchoObject> Overrides = new();
 }
 

@@ -32,7 +32,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     /// </summary>
     public abstract void Dispose();
 
-    private required GraphicsDevice _inFlightDevice;
+    private GraphicsDevice _inFlightDevice;
     private ulong _inFlightExecutionId;
     private ulong _lastOrphanExecutionId;
     private bool _transientWrites;

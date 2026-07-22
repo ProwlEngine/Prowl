@@ -15,7 +15,7 @@ public struct NetworkPosition
 
 public abstract class MonoBehaviour
 {
-    public required string Name;
+    public string Name;
 }
 
 public class Component : MonoBehaviour
@@ -25,17 +25,17 @@ public class Component : MonoBehaviour
 
 public class GameObject
 {
-    public required string Name;
+    public string Name;
 
     public List<MonoBehaviour> Components = new List<MonoBehaviour>();
 }
 
 public class NodeWithMultipleRefs : ISerializable
 {
-    public required string Name;
-    public required NodeWithMultipleRefs Left;
-    public required NodeWithMultipleRefs Right;
-    public required NodeWithMultipleRefs Parent;
+    public string Name;
+    public NodeWithMultipleRefs Left;
+    public NodeWithMultipleRefs Right;
+    public NodeWithMultipleRefs Parent;
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
@@ -1190,14 +1190,14 @@ public class General_Tests
 
     public class Dog : IAnimal
     {
-        public required string Species;
-        public required string Breed;
+        public string Species;
+        public string Breed;
     }
 
     public class Person
     {
         [FormerlySerializedAs("FULLNAME")]
-        public required string Name;
+        public string Name;
 
         public int Age;
     }

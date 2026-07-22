@@ -266,21 +266,21 @@ internal sealed class PBRPipeline : RenderPipeline<SceneView>
 
 public static class Program
 {
-    static required GraphicsDevice device;
-    static required RenderMSTracker tracker;
+    static GraphicsDevice device;
+    static RenderMSTracker tracker;
 
-    static required ModelAsset model;
-    static required GraphicsProgram unlitShader;
-    static required GraphicsProgram compositeShader;
-    static required ShaderDefinition bloomDef;
-    static required ShaderPass bloomShader;
-    static required PropertySet sceneProperties;
-    static required Sampler bloomSampler;
-    static required Sampler compositeSampler;
-    static required Texture albedo;
+    static ModelAsset model;
+    static GraphicsProgram unlitShader;
+    static GraphicsProgram compositeShader;
+    static ShaderDefinition bloomDef;
+    static ShaderPass bloomShader;
+    static PropertySet sceneProperties;
+    static Sampler bloomSampler;
+    static Sampler compositeSampler;
+    static Texture albedo;
 
-    static required PBRPipeline pipeline;
-    static required SceneView[] views;
+    static PBRPipeline pipeline;
+    static SceneView[] views;
 
 
     private static void Main()

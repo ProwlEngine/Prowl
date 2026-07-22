@@ -9,7 +9,7 @@ namespace Prowl.Echo.Test;
 public class TestObject
 {
     public int Id;
-    public required string Name;
+    public string Name;
 }
 
 public class Collection_Tests
@@ -120,7 +120,7 @@ public class Collection_Tests
     public class KeyValuePair
     {
         public int Key;
-        public required string Value;
+        public string Value;
     }
 
     [Fact]
