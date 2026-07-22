@@ -164,7 +164,9 @@ public class Camera : MonoBehaviour
         Scene?.CollectRenderables();
 
         CameraView view = CameraView.From(this, data ?? new());
+        RenderProfilerHooks.Sink?.BeginView("Game");
         Graphics.Device.DispatchGraph(RenderPipelineManager.Current, new[] { view });
+        RenderProfilerHooks.Sink?.EndView();
         SavePreviousViewProjectionMatrix();
     }
 

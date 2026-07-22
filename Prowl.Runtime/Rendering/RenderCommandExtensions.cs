@@ -148,6 +148,38 @@ public static class RenderCommandExtensions
 
     private static readonly FullscreenVertexSource s_fullscreenSource = new();
 
+    private static string FormatVariant(ShaderPass pass)
+    {
+        Keyword[] keywords = pass.ActiveVariant.Keywords;
+        if (keywords.Length == 0)
+            return "";
+
+        var parts = new string[keywords.Length];
+        for (int i = 0; i < keywords.Length; i++)
+            parts[i] = $"{keywords[i].Name}={keywords[i].Value}";
+        return string.Join(";", parts);
+    }
+
+    /// <summary>
+    /// Emits a <see cref="ShaderBindRecord"/> for a bind site that does not go through
+    /// <see cref="DrawMesh(CommandBuffer, Mesh, Material, ShaderPass, Float4x4, PropertySet)"/> or the
+    /// <c>Blit</c> helpers above (e.g. <see cref="GizmoRenderer"/>, which calls
+    /// <c>CommandBuffer.SetShader</c> directly).
+    /// </summary>
+    internal static void EmitShaderBind(ShaderPass pass, string materialName)
+    {
+        if (RenderProfilerHooks.Sink == null)
+            return;
+
+        RenderProfilerHooks.Sink.ShaderBind(new ShaderBindRecord
+        {
+            PassName = pass.Name,
+            Variant = FormatVariant(pass),
+            Tags = pass.Tags,
+            MaterialName = materialName,
+        });
+    }
+
     // ─────────────────────── PropertySet convenience (old PropertyState names) ───────────────────────
 
     public static void SetColor(this PropertySet set, PropertyID name, Color color) => set.SetFloat4(name, color);
@@ -265,6 +297,7 @@ public static class RenderCommandExtensions
         if (source?.IsValid() == true && source.MainTexture?.Handle != null)
             props.SetTexture("_MainTex", source.MainTexture.Handle, source.MainTexture.Sampler);
 
+        EmitShaderBind(shaderPass, mat.Name);
         cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(props);
@@ -291,6 +324,7 @@ public static class RenderCommandExtensions
 
         Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
+        EmitShaderBind(shaderPass, mat.Name);
         cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(mat.BuildPropertySet());
@@ -336,6 +370,7 @@ public static class RenderCommandExtensions
         if (sourceTexture != null)
             props.SetTexture("_MainTex", sourceTexture, GetBlitSampler());
 
+        EmitShaderBind(shaderPass, mat.Name);
         cmd.SetShader(shaderPass);
         cmd.SetVertexSource(s_fullscreenSource);
         cmd.SetProperties(props);
@@ -362,6 +397,7 @@ public static class RenderCommandExtensions
         // Select the material's active variant (keywords) before recording the shader.
         pass.SetKeywords(material._localKeywords.Values.ToArray());
 
+        EmitShaderBind(pass, material.Name);
         cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
         if (properties != null)

@@ -115,7 +115,7 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
         }
     }
 
-    private static void EmitRenderable(IRenderable renderable, string materialName, string meshName, bool culled, int drawCallCount)
+    internal static void EmitRenderable(IRenderable renderable, string materialName, string meshName, bool culled, int drawCallCount)
     {
         if (RenderProfilerHooks.Sink == null)
             return;

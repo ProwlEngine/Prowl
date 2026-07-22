@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.Graphite;
 using Prowl.Graphite.RenderGraph;
 using Prowl.Quill;
+using Prowl.Runtime.Rendering;
 using Prowl.Vector;
 
 namespace Prowl.Runtime.GUI;
@@ -117,7 +118,9 @@ public sealed class PaperPipeline : RenderPipeline<PaperView>, ICanvasRenderer
             PixelHeight = (uint)_paper.PixelHeight,
         };
 
+        RenderProfilerHooks.Sink?.BeginView("UI");
         Graphics.Device.DispatchGraph(this, [view]);
+        RenderProfilerHooks.Sink?.EndView();
     }
 
     public void Cleanup() => _paper.Cleanup();

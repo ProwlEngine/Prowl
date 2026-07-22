@@ -5,6 +5,7 @@ using System;
 using System.Runtime.InteropServices;
 
 using Prowl.Graphite;
+using Prowl.Runtime.Rendering;
 
 using Silk.NET.Input;
 using Silk.NET.Input.Sdl;
@@ -272,7 +273,9 @@ public static class Window
             // No ambient frame anymore - each camera/Paper dispatch opens and closes its own
             // execution via Device.DispatchGraph (see Scene.Render/Camera.Render, PaperRenderer), including
             // its own SwapBuffers when it presents. Render/PostRender just drive that per-view work.
+            RenderProfilerHooks.Sink?.BeginFrame();
             Render?.Invoke(delta);
+            RenderProfilerHooks.Sink?.EndFrame();
             PostRender?.Invoke(delta);
         }
     }
