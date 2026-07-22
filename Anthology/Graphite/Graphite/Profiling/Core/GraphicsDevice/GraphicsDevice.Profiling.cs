@@ -3,13 +3,24 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Attached profiler, null if none. Set once at construction.
+    /// Attached profiler, null if none. Set at construction from <see cref="GraphicsDeviceOptions.Profiler"/>,
+    /// and swappable afterward via <see cref="SetProfiler"/>.
     /// </summary>
     public IProfiler? Profiler { get; private set; }
 
     private void InitializeFrameOptions_InitializeProfiling(in GraphicsDeviceOptions options)
     {
         Profiler = options.Profiler;
+    }
+
+    /// <summary>
+    /// Swaps the active profiler. Must only be called at a frame boundary - between
+    /// <see cref="DispatchGraph{T}"/> calls, never mid-pass or mid-submit. The caller is assumed to be
+    /// single-threaded with respect to frame dispatch, so this performs no locking.
+    /// </summary>
+    internal void SetProfiler(IProfiler? profiler)
+    {
+        Profiler = profiler;
     }
 
     // Fans a buffer allocation/free out to every BufferRoleBin matching a usage flag. Bins overlap

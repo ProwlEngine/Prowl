@@ -327,6 +327,46 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     }
 
     [Fact]
+    public void SetProfiler_SwapsActiveProfilerAtRuntime()
+    {
+        using GraphicsDevice device = GD.BackendType switch
+        {
+            GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true)),
+            _ => throw new NotSupportedException(),
+        };
+
+        DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+        DeviceBuffer destination = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+
+        void RunCopyGraph()
+        {
+            device.RunTestGraph(context =>
+            {
+                CommandBuffer cl = context.GetCommandBuffer();
+                cl.CopyBuffer(source, 0, destination, 0, 256);
+                context.SubmitCommandBuffer(cl);
+            });
+            device.WaitForIdle();
+        }
+
+        Assert.Null(device.Profiler);
+
+        RecordingProfiler profiler = new();
+        device.SetProfiler(profiler);
+        Assert.Same(profiler, device.Profiler);
+
+        RunCopyGraph();
+        Assert.NotEmpty(profiler.Submits);
+
+        device.SetProfiler(null);
+        Assert.Null(device.Profiler);
+
+        profiler.Submits.Clear();
+        RunCopyGraph();
+        Assert.Empty(profiler.Submits);
+    }
+
+    [Fact]
     public void SubmitAndWaitTransfer_WithTiming_RecordsExecutionTime()
     {
         RecordingProfiler profiler = new() { RequestExecutionTiming = true };
