@@ -36,7 +36,7 @@ public class GameViewPanel : DockPanel
     private Rect _displayAbsRect; // game-view rect in paper coords, cached for routing UI input next frame
 
     // Separate Paper instance for in-game UI
-    private PaperRenderer? _gamePaperRenderer;
+    private PaperPipeline? _gamePaperPipeline;
     private Paper? _gamePaper;
 
     private static readonly (string name, int w, int h)[] Resolutions =
@@ -226,7 +226,7 @@ public class GameViewPanel : DockPanel
                         canvas.SetStrokeColor(playing ? EditorTheme.Purple500 : EditorTheme.Ink200);
                         canvas.SetStrokeWidth(bw);
                         canvas.Stroke();
-                        });
+                    });
                     });
 
                 // Route game input into the new UI system. The cursor is rescaled from the letterboxed
@@ -269,15 +269,15 @@ public class GameViewPanel : DockPanel
 
     private void EnsureGamePaper(int w, int h)
     {
-        if (_gamePaperRenderer == null)
+        if (_gamePaperPipeline == null)
         {
-            _gamePaperRenderer = new PaperRenderer();
-            _gamePaperRenderer.Initialize(w, h);
-            _gamePaperRenderer.PresentTarget = _rt?.frameBuffer;
+            _gamePaperPipeline = new PaperPipeline();
+            _gamePaperPipeline.Initialize(w, h);
+            _gamePaperPipeline.PresentTarget = _rt?.frameBuffer;
         }
 
         if (_gamePaper == null)
-            _gamePaper = new Paper(_gamePaperRenderer, w, h, new Quill.FontAtlasSettings());
+            _gamePaper = new Paper(_gamePaperPipeline, w, h, new Quill.FontAtlasSettings());
         else
             _gamePaper.SetResolution(w, h);
     }
@@ -307,8 +307,8 @@ public class GameViewPanel : DockPanel
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
         _rt?.Dispose();
         _rt = new RenderTexture(w, h, true, new[] { PixelFormat.R8_G8_B8_A8_UNorm });
-        if (_gamePaperRenderer != null)
-            _gamePaperRenderer.PresentTarget = _rt.frameBuffer;
+        if (_gamePaperPipeline != null)
+            _gamePaperPipeline.PresentTarget = _rt.frameBuffer;
     }
 
     private void InvalidateRT()
@@ -320,8 +320,8 @@ public class GameViewPanel : DockPanel
     public override void OnClosed()
     {
         InvalidateRT();
-        _gamePaperRenderer?.Dispose();
-        _gamePaperRenderer = null;
+        _gamePaperPipeline?.Dispose();
+        _gamePaperPipeline = null;
         _gamePaper = null;
     }
 }

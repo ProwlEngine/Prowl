@@ -15,7 +15,6 @@ using Prowl.Vector.Spatial;
 using Color = System.Drawing.Color;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
-using Prowl.Editor.GUI.RenderProfiler;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
 
@@ -429,9 +428,6 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
 
             // View manipulator (orientation cube) drawn as 2D overlay on top-right
             DrawViewManipulator(paper, font, width, height);
-
-            // Render stats HUD (bottom-left), reads the scene camera's last render report.
-            RenderProfilerHud.Draw(paper, _editorCamera.Camera, font, width, height);
         }
     }
 
