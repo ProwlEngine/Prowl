@@ -18,7 +18,7 @@ public abstract partial class GraphicsDevice
     /// <see cref="DispatchGraph{T}"/> calls, never mid-pass or mid-submit. The caller is assumed to be
     /// single-threaded with respect to frame dispatch, so this performs no locking.
     /// </summary>
-    internal void SetProfiler(IProfiler? profiler)
+    public void SetProfiler(IProfiler? profiler)
     {
         Profiler = profiler;
     }
