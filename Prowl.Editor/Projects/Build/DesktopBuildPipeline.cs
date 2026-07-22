@@ -639,9 +639,10 @@ public class DesktopBuildPipeline : BuildPipeline
 
         ListDependencies(sb);
 
-        // User NuGet packages from the Packages project setting. Desktop builds bundle the
-        // runtime / non-editor packages (EditorOnly packages live only inside the editor).
-        ScriptCompiler.AppendNuGetPackages(sb, project, isEditorAssembly: false);
+        // User NuGet packages, project references, etc. are pulled from the project's
+        // Directory.Build.props. This player csproj lives under Temp/ inside the project root, so
+        // MSBuild auto-imports that file; packages in its default (non editor scoped) group are
+        // restored and bundled by publish, matching the pre-compiled user assemblies.
 
         // Compile items just the generated Program.cs (user scripts are a separate pre-compiled DLL)
         sb.AppendLine("  <ItemGroup>");

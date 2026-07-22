@@ -110,6 +110,7 @@
   "launcher.tip.create_menu": "Kliknij prawym przyciskiem pusty obszar Hierarchii lub okna Projektu, aby utworzyc nowe obiekty lub assety.",
   "launcher.tip.component_menu": "Kliknij prawym przyciskiem naglowek komponentu w Inspektorze, aby zresetowac, usunac lub zmienic jego kolejnosc.",
   "launcher.tip.escape_unlock": "Nacisnij Escape, aby zwolnic kursor za kazdym razem, gdy widok gry go zablokuje.",
+  "launcher.tip.nuget": "Dodaj pakiety NuGet, edytujac Directory.Build.props w katalogu glownym projektu.",
 
   "inspector.nothing_selected": "Nic nie wybrano",
   "inspector.nothing_selected_hint": "Wybierz asset lub obiekt do inspekcji.",

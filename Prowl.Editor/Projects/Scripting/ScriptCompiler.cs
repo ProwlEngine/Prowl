@@ -26,6 +26,7 @@ public static class ScriptCompiler
         public bool Success;
         public string Output;
         public string Errors;
+        public bool RequiresReload;   // true when script assemblies were rebuilt and need a hot-reload
     }
 
     /// <summary>A single user assembly to be generated and compiled.</summary>
@@ -55,12 +56,14 @@ public static class ScriptCompiler
         if (error != null)
             return new CompileResult { Success = false, Errors = error };
 
+        // Generate the default Game/Editor csproj (and any asmdef unit that owns scripts) up front so
+        // NuGet packages restore and IDEs resolve references even before the first script exists.
+        foreach (var unit in units.Where(u => u.Source == null || u.Scripts.Count > 0))
+            GenerateCsproj(project, unit, units);
+
         var compileUnits = units.Where(u => u.Scripts.Count > 0).ToList();
         if (compileUnits.Count == 0)
-            return new CompileResult { Success = true, Output = "No scripts to compile." };
-
-        foreach (var unit in compileUnits)
-            GenerateCsproj(project, unit, units);
+            return RestorePackagesOnly(project, units);
 
         var output = new StringBuilder();
         var errors = new StringBuilder();
@@ -85,6 +88,39 @@ public static class ScriptCompiler
             Runtime.Debug.Log($"[ScriptCompiler] {unit.Name} compiled successfully.");
         }
 
+        return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString(), RequiresReload = true };
+    }
+
+    /// <summary>
+    /// No scripts to build, so restore the default assemblies instead. This validates configured NuGet
+    /// packages (a bad name or version surfaces now instead of only after the first script is written)
+    /// and lets IDEs resolve them. Returns success with nothing to reload when there is nothing to do.
+    /// </summary>
+    private static CompileResult RestorePackagesOnly(Project project, List<CompilationUnit> units)
+    {
+        if (!ProjectDeclaresPackages(project))
+            return new CompileResult { Success = true, Output = "No scripts to compile." };
+
+        var output = new StringBuilder();
+        var errors = new StringBuilder();
+
+        foreach (var unit in units.Where(u => u.Source == null))
+        {
+            Runtime.Debug.Log($"[ScriptCompiler] Restoring packages for {unit.Name}...");
+            var result = RunDotnetCommand($"restore \"{unit.CsprojPath}\"", project.RootPath);
+            output.AppendLine(result.stdout);
+            if (!string.IsNullOrEmpty(result.stderr))
+                errors.AppendLine(result.stderr);
+
+            if (result.exitCode != 0)
+            {
+                Runtime.Debug.LogError($"[ScriptCompiler] Package restore failed for {unit.Name}.");
+                LogBuildOutput(result.stdout, result.stderr);
+                return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString() };
+            }
+        }
+
+        Runtime.Debug.Log("[ScriptCompiler] Package restore complete.");
         return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString() };
     }
 
@@ -374,11 +410,9 @@ public static class ScriptCompiler
 
         sb.AppendLine("  </ItemGroup>");
 
-        // NuGet packages: non-editor packages flow to every assembly; editor-only packages only to
-        // editor-side assemblies (preserving "any script may use any non-editor package").
-        AppendNuGetPackages(sb, project, isEditorAssembly: false);
-        if (unit.IsEditorOnly)
-            AppendNuGetPackages(sb, project, isEditorAssembly: true);
+        // NuGet packages, project references, and any other user MSBuild come from the project's
+        // Directory.Build.props, which MSBuild auto-imports into every generated csproj (this one lives
+        // at the project root; the player build lives under Temp/ which is also inside the root).
 
         // Compile items.
         sb.AppendLine("  <ItemGroup>");
@@ -491,25 +525,22 @@ public static class ScriptCompiler
         return "PROWL_" + version.Replace('.', '_').Replace('-', '_').ToUpperInvariant();
     }
 
-    internal static void AppendNuGetPackages(StringBuilder sb, Project project, bool isEditorAssembly)
+    /// <summary>
+    /// True if the project's Directory.Build.props declares at least one NuGet PackageReference.
+    /// Comments are stripped first so the commented examples in the generated template do not count.
+    /// </summary>
+    internal static bool ProjectDeclaresPackages(Project project)
     {
-        try
-        {
-            var pkgSettings = EditorRegistries.GetSettings<PackageSettings>();
-            if (pkgSettings.Packages.Count == 0) return;
+        string props = Path.Combine(project.RootPath, "Directory.Build.props");
+        if (!File.Exists(props)) return false;
 
-            var filtered = pkgSettings.Packages.Where(p => p.EditorOnly == isEditorAssembly).ToList();
-            if (filtered.Count == 0) return;
+        string text;
+        try { text = File.ReadAllText(props); }
+        catch { return false; }
 
-            sb.AppendLine("  <ItemGroup>");
-            foreach (var pkg in filtered)
-                sb.AppendLine($"    <PackageReference Include=\"{Xml(pkg.Name)}\" Version=\"{Xml(pkg.Version)}\" />");
-            sb.AppendLine("  </ItemGroup>");
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"[ScriptCompiler] Failed to append NuGet packages: {ex.Message}");
-        }
+        text = System.Text.RegularExpressions.Regex.Replace(text, "<!--.*?-->", "",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        return text.Contains("<PackageReference", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static (int exitCode, string stdout, string stderr) RunDotnetCommand(string args, string workingDir)

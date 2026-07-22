@@ -38,7 +38,7 @@ public class BuildAndRunTests : EditorTestHarness
     [Fact]
     public void FullPipeline_Compile_Build_RunHeadless()
     {
-        // Project settings must be discovered (BuildSettings, PackageSettings, etc.) before compiling/building.
+        // Project settings must be discovered (BuildSettings, etc.) before compiling/building.
         EditorRegistries.Initialize();
         EditorRegistries.OnProjectOpened();
 

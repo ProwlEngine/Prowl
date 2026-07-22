@@ -74,12 +74,19 @@ public static class ScriptAssemblyManager
 
             if (result.Success)
             {
-                Runtime.Debug.Log("[ScriptAssemblyManager] Compilation successful. Attempting hot-reload...");
-
-                if (!TryHotReload(Project.Current!))
+                if (result.RequiresReload)
                 {
-                    Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot-reload failed. Restarting editor...");
-                    RestartEditor(Project.Current!);
+                    Runtime.Debug.Log("[ScriptAssemblyManager] Compilation successful. Attempting hot-reload...");
+
+                    if (!TryHotReload(Project.Current!))
+                    {
+                        Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot-reload failed. Restarting editor...");
+                        RestartEditor(Project.Current!);
+                    }
+                }
+                else
+                {
+                    Runtime.Debug.LogSuccess("[ScriptAssemblyManager] Packages restored.");
                 }
             }
             else
@@ -103,20 +110,26 @@ public static class ScriptAssemblyManager
 
         _recompileRequested = false;
 
-        // Quick check: any .cs files at all?
         var project = Project.Current;
-        if (!Directory.Exists(project.AssetsPath) ||
-            !Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any())
+        bool hasScripts = Directory.Exists(project.AssetsPath) &&
+            Directory.EnumerateFiles(project.AssetsPath, "*.cs", SearchOption.AllDirectories).Any();
+        bool hasPackages = ScriptCompiler.ProjectDeclaresPackages(project);
+
+        // Nothing to build and no packages to restore, so there is nothing to do.
+        if (!hasScripts && !hasPackages)
         {
-            Runtime.Debug.Log("[ScriptAssemblyManager] No scripts found, skipping compilation.");
+            Runtime.Debug.Log("[ScriptAssemblyManager] No scripts or packages found, skipping compilation.");
             return;
         }
 
         _isCompiling = true;
-        Runtime.Debug.Log("[ScriptAssemblyManager] Starting compilation...");
+        Runtime.Debug.Log(hasScripts
+            ? "[ScriptAssemblyManager] Starting compilation..."
+            : "[ScriptAssemblyManager] Restoring packages...");
 
-        // Notify anything tagged [OnScriptCompile] that a recompile is starting (main thread).
-        Core.ScriptReloadCallbacks.InvokeScriptCompile();
+        // Notify [OnScriptCompile] listeners only when scripts will actually reload.
+        if (hasScripts)
+            Core.ScriptReloadCallbacks.InvokeScriptCompile();
 
         // Run on background thread result polled on main thread via _pendingResult
         Task.Run(() =>

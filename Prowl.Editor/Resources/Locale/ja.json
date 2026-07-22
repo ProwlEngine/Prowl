@@ -110,6 +110,7 @@
   "launcher.tip.create_menu": "ヒエラルキーまたはプロジェクトウィンドウの空白部分を右クリックすると、新しいオブジェクトやアセットを作成できます。",
   "launcher.tip.component_menu": "インスペクターのコンポーネントヘッダーを右クリックすると、リセット、削除、並べ替えができます。",
   "launcher.tip.escape_unlock": "ゲームビューがカーソルをロックしている場合、Escapeを押すとカーソルを解放できます。",
+  "launcher.tip.nuget": "プロジェクトのルートにあるDirectory.Build.propsを編集してNuGetパッケージを追加できます。",
 
   "inspector.nothing_selected": "何も選択されていません",
   "inspector.nothing_selected_hint": "アセットまたはオブジェクトを選択して検査します。",

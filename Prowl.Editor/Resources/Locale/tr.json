@@ -110,6 +110,7 @@
   "launcher.tip.create_menu": "Yeni nesne veya varlik olusturmak icin Hiyerarsi veya Proje penceresinin bos bir alanina sag tiklayin.",
   "launcher.tip.component_menu": "Sifirlamak, kaldirmak veya yeniden siralamak icin Denetleyicideki bir bilesen basligina sag tiklayin.",
   "launcher.tip.escape_unlock": "Bir oyun gorunumu imleci kilitledigi her an imleci serbest birakmak icin Escape tusuna basin.",
+  "launcher.tip.nuget": "Proje kok dizinindeki Directory.Build.props dosyasini duzenleyerek NuGet paketleri ekleyin.",
 
   "inspector.nothing_selected": "Hicbir sey secilmedi",
   "inspector.nothing_selected_hint": "Incelemek icin bir varlik veya nesne secin.",

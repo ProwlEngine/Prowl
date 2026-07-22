@@ -36,6 +36,7 @@ public class EditorAssetBackend : AssetBackendBase
     private int _mainThreadId = -1;
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
+    private FileSystemWatcher? _buildPropsWatcher;
 
     // Cached folder/file structure - the single source of truth the Project Panel reads instead of
     // hitting Directory.GetDirectories/GetFiles every frame. Rebuilt from one tree walk whenever the
@@ -127,10 +128,38 @@ public class EditorAssetBackend : AssetBackendBase
         _watcher = new AssetWatcher();
         _watcher.Start(_project.AssetsPath);
 
+        // Watch Directory.Build.props (project root, outside Assets) so adding a NuGet package there
+        // triggers a recompile / package restore, the same as editing the Packages UI used to.
+        StartBuildPropsWatcher();
+
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
         // Initialize GameResources mapping for editor play mode
         RefreshResourcesMap();
+    }
+
+    /// <summary>
+    /// Watch the project's Directory.Build.props (which lives at the root, outside Assets/, so the
+    /// AssetWatcher never sees it) and request a recompile when it changes. That is what makes an
+    /// added NuGet PackageReference take effect without the user manually rebuilding.
+    /// </summary>
+    private void StartBuildPropsWatcher()
+    {
+        if (!Directory.Exists(_project.RootPath)) return;
+
+        _buildPropsWatcher = new FileSystemWatcher(_project.RootPath, "Directory.Build.props")
+        {
+            IncludeSubdirectories = false,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+        };
+        void OnPropsChanged(object? _, FileSystemEventArgs __)
+            => ScriptAssemblyManager.RequestRecompile();
+
+        _buildPropsWatcher.Changed += OnPropsChanged;
+        _buildPropsWatcher.Created += OnPropsChanged;
+        _buildPropsWatcher.Deleted += OnPropsChanged;
+        _buildPropsWatcher.Renamed += OnPropsChanged;
+        _buildPropsWatcher.EnableRaisingEvents = true;
     }
 
     /// <summary>
@@ -1721,6 +1750,9 @@ public class EditorAssetBackend : AssetBackendBase
     {
         _watcher?.Dispose();
         _watcher = null;
+
+        _buildPropsWatcher?.Dispose();
+        _buildPropsWatcher = null;
 
         ClearThumbnailTextureCache();
 

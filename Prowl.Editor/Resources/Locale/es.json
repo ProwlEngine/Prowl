@@ -110,6 +110,7 @@
   "launcher.tip.create_menu": "Haga clic derecho en un area vacia de la Jerarquia o de la ventana del Proyecto para crear nuevos objetos o assets.",
   "launcher.tip.component_menu": "Haga clic derecho en el encabezado de un componente en el Inspector para reiniciarlo, eliminarlo o reordenarlo.",
   "launcher.tip.escape_unlock": "Pulse Escape para liberar el cursor cuando una vista de juego lo tenga bloqueado.",
+  "launcher.tip.nuget": "Anade paquetes NuGet editando Directory.Build.props en la raiz de tu proyecto.",
 
   "inspector.nothing_selected": "Nada seleccionado",
   "inspector.nothing_selected_hint": "Seleccione un asset u objeto para inspeccionarlo.",

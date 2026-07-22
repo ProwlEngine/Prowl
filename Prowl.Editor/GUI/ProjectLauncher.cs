@@ -75,6 +75,7 @@ public static class ProjectLauncher
         "launcher.tip.create_menu",
         "launcher.tip.component_menu",
         "launcher.tip.escape_unlock",
+        "launcher.tip.nuget",
     };
 
     private const float _tipDuration = 8f;

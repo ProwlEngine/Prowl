@@ -100,6 +100,7 @@
   "launcher.tip.create_menu": "Right-click an empty area of the Hierarchy or Project window to create new objects or assets.",
   "launcher.tip.component_menu": "Right-click a component header in the Inspector to reset, remove, or reorder it.",
   "launcher.tip.escape_unlock": "Press Escape to release the cursor whenever a game view has it locked.",
+  "launcher.tip.nuget": "Add NuGet packages by editing Directory.Build.props in your project root.",
 
   "console.clear": "Clear",
   "console.collapse": "Collapse",
