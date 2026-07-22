@@ -55,9 +55,9 @@ public static class FileDialog
     // ── Nebula palette literals ──────────────────────────────
     // Frosted magenta-violet glass over a dark void. Ramps cover most of the surface;
     // these carry the exact alpha the prototype (.w2fd*) uses for glass and accents.
-    private static readonly Color WindowBg   = Color.FromArgb(235, 14, 11, 22);    // window body (dark glass)
-    private static readonly Color Selection  = Color.FromArgb(230, 168, 85, 247);  // selected sidebar item
-    private static readonly Color SideBg     = Color.FromArgb(36, 0, 0, 0);        // sidebar background
+    private static readonly Color WindowBg = Color.FromArgb(235, 14, 11, 22);    // window body (dark glass)
+    private static readonly Color Selection = Color.FromArgb(230, 168, 85, 247);  // selected sidebar item
+    private static readonly Color SideBg = Color.FromArgb(36, 0, 0, 0);        // sidebar background
 
     // ── API ──────────────────────────────────────────────────
 

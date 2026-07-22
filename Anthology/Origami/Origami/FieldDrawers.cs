@@ -1,8 +1,5 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
-//
-// Built-in field drawers for primitive and math types.
-// Registered by the editor at startup via BuiltInFieldDrawers.Register().
 
 using System;
 

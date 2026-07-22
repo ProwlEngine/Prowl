@@ -19,7 +19,7 @@ public class DockSpace
     public DockNode Root { get; set; }
     public List<FloatingWindow> FloatingWindows { get; } = new();
 
-// --- Drag state (one unified mode: dragging a tab) ---
+    // --- Drag state (one unified mode: dragging a tab) ---
     private bool _isDragging;
     private DockPanel? _draggedPanel;
     private DockNode? _dragSourceNode;
@@ -758,10 +758,10 @@ public class DockSpace
         float hx = bx, hy = by, hw = bw, hh = bh;
         switch (_rootHoveredZone)
         {
-            case DockZone.RootTop:    hh = stripSize; break;
+            case DockZone.RootTop: hh = stripSize; break;
             case DockZone.RootBottom: hy = by + bh - stripSize; hh = stripSize; break;
-            case DockZone.RootLeft:   hw = stripSize; break;
-            case DockZone.RootRight:  hx = bx + bw - stripSize; hw = stripSize; break;
+            case DockZone.RootLeft: hw = stripSize; break;
+            case DockZone.RootRight: hx = bx + bw - stripSize; hw = stripSize; break;
         }
 
         paper.Box("root_dock_highlight")
@@ -802,10 +802,10 @@ public class DockSpace
             float hx = bx, hy = by, hw = bw, hh = bh;
             switch (_rootHoveredZone)
             {
-                case DockZone.RootTop:    hh *= 0.25f; break;
+                case DockZone.RootTop: hh *= 0.25f; break;
                 case DockZone.RootBottom: hy += hh * 0.75f; hh *= 0.25f; break;
-                case DockZone.RootLeft:   hw *= 0.25f; break;
-                case DockZone.RootRight:  hx += hw * 0.75f; hw *= 0.25f; break;
+                case DockZone.RootLeft: hw *= 0.25f; break;
+                case DockZone.RootRight: hx += hw * 0.75f; hw *= 0.25f; break;
             }
             target = new Rect(new Float2(hx, hy), new Float2(hx + hw, hy + hh));
         }
@@ -815,10 +815,10 @@ public class DockSpace
             float hx = r.Min.X, hy = r.Min.Y, hw = r.Size.X, hh = r.Size.Y;
             switch (_hoveredZone)
             {
-                case DockZone.Top:    hh *= 0.5f; break;
+                case DockZone.Top: hh *= 0.5f; break;
                 case DockZone.Bottom: hy += hh * 0.5f; hh *= 0.5f; break;
-                case DockZone.Left:   hw *= 0.5f; break;
-                case DockZone.Right:  hx += hw * 0.5f; hw *= 0.5f; break;
+                case DockZone.Left: hw *= 0.5f; break;
+                case DockZone.Right: hx += hw * 0.5f; hw *= 0.5f; break;
             }
             target = new Rect(new Float2(hx, hy), new Float2(hx + hw, hy + hh));
         }
@@ -827,7 +827,7 @@ public class DockSpace
         // `tAlpha` fades the preview in/out. The chosen rates feel snappy (~120ms to settle)
         // without the perceptible lag of a slower interpolation.
         float dt = MathF.Max(0f, _lastDeltaTime);
-        float tMove  = 1f - MathF.Exp(-dt * 18f);
+        float tMove = 1f - MathF.Exp(-dt * 18f);
         float tAlpha = 1f - MathF.Exp(-dt * 20f);
 
         if (target.HasValue)

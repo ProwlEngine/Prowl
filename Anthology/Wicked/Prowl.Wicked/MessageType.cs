@@ -1,4 +1,7 @@
-﻿namespace Prowl.Wicked;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Wicked;
 
 /// <summary>
 /// Wire protocol message type constants.
@@ -33,7 +36,7 @@ internal static class MessageType
 
     // Authentication
     internal const byte Authenticate = 0x32;
-    internal const byte AuthResult   = 0x33;
+    internal const byte AuthResult = 0x33;
 
     // SyncVar
     internal const byte SyncVarUpdate = 0x40;

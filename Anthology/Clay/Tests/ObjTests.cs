@@ -1,7 +1,12 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Text;
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
 using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -126,11 +131,11 @@ public sealed class ObjTests
         """;
         var model = LoadInline(obj);
 
-        var first  = model.FindNode("First");
+        var first = model.FindNode("First");
         var second = model.FindNode("Second");
         Assert.NotNull(first);
         Assert.NotNull(second);
-        Assert.True(first!.MeshIndex  >= 0, "'First' node missing its mesh reference.");
+        Assert.True(first!.MeshIndex >= 0, "'First' node missing its mesh reference.");
         Assert.True(second!.MeshIndex >= 0, "'Second' node missing its mesh reference.");
     }
 
@@ -170,8 +175,8 @@ public sealed class ObjTests
         var m = LoadInline(obj).Meshes[0];
         Assert.NotNull(m.Colors);
         Assert.Equal(1f, m.Colors![0].R, precision: 4);
-        Assert.Equal(1f, m.Colors[1].G,  precision: 4);
-        Assert.Equal(1f, m.Colors[2].B,  precision: 4);
+        Assert.Equal(1f, m.Colors[1].G, precision: 4);
+        Assert.Equal(1f, m.Colors[2].B, precision: 4);
     }
 
     [Fact]
@@ -201,8 +206,8 @@ public sealed class ObjTests
             var model = ModelImporter.Load(Path.Combine(tempDir, "test.obj"));
             var shiny = model.Materials.First(m => m.Name == "shiny");
             Assert.Equal(0.8f, shiny.BaseColor.R, precision: 4);
-            Assert.Equal(0.5f, shiny.Metallic,    precision: 4);
-            Assert.Equal(0.3f, shiny.Roughness,   precision: 4);
+            Assert.Equal(0.5f, shiny.Metallic, precision: 4);
+            Assert.Equal(0.3f, shiny.Roughness, precision: 4);
         }
         finally
         {

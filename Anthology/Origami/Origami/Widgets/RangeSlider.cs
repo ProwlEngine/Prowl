@@ -63,7 +63,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private Action? _onDragEnd;
 
     // Storage keys.
-    private const string KeyDragging  = "rs_drag";       // 0=none, 1=low, 2=high
+    private const string KeyDragging = "rs_drag";       // 0=none, 1=low, 2=high
     private const string KeyDragOrigin = "rs_origin";
 
     internal RangeSliderBuilder(Paper paper, string id, T low, T high, Action<T, T> setter, T min, T max, OrigamiTheme theme)
@@ -84,9 +84,9 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     public RangeSliderBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public RangeSliderBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public RangeSliderBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public RangeSliderBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public RangeSliderBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public RangeSliderBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public RangeSliderBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public RangeSliderBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public RangeSliderBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Sizing / orientation ───────────────────────────────────────────
 
@@ -94,9 +94,9 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     public RangeSliderBuilder<T> Height(float h) { _height = MathF.Max(16, h); return this; }
     public RangeSliderBuilder<T> ThumbSize(float diameter) { _thumbDiameter = MathF.Max(8, diameter); return this; }
     public RangeSliderBuilder<T> TrackThickness(float px) { _trackThickness = MathF.Max(2, px); return this; }
-    public RangeSliderBuilder<T> Small()  { _height = 20; _thumbDiameter = 11; _trackThickness = 4; return this; }
+    public RangeSliderBuilder<T> Small() { _height = 20; _thumbDiameter = 11; _trackThickness = 4; return this; }
     public RangeSliderBuilder<T> Medium() { _height = 24; _thumbDiameter = 15; _trackThickness = 6; return this; }
-    public RangeSliderBuilder<T> Large()  { _height = 32; _thumbDiameter = 22; _trackThickness = 8; return this; }
+    public RangeSliderBuilder<T> Large() { _height = 32; _thumbDiameter = 22; _trackThickness = 8; return this; }
     public RangeSliderBuilder<T> Vertical(bool vertical = true) { _vertical = vertical; return this; }
 
     // ── Range / scale ──────────────────────────────────────────────────
@@ -296,14 +296,14 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     {
         bool vertical = _vertical;
         var onRamp = OnRamp();
-        Color trackBg  = Color.FromArgb(20, 255, 255, 255); // light translucent groove
-        Color fill     = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
+        Color trackBg = Color.FromArgb(20, 255, 255, 255); // light translucent groove
+        Color fill = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color thumbCol = _theme.Ink.C600;
-        Color tickCol  = ink.C300;
+        Color tickCol = ink.C300;
         if (_disabled)
         {
-            trackBg  = Color.FromArgb(14, 255, 255, 255);
-            fill     = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
+            trackBg = Color.FromArgb(14, 255, 255, 255);
+            fill = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
             thumbCol = ink.C300;
         }
 
@@ -316,7 +316,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         float thumbBaseR = _thumbDiameter * 0.5f;
         float trackThicknessLocal = _trackThickness;
 
-        float hoverAnim  = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
+        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
         float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
 
         _paper.Draw((canvas, rect) =>
@@ -343,7 +343,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
             {
                 tx = rx + (rw - trackThickness) * 0.5f; ty = ry; tw = trackThickness; th = rh;
                 thumbLoCx = rx + rw * 0.5f; thumbLoCy = ry + rh * (1f - (float)tLo);
-                thumbHiCx = thumbLoCx;     thumbHiCy = ry + rh * (1f - (float)tHi);
+                thumbHiCx = thumbLoCx; thumbHiCy = ry + rh * (1f - (float)tHi);
             }
 
             // Track background.
@@ -437,7 +437,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                         else
                         {
                             loCx = trX + trW * 0.5f; loCy = trY + trH * (1f - (float)tLoLocal);
-                            hiCx = loCx;             hiCy = trY + trH * (1f - (float)tHiLocal);
+                            hiCx = loCx; hiCy = trY + trH * (1f - (float)tHiLocal);
                         }
 
                         var ts = canvas.MeasureText(tt, fontSize, font);
@@ -453,8 +453,8 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                         float by = loCy - thR - bh - 4f + slide;
 
                         byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
-                        byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
-                        byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
                         canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
                             Color.FromArgb(aShadow, 0, 0, 0));
@@ -486,7 +486,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private OrigamiRamp OnRamp() => _variant switch
     {
         OrigamiVariant.Default => _theme.Primary,
-        OrigamiVariant.Subtle  => _theme.Neutral,
+        OrigamiVariant.Subtle => _theme.Neutral,
         _ => _theme.Get(_variant),
     };
 

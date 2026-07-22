@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic.Rasterization;
 
@@ -66,7 +69,7 @@ internal sealed class TargetWorkspace
         int n = Width * Height;
         for (int i = 0; i < n; i++)
         {
-            Target.PixelsRGB[i * 3    ] = Pixels[i].X;
+            Target.PixelsRGB[i * 3] = Pixels[i].X;
             Target.PixelsRGB[i * 3 + 1] = Pixels[i].Y;
             Target.PixelsRGB[i * 3 + 2] = Pixels[i].Z;
         }

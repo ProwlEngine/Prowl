@@ -3,17 +3,16 @@
 
 using Prowl.PaperUI.LayoutEngine;
 
-namespace Prowl.PaperUI.Events
-{
-    public class TextInputEvent
-    {
-        public ElementHandle Source { get; }
-        public char Character { get; }
+namespace Prowl.PaperUI.Events;
 
-        public TextInputEvent(ElementHandle source, char character)
-        {
-            Source = source;
-            Character = character;
-        }
+public class TextInputEvent
+{
+    public ElementHandle Source { get; }
+    public char Character { get; }
+
+    public TextInputEvent(ElementHandle source, char character)
+    {
+        Source = source;
+        Character = character;
     }
 }

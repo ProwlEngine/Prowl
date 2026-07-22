@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Prowl.Slang;
-
 using Prowl.Graphite.ShaderDef;
+using Prowl.Slang;
 
 
 namespace Prowl.Graphite.ShaderDef.Compiler;

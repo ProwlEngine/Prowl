@@ -143,13 +143,13 @@ public sealed class Toasts
             var semantic = GetSemantic(toast.Type, theme);
             bool hasSub = !string.IsNullOrEmpty(toast.Message);
 
-            var bg         = Color.FromArgb(Fa(247), 28, 23, 42);                         // rgba(28,23,42,0.97)
-            var border     = Color.FromArgb(Fa(66), 190, 150, 255);                       // bd-strong
-            var shadow     = Color.FromArgb(Fa(150), 0, 0, 0);                            // 0 14 40 rgba(0,0,0,.6)
+            var bg = Color.FromArgb(Fa(247), 28, 23, 42);                         // rgba(28,23,42,0.97)
+            var border = Color.FromArgb(Fa(66), 190, 150, 255);                       // bd-strong
+            var shadow = Color.FromArgb(Fa(150), 0, 0, 0);                            // 0 14 40 rgba(0,0,0,.6)
             var titleColor = Color.FromArgb(Fa(255), theme.Ink.C500.R, theme.Ink.C500.G, theme.Ink.C500.B); // t-hi
-            var subColor   = Color.FromArgb(Fa(255), theme.Ink.C200.R, theme.Ink.C200.G, theme.Ink.C200.B); // t-lo
-            var badgeBg    = Color.FromArgb(Fa(38), semantic.R, semantic.G, semantic.B);  // ~15% alpha
-            var iconColor  = Color.FromArgb(Fa(255), semantic.R, semantic.G, semantic.B);
+            var subColor = Color.FromArgb(Fa(255), theme.Ink.C200.R, theme.Ink.C200.G, theme.Ink.C200.B); // t-lo
+            var badgeBg = Color.FromArgb(Fa(38), semantic.R, semantic.G, semantic.B);  // ~15% alpha
+            var iconColor = Color.FromArgb(Fa(255), semantic.R, semantic.G, semantic.B);
 
             float mainH = metrics.FontSize + 2f;
             float subH = metrics.FontSizeSmall;
@@ -236,13 +236,13 @@ public sealed class Toasts
         var semantic = GetSemantic(type, theme);
         bool hasSub = !string.IsNullOrEmpty(message);
 
-        var bg         = theme.Popover;
-        var border     = theme.BorderStrong;
-        var shadow     = theme.Shadow;
+        var bg = theme.Popover;
+        var border = theme.BorderStrong;
+        var shadow = theme.Shadow;
         var titleColor = theme.Ink.C500;
-        var subColor   = theme.Ink.C200;
-        var badgeBg    = Color.FromArgb(38, semantic.R, semantic.G, semantic.B);
-        var iconColor  = semantic;
+        var subColor = theme.Ink.C200;
+        var badgeBg = Color.FromArgb(38, semantic.R, semantic.G, semantic.B);
+        var iconColor = semantic;
 
         float mainH = metrics.FontSize + 2f;
         float subH = metrics.FontSizeSmall;
@@ -309,8 +309,8 @@ public sealed class Toasts
     {
         ToastType.Success => theme.Green.C500,
         ToastType.Warning => theme.Amber.C500,
-        ToastType.Error   => theme.Red.C500,
-        _                 => theme.Blue.C500,
+        ToastType.Error => theme.Red.C500,
+        _ => theme.Blue.C500,
     };
 
     /// <summary>Draw the .tic vector glyph (check / x / info-dot / bang) centred in the badge.</summary>

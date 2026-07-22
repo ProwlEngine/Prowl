@@ -1,30 +1,33 @@
-using Prowl.Scribe;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Runtime.InteropServices;
 
-namespace Tests
+using Prowl.Scribe;
+
+namespace Tests;
+
+public class SystemFontTests
 {
-    public class SystemFontTests
+    [Fact]
+    public void LoadSystemFontsLoadsDejaVuSans()
     {
-        [Fact]
-        public void LoadSystemFontsLoadsDejaVuSans()
-        {
-            //var renderer = new TestFontRenderer();
-            //var fs = new FontSystem(renderer);
-            //fs.LoadSystemFonts();
-            //
-            //Assert.True(fs.Fonts.Any(), "No system fonts were loaded.");
-            //
-            //FontFilter[] expectedFonts;
-            //
-            //if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "Arial"), new FontFilter(FontStyle.Regular, "Segoe UI") };
-            //else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "Helvetica"), new FontFilter(FontStyle.Regular, "Arial") };
-            //else
-            //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "DejaVu Sans"), new FontFilter(FontStyle.Regular, "Liberation Sans") };
-            //
-            //bool found = expectedFonts.Any(name => fs.GetFont(name) != null);
-            //Assert.True(found, $"None of the expected fonts were found. Loaded fonts: {string.Join(", ", fs.Fonts.Select(f => f.FamilyName))}");
-        }
+        //var renderer = new TestFontRenderer();
+        //var fs = new FontSystem(renderer);
+        //fs.LoadSystemFonts();
+        //
+        //Assert.True(fs.Fonts.Any(), "No system fonts were loaded.");
+        //
+        //FontFilter[] expectedFonts;
+        //
+        //if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "Arial"), new FontFilter(FontStyle.Regular, "Segoe UI") };
+        //else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "Helvetica"), new FontFilter(FontStyle.Regular, "Arial") };
+        //else
+        //    expectedFonts = new[] { new FontFilter(FontStyle.Regular, "DejaVu Sans"), new FontFilter(FontStyle.Regular, "Liberation Sans") };
+        //
+        //bool found = expectedFonts.Any(name => fs.GetFont(name) != null);
+        //Assert.True(found, $"None of the expected fonts were found. Loaded fonts: {string.Join(", ", fs.Fonts.Select(f => f.FamilyName))}");
     }
 }

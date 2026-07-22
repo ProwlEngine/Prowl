@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 namespace Prowl.Clay.Importer;
 
 /// <summary>
@@ -13,11 +16,11 @@ internal static class FormatDetector
         return ext switch
         {
             ".gltf" => "gltf",
-            ".glb"  => "glb",
-            ".vrm"  => "vrm",
-            ".obj"  => "obj",
-            ".fbx"  => "fbx",
-            _       => null,
+            ".glb" => "glb",
+            ".vrm" => "vrm",
+            ".obj" => "obj",
+            ".fbx" => "fbx",
+            _ => null,
         };
     }
 

@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Diagnostics;
 using System.Numerics;
+
 using Prowl.Wicked.Transport;
 
 namespace Prowl.Wicked;
@@ -458,36 +462,36 @@ public static class Client
         switch (objectKind)
         {
             case 0: // Entity
-            {
-                uint networkId = reader.ReadUInt();
-                var entity = FindEntity(networkId);
-                if (entity == null) return;
+                {
+                    uint networkId = reader.ReadUInt();
+                    var entity = FindEntity(networkId);
+                    if (entity == null) return;
 
-                ushort methodId = reader.ReadUShort();
-                entity.__DispatchClientRpc(methodId, reader);
-                break;
-            }
+                    ushort methodId = reader.ReadUShort();
+                    entity.__DispatchClientRpc(methodId, reader);
+                    break;
+                }
             case 1: // Map
-            {
-                Guid mapId = reader.ReadGuid();
-                var map = GetMap(mapId);
-                if (map == null) return;
+                {
+                    Guid mapId = reader.ReadGuid();
+                    var map = GetMap(mapId);
+                    if (map == null) return;
 
-                ushort methodId = reader.ReadUShort();
-                map.__DispatchClientRpc(methodId, reader);
-                break;
-            }
+                    ushort methodId = reader.ReadUShort();
+                    map.__DispatchClientRpc(methodId, reader);
+                    break;
+                }
             case 2: // Static
-            {
-                ushort rpcTypeId = reader.ReadUShort();
-                ushort methodId = reader.ReadUShort();
+                {
+                    ushort rpcTypeId = reader.ReadUShort();
+                    ushort methodId = reader.ReadUShort();
 
-                if (!_staticRpcDispatchers.TryGetValue(rpcTypeId, out var dispatcher))
-                    return;
+                    if (!_staticRpcDispatchers.TryGetValue(rpcTypeId, out var dispatcher))
+                        return;
 
-                dispatcher(methodId, reader);
-                break;
-            }
+                    dispatcher(methodId, reader);
+                    break;
+                }
         }
     }
 

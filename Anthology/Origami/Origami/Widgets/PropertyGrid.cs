@@ -72,7 +72,8 @@ public abstract class AttributeHandler
 
     /// <summary>Called after the field is drawn.</summary>
     public virtual void OnAfterDraw(Paper paper, string id, Attribute attr,
-        FieldInfo field, object target, int depth) { }
+        FieldInfo field, object target, int depth)
+    { }
 }
 
 /// <summary>Registry mapping attribute types to their handlers.</summary>

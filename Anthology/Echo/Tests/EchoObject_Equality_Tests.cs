@@ -396,13 +396,13 @@ public class EchoObject_Equality_Tests
     }
     private void ModifyDeepValue(EchoObject obj)
     {
-        if(obj.TagType == EchoType.String)
+        if (obj.TagType == EchoType.String)
             obj.StringValue = "Modified";
 
         // Handle compound type
         if (obj.TagType == EchoType.Compound)
         {
-            foreach(var tag in obj.Tags)
+            foreach (var tag in obj.Tags)
                 ModifyDeepValue(tag.Value);
         }
         // Handle list type

@@ -80,7 +80,7 @@ public sealed class TextFieldBuilder
     // Element-storage keys for the deferred "force-update next frame" channel. Populated by
     // ApplyPick / clear-button click; drained at the top of the next frame's render.
     private const string KeyForcePending = "force_pending";
-    private const string KeyForceValue   = "force_value";
+    private const string KeyForceValue = "force_value";
 
     internal TextFieldBuilder(Paper paper, string id, string value, Action<string> setter, OrigamiTheme theme)
     {
@@ -98,9 +98,9 @@ public sealed class TextFieldBuilder
     public TextFieldBuilder Primary() => Variant(OrigamiVariant.Primary);
     public TextFieldBuilder Success() => Variant(OrigamiVariant.Success);
     public TextFieldBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public TextFieldBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public TextFieldBuilder Info()    => Variant(OrigamiVariant.Info);
-    public TextFieldBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public TextFieldBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public TextFieldBuilder Info() => Variant(OrigamiVariant.Info);
+    public TextFieldBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
@@ -269,17 +269,17 @@ public sealed class TextFieldBuilder
         // Nebula .w2field: glass-in fill, bd-soft border; focus goes accent; error goes red.
         Color glassIn = _theme.Glass;
         Color bdSoft = _theme.BorderSoft;
-        Color bgColor     = subtle ? Color.Transparent
+        Color bgColor = subtle ? Color.Transparent
                                    : (_variant == OrigamiVariant.Default ? glassIn : ramp.C200);
-        Color idleBorder  = hasError ? _theme.Red.C500
-                          : subtle    ? Color.Transparent
+        Color idleBorder = hasError ? _theme.Red.C500
+                          : subtle ? Color.Transparent
                                       : (_variant == OrigamiVariant.Default ? bdSoft : ramp.C400);
         Color focusBorder = hasError ? _theme.Red.C500
                           : (_variant == OrigamiVariant.Default ? _theme.Primary.C500 : ramp.C500);
 
         // Total widget height = field row + helper line (when present).
         float helperH = (hasError || !string.IsNullOrEmpty(_helperText)) ? 16f : 0f;
-        float fieldH  = _multiLine ? ComputeMultiLineHeight() : _height;
+        float fieldH = _multiLine ? ComputeMultiLineHeight() : _height;
 
         using (_paper.Column(_id).Width(_width).Height(fieldH + helperH).Enter())
         {

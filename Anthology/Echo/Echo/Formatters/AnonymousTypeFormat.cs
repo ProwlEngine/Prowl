@@ -42,7 +42,7 @@ internal sealed class AnonymousTypeFormat : ISerializationFormat
                 // Continue with other properties
             }
         }
-        
+
         return compound;
     }
 

@@ -1,8 +1,11 @@
-using Prowl.Vector;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Photonic.Integration;
 using Prowl.Photonic.Rasterization;
 using Prowl.Photonic.Raytracing;
 using Prowl.Photonic.Sampling;
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -149,7 +152,7 @@ public sealed class Job
     /// </summary>
     public event System.Action<int> OnIterationComplete
     {
-        add    { _iterationComplete += value; }
+        add { _iterationComplete += value; }
         remove { _iterationComplete -= value; }
     }
 
@@ -390,7 +393,7 @@ public sealed class Job
                             int n = counts[idx];
                             var avg = n > 0 ? sums[idx] * (1f / n) : Float3.Zero;
                             var final = direct[idx] + avg;
-                            pixels[idx * 3    ] = final.X;
+                            pixels[idx * 3] = final.X;
                             pixels[idx * 3 + 1] = final.Y;
                             pixels[idx * 3 + 2] = final.Z;
                         }
@@ -441,9 +444,9 @@ public sealed class Job
                     int i0 = idx[k], i1 = idx[k + 1], i2 = idx[k + 2];
                     ConservativeTexelMapper.MapTriangle(ws, inst, i,
                         positions[i0], positions[i1], positions[i2],
-                        normals[i0],   normals[i1],   normals[i2],
-                        bakeUVs[i0],   bakeUVs[i1],   bakeUVs[i2],
-                        uv0[i0],       uv0[i1],       uv0[i2],
+                        normals[i0], normals[i1], normals[i2],
+                        bakeUVs[i0], bakeUVs[i1], bakeUVs[i2],
+                        uv0[i0], uv0[i1], uv0[i2],
                         g);
                 }
             }

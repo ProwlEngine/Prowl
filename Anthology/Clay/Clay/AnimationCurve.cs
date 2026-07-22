@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Vector;
 
 namespace Prowl.Clay;
@@ -107,10 +110,10 @@ public sealed class AnimationCurve
         int stride = Dimension * 3;
         // Cubic Hermite per glTF 2.0: dt = t1 - t0; v(t) = h00 v0 + h10 dt outTan_0 + h01 v1 + h11 dt inTan_1.
         float t0 = Times[i0], t1 = Times[i1], dt = t1 - t0;
-        float v0    = Values[i0 * stride + Dimension];
-        float out0  = Values[i0 * stride + Dimension * 2];
-        float in1   = Values[i1 * stride + 0];
-        float v1    = Values[i1 * stride + Dimension];
+        float v0 = Values[i0 * stride + Dimension];
+        float out0 = Values[i0 * stride + Dimension * 2];
+        float in1 = Values[i1 * stride + 0];
+        float v1 = Values[i1 * stride + Dimension];
         return Hermite1D(v0, out0, in1, v1, u, dt);
     }
 
@@ -137,13 +140,13 @@ public sealed class AnimationCurve
     {
         int stride = Dimension * 3;
         float t0 = Times[i0], t1 = Times[i1], dt = t1 - t0;
-        int v0Off  = i0 * stride + Dimension;
-        int oOff   = i0 * stride + Dimension * 2;
-        int inOff  = i1 * stride + 0;
-        int v1Off  = i1 * stride + Dimension;
+        int v0Off = i0 * stride + Dimension;
+        int oOff = i0 * stride + Dimension * 2;
+        int inOff = i1 * stride + 0;
+        int v1Off = i1 * stride + Dimension;
 
         return new Float3(
-            Hermite1D(Values[v0Off],     Values[oOff],     Values[inOff],     Values[v1Off],     u, dt),
+            Hermite1D(Values[v0Off], Values[oOff], Values[inOff], Values[v1Off], u, dt),
             Hermite1D(Values[v0Off + 1], Values[oOff + 1], Values[inOff + 1], Values[v1Off + 1], u, dt),
             Hermite1D(Values[v0Off + 2], Values[oOff + 2], Values[inOff + 2], Values[v1Off + 2], u, dt));
     }
@@ -161,8 +164,8 @@ public sealed class AnimationCurve
         int stride = Dimension;
         int a = i0 * stride;
         int b = i1 * stride;
-        var q0 = new Quaternion(Values[a],     Values[a + 1], Values[a + 2], Values[a + 3]);
-        var q1 = new Quaternion(Values[b],     Values[b + 1], Values[b + 2], Values[b + 3]);
+        var q0 = new Quaternion(Values[a], Values[a + 1], Values[a + 2], Values[a + 3]);
+        var q1 = new Quaternion(Values[b], Values[b + 1], Values[b + 2], Values[b + 3]);
         return Slerp(q0, q1, u);
     }
 
@@ -171,11 +174,11 @@ public sealed class AnimationCurve
         int stride = Dimension * 3;
         float t0 = Times[i0], t1 = Times[i1], dt = t1 - t0;
         int v0Off = i0 * stride + Dimension;
-        int oOff  = i0 * stride + Dimension * 2;
+        int oOff = i0 * stride + Dimension * 2;
         int inOff = i1 * stride + 0;
         int v1Off = i1 * stride + Dimension;
 
-        float x = Hermite1D(Values[v0Off],     Values[oOff],     Values[inOff],     Values[v1Off],     u, dt);
+        float x = Hermite1D(Values[v0Off], Values[oOff], Values[inOff], Values[v1Off], u, dt);
         float y = Hermite1D(Values[v0Off + 1], Values[oOff + 1], Values[inOff + 1], Values[v1Off + 1], u, dt);
         float z = Hermite1D(Values[v0Off + 2], Values[oOff + 2], Values[inOff + 2], Values[v1Off + 2], u, dt);
         float w = Hermite1D(Values[v0Off + 3], Values[oOff + 3], Values[inOff + 3], Values[v1Off + 3], u, dt);

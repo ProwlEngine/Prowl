@@ -116,18 +116,18 @@ public sealed class ButtonBuilder
     public ButtonBuilder Primary() => Variant(OrigamiVariant.Primary);
     public ButtonBuilder Success() => Variant(OrigamiVariant.Success);
     public ButtonBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public ButtonBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public ButtonBuilder Info()    => Variant(OrigamiVariant.Info);
-    public ButtonBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public ButtonBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public ButtonBuilder Info() => Variant(OrigamiVariant.Info);
+    public ButtonBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Style ──────────────────────────────────────────────────────────
 
     public ButtonBuilder Style(ButtonStyle style) { _style = style; return this; }
-    public ButtonBuilder Filled()  => Style(ButtonStyle.Filled);
+    public ButtonBuilder Filled() => Style(ButtonStyle.Filled);
     public ButtonBuilder Outline() => Style(ButtonStyle.Outline);
-    public ButtonBuilder Ghost()   => Style(ButtonStyle.Ghost);
-    public ButtonBuilder Soft()    => Style(ButtonStyle.Soft);
-    public ButtonBuilder Link()    => Style(ButtonStyle.Link);
+    public ButtonBuilder Ghost() => Style(ButtonStyle.Ghost);
+    public ButtonBuilder Soft() => Style(ButtonStyle.Soft);
+    public ButtonBuilder Link() => Style(ButtonStyle.Link);
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
@@ -137,9 +137,9 @@ public sealed class ButtonBuilder
     public ButtonBuilder FullWidth() { _width = UnitValue.Stretch(); return this; }
     public ButtonBuilder FitContent() { _width = UnitValue.Auto; return this; }
 
-    public ButtonBuilder Small()  { _height = 26; _padX = 10; _fontScale = 0.92f; return this; }
-    public ButtonBuilder Medium() { _height = 32; _padX = 14; _fontScale = 1f;    return this; }
-    public ButtonBuilder Large()  { _height = 38; _padX = 18; _fontScale = 1.08f; return this; }
+    public ButtonBuilder Small() { _height = 26; _padX = 10; _fontScale = 0.92f; return this; }
+    public ButtonBuilder Medium() { _height = 32; _padX = 14; _fontScale = 1f; return this; }
+    public ButtonBuilder Large() { _height = 38; _padX = 18; _fontScale = 1.08f; return this; }
 
     /// <summary>Square aspect for icon-only buttons. Width/height match, no asymmetric padding.</summary>
     public ButtonBuilder IconOnly()
@@ -545,7 +545,7 @@ public sealed class ButtonBuilder
     {
         var ramp = s.Ramp; var ink = s.Ink; var neutral = s.Theme.Neutral; var primary = s.Theme.Primary;
         bool isDefault = s.Variant == OrigamiVariant.Default;
-        bool isSubtle  = s.Variant == OrigamiVariant.Subtle;
+        bool isSubtle = s.Variant == OrigamiVariant.Subtle;
         bool saturated = !isDefault && !isSubtle;
         var r = new BtnColors { Label = ink.C500 };
 
@@ -631,7 +631,7 @@ public sealed class ButtonBuilder
     private static Color ChooseFocusRingColor(in ButtonRenderSnapshot s)
     {
         bool isDefault = s.Variant == OrigamiVariant.Default;
-        bool isSubtle  = s.Variant == OrigamiVariant.Subtle;
+        bool isSubtle = s.Variant == OrigamiVariant.Subtle;
         if (isDefault || isSubtle) return s.Theme.Primary.C500;
         return s.Ramp.C500;
     }

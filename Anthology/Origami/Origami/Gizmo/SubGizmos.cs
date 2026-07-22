@@ -289,9 +289,9 @@ public class RotationSubGizmo : ISubGizmo
         var tangent = _params.Direction switch
         {
             GizmoDirection.X or GizmoDirection.Y => Float3.UnitZ,
-            GizmoDirection.Z                     => -Float3.UnitY,
-            GizmoDirection.View                  => -_gizmo.ViewRight,
-            _                                    => throw new ArgumentOutOfRangeException()
+            GizmoDirection.Z => -Float3.UnitY,
+            GizmoDirection.View => -_gizmo.ViewRight,
+            _ => throw new ArgumentOutOfRangeException()
         };
 
         if (_gizmo.Orientation == GizmoOrientation.Local && _params.Direction != GizmoDirection.View)

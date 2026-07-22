@@ -1,4 +1,8 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Unwrapper;
@@ -196,7 +200,7 @@ internal sealed class HalfEdgeMesh
         }
 
         ProgressSink?.Invoke($"[hem] non-manifold split in {phaseSw.ElapsedMilliseconds} ms ({Vertices.Count - positionCount} extra verts)");
-        skipNonManifold:
+    skipNonManifold:
         phaseSw.Restart();
 
         // Now that topology is final, fill in face attributes.

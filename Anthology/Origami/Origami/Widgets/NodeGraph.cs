@@ -437,13 +437,26 @@ public sealed class NodeGraphBuilder
         {
             var snap = new Snapshot
             {
-                St = st, Zoom = zoom, PanX = st.PanX, PanY = st.PanY,
-                Nodes = _nodes, Connections = _connections, Layouts = layouts, ById = byId,
-                ShowGrid = _showGrid, GridSpacing = _gridSpacing, WireThick = _wireThick,
-                GridMinor = ToC32(borderSoft, 0.5f), GridMajor = ToC32(borderSoft, 1f),
-                WireDefault = ToC32(accentDefault, 0.85f), WireSelected = ToC32(_theme.Primary.C700, 1f),
-                DotRing = ToC32(nodeBg, 1f), DotFill = ToC32(ink.C300, 1f),
-                Accent = accentDefault, Marquee = ToC32(accentDefault, 0.9f), MarqueeFill = ToC32(accentDefault, 0.14f),
+                St = st,
+                Zoom = zoom,
+                PanX = st.PanX,
+                PanY = st.PanY,
+                Nodes = _nodes,
+                Connections = _connections,
+                Layouts = layouts,
+                ById = byId,
+                ShowGrid = _showGrid,
+                GridSpacing = _gridSpacing,
+                WireThick = _wireThick,
+                GridMinor = ToC32(borderSoft, 0.5f),
+                GridMajor = ToC32(borderSoft, 1f),
+                WireDefault = ToC32(accentDefault, 0.85f),
+                WireSelected = ToC32(_theme.Primary.C700, 1f),
+                DotRing = ToC32(nodeBg, 1f),
+                DotFill = ToC32(ink.C300, 1f),
+                Accent = accentDefault,
+                Marquee = ToC32(accentDefault, 0.9f),
+                MarqueeFill = ToC32(accentDefault, 0.14f),
             };
 
             // Background: grid only, plus the pan/marquee/select/context surface.
@@ -1477,8 +1490,10 @@ public sealed class NodeGraphBuilder
         float s = r * 1.15f;
         (float dx, float dy) = side switch
         {
-            PortSide.Left => (1f, 0f), PortSide.Right => (1f, 0f),
-            PortSide.Top => (0f, 1f), _ => (0f, 1f),
+            PortSide.Left => (1f, 0f),
+            PortSide.Right => (1f, 0f),
+            PortSide.Top => (0f, 1f),
+            _ => (0f, 1f),
         };
         canvas.SaveState(); canvas.SetFillColor(fill); canvas.BeginPath();
         if (dx != 0) { canvas.MoveTo(cx - s, cy - s); canvas.LineTo(cx + s, cy); canvas.LineTo(cx - s, cy + s); }

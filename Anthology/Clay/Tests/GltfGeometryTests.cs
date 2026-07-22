@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -31,9 +35,9 @@ public sealed class GltfGeometryTests
 
         // Box.glb is centered at origin with half-extent 0.5.
         Assert.InRange(mesh.Bounds.Min.X, -0.6f, -0.4f);
-        Assert.InRange(mesh.Bounds.Max.X,  0.4f,  0.6f);
+        Assert.InRange(mesh.Bounds.Max.X, 0.4f, 0.6f);
         Assert.InRange(mesh.Bounds.Min.Y, -0.6f, -0.4f);
-        Assert.InRange(mesh.Bounds.Max.Y,  0.4f,  0.6f);
+        Assert.InRange(mesh.Bounds.Max.Y, 0.4f, 0.6f);
     }
 
     [Fact]
@@ -53,8 +57,8 @@ public sealed class GltfGeometryTests
 
         for (int i = 0; i < rawMesh.VertexCount; i++)
         {
-            Assert.Equal( rawMesh.Vertices[i].X, convMesh.Vertices[i].X, precision: 5);
-            Assert.Equal( rawMesh.Vertices[i].Y, convMesh.Vertices[i].Y, precision: 5);
+            Assert.Equal(rawMesh.Vertices[i].X, convMesh.Vertices[i].X, precision: 5);
+            Assert.Equal(rawMesh.Vertices[i].Y, convMesh.Vertices[i].Y, precision: 5);
             Assert.Equal(-rawMesh.Vertices[i].Z, convMesh.Vertices[i].Z, precision: 5);
         }
     }

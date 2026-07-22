@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic.Imaging;
 
@@ -33,22 +36,22 @@ internal static class Dilate
                     int n = 0;
                     float r = 0, g = 0, b = 0;
                     for (int dy = -1; dy <= 1; dy++)
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        if (dx == 0 && dy == 0) continue;
-                        int nx = x + dx, ny = y + dy;
-                        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-                        int j = ny * width + nx;
-                        if (!tmpCov[j]) continue;
-                        r += tmpRGB[j * 3    ];
-                        g += tmpRGB[j * 3 + 1];
-                        b += tmpRGB[j * 3 + 2];
-                        n++;
-                    }
+                        for (int dx = -1; dx <= 1; dx++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            int nx = x + dx, ny = y + dy;
+                            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                            int j = ny * width + nx;
+                            if (!tmpCov[j]) continue;
+                            r += tmpRGB[j * 3];
+                            g += tmpRGB[j * 3 + 1];
+                            b += tmpRGB[j * 3 + 2];
+                            n++;
+                        }
                     if (n > 0)
                     {
                         float inv = 1f / n;
-                        rgb[i * 3    ] = r * inv;
+                        rgb[i * 3] = r * inv;
                         rgb[i * 3 + 1] = g * inv;
                         rgb[i * 3 + 2] = b * inv;
                         covered[i] = true;

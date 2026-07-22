@@ -198,12 +198,12 @@ public sealed class SpinnerBuilder
 
         switch (s.Style)
         {
-            case SpinnerStyle.Arc:     PaintArc(canvas, cx, cy, r, s.Color, s.Time); break;
-            case SpinnerStyle.Dots:    PaintDots(canvas, cx, cy, r, s.Color, s.Time); break;
-            case SpinnerStyle.Pulse:   PaintPulse(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Arc: PaintArc(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Dots: PaintDots(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Pulse: PaintPulse(canvas, cx, cy, r, s.Color, s.Time); break;
             case SpinnerStyle.DualArc: PaintDualArc(canvas, cx, cy, r, s.Color, s.Time); break;
-            case SpinnerStyle.Bars:    PaintBars(canvas, cx, cy, r, s.Color, s.Time); break;
-            case SpinnerStyle.Ring:    PaintRing(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Bars: PaintBars(canvas, cx, cy, r, s.Color, s.Time); break;
+            case SpinnerStyle.Ring: PaintRing(canvas, cx, cy, r, s.Color, s.Time); break;
         }
     }
 

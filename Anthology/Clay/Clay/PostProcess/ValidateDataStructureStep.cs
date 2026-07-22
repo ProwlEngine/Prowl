@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 
@@ -72,7 +75,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
                     }
                 }
             }
-            nextMesh:;
+        nextMesh:;
 
             // Material index in range or -1.
             if (mesh.MaterialIndex < -1 || mesh.MaterialIndex >= scene.Materials.Count)

@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 namespace Prowl.Clay.Tests;
 
 /// <summary>
@@ -9,12 +12,12 @@ namespace Prowl.Clay.Tests;
 internal static class TestModels
 {
     public static string GltfRoot { get; } = Resolve("test-models", "gltf");
-    public static string FbxRoot  { get; } = Resolve("test-models", "fbx");
-    public static string ObjRoot  { get; } = Resolve("test-models", "obj");
+    public static string FbxRoot { get; } = Resolve("test-models", "fbx");
+    public static string ObjRoot { get; } = Resolve("test-models", "obj");
 
     public static string Gltf(string relative) => Path.Combine(GltfRoot, relative);
-    public static string Fbx(string relative)  => Path.Combine(FbxRoot,  relative);
-    public static string Obj(string relative)  => Path.Combine(ObjRoot,  relative);
+    public static string Fbx(string relative) => Path.Combine(FbxRoot, relative);
+    public static string Obj(string relative) => Path.Combine(ObjRoot, relative);
 
     private static string Resolve(params string[] segments)
     {

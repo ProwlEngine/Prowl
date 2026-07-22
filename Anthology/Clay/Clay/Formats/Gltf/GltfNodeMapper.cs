@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -105,9 +108,9 @@ internal static class GltfNodeMapper
         if (src.Matrix is { Length: 16 } m)
         {
             var matrix = new Float4x4(
-                new Float4(m[0],  m[1],  m[2],  m[3]),
-                new Float4(m[4],  m[5],  m[6],  m[7]),
-                new Float4(m[8],  m[9],  m[10], m[11]),
+                new Float4(m[0], m[1], m[2], m[3]),
+                new Float4(m[4], m[5], m[6], m[7]),
+                new Float4(m[8], m[9], m[10], m[11]),
                 new Float4(m[12], m[13], m[14], m[15]));
             DecomposeMatrix(matrix, out Float3 t, out Quaternion r, out Float3 s);
             node.LocalPosition = t;

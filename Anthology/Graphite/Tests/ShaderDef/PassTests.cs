@@ -1,6 +1,6 @@
-using Xunit;
-
 using Prowl.Graphite.ShaderDef.Compiler;
+
+using Xunit;
 
 namespace Prowl.Graphite.ShaderDef.Tests;
 

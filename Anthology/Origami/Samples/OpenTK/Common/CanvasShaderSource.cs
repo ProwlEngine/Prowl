@@ -1,16 +1,17 @@
-// Common GLSL shader source for Canvas rendering, shared across OpenGL-based samples.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Common
+namespace Common;
+
+/// <summary>
+/// Contains GLSL 330 vertex and fragment shader source for the Canvas rendering system
+/// </summary>
+public static class CanvasShaderSource
 {
     /// <summary>
-    /// Contains GLSL 330 vertex and fragment shader source for the Canvas rendering system
+    /// GLSL 330 vertex shader.
     /// </summary>
-    public static class CanvasShaderSource
-    {
-        /// <summary>
-        /// GLSL 330 vertex shader.
-        /// </summary>
-        public const string VertexShader = @"#version 330
+    public const string VertexShader = @"#version 330
 uniform mat4 projection;
 
 layout(location = 0) in vec2 aPosition;
@@ -29,10 +30,10 @@ void main()
     gl_Position = projection * vec4(aPosition, 0.0, 1.0);
 }";
 
-        /// <summary>
-        /// GLSL 330 fragment shader for Canvas rendering.
-        /// </summary>
-        public const string FragmentShader = @"#version 330
+    /// <summary>
+    /// GLSL 330 fragment shader for Canvas rendering.
+    /// </summary>
+    public const string FragmentShader = @"#version 330
 in vec2 fragTexCoord;
 in vec4 fragColor;
 in vec2 fragPos;
@@ -148,10 +149,10 @@ void main()
     finalColor = fill * edgeAlpha * mask;
 }";
 
-        /// <summary>
-        /// Fullscreen-triangle vertex shader for the backdrop blur passes. No vertex buffer needed.
-        /// </summary>
-        public const string BlurVertexShader = @"#version 330
+    /// <summary>
+    /// Fullscreen-triangle vertex shader for the backdrop blur passes. No vertex buffer needed.
+    /// </summary>
+    public const string BlurVertexShader = @"#version 330
 out vec2 vUV;
 void main()
 {
@@ -160,11 +161,11 @@ void main()
     gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }";
 
-        /// <summary>
-        /// Dual Kawase downsample pass. Samples the higher-resolution source into a half-size target.
-        /// 'halfpixel' is half a texel of the source; 'offset' scales the sample spread (blur strength).
-        /// </summary>
-        public const string BlurDownsampleShader = @"#version 330
+    /// <summary>
+    /// Dual Kawase downsample pass. Samples the higher-resolution source into a half-size target.
+    /// 'halfpixel' is half a texel of the source; 'offset' scales the sample spread (blur strength).
+    /// </summary>
+    public const string BlurDownsampleShader = @"#version 330
 in vec2 vUV;
 out vec4 frag;
 uniform sampler2D src;
@@ -181,11 +182,11 @@ void main()
     frag = sum / 8.0;
 }";
 
-        /// <summary>
-        /// Dual Kawase upsample pass. Samples the lower-resolution source into a double-size target.
-        /// 'halfpixel' is half a texel of the target; 'offset' scales the sample spread (blur strength).
-        /// </summary>
-        public const string BlurUpsampleShader = @"#version 330
+    /// <summary>
+    /// Dual Kawase upsample pass. Samples the lower-resolution source into a double-size target.
+    /// 'halfpixel' is half a texel of the target; 'offset' scales the sample spread (blur strength).
+    /// </summary>
+    public const string BlurUpsampleShader = @"#version 330
 in vec2 vUV;
 out vec4 frag;
 uniform sampler2D src;
@@ -204,5 +205,4 @@ void main()
     sum += texture(src, vUV + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
     frag = sum / 12.0;
 }";
-    }
 }

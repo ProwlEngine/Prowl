@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -389,25 +392,25 @@ internal static class FbxMeshMapper
                 return result;
 
             case "ByPolygon":
-            {
-                int cursor = 0;
-                for (int f = 0; f < faceSizes.Count; f++)
                 {
-                    T v = Pick(f);
-                    for (int k = 0; k < faceSizes[f]; k++)
-                        result[cursor + k] = v;
-                    cursor += faceSizes[f];
+                    int cursor = 0;
+                    for (int f = 0; f < faceSizes.Count; f++)
+                    {
+                        T v = Pick(f);
+                        for (int k = 0; k < faceSizes[f]; k++)
+                            result[cursor + k] = v;
+                        cursor += faceSizes[f];
+                    }
+                    return result;
                 }
-                return result;
-            }
 
             case "AllSame":
-            {
-                T v = Pick(0);
-                for (int pv = 0; pv < polyVertexCount; pv++)
-                    result[pv] = v;
-                return result;
-            }
+                {
+                    T v = Pick(0);
+                    for (int pv = 0; pv < polyVertexCount; pv++)
+                        result[pv] = v;
+                    return result;
+                }
 
             default:
                 ctx.Log.Warning($"{elementName}: unsupported MappingInformationType '{mapping}'.", "FbxMeshMapper");

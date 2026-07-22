@@ -36,7 +36,7 @@ public class IdTests
 
     private class Renderer : ICanvasRenderer
     {
-        public void Dispose() {}
+        public void Dispose() { }
 
         public object CreateTexture(uint width, uint height)
         {
@@ -48,8 +48,8 @@ public class IdTests
             return (Int2)texture;
         }
 
-        public void SetTextureData(object texture, IntRect bounds, byte[] data) {}
+        public void SetTextureData(object texture, IntRect bounds, byte[] data) { }
 
-        public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls) {}
+        public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls) { }
     }
 }

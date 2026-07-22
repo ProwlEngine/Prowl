@@ -190,7 +190,7 @@ public class EchoObject_Query_Tests
     [InlineData("")]
     [InlineData(null)]
     [InlineData("   ")]
-    public void Find_WithEmptyPath_ReturnsSelf(string path)
+    public void Find_WithEmptyPath_ReturnsSelf(string? path)
     {
         var root = CreateTestData();
 
@@ -421,7 +421,7 @@ public class EchoObject_Query_Tests
         // Test both with nested structure
         item1["name"] = new EchoObject("sword");
         Assert.Equal("name", item1["name"].CompoundKey);
-        Assert.Equal(null, item1["name"].ListIndex); // Not in a list
+        Assert.Null(item1["name"].ListIndex); // Not in a list
     }
 
     [Fact]

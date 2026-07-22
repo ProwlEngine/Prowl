@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Vector;
 
 namespace Prowl.Unwrapper.Tests;
@@ -71,11 +74,11 @@ internal static class Meshes
                 }
         }
         Face(new(-1, -1, -1), new(2, 0, 0), new(0, 2, 0));
-        Face(new(-1, -1,  1), new(2, 0, 0), new(0, 2, 0));
+        Face(new(-1, -1, 1), new(2, 0, 0), new(0, 2, 0));
         Face(new(-1, -1, -1), new(0, 0, 2), new(0, 2, 0));
-        Face(new( 1, -1, -1), new(0, 0, 2), new(0, 2, 0));
+        Face(new(1, -1, -1), new(0, 0, 2), new(0, 2, 0));
         Face(new(-1, -1, -1), new(2, 0, 0), new(0, 0, 2));
-        Face(new(-1,  1, -1), new(2, 0, 0), new(0, 0, 2));
+        Face(new(-1, 1, -1), new(2, 0, 0), new(0, 0, 2));
         return (verts.ToArray(), tris.ToArray());
     }
 

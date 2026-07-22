@@ -77,9 +77,9 @@ public sealed class MultiDropdownBuilder<T>
     public MultiDropdownBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public MultiDropdownBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public MultiDropdownBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public MultiDropdownBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public MultiDropdownBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public MultiDropdownBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public MultiDropdownBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public MultiDropdownBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public MultiDropdownBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ public sealed class MultiDropdownBuilder<T>
         ElementHandle trigHandle = default;
 
         bool subtle = _variant == OrigamiVariant.Subtle;
-        Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
+        Color trigBg = subtle ? Color.Transparent : _theme.Glass; // glass-in field
         Color trigBorder = subtle ? Color.Transparent : _theme.BorderSoft;
         Color trigBorderHover = _theme.BorderStrong;
         // Flex-wrap field (prototype .w2field: height auto, minHeight 32, padding 4, gap 4).

@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+
 using Prowl.Vector;
 
 namespace Prowl.Clay.Formats.Gltf;
@@ -132,9 +136,9 @@ internal sealed class GltfAccessorReader
             int o = i * 16;
             // glTF stores matrices as 16 floats in column-major order.
             result[i] = new Float4x4(
-                new Float4(tmp[o + 0],  tmp[o + 1],  tmp[o + 2],  tmp[o + 3]),
-                new Float4(tmp[o + 4],  tmp[o + 5],  tmp[o + 6],  tmp[o + 7]),
-                new Float4(tmp[o + 8],  tmp[o + 9],  tmp[o + 10], tmp[o + 11]),
+                new Float4(tmp[o + 0], tmp[o + 1], tmp[o + 2], tmp[o + 3]),
+                new Float4(tmp[o + 4], tmp[o + 5], tmp[o + 6], tmp[o + 7]),
+                new Float4(tmp[o + 8], tmp[o + 9], tmp[o + 10], tmp[o + 11]),
                 new Float4(tmp[o + 12], tmp[o + 13], tmp[o + 14], tmp[o + 15]));
         }
         return result;

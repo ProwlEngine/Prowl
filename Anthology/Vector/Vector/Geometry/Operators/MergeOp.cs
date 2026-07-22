@@ -7,43 +7,42 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Prowl.Vector.Geometry.Operators
+namespace Prowl.Vector.Geometry.Operators;
+
+internal static class MergeOp
 {
-    internal static class MergeOp
+    internal static void Merge(GeometryData mesh, GeometryData other)
     {
-        internal static void Merge(GeometryData mesh, GeometryData other)
+        var newVerts = new GeometryData.Vertex[other.Vertices.Count];
+        int i = 0;
+
+        // Copy all vertices and their attributes
+        foreach (var v in other.Vertices)
         {
-            var newVerts = new GeometryData.Vertex[other.Vertices.Count];
-            int i = 0;
+            newVerts[i] = mesh.AddVertex(v.Point);
+            GeometryOperators.AttributeLerp(mesh, newVerts[i], v, v, 1); // Copy all attributes
+            v.Id = i;
+            ++i;
+        }
 
-            // Copy all vertices and their attributes
-            foreach (var v in other.Vertices)
-            {
-                newVerts[i] = mesh.AddVertex(v.Point);
-                GeometryOperators.AttributeLerp(mesh, newVerts[i], v, v, 1); // Copy all attributes
-                v.Id = i;
-                ++i;
-            }
+        // Copy all edges
+        foreach (var e in other.Edges)
+        {
+            mesh.AddEdge(newVerts[e.Vert1.Id], newVerts[e.Vert2.Id]);
+        }
 
-            // Copy all edges
-            foreach (var e in other.Edges)
+        // Copy all faces
+        foreach (var f in other.Faces)
+        {
+            var neighbors = f.NeighborVertices();
+            var newNeighbors = new GeometryData.Vertex[neighbors.Count];
+            int j = 0;
+            foreach (var v in neighbors)
             {
-                mesh.AddEdge(newVerts[e.Vert1.Id], newVerts[e.Vert2.Id]);
+                newNeighbors[j] = newVerts[v.Id];
+                ++j;
             }
-
-            // Copy all faces
-            foreach (var f in other.Faces)
-            {
-                var neighbors = f.NeighborVertices();
-                var newNeighbors = new GeometryData.Vertex[neighbors.Count];
-                int j = 0;
-                foreach (var v in neighbors)
-                {
-                    newNeighbors[j] = newVerts[v.Id];
-                    ++j;
-                }
-                mesh.AddFace(newNeighbors);
-            }
+            mesh.AddFace(newNeighbors);
         }
     }
 }

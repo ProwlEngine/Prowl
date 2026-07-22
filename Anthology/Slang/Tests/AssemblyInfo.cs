@@ -1,3 +1,4 @@
-// Ideally, tests should be isolated and parallelizable - however Slang cannot be run in parallel without creating multiple GlobalSession instances, which is not supported.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]

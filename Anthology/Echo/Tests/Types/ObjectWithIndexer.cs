@@ -6,7 +6,8 @@ namespace Tests.Types;
 public class ObjectWithIndexer
 {
     private readonly Dictionary<string, object> _storage = new();
-    public object this[string key] {
+    public object this[string key]
+    {
         get => _storage[key];
         set => _storage[key] = value;
     }

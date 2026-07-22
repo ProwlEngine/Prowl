@@ -126,31 +126,31 @@ public sealed class ToggleBuilder
     public ToggleBuilder Primary() => Variant(OrigamiVariant.Primary);
     public ToggleBuilder Success() => Variant(OrigamiVariant.Success);
     public ToggleBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public ToggleBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public ToggleBuilder Info()    => Variant(OrigamiVariant.Info);
-    public ToggleBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public ToggleBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public ToggleBuilder Info() => Variant(OrigamiVariant.Info);
+    public ToggleBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Style ──────────────────────────────────────────────────────────
 
     public ToggleBuilder Style(ToggleStyle style) { _style = style; return this; }
-    public ToggleBuilder AsSwitch()   => Style(ToggleStyle.Switch);
+    public ToggleBuilder AsSwitch() => Style(ToggleStyle.Switch);
     public ToggleBuilder AsCheckbox() => Style(ToggleStyle.Checkbox);
-    public ToggleBuilder AsRadio()    => Style(ToggleStyle.Radio);
+    public ToggleBuilder AsRadio() => Style(ToggleStyle.Radio);
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
     /// <summary>Visual size in pixels (default 18). The track / box / dot scale around this.</summary>
     public ToggleBuilder Size(float size) { _size = MathF.Max(12, size); return this; }
-    public ToggleBuilder Small()  => Size(14);
+    public ToggleBuilder Small() => Size(14);
     public ToggleBuilder Medium() => Size(18);
-    public ToggleBuilder Large()  => Size(24);
+    public ToggleBuilder Large() => Size(24);
     /// <summary>Stretch the row to fill the available width — useful when label is on the left so the visual hugs the right edge.</summary>
     public ToggleBuilder Stretch(bool stretch = true) { _stretch = stretch; return this; }
 
     // ── Label / description ────────────────────────────────────────────
 
     public ToggleBuilder Label(string? text) { _label = text; return this; }
-    public ToggleBuilder LabelLeft(string text)  { _label = text; _labelPosition = ToggleLabelPosition.Left; return this; }
+    public ToggleBuilder LabelLeft(string text) { _label = text; _labelPosition = ToggleLabelPosition.Left; return this; }
     public ToggleBuilder LabelRight(string text) { _label = text; _labelPosition = ToggleLabelPosition.Right; return this; }
     public ToggleBuilder NoLabel() { _label = null; _labelPosition = ToggleLabelPosition.None; return this; }
     /// <summary>Muted subtitle drawn below the label, for "settings row with explanation" patterns.</summary>
@@ -195,19 +195,19 @@ public sealed class ToggleBuilder
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp    = _theme.Get(_variant);
-        var ink     = _theme.Ink;
-        var font    = _theme.Font;
-        var icons   = _theme.Icons;
+        var ramp = _theme.Get(_variant);
+        var ink = _theme.Ink;
+        var font = _theme.Font;
+        var icons = _theme.Icons;
         var metrics = _theme.Metrics;
 
         bool interactive = !_disabled && !_readOnly;
-        bool hasError    = !string.IsNullOrEmpty(_error);
+        bool hasError = !string.IsNullOrEmpty(_error);
         string? helpLine = hasError ? _error : _helperText;
-        float helperH    = !string.IsNullOrEmpty(helpLine) ? 16f : 0f;
+        float helperH = !string.IsNullOrEmpty(helpLine) ? 16f : 0f;
 
         bool drawLabel = _labelPosition != ToggleLabelPosition.None && !string.IsNullOrEmpty(_label);
-        bool hasDesc   = !string.IsNullOrEmpty(_description);
+        bool hasDesc = !string.IsNullOrEmpty(_description);
 
         // Visual footprint
         (float vw, float vh) = _style switch
@@ -250,7 +250,7 @@ public sealed class ToggleBuilder
                     _setter(!_value);
                 }
 
-                bool labelLeft  = drawLabel && _labelPosition == ToggleLabelPosition.Left;
+                bool labelLeft = drawLabel && _labelPosition == ToggleLabelPosition.Left;
                 bool labelRight = drawLabel && _labelPosition == ToggleLabelPosition.Right;
 
                 if (labelLeft)
@@ -291,14 +291,14 @@ public sealed class ToggleBuilder
 
     private void DrawLabelColumn(float leftPad, float rightPad, bool stretch)
     {
-        var ink     = _theme.Ink;
-        var font    = _theme.Font;
+        var ink = _theme.Ink;
+        var font = _theme.Font;
         var metrics = _theme.Metrics;
         if (font == null) return;
 
         bool hasDesc = !string.IsNullOrEmpty(_description);
         Color labelColor = _disabled ? ink.C300 : ink.C500;
-        Color descColor  = _disabled ? ink.C200 : ink.C300;
+        Color descColor = _disabled ? ink.C200 : ink.C300;
 
         UnitValue colW = stretch ? UnitValue.Stretch() : UnitValue.Auto;
 
@@ -357,9 +357,9 @@ public sealed class ToggleBuilder
 
         switch (_style)
         {
-            case ToggleStyle.Switch:   DrawSwitch(t, ramp, ink, leftPad, rightPad); break;
+            case ToggleStyle.Switch: DrawSwitch(t, ramp, ink, leftPad, rightPad); break;
             case ToggleStyle.Checkbox: DrawCheckbox(t, ramp, ink, leftPad, rightPad); break;
-            case ToggleStyle.Radio:    DrawRadio(t, ramp, ink, leftPad, rightPad); break;
+            case ToggleStyle.Radio: DrawRadio(t, ramp, ink, leftPad, rightPad); break;
         }
     }
 
@@ -373,7 +373,7 @@ public sealed class ToggleBuilder
     private OrigamiRamp OnRamp() => _variant switch
     {
         OrigamiVariant.Default => _theme.Primary,
-        OrigamiVariant.Subtle  => _theme.Neutral,
+        OrigamiVariant.Subtle => _theme.Neutral,
         _ => _theme.Get(_variant),
     };
 
@@ -395,7 +395,7 @@ public sealed class ToggleBuilder
 
     private void DrawSwitch(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
-        var font    = _theme.Font;
+        var font = _theme.Font;
         var metrics = _theme.Metrics;
 
         float trackW = _size * 1.9f;
@@ -403,18 +403,18 @@ public sealed class ToggleBuilder
 
         // Capture every per-frame value the closure needs — the builder doesn't survive past Show().
         var onRamp = OnRamp();
-        Color offBg   = Color.FromArgb(26, 255, 255, 255); // light translucent pill (prototype .tg)
-        Color onBg    = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
+        Color offBg = Color.FromArgb(26, 255, 255, 255); // light translucent pill (prototype .tg)
+        Color onBg = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color trackBg = OrigamiRamp.LerpColor(offBg, onBg, t);
-        Color borderCol  = _theme.Neutral.C200;
-        Color knobFill   = _theme.Ink.C600;
-        Color textOnFg   = _theme.Ink.C600;
-        Color textOffFg  = _theme.Ink.C500;
+        Color borderCol = _theme.Neutral.C200;
+        Color knobFill = _theme.Ink.C600;
+        Color textOnFg = _theme.Ink.C600;
+        Color textOffFg = _theme.Ink.C500;
         Color glyphOffFg = _theme.Ink.C300;
         if (_disabled)
         {
             // Fade the whole control to ~40% (prototype disabled toggle is just dimmed, not recoloured).
-            trackBg  = Color.FromArgb((int)(trackBg.A * 0.4f), trackBg.R, trackBg.G, trackBg.B);
+            trackBg = Color.FromArgb((int)(trackBg.A * 0.4f), trackBg.R, trackBg.G, trackBg.B);
             knobFill = _theme.Ink.C300;
         }
 
@@ -433,8 +433,8 @@ public sealed class ToggleBuilder
                 float y = (float)rect.Min.Y;
                 float w = (float)rect.Size.X;
                 float h = (float)rect.Size.Y;
-                float pad   = MathF.Max(2f, h * 0.12f);
-                float knob  = h - pad * 2f;
+                float pad = MathF.Max(2f, h * 0.12f);
+                float knob = h - pad * 2f;
                 float knobX = x + pad + (w - knob - pad * 2f) * EaseOutBack(t); // springy slide
                 float knobY = y + pad;
                 float textBoxW = w - knob - pad * 2f;
@@ -512,7 +512,7 @@ public sealed class ToggleBuilder
         float effT = isIndet ? 1f : t;
 
         var onRamp = OnRamp();
-        Color onColor  = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
+        Color onColor = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color offColor = _theme.Neutral.C200;
         Color fill = OrigamiRamp.LerpColor(offColor, onColor, effT);
         Color border = _disabled ? _theme.Neutral.C400

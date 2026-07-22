@@ -1,25 +1,27 @@
-﻿namespace Prowl.PaperUI.LayoutEngine
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.PaperUI.LayoutEngine;
+
+internal class StretchItem
 {
-    internal class StretchItem
+    public enum ItemTypes { Before, Size, After }
+
+    public int Index { get; set; }
+    public float Factor { get; set; }
+    public ItemTypes ItemType { get; set; }
+    public float Violation { get; set; } = 0f;
+    public float Computed { get; set; } = 0f;
+    public bool Frozen { get; set; } = false;
+    public float Min { get; set; }
+    public float Max { get; set; }
+
+    public StretchItem(int index, float factor, ItemTypes itemType, float min, float max)
     {
-        public enum ItemTypes { Before, Size, After }
-
-        public int Index { get; set; }
-        public float Factor { get; set; }
-        public ItemTypes ItemType { get; set; }
-        public float Violation { get; set; } = 0f;
-        public float Computed { get; set; } = 0f;
-        public bool Frozen { get; set; } = false;
-        public float Min { get; set; }
-        public float Max { get; set; }
-
-        public StretchItem(int index, float factor, ItemTypes itemType, float min, float max)
-        {
-            Index = index;
-            Factor = factor;
-            ItemType = itemType;
-            Min = min;
-            Max = max;
-        }
+        Index = index;
+        Factor = factor;
+        ItemType = itemType;
+        Min = min;
+        Max = max;
     }
 }

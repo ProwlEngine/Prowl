@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -105,8 +109,8 @@ public sealed class GltfAnimationTests
             foreach (var b in clip.Bindings)
                 seen.Add(b.Curve.Interpolation);
 
-        Assert.Contains(AnimationInterpolation.Step,        seen);
-        Assert.Contains(AnimationInterpolation.Linear,      seen);
+        Assert.Contains(AnimationInterpolation.Step, seen);
+        Assert.Contains(AnimationInterpolation.Linear, seen);
         Assert.Contains(AnimationInterpolation.CubicSpline, seen);
     }
 }

@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
@@ -158,17 +161,17 @@ internal sealed class FbxBinaryReader
                 p.DoubleValue = ReadDouble();
                 return p;
             case FbxPropertyType.String:
-            {
-                int length = ReadInt32();
-                p.StringValue = ReadFixedString(length);
-                return p;
-            }
+                {
+                    int length = ReadInt32();
+                    p.StringValue = ReadFixedString(length);
+                    return p;
+                }
             case FbxPropertyType.Raw:
-            {
-                int length = ReadInt32();
-                p.BlobValue = ReadFixedBytes(length);
-                return p;
-            }
+                {
+                    int length = ReadInt32();
+                    p.BlobValue = ReadFixedBytes(length);
+                    return p;
+                }
             case FbxPropertyType.ArrayInt32:
             case FbxPropertyType.ArrayInt64:
             case FbxPropertyType.ArrayFloat:
@@ -207,33 +210,33 @@ internal sealed class FbxBinaryReader
         switch (type)
         {
             case FbxPropertyType.ArrayInt32:
-            {
-                var arr = new int[length];
-                Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
-                p.IntArrayValue = arr;
-                break;
-            }
+                {
+                    var arr = new int[length];
+                    Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
+                    p.IntArrayValue = arr;
+                    break;
+                }
             case FbxPropertyType.ArrayInt64:
-            {
-                var arr = new long[length];
-                Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
-                p.LongArrayValue = arr;
-                break;
-            }
+                {
+                    var arr = new long[length];
+                    Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
+                    p.LongArrayValue = arr;
+                    break;
+                }
             case FbxPropertyType.ArrayFloat:
-            {
-                var arr = new float[length];
-                Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
-                p.FloatArrayValue = arr;
-                break;
-            }
+                {
+                    var arr = new float[length];
+                    Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
+                    p.FloatArrayValue = arr;
+                    break;
+                }
             case FbxPropertyType.ArrayDouble:
-            {
-                var arr = new double[length];
-                Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
-                p.DoubleArrayValue = arr;
-                break;
-            }
+                {
+                    var arr = new double[length];
+                    Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
+                    p.DoubleArrayValue = arr;
+                    break;
+                }
             case FbxPropertyType.ArrayByte:
             case FbxPropertyType.ArrayBool:
                 p.BlobValue = raw;

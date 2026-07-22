@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 #if NETSTANDARD2_1
 // Polyfills for net5+/net6+ APIs that netstandard2.1 lacks (and PolySharp does not provide).
 
@@ -19,7 +22,7 @@ namespace System.Collections.Generic
     {
         private ReferenceEqualityComparer() { }
         public static ReferenceEqualityComparer Instance { get; } = new ReferenceEqualityComparer();
-        public bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
         public int GetHashCode(object? obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
         bool System.Collections.IEqualityComparer.Equals(object? x, object? y) => ReferenceEquals(x, y);
         int System.Collections.IEqualityComparer.GetHashCode(object obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);

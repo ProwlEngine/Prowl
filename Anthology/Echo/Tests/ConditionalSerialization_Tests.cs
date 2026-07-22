@@ -124,7 +124,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestFieldCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithFieldCondition {
+        var obj = new ObjectWithFieldCondition
+        {
             shouldInclude = true,
             ConditionalData = "included data"
         };
@@ -141,7 +142,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestFieldCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithFieldCondition {
+        var obj = new ObjectWithFieldCondition
+        {
             shouldInclude = false,
             ConditionalData = "excluded data"
         };
@@ -161,7 +163,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMethodCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithMethodCondition {
+        var obj = new ObjectWithMethodCondition
+        {
             threshold = 10,
             Value = 50 // 50 > 10, so should serialize
         };
@@ -177,7 +180,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMethodCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithMethodCondition {
+        var obj = new ObjectWithMethodCondition
+        {
             threshold = 100,
             Value = 50 // 50 < 100, so should not serialize
         };
@@ -196,7 +200,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateFieldCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithPrivateFieldCondition {
+        var obj = new ObjectWithPrivateFieldCondition
+        {
             Number = 3.14
         };
         obj.Activate();
@@ -211,7 +216,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateFieldCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithPrivateFieldCondition {
+        var obj = new ObjectWithPrivateFieldCondition
+        {
             Number = 3.14
         };
         // _isActive is false by default
@@ -226,7 +232,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateMethodCondition_WhenTrue_ShouldSerializeField()
     {
-        var obj = new ObjectWithPrivateMethodCondition {
+        var obj = new ObjectWithPrivateMethodCondition
+        {
             state = "active",
             Numbers = new[] { 1, 2, 3 }
         };
@@ -242,7 +249,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestPrivateMethodCondition_WhenFalse_ShouldNotSerializeField()
     {
-        var obj = new ObjectWithPrivateMethodCondition {
+        var obj = new ObjectWithPrivateMethodCondition
+        {
             state = "inactive",
             Numbers = new[] { 1, 2, 3 }
         };
@@ -261,7 +269,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_MixedConditions()
     {
-        var obj = new ObjectWithMultipleConditionalFields {
+        var obj = new ObjectWithMultipleConditionalFields
+        {
             condition1 = true,
             condition2 = false,
             Field1 = "field1",
@@ -280,7 +289,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_AllTrue()
     {
-        var obj = new ObjectWithMultipleConditionalFields {
+        var obj = new ObjectWithMultipleConditionalFields
+        {
             condition1 = true,
             condition2 = true,
             Field1 = "field1",
@@ -299,7 +309,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestMultipleConditionalFields_AllFalse()
     {
-        var obj = new ObjectWithMultipleConditionalFields {
+        var obj = new ObjectWithMultipleConditionalFields
+        {
             condition1 = false,
             condition2 = false,
             Field1 = "field1",
@@ -322,7 +333,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInvalidCondition_ShouldDefaultToSerializing()
     {
-        var obj = new ObjectWithInvalidCondition {
+        var obj = new ObjectWithInvalidCondition
+        {
             Value = "test value"
         };
 
@@ -336,7 +348,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestNonBoolCondition_ShouldDefaultToSerializing()
     {
-        var obj = new ObjectWithNonBoolCondition {
+        var obj = new ObjectWithNonBoolCondition
+        {
             NotABool = 5,
             Value = "test value"
         };
@@ -355,7 +368,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalField_WithNull_WhenConditionTrue()
     {
-        var obj = new ObjectWithNullConditionalField {
+        var obj = new ObjectWithNullConditionalField
+        {
             ShouldSerialize = true,
             ConditionalNull = null
         };
@@ -370,7 +384,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalField_WithNull_WhenConditionFalse()
     {
-        var obj = new ObjectWithNullConditionalField {
+        var obj = new ObjectWithNullConditionalField
+        {
             ShouldSerialize = false,
             ConditionalNull = null
         };
@@ -385,7 +400,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalWithIgnoreOnNull_WhenConditionTrueButValueNull()
     {
-        var obj = new ObjectWithConditionalAndIgnoreOnNull {
+        var obj = new ObjectWithConditionalAndIgnoreOnNull
+        {
             ShouldSerialize = true,
             ConditionalValue = null
         };
@@ -401,7 +417,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestConditionalWithIgnoreOnNull_WhenConditionFalse()
     {
-        var obj = new ObjectWithConditionalAndIgnoreOnNull {
+        var obj = new ObjectWithConditionalAndIgnoreOnNull
+        {
             ShouldSerialize = false,
             ConditionalValue = null
         };
@@ -421,7 +438,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInheritance_ConditionFromBaseClass()
     {
-        var obj = new DerivedObjectWithCondition {
+        var obj = new DerivedObjectWithCondition
+        {
             ShouldSerialize = true,
             ConditionalValue = 100,
             DerivedValue = 2.71f
@@ -438,7 +456,8 @@ public class ConditionalSerialization_Tests
     [Fact]
     public void TestInheritance_ConditionFromBaseClass_WhenFalse()
     {
-        var obj = new DerivedObjectWithCondition {
+        var obj = new DerivedObjectWithCondition
+        {
             ShouldSerialize = false,
             ConditionalValue = 100,
             DerivedValue = 2.71f

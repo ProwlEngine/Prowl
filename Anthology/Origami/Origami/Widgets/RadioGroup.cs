@@ -68,14 +68,14 @@ public sealed class RadioGroupBuilder<T>
     public RadioGroupBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public RadioGroupBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public RadioGroupBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public RadioGroupBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public RadioGroupBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public RadioGroupBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public RadioGroupBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public RadioGroupBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public RadioGroupBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Layout ─────────────────────────────────────────────────────────
 
     public RadioGroupBuilder<T> Orientation(RadioGroupOrientation orientation) { _orientation = orientation; return this; }
-    public RadioGroupBuilder<T> Vertical()   => Orientation(RadioGroupOrientation.Vertical);
+    public RadioGroupBuilder<T> Vertical() => Orientation(RadioGroupOrientation.Vertical);
     public RadioGroupBuilder<T> Horizontal() => Orientation(RadioGroupOrientation.Horizontal);
     public RadioGroupBuilder<T> Size(float size) { _size = MathF.Max(12, size); return this; }
     public RadioGroupBuilder<T> Gap(float pixels) { _gap = MathF.Max(0, pixels); return this; }

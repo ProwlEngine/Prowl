@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -135,7 +138,7 @@ public static class AutoAtlasPacker
         {
             var p = placements[i];
             var offset = new Float2(p.x / (float)atlasWidth, p.y / (float)atlasHeight);
-            var scale  = new Float2(p.w / (float)atlasWidth, p.h / (float)atlasHeight);
+            var scale = new Float2(p.w / (float)atlasWidth, p.h / (float)atlasHeight);
             bakeInstances[i] = targets[p.atlas].AddBakeInstance(
                 meshes[i].mesh, meshes[i].transform, offset, scale, bakeUVLayer);
         }
@@ -218,13 +221,13 @@ public static class AutoAtlasPacker
             var idx = mesh.MaterialGroups[g].Indices;
             for (int i = 0; i < idx.Length; i += 3)
             {
-                var v0 = Float4x4.TransformPoint(positions[idx[i    ]], transform);
+                var v0 = Float4x4.TransformPoint(positions[idx[i]], transform);
                 var v1 = Float4x4.TransformPoint(positions[idx[i + 1]], transform);
                 var v2 = Float4x4.TransformPoint(positions[idx[i + 2]], transform);
                 float wArea = Float3.Length(Float3.Cross(v1 - v0, v2 - v0)) * 0.5f;
                 if (wArea < 1e-9f) continue;
 
-                var a = uv[idx[i    ]];
+                var a = uv[idx[i]];
                 var b = uv[idx[i + 1]];
                 var c = uv[idx[i + 2]];
                 float uArea = System.Math.Abs((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)) * 0.5f;

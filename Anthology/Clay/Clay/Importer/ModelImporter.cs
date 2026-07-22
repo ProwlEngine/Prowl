@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Formats.Fbx;
 using Prowl.Clay.Formats.Gltf;
 using Prowl.Clay.Formats.Wavefront;
@@ -90,8 +93,8 @@ public static class ModelImporter
         IModelFormat reader = format switch
         {
             "gltf" or "glb" or "vrm" => new GltfFormat(),
-            "obj"                    => new ObjFormat(),
-            "fbx"                    => new FbxFormat(),
+            "obj" => new ObjFormat(),
+            "fbx" => new FbxFormat(),
             _ => throw new ImportException($"Unsupported model format '{format}'.", sourcePath, format),
         };
 

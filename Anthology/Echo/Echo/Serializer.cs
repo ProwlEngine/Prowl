@@ -1,11 +1,11 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Concurrent;
+
 using Echo.Logging;
 
 using Prowl.Echo.Formatters;
-
-using System.Collections.Concurrent;
 
 namespace Prowl.Echo;
 
@@ -13,7 +13,7 @@ namespace Prowl.Echo;
 public class TypeEnvelope
 {
     public string? TypeInfo { get; set; }
-    public EchoObject Data { get; set; }
+    public required EchoObject Data { get; set; }
     public bool IsTypePreserved => TypeInfo != null;
 }
 

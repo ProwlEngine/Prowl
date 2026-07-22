@@ -7,8 +7,8 @@ using ImageMagick;
 using Prowl.Clay.Importer;
 using Prowl.Graphite;
 using Prowl.Graphite.Samples;
-using Prowl.Vector;
 using Prowl.Unwrapper;
+using Prowl.Vector;
 
 namespace Prowl.Graphite.Samples.PBRRenderer;
 

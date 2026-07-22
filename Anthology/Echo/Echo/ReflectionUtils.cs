@@ -62,7 +62,8 @@ public static class ReflectionUtils
 
     internal static Type? FindTypeByName(string qualifiedTypeName)
     {
-        return TypeCache.GetOrAdd(qualifiedTypeName, typeName => {
+        return TypeCache.GetOrAdd(qualifiedTypeName, typeName =>
+        {
             // First try direct type lookup (works for types in the default AssemblyLoadContext)
             Type? t = Type.GetType(typeName);
             if (t != null)
@@ -143,7 +144,8 @@ public static class ReflectionUtils
     internal static CachedFieldInfo[] GetSerializableFields(this object target)
     {
         Type targetType = target.GetType();
-        return SerializableFieldsCache.GetOrAdd(targetType.TypeHandle, _ => {
+        return SerializableFieldsCache.GetOrAdd(targetType.TypeHandle, _ =>
+        {
             const BindingFlags flags = BindingFlags.Public |
                                      BindingFlags.NonPublic |
                                      BindingFlags.Instance |

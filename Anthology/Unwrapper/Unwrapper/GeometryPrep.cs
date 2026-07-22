@@ -1,4 +1,8 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Unwrapper;
@@ -216,21 +220,21 @@ internal static class GeometryPrep
         {
             // Probe all 27 neighbouring cells so positions on a cell boundary still find each other.
             for (int dx = -1; dx <= 1; ++dx)
-            for (int dy = -1; dy <= 1; ++dy)
-            for (int dz = -1; dz <= 1; ++dz)
-            {
-                Double3 probe = p + new Double3(dx * cell, dy * cell, dz * cell);
-                long key = Bucket(probe);
-                if (!bucket.TryGetValue(key, out var candidates)) continue;
-                foreach (int candidate in candidates)
-                {
-                    if (Double3.Distance(p, welded[candidate]) > WeldDistance) continue;
-                    // -0.9 dot = "facing within ~155° of each other"; tighter than that and the
-                    // crease gets respected (vertices stay separate).
-                    if (Double3.Dot(normal, weldedNormals[candidate]) < -0.9) continue;
-                    return candidate;
-                }
-            }
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dz = -1; dz <= 1; ++dz)
+                    {
+                        Double3 probe = p + new Double3(dx * cell, dy * cell, dz * cell);
+                        long key = Bucket(probe);
+                        if (!bucket.TryGetValue(key, out var candidates)) continue;
+                        foreach (int candidate in candidates)
+                        {
+                            if (Double3.Distance(p, welded[candidate]) > WeldDistance) continue;
+                            // -0.9 dot = "facing within ~155° of each other"; tighter than that and the
+                            // crease gets respected (vertices stay separate).
+                            if (Double3.Dot(normal, weldedNormals[candidate]) < -0.9) continue;
+                            return candidate;
+                        }
+                    }
 
             int newIndex = welded.Count;
             welded.Add(p);

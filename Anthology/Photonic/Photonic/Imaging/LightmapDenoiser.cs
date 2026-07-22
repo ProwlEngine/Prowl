@@ -1,5 +1,8 @@
-using Prowl.Vector;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Photonic.Rasterization;
+using Prowl.Vector;
 
 namespace Prowl.Photonic.Imaging;
 
@@ -69,31 +72,31 @@ internal static class LightmapDenoiser
 
                     float sumR = 0f, sumG = 0f, sumB = 0f, wsum = 0f;
                     for (int dy = -2; dy <= 2; dy++)
-                    for (int dx = -2; dx <= 2; dx++)
-                    {
-                        int qx = x + dx * step, qy = y + dy * step;
-                        if (qx < 0 || qx >= width || qy < 0 || qy >= height) continue;
-                        int q = qy * width + qx;
-                        if (!covered[q]) continue;
+                        for (int dx = -2; dx <= 2; dx++)
+                        {
+                            int qx = x + dx * step, qy = y + dy * step;
+                            if (qx < 0 || qx >= width || qy < 0 || qy >= height) continue;
+                            int q = qy * width + qx;
+                            if (!covered[q]) continue;
 
-                        float ndot = Float3.Dot(np, samples[q].Normal);
-                        if (ndot <= 0f) continue;
+                            float ndot = Float3.Dot(np, samples[q].Normal);
+                            if (ndot <= 0f) continue;
 
-                        int q3 = q * 3;
-                        float h = Kernel[dx + 2] * Kernel[dy + 2];
-                        float wN = System.MathF.Pow(ndot, normalPhi);
+                            int q3 = q * 3;
+                            float h = Kernel[dx + 2] * Kernel[dy + 2];
+                            float wN = System.MathF.Pow(ndot, normalPhi);
 
-                        Float3 d = samples[q].Position - xp;
-                        float perp = Float3.Dot(d, np);                 // distance off the centre texel's plane
-                        float par2 = System.MathF.Max(0f, Float3.Dot(d, d) - perp * perp); // distance along it
-                        float wP = System.MathF.Exp(-par2 * invPar2 - perp * perp * invPerp2);
+                            Float3 d = samples[q].Position - xp;
+                            float perp = Float3.Dot(d, np);                 // distance off the centre texel's plane
+                            float par2 = System.MathF.Max(0f, Float3.Dot(d, d) - perp * perp); // distance along it
+                            float wP = System.MathF.Exp(-par2 * invPar2 - perp * perp * invPerp2);
 
-                        // No radiance edge-stop: smoothing is driven purely by geometry (same surface +
-                        // same plane), so Monte-Carlo noise is averaged out regardless of its magnitude.
-                        float w = h * wN * wP;
-                        sumR += src[q3] * w; sumG += src[q3 + 1] * w; sumB += src[q3 + 2] * w;
-                        wsum += w;
-                    }
+                            // No radiance edge-stop: smoothing is driven purely by geometry (same surface +
+                            // same plane), so Monte-Carlo noise is averaged out regardless of its magnitude.
+                            float w = h * wN * wP;
+                            sumR += src[q3] * w; sumG += src[q3 + 1] * w; sumB += src[q3 + 2] * w;
+                            wsum += w;
+                        }
 
                     if (wsum > 1e-8f)
                     {

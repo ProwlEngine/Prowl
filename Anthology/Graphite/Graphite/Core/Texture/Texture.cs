@@ -8,7 +8,7 @@ namespace Prowl.Graphite;
 public abstract class Texture : DeviceResource, MappableResource, IDisposable, BindableResource
 {
     private readonly object _fullTextureViewLock = new();
-    private TextureView _fullTextureView;
+    private required TextureView _fullTextureView;
 
     /// <summary>
     /// Gets subresource index from mip level and array layer.

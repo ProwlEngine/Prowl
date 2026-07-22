@@ -15,7 +15,7 @@ public struct NetworkPosition
 
 public abstract class MonoBehaviour
 {
-    public string Name;
+    public required string Name;
 }
 
 public class Component : MonoBehaviour
@@ -25,17 +25,17 @@ public class Component : MonoBehaviour
 
 public class GameObject
 {
-    public string Name;
+    public required string Name;
 
     public List<MonoBehaviour> Components = new List<MonoBehaviour>();
 }
 
 public class NodeWithMultipleRefs : ISerializable
 {
-    public string Name;
-    public NodeWithMultipleRefs Left;
-    public NodeWithMultipleRefs Right;
-    public NodeWithMultipleRefs Parent;
+    public required string Name;
+    public required NodeWithMultipleRefs Left;
+    public required NodeWithMultipleRefs Right;
+    public required NodeWithMultipleRefs Parent;
 
     public void Serialize(ref EchoObject compound, SerializationContext ctx)
     {
@@ -637,7 +637,8 @@ public class General_Tests
     public void TypeMode_ComplexObjects_WithCollections()
     {
         // Arrange
-        var complex = new ComplexObject {
+        var complex = new ComplexObject
+        {
             Object = new SimpleObject(),
             Numbers = new List<int> { 1, 2, 3 },
             Values = new Dictionary<string, float> { { "test", 1.0f } }
@@ -655,7 +656,8 @@ public class General_Tests
         Assert.False(resultExplicit.TryGet("$type", out _)); // Explicit target matches, no type needed
 
         // Arrange
-        var complex2 = new ComplexObject {
+        var complex2 = new ComplexObject
+        {
             Object = new SimpleInheritedObject(),
             Numbers = new List<int> { 1, 2, 3 },
             Values = new Dictionary<string, float> { { "test", 1.0f } }
@@ -1182,20 +1184,20 @@ public class General_Tests
     }
 
     #region PolyMorphic Deserialize
-    
+
     #region Test Models
-    public interface IAnimal {  }
+    public interface IAnimal { }
 
     public class Dog : IAnimal
     {
-        public string Species;
-        public string Breed;
+        public required string Species;
+        public required string Breed;
     }
 
     public class Person
     {
         [FormerlySerializedAs("FULLNAME")]
-        public string Name;
+        public required string Name;
 
         public int Age;
     }
@@ -1301,7 +1303,8 @@ public class General_Tests
 
         public object Deserialize(EchoObject value, Type targetType, SerializationContext context)
         {
-            return new Dog {
+            return new Dog
+            {
                 Breed = "Processed: " + value["Breed"].StringValue,
                 Species = "Canine"
             };

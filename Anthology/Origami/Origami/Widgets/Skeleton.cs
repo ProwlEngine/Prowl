@@ -125,9 +125,9 @@ public sealed class SkeletonBuilder
     {
         return _shape switch
         {
-            SkeletonShape.Pill   => MathF.Min(_width, _height) * 0.5f,
+            SkeletonShape.Pill => MathF.Min(_width, _height) * 0.5f,
             SkeletonShape.Circle => MathF.Min(_width, _height) * 0.5f,
-            _                    => _radiusOverride ?? 6f,
+            _ => _radiusOverride ?? 6f,
         };
     }
 

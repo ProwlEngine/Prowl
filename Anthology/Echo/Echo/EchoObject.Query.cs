@@ -85,7 +85,8 @@ public sealed partial class EchoObject
             }
 
             // Handle collections
-            return tag.TagType switch {
+            return tag.TagType switch
+            {
                 EchoType.List => typeof(T).IsAssignableTo(typeof(IEnumerable<EchoObject>))
                     ? (T)(object)tag.List
                     : defaultValue,

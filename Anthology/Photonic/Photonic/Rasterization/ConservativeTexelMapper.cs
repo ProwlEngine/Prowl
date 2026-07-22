@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic.Rasterization;
 
@@ -44,7 +47,7 @@ internal static class ConservativeTexelMapper
 
         int ix0 = System.Math.Max(0, (int)System.Math.Floor(minX));
         int iy0 = System.Math.Max(0, (int)System.Math.Floor(minY));
-        int ix1 = System.Math.Min(ws.Width  - 1, (int)System.Math.Ceiling(maxX));
+        int ix1 = System.Math.Min(ws.Width - 1, (int)System.Math.Ceiling(maxX));
         int iy1 = System.Math.Min(ws.Height - 1, (int)System.Math.Ceiling(maxY));
 
         // pre-compute triangle area & edge sign for barycentric lookups
@@ -68,69 +71,69 @@ internal static class ConservativeTexelMapper
         float texelRadius = (float)System.Math.Sqrt(worldPerPixel) * 0.5f;
 
         for (int py = iy0; py <= iy1; py++)
-        for (int px = ix0; px <= ix1; px++)
-        {
-            // conservative coverage: triangle vs pixel-square SAT
-            Float2 pmin = new Float2(px, py);
-            Float2 pmax = new Float2(px + 1, py + 1);
-            if (!TrianglePixelOverlap(p0, p1, p2, pmin, pmax)) continue;
-
-            // sample barycentrics at the pixel centre; if outside, snap to the closest valid point
-            Float2 sample = new Float2(px + 0.5f, py + 0.5f);
-            float w0 = EdgeFunction(p1, p2, sample) * invArea;
-            float w1 = EdgeFunction(p2, p0, sample) * invArea;
-            float w2 = 1f - w0 - w1;
-            bool strictlyInside = w0 >= 0 && w1 >= 0 && w2 >= 0;
-            if (!strictlyInside)
+            for (int px = ix0; px <= ix1; px++)
             {
-                ClampToTriangle(p0, p1, p2, sample, out w0, out w1, out w2);
-            }
+                // conservative coverage: triangle vs pixel-square SAT
+                Float2 pmin = new Float2(px, py);
+                Float2 pmax = new Float2(px + 1, py + 1);
+                if (!TrianglePixelOverlap(p0, p1, p2, pmin, pmax)) continue;
 
-            // Inset toward triangle centroid by a tiny fraction. Without this, texels right at
-            // chart boundaries have sample positions on triangle edges/vertices, which puts the
-            // ray origin (position + normal*bias) close enough to an adjacent surface that every
-            // shadow ray hits it -> dim "halo" lines tracing every chart edge. Position error is
-            // ~2% of the texel footprint (mm-scale at Sponza), invisible in the bake.
-            const float CentroidBias = 0.02f;
-            const float OneThird = 1f / 3f;
-            w0 = w0 * (1f - CentroidBias) + OneThird * CentroidBias;
-            w1 = w1 * (1f - CentroidBias) + OneThird * CentroidBias;
-            w2 = w2 * (1f - CentroidBias) + OneThird * CentroidBias;
-
-            var pL = v0L * w0 + v1L * w1 + v2L * w2;
-            var nL = n0 * w0 + n1 * w1 + n2 * w2;
-            if (Float3.Dot(nL, nL) < 1e-10f) continue; // skip degenerate normal
-
-            // to world
-            var pW = Raytracing.RayMath.Transform(W, pL, 1f);
-            var nW = Float3.Normalize(Raytracing.RayMath.Transform(NM, nL, 0f));
-
-            var uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
-
-            int idx = py * ws.Width + px;
-            // Strict-inside wins. A new claimant takes the texel if:
-            //   - nobody has claimed it yet, OR
-            //   - this writer is strictly inside but the existing writer was conservative-only.
-            // Two strict writers (which would mean overlapping non-degenerate triangles in atlas space)
-            // still falls back to first-writer-wins; same for two conservative-only writers.
-            bool existing = ws.Covered[idx];
-            bool shouldWrite = !existing
-                || (strictlyInside && !ws.Samples[idx].StrictlyInside);
-            if (shouldWrite)
-            {
-                ws.Covered[idx] = true;
-                ws.Samples[idx] = new TexelSample
+                // sample barycentrics at the pixel centre; if outside, snap to the closest valid point
+                Float2 sample = new Float2(px + 0.5f, py + 0.5f);
+                float w0 = EdgeFunction(p1, p2, sample) * invArea;
+                float w1 = EdgeFunction(p2, p0, sample) * invArea;
+                float w2 = 1f - w0 - w1;
+                bool strictlyInside = w0 >= 0 && w1 >= 0 && w2 >= 0;
+                if (!strictlyInside)
                 {
-                    Position = pW,
-                    Normal = nW,
-                    InstanceIndex = instanceIndex,
-                    MaterialGroupIndex = materialGroupIndex,
-                    UV0 = uv0,
-                    WorldRadius = texelRadius,
-                    StrictlyInside = strictlyInside,
-                };
+                    ClampToTriangle(p0, p1, p2, sample, out w0, out w1, out w2);
+                }
+
+                // Inset toward triangle centroid by a tiny fraction. Without this, texels right at
+                // chart boundaries have sample positions on triangle edges/vertices, which puts the
+                // ray origin (position + normal*bias) close enough to an adjacent surface that every
+                // shadow ray hits it -> dim "halo" lines tracing every chart edge. Position error is
+                // ~2% of the texel footprint (mm-scale at Sponza), invisible in the bake.
+                const float CentroidBias = 0.02f;
+                const float OneThird = 1f / 3f;
+                w0 = w0 * (1f - CentroidBias) + OneThird * CentroidBias;
+                w1 = w1 * (1f - CentroidBias) + OneThird * CentroidBias;
+                w2 = w2 * (1f - CentroidBias) + OneThird * CentroidBias;
+
+                var pL = v0L * w0 + v1L * w1 + v2L * w2;
+                var nL = n0 * w0 + n1 * w1 + n2 * w2;
+                if (Float3.Dot(nL, nL) < 1e-10f) continue; // skip degenerate normal
+
+                // to world
+                var pW = Raytracing.RayMath.Transform(W, pL, 1f);
+                var nW = Float3.Normalize(Raytracing.RayMath.Transform(NM, nL, 0f));
+
+                var uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
+
+                int idx = py * ws.Width + px;
+                // Strict-inside wins. A new claimant takes the texel if:
+                //   - nobody has claimed it yet, OR
+                //   - this writer is strictly inside but the existing writer was conservative-only.
+                // Two strict writers (which would mean overlapping non-degenerate triangles in atlas space)
+                // still falls back to first-writer-wins; same for two conservative-only writers.
+                bool existing = ws.Covered[idx];
+                bool shouldWrite = !existing
+                    || (strictlyInside && !ws.Samples[idx].StrictlyInside);
+                if (shouldWrite)
+                {
+                    ws.Covered[idx] = true;
+                    ws.Samples[idx] = new TexelSample
+                    {
+                        Position = pW,
+                        Normal = nW,
+                        InstanceIndex = instanceIndex,
+                        MaterialGroupIndex = materialGroupIndex,
+                        UV0 = uv0,
+                        WorldRadius = texelRadius,
+                        StrictlyInside = strictlyInside,
+                    };
+                }
             }
-        }
     }
 
     /// <summary>2D signed edge function: positive when (a, b, c) is CCW.</summary>
@@ -178,8 +181,8 @@ internal static class ConservativeTexelMapper
         float dca = ClosestParam(c, a, p, out var qca);
         Float2 q;
         if (dab <= dbc && dab <= dca) q = qab;
-        else if (dbc <= dca)          q = qbc;
-        else                          q = qca;
+        else if (dbc <= dca) q = qbc;
+        else q = qca;
         // recompute barycentrics for q
         float area = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
         wb = ((q.X - a.X) * (c.Y - a.Y) - (q.Y - a.Y) * (c.X - a.X)) / area;
@@ -238,6 +241,6 @@ internal static class ConservativeTexelMapper
             r0.X * invDet, r1.X * invDet, r2.X * invDet, 0,
             r0.Y * invDet, r1.Y * invDet, r2.Y * invDet, 0,
             r0.Z * invDet, r1.Z * invDet, r2.Z * invDet, 0,
-            0,             0,             0,             1);
+            0, 0, 0, 1);
     }
 }

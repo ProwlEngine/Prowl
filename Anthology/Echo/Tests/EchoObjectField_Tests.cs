@@ -1,17 +1,18 @@
-// Tests for serializing objects that contain EchoObject fields (e.g. PrefabAsset with serialized GameObjects)
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Echo.Test;
 
 public class FakeComponent
 {
-    public string Name;
+    public required string Name;
     public int Priority;
     public float Speed;
 }
 
 public class FakeGameObject
 {
-    public string Name;
+    public required string Name;
     public bool IsActive;
     public List<FakeComponent> Components = new();
     public Dictionary<string, string> Tags = new();
@@ -20,21 +21,21 @@ public class FakeGameObject
 public class PrefabAsset
 {
     public int Id;
-    public string PrefabName;
-    public EchoObject GameObjectData;
+    public required string PrefabName;
+    public required EchoObject GameObjectData;
 }
 
 public class SceneAsset
 {
-    public string SceneName;
+    public required string SceneName;
     public List<EchoObject> GameObjects = new();
 }
 
 public class PrefabWithMetadata
 {
     public int Version;
-    public string Author;
-    public EchoObject Data;
+    public required string Author;
+    public required EchoObject Data;
     public Dictionary<string, EchoObject> Overrides = new();
 }
 
@@ -303,7 +304,7 @@ public class EchoObjectField_Tests
         Assert.NotNull(deserialized.GameObjectData);
         Assert.Equal(EchoType.Compound, deserialized.GameObjectData.TagType);
         Assert.Equal("ManualObj", deserialized.GameObjectData["Name"].StringValue);
-        Assert.Equal(true, deserialized.GameObjectData["IsActive"].BoolValue);
+        Assert.True(deserialized.GameObjectData["IsActive"].BoolValue);
         Assert.Equal(100, deserialized.GameObjectData["Health"].IntValue);
         Assert.Equal(3.14f, deserialized.GameObjectData["Speed"].FloatValue);
     }

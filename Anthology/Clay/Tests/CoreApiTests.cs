@@ -1,7 +1,12 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Text;
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
 using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -17,10 +22,10 @@ public sealed class CoreApiTests
     public void FormatDetector_RecognizesEveryKnownExtension()
     {
         Assert.Equal("gltf", FormatDetector.FromPath("foo.gltf"));
-        Assert.Equal("glb",  FormatDetector.FromPath("foo.glb"));
-        Assert.Equal("vrm",  FormatDetector.FromPath("foo.vrm"));
-        Assert.Equal("obj",  FormatDetector.FromPath("foo.obj"));
-        Assert.Equal("fbx",  FormatDetector.FromPath("foo.FBX"));   // case insensitive
+        Assert.Equal("glb", FormatDetector.FromPath("foo.glb"));
+        Assert.Equal("vrm", FormatDetector.FromPath("foo.vrm"));
+        Assert.Equal("obj", FormatDetector.FromPath("foo.obj"));
+        Assert.Equal("fbx", FormatDetector.FromPath("foo.FBX"));   // case insensitive
         Assert.Null(FormatDetector.FromPath("foo.bin"));            // unknown extension
         Assert.Null(FormatDetector.FromPath("noext"));              // no extension at all
     }
@@ -54,7 +59,7 @@ public sealed class CoreApiTests
 
         Assert.NotNull(model);
         Assert.Equal("gltf", model.Metadata.Format);
-        Assert.Equal("2.0",  model.Metadata.FormatVersion);
+        Assert.Equal("2.0", model.Metadata.FormatVersion);
         Assert.Single(model.Nodes);             // synthetic root
         Assert.Empty(model.Meshes);
         Assert.Empty(model.Materials);
@@ -71,7 +76,7 @@ public sealed class CoreApiTests
         b.Encapsulate(new Float3(-1f, 5f, -3f));
 
         Assert.Equal(new Float3(-1f, 2f, -3f), b.Min);
-        Assert.Equal(new Float3( 1f, 5f,  3f), b.Max);
+        Assert.Equal(new Float3(1f, 5f, 3f), b.Max);
     }
 
     [Fact]
@@ -79,9 +84,9 @@ public sealed class CoreApiTests
     {
         var mesh = new Mesh
         {
-            Vertices  = new Float3[1],
+            Vertices = new Float3[1],
             SubMeshes = new[] { new SubMesh { IndexStart = 0, IndexCount = 1 } },
-            Indices   = new uint[] { 70_000 },
+            Indices = new uint[] { 70_000 },
         };
         Assert.Throws<InvalidOperationException>(() => mesh.GetIndices16(0));
     }

@@ -3,7 +3,7 @@
 
 namespace Prowl.Echo;
 
-public enum TypeMode 
+public enum TypeMode
 {
     /// <summary> Always include type information. </summary>
     Aggressive,

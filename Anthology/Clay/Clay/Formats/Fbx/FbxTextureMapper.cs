@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -199,8 +202,8 @@ internal static class FbxTextureMapper
         if (p.Contains("/Maya2", StringComparison.OrdinalIgnoreCase) && p.Contains("/presets/", StringComparison.OrdinalIgnoreCase)) return true;
         string fileName = Path.GetFileName(p);
         return fileName.Equals("specular_cube.dds", StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("diffuse_cube.dds",  StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals("ibl_brdf_lut.dds",  StringComparison.OrdinalIgnoreCase);
+            || fileName.Equals("diffuse_cube.dds", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("ibl_brdf_lut.dds", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? GuessMime(string? path) =>

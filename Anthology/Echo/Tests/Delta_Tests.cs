@@ -5,28 +5,28 @@ namespace Prowl.Echo.Test;
 
 public class Player
 {
-    public string Name;
+    public required string Name;
     public int Health;
     public int MaxHealth;
     public float PositionX;
     public float PositionY;
     public float PositionZ;
-    public List<string> Inventory;
-    public Dictionary<string, int> Stats;
+    public required List<string> Inventory;
+    public required Dictionary<string, int> Stats;
 }
 
 public class DeltaComplexObject
 {
     public int Id;
-    public string Name;
-    public List<int> Numbers;
-    public Dictionary<string, string> Properties;
-    public DeltaNestedObject Nested;
+    public required string Name;
+    public required List<int> Numbers;
+    public required Dictionary<string, string> Properties;
+    public required DeltaNestedObject Nested;
 }
 
 public class DeltaNestedObject
 {
-    public string Value;
+    public required string Value;
     public int Count;
 }
 
@@ -143,7 +143,8 @@ public class Delta_Tests
     [Fact]
     public void TestDelta_CompoundObject_MultipleFieldChanges()
     {
-        var player1 = new Player {
+        var player1 = new Player
+        {
             Name = "Alice",
             Health = 100,
             MaxHealth = 100,
@@ -151,7 +152,8 @@ public class Delta_Tests
             PositionY = 0,
             PositionZ = 0
         };
-        var player2 = new Player {
+        var player2 = new Player
+        {
             Name = "Bob",
             Health = 75,
             MaxHealth = 150,

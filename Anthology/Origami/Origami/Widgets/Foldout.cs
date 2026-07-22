@@ -58,9 +58,9 @@ public sealed class FoldoutBuilder
     public FoldoutBuilder Primary() => Variant(OrigamiVariant.Primary);
     public FoldoutBuilder Success() => Variant(OrigamiVariant.Success);
     public FoldoutBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public FoldoutBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public FoldoutBuilder Info()    => Variant(OrigamiVariant.Info);
-    public FoldoutBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public FoldoutBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public FoldoutBuilder Info() => Variant(OrigamiVariant.Info);
+    public FoldoutBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Behaviour ──────────────────────────────────────────────────────
 
@@ -119,13 +119,13 @@ public sealed class FoldoutBuilder
         float rounding = _roundingOverride ?? 9f;
 
         // Nebula "w2fold" tokens.
-        Color bdSoft      = _theme.BorderSoft;   // --bd-soft
-        Color glassIn     = _theme.Glass;       // --glass-in
+        Color bdSoft = _theme.BorderSoft;   // --bd-soft
+        Color glassIn = _theme.Glass;       // --glass-in
         Color hoverPurple = _theme.Hover;    // rgba(168,85,247,0.12)
-        Color caretCol    = ink.C200;                            // --t-lo
-        Color labelCol    = ink.C500;                            // --t-hi
-        Color badgeCol    = ink.C300;                            // --t-mid
-        Color accIcon     = _theme.Primary.C700;                 // --acc-300
+        Color caretCol = ink.C200;                            // --t-lo
+        Color labelCol = ink.C500;                            // --t-hi
+        Color badgeCol = ink.C300;                            // --t-mid
+        Color accIcon = _theme.Primary.C700;                 // --acc-300
 
         bool hasToggle = _toggleValue.HasValue;
         bool isEnabled = _toggleValue ?? true;
@@ -136,7 +136,7 @@ public sealed class FoldoutBuilder
 
         float headH = metrics.FontSize + 18f;   // ~9px vertical padding around the label
         const float padX = 11f;                  // header horizontal padding
-        const float gap  = 8f;                   // flex gap between header children
+        const float gap = 8f;                   // flex gap between header children
 
         // Outer card: 1px bd-soft border, radius 9, overflow hidden.
         var container = _paper.Column($"{_id}")

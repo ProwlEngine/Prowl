@@ -62,20 +62,20 @@ public sealed class ButtonGroupBuilder
     public ButtonGroupBuilder Primary() => Variant(OrigamiVariant.Primary);
     public ButtonGroupBuilder Success() => Variant(OrigamiVariant.Success);
     public ButtonGroupBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public ButtonGroupBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public ButtonGroupBuilder Info()    => Variant(OrigamiVariant.Info);
-    public ButtonGroupBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public ButtonGroupBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public ButtonGroupBuilder Info() => Variant(OrigamiVariant.Info);
+    public ButtonGroupBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     public ButtonGroupBuilder Style(ButtonGroupStyle style) { _style = style; return this; }
-    public ButtonGroupBuilder Joined()    { _style = ButtonGroupStyle.Joined; return this; }
+    public ButtonGroupBuilder Joined() { _style = ButtonGroupStyle.Joined; return this; }
     public ButtonGroupBuilder Segmented() { _style = ButtonGroupStyle.Segmented; _height = 32; return this; }
 
     public ButtonGroupBuilder Width(UnitValue w) { _width = w; return this; }
     public ButtonGroupBuilder Width(float w) { _width = w; return this; }
     public ButtonGroupBuilder Height(float h) { _height = MathF.Max(20, h); return this; }
-    public ButtonGroupBuilder Small()  { _height = 26; return this; }
+    public ButtonGroupBuilder Small() { _height = 26; return this; }
     public ButtonGroupBuilder Medium() { _height = 30; return this; }
-    public ButtonGroupBuilder Large()  { _height = 36; return this; }
+    public ButtonGroupBuilder Large() { _height = 36; return this; }
     public ButtonGroupBuilder FullWidth() { _stretch = true; _width = UnitValue.Stretch(); return this; }
     public ButtonGroupBuilder Rounding(float radius) { _roundingOverride = radius; return this; }
 
@@ -116,7 +116,7 @@ public sealed class ButtonGroupBuilder
         var font = _theme.Font;
         var metrics = _theme.Metrics;
         bool isDefault = _variant == OrigamiVariant.Default;
-        bool isSubtle  = _variant == OrigamiVariant.Subtle;
+        bool isSubtle = _variant == OrigamiVariant.Subtle;
         // Default/Subtle groups select with the accent so the on-state pops (like the prototype).
         var selRamp = (isDefault || isSubtle) ? _theme.Primary : ramp;
         float rounding = _roundingOverride ?? metrics.Rounding;
@@ -258,7 +258,7 @@ public sealed class ButtonGroupBuilder
         float rr = s.Segmented ? s.SegRound : 0f;
         // Corner radii: segmented pills round all corners; joined rounds only the outer ends.
         float tl = s.Segmented ? rr : (s.IsFirst ? s.Rounding : 0f);
-        float tr = s.Segmented ? rr : (s.IsLast  ? s.Rounding : 0f);
+        float tr = s.Segmented ? rr : (s.IsLast ? s.Rounding : 0f);
         float bl = tl, br = tr;
 
         Color selBg = accent.C500;
@@ -370,8 +370,8 @@ public sealed class ButtonGroupBuilder
                 float by = trY - bh - 6f + slide;
 
                 byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
-                byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
-                byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
                 canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
                     Color.FromArgb(aShadow, 0, 0, 0));

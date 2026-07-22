@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -280,9 +283,9 @@ internal static class FbxSkinMapper
                 if (flat.Length != 16) continue;
 
                 var bindWorld = new Float4x4(
-                    new Float4((float)flat[0],  (float)flat[1],  (float)flat[2],  (float)flat[3]),
-                    new Float4((float)flat[4],  (float)flat[5],  (float)flat[6],  (float)flat[7]),
-                    new Float4((float)flat[8],  (float)flat[9],  (float)flat[10], (float)flat[11]),
+                    new Float4((float)flat[0], (float)flat[1], (float)flat[2], (float)flat[3]),
+                    new Float4((float)flat[4], (float)flat[5], (float)flat[6], (float)flat[7]),
+                    new Float4((float)flat[8], (float)flat[9], (float)flat[10], (float)flat[11]),
                     new Float4((float)flat[12], (float)flat[13], (float)flat[14], (float)flat[15]));
 
                 // First-write-wins: if the same node appears in multiple Pose::BindPose objects
@@ -354,9 +357,9 @@ internal static class FbxSkinMapper
         double[] flat = child.Properties[0].AsDoubleArray();
         if (flat.Length != 16) return null;
         return new Float4x4(
-            new Float4((float)flat[0],  (float)flat[1],  (float)flat[2],  (float)flat[3]),
-            new Float4((float)flat[4],  (float)flat[5],  (float)flat[6],  (float)flat[7]),
-            new Float4((float)flat[8],  (float)flat[9],  (float)flat[10], (float)flat[11]),
+            new Float4((float)flat[0], (float)flat[1], (float)flat[2], (float)flat[3]),
+            new Float4((float)flat[4], (float)flat[5], (float)flat[6], (float)flat[7]),
+            new Float4((float)flat[8], (float)flat[9], (float)flat[10], (float)flat[11]),
             new Float4((float)flat[12], (float)flat[13], (float)flat[14], (float)flat[15]));
     }
 

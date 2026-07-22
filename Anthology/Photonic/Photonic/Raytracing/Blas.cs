@@ -1,5 +1,9 @@
-﻿using System.Runtime.CompilerServices;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+
 using Prowl.Vector;
 
 namespace Prowl.Photonic.Raytracing;
@@ -36,7 +40,7 @@ internal sealed class Blas
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetChild(int i) => i switch { 0 => C0, 1 => C1, 2 => C2, _ => C3 };
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int GetPrim(int i)  => i switch { 0 => P0, 1 => P1, 2 => P2, _ => P3 };
+        public int GetPrim(int i) => i switch { 0 => P0, 1 => P1, 2 => P2, _ => P3 };
     }
 
     /// <summary>Triangle vertex indices + material group. Looked up at hit time for material info.</summary>
@@ -279,8 +283,8 @@ internal sealed class Blas
         node.PrimCount = 0;
         nodes[nodeIndex] = node;
 
-        BuildRecursive(nodes, leftIndex,     perm, first, mid - first,                 aabbs, centroids);
-        BuildRecursive(nodes, leftIndex + 1, perm, mid,   first + count - mid,          aabbs, centroids);
+        BuildRecursive(nodes, leftIndex, perm, first, mid - first, aabbs, centroids);
+        BuildRecursive(nodes, leftIndex + 1, perm, mid, first + count - mid, aabbs, centroids);
     }
 
     private static int Partition(int[] perm, int first, int count, Float3[] centroids, int axis, float splitCoord)
@@ -288,7 +292,7 @@ internal sealed class Blas
         int lo = first, hi = first + count - 1;
         while (lo <= hi)
         {
-            while (lo <= hi && Component(centroids[perm[lo]], axis) <  splitCoord) lo++;
+            while (lo <= hi && Component(centroids[perm[lo]], axis) < splitCoord) lo++;
             while (lo <= hi && Component(centroids[perm[hi]], axis) >= splitCoord) hi--;
             if (lo < hi)
             {
@@ -356,7 +360,7 @@ internal sealed class Blas
                 if (isLeaf[i])
                 {
                     childIdx[i] = bvh2[srcIdx].LeftFirst;
-                    primCnt[i]  = bvh2[srcIdx].PrimCount;
+                    primCnt[i] = bvh2[srcIdx].PrimCount;
                 }
                 else
                 {
@@ -380,8 +384,14 @@ internal sealed class Blas
             MaxX = Vector128.Create(maxX[0], maxX[1], maxX[2], maxX[3]),
             MaxY = Vector128.Create(maxY[0], maxY[1], maxY[2], maxY[3]),
             MaxZ = Vector128.Create(maxZ[0], maxZ[1], maxZ[2], maxZ[3]),
-            C0 = childIdx[0], C1 = childIdx[1], C2 = childIdx[2], C3 = childIdx[3],
-            P0 = primCnt[0],  P1 = primCnt[1],  P2 = primCnt[2],  P3 = primCnt[3],
+            C0 = childIdx[0],
+            C1 = childIdx[1],
+            C2 = childIdx[2],
+            C3 = childIdx[3],
+            P0 = primCnt[0],
+            P1 = primCnt[1],
+            P2 = primCnt[2],
+            P3 = primCnt[3],
             Valid = slotCount,
         };
         result[myIdx] = n;
@@ -442,7 +452,7 @@ internal sealed class Blas
         // u = dot(tv, p) * invDet, must be in [0, 1]
         var u = (tvx * px + tvy * py + tvz * pz) * invDet;
         var zero = Vector256<float>.Zero;
-        var one  = Vector256.Create(1f);
+        var one = Vector256.Create(1f);
         var validU = Vector256.GreaterThanOrEqual(u, zero) & Vector256.LessThanOrEqual(u, one);
 
         // q = cross(tv, e1)
@@ -475,21 +485,21 @@ internal sealed class Blas
         if (Nodes4.Length == 0) return false;
 
         // Vector128 broadcasts for the BVH4 inner-node AABB test (4 children per node).
-        var roX  = Vector128.Create(ro.X);
-        var roY  = Vector128.Create(ro.Y);
-        var roZ  = Vector128.Create(ro.Z);
+        var roX = Vector128.Create(ro.X);
+        var roY = Vector128.Create(ro.Y);
+        var roZ = Vector128.Create(ro.Z);
         var invX = Vector128.Create(1f / SafeNonZero(rd.X));
         var invY = Vector128.Create(1f / SafeNonZero(rd.Y));
         var invZ = Vector128.Create(1f / SafeNonZero(rd.Z));
         var tMinV = Vector128.Create(tMin);
 
         // Vector256 broadcasts for the 8-wide leaf ray-triangle test.
-        var roX8  = Vector256.Create(ro.X);
-        var roY8  = Vector256.Create(ro.Y);
-        var roZ8  = Vector256.Create(ro.Z);
-        var rdX8  = Vector256.Create(rd.X);
-        var rdY8  = Vector256.Create(rd.Y);
-        var rdZ8  = Vector256.Create(rd.Z);
+        var roX8 = Vector256.Create(ro.X);
+        var roY8 = Vector256.Create(ro.Y);
+        var roZ8 = Vector256.Create(ro.Z);
+        var rdX8 = Vector256.Create(rd.X);
+        var rdY8 = Vector256.Create(rd.Y);
+        var rdZ8 = Vector256.Create(rd.Z);
         var tMinV8 = Vector256.Create(tMin);
 
         // Stack stores (nodeIdx, entryDistance). On pop we skip any node whose recorded entry
@@ -520,9 +530,9 @@ internal sealed class Blas
             var t2z = (n.MaxZ - roZ) * invZ;
             var enter = Vector128.Max(Vector128.Max(Vector128.Min(t1x, t2x), Vector128.Min(t1y, t2y)),
                                        Vector128.Max(Vector128.Min(t1z, t2z), tMinV));
-            var exit  = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),
+            var exit = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),
                                        Vector128.Min(Vector128.Max(t1z, t2z), Vector128.Create(t)));
-            var hitV  = Vector128.LessThanOrEqual(enter, exit);
+            var hitV = Vector128.LessThanOrEqual(enter, exit);
             uint mask = Vector128.ExtractMostSignificantBits(hitV);
             if (mask == 0) continue;
 
@@ -586,9 +596,9 @@ internal sealed class Blas
     {
         if (Nodes4.Length == 0) return false;
         // Vector128 broadcasts for inner-node BVH4 AABB tests.
-        var roX  = Vector128.Create(ro.X);
-        var roY  = Vector128.Create(ro.Y);
-        var roZ  = Vector128.Create(ro.Z);
+        var roX = Vector128.Create(ro.X);
+        var roY = Vector128.Create(ro.Y);
+        var roZ = Vector128.Create(ro.Z);
         var invX = Vector128.Create(1f / SafeNonZero(rd.X));
         var invY = Vector128.Create(1f / SafeNonZero(rd.Y));
         var invZ = Vector128.Create(1f / SafeNonZero(rd.Z));
@@ -621,9 +631,9 @@ internal sealed class Blas
             var t2z = (n.MaxZ - roZ) * invZ;
             var enter = Vector128.Max(Vector128.Max(Vector128.Min(t1x, t2x), Vector128.Min(t1y, t2y)),
                                        Vector128.Max(Vector128.Min(t1z, t2z), tMinV));
-            var exit  = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),
+            var exit = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),
                                        Vector128.Min(Vector128.Max(t1z, t2z), tMaxV));
-            var hitV  = Vector128.LessThanOrEqual(enter, exit);
+            var hitV = Vector128.LessThanOrEqual(enter, exit);
             uint mask = Vector128.ExtractMostSignificantBits(hitV);
             if (mask == 0) continue;
 

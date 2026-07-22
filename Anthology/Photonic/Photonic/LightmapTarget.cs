@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -91,7 +94,7 @@ public sealed class LightmapTarget
         var rgba = new float[n * 4];
         for (int i = 0; i < n; i++)
         {
-            rgba[i * 4    ] = PixelsRGB[i * 3    ];
+            rgba[i * 4] = PixelsRGB[i * 3];
             rgba[i * 4 + 1] = PixelsRGB[i * 3 + 1];
             rgba[i * 4 + 2] = PixelsRGB[i * 3 + 2];
             rgba[i * 4 + 3] = 1f;
@@ -114,7 +117,7 @@ public sealed class LightmapTarget
         float invMax = 1f / maxRange;
         for (int i = 0; i < n; i++)
         {
-            float r = System.Math.Max(0f, PixelsRGB[i * 3    ]);
+            float r = System.Math.Max(0f, PixelsRGB[i * 3]);
             float g = System.Math.Max(0f, PixelsRGB[i * 3 + 1]);
             float b = System.Math.Max(0f, PixelsRGB[i * 3 + 2]);
 
@@ -125,7 +128,7 @@ public sealed class LightmapTarget
             float a = (float)System.Math.Ceiling(m * 255f) / 255f;
 
             float inv = 1f / (maxRange * a);
-            bytes[i * 4    ] = (byte)System.Math.Clamp((int)(r * inv * 255f + 0.5f), 0, 255);
+            bytes[i * 4] = (byte)System.Math.Clamp((int)(r * inv * 255f + 0.5f), 0, 255);
             bytes[i * 4 + 1] = (byte)System.Math.Clamp((int)(g * inv * 255f + 0.5f), 0, 255);
             bytes[i * 4 + 2] = (byte)System.Math.Clamp((int)(b * inv * 255f + 0.5f), 0, 255);
             bytes[i * 4 + 3] = (byte)System.Math.Clamp((int)(a * 255f + 0.5f), 0, 255);
@@ -145,7 +148,7 @@ public sealed class LightmapTarget
         var bytes = new byte[n * 3];
         for (int i = 0; i < n; i++)
         {
-            float r = PixelsRGB[i * 3    ] * exposure;
+            float r = PixelsRGB[i * 3] * exposure;
             float g = PixelsRGB[i * 3 + 1] * exposure;
             float b = PixelsRGB[i * 3 + 2] * exposure;
             // tonemap (Reinhard) + gamma
@@ -155,7 +158,7 @@ public sealed class LightmapTarget
             r = (float)System.Math.Pow(System.Math.Max(0f, r), gamma);
             g = (float)System.Math.Pow(System.Math.Max(0f, g), gamma);
             b = (float)System.Math.Pow(System.Math.Max(0f, b), gamma);
-            bytes[i * 3    ] = (byte)System.Math.Clamp((int)(r * 255f + 0.5f), 0, 255);
+            bytes[i * 3] = (byte)System.Math.Clamp((int)(r * 255f + 0.5f), 0, 255);
             bytes[i * 3 + 1] = (byte)System.Math.Clamp((int)(g * 255f + 0.5f), 0, 255);
             bytes[i * 3 + 2] = (byte)System.Math.Clamp((int)(b * 255f + 0.5f), 0, 255);
         }

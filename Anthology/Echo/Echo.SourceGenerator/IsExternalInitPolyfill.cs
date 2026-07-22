@@ -1,5 +1,6 @@
-// This polyfill is needed for using records in netstandard2.0
-namespace System.Runtime.CompilerServices
-{
-    internal static class IsExternalInit { }
-}
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace System.Runtime.CompilerServices;
+
+internal static class IsExternalInit { }

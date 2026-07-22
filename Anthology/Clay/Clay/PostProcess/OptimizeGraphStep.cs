@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -83,7 +86,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
         int collapsed = 0;
 
         // Replace child list iteratively, walking by index because we mutate.
-        for (int i = 0; i < node.Children.Count; )
+        for (int i = 0; i < node.Children.Count;)
         {
             var child = node.Children[i];
 

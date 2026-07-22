@@ -254,7 +254,8 @@ public sealed class AnyObjectFormat : ISerializationFormat
         // This provides backward compatibility and handles edge cases
         try
         {
-            return value.TagType switch {
+            return value.TagType switch
+            {
                 EchoType.Null => null,
                 EchoType.Byte => Convert.ChangeType(value.ByteValue, targetType),
                 EchoType.sByte => Convert.ChangeType(value.sByteValue, targetType),

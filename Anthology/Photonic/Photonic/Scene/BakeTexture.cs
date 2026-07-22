@@ -1,4 +1,7 @@
-﻿using Prowl.Vector;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -44,7 +47,7 @@ public sealed class BakeTexture
         System.Threading.Tasks.Parallel.For(0, n, i =>
         {
             int o = i * 4;
-            float r = pixelsRGBA[o    ] / 255f;
+            float r = pixelsRGBA[o] / 255f;
             float g = pixelsRGBA[o + 1] / 255f;
             float b = pixelsRGBA[o + 2] / 255f;
             if (needsGamma)
@@ -66,7 +69,7 @@ public sealed class BakeTexture
     {
         u = u - (float)System.Math.Floor(u);
         v = v - (float)System.Math.Floor(v);
-        int x = (int)(u * Width);  if (x >= Width)  x = Width  - 1;
+        int x = (int)(u * Width); if (x >= Width) x = Width - 1;
         int y = (int)(v * Height); if (y >= Height) y = Height - 1;
         return _linear[y * Width + x];
     }
@@ -81,16 +84,16 @@ public sealed class BakeTexture
         u = u - (float)System.Math.Floor(u);
         v = v - (float)System.Math.Floor(v);
 
-        float fx = u * Width  - 0.5f;
+        float fx = u * Width - 0.5f;
         float fy = v * Height - 0.5f;
         int x0 = (int)System.Math.Floor(fx);
         int y0 = (int)System.Math.Floor(fy);
         float tx = fx - x0;
         float ty = fy - y0;
 
-        Float3 c00 = Fetch(x0,     y0    );
-        Float3 c10 = Fetch(x0 + 1, y0    );
-        Float3 c01 = Fetch(x0,     y0 + 1);
+        Float3 c00 = Fetch(x0, y0);
+        Float3 c10 = Fetch(x0 + 1, y0);
+        Float3 c01 = Fetch(x0, y0 + 1);
         Float3 c11 = Fetch(x0 + 1, y0 + 1);
 
         Float3 cx0 = c00 * (1 - tx) + c10 * tx;

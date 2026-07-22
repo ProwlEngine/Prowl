@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+using Prowl.Graphite.Samples;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
-using Prowl.Graphite.Samples;
 
 
 namespace Prowl.Graphite.Samples.PBRRenderer;

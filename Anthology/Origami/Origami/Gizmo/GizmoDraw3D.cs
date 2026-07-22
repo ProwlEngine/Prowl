@@ -1,5 +1,5 @@
-// Based on ShapeBuilder from: https://github.com/urholaukkarinen/transform-gizmo - Dual licensed under MIT and Apache 2.0.
-// Ported from old Paper's GuiDraw3D to use Quill Canvas. All methods match 1:1.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;

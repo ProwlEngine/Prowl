@@ -43,8 +43,14 @@ public sealed class ContextBuilder
     {
         Items.Add(new CtxItem
         {
-            Label = label, OnClick = onClick, Enabled = enabled, Icon = icon,
-            Shortcut = shortcut, Danger = danger, On = on, IconDraw = iconDraw,
+            Label = label,
+            OnClick = onClick,
+            Enabled = enabled,
+            Icon = icon,
+            Shortcut = shortcut,
+            Danger = danger,
+            On = on,
+            IconDraw = iconDraw,
         });
         return this;
     }
@@ -128,9 +134,9 @@ public sealed class ContextBuilder
             {
                 bool hovered = Enabled && paper.IsParentHovered;
                 Color txt = !Enabled ? ink.C100                     // t-dim (disabled)
-                          : Danger  ? theme.Red.C500                // .danger
+                          : Danger ? theme.Red.C500                // .danger
                           : hovered ? ink.C500                      // hover = t-hi
-                          :           ink.C400;                     // t
+                          : ink.C400;                     // t
 
                 DrawLeadingIcon(paper, $"{id}_ico_{index}", font, txt);
 

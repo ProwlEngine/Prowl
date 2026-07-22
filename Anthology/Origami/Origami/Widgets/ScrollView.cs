@@ -86,9 +86,9 @@ public sealed class ScrollViewBuilder
     public ScrollViewBuilder Primary() => Variant(OrigamiVariant.Primary);
     public ScrollViewBuilder Success() => Variant(OrigamiVariant.Success);
     public ScrollViewBuilder Warning() => Variant(OrigamiVariant.Warning);
-    public ScrollViewBuilder Danger()  => Variant(OrigamiVariant.Danger);
-    public ScrollViewBuilder Info()    => Variant(OrigamiVariant.Info);
-    public ScrollViewBuilder Subtle()  => Variant(OrigamiVariant.Subtle);
+    public ScrollViewBuilder Danger() => Variant(OrigamiVariant.Danger);
+    public ScrollViewBuilder Info() => Variant(OrigamiVariant.Info);
+    public ScrollViewBuilder Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Padding ────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ public sealed class ScrollViewBuilder
     public ScrollViewBuilder Padding(float left, float right, float top, float bottom)
     {
         _padLeft = left; _padRight = right;
-        _padTop = top;   _padBottom = bottom;
+        _padTop = top; _padBottom = bottom;
         return this;
     }
 
@@ -272,7 +272,7 @@ public sealed class ScrollViewBuilder
                        .Transition(GuiProp.Left, 0.33f, Easing.EaseOut);
 
             if (_horizontal) content.Width(UnitValue.Auto);
-            else             content.Width(viewportW);
+            else content.Width(viewportW);
 
             var capturedHandle = outerHandle;
             content.OnPostLayout((handle, rect) =>

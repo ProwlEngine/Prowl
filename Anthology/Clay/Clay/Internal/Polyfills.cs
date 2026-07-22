@@ -1,7 +1,6 @@
-// Polyfills for C# 11 `required` member support on .NET 6, which shipped before these
-// attributes landed in the BCL. The C# compiler accepts the language feature as long as the
-// attribute types are visible somewhere in the compilation. On net7.0+ the BCL provides them
-// natively, so this whole file is excluded from the compilation via the #if guard.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 #if NET6_0
 
 namespace System.Runtime.CompilerServices

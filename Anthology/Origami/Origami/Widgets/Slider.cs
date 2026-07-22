@@ -134,7 +134,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     private Action<Canvas, SliderThumbContext>? _customThumb;
 
     // Storage keys for per-element persistent state.
-    private const string KeyDragging   = "sl_drag";
+    private const string KeyDragging = "sl_drag";
     private const string KeyDragStartV = "sl_drag_v";
 
     internal SliderBuilder(Paper paper, string id, T value, Action<T> setter, T min, T max, OrigamiTheme theme)
@@ -160,9 +160,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     public SliderBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public SliderBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public SliderBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public SliderBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public SliderBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public SliderBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public SliderBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public SliderBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public SliderBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Sizing / orientation ───────────────────────────────────────────
 
@@ -175,9 +175,9 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     /// <summary>Track thickness in pixels (default 6, set by Small/Medium/Large).</summary>
     public SliderBuilder<T> TrackThickness(float px) { _trackThickness = MathF.Max(2, px); return this; }
 
-    public SliderBuilder<T> Small()  { _height = 16; _thumbDiameter = 10; _trackThickness = 3; return this; }
+    public SliderBuilder<T> Small() { _height = 16; _thumbDiameter = 10; _trackThickness = 3; return this; }
     public SliderBuilder<T> Medium() { _height = 20; _thumbDiameter = 12; _trackThickness = 4; return this; }
-    public SliderBuilder<T> Large()  { _height = 28; _thumbDiameter = 18; _trackThickness = 6; return this; }
+    public SliderBuilder<T> Large() { _height = 28; _thumbDiameter = 18; _trackThickness = 6; return this; }
 
     /// <summary>Vertical track instead of horizontal. Min sits at the bottom, max at the top.</summary>
     public SliderBuilder<T> Vertical(bool vertical = true) { _vertical = vertical; return this; }
@@ -424,14 +424,14 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         double centerT = _bipolar ? SliderInternal.ValueToT(_bipolarCenter, _min, _max, _logarithmic) : 0.0;
 
         OrigamiRamp onRamp = OnRamp();
-        Color trackBg   = Color.FromArgb(20, 255, 255, 255); // light translucent groove
-        Color fill      = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
-        Color thumbCol  = _theme.Ink.C600;
-        Color tickCol   = ink.C300;
+        Color trackBg = Color.FromArgb(20, 255, 255, 255); // light translucent groove
+        Color fill = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
+        Color thumbCol = _theme.Ink.C600;
+        Color tickCol = ink.C300;
         if (_disabled)
         {
-            trackBg  = Color.FromArgb(14, 255, 255, 255);
-            fill     = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
+            trackBg = Color.FromArgb(14, 255, 255, 255);
+            fill = OrigamiRamp.LerpColor(fill, _theme.Neutral.C400, 0.6f);
             thumbCol = ink.C300;
         }
 
@@ -452,7 +452,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         Color tooltipFg = ink.C500;
 
         // Animation hooks for hover/active.
-        float hoverAnim  = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
+        float hoverAnim = _paper.AnimateBool(isHovered && interactive, 0.12f, id: $"{_id}_hov");
         float activeAnim = _paper.AnimateBool(isDragging, 0.10f, id: $"{_id}_act");
 
         _paper.Draw((canvas, rect) =>
@@ -486,12 +486,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 if (bipolar)
                 {
                     fillStartFrac = MathF.Min((float)valueT, (float)centerT);
-                    fillEndFrac   = MathF.Max((float)valueT, (float)centerT);
+                    fillEndFrac = MathF.Max((float)valueT, (float)centerT);
                 }
                 else
                 {
                     fillStartFrac = 0f;
-                    fillEndFrac   = (float)valueT;
+                    fillEndFrac = (float)valueT;
                 }
             }
             else
@@ -508,12 +508,12 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 if (bipolar)
                 {
                     fillStartFrac = MathF.Min((float)valueT, (float)centerT);
-                    fillEndFrac   = MathF.Max((float)valueT, (float)centerT);
+                    fillEndFrac = MathF.Max((float)valueT, (float)centerT);
                 }
                 else
                 {
                     fillStartFrac = 0f;
-                    fillEndFrac   = (float)valueT;
+                    fillEndFrac = (float)valueT;
                 }
             }
 
@@ -653,8 +653,8 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                         // Multiply each color's alpha by the animation fraction so the bubble
                         // truly fades rather than appearing instantly.
                         byte aShadow = (byte)Math.Clamp((int)(80 * ttAnim), 0, 255);
-                        byte aBody   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
-                        byte aText   = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aBody = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
+                        byte aText = (byte)Math.Clamp((int)(255 * ttAnim), 0, 255);
 
                         canvas.RoundedRectFilled(bx + 1f, by + 2f, bw, bh, 3f,
                             Color.FromArgb(aShadow, 0, 0, 0));
@@ -675,7 +675,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     private OrigamiRamp OnRamp() => _variant switch
     {
         OrigamiVariant.Default => _theme.Primary,
-        OrigamiVariant.Subtle  => _theme.Neutral,
+        OrigamiVariant.Subtle => _theme.Neutral,
         _ => _theme.Get(_variant),
     };
 

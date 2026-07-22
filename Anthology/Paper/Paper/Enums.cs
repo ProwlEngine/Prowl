@@ -1,277 +1,279 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Drawing;
 
-namespace Prowl.PaperUI
+namespace Prowl.PaperUI;
+
+/// <summary>
+/// Defines the direction in which elements are arranged in a layout container.
+/// </summary>
+public enum LayoutType
 {
     /// <summary>
-    /// Defines the direction in which elements are arranged in a layout container.
+    /// Elements are arranged horizontally from left to right.
     /// </summary>
-    public enum LayoutType
-    {
-        /// <summary>
-        /// Elements are arranged horizontally from left to right.
-        /// </summary>
-        Row,
-
-        /// <summary>
-        /// Elements are arranged vertically from top to bottom.
-        /// </summary>
-        Column
-    }
+    Row,
 
     /// <summary>
-    /// Defines how an element's position is determined within its parent.
+    /// Elements are arranged vertically from top to bottom.
     /// </summary>
-    public enum PositionType
-    {
-        /// <summary>
-        /// Element positions itself using its own coordinates (similar to "absolute" positioning).
-        /// </summary>
-        SelfDirected,
+    Column
+}
 
-        /// <summary>
-        /// Element's position is determined by the parent layout (similar to "relative" positioning).
-        /// </summary>
-        ParentDirected
-    }
+/// <summary>
+/// Defines how an element's position is determined within its parent.
+/// </summary>
+public enum PositionType
+{
+    /// <summary>
+    /// Element positions itself using its own coordinates (similar to "absolute" positioning).
+    /// </summary>
+    SelfDirected,
 
     /// <summary>
-    /// Defines measurement units for element dimensions and positioning.
+    /// Element's position is determined by the parent layout (similar to "relative" positioning).
     /// </summary>
-    public enum Units
-    {
-        /// <summary>
-        /// Size is determined automatically based on content or other constraints.
-        /// </summary>
-        Auto = 0,
+    ParentDirected
+}
 
-        /// <summary>
-        /// Flexible sizing that distributes available space based on stretch factors.
-        /// </summary>
-        Stretch,
-
-        /// <summary>
-        /// Percentage of parent container's corresponding dimension.
-        /// </summary>
-        Percentage,
-
-        /// <summary>
-        /// Fixed pixel measurements.
-        /// </summary>
-        Pixels,
-    }
-
-    public enum TextAlignment
-    {
-        Left,
-        Center,
-        Right,
-
-        MiddleLeft,
-        MiddleCenter,
-        MiddleRight,
-
-        BottomLeft,
-        BottomCenter,
-        BottomRight,
-    }
+/// <summary>
+/// Defines measurement units for element dimensions and positioning.
+/// </summary>
+public enum Units
+{
+    /// <summary>
+    /// Size is determined automatically based on content or other constraints.
+    /// </summary>
+    Auto = 0,
 
     /// <summary>
-    /// Defines path winding direction for vector shapes.
+    /// Flexible sizing that distributes available space based on stretch factors.
     /// </summary>
-    public enum Winding
-    {
-        /// <summary>
-        /// Counter-clockwise winding, used for defining solid shapes.
-        /// </summary>
-        CounterClockWise = 1,
-
-        /// <summary>
-        /// Clockwise winding, used for defining holes or cutouts in shapes.
-        /// </summary>
-        ClockWise = 2,
-    }
+    Stretch,
 
     /// <summary>
-    /// Defines fill rules for vector paths.
+    /// Percentage of parent container's corresponding dimension.
     /// </summary>
-    public enum Solidity
-    {
-        /// <summary>
-        /// Fills interior of counter-clockwise paths.
-        /// </summary>
-        Solid = 1,
-
-        /// <summary>
-        /// Creates a hole in existing shapes using clockwise paths.
-        /// </summary>
-        Hole = 2,
-    }
+    Percentage,
 
     /// <summary>
-    /// Defines how line endpoints are rendered in stroked paths.
+    /// Fixed pixel measurements.
     /// </summary>
-    public enum LineCap
-    {
-        /// <summary>
-        /// End is squared off at the endpoint with no extension.
-        /// </summary>
-        Butt,
+    Pixels,
+}
 
-        /// <summary>
-        /// End is rounded with a semicircle whose diameter equals the line width.
-        /// </summary>
-        Round,
+public enum TextAlignment
+{
+    Left,
+    Center,
+    Right,
 
-        /// <summary>
-        /// End is squared off with an extension of half the line width.
-        /// </summary>
-        Square,
+    MiddleLeft,
+    MiddleCenter,
+    MiddleRight,
 
-        /// <summary>
-        /// Joins are cut at a 45-degree angle, with the line extending to form a diamond.
-        /// </summary>
-        Bevel,
+    BottomLeft,
+    BottomCenter,
+    BottomRight,
+}
 
-        /// <summary>
-        /// Joins extend to a sharp point, limited by miter limit.
-        /// </summary>
-        Miter,
-    }
-
-    ///// <summary>
-    ///// Defines flags that control image loading and rendering behavior.
-    ///// </summary>
-    //[Flags]
-    //public enum ImageFlags
-    //{
-    //    /// <summary>
-    //    /// Generate mipmaps during creation of the image for better quality when scaled down.
-    //    /// </summary>
-    //    GenerateMipMaps = 1 << 0,
-    //
-    //    /// <summary>
-    //    /// Repeat (tile) the image in X direction when texture coordinates exceed bounds.
-    //    /// </summary>
-    //    RepeatX = 1 << 1,
-    //
-    //    /// <summary>
-    //    /// Repeat (tile) the image in Y direction when texture coordinates exceed bounds.
-    //    /// </summary>
-    //    RepeatY = 1 << 2,
-    //
-    //    /// <summary>
-    //    /// Flips (inverts) image in Y direction when rendered.
-    //    /// </summary>
-    //    FlipY = 1 << 3,
-    //
-    //    /// <summary>
-    //    /// Indicates that image data has premultiplied alpha, affecting blending calculations.
-    //    /// </summary>
-    //    Premultiplied = 1 << 4,
-    //
-    //    /// <summary>
-    //    /// Uses nearest-neighbor interpolation instead of linear when scaling the image.
-    //    /// Produces pixelated rather than smoothed appearance when scaled.
-    //    /// </summary>
-    //    Nearest = 1 << 5,
-    //}
-
-
-    public enum GradientType
-    {
-        None = 0,
-        Linear = 1,
-        Radial = 2,
-        Box = 3
-    }
+/// <summary>
+/// Defines path winding direction for vector shapes.
+/// </summary>
+public enum Winding
+{
+    /// <summary>
+    /// Counter-clockwise winding, used for defining solid shapes.
+    /// </summary>
+    CounterClockWise = 1,
 
     /// <summary>
-    /// Named layer constants. Layers are <see cref="int"/>s — pass any value to
-    /// <c>ElementBuilder.Layer(int)</c>; higher numbers render later (on top of) lower numbers
-    /// and intercept input first. The named constants are spaced by 100 so callers can wedge
-    /// custom layers between them (e.g. <c>Layer.Overlay + 10</c> for "above modals but below
-    /// tooltips") without renumbering.
+    /// Clockwise winding, used for defining holes or cutouts in shapes.
     /// </summary>
-    public static class Layer
-    {
-        /// <summary>Default layer (0). Renders first, hit-tested last.</summary>
-        public const int Base = 0;
+    ClockWise = 2,
+}
 
-        /// <summary>Modal / overlay layer (100). Sits above base content.</summary>
-        public const int Overlay = 100;
-
-        /// <summary>Topmost layer (200). Tooltips, popovers — sits above everything else.</summary>
-        public const int Topmost = 200;
-    }
+/// <summary>
+/// Defines fill rules for vector paths.
+/// </summary>
+public enum Solidity
+{
+    /// <summary>
+    /// Fills interior of counter-clockwise paths.
+    /// </summary>
+    Solid = 1,
 
     /// <summary>
-    /// Controls how an image is scaled to fit its element rect.
+    /// Creates a hole in existing shapes using clockwise paths.
     /// </summary>
-    public enum ImageScaleMode
-    {
-        /// <summary>Stretches the image to fill the entire rect, ignoring aspect ratio.</summary>
-        Stretch,
+    Hole = 2,
+}
 
-        /// <summary>Scales uniformly to fit inside the rect, preserving aspect ratio. May leave empty space.</summary>
-        Fit,
-
-        /// <summary>Scales uniformly to cover the entire rect, preserving aspect ratio. May crop.</summary>
-        Fill
-    }
+/// <summary>
+/// Defines how line endpoints are rendered in stroked paths.
+/// </summary>
+public enum LineCap
+{
+    /// <summary>
+    /// End is squared off at the endpoint with no extension.
+    /// </summary>
+    Butt,
 
     /// <summary>
-    /// A hardware mouse cursor shape an element requests while hovered. Paper only resolves which
-    /// shape the pointer is over (see <see cref="Paper.CurrentCursor"/> / <see cref="Paper.OnCursorChange"/>);
-    /// the host application maps the value to its windowing library and sets the OS cursor. The names
-    /// mirror the common cross-platform standard set (GLFW / SDL); a host should fall back to
-    /// <see cref="Default"/> for any shape it doesn't provide.
+    /// End is rounded with a semicircle whose diameter equals the line width.
     /// </summary>
-    public enum PaperCursor
-    {
-        /// <summary>No explicit cursor; inherit from the parent (resolves to <see cref="Default"/> at the root).</summary>
-        Inherit = 0,
+    Round,
 
-        /// <summary>The standard arrow cursor.</summary>
-        Default,
+    /// <summary>
+    /// End is squared off with an extension of half the line width.
+    /// </summary>
+    Square,
 
-        /// <summary>Pointing hand, for clickable elements (links, buttons).</summary>
-        Pointer,
+    /// <summary>
+    /// Joins are cut at a 45-degree angle, with the line extending to form a diamond.
+    /// </summary>
+    Bevel,
 
-        /// <summary>Open hand, for something grabbable that isn't being dragged yet.</summary>
-        Grab,
+    /// <summary>
+    /// Joins extend to a sharp point, limited by miter limit.
+    /// </summary>
+    Miter,
+}
 
-        /// <summary>Closed hand, for something currently being dragged.</summary>
-        Grabbing,
+///// <summary>
+///// Defines flags that control image loading and rendering behavior.
+///// </summary>
+//[Flags]
+//public enum ImageFlags
+//{
+//    /// <summary>
+//    /// Generate mipmaps during creation of the image for better quality when scaled down.
+//    /// </summary>
+//    GenerateMipMaps = 1 << 0,
+//
+//    /// <summary>
+//    /// Repeat (tile) the image in X direction when texture coordinates exceed bounds.
+//    /// </summary>
+//    RepeatX = 1 << 1,
+//
+//    /// <summary>
+//    /// Repeat (tile) the image in Y direction when texture coordinates exceed bounds.
+//    /// </summary>
+//    RepeatY = 1 << 2,
+//
+//    /// <summary>
+//    /// Flips (inverts) image in Y direction when rendered.
+//    /// </summary>
+//    FlipY = 1 << 3,
+//
+//    /// <summary>
+//    /// Indicates that image data has premultiplied alpha, affecting blending calculations.
+//    /// </summary>
+//    Premultiplied = 1 << 4,
+//
+//    /// <summary>
+//    /// Uses nearest-neighbor interpolation instead of linear when scaling the image.
+//    /// Produces pixelated rather than smoothed appearance when scaled.
+//    /// </summary>
+//    Nearest = 1 << 5,
+//}
 
-        /// <summary>I-beam, for editable/selectable text.</summary>
-        Text,
 
-        /// <summary>Crosshair.</summary>
-        Crosshair,
+public enum GradientType
+{
+    None = 0,
+    Linear = 1,
+    Radial = 2,
+    Box = 3
+}
 
-        /// <summary>Horizontal resize (left-right arrows), for column splitters / east-west edges.</summary>
-        ResizeHorizontal,
+/// <summary>
+/// Named layer constants. Layers are <see cref="int"/>s — pass any value to
+/// <c>ElementBuilder.Layer(int)</c>; higher numbers render later (on top of) lower numbers
+/// and intercept input first. The named constants are spaced by 100 so callers can wedge
+/// custom layers between them (e.g. <c>Layer.Overlay + 10</c> for "above modals but below
+/// tooltips") without renumbering.
+/// </summary>
+public static class Layer
+{
+    /// <summary>Default layer (0). Renders first, hit-tested last.</summary>
+    public const int Base = 0;
 
-        /// <summary>Vertical resize (up-down arrows), for row splitters / north-south edges.</summary>
-        ResizeVertical,
+    /// <summary>Modal / overlay layer (100). Sits above base content.</summary>
+    public const int Overlay = 100;
 
-        /// <summary>Diagonal resize along the top-left / bottom-right axis.</summary>
-        ResizeNWSE,
+    /// <summary>Topmost layer (200). Tooltips, popovers — sits above everything else.</summary>
+    public const int Topmost = 200;
+}
 
-        /// <summary>Diagonal resize along the top-right / bottom-left axis.</summary>
-        ResizeNESW,
+/// <summary>
+/// Controls how an image is scaled to fit its element rect.
+/// </summary>
+public enum ImageScaleMode
+{
+    /// <summary>Stretches the image to fill the entire rect, ignoring aspect ratio.</summary>
+    Stretch,
 
-        /// <summary>Move / resize in all directions (four-way arrows).</summary>
-        ResizeAll,
+    /// <summary>Scales uniformly to fit inside the rect, preserving aspect ratio. May leave empty space.</summary>
+    Fit,
 
-        /// <summary>Operation not allowed (slashed circle).</summary>
-        NotAllowed,
+    /// <summary>Scales uniformly to cover the entire rect, preserving aspect ratio. May crop.</summary>
+    Fill
+}
 
-        /// <summary>Busy / wait.</summary>
-        Wait,
+/// <summary>
+/// A hardware mouse cursor shape an element requests while hovered. Paper only resolves which
+/// shape the pointer is over (see <see cref="Paper.CurrentCursor"/> / <see cref="Paper.OnCursorChange"/>);
+/// the host application maps the value to its windowing library and sets the OS cursor. The names
+/// mirror the common cross-platform standard set (GLFW / SDL); a host should fall back to
+/// <see cref="Default"/> for any shape it doesn't provide.
+/// </summary>
+public enum PaperCursor
+{
+    /// <summary>No explicit cursor; inherit from the parent (resolves to <see cref="Default"/> at the root).</summary>
+    Inherit = 0,
 
-        /// <summary>Help (arrow with question mark).</summary>
-        Help
-    }
+    /// <summary>The standard arrow cursor.</summary>
+    Default,
+
+    /// <summary>Pointing hand, for clickable elements (links, buttons).</summary>
+    Pointer,
+
+    /// <summary>Open hand, for something grabbable that isn't being dragged yet.</summary>
+    Grab,
+
+    /// <summary>Closed hand, for something currently being dragged.</summary>
+    Grabbing,
+
+    /// <summary>I-beam, for editable/selectable text.</summary>
+    Text,
+
+    /// <summary>Crosshair.</summary>
+    Crosshair,
+
+    /// <summary>Horizontal resize (left-right arrows), for column splitters / east-west edges.</summary>
+    ResizeHorizontal,
+
+    /// <summary>Vertical resize (up-down arrows), for row splitters / north-south edges.</summary>
+    ResizeVertical,
+
+    /// <summary>Diagonal resize along the top-left / bottom-right axis.</summary>
+    ResizeNWSE,
+
+    /// <summary>Diagonal resize along the top-right / bottom-left axis.</summary>
+    ResizeNESW,
+
+    /// <summary>Move / resize in all directions (four-way arrows).</summary>
+    ResizeAll,
+
+    /// <summary>Operation not allowed (slashed circle).</summary>
+    NotAllowed,
+
+    /// <summary>Busy / wait.</summary>
+    Wait,
+
+    /// <summary>Help (arrow with question mark).</summary>
+    Help
 }

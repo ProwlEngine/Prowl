@@ -22,8 +22,13 @@ public sealed class OrigamiRamp
 
     public OrigamiRamp Clone() => new()
     {
-        C100 = C100, C200 = C200, C300 = C300,
-        C400 = C400, C500 = C500, C600 = C600, C700 = C700,
+        C100 = C100,
+        C200 = C200,
+        C300 = C300,
+        C400 = C400,
+        C500 = C500,
+        C600 = C600,
+        C700 = C700,
     };
 
     public static OrigamiRamp Lerp(OrigamiRamp a, OrigamiRamp b, float t) => new()

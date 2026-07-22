@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay.Importer;
 using Prowl.Clay.Internal.Intermediate;
 using Prowl.Vector;
@@ -60,15 +63,15 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
                        || mesh.Positions[indices[0]].Equals(mesh.Positions[indices[1]]);
 
             case 3:
-            {
-                int a = indices[0], b = indices[1], c = indices[2];
-                if (a == b || b == c || a == c) return true;
-                Float3 e1 = Sub(mesh.Positions[b], mesh.Positions[a]);
-                Float3 e2 = Sub(mesh.Positions[c], mesh.Positions[a]);
-                Float3 cross = Cross(e1, e2);
-                float twiceAreaSq = cross.X * cross.X + cross.Y * cross.Y + cross.Z * cross.Z;
-                return twiceAreaSq < AreaEpsilon;
-            }
+                {
+                    int a = indices[0], b = indices[1], c = indices[2];
+                    if (a == b || b == c || a == c) return true;
+                    Float3 e1 = Sub(mesh.Positions[b], mesh.Positions[a]);
+                    Float3 e2 = Sub(mesh.Positions[c], mesh.Positions[a]);
+                    Float3 cross = Cross(e1, e2);
+                    float twiceAreaSq = cross.X * cross.X + cross.Y * cross.Y + cross.Z * cross.Z;
+                    return twiceAreaSq < AreaEpsilon;
+                }
 
             default:
                 // Polygons should have been triangulated, but for safety: check duplicates.

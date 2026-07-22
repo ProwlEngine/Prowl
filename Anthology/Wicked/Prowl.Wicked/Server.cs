@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Diagnostics;
 using System.Numerics;
+
 using Prowl.Wicked.Transport;
 
 namespace Prowl.Wicked;
@@ -178,58 +182,58 @@ public static class Server
         switch (objectKind)
         {
             case 0: // Entity
-            {
-                uint networkId = reader.ReadUInt();
-                var entity = FindEntity(networkId);
-                if (entity == null || entity.Map == null || !entity.Map.Observers.Contains(sender))
-                    return;
+                {
+                    uint networkId = reader.ReadUInt();
+                    var entity = FindEntity(networkId);
+                    if (entity == null || entity.Map == null || !entity.Map.Observers.Contains(sender))
+                        return;
 
-                ushort methodId = reader.ReadUShort();
-                ushort promiseId = reader.ReadUShort();
+                    ushort methodId = reader.ReadUShort();
+                    ushort promiseId = reader.ReadUShort();
 
-                NetworkObject.Sender = sender;
-                try
-                {
-                    entity.__DispatchServerRpc(methodId, reader, connectionId, promiseId);
+                    NetworkObject.Sender = sender;
+                    try
+                    {
+                        entity.__DispatchServerRpc(methodId, reader, connectionId, promiseId);
+                    }
+                    catch (Exception ex) when (promiseId == 0)
+                    {
+                        Console.Error.WriteLine(
+                            $"[Prowl.Wicked] Unhandled exception in void EntityCommand on {entity.GetType().Name} " +
+                            $"(connectionId={connectionId}): {ex.Message}");
+                    }
+                    finally
+                    {
+                        NetworkObject.Sender = null;
+                    }
+                    break;
                 }
-                catch (Exception ex) when (promiseId == 0)
-                {
-                    Console.Error.WriteLine(
-                        $"[Prowl.Wicked] Unhandled exception in void EntityCommand on {entity.GetType().Name} " +
-                        $"(connectionId={connectionId}): {ex.Message}");
-                }
-                finally
-                {
-                    NetworkObject.Sender = null;
-                }
-                break;
-            }
             case 2: // Static
-            {
-                ushort rpcTypeId = reader.ReadUShort();
-                ushort methodId = reader.ReadUShort();
-                ushort promiseId = reader.ReadUShort();
+                {
+                    ushort rpcTypeId = reader.ReadUShort();
+                    ushort methodId = reader.ReadUShort();
+                    ushort promiseId = reader.ReadUShort();
 
-                if (!_staticCommandDispatchers.TryGetValue(rpcTypeId, out var dispatcher))
-                    return;
+                    if (!_staticCommandDispatchers.TryGetValue(rpcTypeId, out var dispatcher))
+                        return;
 
-                NetworkObject.Sender = sender;
-                try
-                {
-                    dispatcher(methodId, reader, connectionId, promiseId);
+                    NetworkObject.Sender = sender;
+                    try
+                    {
+                        dispatcher(methodId, reader, connectionId, promiseId);
+                    }
+                    catch (Exception ex) when (promiseId == 0)
+                    {
+                        Console.Error.WriteLine(
+                            $"[Prowl.Wicked] Unhandled exception in void StaticCommand (typeId={rpcTypeId}) " +
+                            $"(connectionId={connectionId}): {ex.Message}");
+                    }
+                    finally
+                    {
+                        NetworkObject.Sender = null;
+                    }
+                    break;
                 }
-                catch (Exception ex) when (promiseId == 0)
-                {
-                    Console.Error.WriteLine(
-                        $"[Prowl.Wicked] Unhandled exception in void StaticCommand (typeId={rpcTypeId}) " +
-                        $"(connectionId={connectionId}): {ex.Message}");
-                }
-                finally
-                {
-                    NetworkObject.Sender = null;
-                }
-                break;
-            }
         }
     }
 

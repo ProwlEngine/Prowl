@@ -1,35 +1,37 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
 
-namespace Prowl.Scribe.Sdf
+namespace Prowl.Scribe.Sdf;
+
+internal sealed class Contour
 {
-    internal sealed class Contour
+    public readonly List<EdgeSegment> Edges = new List<EdgeSegment>();
+
+    public void AddEdge(EdgeSegment edge) => Edges.Add(edge);
+
+    public void Bound(ref double xMin, ref double yMin, ref double xMax, ref double yMax)
     {
-        public readonly List<EdgeSegment> Edges = new List<EdgeSegment>();
+        foreach (var edge in Edges)
+            edge.Bound(ref xMin, ref yMin, ref xMax, ref yMax);
+    }
+}
 
-        public void AddEdge(EdgeSegment edge) => Edges.Add(edge);
+internal sealed class Shape
+{
+    public readonly List<Contour> Contours = new List<Contour>();
 
-        public void Bound(ref double xMin, ref double yMin, ref double xMax, ref double yMax)
-        {
-            foreach (var edge in Edges)
-                edge.Bound(ref xMin, ref yMin, ref xMax, ref yMax);
-        }
+    public Contour AddContour()
+    {
+        var c = new Contour();
+        Contours.Add(c);
+        return c;
     }
 
-    internal sealed class Shape
+    public void Bound(ref double xMin, ref double yMin, ref double xMax, ref double yMax)
     {
-        public readonly List<Contour> Contours = new List<Contour>();
-
-        public Contour AddContour()
-        {
-            var c = new Contour();
-            Contours.Add(c);
-            return c;
-        }
-
-        public void Bound(ref double xMin, ref double yMin, ref double xMax, ref double yMax)
-        {
-            foreach (var c in Contours)
-                c.Bound(ref xMin, ref yMin, ref xMax, ref yMax);
-        }
+        foreach (var c in Contours)
+            c.Bound(ref xMin, ref yMin, ref xMax, ref yMax);
     }
 }

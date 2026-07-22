@@ -1,6 +1,9 @@
-using Prowl.Vector;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Photonic.Integration;
 using Prowl.Photonic.Sampling;
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -71,8 +74,8 @@ public sealed class LightmapBaker : System.IDisposable
     public Job Start()
     {
         if (_job is not null) throw new System.InvalidOperationException("Bake already started.");
-        if (_scene is null)   throw new System.InvalidOperationException("No scene has been begun.");
-        if (!_scene.Ended)    throw new System.InvalidOperationException("Scene was not ended (call BakeScene.End()).");
+        if (_scene is null) throw new System.InvalidOperationException("No scene has been begun.");
+        if (!_scene.Ended) throw new System.InvalidOperationException("Scene was not ended (call BakeScene.End()).");
         if (_targets.Count == 0) throw new System.InvalidOperationException("No targets to bake into.");
 
         _job = Job.Start(_scene, _targets, Options);

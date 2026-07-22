@@ -1,4 +1,7 @@
-﻿namespace Prowl.Echo;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Echo;
 
 /// <summary>
 /// Implements LEB128 (Little Endian Base 128) encoding for variable-length integer encoding.

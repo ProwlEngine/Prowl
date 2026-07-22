@@ -1,10 +1,14 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace Prowl.Echo.SourceGenerator;
 
@@ -121,28 +125,28 @@ public class SerializerGenerator : IIncrementalGenerator
             switch (category)
             {
                 case FieldTypeCategory.ListOfKnown:
-                {
-                    var listType = (INamedTypeSymbol)field.Type;
-                    var elemType = listType.TypeArguments[0];
-                    elementTypeName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
-                    elementCategory = ClassifyFieldType(elemType);
-                    break;
-                }
+                    {
+                        var listType = (INamedTypeSymbol)field.Type;
+                        var elemType = listType.TypeArguments[0];
+                        elementTypeName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
+                        elementCategory = ClassifyFieldType(elemType);
+                        break;
+                    }
                 case FieldTypeCategory.ArrayOfKnown:
-                {
-                    var arrType = (IArrayTypeSymbol)field.Type;
-                    elementTypeName = arrType.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
-                    elementCategory = ClassifyFieldType(arrType.ElementType);
-                    break;
-                }
+                    {
+                        var arrType = (IArrayTypeSymbol)field.Type;
+                        elementTypeName = arrType.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
+                        elementCategory = ClassifyFieldType(arrType.ElementType);
+                        break;
+                    }
                 case FieldTypeCategory.DictStringToKnown:
-                {
-                    var dictType = (INamedTypeSymbol)field.Type;
-                    var valType = dictType.TypeArguments[1];
-                    elementTypeName = valType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
-                    elementCategory = ClassifyFieldType(valType);
-                    break;
-                }
+                    {
+                        var dictType = (INamedTypeSymbol)field.Type;
+                        var valType = dictType.TypeArguments[1];
+                        elementTypeName = valType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
+                        elementCategory = ClassifyFieldType(valType);
+                        break;
+                    }
             }
 
             fields.Add(new FieldToSerialize(
@@ -341,94 +345,102 @@ public class SerializerGenerator : IIncrementalGenerator
         switch (field.Category)
         {
             // Simple single-expression categories
-            case FieldTypeCategory.Byte: case FieldTypeCategory.SByte:
-            case FieldTypeCategory.Short: case FieldTypeCategory.UShort:
-            case FieldTypeCategory.Int: case FieldTypeCategory.UInt:
-            case FieldTypeCategory.Long: case FieldTypeCategory.ULong:
-            case FieldTypeCategory.Float: case FieldTypeCategory.Double:
-            case FieldTypeCategory.Decimal: case FieldTypeCategory.Bool:
+            case FieldTypeCategory.Byte:
+            case FieldTypeCategory.SByte:
+            case FieldTypeCategory.Short:
+            case FieldTypeCategory.UShort:
+            case FieldTypeCategory.Int:
+            case FieldTypeCategory.UInt:
+            case FieldTypeCategory.Long:
+            case FieldTypeCategory.ULong:
+            case FieldTypeCategory.Float:
+            case FieldTypeCategory.Double:
+            case FieldTypeCategory.Decimal:
+            case FieldTypeCategory.Bool:
             case FieldTypeCategory.Char:
-            case FieldTypeCategory.String: case FieldTypeCategory.ByteArray:
-            case FieldTypeCategory.Enum: case FieldTypeCategory.Guid:
+            case FieldTypeCategory.String:
+            case FieldTypeCategory.ByteArray:
+            case FieldTypeCategory.Enum:
+            case FieldTypeCategory.Guid:
                 return GetSerializeExpression(field.Category, field.Name);
 
             // DateTime → compound with "date" key (matches DateTimeFormat)
             case FieldTypeCategory.DateTime:
-            {
-                var v = $"_s_{field.Name}";
-                sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
-                sb.AppendLine($"{indent}{v}.Add(\"date\", new EchoObject(EchoType.Long, {field.Name}.ToBinary()));");
-                return v;
-            }
+                {
+                    var v = $"_s_{field.Name}";
+                    sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
+                    sb.AppendLine($"{indent}{v}.Add(\"date\", new EchoObject(EchoType.Long, {field.Name}.ToBinary()));");
+                    return v;
+                }
 
             // TimeSpan → compound with "ticks" key (matches TimeSpanFormat)
             case FieldTypeCategory.TimeSpan:
-            {
-                var v = $"_s_{field.Name}";
-                sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
-                sb.AppendLine($"{indent}{v}.Add(\"ticks\", new EchoObject(EchoType.Long, {field.Name}.Ticks));");
-                return v;
-            }
+                {
+                    var v = $"_s_{field.Name}";
+                    sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
+                    sb.AppendLine($"{indent}{v}.Add(\"ticks\", new EchoObject(EchoType.Long, {field.Name}.Ticks));");
+                    return v;
+                }
 
             // List<T> → bare EchoType.List (matches ListFormat)
             case FieldTypeCategory.ListOfKnown:
-            {
-                var v = $"_s_{field.Name}";
-                var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
-                sb.AppendLine($"{indent}EchoObject {v};");
-                sb.AppendLine($"{indent}if ({field.Name} != null)");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = EchoObject.NewList();");
-                sb.AppendLine($"{indent}    foreach (var _item in {field.Name})");
-                sb.AppendLine($"{indent}        {v}.ListAdd({elemExpr});");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = new EchoObject();");
-                sb.AppendLine($"{indent}}}");
-                return v;
-            }
+                {
+                    var v = $"_s_{field.Name}";
+                    var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
+                    sb.AppendLine($"{indent}EchoObject {v};");
+                    sb.AppendLine($"{indent}if ({field.Name} != null)");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = EchoObject.NewList();");
+                    sb.AppendLine($"{indent}    foreach (var _item in {field.Name})");
+                    sb.AppendLine($"{indent}        {v}.ListAdd({elemExpr});");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = new EchoObject();");
+                    sb.AppendLine($"{indent}}}");
+                    return v;
+                }
 
             // T[] → compound with "array" key (matches ArrayFormat)
             case FieldTypeCategory.ArrayOfKnown:
-            {
-                var v = $"_s_{field.Name}";
-                var arrList = $"_arrList_{field.Name}";
-                var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
-                sb.AppendLine($"{indent}EchoObject {v};");
-                sb.AppendLine($"{indent}if ({field.Name} != null)");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = EchoObject.NewCompound();");
-                sb.AppendLine($"{indent}    var {arrList} = EchoObject.NewList();");
-                sb.AppendLine($"{indent}    foreach (var _item in {field.Name})");
-                sb.AppendLine($"{indent}        {arrList}.ListAdd({elemExpr});");
-                sb.AppendLine($"{indent}    {v}.Add(\"array\", {arrList});");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = new EchoObject();");
-                sb.AppendLine($"{indent}}}");
-                return v;
-            }
+                {
+                    var v = $"_s_{field.Name}";
+                    var arrList = $"_arrList_{field.Name}";
+                    var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
+                    sb.AppendLine($"{indent}EchoObject {v};");
+                    sb.AppendLine($"{indent}if ({field.Name} != null)");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = EchoObject.NewCompound();");
+                    sb.AppendLine($"{indent}    var {arrList} = EchoObject.NewList();");
+                    sb.AppendLine($"{indent}    foreach (var _item in {field.Name})");
+                    sb.AppendLine($"{indent}        {arrList}.ListAdd({elemExpr});");
+                    sb.AppendLine($"{indent}    {v}.Add(\"array\", {arrList});");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = new EchoObject();");
+                    sb.AppendLine($"{indent}}}");
+                    return v;
+                }
 
             // Dictionary<string, T> → bare compound (matches DictionaryFormat for string keys)
             case FieldTypeCategory.DictStringToKnown:
-            {
-                var v = $"_s_{field.Name}";
-                var valExpr = GetSerializeExpression(field.ElementCategory, "_kvp.Value");
-                sb.AppendLine($"{indent}EchoObject {v};");
-                sb.AppendLine($"{indent}if ({field.Name} != null)");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = EchoObject.NewCompound();");
-                sb.AppendLine($"{indent}    foreach (var _kvp in {field.Name})");
-                sb.AppendLine($"{indent}        {v}.Add(_kvp.Key, {valExpr});");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {v} = new EchoObject();");
-                sb.AppendLine($"{indent}}}");
-                return v;
-            }
+                {
+                    var v = $"_s_{field.Name}";
+                    var valExpr = GetSerializeExpression(field.ElementCategory, "_kvp.Value");
+                    sb.AppendLine($"{indent}EchoObject {v};");
+                    sb.AppendLine($"{indent}if ({field.Name} != null)");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = EchoObject.NewCompound();");
+                    sb.AppendLine($"{indent}    foreach (var _kvp in {field.Name})");
+                    sb.AppendLine($"{indent}        {v}.Add(_kvp.Key, {valExpr});");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {v} = new EchoObject();");
+                    sb.AppendLine($"{indent}}}");
+                    return v;
+                }
 
             // Fallback → existing Serializer.Serialize call
             case FieldTypeCategory.Fallback:
@@ -445,15 +457,22 @@ public class SerializerGenerator : IIncrementalGenerator
         switch (field.Category)
         {
             // Value types — direct accessor
-            case FieldTypeCategory.Byte: case FieldTypeCategory.SByte:
-            case FieldTypeCategory.Short: case FieldTypeCategory.UShort:
-            case FieldTypeCategory.Int: case FieldTypeCategory.UInt:
-            case FieldTypeCategory.Long: case FieldTypeCategory.ULong:
-            case FieldTypeCategory.Float: case FieldTypeCategory.Double:
-            case FieldTypeCategory.Decimal: case FieldTypeCategory.Bool:
+            case FieldTypeCategory.Byte:
+            case FieldTypeCategory.SByte:
+            case FieldTypeCategory.Short:
+            case FieldTypeCategory.UShort:
+            case FieldTypeCategory.Int:
+            case FieldTypeCategory.UInt:
+            case FieldTypeCategory.Long:
+            case FieldTypeCategory.ULong:
+            case FieldTypeCategory.Float:
+            case FieldTypeCategory.Double:
+            case FieldTypeCategory.Decimal:
+            case FieldTypeCategory.Bool:
             case FieldTypeCategory.Char:
             case FieldTypeCategory.Enum:
-            case FieldTypeCategory.DateTime: case FieldTypeCategory.TimeSpan:
+            case FieldTypeCategory.DateTime:
+            case FieldTypeCategory.TimeSpan:
             case FieldTypeCategory.Guid:
                 sb.AppendLine($"{indent}{field.Name} = {GetDeserializeExpression(field.Category, sourceExpr, field.TypeName)};");
                 break;
@@ -466,55 +485,55 @@ public class SerializerGenerator : IIncrementalGenerator
 
             // List<T> → iterate bare list (matches ListFormat)
             case FieldTypeCategory.ListOfKnown:
-            {
-                var elemDeser = GetDeserializeExpression(field.ElementCategory, "_item", field.ElementTypeName!);
-                sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.List<{field.ElementTypeName}>();");
-                sb.AppendLine($"{indent}    foreach (var _item in {sourceExpr}.List)");
-                sb.AppendLine($"{indent}        {field.Name}.Add({elemDeser});");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = null!;");
-                sb.AppendLine($"{indent}}}");
-                break;
-            }
+                {
+                    var elemDeser = GetDeserializeExpression(field.ElementCategory, "_item", field.ElementTypeName!);
+                    sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.List<{field.ElementTypeName}>();");
+                    sb.AppendLine($"{indent}    foreach (var _item in {sourceExpr}.List)");
+                    sb.AppendLine($"{indent}        {field.Name}.Add({elemDeser});");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = null!;");
+                    sb.AppendLine($"{indent}}}");
+                    break;
+                }
 
             // T[] → read from compound "array" key (matches ArrayFormat)
             case FieldTypeCategory.ArrayOfKnown:
-            {
-                var arrData = $"_arrData_{field.Name}";
-                var elemDeser = GetDeserializeExpression(field.ElementCategory, $"{arrData}.List[_i]", field.ElementTypeName!);
-                sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null && {sourceExpr}.TryGet(\"array\", out var {arrData}))");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = new {field.ElementTypeName}[{arrData}.List.Count];");
-                sb.AppendLine($"{indent}    for (int _i = 0; _i < {arrData}.List.Count; _i++)");
-                sb.AppendLine($"{indent}        {field.Name}[_i] = {elemDeser};");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = null!;");
-                sb.AppendLine($"{indent}}}");
-                break;
-            }
+                {
+                    var arrData = $"_arrData_{field.Name}";
+                    var elemDeser = GetDeserializeExpression(field.ElementCategory, $"{arrData}.List[_i]", field.ElementTypeName!);
+                    sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null && {sourceExpr}.TryGet(\"array\", out var {arrData}))");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = new {field.ElementTypeName}[{arrData}.List.Count];");
+                    sb.AppendLine($"{indent}    for (int _i = 0; _i < {arrData}.List.Count; _i++)");
+                    sb.AppendLine($"{indent}        {field.Name}[_i] = {elemDeser};");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = null!;");
+                    sb.AppendLine($"{indent}}}");
+                    break;
+                }
 
             // Dictionary<string, T> → iterate compound tags (matches DictionaryFormat for string keys)
             case FieldTypeCategory.DictStringToKnown:
-            {
-                var valDeser = GetDeserializeExpression(field.ElementCategory, "_kvp.Value", field.ElementTypeName!);
-                sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.Dictionary<string, {field.ElementTypeName}>();");
-                sb.AppendLine($"{indent}    foreach (var _kvp in {sourceExpr}.Tags)");
-                sb.AppendLine($"{indent}        {field.Name}.Add(_kvp.Key, {valDeser});");
-                sb.AppendLine($"{indent}}}");
-                sb.AppendLine($"{indent}else");
-                sb.AppendLine($"{indent}{{");
-                sb.AppendLine($"{indent}    {field.Name} = null!;");
-                sb.AppendLine($"{indent}}}");
-                break;
-            }
+                {
+                    var valDeser = GetDeserializeExpression(field.ElementCategory, "_kvp.Value", field.ElementTypeName!);
+                    sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.Dictionary<string, {field.ElementTypeName}>();");
+                    sb.AppendLine($"{indent}    foreach (var _kvp in {sourceExpr}.Tags)");
+                    sb.AppendLine($"{indent}        {field.Name}.Add(_kvp.Key, {valDeser});");
+                    sb.AppendLine($"{indent}}}");
+                    sb.AppendLine($"{indent}else");
+                    sb.AppendLine($"{indent}{{");
+                    sb.AppendLine($"{indent}    {field.Name} = null!;");
+                    sb.AppendLine($"{indent}}}");
+                    break;
+                }
 
             // Fallback → existing Serializer.Deserialize call
             case FieldTypeCategory.Fallback:

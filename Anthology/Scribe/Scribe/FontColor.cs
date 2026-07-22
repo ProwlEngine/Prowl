@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Runtime.InteropServices;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -60,7 +63,8 @@ public struct FontColor
 
         hex = hex.Substring(1);
 
-        return hex.Length switch {
+        return hex.Length switch
+        {
             3 => new FontColor( // #RGB
                 Convert.ToByte(hex.Substring(0, 1) + hex.Substring(0, 1), 16),
                 Convert.ToByte(hex.Substring(1, 1) + hex.Substring(1, 1), 16),

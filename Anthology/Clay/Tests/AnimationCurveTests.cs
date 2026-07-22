@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay;
 using Prowl.Vector;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -17,7 +21,7 @@ public sealed class AnimationCurveTests
         {
             Interpolation = AnimationInterpolation.Step,
             Dimension = 1,
-            Times  = new[] { 0f, 1f, 2f },
+            Times = new[] { 0f, 1f, 2f },
             Values = new[] { 10f, 20f, 30f },
         };
 
@@ -36,12 +40,12 @@ public sealed class AnimationCurveTests
         {
             Interpolation = AnimationInterpolation.Linear,
             Dimension = 3,
-            Times  = new[] { 0f, 1f },
-            Values = new[] { 0f, 0f, 0f,   10f, 20f, 30f },
+            Times = new[] { 0f, 1f },
+            Values = new[] { 0f, 0f, 0f, 10f, 20f, 30f },
         };
 
         var mid = curve.EvaluateVector3(0.5f);
-        Assert.Equal( 5f, mid.X, precision: 4);
+        Assert.Equal(5f, mid.X, precision: 4);
         Assert.Equal(10f, mid.Y, precision: 4);
         Assert.Equal(15f, mid.Z, precision: 4);
     }
@@ -57,8 +61,8 @@ public sealed class AnimationCurveTests
         {
             Interpolation = AnimationInterpolation.Linear,
             Dimension = 4,
-            Times  = new[] { 0f, 1f },
-            Values = new[] { qx.X, qx.Y, qx.Z, qx.W,  qy.X, qy.Y, qy.Z, qy.W },
+            Times = new[] { 0f, 1f },
+            Values = new[] { qx.X, qx.Y, qx.Z, qx.W, qy.X, qy.Y, qy.Z, qy.W },
         };
 
         for (float t = 0f; t <= 1f; t += 0.1f)

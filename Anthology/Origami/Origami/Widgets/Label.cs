@@ -615,8 +615,8 @@ public sealed class LabelBuilder
         float cursor = s.HAlign switch
         {
             LabelHAlign.Center => innerLeft + (innerWidth - contentW) * 0.5f,
-            LabelHAlign.Right  => innerRight - contentW,
-            _                  => innerLeft,
+            LabelHAlign.Right => innerRight - contentW,
+            _ => innerLeft,
         };
 
         // Vertical baseline for text and icons. MeasureText returns the glyph box
@@ -697,9 +697,9 @@ public sealed class LabelBuilder
     {
         return align switch
         {
-            LabelVAlign.Top    => y + padY,
+            LabelVAlign.Top => y + padY,
             LabelVAlign.Bottom => y + h - padY - contentH,
-            _                  => y + (h - contentH) * 0.5f,
+            _ => y + (h - contentH) * 0.5f,
         };
     }
 

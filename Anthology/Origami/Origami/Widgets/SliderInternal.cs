@@ -93,9 +93,9 @@ internal static class SliderInternal
 
     /// <summary>True when <typeparamref name="T"/> is one of the built-in integer types.</summary>
     public static bool IsIntegerType<T>() where T : struct, INumber<T>
-        => typeof(T) == typeof(int)   || typeof(T) == typeof(uint)
-        || typeof(T) == typeof(long)  || typeof(T) == typeof(ulong)
+        => typeof(T) == typeof(int) || typeof(T) == typeof(uint)
+        || typeof(T) == typeof(long) || typeof(T) == typeof(ulong)
         || typeof(T) == typeof(short) || typeof(T) == typeof(ushort)
-        || typeof(T) == typeof(byte)  || typeof(T) == typeof(sbyte)
-        || typeof(T) == typeof(nint)  || typeof(T) == typeof(nuint);
+        || typeof(T) == typeof(byte) || typeof(T) == typeof(sbyte)
+        || typeof(T) == typeof(nint) || typeof(T) == typeof(nuint);
 }

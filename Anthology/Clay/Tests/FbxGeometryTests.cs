@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -15,7 +19,7 @@ public sealed class FbxGeometryTests
     {
         var model = ModelImporter.Load(TestModels.Fbx("box.fbx"));
 
-        Assert.Equal("fbx",  model.Metadata.Format);
+        Assert.Equal("fbx", model.Metadata.Format);
         Assert.Equal("7400", model.Metadata.FormatVersion);
         Assert.NotEmpty(model.Meshes);
 
@@ -50,7 +54,7 @@ public sealed class FbxGeometryTests
 
         // Spider's known authoring: 19 sub-meshes split across 4 named materials.
         Assert.Equal(19, model.Meshes.Count);
-        Assert.Equal(4,  model.Materials.Count);
+        Assert.Equal(4, model.Materials.Count);
 
         // Every node except the synthetic root must have a parent.
         Assert.Equal(1, model.Nodes.Count(n => n.Parent is null));

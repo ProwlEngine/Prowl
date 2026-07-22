@@ -54,7 +54,8 @@ public static class TypeNameRegistry
 
     public static string GetCompactTypeName(Type type)
     {
-        return _compactNames.GetOrAdd(type, t => {
+        return _compactNames.GetOrAdd(type, t =>
+        {
             // Check predefined compact names first
             if (_predefinedCompactNames.TryGetValue(t, out var predefined))
                 return predefined;
@@ -82,7 +83,8 @@ public static class TypeNameRegistry
 
     public static Type? ResolveCompactTypeName(string name)
     {
-        return _compactNameLookup.GetOrAdd(name, n => {
+        return _compactNameLookup.GetOrAdd(name, n =>
+        {
             // Check predefined types first
             if (_predefinedTypeLookup.TryGetValue(n, out var predefined))
                 return predefined;
@@ -106,7 +108,8 @@ public static class TypeNameRegistry
 
     public static string GetFullTypeName(Type type)
     {
-        return _fullNames.GetOrAdd(type, t => {
+        return _fullNames.GetOrAdd(type, t =>
+        {
             // Use assembly qualified name for better resolution
             return t.AssemblyQualifiedName ?? t.FullName ?? t.Name;
         });
@@ -114,7 +117,8 @@ public static class TypeNameRegistry
 
     public static Type? ResolveFullTypeName(string name)
     {
-        return _fullNameLookup.GetOrAdd(name, n => {
+        return _fullNameLookup.GetOrAdd(name, n =>
+        {
             try
             {
                 // Try direct type resolution first

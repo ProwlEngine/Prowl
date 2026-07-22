@@ -80,9 +80,9 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     public NumericFieldBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public NumericFieldBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public NumericFieldBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public NumericFieldBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public NumericFieldBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public NumericFieldBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public NumericFieldBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public NumericFieldBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public NumericFieldBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     public NumericFieldBuilder<T> Width(UnitValue width) { _width = width; return this; }
     public NumericFieldBuilder<T> Height(float height) { _height = MathF.Max(20, height); return this; }

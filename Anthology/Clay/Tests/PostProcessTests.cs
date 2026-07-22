@@ -1,5 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Clay;
 using Prowl.Clay.Importer;
+
 using Xunit;
 
 namespace Prowl.Clay.Tests;
@@ -15,17 +19,17 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/BoxTextured/glTF-Binary/BoxTextured.glb");
 
-        var raw     = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
         var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipUVs });
 
-        var rawMesh  = raw.Meshes[0];
+        var rawMesh = raw.Meshes[0];
         var flipMesh = flipped.Meshes[0];
         Assert.NotNull(rawMesh.UVs[0]);
         Assert.NotNull(flipMesh.UVs[0]);
 
         for (int i = 0; i < rawMesh.UVs[0]!.Length; i++)
         {
-            Assert.Equal(     rawMesh.UVs[0]![i].X, flipMesh.UVs[0]![i].X, precision: 5);
+            Assert.Equal(rawMesh.UVs[0]![i].X, flipMesh.UVs[0]![i].X, precision: 5);
             Assert.Equal(1f - rawMesh.UVs[0]![i].Y, flipMesh.UVs[0]![i].Y, precision: 5);
         }
     }
@@ -35,10 +39,10 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
-        var raw     = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
         var flipped = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.FlipWindingOrder });
 
-        var rawIdx  = raw.Meshes[0].GetIndices32(0);
+        var rawIdx = raw.Meshes[0].GetIndices32(0);
         var flipIdx = flipped.Meshes[0].GetIndices32(0);
         Assert.Equal(rawIdx.Length, flipIdx.Length);
         Assert.True(rawIdx.Length % 3 == 0);
@@ -56,7 +60,7 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/Box/glTF-Binary/Box.glb");
 
-        var raw    = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
         var scaled = ModelImporter.Load(path, ModelImporterSettings.Raw with
         {
             PostProcess = PostProcessFlags.GlobalScale,
@@ -141,21 +145,21 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb");
 
-        var baseline  = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var baseline = ModelImporter.Load(path, ModelImporterSettings.Raw);
         var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.ImproveCacheLocality });
 
-        Assert.Equal(baseline.Meshes[0].VertexCount,                   optimized.Meshes[0].VertexCount);
+        Assert.Equal(baseline.Meshes[0].VertexCount, optimized.Meshes[0].VertexCount);
         Assert.Equal(baseline.Meshes[0].SubMeshes[0].IndexCount, optimized.Meshes[0].SubMeshes[0].IndexCount);
 
         // Same set of indices, just reordered - sort-and-compare catches "reorder lost an index".
         var baseSorted = baseline.Meshes[0].GetIndices32(0).OrderBy(x => x).ToArray();
-        var optSorted  = optimized.Meshes[0].GetIndices32(0).OrderBy(x => x).ToArray();
+        var optSorted = optimized.Meshes[0].GetIndices32(0).OrderBy(x => x).ToArray();
         Assert.Equal(baseSorted, optSorted);
 
         // ...but the actual order must have changed for a non-trivially-sized mesh, otherwise
         // the step did nothing.
         var baseRaw = baseline.Meshes[0].GetIndices32(0);
-        var optRaw  = optimized.Meshes[0].GetIndices32(0);
+        var optRaw = optimized.Meshes[0].GetIndices32(0);
         Assert.False(baseRaw.SequenceEqual(optRaw),
             "ImproveCacheLocality produced an identical index order - step appears to be a no-op.");
     }
@@ -165,7 +169,7 @@ public sealed class PostProcessTests
     {
         string path = TestModels.Gltf("2.0/CesiumMan/glTF-Binary/CesiumMan.glb");
 
-        var raw       = ModelImporter.Load(path, ModelImporterSettings.Raw);
+        var raw = ModelImporter.Load(path, ModelImporterSettings.Raw);
         var optimized = ModelImporter.Load(path, ModelImporterSettings.Raw with { PostProcess = PostProcessFlags.OptimizeGraph });
 
         // Joints must not collapse: bone count is structural and skinning relies on it.
@@ -184,7 +188,7 @@ public sealed class PostProcessTests
 /// </summary>
 internal static class SyntheticGltf
 {
-    public static readonly byte[] QuadBufferBytes          = BuildQuadBuffer();
+    public static readonly byte[] QuadBufferBytes = BuildQuadBuffer();
     public static readonly byte[] SingleTriangleBufferBytes = BuildSingleTriangleBuffer();
 
     private static byte[] BuildQuadBuffer()
@@ -192,8 +196,8 @@ internal static class SyntheticGltf
         // 4 positions (3 floats each) followed by 6 ushort indices = 48 + 12 = 60 bytes.
         var ms = new MemoryStream();
         var bw = new BinaryWriter(ms);
-        foreach (var c in new float[]  { 0, 0, 0,  1, 0, 0,  0, 1, 0,  1, 1, 0 }) bw.Write(c);
-        foreach (var i in new ushort[] { 0, 1, 2,  0, 1, 1 })                     bw.Write(i); // second tri is degenerate
+        foreach (var c in new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0 }) bw.Write(c);
+        foreach (var i in new ushort[] { 0, 1, 2, 0, 1, 1 }) bw.Write(i); // second tri is degenerate
         return ms.ToArray();
     }
 
@@ -224,7 +228,7 @@ internal static class SyntheticGltf
     {
         var ms = new MemoryStream();
         var bw = new BinaryWriter(ms);
-        foreach (var c in new float[] { 0, 0, 0,  1, 0, 0,  0, 1, 0 }) bw.Write(c);
+        foreach (var c in new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0 }) bw.Write(c);
         return ms.ToArray();
     }
 

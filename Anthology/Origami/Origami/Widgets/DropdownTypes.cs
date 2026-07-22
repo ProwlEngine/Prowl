@@ -87,10 +87,10 @@ public readonly struct DropdownTriggerContext
 internal static class DropdownInternal
 {
     // Storage keys on the trigger handle (centralised so Single/Multi don't fight for slots).
-    internal const string KeyOpen        = "drop_open";
-    internal const string KeySearch      = "drop_search";
-    internal const string KeyHighlight   = "drop_hl";
-    internal const string KeyPage        = "drop_page";
+    internal const string KeyOpen = "drop_open";
+    internal const string KeySearch = "drop_search";
+    internal const string KeyHighlight = "drop_hl";
+    internal const string KeyPage = "drop_page";
 
     /// <summary>
     /// Handles Esc to close. Click-outside is handled separately by the modal backdrop
@@ -534,7 +534,7 @@ internal static class DropdownInternal
         canvas.SetStrokeJoint(JointStyle.Round);
         canvas.BeginPath();
         if (up) { canvas.MoveTo(cx - 3.6f, cy + 1.9f); canvas.LineTo(cx, cy - 2f); canvas.LineTo(cx + 3.6f, cy + 1.9f); }
-        else    { canvas.MoveTo(cx - 3.6f, cy - 1.9f); canvas.LineTo(cx, cy + 2f); canvas.LineTo(cx + 3.6f, cy - 1.9f); }
+        else { canvas.MoveTo(cx - 3.6f, cy - 1.9f); canvas.LineTo(cx, cy + 2f); canvas.LineTo(cx + 3.6f, cy - 1.9f); }
         canvas.Stroke();
         canvas.RestoreState();
     }

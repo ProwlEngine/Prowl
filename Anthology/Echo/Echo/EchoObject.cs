@@ -253,7 +253,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                     return thisBytes.SequenceEqual(otherBytes);
                 }
 
-                return TagType switch {
+                return TagType switch
+                {
                     EchoType.Int => IntValue == other.IntValue,
                     EchoType.Float => FloatValue == other.FloatValue,
                     EchoType.Double => DoubleValue == other.DoubleValue,
@@ -394,7 +395,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             {
                 try
                 {
-                    _value = TagType switch {
+                    _value = TagType switch
+                    {
                         EchoType.Byte => Convert.ToByte(value),
                         EchoType.sByte => Convert.ToSByte(value),
                         EchoType.Short => Convert.ToInt16(value),
@@ -418,7 +420,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             }
 
             // Handle special types
-            _value = TagType switch {
+            _value = TagType switch
+            {
                 EchoType.String => value is string str ? str : value.ToString(),
                 EchoType.Bool => Convert.ToBoolean(value),
                 EchoType.ByteArray => value is byte[] arr ? arr : throw new InvalidOperationException(
@@ -433,7 +436,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         }
     }
 
-    private static bool IsNumericType(EchoType type) => type switch {
+    private static bool IsNumericType(EchoType type) => type switch
+    {
         EchoType.Byte or EchoType.sByte or
         EchoType.Short or EchoType.Int or EchoType.Long or
         EchoType.UShort or EchoType.UInt or EchoType.ULong or
@@ -500,8 +504,10 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
     /// Null returns a string with contents "NULL".
     /// Not supported by CompoundTag, ListTag. </summary>
     /// <exception cref="InvalidCastException"> Will throw when used on an unsupported tag. </exception>
-    public string StringValue {
-        get => TagType switch {
+    public string StringValue
+    {
+        get => TagType switch
+        {
             EchoType.Null => "NULL",
             EchoType.String => Value as string ?? "",
             EchoType.Byte => ByteValue.ToString(CultureInfo.InvariantCulture),

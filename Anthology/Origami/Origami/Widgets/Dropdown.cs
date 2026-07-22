@@ -74,9 +74,9 @@ public sealed class DropdownBuilder<T>
     public DropdownBuilder<T> Primary() => Variant(OrigamiVariant.Primary);
     public DropdownBuilder<T> Success() => Variant(OrigamiVariant.Success);
     public DropdownBuilder<T> Warning() => Variant(OrigamiVariant.Warning);
-    public DropdownBuilder<T> Danger()  => Variant(OrigamiVariant.Danger);
-    public DropdownBuilder<T> Info()    => Variant(OrigamiVariant.Info);
-    public DropdownBuilder<T> Subtle()  => Variant(OrigamiVariant.Subtle);
+    public DropdownBuilder<T> Danger() => Variant(OrigamiVariant.Danger);
+    public DropdownBuilder<T> Info() => Variant(OrigamiVariant.Info);
+    public DropdownBuilder<T> Subtle() => Variant(OrigamiVariant.Subtle);
 
     // ── Sizing ─────────────────────────────────────────────────────────
 
@@ -170,10 +170,10 @@ public sealed class DropdownBuilder<T>
         ElementHandle trigHandle = default;
 
         bool subtle = _variant == OrigamiVariant.Subtle;
-        Color trigBg     = subtle ? Color.Transparent : _theme.Glass; // glass-in field
+        Color trigBg = subtle ? Color.Transparent : _theme.Glass; // glass-in field
         Color trigBorder = subtle ? Color.Transparent : _theme.BorderSoft;
         Color trigBorderHover = _theme.BorderStrong;
-        Color chevColor  = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
+        Color chevColor = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
                                   ? ink.C300 : ramp.C600;
 
         // Use Row so children flow left-to-right; per-child Margin (not ChildLeft/Right)

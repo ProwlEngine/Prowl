@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Vector;
 
 namespace Prowl.Photonic;
@@ -17,8 +20,8 @@ namespace Prowl.Photonic;
 public struct Sh9Rgb
 {
     // Real-SH basis constants (Stupid Spherical Harmonics Tricks, Sloan 2008).
-    private const float K0  = 0.2820947918f;            // band 0
-    private const float K1  = 0.4886025119f;            // band 1
+    private const float K0 = 0.2820947918f;            // band 0
+    private const float K1 = 0.4886025119f;            // band 1
     private const float K2a = 1.0925484306f;            // band 2: xy, yz, xz
     private const float K2b = 0.3153915652f;            // band 2: 3z^2-1
     private const float K2c = 0.5462742153f;            // band 2: x^2-y^2
@@ -62,8 +65,15 @@ public struct Sh9Rgb
     /// <summary>This projection scaled by <paramref name="s"/> (used to turn a running sum into a mean).</summary>
     public readonly Sh9Rgb Scaled(float s) => new Sh9Rgb
     {
-        C0 = C0 * s, C1 = C1 * s, C2 = C2 * s, C3 = C3 * s, C4 = C4 * s,
-        C5 = C5 * s, C6 = C6 * s, C7 = C7 * s, C8 = C8 * s,
+        C0 = C0 * s,
+        C1 = C1 * s,
+        C2 = C2 * s,
+        C3 = C3 * s,
+        C4 = C4 * s,
+        C5 = C5 * s,
+        C6 = C6 * s,
+        C7 = C7 * s,
+        C8 = C8 * s,
     };
 
     /// <summary>The nine raw radiance coefficients (band 0, 1, 2 order), for serialization / GPU upload.</summary>

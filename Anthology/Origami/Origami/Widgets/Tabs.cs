@@ -166,10 +166,19 @@ public sealed class TabsBuilder
 
             var snap = new TabSnapshot
             {
-                Pills = pills, PadX = padX, FontSize = fs, HoverT = hoverT, SelT = selT,
-                Label = item.Label, Icon = item.Icon, Glyph = item.Glyph, Badge = item.Badge,
+                Pills = pills,
+                PadX = padX,
+                FontSize = fs,
+                HoverT = hoverT,
+                SelT = selT,
+                Label = item.Label,
+                Icon = item.Icon,
+                Glyph = item.Glyph,
+                Badge = item.Badge,
                 CloseInset = closeable ? closeSize + 4f : 0f,
-                Theme = _theme, Accent = accent, Font = font,
+                Theme = _theme,
+                Accent = accent,
+                Font = font,
             };
             _paper.Draw((canvas, rect) => PaintTab(canvas, rect, in snap));
 
