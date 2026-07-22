@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 
 using Prowl.Echo;
+using Prowl.Runtime;
 
 namespace Prowl.Editor;
 
@@ -19,7 +20,7 @@ public class SubAssetEntry
 
     public Type? Type
     {
-        get => !string.IsNullOrEmpty(TypeName) ? System.Type.GetType(TypeName) : null;
+        get => !string.IsNullOrEmpty(TypeName) ? RuntimeUtils.ResolveType(TypeName) : null;
         set => TypeName = value?.AssemblyQualifiedName ?? "";
     }
 }
@@ -45,7 +46,7 @@ public class AssetEntry
 
     public Type? MainAssetType
     {
-        get => MainAssetTypeName != null ? Type.GetType(MainAssetTypeName) : null;
+        get => MainAssetTypeName != null ? RuntimeUtils.ResolveType(MainAssetTypeName) : null;
         set => MainAssetTypeName = value?.AssemblyQualifiedName;
     }
 
