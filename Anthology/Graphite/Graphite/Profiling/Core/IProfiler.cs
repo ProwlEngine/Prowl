@@ -17,7 +17,7 @@ public interface IProfiler
     void BeginPass(in PassInfo pass);
     void EndPass(in PassInfo pass);
 
-    void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved);
+    void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
 
     void BeginSample(string name);
     void EndSample();

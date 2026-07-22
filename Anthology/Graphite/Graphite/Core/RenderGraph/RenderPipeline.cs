@@ -97,7 +97,10 @@ public abstract class RenderPipeline<TView> : IDisposable
             if (profiler != null)
             {
                 foreach (RenderResourceID input in node.Inputs)
-                    profiler.RecordPassRead(passInfo, input, context.ResolveForProfiler(input));
+                {
+                    context.ResolveForProfiler(input, out RenderTexture? texture, out DeviceBuffer? buffer);
+                    profiler.RecordPassRead(passInfo, input, texture, buffer);
+                }
             }
 
             context.SetCurrentPass(passInfo);
@@ -108,7 +111,10 @@ public abstract class RenderPipeline<TView> : IDisposable
             if (profiler != null)
             {
                 foreach (RenderResourceID output in node.Outputs)
-                    profiler.RecordPassRead(passInfo, output, context.ResolveForProfiler(output));
+                {
+                    context.ResolveForProfiler(output, out RenderTexture? texture, out DeviceBuffer? buffer);
+                    profiler.RecordPassRead(passInfo, output, texture, buffer);
+                }
             }
 
             context.ReclaimUnsubmittedCommandBuffers(node.Pass.Name);

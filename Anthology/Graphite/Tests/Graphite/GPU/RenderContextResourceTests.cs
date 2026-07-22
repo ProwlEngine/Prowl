@@ -227,7 +227,7 @@ file sealed class RecordingProfiler : IProfiler
 
     public void BeginPass(in PassInfo pass) { }
     public void EndPass(in PassInfo pass) { }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved) { }
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 
     public void BeginSample(string name) { }
 

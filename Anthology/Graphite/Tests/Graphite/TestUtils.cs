@@ -331,7 +331,9 @@ public sealed class TestCountingProfiler : IProfiler
 
     public void BeginPass(in PassInfo pass) { }
     public void EndPass(in PassInfo pass) { }
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved) { }
+#nullable enable
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
+#nullable restore
 
     public void BeginSample(string name) { }
     public void EndSample() { }

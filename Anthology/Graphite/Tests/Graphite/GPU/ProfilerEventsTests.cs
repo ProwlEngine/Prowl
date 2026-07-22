@@ -25,7 +25,7 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<ProfilerSubmitInfo> Submits = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
-    public readonly List<(PassInfo Pass, RenderResourceID Resource, DeviceResource Resolved)> PassReads = new();
+    public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
     public readonly List<(PassInfo? Pass, string BufferName, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
     public bool RequestExecutionTiming { get; set; }
@@ -40,8 +40,8 @@ file sealed class RecordingProfiler : IProfiler
 
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
     public void EndPass(in PassInfo pass) => PassesEnded.Add(pass);
-    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, DeviceResource resolved)
-        => PassReads.Add((pass, resource, resolved));
+    public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer)
+        => PassReads.Add((pass, resource, texture, buffer));
 
     public void BeginSample(string name) { }
     public void EndSample() { }

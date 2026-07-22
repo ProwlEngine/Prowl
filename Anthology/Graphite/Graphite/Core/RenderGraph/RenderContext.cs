@@ -245,11 +245,20 @@ public sealed class RenderContext<TView>
     /// <summary>Closes the most recently opened sample region.</summary>
     public void EndSample() => _device.Profiler?.EndSample();
 
-    /// <summary>Resolves a texture handle to the DeviceResource the profiler should see for a pass read.</summary>
-    internal DeviceResource ResolveForProfiler(RenderResourceID resource)
-        => IsTextureResource(resource)
-            ? GetRenderTexture(new TextureHandle(resource)).Framebuffer
-            : GetRenderBuffer(new BufferHandle(resource));
+    /// <summary>Resolves a texture or buffer handle to the resource the profiler should see for a pass read.</summary>
+    internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)
+    {
+        if (IsTextureResource(resource))
+        {
+            texture = GetRenderTexture(new TextureHandle(resource));
+            buffer = null;
+        }
+        else
+        {
+            texture = null;
+            buffer = GetRenderBuffer(new BufferHandle(resource));
+        }
+    }
 
     private RenderTextureDescription ToTransientDesc(in GraphTextureDesc desc)
     {
