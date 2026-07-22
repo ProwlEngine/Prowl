@@ -351,3 +351,9 @@ FodyWeavers.xsd
 
 nuget.config
 *.mdx
+
+# Local-machine-only helper scripts
+refresh-anthology.sh
+/OldPipeline
+/ProfilerTasks
+/profiler.txt
