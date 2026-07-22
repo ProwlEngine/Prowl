@@ -8,6 +8,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using RenderTexture = Prowl.Runtime.Resources.RenderTexture;
+
 namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
@@ -133,9 +135,6 @@ public class EditorCamera
     {
         if (_renderTarget == null) return;
 
-        // Update camera pixel dimensions
-        _camera.UpdateRenderData();
-
         // Add camera object to scene temporarily if needed
         bool wasInScene = _cameraObject.Scene != null;
         if (!wasInScene)
@@ -150,9 +149,13 @@ public class EditorCamera
             SkipUI = !drawUI
         };
 
-        // Render
-        var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
-        pipeline.Render(_camera, renderData);
+        // Render - native Graphite invocation: collect the scene, build this camera's view, dispatch.
+        scene.CollectRenderables();
+        CameraView view = CameraView.From(_camera, renderData);
+        RenderProfilerHooks.Sink?.BeginView("Scene");
+        Graphics.Device.DispatchGraph(RenderPipelineManager.Current, new[] { view });
+        RenderProfilerHooks.Sink?.EndView();
+        _camera.SavePreviousViewProjectionMatrix();
 
         // Remove from scene if we added it
         if (!wasInScene)
