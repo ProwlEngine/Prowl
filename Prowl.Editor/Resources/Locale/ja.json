@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}'は既に存在し、空ではありません。別の名前または場所を選択してください。",
   "launcher.create_failed": "作成に失敗",
   "launcher.open_failed": "プロジェクトを開けませんでした: {{message}}",
+  "launcher.open_failed_title": "オープンに失敗",
   "launcher.just_now": "たった今",
   "launcher.minutes_ago": "{{count}}分前",
   "launcher.hours_ago": "{{count}}時間前",

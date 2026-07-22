@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}' ja existe e nao esta vazia. Escolha outro nome ou local.",
   "launcher.create_failed": "Falha ao criar",
   "launcher.open_failed": "Falha ao abrir o projeto: {{message}}",
+  "launcher.open_failed_title": "Falha ao abrir",
   "launcher.just_now": "Agora mesmo",
   "launcher.minutes_ago": "{{count}}min atras",
   "launcher.hours_ago": "{{count}}h atras",

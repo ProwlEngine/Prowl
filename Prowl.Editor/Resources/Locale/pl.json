@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}' juz istnieje i nie jest pusty. Wybierz inna nazwe lub lokalizacje.",
   "launcher.create_failed": "Tworzenie nie powiodlo sie",
   "launcher.open_failed": "Nie udalo sie otworzyc projektu: {{message}}",
+  "launcher.open_failed_title": "Otwieranie nie powiodlo sie",
   "launcher.just_now": "Przed chwila",
   "launcher.minutes_ago": "{{count}}min temu",
   "launcher.hours_ago": "{{count}}godz temu",

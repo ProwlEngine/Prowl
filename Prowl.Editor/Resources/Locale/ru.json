@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}' уже существует и не пуста. Выберите другое имя или расположение.",
   "launcher.create_failed": "Ошибка создания",
   "launcher.open_failed": "Не удалось открыть проект: {{message}}",
+  "launcher.open_failed_title": "Ошибка открытия",
   "launcher.just_now": "Только что",
   "launcher.minutes_ago": "{{count}}мин назад",
   "launcher.hours_ago": "{{count}}ч назад",

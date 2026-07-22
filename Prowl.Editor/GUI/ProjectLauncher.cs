@@ -623,6 +623,7 @@ public static class ProjectLauncher
         catch (Exception ex)
         {
             Runtime.Debug.LogError(Loc.Get("launcher.open_failed", new { message = ex.Message }));
+            Toasts.Warning(Loc.Get("launcher.open_failed_title"), ex.Message);
         }
     }
 

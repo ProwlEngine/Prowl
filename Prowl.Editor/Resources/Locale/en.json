@@ -66,6 +66,7 @@
   "launcher.folder_exists_msg": "'{{name}}' already exists and is not empty. Choose a different name or location.",
   "launcher.create_failed": "Create Failed",
   "launcher.open_failed": "Failed to open project: {{message}}",
+  "launcher.open_failed_title": "Open Failed",
   "launcher.just_now": "Just now",
   "launcher.minutes_ago": "{{count}}m ago",
   "launcher.hours_ago": "{{count}}h ago",
