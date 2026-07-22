@@ -1,5 +1,6 @@
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.Runtime;

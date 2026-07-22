@@ -124,7 +124,7 @@ public static class EditorGUI
         => Row(paper, id, label, () =>
             Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
 
-    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : Enum
+    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : struct, Enum
         => Row(paper, id, label, () =>
             Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
 
