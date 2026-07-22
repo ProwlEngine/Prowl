@@ -27,7 +27,7 @@ public class TextureAssetEditor : AssetImporterEditor
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
         var m = Origami.Current.Metrics;
-        var texture = asset as Texture2D;
+        AssetRef<Texture2D> texture = (AssetRef<Texture2D>)(Texture2D)asset;
 
         if (texture != null)
         {
@@ -54,7 +54,7 @@ public class TextureAssetEditor : AssetImporterEditor
                         }
 
                     float maxW = (float)r.Size.X - 16, maxH = (float)r.Size.Y - 16;
-                    float aspect = texture.Width / MathF.Max(1f, texture.Height);
+                    float aspect = texture.Res.Width / MathF.Max(1f, texture.Res.Height);
                     float drawW = maxW, drawH = drawW / aspect;
                     if (drawH > maxH) { drawH = maxH; drawW = drawH * aspect; }
                     float drawX = (float)r.Min.X + ((float)r.Size.X - drawW) / 2f;
