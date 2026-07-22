@@ -72,6 +72,8 @@ public sealed class ChartBuilder
     private int _yTicks = 4;
     private bool _axes = true;
     private bool _legend = true;
+    private float _legendFontSize = 11f;
+    private float _axisFontSize = 11f;
     private OrigamiVariant _variant = OrigamiVariant.Primary;
     private Color? _backgroundColor;
     private float _yLabelMinWidth = 0f;
@@ -148,6 +150,14 @@ public sealed class ChartBuilder
     /// <summary>Draw a legend row (swatch + label + latest value) per series. Default on.</summary>
     public ChartBuilder Legend(bool show = true) { _legend = show; return this; }
 
+    /// <summary>Font size, in pixels, of the legend row text (swatch labels and latest-value readout).
+    /// Default 11.</summary>
+    public ChartBuilder LegendFontSize(float size) { _legendFontSize = MathF.Max(1f, size); return this; }
+
+    /// <summary>Font size, in pixels, of the axis chrome text (y/x tick labels and axis titles).
+    /// Default 11.</summary>
+    public ChartBuilder AxisFontSize(float size) { _axisFontSize = MathF.Max(1f, size); return this; }
+
     /// <summary>Background colour of the chart panel. Default is none (transparent), matching bare widgets.</summary>
     public ChartBuilder BackgroundColor(Color color) { _backgroundColor = color; return this; }
 
@@ -185,6 +195,8 @@ public sealed class ChartBuilder
             Font = _theme.Font,
             Axes = _axes,
             Legend = _legend,
+            LegendFs = _legendFontSize,
+            AxisFs = _axisFontSize,
             YTicks = Math.Max(2, _yTicks),
             XLabel = _xLabel,
             YLabel = _yLabel,
@@ -222,6 +234,7 @@ public sealed class ChartBuilder
         public float Width, Height;
         public FontFile? Font;
         public bool Axes, Legend, HasYRange, IncludeZero;
+        public float LegendFs, AxisFs;
         public int YTicks;
         public string XLabel, YLabel;
         public double YMinFixed, YMaxFixed, MinSpan;
@@ -238,12 +251,14 @@ public sealed class ChartBuilder
         s.Height = (float)rect.Size.Y;
 
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
-        float fs = 11f;
-        float lineH = 13f;
+        float legendFs = s.LegendFs;
+        float axisFs = s.AxisFs;
+        float legendLineH = 13f;
+        float axisLineH = 13f;
         if (s.Font != null)
         {
-            var m = canvas.MeasureText("0", fs, s.Font);
-            lineH = MathF.Max(9f, (float)m.Y);
+            legendLineH = MathF.Max(9f, (float)canvas.MeasureText("0", legendFs, s.Font).Y);
+            axisLineH = MathF.Max(9f, (float)canvas.MeasureText("0", axisFs, s.Font).Y);
         }
 
         canvas.SaveState();
@@ -259,8 +274,8 @@ public sealed class ChartBuilder
                 tickVals.Add(v);
         }
 
-        float legendH = (s.Legend && s.Series.Count > 0 && s.Font != null) ? lineH + 8f : 0f;
-        float yLabelH = (s.Axes && s.YLabel.Length > 0 && s.Font != null) ? lineH + 2f : 0f;
+        float legendH = (s.Legend && s.Series.Count > 0 && s.Font != null) ? legendLineH + 8f : 0f;
+        float yLabelH = (s.Axes && s.YLabel.Length > 0 && s.Font != null) ? axisLineH + 2f : 0f;
         float topRegion = legendH + yLabelH;
 
         bool hasXTickText = s.Axes && s.Font != null && s.XTickFormatter != null;
@@ -272,15 +287,15 @@ public sealed class ChartBuilder
             if (s.Font != null)
                 foreach (var v in tickVals)
                 {
-                    var tw = canvas.MeasureText(Format(in s, v), fs, s.Font);
+                    var tw = canvas.MeasureText(Format(in s, v), axisFs, s.Font);
                     maxTickW = MathF.Max(maxTickW, (float)tw.X);
                 }
             maxTickW = Math.Clamp(maxTickW, s.YLabelMinWidth, s.YLabelMaxWidth);
             leftGutter = 4f + maxTickW + TickLabelPad + TickLen;
 
             bottomGutter = TickLen;
-            if (hasXTickText) bottomGutter += TickLabelPad + lineH;
-            if (hasXLabelText) bottomGutter += lineH + 2f;
+            if (hasXTickText) bottomGutter += TickLabelPad + axisLineH;
+            if (hasXLabelText) bottomGutter += axisLineH + 2f;
             if (hasXTickText || hasXLabelText) bottomGutter += EdgePad;
 
             rightPad = EdgePad;
@@ -322,12 +337,12 @@ public sealed class ChartBuilder
                 if (s.Font != null)
                 {
                     string txt = Format(in s, v);
-                    var tw = canvas.MeasureText(txt, fs, s.Font);
+                    var tw = canvas.MeasureText(txt, axisFs, s.Font);
                     float tx = plotL - TickLen - TickLabelPad - (float)tw.X;
                     float tty = ty - (float)tw.Y * 0.5f;
                     canvas.SaveState();
                     canvas.IntersectScissor(ox, tty - TextClipMargin, 4f + maxTickW, (float)tw.Y + TextClipMargin * 2f);
-                    canvas.DrawText(txt, tx, tty, s.TickTextCol, fs, s.Font);
+                    canvas.DrawText(txt, tx, tty, s.TickTextCol, axisFs, s.Font);
                     canvas.RestoreState();
                 }
             }
@@ -359,9 +374,9 @@ public sealed class ChartBuilder
                         string txt = s.XTickFormatter(idx) ?? "";
                         if (txt.Length > 0)
                         {
-                            var tw = canvas.MeasureText(txt, fs, s.Font);
+                            var tw = canvas.MeasureText(txt, axisFs, s.Font);
                             float tx = Math.Clamp(xx - (float)tw.X * 0.5f, plotL, plotR - (float)tw.X);
-                            canvas.DrawText(txt, tx, plotB + TickLen + TickLabelPad, s.TickTextCol, fs, s.Font);
+                            canvas.DrawText(txt, tx, plotB + TickLen + TickLabelPad, s.TickTextCol, axisFs, s.Font);
                         }
                     }
                 }
@@ -375,13 +390,13 @@ public sealed class ChartBuilder
             canvas.Stroke();
 
             if (s.Font != null && s.YLabel.Length > 0)
-                canvas.DrawText(s.YLabel, ox + 4f, oy + legendH, s.LabelTextCol, fs, s.Font);
+                canvas.DrawText(s.YLabel, ox + 4f, oy + legendH, s.LabelTextCol, axisFs, s.Font);
 
             if (hasXLabelText)
             {
-                var tw = canvas.MeasureText(s.XLabel, fs, s.Font!);
+                var tw = canvas.MeasureText(s.XLabel, axisFs, s.Font!);
                 float tx = plotL + (plotW - (float)tw.X) * 0.5f;
-                canvas.DrawText(s.XLabel, tx, oy + s.Height - lineH - EdgePad, s.LabelTextCol, fs, s.Font!);
+                canvas.DrawText(s.XLabel, tx, oy + s.Height - axisLineH - EdgePad, s.LabelTextCol, axisFs, s.Font!);
             }
         }
 
@@ -392,7 +407,7 @@ public sealed class ChartBuilder
         canvas.RestoreState();
 
         if (legendH > 0f)
-            PaintLegend(canvas, in s, ox, oy, fs, lineH);
+            PaintLegend(canvas, in s, ox, oy, legendFs, legendLineH);
 
         canvas.RestoreState();
     }
