@@ -24,6 +24,7 @@ public class PreviewRenderer : IDisposable
     private GameObject _lightGo;
     private GameObject? _subjectGo;
     private RenderTexture? _rt;
+    private string _assetName = "";
 
     // Previews and thumbnails must not share the scene view's pipeline: the pass state it carries
     // (notably the sampled depth copy the grid/gizmo shaders read) is sized to whatever surface last
@@ -83,6 +84,8 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (model == null) return;
 
+        _assetName = model.Name;
+
         // Instantiate the model's GO hierarchy for preview
         _subjectGo = model.Instantiate();
         if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
@@ -100,6 +103,8 @@ public class PreviewRenderer : IDisposable
     {
         ClearSubject();
         if (mesh == null) return;
+
+        _assetName = mesh.Name;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
@@ -119,6 +124,8 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (prefab == null) return;
 
+        _assetName = prefab.Name;
+
         _subjectGo = prefab.Instantiate();
         if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
         _subjectGo.Name = "PreviewSubject";
@@ -137,6 +144,8 @@ public class PreviewRenderer : IDisposable
     {
         ClearSubject();
         if (material == null) return;
+
+        _assetName = material.Name;
 
         _subjectGo = new GameObject("PreviewSubject");
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
@@ -163,7 +172,9 @@ public class PreviewRenderer : IDisposable
         // RenderPipelineManager.Current) - see the field comment on _pipeline.
         _scene.CollectRenderables();
         CameraView view = CameraView.From(_camera, new RenderingData { DisplayGrid = ShowGrid });
+        RenderProfilerHooks.Sink?.BeginView($"Preview:{_assetName}");
         Graphics.Device.DispatchGraph(_pipeline, new[] { view });
+        RenderProfilerHooks.Sink?.EndView();
         _camera.SavePreviousViewProjectionMatrix();
     }
 
