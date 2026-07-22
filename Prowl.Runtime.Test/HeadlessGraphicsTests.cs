@@ -9,7 +9,7 @@ namespace Prowl.Runtime.Test;
 
 /// <summary>
 /// Tests that GPU-backed resources can be created and used without a graphics device (headless /
-/// dedicated server). GPU command submission is a no-op when <see cref="Graphics.IsHeadless"/>, so
+/// dedicated server). GPU command submission is a no-op when <see cref="Application.IsHeadless"/>, so
 /// constructing textures, materials, meshes, etc. must not crash - they just don't upload to a GPU.
 /// </summary>
 public class HeadlessGraphicsTests
@@ -18,7 +18,7 @@ public class HeadlessGraphicsTests
     public void Graphics_ReportsHeadless_WhenNoDevice()
     {
         // The test process never initializes a GL device.
-        Assert.True(Graphics.IsHeadless);
+        Assert.True(Application.IsHeadless);
     }
 
     [Fact]
