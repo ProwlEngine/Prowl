@@ -138,7 +138,15 @@ public abstract class RenderPipeline<TView> : IDisposable
 
         Framebuffer[] outputs = framebuffers.ToArray();
         TransferCommandBuffer transfer = context.GetTransferCommandBuffer($"{node.Pass.Name} Capture");
-        profiler.Capture(passInfo, outputs, transfer);
+        try
+        {
+            profiler.Capture(passInfo, outputs, transfer);
+        }
+        finally
+        {
+            if (!transfer.HasEnded)
+                transfer.End();
+        }
         context.SubmitTransferCommandBuffer(transfer);
     }
 
