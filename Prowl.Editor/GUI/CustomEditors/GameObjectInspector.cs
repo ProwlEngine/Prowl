@@ -899,17 +899,28 @@ public static class GameObjectInspector
                     PropertyGridUtils.OverriddenFields = overridden.Count > 0 ? overridden : null;
                 }
 
-                // Component body use custom editor or default PropertyGrid
-                var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
-                if (customEditor != null)
-                    customEditor.OnGUI(paper, compId, comp);
-                else
-                    PropertyGridUtils.Draw(paper, compId, comp);
+                // Component body use custom editor or default PropertyGrid. A broken custom editor, a
+                // throwing property getter, or a bad [Button] must not take down the whole Inspector.
+                // Contain it per component (finally keeps OverriddenFields from leaking to the next).
+                try
+                {
+                    var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
+                    if (customEditor != null)
+                        customEditor.OnGUI(paper, compId, comp);
+                    else
+                        PropertyGridUtils.Draw(paper, compId, comp);
 
-                PropertyGridUtils.OverriddenFields = null;
-
-                // Draw [Button] attributed methods
-                DrawButtonMethods(paper, $"{compId}_btns", comp);
+                    // Draw [Button] attributed methods
+                    DrawButtonMethods(paper, $"{compId}_btns", comp);
+                }
+                catch (Exception ex)
+                {
+                    Runtime.Debug.LogError($"[Inspector] Drawing {comp.GetType().Name} threw and was skipped: {ex.Message}");
+                }
+                finally
+                {
+                    PropertyGridUtils.OverriddenFields = null;
+                }
             }
 
             // Auto-detect overrides by comparing against prefab source (index-based)

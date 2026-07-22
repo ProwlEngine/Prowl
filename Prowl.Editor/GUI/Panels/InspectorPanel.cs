@@ -308,7 +308,11 @@ public class InspectorPanel : DockPanel, IScriptReloadCleanup
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
-                assetEditor.OnGUI(paper, "insp_asset_editor", entry, asset);
+                try { assetEditor.OnGUI(paper, "insp_asset_editor", entry, asset); }
+                catch (Exception ex)
+                {
+                    Runtime.Debug.LogError($"[Inspector] Asset editor for {entry.MainAssetType.Name} threw and was skipped: {ex.Message}");
+                }
                 return;
             }
         }

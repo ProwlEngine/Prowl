@@ -523,31 +523,35 @@ public class Mesh : EngineObject, ISerializable
 
         changed = false;
 
+        // Invalid geometry is a data problem, not a programmer error: it commonly comes from a
+        // procedural or imported mesh mid edit. Uploading such a mesh is skipped (VAO stays null, so
+        // callers that check VertexArrayObject simply do not draw it) and reported instead of
+        // throwing into the render loop, which would take down the whole frame.
         if (vertices == null || vertices.Length == 0)
-            throw new InvalidOperationException($"Mesh has no vertices");
+            { WarnUploadSkipped("mesh has no vertices"); return; }
 
         if (indices == null || indices.Length == 0)
-            throw new InvalidOperationException($"Mesh has no indices");
+            { WarnUploadSkipped("mesh has no indices"); return; }
 
         switch (meshTopology)
         {
             case Topology.Triangles:
                 if (indices.Length % 3 != 0)
-                    throw new InvalidOperationException($"Triangle mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
+                    { WarnUploadSkipped($"triangle mesh index count {indices.Length} is not a multiple of 3"); return; }
                 break;
             case Topology.TriangleStrip:
                 if (indices.Length < 3)
-                    throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
+                    { WarnUploadSkipped($"triangle strip mesh has {indices.Length} indices, needs at least 3"); return; }
                 break;
 
             case Topology.Lines:
                 if (indices.Length % 2 != 0)
-                    throw new InvalidOperationException($"Line mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
+                    { WarnUploadSkipped($"line mesh index count {indices.Length} is not a multiple of 2"); return; }
                 break;
 
             case Topology.LineStrip:
                 if (indices.Length < 2)
-                    throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
+                    { WarnUploadSkipped($"line strip mesh has {indices.Length} indices, needs at least 2"); return; }
                 break;
         }
 
@@ -591,7 +595,7 @@ public class Mesh : EngineObject, ISerializable
             for (int i = 0; i < indices.Length; i++)
             {
                 if (indices[i] > ushort.MaxValue)
-                    throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
+                    { WarnUploadSkipped($"index {indices[i]} exceeds the 16-bit range (use IndexFormat.UInt32)"); return; }
                 data[i] = (ushort)indices[i];
             }
 
@@ -633,6 +637,11 @@ public class Mesh : EngineObject, ISerializable
         }
     }
 
+    /// <summary>Logs an upload skipped reason so <see cref="Upload"/> can bail without throwing into a
+    /// render or update loop.</summary>
+    private void WarnUploadSkipped(string reason)
+        => Debug.LogWarning($"[Mesh] Upload skipped ({Name ?? "unnamed"}): {reason}");
+
     /// <summary>
     /// Ensures the instanced rendering VAO and buffer exist for this mesh with
     /// enough capacity for <paramref name="instanceCount"/> instances. Does NOT
@@ -656,6 +665,13 @@ public class Mesh : EngineObject, ISerializable
     {
         EnsureNotDisposed();
         Upload();
+
+        // Base upload was skipped (invalid geometry), so there is no VAO to instance from. Bail.
+        if (vertexArrayObject == null)
+        {
+            instanceBuf = null;
+            return null;
+        }
 
         var instanceFormat = new VertexFormat(new[]
         {
