@@ -260,6 +260,11 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
             DrawSelectionGizmos();
             _editorCamera.Render(scene);
         }
+        catch (Exception ex)
+        {
+            // A broken scene view render or scene editor must not crash the editor. Keep the panel alive.
+            Runtime.Debug.LogError($"[SceneView] Scene render/input threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+        }
         finally
         {
             GameCanvas.EditorWorldSpaceOverride = prevWorldSpace;
@@ -742,12 +747,15 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
         Float2 mouseLocal = mouseAbs - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
         var ray = _editorCamera.ScreenPointToRay(mouseLocal, new Float2(width, height));
 
-        bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2); // Don't pick while camera moving
+        // Alt is the camera orbit modifier, so the gizmo must not capture the mouse while it is held.
+        // Otherwise Alt+LMB drags the selected object instead of orbiting the view.
+        bool cameraNav = Input.IsAltPressed;
+        bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2) || cameraNav; // Don't pick while camera moving
 
         // Input state for the gizmo (Origami gizmo has no Runtime dependency)
         _transformGizmo.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
         _transformGizmo.IsShiftDown = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
-        _transformGizmo.IsMouseDown = Input.GetMouseButtonDown(0);
+        _transformGizmo.IsMouseDown = Input.GetMouseButtonDown(0) && !cameraNav;
         _transformGizmo.IsMouseUp = Input.GetMouseButtonUp(0);
 
         var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
