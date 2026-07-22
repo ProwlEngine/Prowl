@@ -18,6 +18,7 @@ public static class SkyboxRenderer
 {
     private static Mesh? s_skyDome;
     private static Material? s_skybox;
+    private static bool s_loggedMissingShader;
 
     public static void Render(CommandBuffer cmd)
     {
@@ -44,6 +45,11 @@ public static class SkyboxRenderer
             Shader? shader = Shader.LoadDefault(DefaultShader.ProceduralSkybox);
             if (shader.IsValid())
                 s_skybox = new Material(shader);
+            else if (!s_loggedMissingShader)
+            {
+                s_loggedMissingShader = true;
+                Debug.LogError("SkyboxRenderer: Shader.LoadDefault(DefaultShader.ProceduralSkybox) returned an invalid shader.");
+            }
         }
     }
 }

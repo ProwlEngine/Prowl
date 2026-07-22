@@ -19,6 +19,7 @@ public static class GridRenderer
 {
     private static Mesh? s_gridMesh;
     private static Material? s_gridMaterial;
+    private static bool s_loggedMissingShader;
 
     /// <summary>Records the grid into <paramref name="cmd"/>, centered under <paramref name="cameraPosition"/>.</summary>
     public static void Render(CommandBuffer cmd, Float3 cameraPosition, Texture2D depthCopy)
@@ -65,6 +66,11 @@ public static class GridRenderer
                 s_gridMaterial.SetFloat("_LineWidth", 0.02f);
                 s_gridMaterial.SetFloat("_Falloff", 1.5f);
                 s_gridMaterial.SetFloat("_MaxDist", 500f);
+            }
+            else if (!s_loggedMissingShader)
+            {
+                s_loggedMissingShader = true;
+                Debug.LogError("GridRenderer: Shader.LoadDefault(DefaultShader.Grid) returned an invalid shader.");
             }
         }
     }

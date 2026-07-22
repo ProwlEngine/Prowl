@@ -21,6 +21,7 @@ public static class GizmoRenderer
     private static Material? s_gizmoMaterial;
     private static Material? s_iconMaterial;
     private static Mesh? s_iconQuad;
+    private static bool s_loggedMissingGizmoShader;
 
     /// <summary>Records the current frame's gizmos into <paramref name="cmd"/>.</summary>
     public static void Render(CommandBuffer cmd, Texture2D depthCopy)
@@ -38,12 +39,18 @@ public static class GizmoRenderer
                 if (solid is { HasData: true }) DrawBatch(cmd, pass, s_gizmoMaterial, solid);
             }
         }
+        else if (!s_loggedMissingGizmoShader)
+        {
+            s_loggedMissingGizmoShader = true;
+            Debug.LogError("GizmoRenderer: Shader.LoadDefault(DefaultShader.Gizmos) returned an invalid shader.");
+        }
 
         DrawIcons(cmd, depthCopy);
     }
 
     private static void DrawBatch(CommandBuffer cmd, ShaderPass pass, Material material, GizmoBuilder.Batch batch)
     {
+        RenderCommandExtensions.EmitShaderBind(pass, material.Name);
         cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
         cmd.SetVertexSource(batch);
