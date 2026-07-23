@@ -22,8 +22,7 @@
             "program": "${workspaceFolder}/Build/Editor/Release/net10.0/Prowl.Editor.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "stopAtEntry": false,
-            "justMyCode": false
+            "stopAtEntry": false
         }
     ]
 }
