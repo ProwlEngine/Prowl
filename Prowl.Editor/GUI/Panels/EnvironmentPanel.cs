@@ -175,8 +175,22 @@ public class EnvironmentPanel : DockPanel
         }
     }
 
+
+    private struct BakerPlaceholder
+    {
+        public bool IsBaking { get; }
+        public float Progress { get; }
+        public string Status { get; }
+        public Scene TargetScene { get; }
+        public void Start(Scene scene, Scene.LightmapBakeSettings settings) { }
+        public void Cancel() { }
+        public void Clear(Scene scene) { }
+    }
+
+
     private void DrawLightmappingSection(Paper paper, string id, Scribe.FontFile font, Scene scene)
     {
+        BakerPlaceholder _bake = new();
         // IsBaking alone doesn't say WHICH scene it's for - only one bake can run at a time, so
         // switching to a different scene while it's in flight must not show this scene as baking too.
         bool baking = _bake.IsBaking && _bake.TargetScene == scene;
@@ -220,9 +234,11 @@ public class EnvironmentPanel : DockPanel
     private void DrawBakeCard(Paper paper, string id, Scribe.FontFile font, Scene scene,
         Scene.LightmapBakeSettings s, bool baking)
     {
+        BakerPlaceholder _bake = new();
+
         var m = Origami.Current.Metrics;
         var semi = EditorTheme.FontSemiBold ?? font;
-        bool hasBaked = LightmapBakeService.HasBakedData(scene);
+        bool hasBaked = false;//LightmapBakeService.HasBakedData(scene);
 
         using (paper.Column($"{id}_card").Height(UnitValue.Auto).Margin(m.PaddingLarge, m.PaddingLarge, 16, 0)
             .Padding(12, 12, 12, 12).Rounded(9).BackgroundColor(EditorTheme.Glass)
