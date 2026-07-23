@@ -240,15 +240,16 @@ file sealed class RecordingProfiler : IProfiler
         Captures.Add(passOutputs.Count);
     }
 
-    public void RecordDraw(in DrawCallInfo info) { }
-    public void RecordDispatch(in DispatchCallInfo info) { }
-    public void RecordPipelineSwitch(in PipelineBindInfo info) { }
+    public void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info) { }
+    public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
+    public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
+    public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
     public void RecordResourceSetBind(uint setCount) { }
     public void RecordBarrier(BarrierBin kind, uint count) { }
     public void RecordSubmit(in ProfilerSubmitInfo info) { }
 
     public bool RequestExecutionTiming => false;
-    public void RecordExecutionTime(PassInfo? pass, string bufferName, bool isTransfer, double milliseconds) { }
+    public void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds) { }
 }
 
 file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>
