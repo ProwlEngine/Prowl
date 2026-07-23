@@ -21,7 +21,7 @@ namespace Prowl.Editor.GUI.Popups;
 /// </summary>
 public static class PackageExportDialog
 {
-    private static bool _isOpen;
+    private static readonly ModalHandle _handle = new();
     private static List<string> _explicitPaths = new();    // user-selected assets
     private static HashSet<string> _dependencyPaths = new(); // auto-resolved dependencies
     private static HashSet<string> _enabledPaths = new();
@@ -34,7 +34,7 @@ public static class PackageExportDialog
     private const float DialogHeight = 480f;
     private const float RowHeight = 22f;
 
-    public static bool IsOpen => _isOpen;
+    public static bool IsOpen => _handle.IsOpen;
 
     public static void Open(List<string> selectedAssetPaths)
     {
@@ -53,20 +53,15 @@ public static class PackageExportDialog
 
         ResolveDependencies();
         RebuildTreeAndEnabled();
-        _isOpen = true;
-        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer));
-        Modal.Push(_modal);
+        _handle.Open(DrawInternal);
     }
-
-    private static OrigamiUI.IModal? _modal;
 
     public static void Close()
     {
-        _isOpen = false;
+        _handle.Close();
         _explicitPaths.Clear();
         _dependencyPaths.Clear();
         _enabledPaths.Clear();
-        if (_modal != null) { Modal.Remove(_modal); _modal = null; }
     }
 
     /// <summary>
@@ -128,11 +123,9 @@ public static class PackageExportDialog
     //  Draw
     // ================================================================
 
-    public static void Draw(Paper paper) { } // Now handled by modal stack
-
     private static void DrawInternal(Paper paper, int layer)
     {
-        if (!_isOpen) return;
+        if (!_handle.IsOpen) return;
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
 

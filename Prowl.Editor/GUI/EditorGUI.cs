@@ -3,6 +3,7 @@
 
 using System;
 
+using Prowl.Editor;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
@@ -11,6 +12,7 @@ using Prowl.Runtime;
 
 using Color = System.Drawing.Color;
 using VColor = Prowl.Vector.Color;
+using TextAlign = Prowl.Runtime.UI.TextAlignment;
 
 namespace Prowl.Editor.GUI;
 
@@ -109,6 +111,101 @@ public static class EditorGUI
         => SettingsRow(paper, id, label, () =>
             Origami.ColorField(paper, $"{id}_v", HexToVColor(get()), v => setter(VColorToHex(v)))
                 .Width(130f).Show(), separator, compact: compact);
+
+    // =====================================================================
+    //  Project Settings row helpers — Row + widget + auto EditorRegistries.SaveSettings()
+    // =====================================================================
+
+    public static void SettingsTextField(Paper paper, string id, string label, string value, Action<string> setter)
+        => Row(paper, id, label, () =>
+            Origami.TextField(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+
+    public static void SettingsIntSlider(Paper paper, string id, string label, int value, int min, int max, Action<int> setter)
+        => Row(paper, id, label, () =>
+            Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
+
+    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : struct, Enum
+        => Row(paper, id, label, () =>
+            Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+
+    public static void SettingsCheckbox(Paper paper, string id, string label, bool value, Action<bool> setter)
+        => Origami.Checkbox(paper, id, value, v => { setter(v); EditorRegistries.SaveSettings(); })
+            .LabelRight(label).Show();
+
+    public static void SettingsSliderField(Paper paper, string id, string label, float value, float min, float max,
+        Action<float> setter, string format = "F2")
+        => Row(paper, id, label, () =>
+            Origami.Slider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max)
+                .Format(format).Show());
+
+    // =====================================================================
+    //  Inspector row helpers
+    // =====================================================================
+
+    /// <summary>A label + float-slider inspector row.</summary>
+    public static void SliderRow(Paper paper, string id, string label, float value, float min, float max,
+        Action<float> setter, string format = "F2", bool bipolar = false)
+        => Row(paper, id, label, () =>
+        {
+            var s = Origami.Slider(paper, $"{id}_v", value, setter, min, max).Format(format);
+            if (bipolar) s.Bipolar();
+            s.Show();
+        });
+
+    /// <summary>A label + int-slider inspector row.</summary>
+    public static void IntSliderRow(Paper paper, string id, string label, int value, int min, int max,
+        Action<int> setter)
+        => Row(paper, id, label, () =>
+            Origami.IntSlider(paper, $"{id}_v", value, setter, min, max).Show());
+
+    /// <summary>A foldout section with an enable toggle — shared by particle modules and image-effect sections.</summary>
+    public static void ModuleSection(Paper paper, string id, string icon, string label,
+        bool enabled, Action<bool> setEnabled, Action draw)
+        => Origami.Foldout(paper, id, $"{icon}  {label}")
+            .Toggle(enabled, setEnabled)
+            .Body(draw);
+
+    /// <summary>A two-axis text-alignment selector row (horizontal + vertical ButtonGroups).</summary>
+    public static void TextAlignmentRow(Paper paper, string id, string label, TextAlign value, Action<TextAlign> setter)
+    {
+        var font = EditorTheme.DefaultFont;
+        using (paper.Row(id).Height(EditorTheme.RowHeight).RowBetween(6).Enter())
+        {
+            if (font != null)
+                paper.Box($"{id}_lbl")
+                    .Width(EditorTheme.LabelWidth).Height(EditorTheme.RowHeight)
+                    .ChildLeft(4).IsNotInteractable()
+                    .Text(label, font).TextColor(EditorTheme.Ink500).FontSize(EditorTheme.FontSize);
+
+            Origami.ButtonGroup(paper, $"{id}_h", TextAlignHIndex(value),
+                    idx => setter(TextAlignVFlag(TextAlignVIndex(value)) | TextAlignHFlag(idx)))
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item("", EditorIcons.AlignLeft, "Left")
+                .Item("", EditorIcons.AlignCenter, "Center")
+                .Item("", EditorIcons.AlignRight, "Right")
+                .Show();
+
+            Origami.ButtonGroup(paper, $"{id}_v", TextAlignVIndex(value),
+                    idx => setter(TextAlignVFlag(idx) | TextAlignHFlag(TextAlignHIndex(value))))
+                .Height(EditorTheme.RowHeight).FullWidth()
+                .Item("Top", tooltip: "Top")
+                .Item("Mid", tooltip: "Middle")
+                .Item("Bot", tooltip: "Bottom")
+                .Show();
+        }
+    }
+
+    private static int TextAlignHIndex(TextAlign a)
+        => (a & TextAlign.Right) != 0 ? 2 : (a & TextAlign.Middle) != 0 ? 1 : 0;
+
+    private static int TextAlignVIndex(TextAlign a)
+        => (a & TextAlign.Bottom) != 0 ? 2 : (a & TextAlign.Center) != 0 ? 1 : 0;
+
+    private static TextAlign TextAlignHFlag(int i)
+        => i == 2 ? TextAlign.Right : i == 1 ? TextAlign.Middle : TextAlign.Left;
+
+    private static TextAlign TextAlignVFlag(int i)
+        => i == 2 ? TextAlign.Bottom : i == 1 ? TextAlign.Center : TextAlign.Top;
 
     // =====================================================================
     //  Settings-window chrome

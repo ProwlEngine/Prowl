@@ -18,8 +18,7 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Model))]
 public class ModelAssetEditor : AssetImporterEditor
 {
-    private PreviewRenderer? _preview;
-    private EngineObject? _lastPreviewAsset;
+    private readonly PreviewWidget _preview = new(showGrid: true);
 
     // Cached settings
     private bool _generateNormals = true;
@@ -46,7 +45,7 @@ public class ModelAssetEditor : AssetImporterEditor
             _currentGuid = entry.Guid;
             _settingsLoaded = false;
             _settingsDirty = false;
-            _lastPreviewAsset = null;
+            _preview.Invalidate();
         }
 
         // Include the GUID in element IDs so Paper UI state is unique per asset
@@ -65,14 +64,7 @@ public class ModelAssetEditor : AssetImporterEditor
 
         if (model != null)
         {
-            _preview ??= new PreviewRenderer(256, 256) { ShowGrid = true };
-            if (_lastPreviewAsset != model)
-            {
-                _lastPreviewAsset = model;
-                _preview.SetupForModel(model);
-            }
-
-            // Preview hero card wraps the 3D orbit preview in themed chrome.
+            var pr = _preview.Get(model, p => p.SetupForModel(model));
             using (paper.Box($"{id}_previewCard").Height(200)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
                 .Rounded(8).Clip()
@@ -80,7 +72,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
                 .ChildLeft().ChildRight().ChildTop().ChildBottom().Enter())
             {
-                _preview.DrawPreview(paper, $"{id}_preview", 184, 184);
+                pr.DrawPreview(paper, $"{id}_preview", 184, 184);
             }
 
             // Quick-facts chip strip.
@@ -204,7 +196,7 @@ public class ModelAssetEditor : AssetImporterEditor
                     {
                         SaveSettingsToMeta(entry);
                         _settingsDirty = false;
-                        _lastPreviewAsset = null; // Force preview refresh
+                        _preview.Invalidate();
                         _settingsLoaded = false;
                         EditorAssetBackend.Instance?.Reimport(entry.Guid);
                         MeshAssetEditor.InvalidateCachedPreviews();
@@ -222,7 +214,7 @@ public class ModelAssetEditor : AssetImporterEditor
                 .Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) =>
                 {
-                    _lastPreviewAsset = null;
+                    _preview.Invalidate();
                     EditorAssetBackend.Instance?.Reimport(entry.Guid);
                 });
         }

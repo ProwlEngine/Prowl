@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}'は既に存在し、空ではありません。別の名前または場所を選択してください。",
   "launcher.create_failed": "作成に失敗",
   "launcher.open_failed": "プロジェクトを開けませんでした: {{message}}",
+  "launcher.open_failed_title": "オープンに失敗",
   "launcher.just_now": "たった今",
   "launcher.minutes_ago": "{{count}}分前",
   "launcher.hours_ago": "{{count}}時間前",
@@ -109,6 +110,7 @@
   "launcher.tip.create_menu": "ヒエラルキーまたはプロジェクトウィンドウの空白部分を右クリックすると、新しいオブジェクトやアセットを作成できます。",
   "launcher.tip.component_menu": "インスペクターのコンポーネントヘッダーを右クリックすると、リセット、削除、並べ替えができます。",
   "launcher.tip.escape_unlock": "ゲームビューがカーソルをロックしている場合、Escapeを押すとカーソルを解放できます。",
+  "launcher.tip.nuget": "プロジェクトのルートにあるDirectory.Build.propsを編集してNuGetパッケージを追加できます。",
 
   "inspector.nothing_selected": "何も選択されていません",
   "inspector.nothing_selected_hint": "アセットまたはオブジェクトを選択して検査します。",

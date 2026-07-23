@@ -44,20 +44,10 @@ public class TimeSettings : ProjectSettingsBase
         Origami.Label(paper, "time_fixed_info",
             $"  {(int)(1f / FixedTimestep + 0.5f)} Hz ({FixedTimestep * 1000f:F2} ms)").Show();
 
-        EditorGUI.Row(paper, "time_maxiter", "Max Fixed Iterations", () =>
-            Origami.IntSlider(paper, "time_maxiter_v", MaxFixedIterations, v =>
-            {
-                MaxFixedIterations = v;
-                Apply();
-                EditorRegistries.SaveSettings();
-            }, 1, 15).Show());
+        EditorGUI.SettingsIntSlider(paper, "time_maxiter", "Max Fixed Iterations", MaxFixedIterations, 1, 15,
+            v => { MaxFixedIterations = v; Apply(); });
 
-        EditorGUI.Row(paper, "time_scale", "Default Time Scale", () =>
-            Origami.Slider(paper, "time_scale_v", DefaultTimeScale, v =>
-            {
-                DefaultTimeScale = v;
-                Apply();
-                EditorRegistries.SaveSettings();
-            }, 0f, 10f).Format("F2").Show());
+        EditorGUI.SettingsSliderField(paper, "time_scale", "Default Time Scale", DefaultTimeScale, 0f, 10f,
+            v => { DefaultTimeScale = v; Apply(); });
     }
 }

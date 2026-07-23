@@ -627,6 +627,13 @@ public abstract class RenderPipeline : EngineObject
 
             GraphicsProgram variant = variantNullable;
 
+            // Ensure GPU buffers exist before touching grab textures or encoding draws. Upload no longer
+            // throws on invalid geometry (it leaves the VAO null), so skip the batch when that happens
+            // rather than encoding a draw against a null VAO (which would fault on the render thread).
+            mesh.Upload();
+            if (mesh.VertexArrayObject == null)
+                continue;
+
             // GrabTexture: blit current framebuffer into a temporary RT and expose it
             // as a global texture for the shader to sample. Uses the CB's read/draw
             // FB split so the blit happens in the correct order relative to the draws.
@@ -670,8 +677,6 @@ public abstract class RenderPipeline : EngineObject
             // for every draw no explicit cmd.SetBuffer needed here.
 
             cmd.SetMaterialProperties(material);
-
-            mesh.Upload();
 
             // ========== PHASE 3: Draw Objects in Batch ==========
             foreach (int renderIndex in batch.RenderableIndices)

@@ -533,30 +533,30 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         changed = false;
 
         if (VertexCount == 0)
-            throw new InvalidOperationException($"Mesh has no vertices");
+        { WarnUploadSkipped("mesh has no vertices"); return; }
 
         if (indices == null || indices.Length == 0)
-            throw new InvalidOperationException($"Mesh has no indices");
+        { WarnUploadSkipped("mesh has no indices"); return; }
 
         switch (topology)
         {
             case PrimitiveTopology.TriangleList:
                 if (indices.Length % 3 != 0)
-                    throw new InvalidOperationException($"Triangle mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
+                { WarnUploadSkipped($"triangle mesh index count {indices.Length} is not a multiple of 3"); return; }
                 break;
             case PrimitiveTopology.TriangleStrip:
                 if (indices.Length < 3)
-                    throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
+                { WarnUploadSkipped($"triangle strip mesh has {indices.Length} indices, needs at least 3"); return; }
                 break;
 
             case PrimitiveTopology.LineList:
                 if (indices.Length % 2 != 0)
-                    throw new InvalidOperationException($"Line mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
+                { WarnUploadSkipped($"line mesh index count {indices.Length} is not a multiple of 2"); return; }
                 break;
 
             case PrimitiveTopology.LineStrip:
                 if (indices.Length < 2)
-                    throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
+                { WarnUploadSkipped($"line strip mesh has {indices.Length} indices, needs at least 2"); return; }
                 break;
         }
 
@@ -611,7 +611,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
             for (int i = 0; i < indices.Length; i++)
             {
                 if (indices[i] > ushort.MaxValue)
-                    throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
+                { WarnUploadSkipped($"index {indices[i]} exceeds the 16-bit range (use IndexFormat.UInt32)"); return; }
                 data[i] = (ushort)indices[i];
             }
 
@@ -697,6 +697,13 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
     {
         EnsureNotDisposed();
         Upload();
+
+        // Base upload was skipped (invalid geometry), so there is no VAO to instance from. Bail.
+        if (vertexArrayObject == null)
+        {
+            instanceBuf = null;
+            return null;
+        }
 
         var instanceFormat = new VertexFormat(new[]
         {

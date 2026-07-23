@@ -109,13 +109,8 @@ public class TagsAndLayersSettings : ProjectSettingsBase
             }
             else
             {
-                EditorGUI.Row(paper, $"tl_layer_{i}", $"Layer {i}", () =>
-                    Origami.TextField(paper, $"tl_layer_{i}_v", Layers[i], v =>
-                    {
-                        Layers[idx] = v;
-                        Apply();
-                        EditorRegistries.SaveSettings();
-                    }).Show());
+                EditorGUI.SettingsTextField(paper, $"tl_layer_{i}", $"Layer {i}", Layers[i],
+                    v => { Layers[idx] = v; Apply(); });
             }
         }
     }

@@ -150,10 +150,16 @@ public class DefaultRenderPipeline : RenderPipeline
 
         foreach (var effect in effects)
         {
-            effect.OnRenderEffect(context);
+            try { effect.OnRenderEffect(context); }
+            catch (Exception ex) { LogEffectSkipped(effect, "OnRenderEffect", ex); }
             RenderStats.AddImageEffect();
         }
     }
+
+    // A broken image effect (bad shader or variant, disposed RT, divide by zero on a zero size viewport,
+    // or a bug in a user ImageEffect) must never take down the whole frame. Skip it and log it.
+    private static void LogEffectSkipped(ImageEffect effect, string stage, Exception ex)
+        => Debug.LogError($"[ImageEffect] {effect.GetType().Name}.{stage} threw and was skipped: {ex.Message}");
 
     #endregion
 
@@ -178,7 +184,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 1. Pre Cull
         foreach (ImageEffect effect in allEffects)
-            effect.OnPreCull(camera);
+            try { effect.OnPreCull(camera); }
+            catch (Exception ex) { LogEffectSkipped(effect, "OnPreCull", ex); }
 
         // =======================================================
         // 2. Camera snapshot and global uniforms
@@ -223,7 +230,8 @@ public class DefaultRenderPipeline : RenderPipeline
         // =======================================================
         // 4. Pre Render
         foreach (ImageEffect effect in allEffects)
-            effect.OnPreRender(camera);
+            try { effect.OnPreRender(camera); }
+            catch (Exception ex) { LogEffectSkipped(effect, "OnPreRender", ex); }
 
         // =======================================================
         // 5. Light system reconcile + shadow atlas + uniform upload
@@ -430,7 +438,8 @@ public class DefaultRenderPipeline : RenderPipeline
         camera.SavePreviousViewProjectionMatrix();
 
         foreach (ImageEffect effect in allEffects)
-            effect.OnPostRender(camera);
+            try { effect.OnPostRender(camera); }
+            catch (Exception ex) { LogEffectSkipped(effect, "OnPostRender", ex); }
 
         // Cleanup
         RenderTexture.ReleaseTemporaryRT(prepass);

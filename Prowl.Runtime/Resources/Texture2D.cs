@@ -241,11 +241,19 @@ public sealed class Texture2D : Texture, ISerializable
         image.ColorSpace = ColorSpace.sRGB;
         image.ColorType = ColorType.TrueColorAlpha;
 
-        nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
-
-        Texture2D texture = new(image.Width, image.Height, generateMipmaps, format);
+        // Magick.NET-Q8's native quantum is 8-bit, so this is always the actual decoded precision
+        // regardless of source depth - a 16-bit PNG/.hdr/.exr source is quantized to 8-bit here (a
+        // library limitation, not a choice this code makes).
+        //
+        // Read straight from Magick's own pixel cache instead of ToByteArray(PixelMapping.RGBA),
+        // which would allocate a whole extra managed byte[] just to re-pack data that's already in
+        // the right layout. ColorType.TrueColorAlpha above forces the cache to tightly-packed R,G,B,A
+        // - exactly the byte layout Color4b/TexSubImage2D expects for Q8's byte-quantum pixels - so
+        // the raw pointer can go straight to the GPU with no extra copy.
+        Texture2D texture = new(image.Width, image.Height, false, TextureImageFormat.Color4b);
         try
         {
+            nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
             unsafe
             {
                 texture.SetDataPtr((void*)pixels, 0, 0, image.Width, image.Height);
@@ -268,7 +276,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
     {
-        var image = new MagickImage(stream);
+        using var image = new MagickImage(stream);
         return FromImage(image, generateMipmaps);
     }
 
@@ -277,7 +285,7 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public static Texture2D FromFile(string file, bool generateMipmaps = false)
     {
-        var image = new MagickImage(file);
+        using var image = new MagickImage(file);
         return FromImage(image, generateMipmaps);
     }
 

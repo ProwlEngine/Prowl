@@ -1496,8 +1496,7 @@ public class ProjectPanel : DockPanel
         items.AddRange(VirtualContentItems);
         foreach (var u in sorted) items.Add(u.item);  // subs live on item.Subs, not flattened
 
-        if (!string.IsNullOrEmpty(_searchText))
-            items = items.Where(i => i.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+        items = items.Where(i => EditorUtils.MatchesSearch(i.Name, _searchText)).ToList();
 
         return items;
     }

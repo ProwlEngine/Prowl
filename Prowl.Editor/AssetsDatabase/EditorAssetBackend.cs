@@ -37,6 +37,7 @@ public class EditorAssetBackend : AssetBackendBase
     private int _mainThreadId = -1;
     private readonly DependencyGraph _dependencies = new();
     private AssetWatcher? _watcher;
+    private FileSystemWatcher? _buildPropsWatcher;
 
     // Cached folder/file structure - the single source of truth the Project Panel reads instead of
     // hitting Directory.GetDirectories/GetFiles every frame. Rebuilt from one tree walk whenever the
@@ -67,6 +68,9 @@ public class EditorAssetBackend : AssetBackendBase
     public void Initialize()
     {
         _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        Instance = this;
+        Runtime.AssetDatabase.Current = this;
 
         // A sub-asset never loads except as a side effect of loading its parent (see LoadFresh), so
         // resolve it to its parent's GUID for touch/idle/lock purposes too - the whole family is one
@@ -128,63 +132,14 @@ public class EditorAssetBackend : AssetBackendBase
         _watcher = new AssetWatcher();
         _watcher.Start(_project.AssetsPath);
 
-        // Register as the active database
-        Instance = this;
-        Runtime.AssetDatabase.Current = this;
+        // Watch Directory.Build.props (project root, outside Assets) so adding a NuGet package there
+        // triggers a recompile / package restore, the same as editing the Packages UI used to.
+        StartBuildPropsWatcher();
 
         Runtime.Debug.Log($"Asset database initialized: {_guidToEntry.Count} assets tracked.");
 
         // Initialize GameResources mapping for editor play mode
         RefreshResourcesMap();
-    }
-
-    /// <summary>
-    /// Materialize the engine's embedded default assets verbatim into the project's read-only
-    /// Defaults/ folder (a sibling of Assets/), so the asset scan can import them like any other
-    /// asset. The folder is engine-managed: every embedded file is (over)written when missing or out
-    /// of date, which is what makes it effectively read-only. Default shaders' .meta is forced onto
-    /// their deterministic BuiltInAssets GUID (see <see cref="DefaultAssetGuid"/>), which is what
-    /// lets Shader.LoadDefault resolve them.
-    /// </summary>
-    private void ExtractDefaultAssets()
-    {
-        string defaultsDir = _project.DefaultsPath;
-        Directory.CreateDirectory(defaultsDir);
-
-        foreach (string fileName in Runtime.Resources.EmbeddedResources.EnumerateDefaultFileNames())
-        {
-            byte[] embedded = Runtime.Resources.EmbeddedResources.ReadAllBytes($"Assets/Defaults/{fileName}");
-            string targetPath = Path.Combine(defaultsDir, fileName);
-
-            if (File.Exists(targetPath) && File.ReadAllBytes(targetPath).AsSpan().SequenceEqual(embedded))
-                continue;
-
-            File.WriteAllBytes(targetPath, embedded);
-        }
-
-        MigrateLegacyDefaults();
-    }
-
-    /// <summary>
-    /// Older projects extracted default shaders into Assets/Defaults. Those files use the same
-    /// project-relative path ("Defaults/X.shader") and the same forced GUID as the new sibling
-    /// Defaults/ root, so leaving them in place would make two files claim one GUID. Remove the
-    /// legacy in-Assets copy (engine-owned, regenerated) so the sibling root is the only source.
-    /// </summary>
-    private void MigrateLegacyDefaults()
-    {
-        string legacyDir = Path.Combine(_project.AssetsPath, Projects.Project.DefaultsFolder);
-        if (!Directory.Exists(legacyDir)) return;
-
-        try
-        {
-            Directory.Delete(legacyDir, true);
-            Runtime.Debug.Log("Migrated legacy Assets/Defaults to the read-only Defaults/ sibling folder.");
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogWarning($"Failed to remove legacy Assets/Defaults folder: {ex.Message}");
-        }
     }
 
     /// <summary>
@@ -608,16 +563,68 @@ public class EditorAssetBackend : AssetBackendBase
         // afterward would include failed imports too and fire OnAssetsImported for them.
         var succeeded = new List<string>();
 
+        int sinceReclaim = 0;
+
         foreach (var entry in dirty)
         {
-            if (RunImport(entry))
+            bool ok = RunImport(entry);
+
+            if (ok)
+            {
                 succeeded.Add(entry.Path);
+
+                // RunImport's SetLoaded calls (main asset + every sub-asset) each touched this
+                // family's shared idle clock (Touch/IsIdle resolve a sub-asset to its parent - see
+                // AssetDatabase.Resolve), so a big model imported here looks "just used" even though
+                // nothing has actually asked for any of it yet. Reset the clock right after each
+                // entry - but marking it idle isn't enough on its own: this whole loop runs
+                // synchronously as part of Initialize(), before the editor's main loop (and its
+                // per-frame TickIdleSweep call) ever starts ticking, so nothing would actually act on
+                // that until the entire batch finishes and normal frame ticking begins. Sweep right
+                // here instead, so peak memory across a big import batch is bounded to roughly one
+                // entry's worth instead of accumulating unreclaimed across all of them. Scoped to this
+                // batch-import loop only (not RunImport itself) - CreateAsset and other single-asset
+                // RunImport callers want the normal "just touched" behavior, since the caller is about
+                // to use what it just created.
+                AssetDatabase.ForceIdle(entry.Guid);
+                ForceIdleSweep();
+            }
+
+            // A full GC+LOH-compaction pass per entry would be excessive (each pass has real CPU
+            // cost), but leaving it only until the whole batch finishes lets committed memory
+            // accumulate unreclaimed across every entry in between - defeating the point of sweeping
+            // above. Every few entries strikes a balance: bounds peak commit without paying full GC
+            // cost per asset.
+            if (++sinceReclaim >= 5)
+            {
+                sinceReclaim = 0;
+                ReclaimMemory();
+            }
         }
 
         Runtime.Debug.Log($"Import complete: {succeeded.Count}/{dirty.Count} succeeded.");
 
         if (succeeded.Count > 0)
+        {
             OnAssetsImported?.Invoke(succeeded.ToArray());
+            ReclaimMemory();
+        }
+    }
+
+    // Importing (especially models/textures) transiently allocates a lot - raw file bytes,
+    // per-polygon-vertex mesh unpacking, texture decode buffers - none of which is reachable once
+    // disposed, but the CLR doesn't eagerly decommit freed Large Object Heap segments back to the OS
+    // on its own. Left alone, a heavy import batch's peak memory (and the page file backing it)
+    // lingers for the rest of the session instead of shrinking back down once the garbage is
+    // actually collectible. Force a compacting collection to reclaim it immediately instead of
+    // waiting on the GC's own heuristics, which are tuned for throughput, not for promptly returning
+    // memory after a one-off spike.
+    private static void ReclaimMemory()
+    {
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
     }
 
     private bool RunImport(AssetEntry entry)
@@ -1573,90 +1580,90 @@ public class EditorAssetBackend : AssetBackendBase
                     break;
 
                 case FileEventType.Deleted:
-                {
-                    if (_pathToGuid.TryGetValue(relativePath, out var guid))
                     {
-                        var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
+                        if (_pathToGuid.TryGetValue(relativePath, out var guid))
+                        {
+                            var deletedEntry = _guidToEntry.GetValueOrDefault(guid);
 
-                        // Dispose main + sub-assets so AssetRefs detect invalidation
-                        DisposeAndRemove(guid);
-                        if (deletedEntry != null)
-                            RemoveSubAssets(deletedEntry, includeThumbnails: false);
+                            // Dispose main + sub-assets so AssetRefs detect invalidation
+                            DisposeAndRemove(guid);
+                            if (deletedEntry != null)
+                                RemoveSubAssets(deletedEntry, includeThumbnails: false);
 
-                        _guidToEntry.TryRemove(guid, out _);
-                        _pathToGuid.Remove(relativePath);
-                        _dependencies.RemoveAsset(guid);
+                            _guidToEntry.TryRemove(guid, out _);
+                            _pathToGuid.Remove(relativePath);
+                            _dependencies.RemoveAsset(guid);
 
-                        // Clean main cache file
-                        string cachePath = GetCachePath(guid);
-                        if (File.Exists(cachePath))
-                            try { File.Delete(cachePath); } catch { }
+                            // Clean main cache file
+                            string cachePath = GetCachePath(guid);
+                            if (File.Exists(cachePath))
+                                try { File.Delete(cachePath); } catch { }
 
-                        deleted.Add(relativePath);
+                            deleted.Add(relativePath);
 
-                        // Script deleted trigger recompile
-                        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-                            ScriptAssemblyManager.RequestRecompile();
+                            // Script deleted trigger recompile
+                            if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                                ScriptAssemblyManager.RequestRecompile();
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case FileEventType.Renamed:
-                {
-                    if (evt.OldPath != null)
                     {
-                        string oldRelative = ToRelativePath(evt.OldPath);
-                        if (!_pathToGuid.TryGetValue(oldRelative, out var guid))
+                        if (evt.OldPath != null)
                         {
-                            // The old path was never tracked e.g. the "write-to-temp-then-rename-
-                            // into-place" atomic-save pattern collapses Created+Renamed within the
-                            // debounce window before the temp file is ever imported. Treat the
-                            // destination as a brand-new file instead of silently dropping it until
-                            // the next full rescan.
-                            ImportFileChange(evt.Path, relativePath, imported);
-                        }
-                        else
-                        {
-                            _pathToGuid.Remove(oldRelative);
-                            _pathToGuid[relativePath] = guid;
-                            var renamedEntry = _guidToEntry[guid];
-                            renamedEntry.Path = relativePath;
-
-                            // Move .meta
-                            string oldMeta = MetaFile.GetMetaPath(evt.OldPath);
-                            string newMeta = MetaFile.GetMetaPath(evt.Path);
-                            if (File.Exists(oldMeta) && !File.Exists(newMeta))
-                                try { File.Move(oldMeta, newMeta); } catch { }
-
-                            if (TryGetLoaded(guid, out var obj))
-                                obj.AssetPath = relativePath;
-
-                            // Update sub-asset AssetPaths
-                            UpdateSubAssetPaths(renamedEntry, relativePath);
-
-                            // If extension changed, update importer and trigger reimport
-                            string oldExt = Path.GetExtension(evt.OldPath);
-                            string newExt = Path.GetExtension(evt.Path);
-                            if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
+                            string oldRelative = ToRelativePath(evt.OldPath);
+                            if (!_pathToGuid.TryGetValue(oldRelative, out var guid))
                             {
-                                string newImporterName = EditorRegistries.GetImporterTypeName(newExt);
-                                renamedEntry.ImporterType = newImporterName;
-                                renamedEntry.NeedsReimport = true;
-
-                                DisposeAndRemove(guid);
-                                if (renamedEntry.SubAssets != null)
-                                    foreach (var sub in renamedEntry.SubAssets)
-                                        DisposeAndRemove(sub.Guid);
-
-                                RunImport(renamedEntry);
-                                imported.Add(relativePath);
+                                // The old path was never tracked e.g. the "write-to-temp-then-rename-
+                                // into-place" atomic-save pattern collapses Created+Renamed within the
+                                // debounce window before the temp file is ever imported. Treat the
+                                // destination as a brand-new file instead of silently dropping it until
+                                // the next full rescan.
+                                ImportFileChange(evt.Path, relativePath, imported);
                             }
+                            else
+                            {
+                                _pathToGuid.Remove(oldRelative);
+                                _pathToGuid[relativePath] = guid;
+                                var renamedEntry = _guidToEntry[guid];
+                                renamedEntry.Path = relativePath;
 
-                            OnAssetMoved?.Invoke(oldRelative, relativePath);
+                                // Move .meta
+                                string oldMeta = MetaFile.GetMetaPath(evt.OldPath);
+                                string newMeta = MetaFile.GetMetaPath(evt.Path);
+                                if (File.Exists(oldMeta) && !File.Exists(newMeta))
+                                    try { File.Move(oldMeta, newMeta); } catch { }
+
+                                if (TryGetLoaded(guid, out var obj))
+                                    obj.AssetPath = relativePath;
+
+                                // Update sub-asset AssetPaths
+                                UpdateSubAssetPaths(renamedEntry, relativePath);
+
+                                // If extension changed, update importer and trigger reimport
+                                string oldExt = Path.GetExtension(evt.OldPath);
+                                string newExt = Path.GetExtension(evt.Path);
+                                if (!string.Equals(oldExt, newExt, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    string newImporterName = EditorRegistries.GetImporterTypeName(newExt);
+                                    renamedEntry.ImporterType = newImporterName;
+                                    renamedEntry.NeedsReimport = true;
+
+                                    DisposeAndRemove(guid);
+                                    if (renamedEntry.SubAssets != null)
+                                        foreach (var sub in renamedEntry.SubAssets)
+                                            DisposeAndRemove(sub.Guid);
+
+                                    RunImport(renamedEntry);
+                                    imported.Add(relativePath);
+                                }
+
+                                OnAssetMoved?.Invoke(oldRelative, relativePath);
+                            }
                         }
+                        break;
                     }
-                    break;
-                }
             }
         }
 
@@ -1747,6 +1754,9 @@ public class EditorAssetBackend : AssetBackendBase
     {
         _watcher?.Dispose();
         _watcher = null;
+
+        _buildPropsWatcher?.Dispose();
+        _buildPropsWatcher = null;
 
         ClearThumbnailTextureCache();
 

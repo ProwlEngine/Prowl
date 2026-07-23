@@ -11,8 +11,20 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
 
+public abstract class EditorDragPayload : DragPayload
+{
+    public override string DisplayName { get; }
+    public override string Icon { get; }
+
+    protected EditorDragPayload(string displayName, string icon)
+    {
+        DisplayName = displayName;
+        Icon = icon;
+    }
+}
+
 /// <summary>Payload for dragging assets from the Project panel.</summary>
-public class AssetDragPayload : DragPayload
+public class AssetDragPayload : EditorDragPayload
 {
     public Guid AssetGuid { get; }
     public string AssetName { get; }
@@ -21,13 +33,11 @@ public class AssetDragPayload : DragPayload
     public string[] AssetPaths { get; }
     public bool IsMulti => AssetGuids.Length > 1;
 
-    public override string DisplayName => IsMulti ? $"{AssetGuids.Length} assets" : AssetName;
-    public override string Icon => EditorIcons.Cube;
-
     public AssetDragPayload(Guid guid, string name, Type? type)
         : this(guid, name, type, [guid], [name]) { }
 
     public AssetDragPayload(Guid guid, string name, Type? type, Guid[] allGuids, string[] allPaths)
+        : base(allGuids.Length > 1 ? $"{allGuids.Length} assets" : name, EditorIcons.Cube)
     {
         AssetGuid = guid;
         AssetName = name;
@@ -38,29 +48,24 @@ public class AssetDragPayload : DragPayload
 }
 
 /// <summary>Payload for dragging GameObjects in the hierarchy.</summary>
-public class GameObjectDragPayload : DragPayload
+public class GameObjectDragPayload : EditorDragPayload
 {
     public GameObject[] GameObjects { get; }
 
-    public override string DisplayName => GameObjects.Length == 1
-        ? GameObjects[0].Name
-        : $"{GameObjects.Length} objects";
-    public override string Icon => EditorIcons.Cube;
-
     public GameObjectDragPayload(GameObject go) : this([go]) { }
-    public GameObjectDragPayload(GameObject[] gos) => GameObjects = gos;
+    public GameObjectDragPayload(GameObject[] gos)
+        : base(gos.Length == 1 ? gos[0].Name : $"{gos.Length} objects", EditorIcons.Cube)
+        => GameObjects = gos;
 }
 
 /// <summary>Payload for dragging a component from the inspector.</summary>
-public class ComponentDragPayload : DragPayload
+public class ComponentDragPayload : EditorDragPayload
 {
     public GameObject GameObject { get; }
     public MonoBehaviour Component { get; }
 
-    public override string DisplayName => Component.GetType().Name;
-    public override string Icon => EditorIcons.PuzzlePiece;
-
     public ComponentDragPayload(GameObject go, MonoBehaviour comp)
+        : base(comp.GetType().Name, EditorIcons.PuzzlePiece)
     {
         GameObject = go;
         Component = comp;

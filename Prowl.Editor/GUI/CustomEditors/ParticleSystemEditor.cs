@@ -62,7 +62,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         paper.Box($"{id}_sp1").Height(6);
 
         // Initial Module
-        DrawModule(paper, $"{id}_init", "Initial", EditorIcons.Star, ps.Initial, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_init", EditorIcons.Star, "Initial", ps.Initial.Enabled, v => ps.Initial.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_init_lt", "Start Lifetime", typeof(MinMaxCurve), ps.Initial.StartLifetime,
                 v => ps.Initial.StartLifetime = v as MinMaxCurve ?? new MinMaxCurve(5f), 0);
@@ -78,7 +78,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
 
         // Emission Module
-        DrawModule(paper, $"{id}_emit", "Emission", EditorIcons.Burst, ps.Emission, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_emit", EditorIcons.Burst, "Emission", ps.Emission.Enabled, v => ps.Emission.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_emit_rot", "Rate Over Time", typeof(MinMaxCurve), ps.Emission.RateOverTime,
                 v => ps.Emission.RateOverTime = v as MinMaxCurve ?? new MinMaxCurve(10f), 0);
@@ -128,28 +128,28 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
 
         // Size Over Lifetime
-        DrawModule(paper, $"{id}_sol", "Size over Lifetime", EditorIcons.ArrowsLeftRight, ps.SizeOverLifetime, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_sol", EditorIcons.ArrowsLeftRight, "Size over Lifetime", ps.SizeOverLifetime.Enabled, v => ps.SizeOverLifetime.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_sol_c", "Size", typeof(AnimationCurve), ps.SizeOverLifetime.SizeCurve,
                 v => ps.SizeOverLifetime.SizeCurve = v as AnimationCurve ?? new AnimationCurve(), 0);
         });
 
         // Color Over Lifetime
-        DrawModule(paper, $"{id}_col", "Color over Lifetime", EditorIcons.Palette, ps.ColorOverLifetime, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_col", EditorIcons.Palette, "Color over Lifetime", ps.ColorOverLifetime.Enabled, v => ps.ColorOverLifetime.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_col_g", "Color", typeof(Gradient), ps.ColorOverLifetime.ColorGradient,
                 v => ps.ColorOverLifetime.ColorGradient = v as Gradient ?? new Gradient(), 0);
         });
 
         // Rotation Over Lifetime (still MinMaxCurve evaluated at spawn)
-        DrawModule(paper, $"{id}_rol", "Rotation over Lifetime", EditorIcons.ArrowsSpin, ps.RotationOverLifetime, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_rol", EditorIcons.ArrowsSpin, "Rotation over Lifetime", ps.RotationOverLifetime.Enabled, v => ps.RotationOverLifetime.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_rol_av", "Angular Velocity", typeof(MinMaxCurve), ps.RotationOverLifetime.AngularVelocity,
                 v => ps.RotationOverLifetime.AngularVelocity = v as MinMaxCurve ?? new MinMaxCurve(0f), 0);
         });
 
         // Velocity Over Lifetime
-        DrawModule(paper, $"{id}_vol", "Velocity over Lifetime", EditorIcons.Gauge, ps.VelocityOverLifetime, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_vol", EditorIcons.Gauge, "Velocity over Lifetime", ps.VelocityOverLifetime.Enabled, v => ps.VelocityOverLifetime.Enabled = v, () =>
         {
             PropertyGridUtils.DrawField(paper, $"{id}_vol_x", "Velocity X", typeof(AnimationCurve), ps.VelocityOverLifetime.VelocityX,
                 v => ps.VelocityOverLifetime.VelocityX = v as AnimationCurve ?? new AnimationCurve(), 0);
@@ -160,7 +160,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
 
         // Collision
-        DrawModule(paper, $"{id}_coll", "Collision", EditorIcons.Explosion, ps.Collision, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_coll", EditorIcons.Explosion, "Collision", ps.Collision.Enabled, v => ps.Collision.Enabled = v, () =>
         {
             EnumRow(paper, $"{id}_coll_mode", "Mode", ps.Collision.Mode, v => ps.Collision.Mode = v);
             EnumRow(paper, $"{id}_coll_qual", "Quality", ps.Collision.Quality, v => ps.Collision.Quality = v);
@@ -188,7 +188,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
 
         // UV Animation
-        DrawModule(paper, $"{id}_uv", "UV Animation", EditorIcons.Film, ps.UV, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_uv", EditorIcons.Film, "UV Animation", ps.UV.Enabled, v => ps.UV.Enabled = v, () =>
         {
             EnumRow(paper, $"{id}_uv_mode", "Mode", ps.UV.Mode, v => ps.UV.Mode = v);
 
@@ -217,7 +217,7 @@ public class ParticleSystemComponentEditor : CustomEditor
         });
 
         // Light: each alive particle pushes a point light into the scene's dynamic BVH.
-        DrawModule(paper, $"{id}_lt", "Light", EditorIcons.Lightbulb, ps.Light, font, () =>
+        EditorGUI.ModuleSection(paper, $"{id}_lt", EditorIcons.Lightbulb, "Light", ps.Light.Enabled, v => ps.Light.Enabled = v, () =>
         {
             BoolRow(paper, $"{id}_lt_upc", "Use Particle Color", ps.Light.UseParticleColor,
                 v => ps.Light.UseParticleColor = v);
@@ -283,10 +283,6 @@ public class ParticleSystemComponentEditor : CustomEditor
         }
     }
 
-    private static void DrawModule(Paper paper, string id, string label, string icon, ParticleSystemModule module, Prowl.Scribe.FontFile font, Action drawContents)
-        => Origami.Foldout(paper, id, $"{icon}  {label}")
-            .Toggle(module.Enabled, v => module.Enabled = v)
-            .Body(drawContents);
 
     // ================================================================
     //  Burst List Editor

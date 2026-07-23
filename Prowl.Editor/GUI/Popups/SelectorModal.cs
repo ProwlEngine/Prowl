@@ -7,6 +7,7 @@ using System.Linq;
 
 using Prowl.Editor.Theming;
 using Prowl.Graphite;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
@@ -41,7 +42,7 @@ public enum SelectorTabs
 public static class SelectorModal
 {
     // ---- State ----
-    private static bool _open;
+    private static readonly ModalHandle _handle = new();
     private static string _title = "";
     private static Type _targetType = typeof(object);
     private static SelectorTabs _tabs;
@@ -49,7 +50,7 @@ public static class SelectorModal
     private static Action<object?>? _callback;
     private static string _searchText = "";
 
-    public static bool IsOpen => _open;
+    public static bool IsOpen => _handle.IsOpen;
 
     /// <summary>
     /// Open the selector modal.
@@ -58,8 +59,6 @@ public static class SelectorModal
     /// <param name="targetType">The type being selected (e.g. typeof(Transform), typeof(Mesh), typeof(Rigidbody3D)).</param>
     /// <param name="tabs">Which tabs to show.</param>
     /// <param name="onSelect">Callback with the selected value, or null for "None".</param>
-    private static OrigamiUI.IModal? _modal;
-
     public static void Open(string title, Type targetType, SelectorTabs tabs, Action<object?> onSelect)
     {
         _title = title;
@@ -67,25 +66,19 @@ public static class SelectorModal
         _tabs = tabs;
         _callback = onSelect;
         _searchText = "";
-        _open = true;
         _activeTab = tabs.HasFlag(SelectorTabs.Scene) ? SelectorTabs.Scene : SelectorTabs.Assets;
-
-        _modal = new OrigamiUI.CustomDrawModal((p, layer, _) => DrawInternal(p, layer)) { CloseOnBackdrop = true };
-        OrigamiUI.Modal.Push(_modal);
+        _handle.Open(DrawInternal, closeOnBackdrop: true);
     }
 
     public static void Close()
     {
-        _open = false;
         _callback = null;
-        if (_modal != null) { OrigamiUI.Modal.Remove(_modal); _modal = null; }
+        _handle.Close();
     }
-
-    public static void Draw(Paper paper) { } // Now handled by modal stack
 
     private static void DrawInternal(Paper paper, int layer)
     {
-        if (!_open) return;
+        if (!_handle.IsOpen) return;
 
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
@@ -235,7 +228,7 @@ public static class SelectorModal
                         continue;
 
                     object selectValue = isTransform ? go.Transform : go;
-                    string path = GetHierarchyPath(go);
+                    string path = EditorUtils.GetHierarchyPath(go);
                     string detail = string.IsNullOrEmpty(path) ? "" : path;
 
                     DrawSceneItem(paper, font, $"sel_s_{idx++}", go.Name, detail,
@@ -441,17 +434,4 @@ public static class SelectorModal
         return EditorIcons.Circle;
     }
 
-    private static string GetHierarchyPath(GameObject go)
-    {
-        var parent = go.Parent;
-        if (!parent.IsValid()) return "";
-        var parts = new List<string>();
-        while (parent.IsValid())
-        {
-            parts.Add(parent.Name);
-            parent = parent.Parent;
-        }
-        parts.Reverse();
-        return string.Join("/", parts);
-    }
 }

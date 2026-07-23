@@ -20,16 +20,8 @@ public class GeneralSettings : ProjectSettingsBase
     {
         Origami.Header(paper, "gen_header", $"{EditorIcons.Gear}  General").Underline().Show();
 
-        EditorGUI.Row(paper, "gen_company", "Company Name", () =>
-            Origami.TextField(paper, "gen_company_v", CompanyName,
-                v => { CompanyName = v; EditorRegistries.SaveSettings(); }).Show());
-
-        EditorGUI.Row(paper, "gen_product", "Product Name", () =>
-            Origami.TextField(paper, "gen_product_v", ProductName,
-                v => { ProductName = v; EditorRegistries.SaveSettings(); }).Show());
-
-        EditorGUI.Row(paper, "gen_version", "Version", () =>
-            Origami.TextField(paper, "gen_version_v", Version,
-                v => { Version = v; EditorRegistries.SaveSettings(); }).Show());
+        EditorGUI.SettingsTextField(paper, "gen_company", "Company Name", CompanyName, v => CompanyName = v);
+        EditorGUI.SettingsTextField(paper, "gen_product", "Product Name", ProductName, v => ProductName = v);
+        EditorGUI.SettingsTextField(paper, "gen_version", "Version", Version, v => Version = v);
     }
 }

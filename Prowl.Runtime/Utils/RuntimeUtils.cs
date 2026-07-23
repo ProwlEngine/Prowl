@@ -2,8 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -44,11 +46,18 @@ public static class RuntimeUtils
     private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
     private static readonly Dictionary<Type, int> s_executionOrderCache = [];
 
+    // Concurrent because assets (and therefore their type names) are resolved on background
+    // load threads as well as the main thread. Only successful lookups are stored, so a name
+    // that isn't resolvable yet stays resolvable once its assembly finishes loading.
+    private static readonly ConcurrentDictionary<string, Type> s_resolvedTypeCache = new(StringComparer.Ordinal);
+
     [OnAssemblyUnload]
     public static void ClearCache()
     {
         s_deepCopyByAssignmentCache.Clear();
         s_executionOrderCache.Clear();
+        // Must be cleared before the script ALC unloads - a cached Type would pin it alive.
+        s_resolvedTypeCache.Clear();
     }
 
     public static bool IsARM() =>
@@ -102,6 +111,78 @@ public static class RuntimeUtils
             if (t != null)
                 return t;
         }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a type from an assembly-qualified name across ALL loaded assembly load contexts,
+    /// including the collectible context user scripts are loaded into. <see cref="Type.GetType(string)"/>
+    /// can only bind names into the default context by CLR rule, so it returns null for any type
+    /// declared in a user assembly - which is why persisted type names (asset entries, and anything
+    /// else round-tripped through <see cref="Type.AssemblyQualifiedName"/>) need this instead.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="FindType"/>, this honors the assembly recorded in the name and never falls
+    /// back to a loose simple-name match, so it cannot return the wrong type when two assemblies
+    /// declare types that share a name. Assemblies are matched on simple name only: a script assembly
+    /// keeps its name but gets a fresh version and load context on every hot-reload, so matching full
+    /// identity would miss it. Returns null rather than throwing for malformed or unloadable names.
+    /// </remarks>
+    public static Type? ResolveType(string assemblyQualifiedName)
+    {
+        if (string.IsNullOrWhiteSpace(assemblyQualifiedName))
+            return null;
+
+        if (s_resolvedTypeCache.TryGetValue(assemblyQualifiedName, out Type? cached))
+            return cached;
+
+        Type? resolved;
+        try
+        {
+            // Fast path: already resolvable in the default context.
+            resolved = Type.GetType(assemblyQualifiedName, throwOnError: false);
+
+            // Slow path: bind against every loaded assembly. The resolver overload is applied
+            // recursively to generic arguments and array element types, so it also handles names
+            // like List<UserType> whose inner assembly qualifier is a collectible-context one.
+            resolved ??= Type.GetType(assemblyQualifiedName, ResolveLoadedAssembly, ResolveTypeInAssembly, throwOnError: false);
+        }
+        catch (Exception ex) when (ex is FileLoadException or BadImageFormatException or ArgumentException or TypeLoadException)
+        {
+            // A malformed or unloadable name persisted in the asset database must not tear down the
+            // caller - these getters run inside editor draw loops. Treat it as simply unresolved.
+            return null;
+        }
+
+        // Only successful resolutions are cached; a miss may just mean the assembly isn't loaded yet.
+        if (resolved != null)
+            s_resolvedTypeCache[assemblyQualifiedName] = resolved;
+
+        return resolved;
+    }
+
+    private static Assembly? ResolveLoadedAssembly(AssemblyName name)
+    {
+        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            if (string.Equals(asm.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase))
+                return asm;
+
+        return null;
+    }
+
+    private static Type? ResolveTypeInAssembly(Assembly? asm, string typeName, bool ignoreCase)
+    {
+        if (asm != null)
+            return asm.GetType(typeName, throwOnError: false, ignoreCase);
+
+        // No assembly qualifier on this portion of the name - search every loaded assembly.
+        foreach (Assembly candidate in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            Type? t = candidate.GetType(typeName, throwOnError: false, ignoreCase);
+            if (t != null)
+                return t;
+        }
+
         return null;
     }
 

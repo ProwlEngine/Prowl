@@ -63,8 +63,10 @@ public class EditorCamera
     /// <summary>Time (UnscaledTotalTime) when move speed last changed via scroll. Used for HUD indicators.</summary>
     public double SpeedChangedTime => _speedChangedTime;
 
-    // Orbit distance (pivot is always _position + forward * _orbitDistance)
+    // Orbit distance and the pivot captured at the start of an orbit gesture.
     private float _orbitDistance = 10f;
+    private Float3 _orbitPivot;
+    private bool _wasOrbiting;
 
     // Toggles
     public bool ShowGrid { get; set; } = true;
@@ -196,20 +198,29 @@ public class EditorCamera
             consumed = true;
         }
 
-        // Alt + Left mouse = orbit around pivot (pivot = position + forward * distance)
-        if (Input.IsAltPressed && Input.GetMouseButton(0))
+        // Alt + Left mouse = orbit around a pivot captured when the gesture starts. Orbiting the
+        // selection (when present) keeps the thing you care about centered, otherwise a point ahead.
+        bool orbiting = Input.IsAltPressed && Input.GetMouseButton(0);
+        if (orbiting && !_wasOrbiting)
+        {
+            _orbitPivot = ComputeOrbitPivot();
+            _orbitDistance = MathF.Max(0.1f, Float3.Length(_orbitPivot - _position));
+        }
+        if (orbiting)
         {
             Float2 delta = Input.MouseDelta;
-            Float3 pivot = _position + GetForwardFromAngles() * _orbitDistance;
 
             _yaw += delta.X * 0.3f;
             _pitch += delta.Y * 0.3f;
             _pitch = MathF.Max(-89f, MathF.Min(89f, _pitch));
 
-            _position = pivot - GetForwardFromAngles() * _orbitDistance;
+            // Reposition so the pivot stays fixed and centered, using the transform's actual forward.
+            UpdateTransform();
+            _position = _orbitPivot - _cameraObject.Transform.Forward * _orbitDistance;
             UpdateTransform();
             consumed = true;
         }
+        _wasOrbiting = orbiting;
 
         // Alt + Right mouse = dolly zoom
         if (Input.IsAltPressed && Input.GetMouseButton(1))
@@ -301,6 +312,30 @@ public class EditorCamera
         }
 
         return consumed;
+    }
+
+    /// <summary>
+    /// Pivot for an orbit gesture: the selection's bounds/position center when something is selected,
+    /// otherwise a point ahead of the camera at the current orbit distance.
+    /// </summary>
+    private Float3 ComputeOrbitPivot()
+    {
+        Float3 min = new(float.MaxValue);
+        Float3 max = new(float.MinValue);
+        bool anyBounds = false;
+        int count = 0;
+        Float3 positionSum = Float3.Zero;
+
+        foreach (var go in Selection.GetSelected<GameObject>())
+        {
+            count++;
+            positionSum += go.Transform.Position;
+            AccumulateRendererBounds(go, ref min, ref max, ref anyBounds);
+        }
+
+        if (anyBounds) return (min + max) * 0.5f;
+        if (count > 0) return positionSum / count;
+        return _position + _cameraObject.Transform.Forward * _orbitDistance;
     }
 
     public void FocusSelection()

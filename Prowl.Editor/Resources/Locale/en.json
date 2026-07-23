@@ -66,6 +66,7 @@
   "launcher.folder_exists_msg": "'{{name}}' already exists and is not empty. Choose a different name or location.",
   "launcher.create_failed": "Create Failed",
   "launcher.open_failed": "Failed to open project: {{message}}",
+  "launcher.open_failed_title": "Open Failed",
   "launcher.just_now": "Just now",
   "launcher.minutes_ago": "{{count}}m ago",
   "launcher.hours_ago": "{{count}}h ago",
@@ -99,6 +100,7 @@
   "launcher.tip.create_menu": "Right-click an empty area of the Hierarchy or Project window to create new objects or assets.",
   "launcher.tip.component_menu": "Right-click a component header in the Inspector to reset, remove, or reorder it.",
   "launcher.tip.escape_unlock": "Press Escape to release the cursor whenever a game view has it locked.",
+  "launcher.tip.nuget": "Add NuGet packages by editing Directory.Build.props in your project root.",
 
   "console.clear": "Clear",
   "console.collapse": "Collapse",

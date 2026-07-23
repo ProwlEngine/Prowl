@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}' existiert bereits und ist nicht leer. Waehlen Sie einen anderen Namen oder Speicherort.",
   "launcher.create_failed": "Erstellung fehlgeschlagen",
   "launcher.open_failed": "Projekt konnte nicht geoeffnet werden: {{message}}",
+  "launcher.open_failed_title": "Oeffnen fehlgeschlagen",
   "launcher.just_now": "Gerade eben",
   "launcher.minutes_ago": "vor {{count}}min",
   "launcher.hours_ago": "vor {{count}}h",
@@ -109,6 +110,7 @@
   "launcher.tip.create_menu": "Rechtsklicken Sie auf einen leeren Bereich der Hierarchie oder des Projektfensters, um neue Objekte oder Assets zu erstellen.",
   "launcher.tip.component_menu": "Rechtsklicken Sie auf eine Komponenten-Kopfzeile im Inspektor, um sie zurueckzusetzen, zu entfernen oder umzuordnen.",
   "launcher.tip.escape_unlock": "Druecken Sie Escape, um den Cursor freizugeben, wenn eine Spielansicht ihn gesperrt hat.",
+  "launcher.tip.nuget": "Fuegen Sie NuGet-Pakete hinzu, indem Sie Directory.Build.props im Projektstamm bearbeiten.",
 
   "inspector.nothing_selected": "Nichts ausgewaehlt",
   "inspector.nothing_selected_hint": "Waehlen Sie ein Asset oder Objekt zur Inspektion aus.",

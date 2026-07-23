@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
+using Prowl.Editor.Utils;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Core;
@@ -35,32 +36,20 @@ public static class ScriptReloadCallbacks
     {
         var hooks = new List<(int order, MethodInfo method)>();
 
-        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Type type in EditorUtils.GetAllTypes())
         {
-            // Skip any .NET or System library call that couldn't possibly have any attributes we need
-            if (IsFrameworkAssembly(assembly)) continue;
-
-            Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null).ToArray()!; }
-            catch { continue; }
-
-            foreach (Type? type in types)
+            foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
-                if (type == null) continue;
-                foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                var attr = method.GetCustomAttribute<TAttr>();
+                if (attr == null) continue;
+
+                if (method.GetParameters().Length != 0)
                 {
-                    var attr = method.GetCustomAttribute<TAttr>();
-                    if (attr == null) continue;
-
-                    if (method.GetParameters().Length != 0)
-                    {
-                        Runtime.Debug.LogWarning($"[ScriptReloadCallbacks] [{phase}] {type.FullName}.{method.Name} must be static and parameterless; skipping.");
-                        continue;
-                    }
-
-                    hooks.Add((attr.Order, method));
+                    Runtime.Debug.LogWarning($"[ScriptReloadCallbacks] [{phase}] {type.FullName}.{method.Name} must be static and parameterless; skipping.");
+                    continue;
                 }
+
+                hooks.Add((attr.Order, method));
             }
         }
 
@@ -75,14 +64,5 @@ public static class ScriptReloadCallbacks
                 Runtime.Debug.LogError($"[ScriptReloadCallbacks] [{phase}] {method.DeclaringType?.Name}.{method.Name} threw: {ex.InnerException?.Message ?? ex.Message}");
             }
         }
-    }
-
-    private static bool IsFrameworkAssembly(Assembly assembly)
-    {
-        string? name = assembly.GetName().Name;
-        if (string.IsNullOrEmpty(name)) return true;
-        return name.StartsWith("System", StringComparison.Ordinal)
-            || name.StartsWith("Microsoft", StringComparison.Ordinal)
-            || name == "mscorlib" || name == "netstandard" || name == "WindowsBase";
     }
 }

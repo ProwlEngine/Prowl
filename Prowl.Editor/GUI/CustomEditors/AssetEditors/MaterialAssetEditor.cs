@@ -16,8 +16,7 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Material))]
 public class MaterialAssetEditor : AssetImporterEditor
 {
-    private PreviewRenderer? _preview;
-    private EngineObject? _lastPreviewAsset;
+    private readonly PreviewWidget _preview = new();
     private Guid _currentGuid;
     private bool _dirty;
 
@@ -28,14 +27,12 @@ public class MaterialAssetEditor : AssetImporterEditor
         {
             _currentGuid = entry.Guid;
             _dirty = false;
-            _lastPreviewAsset = null;
+            _preview.Invalidate();
         }
 
         // Include the GUID in element IDs so Paper UI state is unique per asset
         id = $"{id}_{entry.Guid:N}";
 
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
         var material = asset as Material;
 
         Origami.Header(paper, $"{id}_h_info", $"{EditorIcons.Palette}  Material").Show();
@@ -49,12 +46,9 @@ public class MaterialAssetEditor : AssetImporterEditor
         PropertyGridUtils.DrawField(paper, $"{id}_shader", "Shader", typeof(AssetRef<Shader>), material.ShaderRef,
             newVal =>
             {
-                if (newVal is AssetRef<Shader> shaderRef)
-                {
-                    material.ShaderRef = shaderRef;
-                    _dirty = true;
-                    _lastPreviewAsset = null; // force preview refresh
-                }
+                material.ShaderRef = (AssetRef<Shader>)newVal!;
+                _dirty = true;
+                _preview.Invalidate();
             }, 0);
 
         // Shader properties one field per property declared by the shader. Values
@@ -64,12 +58,12 @@ public class MaterialAssetEditor : AssetImporterEditor
         var shader = material.Shader;
         if (shader != null)
         {
-                        Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
+            Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
 
             foreach (var prop in shader.Properties)
             {
                 MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name}", material, prop,
-                    onChanged: () => { _dirty = true; _lastPreviewAsset = null; });
+                    onChanged: () => { _dirty = true; _preview.Invalidate(); });
             }
 
         }
@@ -82,16 +76,9 @@ public class MaterialAssetEditor : AssetImporterEditor
         }
 
         // 3D Preview
-                Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
+        Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
-        _preview ??= new PreviewRenderer(256, 256);
-        if (_lastPreviewAsset != material)
-        {
-            _lastPreviewAsset = material;
-            _preview.SetupForMaterial(material);
-        }
-
-        _preview.DrawPreview(paper, $"{id}_preview", 256, 256);
+        _preview.Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
     private void SaveMaterial(Material material, AssetEntry entry)
@@ -113,7 +100,7 @@ public class MaterialAssetEditor : AssetImporterEditor
             {
                 File.WriteAllText(absolutePath, echo.WriteToString());
                 _dirty = false;
-                _lastPreviewAsset = null;
+                _preview.Invalidate();
 
                 // Reimport to update cache + thumbnail
                 EditorAssetBackend.Instance?.Reimport(entry.Guid);

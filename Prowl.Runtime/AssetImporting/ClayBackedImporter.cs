@@ -111,10 +111,13 @@ internal static class ClayBackedImporter
             }
         }
 
-        // 1. Textures - load once, share by Clay texture index.
-        var textureCache = new Texture2D?[clayModel.Textures.Count];
+        // 1. Textures - resolve once, share by Clay texture index. Resolution (not necessarily
+        // decoding - see IModelTextureResolver) happens through the resolver, so the editor can
+        // supply one that only ever produces AssetRefs and never touches pixel data itself.
+        var resolver = settings.TextureResolver ?? DefaultModelTextureResolver.Instance;
+        var textureCache = new AssetRef<Texture2D>[clayModel.Textures.Count];
         for (int i = 0; i < clayModel.Textures.Count; i++)
-            textureCache[i] = LoadTexture(clayModel.Textures[i]);
+            textureCache[i] = ResolveModelTexture(clayModel.Textures[i], resolver);
 
         // 2. Materials.
         var materials = new List<PMaterial>(clayModel.Materials.Count);
@@ -212,21 +215,12 @@ internal static class ClayBackedImporter
             anim.Clips = animations.Select(c => new AssetRef<PAnim>(c)).ToList();
         }
 
-        // Collect every Texture2D that actually loaded - cache entries may be null when a
-        // texture couldn't be resolved or decoded. The editor's importer registers embedded
-        // ones (AssetPath empty) as sub-assets so they show up in the asset browser.
-        var textures = new List<Texture2D>(textureCache.Length);
-        for (int i = 0; i < textureCache.Length; i++)
-            if (textureCache[i] is { } t)
-                textures.Add(t);
-
         return new ModelImportResult
         {
             RootGO = rootGO,
             Meshes = meshes,
             Materials = materials,
             Animations = animations,
-            Textures = textures,
         };
     }
 
@@ -378,7 +372,7 @@ internal static class ClayBackedImporter
     // Material bake
     // ----------------------------------------------------------------------------------------
 
-    private static PMaterial BuildMaterial(ClayMaterial src, Texture2D?[] textureCache)
+    private static PMaterial BuildMaterial(ClayMaterial src, AssetRef<Texture2D>[] textureCache)
     {
         var mat = new PMaterial(Shader.LoadDefault(DefaultShader.Standard))
         {
@@ -387,19 +381,14 @@ internal static class ClayBackedImporter
 
         mat.SetColor("_MainColor", src.BaseColor);
 
-        var baseTex = ResolveTexture(src.BaseColorTexture, textureCache) ?? Texture2D.LoadDefault(DefaultTexture.Grid);
-        mat.SetTexture("_MainTex", baseTex);
-
-        var normalTex = ResolveTexture(src.NormalTexture, textureCache) ?? Texture2D.LoadDefault(DefaultTexture.Normal);
-        mat.SetTexture("_NormalTex", normalTex);
+        mat.SetTexture("_MainTex", OrDefault(ResolveTexture(src.BaseColorTexture, textureCache), DefaultTexture.Grid));
+        mat.SetTexture("_NormalTex", OrDefault(ResolveTexture(src.NormalTexture, textureCache), DefaultTexture.Normal));
 
         mat.SetFloat("_Metallic", src.Metallic);
         mat.SetFloat("_Roughness", src.Roughness);
-        var surfaceTex = ResolveTexture(src.MetallicRoughnessTexture, textureCache) ?? Texture2D.LoadDefault(DefaultTexture.Surface);
-        mat.SetTexture("_SurfaceTex", surfaceTex);
+        mat.SetTexture("_SurfaceTex", OrDefault(ResolveTexture(src.MetallicRoughnessTexture, textureCache), DefaultTexture.Surface));
 
-        var emissiveTex = ResolveTexture(src.EmissiveTexture, textureCache) ?? Texture2D.LoadDefault(DefaultTexture.Emission);
-        mat.SetTexture("_EmissionTex", emissiveTex);
+        mat.SetTexture("_EmissionTex", OrDefault(ResolveTexture(src.EmissiveTexture, textureCache), DefaultTexture.Emission));
 
         // EmissiveFactor is already linear-RGB in Clay; EmissiveStrength multiplies it.
         var e = src.EmissiveFactor;
@@ -411,48 +400,34 @@ internal static class ClayBackedImporter
         return mat;
     }
 
-    private static Texture2D? ResolveTexture(MaterialTextureSlot? slot, Texture2D?[] cache)
+    private static AssetRef<Texture2D> ResolveTexture(MaterialTextureSlot? slot, AssetRef<Texture2D>[] cache)
     {
-        if (slot is null) return null;
+        if (slot is null) return default;
         int idx = slot.TextureIndex;
-        if ((uint)idx >= (uint)cache.Length) return null;
+        if ((uint)idx >= (uint)cache.Length) return default;
         return cache[idx];
     }
 
-    private static Texture2D? LoadTexture(ClayTexture src)
+    // "No texture in this slot" is never resolved through IModelTextureResolver - it isn't a texture
+    // reference to look up, it's the absence of one. Falls back to the shared, GUID-tagged default
+    // texture singletons (same as always).
+    private static AssetRef<Texture2D> OrDefault(AssetRef<Texture2D> tex, DefaultTexture fallback) =>
+        tex.IsExplicitNull ? new AssetRef<Texture2D>(Texture2D.LoadDefault(fallback)) : tex;
+
+    private static AssetRef<Texture2D> ResolveModelTexture(ClayTexture src, IModelTextureResolver resolver)
     {
         try
         {
-            Texture2D? loaded = null;
             if (!string.IsNullOrEmpty(src.SourcePath) && File.Exists(src.SourcePath))
-            {
-                loaded = Texture2D.LoadFromFile(src.SourcePath, generateMipmaps: true);
-            }
-            else if (src.EncodedBytes is { Length: > 0 } bytes)
-            {
-                using var ms = new MemoryStream(bytes);
-                loaded = Texture2D.LoadFromStream(ms, generateMipmaps: true);
-            }
-
-            if (loaded is not null)
-            {
-                // LoadFromStream doesn't fill Name; LoadFromFile fills AssetPath but leaves
-                // Name empty too. Set Name so embedded textures show up nicely in the asset
-                // browser when the editor registers them as sub-assets.
-                if (string.IsNullOrEmpty(loaded.Name))
-                {
-                    loaded.Name = !string.IsNullOrEmpty(src.Name)
-                        ? src.Name
-                        : (src.SourcePath is not null ? Path.GetFileNameWithoutExtension(src.SourcePath) : "EmbeddedTexture");
-                }
-            }
-            return loaded;
+                return resolver.ResolveExternal(src.SourcePath);
+            if (src.EncodedBytes is { Length: > 0 } bytes)
+                return resolver.ResolveEmbedded(src.Name, bytes, src.MimeType);
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[Clay] Failed to load texture '{src.Name ?? src.SourcePath ?? "(embedded)"}': {ex.Message}");
+            Debug.LogWarning($"[Clay] Failed to resolve texture '{src.Name ?? src.SourcePath ?? "(embedded)"}': {ex.Message}");
         }
-        return null;
+        return default;
     }
 
     // ----------------------------------------------------------------------------------------

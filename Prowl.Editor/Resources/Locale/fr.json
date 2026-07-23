@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}' existe deja et n'est pas vide. Choisissez un autre nom ou emplacement.",
   "launcher.create_failed": "Echec de la creation",
   "launcher.open_failed": "Echec de l'ouverture du projet : {{message}}",
+  "launcher.open_failed_title": "Echec de l'ouverture",
   "launcher.just_now": "A l'instant",
   "launcher.minutes_ago": "il y a {{count}}min",
   "launcher.hours_ago": "il y a {{count}}h",
@@ -109,6 +110,7 @@
   "launcher.tip.create_menu": "Faites un clic droit sur une zone vide de la Hierarchie ou de la fenetre Projet pour creer de nouveaux objets ou assets.",
   "launcher.tip.component_menu": "Faites un clic droit sur l'en-tete d'un composant dans l'Inspecteur pour le reinitialiser, le supprimer ou le reordonner.",
   "launcher.tip.escape_unlock": "Appuyez sur Escape pour liberer le curseur lorsqu'une vue de jeu le verrouille.",
+  "launcher.tip.nuget": "Ajoutez des paquets NuGet en modifiant Directory.Build.props a la racine de votre projet.",
 
   "inspector.nothing_selected": "Rien de selectionne",
   "inspector.nothing_selected_hint": "Selectionnez un asset ou un objet pour l'inspecter.",

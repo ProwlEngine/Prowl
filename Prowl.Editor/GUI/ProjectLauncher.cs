@@ -75,6 +75,7 @@ public static class ProjectLauncher
         "launcher.tip.create_menu",
         "launcher.tip.component_menu",
         "launcher.tip.escape_unlock",
+        "launcher.tip.nuget",
     };
 
     private const float _tipDuration = 8f;
@@ -623,6 +624,7 @@ public static class ProjectLauncher
         catch (Exception ex)
         {
             Runtime.Debug.LogError(Loc.Get("launcher.open_failed", new { message = ex.Message }));
+            Toasts.Warning(Loc.Get("launcher.open_failed_title"), ex.Message);
         }
     }
 

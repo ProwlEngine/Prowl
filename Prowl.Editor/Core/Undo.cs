@@ -365,7 +365,7 @@ public static class Undo
                 }
 
                 Selection.Select(restored);
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             })));
     }
 
@@ -407,7 +407,7 @@ public static class Undo
                 }
 
                 Selection.Select(restored);
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             },
             redo: () =>
             {
@@ -423,7 +423,7 @@ public static class Undo
                     scene.Remove(child);
                 scene.Remove(target);
                 target.Dispose();
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             });
     }
 
@@ -577,7 +577,7 @@ public static class Undo
         _redoStack.Add(step);
         TrimStack(_redoStack);
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
         OnUndoRedo?.Invoke();
     }
 
@@ -610,7 +610,7 @@ public static class Undo
         _undoStack.Add(step);
         TrimStack(_undoStack);
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
         OnUndoRedo?.Invoke();
     }
 

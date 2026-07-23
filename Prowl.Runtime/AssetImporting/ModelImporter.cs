@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -32,6 +33,12 @@ public struct ModelImporterSettings
     /// (it's slow and some models ship their own UV2); the built-in default models force it on.</summary>
     public bool GenerateLightmapUVs = false;
 
+    /// <summary>Strategy for turning a model's texture references into AssetRefs. Null (the default)
+    /// uses <see cref="DefaultModelTextureResolver"/>, which decodes/GPU-uploads immediately - correct
+    /// for a direct runtime load with no separate asset-tracking step. The editor importer supplies
+    /// its own resolver that only ever produces GUID-backed AssetRefs, with no decode of its own.</summary>
+    public IModelTextureResolver? TextureResolver;
+
     public ModelImporterSettings() { }
 }
 
@@ -44,15 +51,6 @@ public class ModelImportResult
     public List<Mesh> Meshes = [];
     public List<Material> Materials = [];
     public List<AnimationClip> Animations = [];
-    /// <summary>
-    /// Every Texture2D loaded during import. Textures with a populated <c>AssetPath</c> were
-    /// loaded from disk files referenced by the model (and the editor's <c>ResolveTextures</c>
-    /// will swap them for AssetRefs into the asset database). Textures with an empty
-    /// <c>AssetPath</c> are embedded (GLB inline image, FBX Video::Clip content, data: URI)
-    /// and should be registered as sub-assets so they're discoverable in the asset browser
-    /// and reusable across materials.
-    /// </summary>
-    public List<Texture2D> Textures = [];
 }
 
 /// <summary>
@@ -82,5 +80,80 @@ public class ModelImporter
             for (int i = 0; i < result.Meshes.Count; i++)
                 LightmapUVGenerator.Generate(result.Meshes[i]);
         return result;
+    }
+}
+
+/// <summary>
+/// Strategy for turning a model's texture references into <see cref="AssetRef{T}"/>s during import.
+/// Invoked once per distinct texture the model references (the caller caches and reuses the result
+/// across every material slot that references the same texture).
+/// <para/>
+/// The default (used when nothing else is supplied) decodes and GPU-uploads immediately - correct
+/// for a direct runtime load with no separate asset-tracking step to hand off to. The editor supplies
+/// its own implementation that never decodes another asset's pixel data itself: an externally
+/// referenced texture is resolved purely by path, against the asset database's existing GUID for
+/// that file, and an embedded texture is registered as a proper sub-asset for the asset database to
+/// own and cache - so importing a model never grows or duplicates the pixel data of anything else.
+/// </summary>
+public interface IModelTextureResolver
+{
+    /// <summary>
+    /// Resolve a texture referenced by a sibling file on disk. <paramref name="sourcePath"/> is
+    /// always an already-resolved, existing, absolute path.
+    /// </summary>
+    /// <returns>An <see cref="AssetRef{T}"/> for the texture, or <see langword="default"/> if it
+    /// can't/shouldn't be resolved - the caller falls back to the material slot's built-in default
+    /// texture (Grid/Normal/Surface/Emission).</returns>
+    AssetRef<Texture2D> ResolveExternal(string sourcePath);
+
+    /// <summary>
+    /// Resolve a texture embedded directly in the model file (GLB bufferView, FBX Video::Clip
+    /// content, data: URI - no file of its own).
+    /// </summary>
+    /// <returns>An <see cref="AssetRef{T}"/> for the texture, or <see langword="default"/> if it
+    /// can't/shouldn't be resolved.</returns>
+    AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType);
+}
+
+/// <summary>
+/// The <see cref="IModelTextureResolver"/> used when a model import doesn't supply its own -
+/// i.e. every genuine direct runtime load, with no separate asset-tracking system to hand
+/// resolution off to. Decodes and GPU-uploads immediately, matching how model-referenced textures
+/// were always loaded before this resolver existed.
+/// </summary>
+public sealed class DefaultModelTextureResolver : IModelTextureResolver
+{
+    public static readonly DefaultModelTextureResolver Instance = new();
+
+    public AssetRef<Texture2D> ResolveExternal(string sourcePath)
+    {
+        try
+        {
+            var tex = Texture2D.LoadFromFile(sourcePath, generateMipmaps: true);
+            if (string.IsNullOrEmpty(tex.Name))
+                tex.Name = Path.GetFileNameWithoutExtension(sourcePath);
+            return new AssetRef<Texture2D>(tex);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Clay] Failed to load external texture '{sourcePath}': {ex.Message}");
+            return default;
+        }
+    }
+
+    public AssetRef<Texture2D> ResolveEmbedded(string? name, byte[] encodedBytes, string? mimeType)
+    {
+        try
+        {
+            using var ms = new MemoryStream(encodedBytes);
+            var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
+            tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
+            return new AssetRef<Texture2D>(tex);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[Clay] Failed to load embedded texture '{name ?? "(unnamed)"}': {ex.Message}");
+            return default;
+        }
     }
 }

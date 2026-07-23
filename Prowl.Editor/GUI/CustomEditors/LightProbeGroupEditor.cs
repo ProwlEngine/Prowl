@@ -54,7 +54,7 @@ public class LightProbeGroupEditor : CustomEditor
         {
             Undo.Snapshot(grp);
             grp.GenerateGrid(_min, _max, _countX, _countY, _countZ);
-            EditorSceneManager.IsDirty = true;
+            EditorSceneManager.MarkDirty();
         }).Show();
 
         paper.Box($"{id}_sp").Height(4);
@@ -63,7 +63,7 @@ public class LightProbeGroupEditor : CustomEditor
         {
             Undo.Snapshot(grp);
             grp.ProbePositions.Add(Float3.Zero);
-            EditorSceneManager.IsDirty = true;
+            EditorSceneManager.MarkDirty();
         }).Show();
 
         if (grp.ProbePositions.Count > 0)
@@ -71,7 +71,7 @@ public class LightProbeGroupEditor : CustomEditor
             {
                 Undo.Snapshot(grp);
                 grp.ProbePositions.Clear();
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             }).Show();
 
         paper.Box($"{id}_sp2").Height(6);

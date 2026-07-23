@@ -1,4 +1,4 @@
-﻿<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%" alt="Prowl logo image">
+﻿<img src="https://i.imgur.com/qoJ4RTS.png" width="100%" alt="Prowl logo image">
 
 ![Github top languages](https://img.shields.io/github/languages/top/ProwlEngine/Prowl)
 [![GitHub version](https://img.shields.io/github/v/release/ProwlEngine/Prowl?include_prereleases&style=flat-square)](https://github.com/ProwlEngine/Prowl/releases)
@@ -33,11 +33,14 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn)
 
-| ![Screenshot](https://github.com/user-attachments/assets/f124906e-c403-4618-93e7-461b39ba4deb) | ![Screenshot](https://github.com/user-attachments/assets/956c6f00-2052-464e-b426-0b3cdbbe45de) |
+
+<img width="100%" alt="image 5" src="https://i.imgur.com/hDXtuv5.png" />
+
+| ![Screenshot](https://i.imgur.com/khCaEB5.png) | ![Screenshot](https://i.imgur.com/qNeMvC4.jpeg) |
 | :-: | :-: |
-| ![image](https://github.com/user-attachments/assets/974cc488-379c-4db8-bd39-ff6024e341c6) | ![image](https://github.com/user-attachments/assets/5b00b701-5b61-4fd1-afaa-265ef9d578e7) |
-| ![image](https://github.com/user-attachments/assets/e0ec6307-2368-4df5-b7a8-ef7665df2207) | ![image](https://github.com/user-attachments/assets/e59d63d2-d2d9-4ddb-afa7-4a465caa2cc9) |
-| ![UntitledFLightModel](https://github.com/user-attachments/assets/71486b58-a81f-440a-ad43-cabdb1e6d6ba) | ![Untitled](https://github.com/user-attachments/assets/4255a0fe-689f-4696-b062-2d62ca35a23c) |
+| ![image](https://i.imgur.com/xooqeDx.png) | ![image](https://i.imgur.com/zbCJOwI.png) |
+| ![UntitledFLightModel](https://i.imgur.com/TkJOmw9.png) | ![Untitled](https://i.imgur.com/BXn31d0.png) |
+| ![UntitledFLightModel](https://i.imgur.com/rLGLo7h.png) | ![Untitled](https://i.imgur.com/jbKCif2.png) |
 
 # <span align="center">✨ Features ✨</span>
 
@@ -47,8 +50,8 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - C# Scripting with .NET 10
     - GameObject & MonoBehaviour Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
-    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Prowl.Paper)), Editor built on top of [Origami](https://github.com/ProwlEngine/Prowl.Origami)
-    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Prowl.Quill)
+    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
+    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Anthology)
     - Full-Featured Editor
         - Scene View, Hierarchy, Inspector, Project Browser, Console, Game View
         - Custom Component Editors, Property Editors, and Scene View Editors
@@ -77,7 +80,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
         - Spatial 3D Audio with Attenuation & Doppler
         - Supports WAV, MP3, OGG, FLAC
         - Effect chain (Delay, Distortion, Biquad Filter, Reverb, Phaser) + custom `IAudioEffect`
-    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo)
+    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Anthology)
     - Tags & Layers System
     - Scene System with Fog & Ambient Lighting
     - Prefabs with Nested Prefab Support
@@ -91,7 +94,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - GameObject-Based UI, including World Space UI
         - `RectTransform`-driven layout, Buttons, Sliders, layout groups, drag & drop event handlers
     - Prowl Actions - persistent, inspector-configurable event callbacks
-    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector)
+    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Anthology)
         - Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
     - Build System - Build to Standalone Application
@@ -106,7 +109,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 	- Dedicated Render Thread
     - Extensible Render Pipeline (Custom Pipelines Supported)
     - Forward-Lit Pipeline with Thin G-Buffer Pre-Pass (Depth, Normals, Motion, Roughness, Metallic)
-	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic)
+	- UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Anthology)
 	- Baked Light Probes
     - Custom Shader Language with #include Support, Multi-Pass, and Shader Keywords/Variants
     - HDR & PBR (Physically Based Rendering) - Metallic Workflow
@@ -155,7 +158,7 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
     - Forward & Reverse Dependency Tracking
 	- Threaded Asset Loading
     - Supported Formats:
-        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay))
+        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Anthology))
         - Textures: PNG, JPG, BMP, TGA, PSD, HDR, DDS, EXR (via Magick.NET)
         - Audio: WAV, MP3, OGG, FLAC
 
@@ -165,15 +168,16 @@ Prowl is currently in **1.0-preview**, following a complete rewrite of the Edito
 
 Getting Prowl up and running is super easy!
 
+### Prerequisites
+
+* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+
 ## Releases
 
 > **Note**: Prowl is now at **1.0-preview**, grab it from the [Releases page](https://github.com/ProwlEngine/Prowl/releases). Projects made with older, pre-1.0-preview versions of Prowl are not compatible and cannot be migrated.
 
 ## Build from source
 
-### Prerequisites
-
-* [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 
 ### Installation
 
@@ -216,16 +220,16 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 - [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input, OpenGL & Audio Bindings
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
 - [Magick.NET](https://github.com/dlemstra/Magick.NET) - Image Processing
-- [Prowl.Echo](https://github.com/ProwlEngine/Prowl.Echo) - Serialization
-- [Prowl.Paper](https://github.com/ProwlEngine/Prowl.Paper) - UI Framework
-- [Prowl.Origami](https://github.com/ProwlEngine/Prowl.Origami) - Component Library for Paper
-- [Prowl.Quill](https://github.com/ProwlEngine/Prowl.Quill) - Vector Graphics & Text Rendering
-- [Prowl.Scribe](https://github.com/ProwlEngine/Prowl.Scribe) - TrueType font parsing, glyph rasterization & markdown layout
-- [Prowl.Rosetta](https://github.com/ProwlEngine/Prowl.Rosetta) - For Editor Localisation
-- [Prowl.Vector](https://github.com/ProwlEngine/Prowl.Vector) - 64-bit Math Library
-- [Prowl.Unwrapper](https://github.com/ProwlEngine/Prowl.Unwrapper) - UV Unwrapper
-- [Prowl.Photonic](https://github.com/ProwlEngine/Prowl.Photonic) - Progressive Lightmapper
-- [Prowl.Clay](https://github.com/ProwlEngine/Prowl.Clay) - Model Importing (GLTF, GLB, OBJ, FBX)
+- [Prowl.Echo](https://github.com/ProwlEngine/Anthology) - Serialization
+- [Prowl.Paper](https://github.com/ProwlEngine/Anthology) - UI Framework
+- [Prowl.Origami](https://github.com/ProwlEngine/Anthology) - Component Library for Paper
+- [Prowl.Quill](https://github.com/ProwlEngine/Anthology) - Vector Graphics & Text Rendering
+- [Prowl.Scribe](https://github.com/ProwlEngine/Anthology) - TrueType font parsing, glyph rasterization & markdown layout
+- [Prowl.Rosetta](https://github.com/ProwlEngine/Anthology) - For Editor Localisation
+- [Prowl.Vector](https://github.com/ProwlEngine/Anthology) - 64-bit Math Library
+- [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology) - UV Unwrapper
+- [Prowl.Photonic](https://github.com/ProwlEngine/Anthology) - Progressive Lightmapper
+- [Prowl.Clay](https://github.com/ProwlEngine/Anthology) - Model Importing (GLTF, GLB, OBJ, FBX)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

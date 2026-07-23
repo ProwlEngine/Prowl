@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.Utils;
 using static Prowl.Editor.GUI.EditorGUI;
 using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
@@ -429,8 +430,7 @@ public class ConsolePanel : DockPanel
         {
             var msg = _messages[i];
             if (!ShouldShow(msg.Severity)) continue;
-            if (!string.IsNullOrEmpty(_searchText) &&
-                !msg.Message.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+            if (!EditorUtils.MatchesSearch(msg.Message, _searchText))
                 continue;
 
             if (_collapse || msg.Count == 1)

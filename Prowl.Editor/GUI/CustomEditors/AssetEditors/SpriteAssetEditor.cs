@@ -34,8 +34,6 @@ public class SpriteAssetEditor : AssetImporterEditor
     /// <summary>Draws the sprite preview + read-only stats + edit button. Reused for sprite sub-assets in the InspectorPanel.</summary>
     public static void DrawInspector(Paper paper, string id, Sprite sprite)
     {
-        var font = EditorTheme.DefaultFont;
-        if (font == null) return;
         var m = Origami.Current.Metrics;
 
         Texture2D? tex = sprite.Texture.Res;

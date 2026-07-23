@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}'이(가) 이미 존재하며 비어 있지 않습니다. 다른 이름이나 위치를 선택하세요.",
   "launcher.create_failed": "생성 실패",
   "launcher.open_failed": "프로젝트를 열 수 없습니다: {{message}}",
+  "launcher.open_failed_title": "열기 실패",
   "launcher.just_now": "방금",
   "launcher.minutes_ago": "{{count}}분 전",
   "launcher.hours_ago": "{{count}}시간 전",
@@ -109,6 +110,7 @@
   "launcher.tip.create_menu": "계층구조 또는 프로젝트 창의 빈 영역을 마우스 오른쪽 버튼으로 클릭하여 새 오브젝트 또는 에셋을 만듭니다.",
   "launcher.tip.component_menu": "인스펙터의 컴포넌트 헤더를 마우스 오른쪽 버튼으로 클릭하여 초기화, 제거 또는 순서를 변경합니다.",
   "launcher.tip.escape_unlock": "게임 뷰가 커서를 잠갔을 때 Escape를 누르면 커서가 해제됩니다.",
+  "launcher.tip.nuget": "프로젝트 루트의 Directory.Build.props를 편집하여 NuGet 패키지를 추가하세요.",
 
   "inspector.nothing_selected": "선택된 항목 없음",
   "inspector.nothing_selected_hint": "에셋 또는 오브젝트를 선택하여 검사합니다.",

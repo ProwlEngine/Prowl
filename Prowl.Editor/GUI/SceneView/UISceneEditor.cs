@@ -279,7 +279,7 @@ public sealed class UISceneEditor : ISceneViewEditor
                     {
                         ApplyDrag(rt, parentRect, designHit);
                         canvas.RebuildIfDirty();
-                        EditorSceneManager.IsDirty = true;
+                        EditorSceneManager.MarkDirty();
                     }
                 }
                 else if (_active == Handle.Move && _moveIsClick)

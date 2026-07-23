@@ -112,6 +112,12 @@ public class Project
                 "Library/\nTemp/\nLogs/\nDefaults/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
         }
 
+        // Non-destructive MSBuild customization surface. The generated .csproj files are rewritten on
+        // every recompile, so this checked-in file is where users add their own references.
+        string buildProps = Path.Combine(rootPath, "Directory.Build.props");
+        if (!File.Exists(buildProps))
+            File.WriteAllText(buildProps, DirectoryBuildPropsTemplate);
+
         return project;
     }
 
@@ -223,4 +229,35 @@ public class Project
         string json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(ProwlFilePath, json);
     }
+
+    private const string DirectoryBuildPropsTemplate =
+        """
+        <Project>
+
+          <!--
+            Directory.Build.props (Prowl user MSBuild customization)
+
+            This is where you add NuGet packages for your game. Prowl regenerates the .csproj files on
+            every recompile, but never touches this file, and MSBuild imports it into every generated
+            user project automatically (editor script assemblies and the shipped player build). Add
+            PackageReference, ProjectReference, analyzers, or any other MSBuild here.
+
+            Packages in the default group below are available to your scripts in the editor AND bundled
+            into player builds. To keep a package out of player builds (editor tooling only), put it in
+            the editor group, which is scoped to the *.Editor assembly by name.
+          -->
+
+          <!-- Available everywhere: editor scripts, runtime scripts, and shipped player builds. -->
+          <ItemGroup>
+            <!-- <PackageReference Include="Newtonsoft.Json" Version="13.0.3" /> -->
+            <!-- <ProjectReference Include="..\Shared\Shared.csproj" /> -->
+          </ItemGroup>
+
+          <!-- Editor only: never shipped in a player build. -->
+          <ItemGroup Condition="$(MSBuildProjectName.EndsWith('.Editor'))">
+            <!-- <PackageReference Include="ImGui.NET" Version="1.91.6.1" /> -->
+          </ItemGroup>
+
+        </Project>
+        """;
 }

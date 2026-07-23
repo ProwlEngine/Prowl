@@ -78,6 +78,14 @@ public class AssetDatabasePanel : DockPanel
     private int _totalCount, _idleCount, _lockedCount;
     private long _totalBytes;
 
+    // Per-asset size estimate is opt-in (via the "Calc Sizes" toolbar button) rather than
+    // recomputed every frame for every loaded asset - EstimateBytes itself is cheap per-asset, but
+    // this panel is meant to be safe to leave open during a heavy import without adding its own
+    // per-frame cost across potentially hundreds of resident assets. Empty/stale entries just read
+    // as "-" (see FormatBytes) until the button is pressed.
+    private readonly Dictionary<Guid, long> _cachedSizes = new();
+    private bool _sizesComputed;
+
     #region Loaded-count History (sparkline)
 
     private readonly int[] _countHistory = new int[60];
@@ -148,7 +156,7 @@ public class AssetDatabasePanel : DockPanel
                 ? DateTime.UtcNow - last
                 : null;
 
-            long sizeBytes = EstimateBytes(asset);
+            long sizeBytes = _cachedSizes.GetValueOrDefault(guid);
             _totalBytes += sizeBytes;
 
             bool isSub = db.TryGetParentGuid(guid, out var parentGuid);
@@ -249,6 +257,7 @@ public class AssetDatabasePanel : DockPanel
                 paper.Box("adb_sp");
 
                 EditorGUI.ToolbarIconBtn(paper, "adb_export", EditorIcons.Clipboard, false, () => ExportToClipboard(paper));
+                EditorGUI.CtaButton(paper, "adb_calcsize", "Calc Sizes", EditorTheme.Accent, () => RecalculateSizes(db));
                 EditorGUI.CtaButton(paper, "adb_sweep", "Sweep Now", EditorTheme.Accent, () => db.ForceIdleSweep());
             }
 
@@ -257,11 +266,22 @@ public class AssetDatabasePanel : DockPanel
                 EditorGUI.StatChip(paper, "adb_chip_total", $"Loaded: {_totalCount}", font);
                 EditorGUI.StatChip(paper, "adb_chip_idle", $"Idle: {_idleCount}", font);
                 EditorGUI.StatChip(paper, "adb_chip_locked", $"Locked: {_lockedCount}", font);
-                EditorGUI.StatChip(paper, "adb_chip_mem", $"Memory: {FormatBytes(_totalBytes)}", font);
+                EditorGUI.StatChip(paper, "adb_chip_mem", _sizesComputed ? $"Memory: {FormatBytes(_totalBytes)}" : "Memory: not calculated", font);
                 EditorGUI.StatChip(paper, "adb_chip_timeout", $"Timeout: {EditorAssetBackend.IdleTimeout.TotalSeconds:0}s", font);
             }
             EditorGUI.Divider(paper, "adb_tb_div");
         }
+    }
+
+    /// <summary>Computes (or refreshes) every currently-loaded asset's size estimate. Reads data
+    /// from every resident asset, so this only runs when explicitly requested rather than every
+    /// frame the panel happens to be open.</summary>
+    private void RecalculateSizes(EditorAssetBackend db)
+    {
+        _cachedSizes.Clear();
+        foreach (var (guid, asset) in db.GetLoadedAssets())
+            _cachedSizes[guid] = EstimateBytes(asset);
+        _sizesComputed = true;
     }
 
     private void DrawSparkline(Canvas canvas, Rect r)

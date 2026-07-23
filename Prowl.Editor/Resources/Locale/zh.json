@@ -77,6 +77,7 @@
   "launcher.folder_exists_msg": "'{{name}}'已存在且不为空。请选择其他名称或位置。",
   "launcher.create_failed": "创建失败",
   "launcher.open_failed": "无法打开项目: {{message}}",
+  "launcher.open_failed_title": "打开失败",
   "launcher.just_now": "刚刚",
   "launcher.minutes_ago": "{{count}}分钟前",
   "launcher.hours_ago": "{{count}}小时前",
@@ -109,6 +110,7 @@
   "launcher.tip.create_menu": "右键点击层级或项目窗口的空白区域可创建新对象或资产。",
   "launcher.tip.component_menu": "右键点击检查器中的组件标题可重置、移除或重新排序组件。",
   "launcher.tip.escape_unlock": "当游戏视图锁定光标时,按Escape可释放光标。",
+  "launcher.tip.nuget": "编辑项目根目录中的Directory.Build.props来添加NuGet包。",
 
   "inspector.nothing_selected": "未选择任何内容",
   "inspector.nothing_selected_hint": "选择一个资产或对象进行检查。",

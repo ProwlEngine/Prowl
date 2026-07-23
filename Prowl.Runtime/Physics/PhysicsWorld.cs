@@ -212,19 +212,24 @@ public class PhysicsWorld
         return staticBody;
     }
 
-    private void OnPreStep(float deltaTime)
-    {
-        PreStep?.Invoke(deltaTime);
-    }
+    private void OnPreStep(float deltaTime) => InvokeStepEvent(PreStep, deltaTime, nameof(PreStep));
+    private void OnPreSubStep(float deltaTime) => InvokeStepEvent(PreSubStep, deltaTime, nameof(PreSubStep));
+    private void OnPostStep(float deltaTime) => InvokeStepEvent(PostStep, deltaTime, nameof(PostStep));
 
-    private void OnPreSubStep(float deltaTime)
+    // Step callbacks fire inside Jitter's World.Step. A throwing subscriber (e.g. a wheel raycasting
+    // against a disposed body) must not unwind through the solver and crash. Isolate each subscriber
+    // so one failure neither aborts the step nor blocks the other subscribers.
+    private static void InvokeStepEvent(Action<float> evt, float deltaTime, string stage)
     {
-        PreSubStep?.Invoke(deltaTime);
-    }
-
-    private void OnPostStep(float deltaTime)
-    {
-        PostStep?.Invoke(deltaTime);
+        if (evt == null) return;
+        foreach (Delegate d in evt.GetInvocationList())
+        {
+            try { ((Action<float>)d)(deltaTime); }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Physics] {stage} subscriber {d.Method.DeclaringType?.Name}.{d.Method.Name} threw and was skipped: {ex.Message}");
+            }
+        }
     }
 
     public void Clear()

@@ -16,6 +16,7 @@ using Color = System.Drawing.Color;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Core;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -444,7 +445,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                                 dragged.SetParent(default);
                             }
                         }
-                        EditorSceneManager.IsDirty = true;
+                        EditorSceneManager.MarkDirty();
                         DragDrop.EndDrag();
                     }
 
@@ -476,12 +477,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         if (go.HideFlags.HasFlag(HideFlags.Hide) || go.HideFlags.HasFlag(HideFlags.HideAndDontSave))
             return;
 
-        if (!string.IsNullOrEmpty(_searchText))
-        {
-            if (!go.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-                && !go.GetChildrenDeep().Any(c => c.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)))
-                return;
-        }
+        if (!EditorUtils.MatchesSearch(go.Name, _searchText)
+            && !go.GetChildrenDeep().Any(c => EditorUtils.MatchesSearch(c.Name, _searchText)))
+            return;
 
         string goId = go.Identifier.ToString();
         bool hasVisibleChildren = go.Children.Count > 0
@@ -654,7 +652,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             }
         }
 
-        EditorSceneManager.IsDirty = true;
+        EditorSceneManager.MarkDirty();
         DragDrop.EndDrag();
     }
 
@@ -790,7 +788,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         go.Transform.Position = cam.Position;
                         go.Transform.LocalEulerAngles = new Float3(cam.Pitch, cam.Yaw, 0);
                     }
-                    EditorSceneManager.IsDirty = true;
+                    EditorSceneManager.MarkDirty();
                 }, icon: EditorIcons.ArrowRight);
 
                 builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
@@ -891,7 +889,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                     () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
                     () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
                 go.Name = newName;
-                EditorSceneManager.IsDirty = true;
+                EditorSceneManager.MarkDirty();
             });
         }
 
@@ -910,7 +908,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 redo: () => { foreach (var (id, _) in oldNames) { var r = Undo.FindGO(id); if (r != null) r.Name = newName; } });
             foreach (var go in targets)
                 go.Name = newName;
-            EditorSceneManager.IsDirty = true;
+            EditorSceneManager.MarkDirty();
         });
     }
 

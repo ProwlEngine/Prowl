@@ -24,6 +24,9 @@ public static class EditorSceneManager
     /// <summary>Whether the current scene has unsaved changes.</summary>
     public static bool IsDirty { get; set; }
 
+    /// <summary>Marks the current scene as having unsaved changes.</summary>
+    public static void MarkDirty() => IsDirty = true;
+
     /// <summary>Fired after the scene is saved. Use for auto-saving dependent assets.</summary>
     public static event Action? OnSceneSaved;
 
