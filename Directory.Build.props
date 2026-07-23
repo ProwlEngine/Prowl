@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <ProwlVersion>2.7.1</ProwlVersion>
+    <ProwlVersion>2.8.0</ProwlVersion>
   </PropertyGroup>
 
 </Project>
