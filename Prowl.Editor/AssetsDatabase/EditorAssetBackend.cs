@@ -143,6 +143,79 @@ public class EditorAssetBackend : AssetBackendBase
     }
 
     /// <summary>
+    /// Materialize the engine's embedded default assets verbatim into the project's read-only
+    /// Defaults/ folder (a sibling of Assets/), so the asset scan can import them like any other
+    /// asset. The folder is engine-managed: every embedded file is (over)written when missing or out
+    /// of date, which is what makes it effectively read-only. Default shaders' .meta is forced onto
+    /// their deterministic BuiltInAssets GUID (see <see cref="DefaultAssetGuid"/>), which is what
+    /// lets Shader.LoadDefault resolve them.
+    /// </summary>
+    private void ExtractDefaultAssets()
+    {
+        string defaultsDir = _project.DefaultsPath;
+        Directory.CreateDirectory(defaultsDir);
+
+        foreach (string fileName in Runtime.Resources.EmbeddedResources.EnumerateDefaultFileNames())
+        {
+            byte[] embedded = Runtime.Resources.EmbeddedResources.ReadAllBytes($"Assets/Defaults/{fileName}");
+            string targetPath = Path.Combine(defaultsDir, fileName);
+
+            if (File.Exists(targetPath) && File.ReadAllBytes(targetPath).AsSpan().SequenceEqual(embedded))
+                continue;
+
+            File.WriteAllBytes(targetPath, embedded);
+        }
+
+        MigrateLegacyDefaults();
+    }
+
+    /// <summary>
+    /// Older projects extracted default shaders into Assets/Defaults. Those files use the same
+    /// project-relative path ("Defaults/X.shader") and the same forced GUID as the new sibling
+    /// Defaults/ root, so leaving them in place would make two files claim one GUID. Remove the
+    /// legacy in-Assets copy (engine-owned, regenerated) so the sibling root is the only source.
+    /// </summary>
+    private void MigrateLegacyDefaults()
+    {
+        string legacyDir = Path.Combine(_project.AssetsPath, Projects.Project.DefaultsFolder);
+        if (!Directory.Exists(legacyDir)) return;
+
+        try
+        {
+            Directory.Delete(legacyDir, true);
+            Runtime.Debug.Log("Migrated legacy Assets/Defaults to the read-only Defaults/ sibling folder.");
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Failed to remove legacy Assets/Defaults folder: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Watch the project's Directory.Build.props (which lives at the root, outside Assets/, so the
+    /// AssetWatcher never sees it) and request a recompile when it changes. That is what makes an
+    /// added NuGet PackageReference take effect without the user manually rebuilding.
+    /// </summary>
+    private void StartBuildPropsWatcher()
+    {
+        if (!Directory.Exists(_project.RootPath)) return;
+
+        _buildPropsWatcher = new FileSystemWatcher(_project.RootPath, "Directory.Build.props")
+        {
+            IncludeSubdirectories = false,
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+        };
+        void OnPropsChanged(object? _, FileSystemEventArgs __)
+            => ScriptAssemblyManager.RequestRecompile();
+
+        _buildPropsWatcher.Changed += OnPropsChanged;
+        _buildPropsWatcher.Created += OnPropsChanged;
+        _buildPropsWatcher.Deleted += OnPropsChanged;
+        _buildPropsWatcher.Renamed += OnPropsChanged;
+        _buildPropsWatcher.EnableRaisingEvents = true;
+    }
+
+    /// <summary>
     /// Delete leftover ".meta.tmp" files from a previous session's write that never got
     /// renamed into place (e.g. the editor crashed mid-write). These are always incomplete
     /// data never valid on their own so ScanAssets must not pick them up as real asset files.
