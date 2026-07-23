@@ -74,9 +74,9 @@ public class TextureAssetEditor : AssetImporterEditor
             using (paper.Row($"{id}_stats").Height(UnitValue.Auto)
                 .Margin(m.PaddingLarge, m.PaddingLarge, 0, m.SpacingLarge).RowBetween(m.SpacingMedium).Enter())
             {
-                EditorGUI.StatChip(paper, $"{id}_st_size", $"{texture.Width} x {texture.Height}", font);
-                EditorGUI.StatChip(paper, $"{id}_st_fmt", texture.ImageFormat.ToString(), font);
-                EditorGUI.StatChip(paper, $"{id}_st_mip", texture.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
+                EditorGUI.StatChip(paper, $"{id}_st_size", $"{texture.Res.Width} x {texture.Res.Height}", font);
+                EditorGUI.StatChip(paper, $"{id}_st_fmt", texture.Res.ImageFormat.ToString(), font);
+                EditorGUI.StatChip(paper, $"{id}_st_mip", texture.Res.IsMipmapped ? "Mipmapped" : "No Mipmaps", font);
                 paper.Box($"{id}_st_pad").Height(1).IsNotInteractable();
             }
         }
