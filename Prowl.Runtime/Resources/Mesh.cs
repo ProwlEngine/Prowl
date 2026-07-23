@@ -1445,6 +1445,8 @@ public class Mesh : EngineObject, ISerializable
         EnsureNotDisposed();
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
+        if (vertices?.Length == 0)
+            throw new ArgumentException("Vertices data must not be empty when assigning vertex data");
         if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
             throw new ArgumentException("Array length should match vertices length");
         changed = true;
