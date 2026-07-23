@@ -525,6 +525,11 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         // Buffers are only deleted when the mesh is disposed
     }
 
+    /// <summary>Logs an upload skipped reason so <see cref="Upload"/> can bail without throwing into a
+    /// render or update loop.</summary>
+    private void WarnUploadSkipped(string reason)
+        => Debug.LogWarning($"[Mesh] Upload skipped ({Name ?? "unnamed"}): {reason}");
+
     public void Upload()
     {
         if (changed == false && _streams[STREAM_POSITION].Buffer != null)
