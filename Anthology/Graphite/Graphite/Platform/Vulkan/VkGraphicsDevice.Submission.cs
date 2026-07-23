@@ -53,7 +53,7 @@ internal unsafe partial class VkGraphicsDevice
         if (timingPool is { } pool)
         {
             double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(null, bufferName, isTransfer: true, milliseconds);
+            Profiler?.RecordExecutionTime(null, 0, bufferName, isTransfer: true, milliseconds);
         }
     }
 
@@ -172,7 +172,7 @@ internal unsafe partial class VkGraphicsDevice
         if (fsi.TimingPool is { } pool)
         {
             double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(fsi.Pass, fsi.BufferName, fsi.IsTransfer, milliseconds);
+            Profiler?.RecordExecutionTime(fsi.Pass, fsi.CommandBuffer?.RentalId ?? 0, fsi.BufferName, fsi.IsTransfer, milliseconds);
         }
 
         _vk.ResetFences(_device, 1, &fence).CheckResult();

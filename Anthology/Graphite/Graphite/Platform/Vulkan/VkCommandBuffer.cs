@@ -168,6 +168,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
         int count = layouts.Count;
+
+        bool captureForProfiler = WantsDrawBufferCapture;
+        if (captureForProfiler)
+            BeginDrawBufferCapture();
+
         if (count == 0) return;
 
         VkBufferHandle* buffers = stackalloc VkBufferHandle[count];
@@ -179,6 +184,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             _currentVertexSource!.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
             binding.Buffer.MarkInFlight(_gd, ExecutionId);
+
+            if (captureForProfiler)
+                CaptureResolvedVertexBinding(in binding);
 
             VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(binding.Buffer);
             buffers[slot] = vkBuffer.DeviceBuffer;
@@ -197,6 +205,9 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         DrawIndexed_AssertIndexBufferResolved(has);
         CheckIndexBufferUsage(ib);
         ib.MarkInFlight(_gd, ExecutionId);
+
+        if (WantsDrawBufferCapture)
+            CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
         _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));

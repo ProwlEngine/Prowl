@@ -42,6 +42,21 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     /// </summary>
     private const ulong OrphanWarningExecutionWindow = 10;
 
+    /// <summary>
+    /// Bumps every time this buffer's contents change (CPU write via UpdateBuffer/Map, or a
+    /// GPU-side copy landing in it). Consumers - e.g. a profiler deciding whether it needs to
+    /// re-snapshot a buffer it already captured - can compare this against a previously observed
+    /// value instead of re-reading the bytes. Does not track GPU compute writes to a buffer bound
+    /// read-write (UAV/structured); those are invisible on the CPU timeline.
+    /// </summary>
+    public uint ContentVersion { get; private set; }
+
+    /// <summary>Call whenever this buffer's contents change outside of EnsureWritable's own CPU-write path, e.g. a recorded GPU-side copy landing in it.</summary>
+    internal void MarkContentChanged()
+    {
+        unchecked { ContentVersion++; }
+    }
+
     internal void SetTransientWrites(bool transientWrites)
     {
         _transientWrites = transientWrites;
@@ -70,6 +85,8 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     /// </summary>
     internal void EnsureWritable()
     {
+        MarkContentChanged();
+
         if (!IsInFlight)
             return;
 

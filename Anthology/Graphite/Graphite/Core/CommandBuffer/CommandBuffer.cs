@@ -47,8 +47,78 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Bound execution's id, or 0.</summary>
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
+    /// <summary>Monotonic id stamped fresh on every rental, so profiler consumers can tell distinct rentals of a pooled/reused instance apart.</summary>
+    internal ulong RentalId { get; set; }
+
+    private CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
+
     /// <summary>Reports a resource-set bind to the profiler, if any.</summary>
     internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Profiler?.RecordResourceSetBind(setCount);
+
+    private readonly List<BufferBindingInfo> _capturedVertexBuffers = new();
+    private BufferBindingInfo? _capturedIndexBuffer;
+
+    /// <summary>
+    /// True when the profiler wants draw-time buffer bindings captured. Backends must check this
+    /// before reporting resolved bindings via CaptureResolvedVertexBinding/CaptureResolvedIndexBinding,
+    /// since building BufferBindingInfo for every draw is pure overhead when nothing consumes it.
+    /// </summary>
+    internal bool WantsDrawBufferCapture => Execution?.Device.Profiler?.RequestCapture ?? false;
+
+    /// <summary>Clears capture state before a backend resolves buffers for a new draw. Only call when WantsDrawBufferCapture is true.</summary>
+    internal void BeginDrawBufferCapture()
+    {
+        _capturedVertexBuffers.Clear();
+        _capturedIndexBuffer = null;
+    }
+
+    /// <summary>
+    /// Reports the vertex buffer a backend just resolved (via IVertexSource) and bound to the GPU for
+    /// the current draw. Only call when WantsDrawBufferCapture is true - this must be the same
+    /// resolution used for the actual GPU bind, not a second, independent query of IVertexSource.
+    /// </summary>
+    internal void CaptureResolvedVertexBinding(in VertexBinding binding)
+    {
+        _capturedVertexBuffers.Add(new BufferBindingInfo(
+            binding.Buffer.Name, binding.Buffer, binding.Offset, binding.Buffer.SizeInBytes - binding.Offset,
+            binding.Buffer.ContentVersion, readOnly: true));
+    }
+
+    /// <summary>
+    /// Reports the index buffer a backend just resolved (via IVertexSource) and bound to the GPU for
+    /// the current draw. Only call when WantsDrawBufferCapture is true - this must be the same
+    /// resolution used for the actual GPU bind, not a second, independent query of IVertexSource.
+    /// </summary>
+    internal void CaptureResolvedIndexBinding(DeviceBuffer buffer, IndexFormat format, uint indexCount)
+    {
+        uint indexSize = format == IndexFormat.UInt16 ? 2u : 4u;
+        _capturedIndexBuffer = new BufferBindingInfo(buffer.Name, buffer, offset: 0, indexSize * indexCount, buffer.ContentVersion, readOnly: true);
+    }
+
+    /// <summary>
+    /// Reports the buffers already resolved and bound for the draw that just recorded (by the backend,
+    /// via CaptureResolvedVertexBinding/CaptureResolvedIndexBinding) plus any buffer-kind entries in the
+    /// active PropertySet, to the profiler. Only runs when the profiler actually requested a capture.
+    /// </summary>
+    private void RecordDrawBuffersIfRequested()
+    {
+        if (Execution?.Device.Profiler is not { RequestCapture: true } profiler)
+            return;
+
+        var boundBuffers = new List<BufferBindingInfo>();
+        foreach (KeyValuePair<PropertyID, PropertyEntry> kv in _activeProperties.Entries)
+        {
+            if (kv.Value.Kind == PropertyEntryKind.Buffer && kv.Value.Buffer is { } range)
+            {
+                string name = PropertyID.ToString(kv.Key) ?? kv.Key.ToString();
+                boundBuffers.Add(new BufferBindingInfo(
+                    name, range.Buffer, range.Offset, range.SizeInBytes, range.Buffer.ContentVersion, kv.Value.ReadOnly));
+            }
+        }
+
+        var vertexBuffers = new List<BufferBindingInfo>(_capturedVertexBuffers);
+        profiler.RecordDrawBuffers(ProfilerInfo, new DrawBufferInfo(vertexBuffers, _capturedIndexBuffer, boundBuffers));
+    }
 
     /// <summary>True if End was called since last Begin.</summary>
     internal bool HasEnded { get; private protected set; }
@@ -97,7 +167,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
             foreach (ShaderStages stage in program.Stages)
                 stages |= stage;
 
-            profiler.RecordPipelineSwitch(new PipelineBindInfo(program.Name, isCompute: false, stages));
+            profiler.RecordPipelineSwitch(ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: false, stages, program));
         }
     }
 
@@ -112,7 +182,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         _computeProgram = program;
 
         Execution?.Device.Profiler?.RecordPipelineSwitch(
-            new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute));
+            ProfilerInfo, new PipelineBindInfo(program.Name, isCompute: true, ShaderStages.Compute, program));
     }
 
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
@@ -301,7 +371,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
 
         Execution?.Device.Profiler?.RecordDraw(
-            new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false));
+            ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false));
+        RecordDrawBuffersIfRequested();
     }
 
     private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
@@ -323,7 +394,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
 
         Execution?.Device.Profiler?.RecordDraw(
-            new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false));
+        RecordDrawBuffersIfRequested();
     }
 
     private protected abstract void DrawIndexedCore(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
@@ -344,7 +416,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
 
         Execution?.Device.Profiler?.RecordDraw(
-            new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+        RecordDrawBuffersIfRequested();
     }
 
 
@@ -371,7 +444,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
 
         Execution?.Device.Profiler?.RecordDraw(
-            new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+        RecordDrawBuffersIfRequested();
     }
 
 
@@ -391,7 +465,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DispatchCore(groupCountX, groupCountY, groupCountZ);
 
         Execution?.Device.Profiler?.RecordDispatch(
-            new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
+            ProfilerInfo, new DispatchCallInfo(groupCountX, groupCountY, groupCountZ, isIndirect: false));
     }
 
     private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
@@ -406,7 +480,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DispatchIndirectCore(indirectBuffer, offset);
 
         Execution?.Device.Profiler?.RecordDispatch(
-            new DispatchCallInfo(0, 0, 0, isIndirect: true));
+            ProfilerInfo, new DispatchCallInfo(0, 0, 0, isIndirect: true));
     }
 
 

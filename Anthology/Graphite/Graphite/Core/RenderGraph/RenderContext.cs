@@ -21,6 +21,8 @@ public sealed class RenderContext<TView>
     private bool _presentRequested;
     private PassInfo? _currentPass;
 
+    private static long s_nextCommandBufferRentalId;
+
     internal RenderContext(
         GraphicsDevice device,
         ExecutionTask task,
@@ -59,6 +61,7 @@ public sealed class RenderContext<TView>
 
         cb.Execution = _task;
         cb.Pass = _currentPass;
+        cb.RentalId = (ulong)System.Threading.Interlocked.Increment(ref s_nextCommandBufferRentalId);
         _task.TrackRentedCommandBuffer(cb);
         if (!string.IsNullOrEmpty(name))
             cb.Name = name;

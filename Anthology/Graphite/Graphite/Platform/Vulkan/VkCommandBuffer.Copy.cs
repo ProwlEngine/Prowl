@@ -22,6 +22,7 @@ internal unsafe partial class VkCommandBuffer
 
         source.MarkInFlight(_gd, ExecutionId);
         destination.MarkInFlight(_gd, ExecutionId);
+        destination.MarkContentChanged();
 
         VkBuffer srcVkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(source);
         AddStagingResource(srcVkBuffer.RefCount);

@@ -110,6 +110,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
         };
 
         _gd.Vk.CmdCopyBuffer(_cb, srcVkBuffer.DeviceBuffer, dstVkBuffer.DeviceBuffer, 1, in region);
+        destination.MarkContentChanged();
 
         bool needToProtectUniform = destination.Usage.HasFlag(BufferUsage.UniformBuffer);
         MemoryBarrier barrier = new()

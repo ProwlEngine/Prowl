@@ -25,10 +25,16 @@ public interface IProfiler
     bool RequestCapture { get; }
     void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer);
 
-    void RecordDraw(in DrawCallInfo info);
-    void RecordDispatch(in DispatchCallInfo info);
+    void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info);
+    void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info);
 
-    void RecordPipelineSwitch(in PipelineBindInfo info);
+    /// <summary>
+    /// Reports the vertex/index/bound buffers used by the draw call that was just recorded. Only
+    /// called when RequestCapture is true, since resolving the current bindings is not free.
+    /// </summary>
+    void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info);
+
+    void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);
 
     void RecordResourceSetBind(uint setCount);
 
@@ -37,5 +43,5 @@ public interface IProfiler
     void RecordSubmit(in ProfilerSubmitInfo info);
 
     bool RequestExecutionTiming { get; }
-    void RecordExecutionTime(PassInfo? pass, string bufferName, bool isTransfer, double milliseconds);
+    void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds);
 }
