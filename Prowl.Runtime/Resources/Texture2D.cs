@@ -250,7 +250,7 @@ public sealed class Texture2D : Texture, ISerializable
         // the right layout. ColorType.TrueColorAlpha above forces the cache to tightly-packed R,G,B,A
         // - exactly the byte layout Color4b/TexSubImage2D expects for Q8's byte-quantum pixels - so
         // the raw pointer can go straight to the GPU with no extra copy.
-        Texture2D texture = new(image.Width, image.Height, false, TextureImageFormat.Color4b);
+        Texture2D texture = new(image.Width, image.Height, false, PixelFormat.R8_G8_B8_A8_UNorm);
         try
         {
             nint pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
