@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.PaperUI;
 using Prowl.Vector;
 
+using Silk.NET.GLFW;
 using Silk.NET.Input;
 
 namespace Prowl.Runtime;
@@ -19,12 +20,29 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public IReadOnlyList<IMouse> Mice => Context.Mice;
     public IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
+    /// <summary>
+    /// The system clipboard as text. Empty when the clipboard holds content that isn't convertible
+    /// to text - an image, a file list, a shell object.
+    /// </summary>
+    /// <remarks>
+    /// GLFW reports "no text on the clipboard" by raising FormatUnavailable rather than returning
+    /// null, and Silk surfaces that as <see cref="GlfwException"/>, so the empty case can only be
+    /// detected by catching it - there is no format-query API to check first. The catch is narrowed
+    /// to that one type on purpose: a missing keyboard or a disposed context is a real fault and
+    /// should still surface.
+    /// </remarks>
     public string Clipboard
     {
-        get => Context.Keyboards[0].ClipboardText;
+        get
+        {
+            if (Context.Keyboards.Count == 0) return "";
+            try { return Context.Keyboards[0].ClipboardText ?? ""; }
+            catch (GlfwException) { return ""; }
+        }
         set
         {
-            Context.Keyboards[0].ClipboardText = value;
+            if (Context.Keyboards.Count == 0) return;
+            Context.Keyboards[0].ClipboardText = value ?? "";
         }
     }
 
