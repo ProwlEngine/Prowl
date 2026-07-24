@@ -67,9 +67,10 @@ public static class TypeNameRegistry
             if (_predefinedCompactNames.TryGetValue(t, out var predefined))
                 return predefined;
 
-            // For enums, use enum name
+            // For enums, record the namespace-qualified name and assembly so two enums with the same
+            // short name in different namespaces/assemblies don't collide on resolve.
             if (t.IsEnum)
-                return $"e:{t.Name}";
+                return $"e:{t.FullName}, {t.Assembly.GetName().Name}";
 
             // For arrays, use special notation
             if (t.IsArray)
@@ -167,6 +168,18 @@ public static class TypeNameRegistry
 
     private static Type? ResolveEnumType(string enumName)
     {
+        // New form is assembly-qualified: resolve it honoring the recorded assembly.
+        Type? resolved = ReflectionUtils.FindTypeByName(enumName);
+        if (resolved != null && resolved.IsEnum)
+            return resolved;
+
+        // Fallback for older data that stored only the enum's short name (or when the qualified lookup
+        // landed on a non-enum of the same name): first enum in any assembly with this short name.
+        int comma = enumName.IndexOf(',');
+        string typeName = comma >= 0 ? enumName[..comma].Trim() : enumName;
+        int dot = typeName.LastIndexOf('.');
+        string simpleName = dot >= 0 ? typeName[(dot + 1)..] : typeName;
+
         foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
         {
             Type?[] types;
@@ -183,7 +196,7 @@ public static class TypeNameRegistry
 
             foreach (Type? t in types)
             {
-                if (t != null && t.IsEnum && t.Name == enumName)
+                if (t != null && t.IsEnum && t.Name == simpleName)
                     return t;
             }
         }
