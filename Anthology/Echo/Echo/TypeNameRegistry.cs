@@ -39,6 +39,13 @@ public static class TypeNameRegistry
 
     private static readonly Dictionary<string, Type> _predefinedTypeLookup;
 
+    /// <summary>
+    /// Optional override consulted before the normal assembly scan when resolving a type name (both the
+    /// compact and full forms are passed through it). Return the resolved <see cref="Type"/>, or null to
+    /// fall through to the default resolution.
+    /// </summary>
+    public static Func<string, Type?>? TypeResolver { get; set; }
+
     static TypeNameRegistry()
     {
         _predefinedTypeLookup = _predefinedCompactNames.ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
@@ -101,7 +108,10 @@ public static class TypeNameRegistry
             if (n.Contains('<') && n.Contains('>'))
                 return ResolveGenericType(n);
 
-            // Fallback to full type resolution
+            // Engine-provided override (e.g. current script assemblies), then default resolution.
+            Type? overridden = TypeResolver?.Invoke(n);
+            if (overridden != null) return overridden;
+
             return ReflectionUtils.FindTypeByName(n);
         });
     }
@@ -121,6 +131,11 @@ public static class TypeNameRegistry
         {
             try
             {
+                // Engine-provided override first, so a live/hot-reloaded assembly wins over a stale
+                // copy of the same name that is still loaded.
+                Type? overridden = TypeResolver?.Invoke(n);
+                if (overridden != null) return overridden;
+
                 // Try direct type resolution first
                 var type = Type.GetType(n);
                 if (type != null) return type;
