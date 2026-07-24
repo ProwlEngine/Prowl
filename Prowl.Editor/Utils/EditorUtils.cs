@@ -89,6 +89,9 @@ public static class EditorUtils
     {
         try
         {
+            // Normalize separators to the platform's native form
+            absPath = Path.GetFullPath(absPath);
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 if (Directory.Exists(absPath))
