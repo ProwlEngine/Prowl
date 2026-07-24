@@ -91,6 +91,8 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         Float4x4 primaryLocal = SceneBakerHelpers.ComposeTRS(primaryNode.LocalPosition, primaryNode.LocalRotation, primaryNode.LocalScale);
         Float4x4 sourceLocal = SceneBakerHelpers.ComposeTRS(sourceNode.LocalPosition, sourceNode.LocalRotation, sourceNode.LocalScale);
         Float4x4 sourceToPrimary = SceneBakerHelpers.Mul(Inverse(primaryLocal), sourceLocal);
+        // Normals need the inverse-transpose so they stay perpendicular under non-uniform scale/shear.
+        Float4x4 normalMatrix = Transpose(Inverse(sourceToPrimary));
 
         int vertexOffset = primary.Positions.Count;
 
@@ -100,7 +102,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         if (primary.Normals is not null && source.Normals is not null)
         {
             for (int i = 0; i < source.Normals.Count; i++)
-                primary.Normals.Add(TransformDirection(sourceToPrimary, source.Normals[i]));
+                primary.Normals.Add(TransformDirection(normalMatrix, source.Normals[i]));
         }
 
         if (primary.Tangents is not null && source.Tangents is not null)
@@ -145,6 +147,12 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         float len = MathF.Sqrt(result.X * result.X + result.Y * result.Y + result.Z * result.Z);
         return len < 1e-12f ? result : new Float3(result.X / len, result.Y / len, result.Z / len);
     }
+
+    private static Float4x4 Transpose(Float4x4 m) => new(
+        new Float4(m.c0.X, m.c1.X, m.c2.X, m.c3.X),
+        new Float4(m.c0.Y, m.c1.Y, m.c2.Y, m.c3.Y),
+        new Float4(m.c0.Z, m.c1.Z, m.c2.Z, m.c3.Z),
+        new Float4(m.c0.W, m.c1.W, m.c2.W, m.c3.W));
 
     private static Float4x4 Inverse(Float4x4 m)
     {
