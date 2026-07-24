@@ -161,7 +161,7 @@ public static class Serializer
             TypeCode.String => new EchoObject((string)value),
             TypeCode.Int64 => new EchoObject((long)value),
             TypeCode.Byte => new EchoObject((byte)value),
-            TypeCode.Char => new EchoObject((byte)(char)value),
+            TypeCode.Char => new EchoObject((ushort)(char)value),
             TypeCode.UInt32 => new EchoObject((uint)value),
             TypeCode.Int16 => new EchoObject((short)value),
             TypeCode.UInt64 => new EchoObject((ulong)value),
