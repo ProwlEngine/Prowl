@@ -96,6 +96,12 @@ public class SerializationContext
     /// </summary>
     public DeserializeOverride? OnDeserialize { get; set; }
 
+    /// <summary>
+    /// Optional resolver for references that point outside the graph being serialized. When set, Echo
+    /// links to those objects by a stable key instead of inlining them. See <see cref="IExternalReferenceResolver"/>.
+    /// </summary>
+    public IExternalReferenceResolver? ExternalReferences { get; set; }
+
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
         // Ids start at 1; id 0 is left free so external/hand-authored data using a 0-based id scheme

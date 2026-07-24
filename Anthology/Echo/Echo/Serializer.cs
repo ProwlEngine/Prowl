@@ -21,6 +21,9 @@ public static class Serializer
 {
     public static IEchoLogger Logger { get; set; } = new NullEchoLogger();
 
+    // Reserved key marking an external-reference stub (see IExternalReferenceResolver).
+    private const string ExternalRefKey = "$extern";
+
     private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
     private static IReadOnlyList<ISerializationFormat> _formats;
 
@@ -127,6 +130,19 @@ public static class Serializer
         }
 
         var actualType = value.GetType();
+
+        // Link out-of-graph references by key instead of inlining/deep-copying them.
+        if (context.ExternalReferences != null && !actualType.IsValueType)
+        {
+            object? key = context.ExternalReferences.GetReferenceKey(value);
+            if (key != null)
+            {
+                var stub = EchoObject.NewCompound();
+                stub[ExternalRefKey] = SerializeExternalKey(key, context);
+                bool needsType = ShouldPreserveType(targetType, actualType, context);
+                return WrapWithTypeEnvelope(stub, needsType ? actualType : null, context);
+            }
+        }
 
         // Check for serialization override (e.g. external asset references)
         if (context.OnSerialize != null)
@@ -235,6 +251,15 @@ public static class Serializer
         // STEP 2: Determine actual type to deserialize to
         var actualType = envelope.ActualType ?? targetType;
 
+        // Resolve an external reference stub back to its live instance.
+        if (context.ExternalReferences != null &&
+            envelope.Data.TagType == EchoType.Compound &&
+            envelope.Data.TryGet(ExternalRefKey, out var keyData))
+        {
+            object? key = Deserialize(keyData, typeof(object), context);
+            return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
+        }
+
         // Check for deserialization override (e.g. external asset references)
         if (context.OnDeserialize != null)
         {
@@ -300,6 +325,15 @@ public static class Serializer
 
         // For complex types, use full representation
         return CreateFullTypeWrapper(data, typeToPreserve);
+    }
+
+    // Serialize an external-reference key self-describingly so it round-trips without the resolver
+    // needing to know the key's type up front, regardless of the context's TypeMode.
+    private static EchoObject SerializeExternalKey(object key, SerializationContext context)
+    {
+        var keyType = key.GetType();
+        var data = Serialize(keyType, key, context);
+        return WrapWithTypeEnvelope(data, keyType, context);
     }
 
     private static bool IsSimpleType(Type type)
