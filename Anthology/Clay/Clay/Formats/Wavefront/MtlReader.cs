@@ -192,16 +192,37 @@ internal sealed class MtlReader
 
     private static void SkipOptionArgs(ReadOnlySpan<char> option, ref ObjTokenizer tok)
     {
-        int args = option.SequenceEqual("-s") || option.SequenceEqual("-o") || option.SequenceEqual("-t") ? 3 :
-                   option.SequenceEqual("-mm") || option.SequenceEqual("-bm") ? 1 :
-                   option.SequenceEqual("-clamp") || option.SequenceEqual("-blendu") || option.SequenceEqual("-blendv") ? 1 :
-                   0;
-        for (int i = 0; i < args; i++)
+        // Options whose single argument is a non-numeric token (on/off, channel letter).
+        if (option.SequenceEqual("-clamp") || option.SequenceEqual("-blendu") ||
+            option.SequenceEqual("-blendv") || option.SequenceEqual("-imfchan"))
         {
+            if (!tok.AtEnd) tok.NextToken();
+            return;
+        }
+
+        // Options taking numeric arguments. Trailing ones are optional (e.g. -s u [v] [w]), so stop
+        // as soon as a non-numeric token appears - that token is the start of the filename.
+        int maxNumeric =
+            option.SequenceEqual("-s") || option.SequenceEqual("-o") || option.SequenceEqual("-t") ? 3 :
+            option.SequenceEqual("-mm") ? 2 :
+            option.SequenceEqual("-bm") || option.SequenceEqual("-boost") || option.SequenceEqual("-texres") ? 1 :
+            0;
+
+        for (int i = 0; i < maxNumeric; i++)
+        {
+            var save = tok;
             if (tok.AtEnd) return;
-            tok.NextToken();
+            if (!IsNumeric(tok.NextToken()))
+            {
+                tok = save;
+                return;
+            }
         }
     }
+
+    private static bool IsNumeric(ReadOnlySpan<char> token) =>
+        float.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out _);
 
     private int ResolveOrCreateTexture(string referencedPath)
     {
