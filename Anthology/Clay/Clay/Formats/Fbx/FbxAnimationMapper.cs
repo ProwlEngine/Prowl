@@ -198,7 +198,7 @@ internal static class FbxAnimationMapper
         if (keyTimeNode.Properties.Count == 0 || keyValueNode.Properties.Count == 0) return null;
 
         // KeyTime is i64 KTime ticks; KeyValueFloat is f32 per key.
-        long[] times = keyTimeNode.Properties[0].LongArrayValue ?? Array.Empty<long>();
+        long[] times = keyTimeNode.Properties[0].AsLongArray();
         float[] values = keyValueNode.Properties[0].FloatArrayValue ?? keyValueNode.Properties[0].AsFloatArray();
         if (times.Length == 0 || values.Length == 0) return null;
         int len = Math.Min(times.Length, values.Length);
