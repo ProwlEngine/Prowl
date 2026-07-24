@@ -117,7 +117,7 @@ public static class Serializer
         if (targetType != null)
         {
             if (targetType.IsEnum)
-                return new EchoObject(EchoType.Int, Convert.ToInt32(value));
+                return Formatters.EnumFormat.SerializeEnum((Enum)value);
 
             if (targetType.IsValueType || targetType == typeof(string) || targetType == typeof(byte[]))
             {

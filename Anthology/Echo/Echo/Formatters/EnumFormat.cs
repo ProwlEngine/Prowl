@@ -12,16 +12,24 @@ internal sealed class EnumFormat : ISerializationFormat
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         if (value is Enum e)
-            return new(EchoType.Int, Convert.ToInt32(e));
+            return SerializeEnum(e);
 
         throw new NotSupportedException($"Type '{value.GetType()}' is not supported by EnumFormat.");
     }
 
+    // Store at the enum's full underlying width so long/ulong-backed values don't overflow Int32.
+    internal static EchoObject SerializeEnum(Enum e)
+    {
+        if (Enum.GetUnderlyingType(e.GetType()) == typeof(ulong))
+            return new EchoObject(Convert.ToUInt64(e));
+        return new EchoObject(Convert.ToInt64(e));
+    }
+
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (value.TagType != EchoType.Int)
-            throw new Exception($"Expected Int type for Enum, got {value.TagType}");
-
-        return Enum.ToObject(targetType, value.IntValue);
+        // ULongValue/LongValue also read older Int-tagged enum data, keeping old files loadable.
+        if (Enum.GetUnderlyingType(targetType) == typeof(ulong))
+            return Enum.ToObject(targetType, value.ULongValue);
+        return Enum.ToObject(targetType, value.LongValue);
     }
 }
