@@ -264,6 +264,11 @@ public sealed class XmlFileFormat : IFileFormat
             {
                 if (index + 1 < xml.Length && xml[index + 1] == '/')
                 {
+                    // Whitespace-only content (no child elements, no other text) is real text, e.g. a
+                    // value of "   " or "\t"; the whitespace we just skipped is that content.
+                    if (children.Count == 0 && wsStart < index)
+                        textContent.Append(xml, wsStart, index - wsStart);
+
                     index += 2;
                     ReadName(xml, ref index); // skip closing tag name
                     SkipWhitespace(xml, ref index);
