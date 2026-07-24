@@ -29,8 +29,6 @@ public delegate (bool handled, object? result) DeserializeOverride(EchoObject da
 
 public class SerializationContext
 {
-    private class NullKey { }
-
     internal TypeMode TypeMode = TypeMode.Auto;
 
     public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
@@ -100,11 +98,9 @@ public class SerializationContext
 
     public SerializationContext(TypeMode typeMode = TypeMode.Auto)
     {
+        // Ids start at 1; id 0 is left free so external/hand-authored data using a 0-based id scheme
+        // resolves normally instead of colliding with a reserved sentinel.
         TypeMode = typeMode;
-        //objectToId.Clear(); // Not sure why we cleared these?
-        objectToId.Add(new NullKey(), 0);
-        //idToObject.Clear();
-        idToObject.Add(0, new NullKey());
         nextId = 1;
     }
 }
