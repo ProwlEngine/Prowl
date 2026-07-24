@@ -41,18 +41,6 @@ public static class ComponentClipboard
     private const string RefComponent = "c:";
     private const string RefTransform = "t:";
 
-    /// <summary>
-    /// Fields that carry identity or engine-managed state rather than user data. Excluded when
-    /// pasting values onto an existing component so the target keeps its own identity and the
-    /// derived enabled/lifecycle flags stay consistent. Mirrors PrefabUtility's override skip-list.
-    /// </summary>
-    private static readonly HashSet<string> _skipOnPasteValues = new()
-    {
-        "_identifier", "_go", "_enabled", "_enabledInHierarchy",
-        "_hasStarted", "_hasBeenEnabled", "_executeAlwaysCached", "_updateRegistered",
-        "HideFlags", "Name", "AssetID", "AssetPath",
-    };
-
     // ================================================================
     //  Copy
     // ================================================================
@@ -63,7 +51,6 @@ public static class ComponentClipboard
         if (comp == null) return;
 
         var (data, refs) = CaptureState(comp);
-        if (data == null) return;
 
         var root = EchoObject.NewCompound();
         root.Add("Data", data);
@@ -108,10 +95,9 @@ public static class ComponentClipboard
     /// </summary>
     public static Type? PeekType()
     {
-        // ResolveType honors the recorded assembly and searches every load context, so it finds
-        // user-script types in the collectible context that Type.GetType can't bind. Deliberately
-        // not falling back to FindType: its loose simple-name match could bind a same-named type
-        // from another assembly, and silently pasting the wrong component is worse than refusing.
+        // ResolveType searches every load context (so it finds user scripts in the collectible one)
+        // and honors the recorded assembly - unlike FindType, whose loose name match could bind a
+        // same-named type from the wrong assembly and paste the wrong component.
         return TryParseHeader(out string typeName, out _) ? RuntimeUtils.ResolveType(typeName) : null;
     }
 
@@ -148,14 +134,12 @@ public static class ComponentClipboard
             go.AddComponent(comp);
             comp.OnValidate();
 
-            // Capture only strings/echo in the undo closures - no Type, no live object references,
-            // so an undo stack entry can't pin the script load context.
+            // Capture only strings/echo in the undo closures - no Type, no live references - so an
+            // undo entry can't pin the collectible script load context. Re-resolve from the name on
+            // redo. (AssemblyQualifiedName is non-null for any concrete type; FullName won't do, as
+            // ResolveType needs the qualifier to reach user scripts.)
             var goId = go.Identifier;
             var compId = comp.Identifier;
-            // AssemblyQualifiedName is null only for generic parameters and open generics, neither of
-            // which can reach here - `type` was just resolved from a concrete component payload.
-            // FullName is not a usable fallback: ResolveType needs the assembly qualifier to reach
-            // user scripts in the collectible load context.
             string typeName = type.AssemblyQualifiedName!;
             var capturedData = data;
             var capturedRefs = refs;
@@ -206,11 +190,9 @@ public static class ComponentClipboard
                 return false;
             if (type != target.GetType()) return false;
 
-            // Snapshot through the same capture path the clipboard uses, so the undo state has its
-            // scene references stored as identifiers too - a plain Serialize here would deep-clone
-            // them and undo would restore orphans.
+            // Snapshot via CaptureState (not a plain Serialize) so the undo state stores scene
+            // references as identifiers too, otherwise undo would restore deep-cloned orphans.
             var (beforeData, beforeRefs) = CaptureState(target);
-            if (beforeData == null) return false;
 
             ApplyState(target, data, refs);
 
@@ -237,17 +219,11 @@ public static class ComponentClipboard
     // ================================================================
 
     /// <summary>
-    /// Serialize a component with its scene-object references swapped out for identifier tokens.
-    /// The live fields are nulled only for the duration of the serialize call and always restored.
+    /// Serialize a component with its scene-object references swapped out for identifier tokens, so
+    /// Echo can't deep-clone them into orphans. Reference fields are nulled only across the serialize
+    /// call and always restored. Single-threaded by assumption, like the rest of the editor.
     /// </summary>
-    /// <remarks>
-    /// Nulling the live component's fields makes this non-reentrant: the component is briefly in an
-    /// inconsistent state. That is safe here because the editor mutates the scene only from the main
-    /// thread (the same assumption <see cref="Undo"/> and PrefabUtility already make) and the whole
-    /// capture runs inside a single context-menu callback. Anything that ever calls this off-thread
-    /// would need to serialize a clone instead.
-    /// </remarks>
-    private static (EchoObject? data, Dictionary<string, string> refs) CaptureState(MonoBehaviour comp)
+    private static (EchoObject data, Dictionary<string, string> refs) CaptureState(MonoBehaviour comp)
     {
         var refs = new Dictionary<string, string>();
         var stashed = new List<(FieldInfo field, object value)>();
@@ -259,9 +235,8 @@ public static class ComponentClipboard
             object? value = field.GetValue(comp);
             if (value is not (GameObject or MonoBehaviour or Transform)) continue;
 
-            // Every scene-object reference gets nulled, whether or not it can be identified - the
-            // point is to keep Echo from deep-cloning the target into an orphan. One that yields no
-            // token (a Transform whose GameObject is already gone) is simply dropped on paste.
+            // A reference that yields no token (detached Transform) is still nulled - just dropped
+            // on paste rather than restored.
             if (TryMakeRefToken(value, out string? token))
                 refs[field.Name] = token!;
 
@@ -281,40 +256,33 @@ public static class ComponentClipboard
     }
 
     /// <summary>
-    /// Copy field values from a serialized snapshot onto a live component, preserving the target's
-    /// identity. Brackets the copy with OnDisable/OnEnable so components that build native state on
-    /// enable (rigidbodies, audio sources) rebuild it against the new values.
+    /// Overwrite a live component's serializable state from a snapshot, preserving its identity.
+    /// Uses DeserializeInto so state reaches the target through the component's own Deserialize - a
+    /// field-by-field copy misses types like AudioSource that keep everything behind ISerializable.
+    /// Brackets the write with OnDisable/OnEnable so components with native state (rigidbodies, audio
+    /// sources) rebuild against the new values.
     /// </summary>
     private static void ApplyState(MonoBehaviour target, EchoObject data, Dictionary<string, string> refs)
     {
-        var temp = Deserialize(data, target.GetType());
-        if (temp == null) return;
-
-        ResolveRefs(temp, refs);
-
         bool attached = target.GameObject.IsValid();
         bool inActiveScene = attached && target.Scene.IsValid() && target.Scene!.IsActive;
         bool wasLive = inActiveScene && target.HasBeenEnabled && target.EnabledInHierarchy;
 
         if (wasLive) target.InternalOnDisable();
 
-        foreach (var field in target.GetSerializableFields())
-        {
-            if (_skipOnPasteValues.Contains(field.Name)) continue;
-            field.SetValue(target, field.GetValue(temp));
-        }
+        // OnAfterDeserialize regenerates the identifier; preserve it so undo records and scene
+        // lookups that key on it survive a values paste.
+        Guid identifier = target.Identifier;
+        Serializer.DeserializeInto(data, target);
+        target.Identifier = identifier;
 
-        // Enabled is written through the backing field rather than the property because the property
-        // routes into HierarchyStateChanged, which fires OnEnable/OnDisable itself - on top of the
-        // explicit bracket here, and only when the value happens to change. Driving the lifecycle
-        // from one place makes it predictable; the cost is setting the field directly.
-        // Re-attaching then re-derives _enabledInHierarchy using the engine's own rule instead of
-        // restating it here (it depends on the GameObject, NOT on whether the scene is active).
-        target._enabled = temp.Enabled;
+        ResolveRefs(target, refs);
+
+        // AttachToGameObject re-derives _enabledInHierarchy from the pasted _enabled via the engine's
+        // own rule rather than restating it here.
         if (attached) target.AttachToGameObject(target.GameObject);
 
-        // Re-enable from the pasted state, not the old one: pasted values that flip Enabled should
-        // fire the matching lifecycle callback, exactly as assigning Enabled would.
+        // Fire OnEnable from the pasted state, matching what assigning Enabled would do.
         if (inActiveScene && target.EnabledInHierarchy) target.InternalOnEnable();
 
         target.OnValidate();
@@ -342,9 +310,8 @@ public static class ComponentClipboard
                 token = RefComponent + mb.Identifier;
                 return true;
 
-            // Transform isn't an EngineObject and has no identifier of its own; anchor it to the
-            // owning GameObject and re-derive on paste. A detached Transform has nothing to anchor
-            // to, so it can't be identified - and must not be cloned either.
+            // Transform has no identifier of its own; anchor it to its GameObject and re-derive on
+            // paste. A detached Transform can't be anchored, so it's dropped (never cloned).
             case Transform t:
                 if (!t.GameObject.IsValid()) return false;
                 token = RefTransform + t.GameObject.Identifier;

@@ -70,6 +70,23 @@ public sealed class ClipRefComp : MonoBehaviour
 }
 
 /// <summary>
+/// Mirrors AudioSource's pattern: all state lives in plain private fields that are invisible to
+/// GetSerializableFields and travel only through custom ISerializable methods. A field-by-field
+/// copy would miss every one of them; a values paste must go through Deserialize.
+/// </summary>
+public sealed class ClipSerializableComp : MonoBehaviour, ISerializable
+{
+    private int _hidden;
+    public int Hidden { get => _hidden; set => _hidden = value; }
+
+    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+        => compound.Add("Hidden", new EchoObject(_hidden));
+
+    public void Deserialize(EchoObject value, SerializationContext ctx)
+        => _hidden = value["Hidden"].IntValue;
+}
+
+/// <summary>
 /// Tests for <see cref="ComponentClipboard"/>: value round-trips, identity preservation on
 /// paste-values, undo/redo, and - the part most likely to regress - scene-object reference fields,
 /// which must resolve by identifier rather than being deep-cloned into orphans.
@@ -391,6 +408,66 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         // The source keeps its reference - capture must restore what it stashed.
         Assert.NotNull(src.TargetTransform);
+    }
+
+    // ---- ISerializable components (custom Serialize/Deserialize) ----
+
+    [Fact]
+    public void PasteValues_ISerializableComponent_CopiesCustomState()
+    {
+        // The whole point: state that lives only behind ISerializable, invisible to a field copy,
+        // still round-trips because the values paste routes through the component's Deserialize.
+        MakeScene(out var a, out var b);
+        var src = a.AddComponent<ClipSerializableComp>();
+        src.Hidden = 123;
+
+        var dst = b.AddComponent<ClipSerializableComp>();
+        dst.Hidden = 7;
+        var dstId = dst.Identifier;
+
+        ComponentClipboard.Copy(src);
+        Assert.True(ComponentClipboard.PasteValues(dst));
+
+        Assert.Equal(123, dst.Hidden);
+        Assert.Equal(dstId, dst.Identifier); // identity survives OnAfterDeserialize's regen
+    }
+
+    [Fact]
+    public void PasteAsNew_ISerializableComponent_CopiesCustomState()
+    {
+        MakeScene(out var a, out var b);
+        var src = a.AddComponent<ClipSerializableComp>();
+        src.Hidden = 55;
+
+        ComponentClipboard.Copy(src);
+        var pasted = ComponentClipboard.PasteAsNew(b) as ClipSerializableComp;
+
+        Assert.NotNull(pasted);
+        Assert.Equal(55, pasted!.Hidden);
+        Assert.NotEqual(src.Identifier, pasted.Identifier);
+    }
+
+    [Fact]
+    public void PasteValues_ISerializable_Undo_RestoresCustomState()
+    {
+        MakeScene(out var a, out var b);
+        var src = a.AddComponent<ClipSerializableComp>();
+        src.Hidden = 900;
+
+        var dst = b.AddComponent<ClipSerializableComp>();
+        dst.Hidden = 3;
+
+        ComponentClipboard.Copy(src);
+        ComponentClipboard.PasteValues(dst);
+        Undo.IncrementGroup();
+
+        Assert.Equal(900, dst.Hidden);
+
+        Undo.PerformUndo();
+        Assert.Equal(3, dst.Hidden);
+
+        Undo.PerformRedo();
+        Assert.Equal(900, dst.Hidden);
     }
 
     // ---- Malformed / unresolvable payloads ----
