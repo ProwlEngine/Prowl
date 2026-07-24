@@ -11,6 +11,9 @@ internal sealed class ArrayFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var array = (Array)value;
         var elementType = targetType!.GetElementType() ?? typeof(object);
         Type actualType = value.GetType();
@@ -41,7 +44,7 @@ internal sealed class ArrayFormat : ISerializationFormat
             arrCompound["elements"] = new EchoObject(elements);
         }
 
-        return arrCompound;
+        return CollectionReferences.WrapCompoundBody(arrCompound, id);
     }
 
     private static void SerializeMultiDimensionalArray(
@@ -70,6 +73,9 @@ internal sealed class ArrayFormat : ISerializationFormat
         Type elementType = targetType.GetElementType()
             ?? throw new InvalidOperationException("Array element type is null");
 
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
         // If value is a compound with type info
         if (value.TagType == EchoType.Compound)
         {
@@ -77,6 +83,7 @@ internal sealed class ArrayFormat : ISerializationFormat
             if (value.TryGet("array", out var arrayTag) && arrayTag.TagType == EchoType.List)
             {
                 var array = Array.CreateInstance(elementType, arrayTag.Count);
+                CollectionReferences.Register(value, array, context);
                 for (int idx = 0; idx < array.Length; idx++)
                 {
                     var item = arrayTag[idx];
@@ -105,6 +112,7 @@ internal sealed class ArrayFormat : ISerializationFormat
                     ?? throw new InvalidOperationException("Missing elements in multi-dimensional array");
 
                 var array = Array.CreateInstance(elementType, dimensions);
+                CollectionReferences.Register(value, array, context);
                 var indices = new int[dimensions.Length];
                 int elementIndex = 0;
 

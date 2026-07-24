@@ -12,6 +12,9 @@ internal sealed class LinkedListFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var elementType = targetType!.GetGenericArguments()[0];
         var linkedList = (IEnumerable)value;
         List<EchoObject> tags = new();
@@ -21,20 +24,24 @@ internal sealed class LinkedListFormat : ISerializationFormat
             tags.Add(Serializer.Serialize(elementType, item, context));
         }
 
-        return new EchoObject(tags);
+        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
         Type elementType = targetType.GetGenericArguments()[0];
         var linkedList = Activator.CreateInstance(targetType)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+        CollectionReferences.Register(value, linkedList, context);
 
         // Use reflection to get the AddLast method to avoid ambiguity with null values
         var addLastMethod = targetType.GetMethod("AddLast", new[] { elementType })
             ?? throw new InvalidOperationException($"AddLast method not found on type: {targetType}");
 
-        foreach (var tag in value.List)
+        foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
             addLastMethod.Invoke(linkedList, new[] { item });

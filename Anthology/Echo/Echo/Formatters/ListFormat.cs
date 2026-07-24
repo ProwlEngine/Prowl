@@ -24,22 +24,29 @@ internal sealed class ListFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var elementType = GetElementType(targetType!);
         var list = value as IList ?? throw new InvalidOperationException("Expected IList type");
 
         List<EchoObject> tags = new(list.Count);
         for (int i = 0; i < list.Count; i++)
             tags.Add(Serializer.Serialize(elementType, list[i], context));
-        return new EchoObject(tags);
+        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
         Type elementType = GetElementType(targetType);
         var list = Activator.CreateInstance(targetType) as IList
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+        CollectionReferences.Register(value, list, context);
 
-        foreach (var tag in value.List)
+        foreach (var tag in CollectionReferences.ListItems(value))
             list.Add(Serializer.Deserialize(tag, elementType, context));
         return list;
     }

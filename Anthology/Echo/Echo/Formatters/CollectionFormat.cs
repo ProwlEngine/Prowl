@@ -15,21 +15,28 @@ internal sealed class CollectionFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var elementType = targetType!.GetGenericArguments()[0];
         var enumerable = (IEnumerable)value;
         List<EchoObject> tags = new();
         foreach (var item in enumerable)
             tags.Add(Serializer.Serialize(elementType, item, context));
-        return new EchoObject(tags);
+        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
         Type elementType = targetType.GetGenericArguments()[0];
         dynamic collection = Activator.CreateInstance(targetType)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+        CollectionReferences.Register(value, collection, context);
 
-        foreach (var tag in value.List)
+        foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
             collection.Add((dynamic)item);
