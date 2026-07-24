@@ -981,6 +981,22 @@ public static class GameObjectInspector
 
         builder.Separator();
 
+        builder.Item(Loc.Get("inspector.copy_component"), () => ComponentClipboard.Copy(comp),
+            icon: EditorIcons.Copy);
+
+        // Structure is fixed on prefab instances (Add Component is hidden for the same reason), so
+        // pasting a whole new component is only offered where adding one is.
+        bool canAddToGO = !go.IsPrefabInstance || Application.IsPlaying;
+        builder.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(go),
+            icon: EditorIcons.Paste, enabled: canAddToGO && ComponentClipboard.CanPasteAsNew());
+
+        // Values-only paste is fine on a prefab instance - DetectComponentOverrides picks the
+        // changed fields up as overrides on the next frame.
+        builder.Item(Loc.Get("inspector.paste_component_values"), () => ComponentClipboard.PasteValues(comp),
+            icon: EditorIcons.ClipboardCheck, enabled: ComponentClipboard.CanPasteValues(comp.GetType()));
+
+        builder.Separator();
+
         var moveCompId = comp.Identifier;
         builder.Item(Loc.Get("inspector.move_up"), () =>
         {
@@ -1042,7 +1058,12 @@ public static class GameObjectInspector
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .OnClick(go, (g, _) => ToggleAddComponentPopup(g));
+                .OnClick(go, (g, _) => ToggleAddComponentPopup(g))
+                // A GameObject with no components has no component header to right-click, so this is
+                // the only place to reach "paste as new" on an empty object.
+                .OnRightClick(go, (g, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y,
+                    b => b.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(g),
+                        icon: EditorIcons.Paste, enabled: ComponentClipboard.CanPasteAsNew())));
 
             using (trigger.Enter())
             {
