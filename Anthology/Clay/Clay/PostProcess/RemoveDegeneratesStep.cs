@@ -20,8 +20,11 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
     public PostProcessFlags Flag => PostProcessFlags.RemoveDegenerates;
     public string Name => "RemoveDegenerates";
 
-    /// <summary>Triangles with area below this threshold are treated as degenerate.</summary>
-    private const float AreaEpsilon = 1e-12f;
+    /// <summary>
+    /// Squared sine of the smallest angle a triangle may have before it counts as collinear. The
+    /// test is scale-invariant, so small-but-valid triangles are kept while true slivers are dropped.
+    /// </summary>
+    private const float SinSqEpsilon = 1e-12f;
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
@@ -66,11 +69,20 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
                 {
                     int a = indices[0], b = indices[1], c = indices[2];
                     if (a == b || b == c || a == c) return true;
-                    Float3 e1 = Sub(mesh.Positions[b], mesh.Positions[a]);
-                    Float3 e2 = Sub(mesh.Positions[c], mesh.Positions[a]);
-                    Float3 cross = Cross(e1, e2);
-                    float twiceAreaSq = cross.X * cross.X + cross.Y * cross.Y + cross.Z * cross.Z;
-                    return twiceAreaSq < AreaEpsilon;
+
+                    Float3 pa = mesh.Positions[a], pb = mesh.Positions[b], pc = mesh.Positions[c];
+                    if (pa.Equals(pb) || pb.Equals(pc) || pa.Equals(pc)) return true;
+
+                    Float3 e1 = pb - pa;
+                    Float3 e2 = pc - pa;
+                    float len1Sq = Float3.Dot(e1, e1);
+                    float len2Sq = Float3.Dot(e2, e2);
+
+                    // |e1 x e2|^2 == len1Sq * len2Sq * sin^2(theta). Dividing out the edge lengths
+                    // keeps the threshold scale-invariant so only near-collinear triangles are culled.
+                    Float3 cross = Float3.Cross(e1, e2);
+                    float crossSq = Float3.Dot(cross, cross);
+                    return crossSq < len1Sq * len2Sq * SinSqEpsilon;
                 }
 
             default:
@@ -84,8 +96,4 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
                 return false;
         }
     }
-
-    private static Float3 Sub(Float3 a, Float3 b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-    private static Float3 Cross(Float3 a, Float3 b) =>
-        new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 }
