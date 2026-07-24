@@ -46,6 +46,10 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
         var compound = EchoObject.NewCompound();
         compound["entries"] = new EchoObject(entries);
+
+        var comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(dict), keyType, context);
+        if (comparerTag != null) compound["$comparer"] = comparerTag;
+
         return CollectionReferences.WrapCompoundBody(compound, id);
     }
 
@@ -56,7 +60,8 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
         var (keyType, valueType) = GetTypeArgs(targetType);
 
-        IDictionary dict = Activator.CreateInstance(targetType) as IDictionary
+        var comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
+        IDictionary dict = ComparerSupport.CreateCollection(targetType, comparer) as IDictionary
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, dict, context);
 

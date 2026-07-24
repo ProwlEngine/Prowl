@@ -22,7 +22,11 @@ internal sealed class HashSetFormat : ISerializationFormat
         List<EchoObject> tags = new();
         foreach (var item in hashSet)
             tags.Add(Serializer.Serialize(elementType, item, context));
-        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
+
+        var body = CollectionReferences.WrapListBody(new EchoObject(tags), id);
+        var comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(value), elementType, context);
+        if (comparerTag != null) body["$comparer"] = comparerTag;
+        return body;
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
@@ -31,7 +35,8 @@ internal sealed class HashSetFormat : ISerializationFormat
             return existing;
 
         Type elementType = targetType.GetGenericArguments()[0];
-        dynamic hashSet = Activator.CreateInstance(targetType)
+        var comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
+        dynamic hashSet = ComparerSupport.CreateCollection(targetType, comparer)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, hashSet, context);
 
