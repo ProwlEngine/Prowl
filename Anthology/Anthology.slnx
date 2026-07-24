@@ -22,64 +22,9 @@
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
     <Project Path="Slang/COMApi/Prowl.Slang.COMApi.csproj" />
   </Folder>
-  <Folder Name="/Samples/Vector/">
-    <Project Path="Vector/OpenTKSample/OpenTKSample.csproj" />
-    <Project Path="Vector/Samples/SoftwareRasterizer/SoftwareRasterizer.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Scribe/">
-    <Project Path="Scribe/Samples/RaylibTest/RaylibTest.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Quill/">
-    <Project Path="Quill/Samples/Common/Common.csproj" />
-    <Project Path="Quill/Samples/OpenTKExample/OpenTKExample.csproj" />
-    <Project Path="Quill/Samples/RaylibExample/RaylibExample.csproj" />
-    <Project Path="Quill/Samples/SFMLExample/SFMLExample.csproj" />
-    <Project Path="Quill/Samples/SilkNETExample/SilkNETExample.csproj" />
-    <Project Path="Quill/Samples/WasmExample/WasmExample.csproj" />
-    <Project Path="Quill/Samples/GraphiteExample/GraphiteExample.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Paper/">
-    <Project Path="Paper/Samples/OpenTK/OpenTKSample.csproj" />
-    <Project Path="Paper/Samples/RaylibSample/RaylibSample.csproj" />
-    <Project Path="Paper/Samples/Shared/Shared.csproj" />
-    <Project Path="Paper/Samples/WasmExample/WasmExample.csproj" />
-    <Project Path="Paper/Samples/GraphiteSample/GraphiteSample.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Origami/">
+  <Folder Name="/Samples/">
     <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Clay/">
-    <Project Path="Clay/DiffDebugger/DiffDebugger.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Crumb/">
-    <Project Path="Crumb/Samples/ShaderLab/ShaderLab.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Photonic/">
-    <Project Path="Photonic/Samples/Photonic.Demo/Photonic.Demo.csproj" />
-    <Project Path="Photonic/Samples/Photonic.Sample.Raylib/Photonic.Sample.Raylib.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Unwrapper/">
-    <Project Path="Unwrapper/UvVisualizer/UvVisualizer.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Wicked/">
-    <Project Path="Wicked/samples/MobaGame/MobaGame.csproj" />
-    <Project Path="Wicked/samples/MultiplayerGame/MultiplayerGame.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Drift/">
-    <Project Path="Drift/DriftDemo/DriftDemo.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Slang/">
-    <Project Path="Slang/Samples/HelloWorld/HelloWorld.csproj" />
-    <Project Path="Slang/Samples/ModelViewer/ModelViewer.csproj" />
-    <Project Path="Slang/Samples/Triangle/Triangle.csproj" />
-  </Folder>
-  <Folder Name="/Samples/Graphite/">
-    <Project Path="Graphite/Samples/Cube/Cube.csproj" />
-    <Project Path="Graphite/Samples/CubeGrid/CubeGrid.csproj" />
-    <Project Path="Graphite/Samples/HelloTriangle/HelloTriangle.csproj" />
-    <Project Path="Graphite/Samples/TexturedQuad/TexturedQuad.csproj" />
     <Project Path="Graphite/Samples/PBRRenderer/PBRRenderer.csproj" />
-    <Project Path="Graphite/Samples/Shared/Shared.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Vector/Tests/Vector.Tests/Vector.Tests.csproj" />
