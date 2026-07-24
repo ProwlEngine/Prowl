@@ -2,7 +2,7 @@
 
   <!-- Shared version for all Prowl.* NuGet packages. Bump once to update Runtime and Editor. -->
   <PropertyGroup>
-    <ProwlPackageVersion>2.8.1</ProwlPackageVersion>
+    <ProwlPackageVersion>2.8.2</ProwlPackageVersion>
   </PropertyGroup>
 
 </Project>
