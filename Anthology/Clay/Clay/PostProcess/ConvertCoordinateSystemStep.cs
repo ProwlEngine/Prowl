@@ -66,7 +66,8 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 for (int i = 0; i < mesh.Tangents.Count; i++)
                 {
                     var t = mesh.Tangents[i];
-                    mesh.Tangents[i] = new Float4(t.X, t.Y, -t.Z, t.W);
+                    // Reflection (det = -1) flips tangent-frame handedness, so negate the bitangent sign.
+                    mesh.Tangents[i] = new Float4(t.X, t.Y, -t.Z, -t.W);
                 }
 
             // Mirror-flip changes face winding; reverse triangle order so visible side stays consistent.
@@ -195,7 +196,8 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 for (int i = 0; i < mesh.Tangents.Count; i++)
                 {
                     var t = mesh.Tangents[i];
-                    mesh.Tangents[i] = new Float4(t.X, t.Z, t.Y, t.W);
+                    // Reflection (det = -1) flips tangent-frame handedness, so negate the bitangent sign.
+                    mesh.Tangents[i] = new Float4(t.X, t.Z, t.Y, -t.W);
                 }
 
             // Handedness flipped (det = -1), so winding reverses.
