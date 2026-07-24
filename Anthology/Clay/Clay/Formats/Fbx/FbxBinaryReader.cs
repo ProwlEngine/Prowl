@@ -122,7 +122,7 @@ internal sealed class FbxBinaryReader
             // Verify and skip the sentinel block.
             for (int i = 0; i < sentinelSize; i++)
             {
-                if (_cursor >= _data.Length || _data[_cursor + i] != 0)
+                if (_cursor + i >= _data.Length || _data[_cursor + i] != 0)
                     throw new ImportException($"FBX node '{name}': malformed sentinel block at position {_cursor + i}.");
             }
             _cursor += sentinelSize;
