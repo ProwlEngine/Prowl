@@ -88,9 +88,34 @@ public static class RuntimeUtils
         // Assembly-qualified names look like "Namespace.Type, AssemblyName, Version=..."
         // asm.GetType() needs just "Namespace.Type" to search within a specific assembly.
         string typeNameOnly = qualifiedTypeName;
+        string? assemblyName = null;
         int commaIdx = qualifiedTypeName.IndexOf(',');
         if (commaIdx >= 0)
+        {
             typeNameOnly = qualifiedTypeName.Substring(0, commaIdx).Trim();
+
+            int nextComma = qualifiedTypeName.IndexOf(',', commaIdx + 1);
+            assemblyName = (nextComma >= 0
+                ? qualifiedTypeName.Substring(commaIdx + 1, nextComma - commaIdx - 1)
+                : qualifiedTypeName.Substring(commaIdx + 1)).Trim();
+        }
+
+        // Search the assembly the name records before any loose simple-name match, so a short name that
+        // also exists in another assembly (a user script "World" vs Jitter2.World) binds to the right one.
+        // Assembly matched on simple name only, since a script assembly keeps its name across hot reloads.
+        if (!string.IsNullOrEmpty(assemblyName))
+        {
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (!string.Equals(asm.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                t = asm.GetType(typeNameOnly)
+                    ?? SafeGetTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+                if (t != null)
+                    return t;
+            }
+        }
 
         foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
         {
@@ -107,11 +132,18 @@ public static class RuntimeUtils
             }
 
             // If not found, try to find by name without namespace
-            t = asm.GetTypes().FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+            t = SafeGetTypes(asm).FirstOrDefault(t => t.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
             if (t != null)
                 return t;
         }
         return null;
+    }
+
+    /// <summary>Returns an assembly's loadable types, tolerating partially-loadable assemblies.</summary>
+    private static IEnumerable<Type> SafeGetTypes(Assembly asm)
+    {
+        try { return asm.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { return ex.Types.Where(t => t != null)!; }
     }
 
     /// <summary>

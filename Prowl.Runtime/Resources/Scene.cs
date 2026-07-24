@@ -624,6 +624,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             for (int i = 0; i < serializeObj.Length; i++)
             {
+                // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
+                if (serializeObj[i] == null) continue;
                 serializeObj[i].SetIdentifier(_goIdentifiers[i]);
 
                 if (_compIdentifiers != null && _compIdOffsets != null)
@@ -643,7 +645,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _compIdOffsets = null;
 
         foreach (GameObject obj in serializeObj)
-            Add(obj);
+            if (obj != null) Add(obj);
     }
 
     /// <summary>

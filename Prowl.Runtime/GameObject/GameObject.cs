@@ -1208,38 +1208,37 @@ public class GameObject : EngineObject, ISerializable
         // guard so such an object degrades to an empty GameObject instead of NREing out of the whole scene.
         foreach (EchoObject compTag in comps?.List ?? [])
         {
-            // Fallback for Missing Type
             EchoObject? typeProperty = compTag.Get("$type");
-            // If the type is missing or string null/whitespace something is wrong, so just let the Deserializer handle it, maybe it knows what to do
             if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
             {
-                // Look for Monobehaviour Type
                 Type oType = RuntimeUtils.FindType(typeProperty.StringValue);
-                if (oType == null)
-                {
-                    Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
-                    MissingMonobehaviour missing = new()
-                    {
-                        ComponentData = compTag
-                    };
-                    _components.Add(missing);
 
-                    // Echo emits an object's full definition at its FIRST encounter during traversal, so the
-                    // definition of an unrelated object (an engine component, a child GameObject, an AssetRef
-                    // holder) can live INLINE inside this missing component's field data. If we ignore it, the
-                    // rest of the scene's references to that object stay as empty "New GameObject"/blank-component
-                    // placeholders. We can't populate them now (the placeholders don't all exist yet, and a
-                    // GameObject reference carries no $type here), so DEFER: once the whole graph is loaded and
-                    // every placeholder exists with its correct type, back-patch them from this trapped data.
-                    EchoObject trapped = compTag;
-                    ctx.Defer(() => BackPatchTrappedDefinitions(trapped, ctx));
-                    continue;
-                }
-                else if (oType == typeof(MissingMonobehaviour))
+                if (oType == typeof(MissingMonobehaviour))
                 {
                     HandleMissingComponent(compTag, ctx);
                     continue;
                 }
+
+                // Deserialize against the resolved type, not the abstract MonoBehaviour, so a name that
+                // binds to a non component type can't throw a bad cast out of the array.
+                MonoBehaviour? typedComponent = oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType)
+                    ? Serializer.Deserialize(compTag, oType, ctx) as MonoBehaviour
+                    : null;
+
+                if (typedComponent.IsValid())
+                {
+                    _components.Add(typedComponent!);
+                    _componentCache.Add(typedComponent!.GetType(), typedComponent);
+                    continue;
+                }
+
+                // Keep the raw data as a MissingMonobehaviour so it survives a re-save, and back-patch any
+                // object definitions Echo stored inline in it once the whole graph has loaded.
+                Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
+                _components.Add(new MissingMonobehaviour { ComponentData = compTag });
+                EchoObject trapped = compTag;
+                ctx.Defer(() => BackPatchTrappedDefinitions(trapped, ctx));
+                continue;
             }
 
             MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
@@ -1344,10 +1343,10 @@ public class GameObject : EngineObject, ISerializable
             && !string.IsNullOrWhiteSpace(typeProp?.StringValue))
         {
             Type? oType = RuntimeUtils.FindType(typeProp!.StringValue);
-            if (oType != null)
+            if (oType != null && typeof(MonoBehaviour).IsAssignableFrom(oType))
             {
                 // We have the type! Deserialize it and add it to the components
-                MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(oldData);
+                MonoBehaviour? component = Serializer.Deserialize(oldData, oType) as MonoBehaviour;
                 if (component.IsValid())
                 {
                     _components.Add(component);
