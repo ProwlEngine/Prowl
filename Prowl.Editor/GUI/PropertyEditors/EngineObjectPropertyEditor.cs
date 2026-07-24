@@ -34,8 +34,7 @@ public class EngineObjectPropertyEditor : PropertyEditor
         _lastFieldType = null; // consume it
 
         bool isAsset = eo != null && eo.AssetID != Guid.Empty;
-        string suffix = eo != null ? (isAsset ? eo.GetType().Name : "Instance") : fieldType.Name;
-        string displayName = eo != null ? $"{eo.Name} ({suffix})" : $"None ({fieldType.Name})";
+        string displayName = PropertyGridUtils.DescribeObjectRef(eo, fieldType);
         string icon = eo != null ? EditorIcons.Cube : EditorIcons.Circle;
 
         using (paper.Row(id).Height(UnitValue.Auto).MinHeight(rh).Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())

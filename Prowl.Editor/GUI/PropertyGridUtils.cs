@@ -5,11 +5,31 @@ using System.Reflection;
 using Prowl.Editor.Core;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
 
 public static class PropertyGridUtils
 {
+    /// <summary>
+    /// Build the "Name (Type)" label an object-reference field shows in the property grid. 
+    /// A scene component has no name of its own so it uses the name of the GameObject it lives on and typed
+    /// by the component (e.g. "Player (Rigidbody)"). GameObjects and assets carry a real Name, so they use it.
+    /// Field Type is used as a fallback for empty references.
+    /// </summary>
+    public static string DescribeObjectRef(EngineObject? instance, Type fieldType)
+    {
+        if (instance == null)
+            return $"None ({fieldType.Name})";
+
+        if (instance is MonoBehaviour mb && mb.GameObject != null)
+            return $"{mb.GameObject.Name} ({instance.GetType().Name})";
+
+        bool isAsset = instance.AssetID != Guid.Empty;
+        string suffix = isAsset || instance is GameObject ? instance.GetType().Name : "Instance";
+        return $"{instance.Name} ({suffix})";
+    }
+
     /// <summary>
     /// Set of overridden field names for the current component being drawn.
     /// Set by the inspector before drawing a prefab instance's component.

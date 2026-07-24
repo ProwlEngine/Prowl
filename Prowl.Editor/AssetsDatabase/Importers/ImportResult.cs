@@ -37,12 +37,11 @@ public class ImportContext
         Settings = settings;
     }
 
-    /// <summary>Set the main asset. Auto-sets Name from the file path if it isn't already set.</summary>
+    /// <summary>Set the main asset. Auto-sets Name from the file path.</summary>
     public void SetMainAsset(EngineObject asset)
     {
         asset.AssetID = AssetGuid;
-        if (string.IsNullOrEmpty(asset.Name))
-            asset.Name = Path.GetFileNameWithoutExtension(AbsolutePath);
+        asset.Name = Path.GetFileNameWithoutExtension(AbsolutePath);
         MainAsset = asset;
     }
 
