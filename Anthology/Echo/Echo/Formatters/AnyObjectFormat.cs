@@ -56,13 +56,13 @@ public sealed class AnyObjectFormat : ISerializationFormat
                         // Use cached IgnoreOnNull flag
                         if (cachedField.HasIgnoreOnNull)
                             continue;
-                        compound.Add(cachedField.Field.Name, new(EchoType.Null, null));
+                        compound.Add(cachedField.SerializedName, new(EchoType.Null, null));
                     }
                     else
                     {
                         // Serialize with field type as target to enable polymorphism detection
                         EchoObject tag = Serializer.Serialize(cachedField.Field.FieldType, propValue, context);
-                        compound.Add(cachedField.Field.Name, tag);
+                        compound.Add(cachedField.SerializedName, tag);
                     }
                 }
                 catch (Exception ex)
@@ -284,7 +284,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
 
     private static bool TryGetFieldValue(EchoObject compound, CachedFieldInfo cachedField, out EchoObject? value)
     {
-        var fieldName = cachedField.Field.Name;
+        var fieldName = cachedField.SerializedName;
 
         if (compound.TryGet(fieldName, out value))
             return true;

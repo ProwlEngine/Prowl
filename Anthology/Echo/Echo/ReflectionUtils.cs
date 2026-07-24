@@ -13,13 +13,17 @@ namespace Prowl.Echo;
 internal readonly struct CachedFieldInfo
 {
     public readonly FieldInfo Field;
+    // Key this field is (de)serialized under. Equals Field.Name except for a field shadowed by a
+    // same-named field further down the hierarchy, which is qualified so the two don't collide.
+    public readonly string SerializedName;
     public readonly string? SerializeIfCondition;
     public readonly bool HasIgnoreOnNull;
     public readonly string[]? FormerNames;
 
-    public CachedFieldInfo(FieldInfo field)
+    public CachedFieldInfo(FieldInfo field, string serializedName)
     {
         Field = field;
+        SerializedName = serializedName;
 
         var serializeIf = field.GetCustomAttribute<SerializeIfAttribute>();
         SerializeIfCondition = serializeIf?.ConditionMemberName;
@@ -185,15 +189,23 @@ public static class ReflectionUtils
 
             // Start with the current type
             List<CachedFieldInfo> fields = new List<CachedFieldInfo>();
+            HashSet<string> seenNames = new();
             Type? currentType = targetType;
 
-            // Walk up the inheritance hierarchy to collect fields from all base types
+            // Walk up the inheritance hierarchy to collect fields from all base types. The most-derived
+            // field of a shadowed name is seen first and keeps the plain name; any same-named base field
+            // is qualified by its declaring type so both survive instead of colliding on one key.
             while (currentType != null && currentType != typeof(object))
             {
                 foreach (var field in currentType.GetFields(flags))
                 {
-                    if (IsFieldSerializable(field))
-                        fields.Add(new CachedFieldInfo(field));
+                    if (!IsFieldSerializable(field))
+                        continue;
+
+                    string serializedName = seenNames.Add(field.Name)
+                        ? field.Name
+                        : $"{field.Name}@{field.DeclaringType!.FullName}";
+                    fields.Add(new CachedFieldInfo(field, serializedName));
                 }
 
                 currentType = currentType.BaseType;
