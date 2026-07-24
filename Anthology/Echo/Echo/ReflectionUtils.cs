@@ -73,11 +73,43 @@ public static class ReflectionUtils
             // Assembly-qualified names look like "Namespace.Type, AssemblyName, Version=..."
             // asm.GetType() needs just "Namespace.Type" to search within a specific assembly.
             string typeNameOnly = typeName;
+            string? assemblyName = null;
             int commaIdx = typeName.IndexOf(',');
             if (commaIdx >= 0)
+            {
                 typeNameOnly = typeName.Substring(0, commaIdx).Trim();
 
+                int nextComma = typeName.IndexOf(',', commaIdx + 1);
+                assemblyName = (nextComma >= 0
+                    ? typeName.Substring(commaIdx + 1, nextComma - commaIdx - 1)
+                    : typeName.Substring(commaIdx + 1)).Trim();
+            }
+
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+            // Search the assembly the name records before any loose simple-name match, so a short name that
+            // also exists in another assembly binds to the right one. Matched on simple name only, since an
+            // assembly can keep its name while its version or load context changes.
+            if (!string.IsNullOrEmpty(assemblyName))
+            {
+                foreach (Assembly asm in assemblies)
+                {
+                    if (!string.Equals(asm.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    t = asm.GetType(typeNameOnly);
+                    if (t == null)
+                    {
+                        Type?[] declared;
+                        try { declared = asm.GetTypes(); }
+                        catch (ReflectionTypeLoadException ex) { declared = ex.Types; }
+                        t = declared.FirstOrDefault(type => type != null && type.Name.Equals(typeNameOnly, StringComparison.OrdinalIgnoreCase));
+                    }
+                    if (t != null)
+                        return t;
+                }
+            }
+
             foreach (Assembly asm in assemblies)
             {
                 // Try full name lookup (handles non-assembly-qualified names)

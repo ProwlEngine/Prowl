@@ -80,21 +80,20 @@ internal sealed class ArrayFormat : ISerializationFormat
                 for (int idx = 0; idx < array.Length; idx++)
                 {
                     var item = arrayTag[idx];
-
-                    // Special handling for object arrays - check if the element has its own type info
-                    if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+                    try
                     {
-                        var actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
-                        if (actualType != null)
-                        {
-                            // Deserialize using the specific type found in the element
-                            array.SetValue(Serializer.Deserialize(item, actualType, context), idx);
-                            continue;
-                        }
-                    }
+                        // Object arrays may carry per element type info.
+                        Type actual = elementType;
+                        if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+                            actual = ReflectionUtils.FindTypeByName(typeTag.StringValue) ?? elementType;
 
-                    // Regular deserialization
-                    array.SetValue(Serializer.Deserialize(item, elementType, context), idx);
+                        array.SetValue(Serializer.Deserialize(item, actual, context), idx);
+                    }
+                    catch (Exception ex)
+                    {
+                        // One bad element must not abandon the rest of the array; leave this slot at default.
+                        Serializer.Logger.Error($"Failed to deserialize array element {idx}", ex);
+                    }
                 }
                 return array;
             }
