@@ -114,6 +114,7 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
         float length = Length(v);
         return length > float.Epsilon ? v / length : defaultValue;
     }
+
     /// <summary>Returns the magnitude (length) of the given vector.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Length(Float2 v) => Maths.Sqrt(LengthSquared(v));
@@ -121,6 +122,10 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
     /// <summary>Returns the magnitude (length) of the given vector.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float LengthSquared(Float2 v) => v.X * v.X + v.Y * v.Y;
+
+    /// <summary>2D cross product (perp-dot): <c>a.X*b.Y - a.Y*b.X</c>, the signed area of the a,b parallelogram.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float Cross(Float2 a, Float2 b) => a.X * b.Y - a.Y * b.X;
 
     /// <summary>Returns the angle in radians between two vectors.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
