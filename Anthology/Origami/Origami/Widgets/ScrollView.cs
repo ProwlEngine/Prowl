@@ -258,18 +258,18 @@ public sealed class ScrollViewBuilder
             _paper.SetElementStorage(outerHandle, "scrollY", scrollY);
             _paper.SetElementStorage(outerHandle, "scrollX", scrollX);
 
-            // Content area: SelfDirected so we can offset it by (-scrollX, -scrollY).
+            float animScrollX = EaseScrollAxis(outerHandle, "X", scrollX);
+            float animScrollY = EaseScrollAxis(outerHandle, "Y", scrollY);
+
+            // Content area: SelfDirected so we can offset it by (-animScrollX, -animScrollY).
             // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
             // shrunk to viewport width minus the vertical scrollbar.
             float viewportW = _width - _padLeft - _padRight - reserveV;
             var content = _paper.Column($"{_id}_content")
                 .PositionType(PositionType.SelfDirected)
-                .Position(_padLeft - scrollX, _padTop - scrollY)
+                .Position(_padLeft - animScrollX, _padTop - animScrollY)
                 .Height(UnitValue.Auto)
                 .ColBetween(_colSpacing);
-            if (_smoothScroll)
-                content.Transition(GuiProp.Top, 0.33f, Easing.EaseOut)
-                       .Transition(GuiProp.Left, 0.33f, Easing.EaseOut);
 
             if (_horizontal) content.Width(UnitValue.Auto);
             else content.Width(viewportW);
@@ -284,7 +284,7 @@ public sealed class ScrollViewBuilder
             using (content.Enter())
             {
                 float viewportH = _height - _padTop - _padBottom - reserveH;
-                drawContents(new ScrollViewport(scrollX, scrollY, viewportW, viewportH));
+                drawContents(new ScrollViewport(animScrollX, animScrollY, viewportW, viewportH));
             }
 
             // ── Scrollbar thumbs ─────────────────────────────────────
@@ -427,6 +427,32 @@ public sealed class ScrollViewBuilder
             _paper.SetElementStorage(capturedHandle, "scrollX", ns);
         });
         thumb.OnDragEnd(e => _paper.SetElementStorage(capturedHandle, "barDrag", 0f));
+    }
+
+    private float EaseScrollAxis(ElementHandle outerHandle, string axis, float target)
+    {
+        if (!_smoothScroll) return target;
+
+        const float duration = 0.33f;
+        float prevTarget = _paper.GetElementStorage(outerHandle, $"animTarget{axis}", target);
+        float time = _paper.GetElementStorage(outerHandle, $"animTime{axis}", duration);
+        float start = _paper.GetElementStorage(outerHandle, $"animStart{axis}", target);
+
+        if (target != prevTarget)
+        {
+            start = _paper.GetElementStorage(outerHandle, $"animScroll{axis}", target);
+            time = 0f;
+        }
+
+        time += (float)_paper.DeltaTime;
+
+        float value = time >= duration ? target : start + (target - start) * Easing.EaseOut(time / duration);
+
+        _paper.SetElementStorage(outerHandle, $"animTarget{axis}", target);
+        _paper.SetElementStorage(outerHandle, $"animStart{axis}", start);
+        _paper.SetElementStorage(outerHandle, $"animTime{axis}", time);
+        _paper.SetElementStorage(outerHandle, $"animScroll{axis}", value);
+        return value;
     }
 
     private static float Clamp(float v, float lo, float hi) => MathF.Max(lo, MathF.Min(hi, v));
