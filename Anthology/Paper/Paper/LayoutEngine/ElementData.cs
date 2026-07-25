@@ -106,6 +106,7 @@ public struct ElementData
     public FontFile FontBoldItalic;
     public FontFile FontMono;
     public FontStyle FontStyle;
+    /// <summary> How text wraps within the element's bounds. Defaults to NoWrap. </summary>
     public TextWrapMode WrapMode;
     /// <summary>When true (single-line only), text wider than the element is cut and suffixed with
     /// an ellipsis that is guaranteed to fit.</summary>
