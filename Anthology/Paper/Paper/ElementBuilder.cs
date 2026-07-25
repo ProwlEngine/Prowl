@@ -1371,7 +1371,7 @@ namespace Prowl.PaperUI
         /// Internal state container for text input data to reduce storage operations.
         /// Supports both single-line and multi-line text input.
         /// </summary>
-        private struct TextInputState
+        public struct TextInputState
         {
             public string Value;
             public int CursorPosition;
