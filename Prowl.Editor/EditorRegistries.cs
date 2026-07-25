@@ -211,10 +211,6 @@ public static class EditorRegistries
             try { m.Invoke(null, null); }
             catch (Exception ex) { Debug.LogError($"[InitializeOnLoad] {m.DeclaringType?.Name}.{m.Name}: {ex.InnerException?.Message ?? ex.Message}"); }
         }
-
-        Debug.Log($"EditorRegistries: {_customEditorTypes.Count} custom editors, {_propertyEditorTypes.Count} property editors, " +
-                  $"{_assetEditorTypes.Count} asset editors, {_importersByName.Count} importers, " +
-                  $"{_thumbnailGenerators.Count} thumbnail generators, {_settingsEntries.Count} settings.");
     }
 
     #endregion
@@ -550,7 +546,6 @@ public static class EditorRegistries
                     if (data != null)
                     {
                         CopySettingsFields(data, entry.Instance);
-                        Debug.Log($"Loaded settings: {entry.Name}");
                         loaded = true;
                     }
                 }
