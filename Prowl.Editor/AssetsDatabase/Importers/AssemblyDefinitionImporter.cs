@@ -35,7 +35,7 @@ public class AssemblyDefinitionImporter : AssetImporter
             ScriptAssemblyManager.RequestRecompile();
 
         // Marker asset so the inspector resolves the editor by type (data stays in the file).
-        ctx.SetMainAsset(new AssemblyDefinitionAsset { Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath) });
+        ctx.SetMainAsset(new AssemblyDefinitionAsset { Name = ctx.FileName });
         return true;
     }
 

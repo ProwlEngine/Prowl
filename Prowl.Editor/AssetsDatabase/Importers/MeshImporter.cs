@@ -35,6 +35,7 @@ public class MeshImporter : AssetImporter
                 return false;
             }
 
+            mesh.Name = ctx.FileName;
             ctx.SetMainAsset(mesh);
 
             foreach (var dep in dependencies)
