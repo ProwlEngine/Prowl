@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Scribe;
@@ -72,12 +73,25 @@ public sealed class ChartBuilder
     private int _yTicks = 4;
     private bool _axes = true;
     private bool _legend = true;
+    private bool _legendShowValue = true;
     private float _legendFontSize = 11f;
     private float _axisFontSize = 11f;
     private OrigamiVariant _variant = OrigamiVariant.Primary;
     private Color? _backgroundColor;
     private float _yLabelMinWidth = 0f;
     private float _yLabelMaxWidth = float.MaxValue;
+    private float _padding = 0f;
+
+    private bool _sampleable;
+    private Color? _sampleLineColor;
+
+    private enum ChartGridMode { None, FixedCount, TickRatio }
+    private ChartGridMode _gridMode = ChartGridMode.None;
+    private int _gridCountX = -1;
+    private int _gridCountY = 4;
+    private float _gridRatioX = float.NaN;
+    private float _gridRatioY = 1f;
+    private Color? _gridLineColor;
 
     internal ChartBuilder(Paper paper, string id, OrigamiTheme theme)
     {
@@ -150,6 +164,9 @@ public sealed class ChartBuilder
     /// <summary>Draw a legend row (swatch + label + latest value) per series. Default on.</summary>
     public ChartBuilder Legend(bool show = true) { _legend = show; return this; }
 
+    /// <summary>Show the latest value readout next to each legend label. Default on.</summary>
+    public ChartBuilder LegendShowValue(bool show = true) { _legendShowValue = show; return this; }
+
     /// <summary>Font size, in pixels, of the legend row text (swatch labels and latest-value readout).
     /// Default 11.</summary>
     public ChartBuilder LegendFontSize(float size) { _legendFontSize = MathF.Max(1f, size); return this; }
@@ -160,6 +177,63 @@ public sealed class ChartBuilder
 
     /// <summary>Background colour of the chart panel. Default is none (transparent), matching bare widgets.</summary>
     public ChartBuilder BackgroundColor(Color color) { _backgroundColor = color; return this; }
+
+    /// <summary>Inset the chart contents by this many pixels on every side of the box. Default 0, so
+    /// every label/tick sits directly against the border.</summary>
+    public ChartBuilder Padding(float padding) { _padding = MathF.Max(0f, padding); return this; }
+
+    /// <summary>Let the user click or drag inside the plot area to sample a point. Draws a vertical
+    /// line at the sampled x index and a tooltip-style popup listing every series' value there.
+    /// Default off.</summary>
+    public ChartBuilder Sampleable(bool enable = true) { _sampleable = enable; return this; }
+
+    /// <summary>Colour of the sample line drawn by <see cref="Sampleable"/>. Default reads the theme's
+    /// ink colour, so most callers never need to set this.</summary>
+    public ChartBuilder SampleLineColor(Color color) { _sampleLineColor = color; return this; }
+
+    /// <summary>Colour of the grid lines drawn by <see cref="GridLines(int)"/> / <see cref="GridTickLines(float)"/>.
+    /// Default reads the theme's soft border colour, so most callers never need to set this.</summary>
+    public ChartBuilder GridLineColor(Color color) { _gridLineColor = color; return this; }
+
+    /// <summary>Draw a fixed grid with <paramref name="countY"/> horizontal divisions; the vertical
+    /// division count is derived automatically so grid cells come out square in pixel space.</summary>
+    public ChartBuilder GridLines(int countY)
+    {
+        _gridMode = ChartGridMode.FixedCount;
+        _gridCountY = Math.Max(1, countY);
+        _gridCountX = -1;
+        return this;
+    }
+
+    /// <summary>Draw a fixed grid with an explicit division count on each axis.</summary>
+    public ChartBuilder GridLines(int countX, int countY)
+    {
+        _gridMode = ChartGridMode.FixedCount;
+        _gridCountX = Math.Max(1, countX);
+        _gridCountY = Math.Max(1, countY);
+        return this;
+    }
+
+    /// <summary>Draw a grid that follows the y-axis ticks, with <paramref name="ratioY"/> grid lines
+    /// per y-tick (2 = twice as many lines, 0.5 = half as many). The x division count is derived
+    /// automatically so grid cells come out square in pixel space.</summary>
+    public ChartBuilder GridTickLines(float ratioY)
+    {
+        _gridMode = ChartGridMode.TickRatio;
+        _gridRatioY = MathF.Max(0.01f, ratioY);
+        _gridRatioX = float.NaN;
+        return this;
+    }
+
+    /// <summary>Draw a grid that follows both axes' ticks, with an explicit lines-per-tick ratio on
+    /// each axis (2 = twice as many lines, 0.5 = half as many).</summary>
+    public ChartBuilder GridTickLines(float ratioX, float ratioY)
+    {
+        _gridMode = ChartGridMode.TickRatio;
+        _gridRatioX = MathF.Max(0.01f, ratioX);
+        _gridRatioY = MathF.Max(0.01f, ratioY);
+        return this;
+    }
 
     /// <summary>Default single-series colour used when a series has no explicit colour of its own.</summary>
     public ChartBuilder Variant(OrigamiVariant v) { _variant = v; return this; }
@@ -175,6 +249,9 @@ public sealed class ChartBuilder
     private const float SwatchSize = 9f;
     private const float TextClipMargin = 4f;
 
+    private const string PlotInfoKey = "chart_plot";
+    private const string SampleIdxKey = "chart_sample";
+
     /// <summary>Render the chart.</summary>
     public void Show()
     {
@@ -189,12 +266,15 @@ public sealed class ChartBuilder
             resolved.Add(use);
         }
 
+        Color gridLineColor = _gridLineColor ?? _theme.BorderSoft;
+
         var snap = new Snapshot
         {
             Series = resolved,
             Font = _theme.Font,
             Axes = _axes,
             Legend = _legend,
+            LegendShowValue = _legendShowValue,
             LegendFs = _legendFontSize,
             AxisFs = _axisFontSize,
             YTicks = Math.Max(2, _yTicks),
@@ -213,19 +293,117 @@ public sealed class ChartBuilder
             LabelTextCol = ToC32(_theme.Ink.C500),
             YLabelMinWidth = _yLabelMinWidth,
             YLabelMaxWidth = _yLabelMaxWidth,
+            Padding = _padding,
+            Sampleable = _sampleable,
+            SampleLineCol = ToC32(_sampleLineColor ?? _theme.Ink.C500),
+            PopoverCol = ToC32(_theme.Popover),
+            BorderStrongCol = ToC32(_theme.BorderStrong),
+            Grid = _gridMode,
+            GridCountX = _gridCountX,
+            GridCountY = _gridCountY,
+            GridRatioX = _gridRatioX,
+            GridRatioY = _gridRatioY,
+            GridLineCol = _gridLineColor.HasValue ? ToC32(gridLineColor) : ToC32(gridLineColor, 0.6f),
         };
 
         var box = _paper.Box(_id)
             .Width(_width).Height(_height)
             .Rounded(_theme.Metrics.ContainerRounding)
             .BorderColor(_theme.BorderSoft).BorderWidth(1f)
-            .Clip().IsNotInteractable();
+            .Clip();
+        if (_sampleable) box.Cursor(PaperCursor.Crosshair); else box.IsNotInteractable();
         if (_backgroundColor.HasValue) box.BackgroundColor(_backgroundColor.Value);
 
         using (box.Enter())
         {
-            _paper.Draw((canvas, rect) => Paint(canvas, rect, in snap));
+            ElementHandle el = _paper.CurrentParent;
+
+            if (_sampleable)
+            {
+                box.OnHeld(e => UpdateSample(el, e));
+                box.OnRelease(e => ClearSample(el));
+            }
+
+            _paper.Draw((canvas, rect) =>
+            {
+                PlotInfo info = Paint(canvas, rect, in snap);
+                if (_sampleable)
+                {
+                    _paper.SetElementStorage(el, PlotInfoKey, info);
+
+                    // Drawn here, inside the box's own (clipped) draw commands, so the sample line
+                    // and per-series dots are scissored to the chart's bounds like the rest of the
+                    // plot. Only the tooltip popup below needs to escape that clip.
+                    int sampleIdx = _paper.GetElementStorage(el, SampleIdxKey, -1);
+                    if (sampleIdx >= 0 && sampleIdx < info.MaxN)
+                        PaintSampleMarkers(canvas, in snap, rect, in info, sampleIdx);
+                }
+            });
+
+            // The sample popup renders on its own zero-size, Topmost-layer child rather than as
+            // part of the box's own draw commands above: the box has Clip() enabled, so anything
+            // painted inside its own render commands is scissored to its bounds. A higher-layer
+            // element's rendering is deferred past the normal pass (see Paper's layer breakout),
+            // so it paints without inheriting that scissor - letting the popup overflow onto
+            // neighbouring charts/panels instead of being cut off at this chart's edge. Positioned
+            // at (0,0) self-directed within `box` with no padding of its own, its LayoutRect origin
+            // lands exactly on the box's, so PlotInfo's box-relative coordinates still apply as-is.
+            if (_sampleable)
+            {
+                var overlay = _paper.Box(_id + "_sample")
+                    .PositionType(PositionType.SelfDirected)
+                    .Position(0, 0)
+                    .Width(0).Height(0)
+                    .IsNotInteractable()
+                    .Layer(Layer.Topmost);
+
+                using (overlay.Enter())
+                {
+                    _paper.Draw((canvas, r) =>
+                    {
+                        int sampleIdx = _paper.GetElementStorage(el, SampleIdxKey, -1);
+                        PlotInfo info = _paper.GetElementStorage<PlotInfo>(el, PlotInfoKey, default);
+                        if (sampleIdx >= 0 && sampleIdx < info.MaxN)
+                            PaintSamplePopup(canvas, in snap, r.Min.X, r.Min.Y, in info, sampleIdx, _legendFontSize, _paper);
+                    });
+                }
+            }
         }
+    }
+
+    private void UpdateSample(ElementHandle el, ElementEvent e)
+    {
+        // OnHeld keeps firing for the pressed element even once the pointer strays outside its
+        // bounds (e.g. dragging past the chart's edge) - hide the sampler in that case instead of
+        // clamping the reading to the nearest edge, so it disappears the moment the mouse leaves.
+        if (e.RelativePosition.X < 0f || e.RelativePosition.X > e.ElementRect.Size.X ||
+            e.RelativePosition.Y < 0f || e.RelativePosition.Y > e.ElementRect.Size.Y)
+        {
+            ClearSample(el);
+            return;
+        }
+
+        PlotInfo info = _paper.GetElementStorage<PlotInfo>(el, PlotInfoKey, default);
+        if (info.MaxN <= 0 || info.PlotR <= info.PlotL)
+        {
+            ClearSample(el);
+            return;
+        }
+
+        float rel = (float)e.RelativePosition.X;
+        float clamped = Math.Clamp(rel, info.PlotL, info.PlotR);
+        float frac = (clamped - info.PlotL) / (info.PlotR - info.PlotL);
+        int idx = info.MaxN <= 1 ? 0 : (int)Math.Round(frac * (info.MaxN - 1));
+        idx = Math.Clamp(idx, 0, info.MaxN - 1);
+        _paper.SetElementStorage(el, SampleIdxKey, idx);
+    }
+
+    private void ClearSample(ElementHandle el) => _paper.SetElementStorage(el, SampleIdxKey, -1);
+
+    private struct PlotInfo
+    {
+        public float PlotL, PlotT, PlotR, PlotB;
+        public int MaxN;
     }
 
     private struct Snapshot
@@ -233,7 +411,7 @@ public sealed class ChartBuilder
         public List<ChartSeries> Series;
         public float Width, Height;
         public FontFile? Font;
-        public bool Axes, Legend, HasYRange, IncludeZero;
+        public bool Axes, Legend, LegendShowValue, HasYRange, IncludeZero;
         public float LegendFs, AxisFs;
         public int YTicks;
         public string XLabel, YLabel;
@@ -242,15 +420,23 @@ public sealed class ChartBuilder
         public Func<int, string>? XTickFormatter;
         public Color32 GridCol, AxisCol, TickTextCol, LabelTextCol;
         public float YLabelMinWidth, YLabelMaxWidth;
+        public float Padding;
+        public bool Sampleable;
+        public Color32 SampleLineCol, PopoverCol, BorderStrongCol;
+        public ChartGridMode Grid;
+        public int GridCountX, GridCountY;
+        public float GridRatioX, GridRatioY;
+        public Color32 GridLineCol;
     }
 
-    private static void Paint(Canvas canvas, Rect rect, in Snapshot sIn)
+    private static PlotInfo Paint(Canvas canvas, Rect rect, in Snapshot sIn)
     {
         Snapshot s = sIn;
-        s.Width = (float)rect.Size.X;
-        s.Height = (float)rect.Size.Y;
+        float pad = Math.Min(s.Padding, MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * 0.5f);
+        s.Width = (float)rect.Size.X - pad * 2f;
+        s.Height = (float)rect.Size.Y - pad * 2f;
 
-        float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
+        float ox = (float)rect.Min.X + pad, oy = (float)rect.Min.Y + pad;
         float legendFs = s.LegendFs;
         float axisFs = s.AxisFs;
         float legendLineH = 13f;
@@ -308,10 +494,17 @@ public sealed class ChartBuilder
         float plotW = plotR - plotL;
         float plotH = plotB - plotT;
 
-        if (plotW < 4f || plotH < 4f) { canvas.RestoreState(); return; }
+        if (plotW < 4f || plotH < 4f) { canvas.RestoreState(); return default; }
 
         double ySpan = yMax - yMin;
         if (ySpan <= 0d) ySpan = 1d;
+
+        int maxN = 0;
+        foreach (var series in s.Series)
+            if (series.Values != null) maxN = Math.Max(maxN, series.Values.Count);
+
+        if (s.Grid != ChartGridMode.None)
+            DrawGrid(canvas, in s, plotL, plotT, plotR, plotB, plotW, plotH, ySpan, tickSpacing, maxN);
 
         if (s.Axes)
         {
@@ -320,12 +513,15 @@ public sealed class ChartBuilder
                 float ty = plotB - (float)((v - yMin) / ySpan) * plotH;
                 if (ty < plotT - 0.5f || ty > plotB + 0.5f) continue;
 
-                canvas.BeginPath();
-                canvas.MoveTo(plotL, ty);
-                canvas.LineTo(plotR, ty);
-                canvas.SetStrokeColor(s.GridCol);
-                canvas.SetStrokeWidth(1f);
-                canvas.Stroke();
+                if (s.Grid == ChartGridMode.None)
+                {
+                    canvas.BeginPath();
+                    canvas.MoveTo(plotL, ty);
+                    canvas.LineTo(plotR, ty);
+                    canvas.SetStrokeColor(s.GridCol);
+                    canvas.SetStrokeWidth(1f);
+                    canvas.Stroke();
+                }
 
                 canvas.BeginPath();
                 canvas.MoveTo(plotL - TickLen, ty);
@@ -347,10 +543,6 @@ public sealed class ChartBuilder
                 }
             }
         }
-
-        int maxN = 0;
-        foreach (var series in s.Series)
-            if (series.Values != null) maxN = Math.Max(maxN, series.Values.Count);
 
         if (s.Axes)
         {
@@ -410,6 +602,15 @@ public sealed class ChartBuilder
             PaintLegend(canvas, in s, ox, oy, legendFs, legendLineH);
 
         canvas.RestoreState();
+
+        return new PlotInfo
+        {
+            PlotL = plotL - (float)rect.Min.X,
+            PlotT = plotT - (float)rect.Min.Y,
+            PlotR = plotR - (float)rect.Min.X,
+            PlotB = plotB - (float)rect.Min.Y,
+            MaxN = maxN,
+        };
     }
 
     private static void PaintSeries(Canvas canvas, ChartSeries series, float plotL, float plotT, float plotW, float plotH, float plotB,
@@ -479,7 +680,7 @@ public sealed class ChartBuilder
 
         foreach (var series in s.Series)
         {
-            string latest = (series.Values != null && series.Values.Count > 0)
+            string latest = (s.LegendShowValue && series.Values != null && series.Values.Count > 0)
                 ? Format(in s, series.Values[series.Values.Count - 1]) : "";
             string txt = latest.Length > 0 ? series.Label + "  " + latest : series.Label;
 
@@ -494,6 +695,187 @@ public sealed class ChartBuilder
 
             canvas.DrawText(txt, x + SwatchSize + 5f, y + (lineH - (float)tw.Y) * 0.5f, s.LabelTextCol, fs, s.Font);
             x += entryW;
+        }
+    }
+
+    private static void DrawGrid(Canvas canvas, in Snapshot s, float plotL, float plotT, float plotR, float plotB,
+        float plotW, float plotH, double ySpan, double tickSpacing, int maxN)
+    {
+        float spacingY, spacingX;
+
+        if (s.Grid == ChartGridMode.FixedCount)
+        {
+            spacingY = plotH / s.GridCountY;
+            spacingX = s.GridCountX > 0 ? plotW / s.GridCountX : spacingY;
+        }
+        else
+        {
+            float yTickPx = tickSpacing > 0d ? (float)(tickSpacing / ySpan) * plotH : plotH;
+            spacingY = yTickPx / s.GridRatioY;
+
+            if (!float.IsNaN(s.GridRatioX))
+            {
+                int xTicks = Math.Min(6, Math.Max(2, maxN));
+                float xTickPx = plotW / Math.Max(1, xTicks - 1);
+                spacingX = xTickPx / s.GridRatioX;
+            }
+            else
+            {
+                spacingX = spacingY;
+            }
+        }
+
+        spacingX = MathF.Max(1f, spacingX);
+        spacingY = MathF.Max(1f, spacingY);
+
+        canvas.SetStrokeColor(s.GridLineCol);
+        canvas.SetStrokeWidth(1f);
+
+        int guard = 0;
+        for (float x = plotL; x <= plotR + 0.5f && guard < 1000; x += spacingX, guard++)
+        {
+            canvas.BeginPath();
+            canvas.MoveTo(x, plotT);
+            canvas.LineTo(x, plotB);
+            canvas.Stroke();
+        }
+
+        guard = 0;
+        for (float y = plotT; y <= plotB + 0.5f && guard < 1000; y += spacingY, guard++)
+        {
+            canvas.BeginPath();
+            canvas.MoveTo(plotL, y);
+            canvas.LineTo(plotR, y);
+            canvas.Stroke();
+        }
+    }
+
+    /// <summary>Draws the vertical sample line and per-series crosshair dots for
+    /// <see cref="ChartBuilder.Sampleable"/>. Called from within the box's own (clipped) draw
+    /// commands (see <see cref="Show"/>), so these markers are scissored to the chart's bounds like
+    /// the rest of the plot - only the tooltip popup (<see cref="PaintSamplePopup"/>) escapes that
+    /// clip. <paramref name="rect"/> is the box's own layout rect, matching what <see cref="Paint"/>
+    /// was given, so it can recover absolute plot coordinates from <paramref name="info"/>'s
+    /// box-relative plot bounds.</summary>
+    private static void PaintSampleMarkers(Canvas canvas, in Snapshot s, Rect rect, in PlotInfo info, int sampleIdx)
+    {
+        if (info.MaxN <= 0) return;
+
+        float plotL = (float)rect.Min.X + info.PlotL;
+        float plotT = (float)rect.Min.Y + info.PlotT;
+        float plotR = (float)rect.Min.X + info.PlotR;
+        float plotB = (float)rect.Min.Y + info.PlotB;
+        float plotW = plotR - plotL;
+        int maxN = info.MaxN;
+
+        ComputeYRange(in s, out double yMin, out double yMax, out _);
+        double ySpan = yMax - yMin;
+        if (ySpan <= 0d) ySpan = 1d;
+
+        float lx = XPos(plotL, plotW, sampleIdx, maxN);
+
+        canvas.BeginPath();
+        canvas.MoveTo(lx, plotT);
+        canvas.LineTo(lx, plotB);
+        canvas.SetStrokeColor(s.SampleLineCol);
+        canvas.SetStrokeWidth(1f);
+        canvas.Stroke();
+
+        foreach (var series in s.Series)
+        {
+            if (series.Values == null || sampleIdx >= series.Values.Count) continue;
+            float py = plotB - (float)((series.Values[sampleIdx] - yMin) / ySpan) * (plotB - plotT);
+            py = Math.Clamp(py, plotT, plotB);
+            canvas.BeginPath();
+            canvas.Circle(lx, py, 3f);
+            canvas.SetFillColor((Color32)series.Color);
+            canvas.Fill();
+        }
+    }
+
+    /// <summary>Draws the tooltip-style value popup for <see cref="ChartBuilder.Sampleable"/>. Called
+    /// from the box's Topmost-layer overlay child (see <see cref="Show"/>), not the box's own clipped
+    /// draw commands, so the popup can overflow this chart's bounds instead of being clipped at its
+    /// edge. <paramref name="boxOx"/>/<paramref name="boxOy"/> are the overlay's own layout origin,
+    /// which lands exactly on the box's origin (see Show) - added back to <paramref name="info"/>'s
+    /// box-relative plot bounds to recover the same absolute plot coordinates <see cref="Paint"/> used.</summary>
+    private static void PaintSamplePopup(Canvas canvas, in Snapshot s, float boxOx, float boxOy, in PlotInfo info, int sampleIdx, float fs, Paper paper)
+    {
+        if (s.Font == null || info.MaxN <= 0) return;
+
+        float plotL = boxOx + info.PlotL;
+        float plotT = boxOy + info.PlotT;
+        float plotR = boxOx + info.PlotR;
+        float plotW = plotR - plotL;
+        int maxN = info.MaxN;
+
+        float lineH = MathF.Max(9f, (float)canvas.MeasureText("0", fs, s.Font).Y);
+
+        float lx = XPos(plotL, plotW, sampleIdx, maxN);
+
+        string header = s.XTickFormatter != null ? (s.XTickFormatter(sampleIdx) ?? "") : $"Index {sampleIdx}";
+
+        const float padX = 9f, padY = 6f, swatchGap = 6f, rowGap = 2f, anchorGap = 8f;
+        float rowW = 0f;
+        var headerSize = header.Length > 0 ? canvas.MeasureText(header, fs, s.Font) : default;
+        if (header.Length > 0) rowW = MathF.Max(rowW, (float)headerSize.X);
+
+        var rows = new List<(Color32 Color, string Text)>();
+        foreach (var series in s.Series)
+        {
+            if (series.Values == null || sampleIdx >= series.Values.Count) continue;
+            string text = $"{series.Label}: {Format(in s, series.Values[sampleIdx])}";
+            rows.Add((series.Color, text));
+            var tw = canvas.MeasureText(text, fs, s.Font);
+            rowW = MathF.Max(rowW, SwatchSize + swatchGap + (float)tw.X);
+        }
+
+        if (header.Length == 0 && rows.Count == 0) return;
+
+        float popW = rowW + padX * 2f;
+        int rowCount = rows.Count + (header.Length > 0 ? 1 : 0);
+        float popH = padY * 2f + rowCount * lineH + Math.Max(0, rowCount - 1) * rowGap;
+
+        // Anchor the popup's top-left corner to the top of the sample line, nudged right so the
+        // popup doesn't sit directly over the line it's reporting on. Flip to the line's left if
+        // that would run the popup off the right edge of the screen; either way, clamp fully
+        // on-screen last (the popup floats above everything, so this chart's own bounds no longer
+        // constrain it, but the screen still should).
+        float screenW = (float)paper.ScreenRect.Size.X;
+        float screenH = (float)paper.ScreenRect.Size.Y;
+
+        float popX = lx + anchorGap;
+        if (popX + popW > screenW - 2f)
+            popX = lx - anchorGap - popW;
+        popX = Math.Clamp(popX, 2f, MathF.Max(2f, screenW - popW - 2f));
+
+        float popY = Math.Clamp(plotT, 2f, MathF.Max(2f, screenH - popH - 2f));
+
+        canvas.BeginPath();
+        canvas.RoundedRect(popX, popY, popW, popH, 6f, 6f, 6f, 6f);
+        canvas.SetFillColor(s.PopoverCol);
+        canvas.Fill();
+        canvas.SetStrokeColor(s.BorderStrongCol);
+        canvas.SetStrokeWidth(1f);
+        canvas.Stroke();
+
+        float rowY = popY + padY;
+        if (header.Length > 0)
+        {
+            canvas.DrawText(header, popX + padX, rowY, s.LabelTextCol, fs, s.Font);
+            rowY += lineH + rowGap;
+        }
+
+        foreach (var (color, text) in rows)
+        {
+            float swatchY = rowY + (lineH - SwatchSize) * 0.5f;
+            canvas.BeginPath();
+            canvas.RoundedRect(popX + padX, swatchY, SwatchSize, SwatchSize, 2f, 2f, 2f, 2f);
+            canvas.SetFillColor(color);
+            canvas.Fill();
+
+            canvas.DrawText(text, popX + padX + SwatchSize + swatchGap, rowY, s.LabelTextCol, fs, s.Font);
+            rowY += lineH + rowGap;
         }
     }
 
