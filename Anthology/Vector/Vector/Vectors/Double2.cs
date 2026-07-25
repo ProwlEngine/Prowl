@@ -106,6 +106,13 @@ namespace Prowl.Vector
             return Zero;
         }
 
+        /// <summary>Normalizes the vector, returning <paramref name="defaultValue"/> when it is too small to normalize.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Double2 NormalizeSafe(Double2 v, Double2 defaultValue)
+        {
+            double length = Length(v);
+            return length > double.Epsilon ? v / length : defaultValue;
+        }
         /// <summary>Returns the magnitude (length) of the given vector.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Length(Double2 v) => Maths.Sqrt(LengthSquared(v));

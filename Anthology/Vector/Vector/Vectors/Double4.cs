@@ -129,6 +129,14 @@ public partial struct Double4 : IEquatable<Double4>, IFormattable
         return Zero;
     }
 
+    /// <summary>Normalizes the vector, returning <paramref name="defaultValue"/> when it is too small to normalize.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Double4 NormalizeSafe(Double4 v, Double4 defaultValue)
+    {
+        double length = Length(v);
+        return length > double.Epsilon ? v / length : defaultValue;
+    }
+
     /// <summary>Returns the magnitude (length) of the given vector.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double Length(Double4 v) => Maths.Sqrt(LengthSquared(v));
