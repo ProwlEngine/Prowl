@@ -173,7 +173,7 @@ internal static class FbxSkinMapper
                 // Read TransformLink (bone bind-pose world) and Transform (mesh bind-pose world).
                 Float4x4 transformLink = ReadMatrix(cluster.Node, "TransformLink") ?? Float4x4.Identity;
                 Float4x4 transform = meshBindWorldOverride ?? ReadMatrix(cluster.Node, "Transform") ?? Float4x4.Identity;
-                Float4x4 invBind = Multiply(Inverse4x4(transformLink), transform);
+                Float4x4 invBind = Inverse4x4(transformLink) * transform;
 
                 iSkin.BoneNodes.Add(boneNode);
                 iSkin.InverseBindPoses.Add(invBind);
@@ -327,7 +327,7 @@ internal static class FbxSkinMapper
             // If this node is clustered, override its local TRS from the bind world.
             if (boneBindWorld.TryGetValue(node, out var bindWorld))
             {
-                Float4x4 boneLocal = Multiply(Inverse4x4(parentWorld), bindWorld);
+                Float4x4 boneLocal = Inverse4x4(parentWorld) * bindWorld;
                 Prowl.Clay.PostProcess.SceneBakerHelpers.DecomposeMatrix(boneLocal, out var t, out var r, out var s);
                 node.LocalPosition = t;
                 node.LocalRotation = r;
@@ -337,17 +337,17 @@ internal static class FbxSkinMapper
             else if (node.Parent is not null)
             {
                 // Non-clustered node: keep its current TRS but record its world for descendants.
-                var local = Prowl.Clay.PostProcess.SceneBakerHelpers.ComposeTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
-                resolvedWorld[node] = Multiply(parentWorld, local);
+                var local = Float4x4.CreateTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
+                resolvedWorld[node] = parentWorld * local;
             }
         }
     }
 
     private static Float4x4 ComputeCurrentWorldFromTRS(IntermediateNode node)
     {
-        Float4x4 local = Prowl.Clay.PostProcess.SceneBakerHelpers.ComposeTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
+        Float4x4 local = Float4x4.CreateTRS(node.LocalPosition, node.LocalRotation, node.LocalScale);
         if (node.Parent is null) return local;
-        return Multiply(ComputeCurrentWorldFromTRS(node.Parent), local);
+        return ComputeCurrentWorldFromTRS(node.Parent) * local;
     }
 
     private static Float4x4? ReadMatrix(FbxNode node, string childName)
@@ -386,54 +386,7 @@ internal static class FbxSkinMapper
         mesh.MaxInfluencesPerVertex = newInfluences;
     }
 
-    private static Float4x4 Multiply(Float4x4 a, Float4x4 b) =>
-        Prowl.Clay.PostProcess.SceneBakerHelpers.Mul(a, b);
-
-    private static Float4x4 Inverse4x4(Float4x4 m)
-    {
-        // General 4x4 inverse via cofactor expansion (same form used in OptimizeMeshesStep).
-        float a00 = m.c0.X, a01 = m.c1.X, a02 = m.c2.X, a03 = m.c3.X;
-        float a10 = m.c0.Y, a11 = m.c1.Y, a12 = m.c2.Y, a13 = m.c3.Y;
-        float a20 = m.c0.Z, a21 = m.c1.Z, a22 = m.c2.Z, a23 = m.c3.Z;
-        float a30 = m.c0.W, a31 = m.c1.W, a32 = m.c2.W, a33 = m.c3.W;
-
-        float b00 = a00 * a11 - a01 * a10;
-        float b01 = a00 * a12 - a02 * a10;
-        float b02 = a00 * a13 - a03 * a10;
-        float b03 = a01 * a12 - a02 * a11;
-        float b04 = a01 * a13 - a03 * a11;
-        float b05 = a02 * a13 - a03 * a12;
-        float b06 = a20 * a31 - a21 * a30;
-        float b07 = a20 * a32 - a22 * a30;
-        float b08 = a20 * a33 - a23 * a30;
-        float b09 = a21 * a32 - a22 * a31;
-        float b10 = a21 * a33 - a23 * a31;
-        float b11 = a22 * a33 - a23 * a32;
-
-        float det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-        if (MathF.Abs(det) < 1e-12f) return Float4x4.Identity;
-        float invDet = 1f / det;
-
-        return new Float4x4(
-            new Float4(
-                (a11 * b11 - a12 * b10 + a13 * b09) * invDet,
-                (-a10 * b11 + a12 * b08 - a13 * b07) * invDet,
-                (a10 * b10 - a11 * b08 + a13 * b06) * invDet,
-                (-a10 * b09 + a11 * b07 - a12 * b06) * invDet),
-            new Float4(
-                (-a01 * b11 + a02 * b10 - a03 * b09) * invDet,
-                (a00 * b11 - a02 * b08 + a03 * b07) * invDet,
-                (-a00 * b10 + a01 * b08 - a03 * b06) * invDet,
-                (a00 * b09 - a01 * b07 + a02 * b06) * invDet),
-            new Float4(
-                (a31 * b05 - a32 * b04 + a33 * b03) * invDet,
-                (-a30 * b05 + a32 * b02 - a33 * b01) * invDet,
-                (a30 * b04 - a31 * b02 + a33 * b00) * invDet,
-                (-a30 * b03 + a31 * b01 - a32 * b00) * invDet),
-            new Float4(
-                (-a21 * b05 + a22 * b04 - a23 * b03) * invDet,
-                (a20 * b05 - a22 * b02 + a23 * b01) * invDet,
-                (-a20 * b04 + a21 * b02 - a23 * b00) * invDet,
-                (a20 * b03 - a21 * b01 + a22 * b00) * invDet));
-    }
+    // Delegates the general 4x4 inverse to Prowl.Vector, keeping Clay's Identity fallback for a singular
+    // matrix (Prowl.Vector.Invert yields a NaN matrix there, which we don't want to skin with).
+    private static Float4x4 Inverse4x4(Float4x4 m) => Float4x4.Invert(m, out Float4x4 inv) ? inv : Float4x4.Identity;
 }

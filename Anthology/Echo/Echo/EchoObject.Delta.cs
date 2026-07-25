@@ -88,7 +88,8 @@ public sealed partial class EchoObject
         // Find added or changed keys
         foreach (var (key, toValue) in toTags)
         {
-            string childPath = string.IsNullOrEmpty(path) ? key : $"{path}/{key}";
+            string escapedKey = EscapePathSegment(key);
+            string childPath = string.IsNullOrEmpty(path) ? escapedKey : $"{path}/{escapedKey}";
 
             if (!fromTags.ContainsKey(key))
             {
@@ -280,7 +281,7 @@ public sealed partial class EchoObject
             }
             else
             {
-                var parent = target.Find(parentPath);
+                var parent = NavigatePath(target, parentPath);
                 if (parent == null)
                     throw new InvalidOperationException($"Parent path not found: {parentPath}");
 
@@ -311,7 +312,7 @@ public sealed partial class EchoObject
 
     private static void ApplyAddCompoundTag(EchoObject target, string path, string key, EchoObject value)
     {
-        var compound = string.IsNullOrEmpty(path) ? target : target.Find(path);
+        var compound = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
         if (compound == null)
             throw new InvalidOperationException($"Path not found: {path}");
         if (compound.TagType != EchoType.Compound)
@@ -335,7 +336,7 @@ public sealed partial class EchoObject
 
     private static void ApplyRemoveCompoundTag(EchoObject target, string path, string key)
     {
-        var compound = string.IsNullOrEmpty(path) ? target : target.Find(path);
+        var compound = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
         if (compound == null)
             throw new InvalidOperationException($"Path not found: {path}");
         if (compound.TagType != EchoType.Compound)
@@ -352,7 +353,7 @@ public sealed partial class EchoObject
 
     private static void ApplyAddListItem(EchoObject target, string path, int index, EchoObject value)
     {
-        var list = string.IsNullOrEmpty(path) ? target : target.Find(path);
+        var list = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
         if (list == null)
             throw new InvalidOperationException($"Path not found: {path}");
         if (list.TagType != EchoType.List)
@@ -363,7 +364,7 @@ public sealed partial class EchoObject
 
     private static void ApplyRemoveListItem(EchoObject target, string path, int index)
     {
-        var list = string.IsNullOrEmpty(path) ? target : target.Find(path);
+        var list = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
         if (list == null)
             throw new InvalidOperationException($"Path not found: {path}");
         if (list.TagType != EchoType.List)
@@ -381,6 +382,39 @@ public sealed partial class EchoObject
     private static string GetLastSegment(string path)
     {
         int lastSlash = path.LastIndexOf('/');
-        return lastSlash == -1 ? path : path.Substring(lastSlash + 1);
+        return UnescapePathSegment(lastSlash == -1 ? path : path.Substring(lastSlash + 1));
+    }
+
+    // Path segments are joined by '/', so a key that itself contains '/' (or the escape char '~') is
+    // escaped JSON-Pointer style. The '/' separator between segments stays literal.
+    private static string EscapePathSegment(string segment) => segment.Replace("~", "~0").Replace("/", "~1");
+    private static string UnescapePathSegment(string segment) => segment.Replace("~1", "/").Replace("~0", "~");
+
+    // Walks an escaped '/'-joined path from root, unescaping each segment. Replaces EchoObject.Find here
+    // because Find splits on raw '/' and would mis-split a key containing one.
+    private static EchoObject? NavigatePath(EchoObject root, string escapedPath)
+    {
+        if (string.IsNullOrEmpty(escapedPath))
+            return root;
+
+        EchoObject? current = root;
+        foreach (string segment in escapedPath.Split('/'))
+        {
+            if (current == null) return null;
+            string key = UnescapePathSegment(segment);
+
+            if (current.TagType == EchoType.Compound)
+            {
+                if (!current.Tags.TryGetValue(key, out current)) return null;
+            }
+            else if (current.TagType == EchoType.List && int.TryParse(key, out int idx))
+            {
+                var list = current.List;
+                if (idx < 0 || idx >= list.Count) return null;
+                current = list[idx];
+            }
+            else return null;
+        }
+        return current;
     }
 }

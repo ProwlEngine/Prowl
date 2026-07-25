@@ -187,7 +187,10 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
                 var bs = m.BlendShapes[b];
                 for (int f = 0; f < bs.Frames.Count; f++)
                 {
-                    hc.Add(bs.Frames[f].DeltaPositions[i]);
+                    var frame = bs.Frames[f];
+                    hc.Add(frame.DeltaPositions[i]);
+                    if (frame.DeltaNormals is { } dn) hc.Add(dn[i]);
+                    if (frame.DeltaTangents is { } dt) hc.Add(dt[i]);
                 }
             }
         }
@@ -220,8 +223,10 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
                 var shape = m.BlendShapes[bs];
                 for (int f = 0; f < shape.Frames.Count; f++)
                 {
-                    if (!shape.Frames[f].DeltaPositions[a].Equals(shape.Frames[f].DeltaPositions[b]))
-                        return false;
+                    var frame = shape.Frames[f];
+                    if (!frame.DeltaPositions[a].Equals(frame.DeltaPositions[b])) return false;
+                    if (frame.DeltaNormals is { } dn && !dn[a].Equals(dn[b])) return false;
+                    if (frame.DeltaTangents is { } dt && !dt[a].Equals(dt[b])) return false;
                 }
             }
         }

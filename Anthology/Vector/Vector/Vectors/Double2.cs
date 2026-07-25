@@ -106,6 +106,14 @@ namespace Prowl.Vector
             return Zero;
         }
 
+        /// <summary>Normalizes the vector, returning <paramref name="defaultValue"/> when it is too small to normalize.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Double2 NormalizeSafe(Double2 v, Double2 defaultValue)
+        {
+            double length = Length(v);
+            return length > double.Epsilon ? v / length : defaultValue;
+        }
+
         /// <summary>Returns the magnitude (length) of the given vector.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Length(Double2 v) => Maths.Sqrt(LengthSquared(v));
@@ -113,6 +121,10 @@ namespace Prowl.Vector
         /// <summary>Returns the magnitude (length) of the given vector.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double LengthSquared(Double2 v) => v.X * v.X + v.Y * v.Y;
+
+        /// <summary>2D cross product (perp-dot): <c>a.X*b.Y - a.Y*b.X</c>, the signed area of the a,b parallelogram.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Cross(Double2 a, Double2 b) => a.X * b.Y - a.Y * b.X;
 
         /// <summary>Returns the angle in radians between two vectors.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

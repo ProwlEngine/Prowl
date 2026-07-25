@@ -198,7 +198,7 @@ internal static class FbxMeshMapper
                         expansionVertIdx[dst] = meshVi;
                     }
 
-                    mesh.Positions.Add(sourceVertices[fbxV]);
+                    mesh.Positions.Add((uint)fbxV < (uint)vertexCount ? sourceVertices[fbxV] : default);
                     if (unpackedNormals is not null)
                     {
                         mesh.Normals ??= new List<Float3>();

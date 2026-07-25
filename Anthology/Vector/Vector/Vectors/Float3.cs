@@ -118,6 +118,14 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
         return Zero;
     }
 
+    /// <summary>Normalizes the vector, returning <paramref name="defaultValue"/> when it is too small to normalize.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Float3 NormalizeSafe(Float3 v, Float3 defaultValue)
+    {
+        float length = Length(v);
+        return length > float.Epsilon ? v / length : defaultValue;
+    }
+
     /// <summary>Returns the magnitude (length) of the given vector.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Length(Float3 v) => Maths.Sqrt(LengthSquared(v));

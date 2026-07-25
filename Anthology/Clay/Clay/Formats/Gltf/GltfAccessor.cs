@@ -223,6 +223,8 @@ internal sealed class GltfAccessorReader
             int idxOff = sparse.Indices.ByteOffset + i * idxCompBytes;
             uint logicalIndex = ReadComponentAsUInt(idxData, idxOff, sparse.Indices.ComponentType);
             int valOff = sparse.Values.ByteOffset + i * valuesElementBytes;
+            if ((long)logicalIndex * componentsPerElement + componentsPerElement > dst.Length)
+                throw new ImportException($"Sparse accessor index {logicalIndex} is out of range for accessor of count {parent.Count}.");
             int dstOff = (int)logicalIndex * componentsPerElement;
             for (int c = 0; c < componentsPerElement; c++)
                 dst[dstOff + c] = ReadComponentAsFloat(valData, valOff + c * valCompBytes, parent.ComponentType, parent.Normalized);
@@ -243,6 +245,8 @@ internal sealed class GltfAccessorReader
             int idxOff = sparse.Indices.ByteOffset + i * idxCompBytes;
             uint logicalIndex = ReadComponentAsUInt(idxData, idxOff, sparse.Indices.ComponentType);
             int valOff = sparse.Values.ByteOffset + i * valCompBytes;
+            if (logicalIndex >= dst.Length)
+                throw new ImportException($"Sparse accessor index {logicalIndex} is out of range for accessor of count {parent.Count}.");
             dst[(int)logicalIndex] = ReadComponentAsUInt(valData, valOff, parent.ComponentType);
         }
     }

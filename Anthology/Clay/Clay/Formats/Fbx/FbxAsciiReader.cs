@@ -287,14 +287,18 @@ internal sealed class FbxAsciiReader
         // re-derive them here from its Properties list since ParseElement already populated it).
         // We pack them into a single double[] (or int[]) property on `outer` to match binary form.
         bool allInt = true;
+        bool needsLong = false;
         var data = new double[inner.Properties.Count];
         for (int i = 0; i < inner.Properties.Count; i++)
         {
             var p = inner.Properties[i];
             switch (p.Type)
             {
-                case FbxPropertyType.Int32:
                 case FbxPropertyType.Int64:
+                    needsLong = true;
+                    data[i] = p.AsDouble();
+                    break;
+                case FbxPropertyType.Int32:
                 case FbxPropertyType.Int16:
                     data[i] = p.AsDouble();
                     break;
@@ -310,7 +314,14 @@ internal sealed class FbxAsciiReader
             }
         }
 
-        if (allInt)
+        if (allInt && needsLong)
+        {
+            // At least one element overflows int32 (e.g. KTime ticks); preserve full precision.
+            var longs = new long[inner.Properties.Count];
+            for (int i = 0; i < longs.Length; i++) longs[i] = inner.Properties[i].AsLong();
+            outer.Properties.Add(FbxProperty.FromLongArray(longs));
+        }
+        else if (allInt)
         {
             var ints = new int[data.Length];
             for (int i = 0; i < data.Length; i++) ints[i] = (int)data[i];

@@ -2391,5 +2391,14 @@ public class Delta_Tests
         Assert.Equal(2, result[1].IntValue);
     }
 
+    [Fact]
+    public void TestDelta_KeyContainingSlash_Applies()
+    {
+        var from = EchoObject.NewCompound(); from.Add("a/b", new EchoObject(1));
+        var to = EchoObject.NewCompound(); to.Add("a/b", new EchoObject(2));
+        var applied = EchoObject.ApplyDelta(from, EchoObject.CreateDelta(from, to));
+        Assert.Equal(2, applied["a/b"].IntValue);
+    }
+
     #endregion
 }

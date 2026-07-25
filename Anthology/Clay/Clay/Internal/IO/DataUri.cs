@@ -50,7 +50,7 @@ internal static class DataUri
         {
             data = base64
                 ? Convert.FromBase64String(payload)
-                : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(payload));
+                : PercentDecode(payload);
         }
         catch (FormatException ex)
         {
@@ -58,5 +58,29 @@ internal static class DataUri
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Decodes a percent-encoded payload into raw bytes. Each <c>%XX</c> becomes a single byte and
+    /// every other character is taken as its literal byte value, so binary payloads survive intact.
+    /// </summary>
+    private static byte[] PercentDecode(string payload)
+    {
+        var bytes = new List<byte>(payload.Length);
+        for (int i = 0; i < payload.Length; i++)
+        {
+            char c = payload[i];
+            if (c == '%' && i + 2 < payload.Length
+                && Uri.IsHexDigit(payload[i + 1]) && Uri.IsHexDigit(payload[i + 2]))
+            {
+                bytes.Add((byte)(Uri.FromHex(payload[i + 1]) * 16 + Uri.FromHex(payload[i + 2])));
+                i += 2;
+            }
+            else
+            {
+                bytes.Add((byte)c);
+            }
+        }
+        return bytes.ToArray();
     }
 }

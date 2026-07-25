@@ -363,6 +363,15 @@ public sealed class EchoTextFormat : IFileFormat
         if (parser.Token[0] is '"' or '\'')
             return new EchoObject(parser.ParseQuotedStringValue());
 
+        // NaN/Infinity are written as a letter literal plus an F/D suffix; route them to the number path
+        // before the letter-first string fallback would misread them as a string.
+        if (parser.Token[^1] is 'F' or 'D')
+        {
+            var body = parser.Token[..^1];
+            if (body.SequenceEqual("NaN") || body.SequenceEqual("Infinity") || body.SequenceEqual("-Infinity"))
+                return ReadNumberTag(parser);
+        }
+
         if (char.IsLetter(parser.Token[0]))
             return new EchoObject(new string(parser.Token));
 

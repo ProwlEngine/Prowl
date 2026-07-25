@@ -166,7 +166,7 @@ public sealed class AnimationCurve
         int b = i1 * stride;
         var q0 = new Quaternion(Values[a], Values[a + 1], Values[a + 2], Values[a + 3]);
         var q1 = new Quaternion(Values[b], Values[b + 1], Values[b + 2], Values[b + 3]);
-        return Slerp(q0, q1, u);
+        return Quaternion.Slerp(q0, q1, u);
     }
 
     private Quaternion HermiteQuatNormalized(int i0, int i1, float u)
@@ -197,36 +197,5 @@ public sealed class AnimationCurve
         float h01 = -2f * u3 + 3f * u2;
         float h11 = u3 - u2;
         return h00 * v0 + h10 * dt * outTan + h01 * v1 + h11 * dt * inTan;
-    }
-
-    private static Quaternion Slerp(Quaternion a, Quaternion b, float t)
-    {
-        float dot = a.X * b.X + a.Y * b.Y + a.Z * b.Z + a.W * b.W;
-        if (dot < 0f)
-        {
-            b = new Quaternion(-b.X, -b.Y, -b.Z, -b.W);
-            dot = -dot;
-        }
-
-        if (dot > 0.9995f)
-        {
-            // Nearly parallel - use linear and renormalize to avoid divide-by-zero.
-            float x = a.X + (b.X - a.X) * t;
-            float y = a.Y + (b.Y - a.Y) * t;
-            float z = a.Z + (b.Z - a.Z) * t;
-            float w = a.W + (b.W - a.W) * t;
-            float len = MathF.Sqrt(x * x + y * y + z * z + w * w);
-            return new Quaternion(x / len, y / len, z / len, w / len);
-        }
-
-        float theta = MathF.Acos(dot);
-        float sinTheta = MathF.Sin(theta);
-        float s0 = MathF.Sin((1f - t) * theta) / sinTheta;
-        float s1 = MathF.Sin(t * theta) / sinTheta;
-        return new Quaternion(
-            s0 * a.X + s1 * b.X,
-            s0 * a.Y + s1 * b.Y,
-            s0 * a.Z + s1 * b.Z,
-            s0 * a.W + s1 * b.W);
     }
 }

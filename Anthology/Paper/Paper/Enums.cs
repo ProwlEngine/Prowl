@@ -64,6 +64,7 @@ public enum Units
     Pixels,
 }
 
+/// <summary> Defines horizontal and vertical alignment of text within its bounding area. </summary>
 public enum TextAlignment
 {
     Left,
@@ -95,9 +96,7 @@ public enum Winding
     ClockWise = 2,
 }
 
-/// <summary>
-/// Defines fill rules for vector paths.
-/// </summary>
+/// <summary> Specifies whether a vector path represents a solid region or a hole. </summary>
 public enum Solidity
 {
     /// <summary>
@@ -181,6 +180,7 @@ public enum LineCap
 //}
 
 
+/// <summary> Defines the type of gradient used for filling shapes and backgrounds. </summary>
 public enum GradientType
 {
     None = 0,
@@ -189,13 +189,7 @@ public enum GradientType
     Box = 3
 }
 
-/// <summary>
-/// Named layer constants. Layers are <see cref="int"/>s — pass any value to
-/// <c>ElementBuilder.Layer(int)</c>; higher numbers render later (on top of) lower numbers
-/// and intercept input first. The named constants are spaced by 100 so callers can wedge
-/// custom layers between them (e.g. <c>Layer.Overlay + 10</c> for "above modals but below
-/// tooltips") without renumbering.
-/// </summary>
+/// <summary> Named layer constants. Layers are ints; pass any value to ElementBuilder.Layer(int). Higher numbers render later (on top of) lower numbers and intercept input first. The named constants are spaced by 100 so callers can wedge custom layers between them (e.g. Layer.Overlay + 10 for "above modals but below tooltips") without renumbering. </summary>
 public static class Layer
 {
     /// <summary>Default layer (0). Renders first, hit-tested last.</summary>
@@ -250,7 +244,7 @@ public enum PaperCursor
     /// <summary>I-beam, for editable/selectable text.</summary>
     Text,
 
-    /// <summary>Crosshair.</summary>
+    /// <summary> Crosshair cursor, for precise selection or measurement (image editors, drawing tools). </summary>
     Crosshair,
 
     /// <summary>Horizontal resize (left-right arrows), for column splitters / east-west edges.</summary>

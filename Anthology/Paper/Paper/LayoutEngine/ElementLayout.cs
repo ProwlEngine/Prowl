@@ -651,7 +651,7 @@ namespace Prowl.PaperUI.LayoutEngine
                     foreach (var item in crossAxis)
                     {
                         if (item.Frozen) continue;
-                        // Freeze over-stretched items
+                        // Freeze items violating in the direction of the total
                         if (totalViolation > 0f)
                             item.Frozen = item.Violation > 0f;
                         else if (totalViolation < 0f)

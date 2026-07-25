@@ -7,6 +7,7 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.Events;
 
+/// <summary> Defines the stage or type of a click interaction: Press, Release, Click, DoubleClick, RightClick, or Held. </summary>
 public enum ClickPhase
 {
     Click,
@@ -14,11 +15,14 @@ public enum ClickPhase
     Release,
     DoubleClick,
     RightClick,
+    /// <summary> The phase during which a mouse button is continuously held down after the initial press. </summary>
     Held
 }
 
+/// <summary> Represents a mouse click event raised by a UI element, including the button and click phase. </summary>
 public class ClickEvent : ElementEvent
 {
+    /// <summary> Gets the mouse button that triggered this event. </summary>
     public PaperMouseBtn Button { get; }
 
     /// <summary>
@@ -26,6 +30,7 @@ public class ClickEvent : ElementEvent
     /// </summary>
     public ClickPhase Phase { get; }
 
+    /// <summary> Initializes a new click event with the given source element, element rectangle, pointer position, mouse button, and click phase. </summary>
     public ClickEvent(ElementHandle source, Rect elementRect, Float2 pointerPos, PaperMouseBtn button, ClickPhase phase = ClickPhase.Click)
         : base(source, elementRect, pointerPos)
     {

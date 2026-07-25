@@ -1966,16 +1966,16 @@ namespace Prowl.Quill
 
                 // Core fan triangle.
                 _indices.Add(baseIndex);
-                _indices.Add(inner0);
                 _indices.Add(inner1);
+                _indices.Add(inner0);
 
                 // Fringe ribbon quad (inner0 -> outer0 -> outer1 -> inner1).
                 _indices.Add(inner0);
+                _indices.Add(outer1);
                 _indices.Add(outer0);
-                _indices.Add(outer1);
                 _indices.Add(inner0);
-                _indices.Add(outer1);
                 _indices.Add(inner1);
+                _indices.Add(outer1);
             }
 
             AddTriangleCount(n * 3);
@@ -2286,15 +2286,15 @@ namespace Prowl.Quill
             AddVertex(new Vertex(o3, fringe, color));
 
             // Solid core (2 triangles).
-            _indices.Add(b); _indices.Add(b + 1); _indices.Add(b + 2);
-            _indices.Add(b); _indices.Add(b + 2); _indices.Add(b + 3);
+            _indices.Add(b); _indices.Add(b + 2); _indices.Add(b + 1);
+            _indices.Add(b); _indices.Add(b + 3); _indices.Add(b + 2);
             // Fringe frame (4 edges, 2 triangles each).
             for (uint e = 0; e < 4; e++)
             {
                 uint nx = (e + 1) & 3;
                 uint inE = b + e, inN = b + nx, outE = b + 4 + e, outN = b + 4 + nx;
-                _indices.Add(inE); _indices.Add(outE); _indices.Add(outN);
-                _indices.Add(inE); _indices.Add(outN); _indices.Add(inN);
+                _indices.Add(inE); _indices.Add(outN); _indices.Add(outE);
+                _indices.Add(inE); _indices.Add(inN); _indices.Add(outN);
             }
 
             AddTriangleCount(10);
@@ -2416,9 +2416,9 @@ namespace Prowl.Quill
                 uint inner1 = b + 1 + (uint)(next * 2);
                 uint outer1 = b + 2 + (uint)(next * 2);
 
-                _indices.Add(b); _indices.Add(inner0); _indices.Add(inner1);          // core fan
-                _indices.Add(inner0); _indices.Add(outer0); _indices.Add(outer1);     // fringe
-                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(inner1);
+                _indices.Add(b); _indices.Add(inner1); _indices.Add(inner0);          // core fan
+                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(outer0);     // fringe
+                _indices.Add(inner0); _indices.Add(inner1); _indices.Add(outer1);
             }
 
             AddTriangleCount(ringCount * 3);
@@ -2486,9 +2486,9 @@ namespace Prowl.Quill
                 uint inner1 = b + 1 + (uint)(next * 2);
                 uint outer1 = b + 2 + (uint)(next * 2);
 
-                _indices.Add(b); _indices.Add(inner0); _indices.Add(inner1);          // core fan
-                _indices.Add(inner0); _indices.Add(outer0); _indices.Add(outer1);     // fringe
-                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(inner1);
+                _indices.Add(b); _indices.Add(inner1); _indices.Add(inner0);          // core fan
+                _indices.Add(inner0); _indices.Add(outer1); _indices.Add(outer0);     // fringe
+                _indices.Add(inner0); _indices.Add(inner1); _indices.Add(outer1);
             }
 
             AddTriangleCount(segments * 3);

@@ -479,7 +479,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
     /// <summary> Returns the value of this tag, cast as a ulong. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ULongTag. </exception>
-    public ulong ULongValue { get => Convert.ToUInt64(Value); set => SetValue(value); }
+    public ulong ULongValue { get => Value is long l ? unchecked((ulong)l) : Convert.ToUInt64(Value); set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a float. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than FloatTag. </exception>

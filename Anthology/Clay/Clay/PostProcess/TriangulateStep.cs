@@ -69,11 +69,11 @@ internal sealed class TriangulateStep : IPostProcess
         Float3 d = mesh.Positions[q[3]];
 
         // Compute cross products of consecutive edges; sign-consistency around the loop means convex.
-        var n0 = Cross(b - a, c - b);
-        var n1 = Cross(c - b, d - c);
-        var n2 = Cross(d - c, a - d);
-        var n3 = Cross(a - d, b - a);
-        return Dot(n0, n1) > 0f && Dot(n1, n2) > 0f && Dot(n2, n3) > 0f;
+        var n0 = Float3.Cross(b - a, c - b);
+        var n1 = Float3.Cross(c - b, d - c);
+        var n2 = Float3.Cross(d - c, a - d);
+        var n3 = Float3.Cross(a - d, b - a);
+        return Float3.Dot(n0, n1) > 0f && Float3.Dot(n1, n2) > 0f && Float3.Dot(n2, n3) > 0f;
     }
 
     private static void EarClip(IntermediateMesh mesh, int[] poly, List<IntermediateFace> output, ImportContext ctx)
@@ -223,8 +223,6 @@ internal sealed class TriangulateStep : IPostProcess
         return !(negative && positive);
     }
 
-    private static Float3 Cross(Float3 a, Float3 b) =>
-        new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
-    private static float Dot(Float3 a, Float3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+    // 2D perp-dot (signed area); no direct Prowl.Vector equivalent, so kept local.
     private static float Cross2(Float2 a, Float2 b) => a.X * b.Y - a.Y * b.X;
 }

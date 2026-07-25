@@ -156,12 +156,42 @@ internal sealed class FbxProperty
         throw new InvalidCastException($"FBX property of type {Type} is not int-array-convertible.");
     }
 
+    /// <summary>
+    /// Returns the property as a flat long array. Handles every numeric scalar/array type.
+    /// </summary>
+    public long[] AsLongArray()
+    {
+        if (LongArrayValue is { } l) return l;
+        if (IntArrayValue is { } i)
+        {
+            var r = new long[i.Length];
+            for (int j = 0; j < i.Length; j++) r[j] = i[j];
+            return r;
+        }
+        if (FloatArrayValue is { } f)
+        {
+            var r = new long[f.Length];
+            for (int j = 0; j < f.Length; j++) r[j] = (long)f[j];
+            return r;
+        }
+        if (DoubleArrayValue is { } d)
+        {
+            var r = new long[d.Length];
+            for (int j = 0; j < d.Length; j++) r[j] = (long)d[j];
+            return r;
+        }
+        if (Type == FbxPropertyType.Int16 || Type == FbxPropertyType.Int32 || Type == FbxPropertyType.Int64)
+            return new[] { IntegerValue };
+        throw new InvalidCastException($"FBX property of type {Type} is not long-array-convertible.");
+    }
+
     // Factory helpers used by the ASCII reader (binary path constructs FbxProperty inline).
     public static FbxProperty FromInt(int v) => new() { Type = FbxPropertyType.Int32, IntegerValue = v };
     public static FbxProperty FromLong(long v) => new() { Type = FbxPropertyType.Int64, IntegerValue = v };
     public static FbxProperty FromDouble(double v) => new() { Type = FbxPropertyType.Double, DoubleValue = v };
     public static FbxProperty FromString(string v) => new() { Type = FbxPropertyType.String, StringValue = v };
     public static FbxProperty FromIntArray(int[] v) => new() { Type = FbxPropertyType.ArrayInt32, IntArrayValue = v };
+    public static FbxProperty FromLongArray(long[] v) => new() { Type = FbxPropertyType.ArrayInt64, LongArrayValue = v };
     public static FbxProperty FromDoubleArray(double[] v) => new() { Type = FbxPropertyType.ArrayDouble, DoubleArrayValue = v };
 }
 

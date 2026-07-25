@@ -55,8 +55,12 @@ internal sealed class TupleFormat : ISerializationFormat
         {
             object? itemValue = null;
 
+            // The 8th generic argument is TRest, whose backing member is named "Rest", not "Item8".
+            // Reading it lets TupleFormat recurse into the nested tuple, covering tuples of 8+ elements.
+            string memberName = i == 7 ? "Rest" : $"Item{i + 1}";
+
             // Try field first (ValueTuple)
-            var field = type.GetField($"Item{i + 1}");
+            var field = type.GetField(memberName);
             if (field != null)
             {
                 itemValue = field.GetValue(value);
@@ -64,7 +68,7 @@ internal sealed class TupleFormat : ISerializationFormat
             else
             {
                 // Try property (classic Tuple)
-                var property = type.GetProperty($"Item{i + 1}");
+                var property = type.GetProperty(memberName);
                 if (property != null)
                 {
                     itemValue = property.GetValue(value);

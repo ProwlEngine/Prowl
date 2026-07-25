@@ -41,12 +41,13 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
                 NormaliseInPlace(mesh.VertexWeights, vertexCount, oldInfluences);
                 continue;
             }
+            int readCount = oldInfluences;
             if (oldInfluences > MaxInfluencesCap)
             {
                 context.Log.Warning(
                     $"Mesh '{mesh.Name}' has {oldInfluences} bone influences per vertex which exceeds the analyzer cap of {MaxInfluencesCap}; truncating influences before top-N selection.",
                     Name);
-                oldInfluences = MaxInfluencesCap;
+                readCount = MaxInfluencesCap;
             }
 
             int[] newJoints = new int[vertexCount * limit];
@@ -54,9 +55,10 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
 
             for (int v = 0; v < vertexCount; v++)
             {
+                // Source arrays keep their original stride even when we only read the first readCount.
                 int srcBase = v * oldInfluences;
 
-                for (int k = 0; k < oldInfluences; k++)
+                for (int k = 0; k < readCount; k++)
                     scratch[k] = (mesh.VertexJoints[srcBase + k], mesh.VertexWeights[srcBase + k]);
 
                 // Top-N selection: simple O(N*K) for small N - N is at most 8 in practice.
@@ -65,7 +67,7 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
                 {
                     int bestK = -1;
                     float bestW = -1f;
-                    for (int k = 0; k < oldInfluences; k++)
+                    for (int k = 0; k < readCount; k++)
                     {
                         if (scratch[k].weight > bestW)
                         {

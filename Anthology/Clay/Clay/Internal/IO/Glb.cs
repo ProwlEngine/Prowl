@@ -60,6 +60,7 @@ internal static class Glb
         if (jsonType != JsonChunkType)
             throw new ImportException("GLB first chunk must be a JSON chunk.");
 
+        EnsureFits(stream, jsonLen);
         byte[] jsonBytes = new byte[jsonLen];
         ReadExact(stream, jsonBytes);
 
@@ -75,6 +76,7 @@ internal static class Glb
             {
                 if (binBytes is not null)
                     throw new ImportException("GLB contains more than one BIN chunk.");
+                EnsureFits(stream, len);
                 binBytes = new byte[len];
                 ReadExact(stream, binBytes);
             }
@@ -86,6 +88,14 @@ internal static class Glb
         }
 
         return new GlbContent(jsonBytes, binBytes);
+    }
+
+    /// <summary>Rejects an attacker-controlled chunk length that can't fit in the remaining stream.</summary>
+    private static void EnsureFits(Stream stream, uint length)
+    {
+        long remaining = stream.Length - stream.Position;
+        if (length > remaining)
+            throw new ImportException($"GLB chunk length {length} exceeds the remaining {remaining} byte(s).");
     }
 
     private static void ReadExact(Stream stream, Span<byte> dst)

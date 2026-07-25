@@ -14,11 +14,14 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
+    /// <summary> Provides a fluent-style API for setting visual style properties on UI elements. The type parameter enables chained calls that return the concrete setter type. </summary>
     public interface IStyleSetter<T> where T : IStyleSetter<T>
     {
+        /// <summary> Sets the style property identified by property to the given value and returns the setter for chaining. </summary>
         T SetStyleProperty(GuiProp property, object value);
     }
 
+    /// <summary> Base class for fluent style-builder types. Provides chainable methods that set UI properties on the wrapped element and return the derived type T so callers can continue the builder pattern. </summary>
     public abstract class StyleSetterBase<T> : IStyleSetter<T> where T : StyleSetterBase<T>
     {
         public ElementHandle _handle { get; protected set; }
@@ -28,6 +31,7 @@ namespace Prowl.PaperUI
             _handle = element;
         }
 
+        /// <summary> Sets the given style property to the specified value on the element. This is the base method that all typed convenience setters delegate to; returns the setter for fluent chaining. </summary>
         public abstract T SetStyleProperty(GuiProp property, object value);
 
         // Shared implementation methods
@@ -41,7 +45,7 @@ namespace Prowl.PaperUI
         public T BackgroundLinearGradient(float x1, float y1, float x2, float y2, Color color1, Color color2) =>
             SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Linear(x1, y1, x2, y2, color1, color2));
 
-        /// <summary>Sets a radial gradient background gradient.</summary>
+        /// <summary> Sets a radial gradient background on the element. </summary>
         public T BackgroundRadialGradient(float centerX, float centerY, float innerRadius, float outerRadius, Color innerColor, Color outerColor) =>
             SetStyleProperty(GuiProp.BackgroundGradient, Gradient.Radial(centerX, centerY, innerRadius, outerRadius, innerColor, outerColor));
 
@@ -202,7 +206,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public T Margin(in UnitValue all) => Margin(all, all, all, all);
 
-        /// <inheritdoc cref="Margin(in UnitValue)"/>
+        /// <summary> Sets the horizontal and vertical outer spacing of the element. </summary>
         public T Margin(in UnitValue horizontal, in UnitValue vertical) =>
             Margin(horizontal, horizontal, vertical, vertical);
 
@@ -263,13 +267,7 @@ namespace Prowl.PaperUI
         /// <inheritdoc cref="ChildLeft(in UnitValue)"/>
         public T ChildBottom() => ChildBottom(UnitValue.StretchOne);
 
-        /// <summary>
-        /// Default spacing inserted between two adjacent children in a column-direction container, but only
-        /// when both adjacent margins (the upper child's bottom and the lower child's top) are still
-        /// <see cref="UnitValue.Auto"/>. The no-argument overload defaults to <see cref="UnitValue.StretchOne"/>
-        /// for space-between-style alignment; pass an explicit pixel value for a fixed gap. See
-        /// <see cref="ChildLeft(in UnitValue)"/> for the full alignment recipe table.
-        /// </summary>
+        /// <summary> Sets the spacing inserted between two adjacent children in a column-direction container, used when the upper child's bottom and lower child's top margins are both still auto. </summary>
         public T RowBetween(in UnitValue rowBetween) => SetStyleProperty(GuiProp.RowBetween, rowBetween);
 
         /// <inheritdoc cref="RowBetween(in UnitValue)"/>
@@ -286,17 +284,13 @@ namespace Prowl.PaperUI
         /// <inheritdoc cref="ColBetween(in UnitValue)"/>
         public T ColBetween() => ColBetween(UnitValue.StretchOne);
 
-        /// <summary>
-        /// Inner padding on the left side of the parent's content area > unconditional inset that always
-        /// applies. Children are positioned starting after this inset, stretch competition fights only over
-        /// the remaining inner space, and an auto-sized parent grows to include this thickness in its outer size.
-        /// </summary>
+        /// <summary> Sets the inner padding on the left side of the element. </summary>
         public T PaddingLeft(in UnitValue paddingLeft) => SetStyleProperty(GuiProp.PaddingLeft, paddingLeft);
 
         /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
         public T PaddingRight(in UnitValue paddingRight) => SetStyleProperty(GuiProp.PaddingRight, paddingRight);
 
-        /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
+        /// <summary> Sets the inner padding on the top side of the element's content area. </summary>
         public T PaddingTop(in UnitValue paddingTop) => SetStyleProperty(GuiProp.PaddingTop, paddingTop);
 
         /// <inheritdoc cref="PaddingLeft(in UnitValue)"/>
@@ -416,9 +410,7 @@ namespace Prowl.PaperUI
         /// <param name="easing">Optional easing function</param>
         public T Transition(GuiProp property, float duration, Func<float, float> easing = null) => SetTransition(property, duration, easing);
 
-        /// <summary>
-        /// Abstract method to handle transition setting - implemented by derived classes
-        /// </summary>
+        /// <summary> Configures a property transition with the specified duration and easing function. </summary>
         protected abstract T SetTransition(GuiProp property, float duration, Func<float, float> easing);
 
         #endregion
@@ -471,6 +463,7 @@ namespace Prowl.PaperUI
             _isActive = isActive;
         }
 
+        /// <summary> Applies the predefined styles from the given template to the element, but only when this state-driven style is active (the condition is met). Returns this instance for fluent chaining. </summary>
         public StateDrivenStyle Style(StyleTemplate style)
         {
             if (_isActive)
@@ -479,6 +472,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary> Applies the named styles to the element if the current state condition is active. </summary>
         public StateDrivenStyle Style(params string[] names)
         {
             if (_isActive)
@@ -488,6 +482,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary> Conditionally applies the named style templates to the element when condition is true. </summary>
         public StateDrivenStyle StyleIf(bool condition, params string[] names)
         {
             if (condition)
@@ -646,6 +641,7 @@ namespace Prowl.PaperUI
             _paper = paper;
         }
 
+        /// <summary> Sets the style property identified by the given GuiProp to the specified value. Returns this builder for chaining. </summary>
         public override ElementBuilder SetStyleProperty(GuiProp property, object value)
         {
             _paper.SetStyleProperty(_handle.Data.ID, property, value);
@@ -688,12 +684,14 @@ namespace Prowl.PaperUI
             return this;
         }
 
+        /// <summary> Applies all style properties from the specified template to this element. </summary>
         public ElementBuilder Style(StyleTemplate style)
         {
             style.ApplyTo(_handle);
             return this;
         }
 
+        /// <summary> Applies one or more named styles to the element. </summary>
         public ElementBuilder Style(params string[] names)
         {
             foreach (var name in names)
@@ -792,7 +790,7 @@ namespace Prowl.PaperUI
         public ElementBuilder OnClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnClick((e) => handler(capturedValue, e));
 
-        /// <summary>Sets a callback that runs when the element is dragged.</summary>
+        /// <summary> Sets a callback that runs when the user starts dragging the element. </summary>
         public ElementBuilder OnDragStart(Action<DragEvent> handler)
         {
             _handle.Data.OnDragStart += handler;
@@ -803,7 +801,7 @@ namespace Prowl.PaperUI
         public ElementBuilder OnDragStart<T>(T capturedValue, Action<T, DragEvent> handler) =>
             OnDragStart((e) => handler(capturedValue, e));
 
-        /// <summary>Sets a callback that runs when the element is dragged.</summary>
+        /// <summary> Sets a callback that runs while the element is being dragged. </summary>
         public ElementBuilder OnDragging(Action<DragEvent> handler)
         {
             _handle.Data.OnDragging += handler;
@@ -836,14 +834,14 @@ namespace Prowl.PaperUI
         public ElementBuilder OnRelease<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnRelease((e) => handler(capturedValue, e));
 
-        /// <summary>Sets a callback that runs when the element is float-clicked.</summary>
+        /// <summary> Sets a callback that runs when the element is double-clicked. </summary>
         public ElementBuilder OnDoubleClick(Action<ClickEvent> handler)
         {
             _handle.Data.OnDoubleClick += handler;
             return this;
         }
 
-        /// <summary>Sets a callback that runs when the element is float-clicked, with a captured value.</summary>
+        /// <summary> Sets a callback that runs when the element is double-clicked, with a captured value. </summary>
         public ElementBuilder OnDoubleClick<T>(T capturedValue, Action<T, ClickEvent> handler) =>
             OnDoubleClick((e) => handler(capturedValue, e));
 
@@ -1091,9 +1089,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>Sets the text content of the element.</summary>
-        /// <param name="text">The text to display</param>
-        /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
+        /// <summary> Sets the plain text content of the element with the specified font for rendering. Does not parse markdown or rich text. </summary>
         public ElementBuilder Text(string text, FontFile font)
         {
             _handle.Data.IsMarkdown = false;
@@ -1102,9 +1098,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>Sets the text content of the element.</summary>
-        /// <param name="text">The text to display</param>
-        /// <param name="useMarkdown">Whether to parse the text as Markdown</param>
+        /// <summary> Sets the text content of the element, parsing it as Markdown with custom font faces for bold, italic, bold-italic, and monospace styles. </summary>
         public ElementBuilder Markdown(string text, FontFile font, FontFile bold, FontFile italic, FontFile boldItalic, FontFile mono)
         {
             _handle.Data.IsMarkdown = true;
@@ -1173,16 +1167,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>
-        /// Flex-wrap the parent-directed children: when they overrun this element's main axis they
-        /// flow onto a new line, and the element auto-grows on the cross axis to fit every line.
-        /// Use the container's <c>RowBetween</c>/<c>ColBetween</c> as the gap between items and lines.
-        /// <para>
-        /// Children should use a fixed or auto CROSS size. A child that is Stretch/Grow on the cross
-        /// axis spans the full container height and overlaps the lines below it (it is sized before
-        /// lines are formed); this is warned about once at runtime.
-        /// </para>
-        /// </summary>
+        /// <summary> Flex-wrap the parent-directed children: when they overrun this element's main axis they flow onto a new line, and the element auto-grows on the cross axis to fit every line. Use the container's RowBetween/ColBetween as the gap between items and lines. Children should use a fixed or auto CROSS size. A child that is Stretch/Grow on the cross axis spans the full container height and overlaps the lines below it (it is sized before lines are formed); this is warned about once at runtime. </summary>
         public ElementBuilder WrapContent(bool wrap = true)
         {
             _handle.Data.ContentWrap = wrap;
@@ -1331,13 +1316,7 @@ namespace Prowl.PaperUI
             /// <summary>When true, all text is selected when the field gains focus.</summary>
             public bool SelectAllOnFocus;
 
-            /// <summary>
-            /// When non-null, every visible character is replaced with this glyph for layout
-            /// and rendering — the underlying value is unchanged. Used by password fields.
-            /// Newlines are preserved unmasked so multi-line cursor math still works (though
-            /// password fields are typically single-line). Clipboard copy / cut is suppressed
-            /// while this is set so masked content can't be exfiltrated through Ctrl+C / X.
-            /// </summary>
+            /// <summary> When non-null, every visible character is replaced with this glyph for layout and rendering; the underlying value is unchanged. Used by password fields. </summary>
             public char? MaskChar;
 
             /// <summary>
@@ -1352,12 +1331,7 @@ namespace Prowl.PaperUI
             /// </summary>
             public string ForceValue;
 
-            /// <summary>
-            /// Companion to <see cref="ForceValue"/>: when true and a force-update lands while
-            /// focused, the new text is fully selected so the user's next keystroke replaces
-            /// it. When the field isn't focused this flag is ignored (no selection on a
-            /// non-focused field).
-            /// </summary>
+            /// <summary> Companion to ForceValue: when true and a force-update lands while focused, the new text is fully selected so the user's next keystroke replaces it. When the field isn't focused this flag is ignored (no selection on a non-focused field). </summary>
             public bool ForceSelectAll;
 
             /// <summary>Creates default text input settings</summary>
@@ -1397,7 +1371,7 @@ namespace Prowl.PaperUI
         /// Internal state container for text input data to reduce storage operations.
         /// Supports both single-line and multi-line text input.
         /// </summary>
-        private struct TextInputState
+        public struct TextInputState
         {
             public string Value;
             public int CursorPosition;
@@ -1909,8 +1883,7 @@ namespace Prowl.PaperUI
                 case PaperKey.Enter when state.IsMultiLine:
                     if (state.HasSelection) state.DeleteSelection();
 
-                    // Check max length
-                    // Check max length and read-only
+                    // Check read-only and max length
                     if (!settings.ReadOnly && (settings.MaxLength == 0 || state.Value.Length < settings.MaxLength))
                     {
                         state.Value = state.Value.Insert(state.CursorPosition, "\n");
@@ -2068,7 +2041,7 @@ namespace Prowl.PaperUI
                     var textLayout = _paper.CreateLayout(GetDisplayValue(currentState.Value, settings), textSettings);
 
                     // textSettings.PixelSize is in logical-with-DPI units (CreateTextLayoutSettings
-                    // pre-scales). textLayout.Size is pixel-space — divide by FramebufferScale to
+                    // pre-scales). textLayout.Size is pixel-space - divide by FramebufferScale to
                     // reach logical-with-DPI for comparison.
                     float invFb = 1.0f / _paper.Canvas.FramebufferScale;
                     return (width ?? textSettings.PixelSize,
@@ -2133,7 +2106,7 @@ namespace Prowl.PaperUI
                 SaveTextInputState(currentState);
             });
 
-            // Handle float-click for word selection
+            // Handle double-click for word selection
             OnDoubleClick((ClickEvent e) =>
             {
                 var currentState = LoadTextInputState(value, isMultiLine);
@@ -2143,8 +2116,7 @@ namespace Prowl.PaperUI
                     CalculateTextPosition(GetDisplayValue(currentState.Value, settings), settings, isMultiLine, clickPos, clickPosY),
                     0, currentState.Value.Length);
 
-                // Select the word at the clicked position. Word boundaries are computed against the
-                // real string — masked text has no real word boundaries (it's all the same glyph).
+                // Select the word at the clicked position. Word boundaries are computed against the real string - masked text has no real word boundaries (it's all the same glyph).
                 var (wordStart, wordEnd) = FindWordBoundaries(currentState.Value, clickPosition);
                 if (wordStart != wordEnd)
                 {

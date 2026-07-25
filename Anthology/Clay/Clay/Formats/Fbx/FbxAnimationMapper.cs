@@ -198,7 +198,7 @@ internal static class FbxAnimationMapper
         if (keyTimeNode.Properties.Count == 0 || keyValueNode.Properties.Count == 0) return null;
 
         // KeyTime is i64 KTime ticks; KeyValueFloat is f32 per key.
-        long[] times = keyTimeNode.Properties[0].LongArrayValue ?? Array.Empty<long>();
+        long[] times = keyTimeNode.Properties[0].AsLongArray();
         float[] values = keyValueNode.Properties[0].FloatArrayValue ?? keyValueNode.Properties[0].AsFloatArray();
         if (times.Length == 0 || values.Length == 0) return null;
         int len = Math.Min(times.Length, values.Length);
@@ -316,8 +316,8 @@ internal static class FbxAnimationMapper
             float ry = (curveY?.Sample(t) ?? 0f) * MathF.PI / 180f;
             float rz = (curveZ?.Sample(t) ?? 0f) * MathF.PI / 180f;
             var q = EulerToQuat(rx, ry, rz);
-            if (needPre) q = MulQuat(preRotation, q);
-            if (needPost) q = MulQuat(q, postInverse);
+            if (needPre) q = preRotation * q;
+            if (needPost) q = q * postInverse;
             binding.Values.Add(q.X); binding.Values.Add(q.Y); binding.Values.Add(q.Z); binding.Values.Add(q.W);
         }
         clip.Bindings.Add(binding);
@@ -327,11 +327,6 @@ internal static class FbxAnimationMapper
     private static bool IsIdentity(Quaternion q) =>
         MathF.Abs(q.X) < 1e-7f && MathF.Abs(q.Y) < 1e-7f && MathF.Abs(q.Z) < 1e-7f && MathF.Abs(q.W - 1f) < 1e-7f;
 
-    private static Quaternion MulQuat(Quaternion a, Quaternion b) => new(
-        a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
-        a.W * b.Y - a.X * b.Z + a.Y * b.W + a.Z * b.X,
-        a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
-        a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z);
 
     private static Prowl.Vector.Quaternion EulerToQuat(float rx, float ry, float rz)
     {

@@ -12,7 +12,9 @@ public struct BoxShadow
 {
     public float OffsetX;
     public float OffsetY;
+    /// <summary> The blur radius of the shadow in pixels. Larger values produce a softer, more spread-out blur. </summary>
     public float Blur;
+    /// <summary> How much the shadow expands (positive values) or contracts (negative values) relative to the element's bounds. </summary>
     public float Spread;
     public Color Color;
 

@@ -12,6 +12,9 @@ internal sealed class StackFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var elementType = targetType!.GetGenericArguments()[0];
         var stack = (IEnumerable)value;
         List<EchoObject> tags = new();
@@ -24,18 +27,22 @@ internal sealed class StackFormat : ISerializationFormat
             tags.Add(Serializer.Serialize(elementType, array[i], context));
         }
 
-        return new EchoObject(tags);
+        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
         Type elementType = targetType.GetGenericArguments()[0];
         dynamic stack = Activator.CreateInstance(targetType)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+        CollectionReferences.Register(value, stack, context);
 
         // Process elements in order - they were serialized in reverse,
         // so this will maintain proper order
-        foreach (var tag in value.List)
+        foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
             stack.Push((dynamic)item);

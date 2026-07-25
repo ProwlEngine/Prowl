@@ -130,6 +130,14 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
         return Zero;
     }
 
+    /// <summary>Normalizes the vector, returning <paramref name="defaultValue"/> when it is too small to normalize.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Float4 NormalizeSafe(Float4 v, Float4 defaultValue)
+    {
+        float length = Length(v);
+        return length > float.Epsilon ? v / length : defaultValue;
+    }
+
     /// <summary>Returns the magnitude (length) of the given vector.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float Length(Float4 v) => Maths.Sqrt(LengthSquared(v));

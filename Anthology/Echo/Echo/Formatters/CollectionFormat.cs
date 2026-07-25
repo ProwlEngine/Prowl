@@ -15,26 +15,59 @@ internal sealed class CollectionFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
         var elementType = targetType!.GetGenericArguments()[0];
         var enumerable = (IEnumerable)value;
         List<EchoObject> tags = new();
         foreach (var item in enumerable)
             tags.Add(Serializer.Serialize(elementType, item, context));
-        return new EchoObject(tags);
+        return CollectionReferences.WrapListBody(new EchoObject(tags), id);
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        Type elementType = targetType.GetGenericArguments()[0];
-        dynamic collection = Activator.CreateInstance(targetType)
-            ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
 
-        foreach (var tag in value.List)
+        Type elementType = targetType.GetGenericArguments()[0];
+
+        // Mutable collection with a parameterless ctor: create it and register it first so a self
+        // reference resolves, then fill it via Add.
+        if (targetType.GetConstructor(Type.EmptyTypes) != null)
         {
-            var item = Serializer.Deserialize(tag, elementType, context);
-            collection.Add((dynamic)item);
+            dynamic collection = Activator.CreateInstance(targetType)!;
+            CollectionReferences.Register(value, collection, context);
+
+            foreach (var tag in CollectionReferences.ListItems(value))
+            {
+                var item = Serializer.Deserialize(tag, elementType, context);
+                collection.Add((dynamic)item);
+            }
+            return collection;
         }
 
-        return collection;
+        // No parameterless ctor (e.g. ReadOnlyCollection<T>): build the items, then construct from them
+        // via a single-argument constructor that takes the item list.
+        var items = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType))!;
+        foreach (var tag in CollectionReferences.ListItems(value))
+            items.Add(Serializer.Deserialize(tag, elementType, context));
+
+        var built = ConstructFromItems(targetType, items)
+            ?? throw new InvalidOperationException($"No usable constructor to build {targetType} from its items");
+        CollectionReferences.Register(value, built, context);
+        return built;
+    }
+
+    private static object? ConstructFromItems(Type targetType, IList items)
+    {
+        foreach (var ctor in targetType.GetConstructors())
+        {
+            var ps = ctor.GetParameters();
+            if (ps.Length == 1 && ps[0].ParameterType.IsInstanceOfType(items))
+                return ctor.Invoke(new object[] { items });
+        }
+        return null;
     }
 }

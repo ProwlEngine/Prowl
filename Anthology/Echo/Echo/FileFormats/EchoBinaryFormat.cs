@@ -181,7 +181,14 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     private static void WriteLZWCompressed(BinaryWriter writer, ReadOnlySpan<char> input)
     {
-        var codes = CompressString(input);
+        // Compress the UTF-8 bytes (each reinterpreted as a 0-255 char) rather than the chars directly, so
+        // any Unicode text works with a 256-symbol dictionary. ASCII maps 1:1, so it encodes as before.
+        byte[] utf8 = Encoding.UTF8.GetBytes(input.ToString());
+        char[] symbols = new char[utf8.Length];
+        for (int i = 0; i < utf8.Length; i++)
+            symbols[i] = (char)utf8[i];
+
+        var codes = CompressString(symbols);
         LEB128.WriteUnsigned(writer, (ulong)codes.Count);
         foreach (int code in codes)
             LEB128.WriteUnsigned(writer, (ulong)code);
@@ -197,7 +204,11 @@ public sealed class EchoBinaryFormat : IFileFormat
         for (int i = 0; i < codesCount; i++)
             SharedCodeList.Value!.Add((int)LEB128.ReadUnsigned(reader));
 
-        return DecompressString(SharedCodeList.Value!);
+        string symbols = DecompressString(SharedCodeList.Value!);
+        byte[] utf8 = new byte[symbols.Length];
+        for (int i = 0; i < symbols.Length; i++)
+            utf8[i] = (byte)symbols[i];
+        return Encoding.UTF8.GetString(utf8);
     }
     #endregion
 

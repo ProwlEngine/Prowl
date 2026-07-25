@@ -10,6 +10,7 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI
 {
+    /// <summary> Provides an in-app developer tools panel for inspecting the UI element tree and viewing log messages. </summary>
     public sealed partial class PaperDevTools
     {
         // ================================================================= Logging
@@ -423,7 +424,7 @@ namespace Prowl.PaperUI
         private readonly List<RTime> _renderTimes = new();   // this frame's raw render samples
         private readonly List<RTime> _renderDisplay = new();  // published render flame (live per frame)
 
-        // Layout timing, summed per element (an element is laid out several times per frame).
+        // Raw layout timing samples (an element is laid out several times per frame).
         private readonly List<RTime> _layoutTimes = new();
         private readonly List<RTime> _layoutDisplay = new();
         private readonly Dictionary<int, double> _layoutSum = new();

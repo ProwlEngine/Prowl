@@ -39,6 +39,13 @@ public static class TypeNameRegistry
 
     private static readonly Dictionary<string, Type> _predefinedTypeLookup;
 
+    /// <summary>
+    /// Optional override consulted before the normal assembly scan when resolving a type name (both the
+    /// compact and full forms are passed through it). Return the resolved <see cref="Type"/>, or null to
+    /// fall through to the default resolution.
+    /// </summary>
+    public static Func<string, Type?>? TypeResolver { get; set; }
+
     static TypeNameRegistry()
     {
         _predefinedTypeLookup = _predefinedCompactNames.ToDictionary(kvp => kvp.Value, kvp => kvp.Key);
@@ -60,9 +67,10 @@ public static class TypeNameRegistry
             if (_predefinedCompactNames.TryGetValue(t, out var predefined))
                 return predefined;
 
-            // For enums, use enum name
+            // For enums, record the namespace-qualified name and assembly so two enums with the same
+            // short name in different namespaces/assemblies don't collide on resolve.
             if (t.IsEnum)
-                return $"e:{t.Name}";
+                return $"e:{t.FullName}, {t.Assembly.GetName().Name}";
 
             // For arrays, use special notation
             if (t.IsArray)
@@ -101,7 +109,10 @@ public static class TypeNameRegistry
             if (n.Contains('<') && n.Contains('>'))
                 return ResolveGenericType(n);
 
-            // Fallback to full type resolution
+            // Engine-provided override (e.g. current script assemblies), then default resolution.
+            Type? overridden = TypeResolver?.Invoke(n);
+            if (overridden != null) return overridden;
+
             return ReflectionUtils.FindTypeByName(n);
         });
     }
@@ -121,6 +132,11 @@ public static class TypeNameRegistry
         {
             try
             {
+                // Engine-provided override first, so a live/hot-reloaded assembly wins over a stale
+                // copy of the same name that is still loaded.
+                Type? overridden = TypeResolver?.Invoke(n);
+                if (overridden != null) return overridden;
+
                 // Try direct type resolution first
                 var type = Type.GetType(n);
                 if (type != null) return type;
@@ -152,6 +168,18 @@ public static class TypeNameRegistry
 
     private static Type? ResolveEnumType(string enumName)
     {
+        // New form is assembly-qualified: resolve it honoring the recorded assembly.
+        Type? resolved = ReflectionUtils.FindTypeByName(enumName);
+        if (resolved != null && resolved.IsEnum)
+            return resolved;
+
+        // Fallback for older data that stored only the enum's short name (or when the qualified lookup
+        // landed on a non-enum of the same name): first enum in any assembly with this short name.
+        int comma = enumName.IndexOf(',');
+        string typeName = comma >= 0 ? enumName[..comma].Trim() : enumName;
+        int dot = typeName.LastIndexOf('.');
+        string simpleName = dot >= 0 ? typeName[(dot + 1)..] : typeName;
+
         foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
         {
             Type?[] types;
@@ -168,7 +196,7 @@ public static class TypeNameRegistry
 
             foreach (Type? t in types)
             {
-                if (t != null && t.IsEnum && t.Name == enumName)
+                if (t != null && t.IsEnum && t.Name == simpleName)
                     return t;
             }
         }

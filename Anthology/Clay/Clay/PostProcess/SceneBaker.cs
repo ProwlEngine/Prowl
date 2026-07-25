@@ -39,9 +39,9 @@ internal static class SceneBaker
         for (int i = 0; i < scene.Nodes.Count; i++)
         {
             var src = scene.Nodes[i];
-            var local = SceneBakerHelpers.ComposeTRS(src.LocalPosition, src.LocalRotation, src.LocalScale);
+            var local = Float4x4.CreateTRS(src.LocalPosition, src.LocalRotation, src.LocalScale);
             var world = src.Parent is { } parent && parent.BakeIndex >= 0
-                ? SceneBakerHelpers.Mul(bakedNodes[parent.BakeIndex].WorldMatrix, local)
+                ? bakedNodes[parent.BakeIndex].WorldMatrix * local
                 : local;
 
             var node = new ModelNode
