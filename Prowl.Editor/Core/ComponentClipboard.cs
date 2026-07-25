@@ -2,14 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
-using Prowl.Vector;
 
 namespace Prowl.Editor.Core;
 
@@ -22,24 +18,19 @@ namespace Prowl.Editor.Core;
 /// Payload format (first line is a header so the type can be peeked without parsing the body):
 /// <code>
 /// ProwlComponent:&lt;AssemblyQualifiedName&gt;
-/// { Data = {...}, Refs = {...} }
+/// { ...serialized component... }
 /// </code>
 ///
-/// Scene-object references (fields typed GameObject / MonoBehaviour / Transform) are NOT serialized
-/// by value - Echo would deep-clone the target and paste would produce a detached orphan. They're
-/// nulled in Data and recorded in Refs as identifier Guids, then re-resolved against the current
-/// scene on paste. Unresolvable (different scene, deleted object, cross-project) simply stays null,
-/// which mirrors Unity. Identifiers survive the prefab-mode round trip because
-/// <c>Scene.OnBeforeSerialize/OnAfterDeserialize</c> capture and restore them.
+/// Scene-object references (fields typed GameObject / MonoBehaviour / Transform, at any depth) are
+/// linked by persistence id rather than serialized by value: <see cref="SceneReferenceResolver"/>
+/// is handed to Echo as the context's external-reference resolver, so Echo emits a stable key for
+/// them instead of deep-cloning the target into an orphan, and resolves that key back to the live
+/// instance on paste. References that can't be resolved (different scene, deleted object) become
+/// null, which mirrors Unity.
 /// </summary>
 public static class ComponentClipboard
 {
     private const string ClipboardHeader = "ProwlComponent:";
-
-    // Reference-kind prefixes used in the Refs compound.
-    private const string RefGameObject = "go:";
-    private const string RefComponent = "c:";
-    private const string RefTransform = "t:";
 
     // ================================================================
     //  Copy
@@ -50,19 +41,8 @@ public static class ComponentClipboard
     {
         if (comp == null) return;
 
-        var (data, refs) = CaptureState(comp);
-
-        var root = EchoObject.NewCompound();
-        root.Add("Data", data);
-        if (refs.Count > 0)
-        {
-            var refsTag = EchoObject.NewCompound();
-            foreach (var (field, token) in refs)
-                refsTag.Add(field, new EchoObject(token));
-            root.Add("Refs", refsTag);
-        }
-
-        Input.Clipboard = $"{ClipboardHeader}{comp.GetType().AssemblyQualifiedName}\n{root.WriteToString()}";
+        var data = Serializer.Serialize(comp.GetType(), comp, SerializeContext(comp));
+        Input.Clipboard = $"{ClipboardHeader}{comp.GetType().AssemblyQualifiedName}\n{data.WriteToString()}";
     }
 
     // ================================================================
@@ -121,13 +101,11 @@ public static class ComponentClipboard
 
         try
         {
-            if (!TryReadClipboard(out Type? type, out EchoObject? data, out var refs) || type == null || data == null)
+            if (!TryReadClipboard(out Type? type, out EchoObject? data) || type == null || data == null)
                 return null;
 
-            var comp = Deserialize(data, type);
+            var comp = Serializer.Deserialize(data, type, DeserializeContext()) as MonoBehaviour;
             if (comp == null) return null;
-
-            ResolveRefs(comp, refs);
 
             // AddComponent(instance) attaches, registers with the scene and fires OnAddedToScene /
             // OnEnable, so the pasted component is live immediately.
@@ -142,7 +120,6 @@ public static class ComponentClipboard
             var compId = comp.Identifier;
             string typeName = type.AssemblyQualifiedName!;
             var capturedData = data;
-            var capturedRefs = refs;
 
             Undo.RegisterAction("Paste Component",
                 undo: () =>
@@ -157,10 +134,9 @@ public static class ComponentClipboard
                     if (g == null) return;
                     var t = RuntimeUtils.ResolveType(typeName);
                     if (t == null) return;
-                    var restored = Deserialize(capturedData, t);
+                    var restored = Serializer.Deserialize(capturedData, t, DeserializeContext()) as MonoBehaviour;
                     if (restored == null) return;
                     restored.Identifier = compId;
-                    ResolveRefs(restored, capturedRefs);
                     g.AddComponent(restored);
                     restored.OnValidate();
                 });
@@ -186,23 +162,22 @@ public static class ComponentClipboard
 
         try
         {
-            if (!TryReadClipboard(out Type? type, out EchoObject? data, out var refs) || type == null || data == null)
+            if (!TryReadClipboard(out Type? type, out EchoObject? data) || type == null || data == null)
                 return false;
             if (type != target.GetType()) return false;
 
-            // Snapshot via CaptureState (not a plain Serialize) so the undo state stores scene
-            // references as identifiers too, otherwise undo would restore deep-cloned orphans.
-            var (beforeData, beforeRefs) = CaptureState(target);
+            // Snapshot the current state through the same reference-linking path, so undo restores
+            // scene references as live instances rather than deep-cloned orphans.
+            var beforeData = Serializer.Serialize(target.GetType(), target, SerializeContext(target));
 
-            ApplyState(target, data, refs);
+            ApplyState(target, data);
 
             var compId = target.Identifier;
             var afterData = data;
-            var afterRefs = refs;
 
             Undo.RegisterAction("Paste Component Values",
-                undo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, beforeData, beforeRefs); },
-                redo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, afterData, afterRefs); });
+                undo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, beforeData); },
+                redo: () => { var c = Undo.FindComponent(compId); if (c != null) ApplyState(c, afterData); });
 
             EditorSceneManager.MarkDirty();
             return true;
@@ -214,47 +189,6 @@ public static class ComponentClipboard
         }
     }
 
-    // ================================================================
-    //  State capture / apply
-    // ================================================================
-
-    /// <summary>
-    /// Serialize a component with its scene-object references swapped out for identifier tokens, so
-    /// Echo can't deep-clone them into orphans. Reference fields are nulled only across the serialize
-    /// call and always restored. Single-threaded by assumption, like the rest of the editor.
-    /// </summary>
-    private static (EchoObject data, Dictionary<string, string> refs) CaptureState(MonoBehaviour comp)
-    {
-        var refs = new Dictionary<string, string>();
-        var stashed = new List<(FieldInfo field, object value)>();
-
-        // Top-level fields only. A scene reference nested inside a list or a custom class still
-        // deep-clones; fixing that needs identifier-aware reference handling down in Echo itself.
-        foreach (var field in comp.GetSerializableFields())
-        {
-            object? value = field.GetValue(comp);
-            if (value is not (GameObject or MonoBehaviour or Transform)) continue;
-
-            // A reference that yields no token (detached Transform) is still nulled - just dropped
-            // on paste rather than restored.
-            if (TryMakeRefToken(value, out string? token))
-                refs[field.Name] = token!;
-
-            stashed.Add((field, value));
-            field.SetValue(comp, null);
-        }
-
-        try
-        {
-            return (Serializer.Serialize(comp.GetType(), comp), refs);
-        }
-        finally
-        {
-            foreach (var (field, value) in stashed)
-                field.SetValue(comp, value);
-        }
-    }
-
     /// <summary>
     /// Overwrite a live component's serializable state from a snapshot, preserving its identity.
     /// Uses DeserializeInto so state reaches the target through the component's own Deserialize - a
@@ -262,7 +196,7 @@ public static class ComponentClipboard
     /// Brackets the write with OnDisable/OnEnable so components with native state (rigidbodies, audio
     /// sources) rebuild against the new values.
     /// </summary>
-    private static void ApplyState(MonoBehaviour target, EchoObject data, Dictionary<string, string> refs)
+    private static void ApplyState(MonoBehaviour target, EchoObject data)
     {
         bool attached = target.GameObject.IsValid();
         bool inActiveScene = attached && target.Scene.IsValid() && target.Scene!.IsActive;
@@ -273,10 +207,8 @@ public static class ComponentClipboard
         // OnAfterDeserialize regenerates the identifier; preserve it so undo records and scene
         // lookups that key on it survive a values paste.
         Guid identifier = target.Identifier;
-        Serializer.DeserializeInto(data, target);
+        Serializer.DeserializeInto(data, target, DeserializeContext());
         target.Identifier = identifier;
-
-        ResolveRefs(target, refs);
 
         // AttachToGameObject re-derives _enabledInHierarchy from the pasted _enabled via the engine's
         // own rule rather than restating it here.
@@ -289,84 +221,29 @@ public static class ComponentClipboard
     }
 
     // ================================================================
-    //  Scene reference tokens
+    //  Scene reference linking
     // ================================================================
 
-    /// <summary>
-    /// Build an identifier token for a scene-object reference. False when the reference can't be
-    /// identified, which the caller treats as "drop it" rather than "serialize it by value".
-    /// </summary>
-    private static bool TryMakeRefToken(object value, out string? token)
-    {
-        token = null;
+    // Serializing keys every scene reference except the component being copied (see
+    // SceneReferenceResolver); deserializing only resolves keys, so it passes no copy roots.
+    private static SerializationContext SerializeContext(MonoBehaviour root)
+        => new() { ExternalReferences = new SceneReferenceResolver(root) };
 
-        switch (value)
-        {
-            case GameObject go:
-                token = RefGameObject + go.Identifier;
-                return true;
-
-            case MonoBehaviour mb:
-                token = RefComponent + mb.Identifier;
-                return true;
-
-            // Transform has no identifier of its own; anchor it to its GameObject and re-derive on
-            // paste. A detached Transform can't be anchored, so it's dropped (never cloned).
-            case Transform t:
-                if (!t.GameObject.IsValid()) return false;
-                token = RefTransform + t.GameObject.Identifier;
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>Re-resolve identifier tokens against the current scene and assign them back.</summary>
-    private static void ResolveRefs(MonoBehaviour comp, Dictionary<string, string> refs)
-    {
-        if (refs.Count == 0) return;
-
-        var fields = comp.GetSerializableFields();
-        foreach (var (fieldName, token) in refs)
-        {
-            FieldInfo? field = fields.FirstOrDefault(f => f.Name == fieldName);
-            if (field == null) continue;
-
-            object? resolved = ResolveToken(token);
-            // Leave the field null when the target isn't in this scene, or when the reference
-            // resolved to something the field can't hold.
-            if (resolved != null && field.FieldType.IsInstanceOfType(resolved))
-                field.SetValue(comp, resolved);
-        }
-    }
-
-    private static object? ResolveToken(string token)
-    {
-        if (token.StartsWith(RefGameObject))
-            return Guid.TryParse(token[RefGameObject.Length..], out var goId) ? Undo.FindGO(goId) : null;
-
-        if (token.StartsWith(RefComponent))
-            return Guid.TryParse(token[RefComponent.Length..], out var cId) ? Undo.FindComponent(cId) : null;
-
-        if (token.StartsWith(RefTransform))
-            return Guid.TryParse(token[RefTransform.Length..], out var tId) ? Undo.FindGO(tId)?.Transform : null;
-
-        return null;
-    }
+    private static SerializationContext DeserializeContext()
+        => new() { ExternalReferences = new SceneReferenceResolver() };
 
     // ================================================================
     //  Helpers
     // ================================================================
 
     /// <summary>
-    /// Parse the clipboard payload. Callers wrap this in their own try/catch - a malformed body is
-    /// reported there rather than swallowed here.
+    /// Parse the clipboard payload into a component type and its serialized data. Callers wrap this
+    /// in their own try/catch - a malformed body is reported there rather than swallowed here.
     /// </summary>
-    private static bool TryReadClipboard(out Type? type, out EchoObject? data, out Dictionary<string, string> refs)
+    private static bool TryReadClipboard(out Type? type, out EchoObject? data)
     {
         type = null;
         data = null;
-        refs = [];
 
         if (!TryParseHeader(out string typeName, out string body)) return false;
 
@@ -381,19 +258,7 @@ public static class ComponentClipboard
 
         if (!typeof(MonoBehaviour).IsAssignableFrom(type) || type.IsAbstract) return false;
 
-        var root = EchoObject.ReadFromString(body);
-        if (root == null || !root.TryGet("Data", out var dataTag) || dataTag == null) return false;
-
-        data = dataTag;
-
-        if (root.TryGet("Refs", out var refsTag) && refsTag != null)
-            foreach (var (key, val) in refsTag.Tags)
-                if (val?.StringValue is { Length: > 0 } token)
-                    refs[key] = token;
-
-        return true;
+        data = EchoObject.ReadFromString(body);
+        return data != null;
     }
-
-    private static MonoBehaviour? Deserialize(EchoObject data, Type type)
-        => Serializer.Deserialize(data, type) as MonoBehaviour;
 }

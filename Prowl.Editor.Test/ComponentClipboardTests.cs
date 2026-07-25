@@ -69,6 +69,15 @@ public sealed class ClipRefComp : MonoBehaviour
     public int Value;
 }
 
+/// <summary>Scene references nested inside a collection and a plain data class.</summary>
+public sealed class ClipNestedRefComp : MonoBehaviour
+{
+    public sealed class RefBox { public GameObject? GO; }
+
+    public List<GameObject> Targets = new();
+    public RefBox? Wrapper;
+}
+
 /// <summary>
 /// Mirrors AudioSource's pattern: all state lives in plain private fields that are invisible to
 /// GetSerializableFields and travel only through custom ISerializable methods. A field-by-field
@@ -198,7 +207,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         ComponentClipboard.Copy(src);
 
-        // Copy temporarily nulls reference fields to keep them out of the payload; they must be back.
+        // Copy links references by id and never mutates the source component's fields.
         Assert.Same(a, src.TargetGO);
         Assert.Same(target, src.TargetComp);
         Assert.Same(a.Transform, src.TargetTransform);
@@ -390,9 +399,9 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
     [Fact]
     public void DetachedTransformReference_IsDropped_NotCloned()
     {
-        // A Transform with no GameObject can't be identified, so it can't be restored - but it must
-        // still be kept out of the payload. Serializing it by value would paste an orphan Transform
-        // whose GameObject is null, which NREs the first time anything touches it.
+        // A Transform with no GameObject can't be anchored to an id. It must still be linked rather
+        // than serialized by value - otherwise paste produces an orphan Transform with a null
+        // GameObject that NREs the first time anything touches it. It resolves to null on paste.
         var scene = MakeScene(out var a, out var b);
         var src = a.AddComponent<ClipRefComp>();
         src.TargetTransform = new Transform(); // never attached to a GameObject
@@ -405,9 +414,33 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         Assert.NotNull(pasted);
         Assert.Null(pasted!.TargetTransform);
         Assert.Equal(rootsBefore, scene.RootObjects.Count());
+    }
 
-        // The source keeps its reference - capture must restore what it stashed.
-        Assert.NotNull(src.TargetTransform);
+    [Fact]
+    public void NestedSceneReferences_ResolveToOriginals()
+    {
+        // The payoff of Echo owning the traversal: references nested inside a list or a plain data
+        // class are linked too, which the old top-level-only tokenizer could not reach.
+        var scene = MakeScene(out var a, out var b);
+        var c = new GameObject("C");
+        scene.Add(c);
+
+        var src = a.AddComponent<ClipNestedRefComp>();
+        src.Targets.Add(a);
+        src.Targets.Add(c);
+        src.Wrapper = new ClipNestedRefComp.RefBox { GO = c };
+
+        int rootsBefore = scene.RootObjects.Count();
+
+        ComponentClipboard.Copy(src);
+        var pasted = ComponentClipboard.PasteAsNew(b) as ClipNestedRefComp;
+
+        Assert.NotNull(pasted);
+        Assert.Equal(2, pasted!.Targets.Count);
+        Assert.Same(a, pasted.Targets[0]);          // ref inside a List<>
+        Assert.Same(c, pasted.Targets[1]);
+        Assert.Same(c, pasted.Wrapper!.GO);         // ref inside a nested class
+        Assert.Equal(rootsBefore, scene.RootObjects.Count()); // nothing deep-cloned into the scene
     }
 
     // ---- ISerializable components (custom Serialize/Deserialize) ----
@@ -496,10 +529,6 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
 
         // Header with no body at all.
         Input.Clipboard = $"ProwlComponent:{typeName}";
-        Assert.Null(ComponentClipboard.PasteAsNew(b));
-
-        // Well-formed body missing the Data compound.
-        Input.Clipboard = $"ProwlComponent:{typeName}\n{EchoObject.NewCompound().WriteToString()}";
         Assert.Null(ComponentClipboard.PasteAsNew(b));
 
         Assert.Empty(b.GetComponents<MonoBehaviour>());
