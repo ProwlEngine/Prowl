@@ -239,7 +239,32 @@ namespace Prowl.PaperUI
         {
             var target = element ?? CurrentParent;
             if (!target.IsValid) return;
+            if (_focusedElementId == target.Data.ID) return;
+
+            // Notify the previously focused element that it is losing focus.
+            if (_focusedElementId != 0)
+            {
+                ElementHandle oldFocusedElement = FindElementByID(_focusedElementId);
+                if (oldFocusedElement.IsValid)
+                {
+                    ref ElementData oldData = ref oldFocusedElement.Data;
+                    oldData.OnFocusChange?.Invoke(new FocusEvent(oldFocusedElement, false));
+                    PropagateEventToHookedChildren(oldFocusedElement, child => {
+                        ref ElementData childData = ref child.Data;
+                        childData.OnFocusChange?.Invoke(new FocusEvent(child, false));
+                    });
+                }
+            }
+
             _focusedElementId = target.Data.ID;
+
+            // Notify the new element that it gained focus.
+            ref ElementData data = ref target.Data;
+            data.OnFocusChange?.Invoke(new FocusEvent(target, true));
+            PropagateEventToHookedChildren(target, child => {
+                ref ElementData childData = ref child.Data;
+                childData.OnFocusChange?.Invoke(new FocusEvent(child, true));
+            });
         }
 
         /// <summary>
