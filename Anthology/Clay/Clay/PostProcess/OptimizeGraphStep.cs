@@ -125,12 +125,12 @@ internal sealed class OptimizeGraphStep : IPostProcess
     private static void FoldChildIntoGrandchildren(IntermediateNode child)
     {
         // grandchild_new = child_local * grandchild_old
-        Float4x4 m = SceneBakerHelpers.ComposeTRS(child.LocalPosition, child.LocalRotation, child.LocalScale);
+        Float4x4 m = Float4x4.CreateTRS(child.LocalPosition, child.LocalRotation, child.LocalScale);
 
         foreach (var gc in child.Children)
         {
-            Float4x4 g = SceneBakerHelpers.ComposeTRS(gc.LocalPosition, gc.LocalRotation, gc.LocalScale);
-            Float4x4 combined = SceneBakerHelpers.Mul(m, g);
+            Float4x4 g = Float4x4.CreateTRS(gc.LocalPosition, gc.LocalRotation, gc.LocalScale);
+            Float4x4 combined = m * g;
             SceneBakerHelpers.DecomposeMatrix(combined, out var t, out var r, out var s);
             gc.LocalPosition = t;
             gc.LocalRotation = r;

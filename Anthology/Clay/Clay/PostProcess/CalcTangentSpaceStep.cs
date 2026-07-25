@@ -83,13 +83,13 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
                     (s1 * y2 - s2 * y1) * r,
                     (s1 * z2 - s2 * z1) * r);
 
-                tan1[i1] = Add(tan1[i1], sdir);
-                tan1[i2] = Add(tan1[i2], sdir);
-                tan1[i3] = Add(tan1[i3], sdir);
+                tan1[i1] += sdir;
+                tan1[i2] += sdir;
+                tan1[i3] += sdir;
 
-                tan2[i1] = Add(tan2[i1], tdir);
-                tan2[i2] = Add(tan2[i2], tdir);
-                tan2[i3] = Add(tan2[i3], tdir);
+                tan2[i1] += tdir;
+                tan2[i2] += tdir;
+                tan2[i3] += tdir;
             }
 
             var result = new List<Float4>(vertexCount);
@@ -99,9 +99,9 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
                 Float3 t = tan1[i];
 
                 // Gram-Schmidt orthogonalize: tangent_perp = normalize(t - n * (n.t)).
-                Float3 tangent = Normalize(Subtract(t, Scale(n, Dot(n, t))));
+                Float3 tangent = Normalize(t - n * Float3.Dot(n, t));
                 // Bitangent handedness from cross-product sign.
-                float w = (Dot(Cross(n, t), tan2[i]) < 0f) ? -1f : 1f;
+                float w = (Float3.Dot(Float3.Cross(n, t), tan2[i]) < 0f) ? -1f : 1f;
                 result.Add(new Float4(tangent.X, tangent.Y, tangent.Z, w));
             }
 
@@ -111,15 +111,11 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
         _ = context;
     }
 
-    private static Float3 Add(Float3 a, Float3 b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
-    private static Float3 Subtract(Float3 a, Float3 b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-    private static Float3 Scale(Float3 a, float s) => new(a.X * s, a.Y * s, a.Z * s);
-    private static float Dot(Float3 a, Float3 b) => a.X * b.X + a.Y * b.Y + a.Z * b.Z;
-    private static Float3 Cross(Float3 a, Float3 b) =>
-        new(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+    // Safe-normalize with a (1,0,0) fallback for a degenerate tangent (a zero tangent would break normal
+    // mapping); Prowl.Vector.Float3.Normalize falls back to Zero, so this stays local.
     private static Float3 Normalize(Float3 v)
     {
-        float len = MathF.Sqrt(Dot(v, v));
-        return len < 1e-12f ? new Float3(1f, 0f, 0f) : new Float3(v.X / len, v.Y / len, v.Z / len);
+        float len = Float3.Length(v);
+        return len < 1e-12f ? new Float3(1f, 0f, 0f) : v / len;
     }
 }

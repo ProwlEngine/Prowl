@@ -55,7 +55,7 @@ internal sealed class FindInvalidDataStep : IPostProcess
         {
             for (int i = 0; i < normals.Count; i++)
             {
-                if (!Finite(normals[i]) || Magnitude(normals[i]) < 1e-12f)
+                if (!Finite(normals[i]) || Float3.Length(normals[i]) < 1e-12f)
                 {
                     normals[i] = new Float3(0f, 1f, 0f);
                     fixedCount += 3;
@@ -162,5 +162,4 @@ internal sealed class FindInvalidDataStep : IPostProcess
     private static bool Finite(Float3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
     private static bool Finite(Float4 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z) && float.IsFinite(v.W);
     private static bool Finite(Color c) => float.IsFinite(c.R) && float.IsFinite(c.G) && float.IsFinite(c.B) && float.IsFinite(c.A);
-    private static float Magnitude(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 }

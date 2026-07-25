@@ -216,17 +216,17 @@ internal static class FbxModelMapper
         Quaternion Rpost = EulerToQuat(postRot, 0);
 
         Float4x4 m = Float4x4.Identity;
-        m = SceneBakerHelpers.Mul(m, Translation(lclT));
-        m = SceneBakerHelpers.Mul(m, Translation(rotOff));
-        m = SceneBakerHelpers.Mul(m, Translation(rotPiv));
-        m = SceneBakerHelpers.Mul(m, RotationMatrix(Rpre));
-        m = SceneBakerHelpers.Mul(m, RotationMatrix(R));
-        m = SceneBakerHelpers.Mul(m, RotationMatrix(InverseUnit(Rpost)));
-        m = SceneBakerHelpers.Mul(m, Translation(Neg(rotPiv)));
-        m = SceneBakerHelpers.Mul(m, Translation(scaleOff));
-        m = SceneBakerHelpers.Mul(m, Translation(scalePiv));
-        m = SceneBakerHelpers.Mul(m, ScaleMatrix(lclS));
-        m = SceneBakerHelpers.Mul(m, Translation(Neg(scalePiv)));
+        m *= Float4x4.CreateTranslation(lclT);
+        m *= Float4x4.CreateTranslation(rotOff);
+        m *= Float4x4.CreateTranslation(rotPiv);
+        m *= Float4x4.CreateFromQuaternion(Rpre);
+        m *= Float4x4.CreateFromQuaternion(R);
+        m *= Float4x4.CreateFromQuaternion(Quaternion.Conjugate(Rpost));
+        m *= Float4x4.CreateTranslation(-rotPiv);
+        m *= Float4x4.CreateTranslation(scaleOff);
+        m *= Float4x4.CreateTranslation(scalePiv);
+        m *= Float4x4.CreateScale(lclS);
+        m *= Float4x4.CreateTranslation(-scalePiv);
 
         SceneBakerHelpers.DecomposeMatrix(m, out var t, out var rDecomposed, out var s);
         node.LocalPosition = t;
@@ -253,7 +253,7 @@ internal static class FbxModelMapper
         Float3 gs = hasS ? new Float3((float)gsX, (float)gsY, (float)gsZ) : Float3.One;
         if (gt == Float3.Zero && gr == Float3.Zero && gs == Float3.One) return;
 
-        var geomMatrix = SceneBakerHelpers.ComposeTRS(gt, EulerToQuat(gr, 0), gs);
+        var geomMatrix = Float4x4.CreateTRS(gt, EulerToQuat(gr, 0), gs);
 
         for (int m = range.FirstMeshIndex; m < range.FirstMeshIndex + range.MeshCount; m++)
         {
@@ -261,7 +261,7 @@ internal static class FbxModelMapper
             for (int i = 0; i < mesh.Positions.Count; i++)
             {
                 var v = mesh.Positions[i];
-                var v4 = SceneBakerHelpers.MulColumn(geomMatrix, new Float4(v.X, v.Y, v.Z, 1f));
+                var v4 = geomMatrix * new Float4(v.X, v.Y, v.Z, 1f);
                 mesh.Positions[i] = new Float3(v4.X, v4.Y, v4.Z);
             }
             // Normals + tangents would also need the geometric rotation applied. For Phase 6
@@ -283,54 +283,22 @@ internal static class FbxModelMapper
         float rx = eulerDegrees.X * MathF.PI / 180f;
         float ry = eulerDegrees.Y * MathF.PI / 180f;
         float rz = eulerDegrees.Z * MathF.PI / 180f;
-        Quaternion qx = AxisAngle(new Float3(1f, 0f, 0f), rx);
-        Quaternion qy = AxisAngle(new Float3(0f, 1f, 0f), ry);
-        Quaternion qz = AxisAngle(new Float3(0f, 0f, 1f), rz);
+        Quaternion qx = Quaternion.AxisAngle(new Float3(1f, 0f, 0f), rx);
+        Quaternion qy = Quaternion.AxisAngle(new Float3(0f, 1f, 0f), ry);
+        Quaternion qz = Quaternion.AxisAngle(new Float3(0f, 0f, 1f), rz);
 
         // FBX rotation orders: 0=XYZ, 1=XZY, 2=YZX, 3=YXZ, 4=ZXY, 5=ZYX, 6=SphericXYZ (rare, skip).
         return rotationOrder switch
         {
-            0 => MulQuat(MulQuat(qz, qy), qx), // R = Rz * Ry * Rx (Euler XYZ extrinsic)
-            1 => MulQuat(MulQuat(qy, qz), qx),
-            2 => MulQuat(MulQuat(qx, qz), qy),
-            3 => MulQuat(MulQuat(qz, qx), qy),
-            4 => MulQuat(MulQuat(qy, qx), qz),
-            5 => MulQuat(MulQuat(qx, qy), qz),
-            _ => MulQuat(MulQuat(qz, qy), qx),
+            0 => qz * qy * qx, // R = Rz * Ry * Rx (Euler XYZ extrinsic)
+            1 => qy * qz * qx,
+            2 => qx * qz * qy,
+            3 => qz * qx * qy,
+            4 => qy * qx * qz,
+            5 => qx * qy * qz,
+            _ => qz * qy * qx,
         };
     }
-
-    private static Quaternion AxisAngle(Float3 axis, float radians)
-    {
-        float half = radians * 0.5f;
-        float s = MathF.Sin(half);
-        return new Quaternion(axis.X * s, axis.Y * s, axis.Z * s, MathF.Cos(half));
-    }
-
-    private static Quaternion MulQuat(Quaternion a, Quaternion b) => new(
-        a.W * b.X + a.X * b.W + a.Y * b.Z - a.Z * b.Y,
-        a.W * b.Y - a.X * b.Z + a.Y * b.W + a.Z * b.X,
-        a.W * b.Z + a.X * b.Y - a.Y * b.X + a.Z * b.W,
-        a.W * b.W - a.X * b.X - a.Y * b.Y - a.Z * b.Z);
-
-    private static Quaternion InverseUnit(Quaternion q) => new(-q.X, -q.Y, -q.Z, q.W);
-
-    private static Float3 Neg(Float3 v) => new(-v.X, -v.Y, -v.Z);
-
-    private static Float4x4 Translation(Float3 t) => new(
-        new Float4(1f, 0f, 0f, 0f),
-        new Float4(0f, 1f, 0f, 0f),
-        new Float4(0f, 0f, 1f, 0f),
-        new Float4(t.X, t.Y, t.Z, 1f));
-
-    private static Float4x4 ScaleMatrix(Float3 s) => new(
-        new Float4(s.X, 0f, 0f, 0f),
-        new Float4(0f, s.Y, 0f, 0f),
-        new Float4(0f, 0f, s.Z, 0f),
-        new Float4(0f, 0f, 0f, 1f));
-
-    private static Float4x4 RotationMatrix(Quaternion q) =>
-        SceneBakerHelpers.ComposeTRS(Float3.Zero, q, Float3.One);
 
     private static void AppendDepthFirst(IntermediateNode node, List<IntermediateNode> list)
     {

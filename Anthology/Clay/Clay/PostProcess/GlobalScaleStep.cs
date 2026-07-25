@@ -32,7 +32,7 @@ internal sealed class GlobalScaleStep : IPostProcess
         foreach (var mesh in scene.Meshes)
         {
             for (int i = 0; i < mesh.Positions.Count; i++)
-                mesh.Positions[i] = Mul(mesh.Positions[i], scale);
+                mesh.Positions[i] *= scale;
 
             foreach (var bs in mesh.BlendShapes)
             {
@@ -40,13 +40,13 @@ internal sealed class GlobalScaleStep : IPostProcess
                 {
                     var dp = frame.DeltaPositions;
                     for (int i = 0; i < dp.Length; i++)
-                        dp[i] = Mul(dp[i], scale);
+                        dp[i] *= scale;
                 }
             }
         }
 
         foreach (var node in scene.Nodes)
-            node.LocalPosition = Mul(node.LocalPosition, scale);
+            node.LocalPosition *= scale;
 
         foreach (var skin in scene.Skins)
         {
@@ -64,8 +64,6 @@ internal sealed class GlobalScaleStep : IPostProcess
             }
         }
     }
-
-    private static Float3 Mul(Float3 v, float s) => new(v.X * s, v.Y * s, v.Z * s);
 
     private static Float4x4 ScaleTranslation(Float4x4 m, float s)
     {
