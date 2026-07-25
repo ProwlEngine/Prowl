@@ -7,21 +7,27 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI.Events;
 
+/// <summary> Represents event data for pointer-based UI events, providing the source element, its layout rectangle, and pointer positions in multiple coordinate spaces. </summary>
 public class ElementEvent
 {
     // The element that triggered the event
+    /// <summary> The element that triggered the event. </summary>
     public ElementHandle Source { get; internal set; }
 
     // The calculated layout rectangle of the element
+    /// <summary> The calculated layout rectangle of the element. </summary>
     public Rect ElementRect { get; internal set; }
 
     // The raw pointer position in screen coordinates
+    /// <summary> Gets the raw pointer position in screen coordinates. </summary>
     public Float2 PointerPosition { get; }
 
     // The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right)
+    /// <summary> The pointer position normalized to the element (0,0 = top-left, 1,1 = bottom-right). </summary>
     public Float2 NormalizedPosition { get; internal set; }
 
     // The pointer position relative to the element's top-left corner
+    /// <summary> The pointer position relative to the element's top-left corner </summary>
     public Float2 RelativePosition { get; internal set; }
 
     /// <summary>
@@ -38,6 +44,7 @@ public class ElementEvent
     /// </summary>
     public void StopPropagation() => IsPropagationStopped = true;
 
+    /// <summary> Initializes a new event with the given source element, its layout rectangle, and the raw pointer position on screen. Relative and normalized positions are computed automatically. </summary>
     public ElementEvent(ElementHandle source, Rect elementRect, Float2 pointerPos)
     {
         Source = source;

@@ -8,6 +8,7 @@ using Prowl.PaperUI.LayoutEngine;
 
 namespace Prowl.PaperUI;
 
+/// <summary> Manages a tree of UI elements stored in a dense array, providing creation, destruction, lookup by ID, and integrity validation for debugging. </summary>
 public partial class Paper
 {
     private ElementData[] _elements = new ElementData[1024];
@@ -22,6 +23,7 @@ public partial class Paper
 
     public int ElementCount => _elementCount;
 
+    /// <summary> Returns a writable reference to the ElementData at the given index. The index must be between 0 (inclusive) and ElementCount (exclusive); otherwise throws IndexOutOfRangeException. </summary>
     public ref ElementData GetElementData(int index)
     {
         if (index < 0 || index >= _elementCount)
@@ -29,6 +31,7 @@ public partial class Paper
         return ref _elements[index];
     }
 
+    /// <summary> Creates a new element with the specified id and returns a handle to it. If the id already exists, the element is still created but the existing style mapping is preserved. </summary>
     public ElementHandle CreateElement(int id)
     {
         int index;
@@ -63,6 +66,7 @@ public partial class Paper
         return new ElementHandle(this, index);
     }
 
+    /// <summary> Destroys the element identified by the handle, recursively destroys all its children, and reclaims its storage for reuse. If the handle is not valid the call is silently ignored. </summary>
     public void DestroyElement(ElementHandle handle)
     {
         if (!handle.IsValid)
@@ -93,6 +97,7 @@ public partial class Paper
         _freeIndices.Push(handle.Index);
     }
 
+    /// <summary> Returns the ElementHandle of the root element, or throws InvalidOperationException if the root element has not been initialized. </summary>
     public ElementHandle GetRootElementHandle()
     {
         if (_rootElementIndex == -1)
@@ -120,6 +125,7 @@ public partial class Paper
 
     // Helper method to find element by ID. O(1) via _idToIndex, with an ID re-check so a stale/reused
     // slot can never resolve to the wrong element.
+    /// <summary> Returns an ElementHandle for the element with the given numeric ID, or an invalid handle if no element with that ID exists. </summary>
     public ElementHandle FindElementHandleByID(int id)
     {
         if (_idToIndex.TryGetValue(id, out int index) && index >= 0 && index < _elementCount && _elements[index].ID == id)
@@ -128,6 +134,7 @@ public partial class Paper
     }
 
     // Validation method for debugging
+    /// <summary> Validates parent-child relationship consistency of all elements. Throws InvalidOperationException if any element has a dangling parent reference, a missing child link, or an out-of-range index. </summary>
     public void ValidateElementIntegrity()
     {
         for (int i = 0; i < _elementCount; i++)

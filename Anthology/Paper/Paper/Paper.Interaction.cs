@@ -38,9 +38,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public bool IsParentHovered => IsElementHovered(CurrentParent.Data.ID);
 
-        /// <summary>
-        /// Checks if the current parent element is active.
-        /// </summary>
+        /// <summary> Whether the current parent element is active. </summary>
         public bool IsParentActive => _activeElementId == CurrentParent.Data.ID;
 
         /// <summary>
@@ -65,6 +63,7 @@ namespace Prowl.PaperUI
         /// </summary>
         private HashSet<int> _focusWithinAncestors = new HashSet<int>();
 
+        /// <summary> Checks if the element with the specified id, or any of its descendants, currently has input focus. Equivalent to CSS :focus-within. </summary>
         public bool IsElementFocusWithin(int id)
         {
             // Check the cached ancestor set from the previous frame
@@ -211,8 +210,11 @@ namespace Prowl.PaperUI
         private List<(ElementHandle handle, Transform2D parentTransform)> _layeredElements = new List<(ElementHandle, Transform2D)>();
 
         // Public access to interaction state
+        /// <summary> Gets the ID of the element currently under the pointer, or 0 if no element is hovered. </summary>
         public int HoveredElementId => _theHoveredElementId;
+        /// <summary> Gets the ID of the currently active (pressed) element, or 0 if no element is active. </summary>
         public int ActiveElementId => _activeElementId;
+        /// <summary> Gets the ID of the element that currently has input focus, or 0 if no element is focused. </summary>
         public int FocusedElementId => _focusedElementId;
 
         private PaperCursor _currentCursor = PaperCursor.Default;
@@ -263,8 +265,10 @@ namespace Prowl.PaperUI
             }
         }
 
+        /// <summary> Indicates whether the UI currently has a hovered or active (pressed) element, and therefore wants to capture the pointer. The host can check this to decide whether to forward pointer events to the UI or handle them elsewhere. </summary>
         public bool WantsCapturePointer => _theHoveredElementId != 0 || _activeElementId != 0;
 
+        /// <summary> When set to true, suppresses keyboard navigation (Tab/Shift+Tab) for the current frame. Automatically reset to false at the end of each frame. </summary>
         public bool SkipKeyboardNavigation = false;
 
         #endregion
@@ -611,7 +615,7 @@ namespace Prowl.PaperUI
                         data.OnHeld?.Invoke(click);
                     break;
                 default:
-                    // ElementEvent base (hover/enter/leave) — handled separately
+                    // ElementEvent base (hover/enter/leave) - handled separately
                     break;
             }
         }

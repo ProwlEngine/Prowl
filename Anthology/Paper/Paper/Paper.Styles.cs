@@ -163,9 +163,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>
-        /// Sets the X skew angle.
-        /// </summary>
+        /// <summary> Sets the X skew angle in degrees. </summary>
         public TransformBuilder SetSkewX(float angle)
         {
             _skewX = angle;
@@ -190,9 +188,7 @@ namespace Prowl.PaperUI
             return this;
         }
 
-        /// <summary>
-        /// Sets the Y origin point (0-1 range).
-        /// </summary>
+        /// <summary> Sets the Y origin point (0-1 range). </summary>
         public TransformBuilder SetOriginY(float y)
         {
             _originY = y;
@@ -681,6 +677,7 @@ namespace Prowl.PaperUI
         #endregion
     }
 
+    /// <summary> Manages style templates, style families, and per-element style state for UI elements in the Paper document. </summary>
     public partial class Paper
     {
         #region Style Management
@@ -809,14 +806,13 @@ namespace Prowl.PaperUI
             return template;
         }
 
+        /// <summary> Registers an existing StyleTemplate under the given name, making it available for use by ApplyStyleWithStates and related methods. </summary>
         public void RegisterStyle(string name, StyleTemplate template)
         {
             _styleTemplates[name] = template;
         }
 
-        /// <summary>
-        /// Creates a new style template.
-        /// </summary>
+        /// <summary> Attempts to retrieve a style template by name, returning true if found and setting template to the matching StyleTemplate, or false if no template exists with that name. </summary>
         public bool TryGetStyle(string name, out StyleTemplate? template)
         {
             return _styleTemplates.TryGetValue(name, out template);
@@ -925,12 +921,14 @@ namespace Prowl.PaperUI
                 return this;
             }
 
+            /// <summary> Sets the style template for the normal pseudo-state and returns the builder for chaining. </summary>
             public StyleFamilyBuilder Normal(StyleTemplate style)
             {
                 _normalStyle = style;
                 return this;
             }
 
+            /// <summary> Sets the style template for the hovered pseudo-state and returns this builder for chaining. </summary>
             public StyleFamilyBuilder Hovered(StyleTemplate style)
             {
                 _hoveredStyle = style;

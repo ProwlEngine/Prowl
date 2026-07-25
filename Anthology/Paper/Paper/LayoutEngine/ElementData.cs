@@ -29,13 +29,16 @@ public enum WrapJustify
     Fill,
 }
 
+/// <summary> Configuration data for a UI element, including its identifiers, interactivity flags, event callbacks, layout properties, and font settings. </summary>
 public struct ElementData
 {
     public int ID;
 
     // Events
     public bool IsFocusable;
+    /// <summary> When true, the element ignores all input events (mouse, keyboard, touch). </summary>
     public bool IsNotInteractable;
+    /// <summary> When true, events on this element do not propagate to parent elements. </summary>
     public bool StopPropagation;
 
     /// <summary>Mouse cursor shape requested while this element is hovered. Defaults to
@@ -67,22 +70,26 @@ public struct ElementData
     public Action<TextInputEvent> OnTextInput;
     public Action<FocusEvent> OnFocusChange;
 
+    /// <summary> Called after this element's layout is computed, with the element handle and its final layout rectangle. </summary>
     public Action<ElementHandle, Rect> OnPostLayout;
 
 
     // Hierarchy
+    /// <summary> Index of the parent element in the owner's element array, or -1 if this element is the root. </summary>
     public int ParentIndex;
+    /// <summary> Indices of child elements in the owning element array. </summary>
     public List<int> ChildIndices;
 
-    // Interaction hooking - whether this element inherits parent's interaction state
+    /// <summary> Whether this element inherits its parent's interaction state (mouse hover, press, etc.) instead of tracking its own. </summary>
     public bool IsHookedToParent;
 
-    // Interaction hooking - whether this element has hooked children (optimization flag)
+    /// <summary> Whether this element has one or more children that are hooked to it. An optimization flag for interaction hooking. </summary>
     public bool IsAHookedParent;
 
-    // Tab navigation - element's position in tab order (-1 means not focusable via tab)
+    /// <summary>  Tab navigation - element's position in tab order (-1 means not focusable via tab) </summary>
     public int TabIndex;
 
+    /// <summary> Whether the element is rendered and participates in layout. Defaults to true. </summary>
     public bool Visible;
 
     // Layout properties
@@ -110,8 +117,7 @@ public struct ElementData
     /// <summary>How leftover main-axis space on each wrapped line is distributed.</summary>
     public WrapJustify WrapJustify;
 
-    // Cached text layout objects (RichText is persisted across frames via element storage so
-    // animation start time survives — see Paper.Core.cs ProcessText / DrawText paths.)
+    // Cached text layout objects (RichText is persisted across frames via element storage so animation start time survives -- see Paper.Core.cs ProcessText / DrawText paths.)
     internal Quill.Canvas.QuillMarkdown? _quillMarkdown;
     internal Quill.Canvas.QuillRichText? _quillRichText;
     internal TextLayout _textLayout;
@@ -148,19 +154,28 @@ public struct ElementData
     internal bool _textMemoValid;
 
     // Layout results
+    /// <summary> Whether text layout has been computed for this element this frame. Set to true by ProcessText so subsequent layout and render passes skip redundant work. </summary>
     public bool ProcessedText;
+    /// <summary> The resolved X position of the top-left corner of this element's layout rectangle. </summary>
     public float X;
+    /// <summary> The resolved Y position of the top-left corner of this element's layout rectangle. </summary>
     public float Y;
+    /// <summary> The width of this element as computed by the layout engine, in the parent's coordinate space. </summary>
     public float LayoutWidth;
+    /// <summary> The Height of this element as computed by the layout engine, in the parent's coordinate space </summary>
     public float LayoutHeight;
+    /// <summary> The resolved X position of the top-left corner of this element's layout rectangle, in the parent's coordinate space. </summary>
     public float RelativeX;
+    /// <summary> The resolved Y position of the top-left corner of this element's layout rectangle, in the parent's coordinate space. </summary>
     public float RelativeY;
 
-    // Content sizing for auto-sized elements
+    /// <summary> Callback that measures the element's content size given optional width and height constraints. Returns the measured (width, height) or null if the measurement is unavailable. </summary>
     public Func<float?, float?, (float, float)?> ContentSizer;
 
+    /// <summary> Gets the bounding rectangle of this element in sceen (or root) cordinate space, derived from X, Y, LayoutWidth and LayoutHeight. </summary>
     public readonly Rect LayoutRect => new Rect(X, Y, X + LayoutWidth, Y + LayoutHeight);
 
+    /// <summary> Creates a new ElementData with the given ID and all fields set to their default values. </summary>
     public static ElementData Create(int id)
     {
         return new ElementData

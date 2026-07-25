@@ -14,13 +14,7 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.PaperUI;
 
-/// <summary>
-/// Built-in developer tools for Paper — a browser-inspector-style overlay (console, element
-/// tree, profiler, render/input/atlas panels). Off by default; set <see cref="Enabled"/> and
-/// press F12 to toggle. Lives inside the Paper assembly so it can read internal frame state
-/// directly; Paper only calls a handful of hooks (OnBeginFrame / OnEndFrameStart / Phase /
-/// OnEndFrameEnd). All of its own UI is built through the normal ElementBuilder API.
-/// </summary>
+/// <summary> Built-in developer tools for Paper: a browser-inspector-style overlay (console, element tree, profiler, render/input/atlas panels). Off by default; set Enabled and press F12 to toggle. </summary>
 public sealed partial class PaperDevTools
 {
     private readonly Paper _p;
@@ -47,6 +41,7 @@ public sealed partial class PaperDevTools
     private readonly Dictionary<string, float> _scroll = new();
     private readonly Dictionary<string, float> _scrollContent = new();
 
+    /// <summary> Initializes a new instance of PaperDevTools associated with the given Paper frame. </summary>
     public PaperDevTools(Paper paper) => _p = paper;
 
     // ---------------------------------------------------------------- Frame hooks

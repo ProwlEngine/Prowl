@@ -10,14 +10,18 @@ namespace Prowl.PaperUI
         #region Fields & Properties
 
         private bool _capturedKeyboard = false; // Whether keyboard input is captured by an element
+        /// <summary> Gets whether a UI element is currently requesting keyboard capture. </summary>
         public bool WantsCaptureKeyboard { get; private set; }
 
         // Enums
         public readonly PaperKey[] KeyValues = Enum.GetValues(typeof(PaperKey)).Cast<PaperKey>().ToArray();
+        /// <summary> All defined PaperMouseBtn values, cached for iteration. </summary>
         public readonly PaperMouseBtn[] MouseValues = Enum.GetValues(typeof(PaperMouseBtn)).Cast<PaperMouseBtn>().ToArray();
 
         // Events
+        /// <summary> Raised when the pointer position is set. The Float2 parameter contains the new pointer coordinates. </summary>
         public event Action<Float2> OnPointerPosSet;
+        /// <summary> Raised when the cursor visibility changes. The boolean parameter is true when the cursor becomes visible and false when it becomes hidden. </summary>
         public event Action<bool> OnCursorVisibilitySet;
 
         #region Keyboard State
@@ -26,6 +30,7 @@ namespace Prowl.PaperUI
         private bool[] _keyCurState;
         private bool[] _keyPrevState;
         private float[] _keyPressedTime;
+        /// <summary> Gets the most recently pressed key, or PaperKey.Unknown if no key has been pressed since the last reset. </summary>
         public PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
 
         #region Auto-Repeat Settings
@@ -40,18 +45,21 @@ namespace Prowl.PaperUI
         private bool[] _keyRepeating;
 
         // Public properties for configuration
+        /// <summary> Gets or sets whether holding a key down automatically repeats key-press events. Defaults to true. </summary>
         public bool KeyAutoRepeatEnabled
         {
             get => _keyAutoRepeatEnabled;
             set => _keyAutoRepeatEnabled = value;
         }
 
+        /// <summary> Gets or sets the initial delay in seconds before a held key begins repeating. The minimum value is 0.1. </summary>
         public float AutoRepeatDelay
         {
             get => _autoRepeatDelay;
             set => _autoRepeatDelay = Maths.Max(0.1f, value); // Minimum safe delay
         }
 
+        /// <summary> Gets or sets the time in seconds between auto-repeated key events after the initial delay. Clamped to a minimum of 0.01 (max 100 repeats per second). </summary>
         public float AutoRepeatRate
         {
             get => _autoRepeatRate;
@@ -74,6 +82,7 @@ namespace Prowl.PaperUI
 
         // Current pointer position
         private Float2 _pointerPos;
+        /// <summary> Gets or sets the current pointer position. Setting the value raises OnPointerPosSet. </summary>
         public Float2 PointerPos {
             get => _pointerPos;
             set {
@@ -83,9 +92,11 @@ namespace Prowl.PaperUI
         }
 
         // Mouse wheel
+        /// <summary> Cumulative mouse wheel scroll value since the last reset. Positive values indicate forward/up scrolling, negative indicates backward/down. </summary>
         public float PointerWheel { get; private set; } = 0;
 
         // Derived properties
+        /// <summary> The change in pointer position since the last update, equal to PointerPos minus PreviousPointerPos. </summary>
         public Float2 PointerDelta => PointerPos - PreviousPointerPos;
         public bool IsPointerMoving => Float2.LengthSquared(PointerDelta) > 0;
 
@@ -102,6 +113,7 @@ namespace Prowl.PaperUI
         #region Text Input
 
         // Text input
+        /// <summary> Queue of characters buffered for text input processing. Characters are enqueued from keyboard events and cleared after each frame's input handling. </summary>
         public readonly Queue<char> InputString = new Queue<char>();
 
         #endregion
@@ -111,7 +123,9 @@ namespace Prowl.PaperUI
         // Frame timing
         private float _deltaTime = 0.016f; // Default to 60 FPS
         private float _time = 0f;
+        /// <summary> Time in seconds since the last frame update, used for frame-rate-independent logic. </summary>
         public float DeltaTime => _deltaTime;
+        /// <summary> Gets the accumulated time in seconds since the paper instance was initialized. </summary>
         public float Time => _time;
 
         #endregion
@@ -159,19 +173,13 @@ namespace Prowl.PaperUI
 
         #region Clipboard Handling
 
-        /// <summary>
-        /// Sets the clipboard handler for text operations.
-        /// </summary>
-        /// <param name="handler">The clipboard handler implementation</param>
+        /// <summary> Sets the clipboard handler for text operations. Throws ArgumentNullException if handler is null. </summary>
         public void SetClipboardHandler(IClipboardHandler handler)
         {
             _clipboardHandler = handler ?? throw new ArgumentNullException(nameof(handler));
         }
 
-        /// <summary>
-        /// Gets the current clipboard text.
-        /// </summary>
-        /// <returns>The text from the clipboard</returns>
+        /// <summary> Returns the current clipboard text, or an empty string if no clipboard handler is set. </summary>
         public string GetClipboard()
         {
             if (_clipboardHandler == null)
@@ -202,6 +210,7 @@ namespace Prowl.PaperUI
 
         #region Text Input Handling
 
+        /// <summary> Marks the currently active element as the exclusive receiver of keyboard input until the next frame begins. </summary>
         public void CaptureKeyboard()
         {
             _capturedKeyboard = true;
@@ -426,19 +435,13 @@ namespace Prowl.PaperUI
             }
         }
 
-        /// <summary>
-        /// Sets the mouse wheel value.
-        /// </summary>
-        /// <param name="wheel">The wheel delta</param>
+        /// <summary> Sets the mouse wheel scroll delta for the current frame. </summary>
         public void SetPointerWheel(float wheel)
         {
             PointerWheel = wheel;
         }
 
-        /// <summary>
-        /// Adds text input characters.
-        /// </summary>
-        /// <param name="text">The text to add</param>
+        /// <summary> Adds each character of the text to the input queue, converting carriage returns to newlines. </summary>
         public void AddInputCharacter(string text)
         {
             if (string.IsNullOrEmpty(text))
@@ -552,13 +555,10 @@ namespace Prowl.PaperUI
         /// <returns><c>true</c> if the button has been held for at least <paramref name="holdDuration"/> seconds.</returns>
         public bool IsPointerHeld(PaperMouseBtn btn, float holdDuration = 0.5f) => IsPointerDown(btn) && _pointerPressedTime[(int)btn] >= holdDuration;
 
-        /// <summary>
-        /// Checks if a mouse button was float-clicked.
-        /// </summary>
-        /// <param name="btn">The mouse button to query.</param>
+        /// <summary> Checks whether the specified mouse button was double-clicked within the time and distance thresholds. </summary>
         public bool IsPointerDoubleClick(PaperMouseBtn btn) =>
             IsPointerPressed(btn) && _time < _pointerLastClickTime[(int)btn] &&
-            Float2.LengthSquared(PointerPos - _pointerLastClickPos[(int)btn]) < 2; // 5^2 = 25
+            Float2.LengthSquared(PointerPos - _pointerLastClickPos[(int)btn]) < 2; // squared distance threshold of 2 pixels
 
         /// <summary>
         /// Gets the position where a mouse button was clicked.
@@ -566,10 +566,7 @@ namespace Prowl.PaperUI
         /// <param name="btn">The mouse button to query.</param>
         public Float2 GetPointerClickPos(PaperMouseBtn btn) => _pointerClickPos[(int)btn];
 
-        /// <summary>
-        /// Checks if the pointer is over a specified rectangle.
-        /// </summary>
-        /// <param name="btn">The mouse button to query.</param>
+        /// <summary> Returns whether the pointer position lies within the axis-aligned rectangle (x, y, width, height), inclusive of its edges. </summary>
         public bool IsPointerOverRect(float x, float y, float width, float height)
         {
             return _pointerPos.X >= x && _pointerPos.X <= x + width &&
@@ -607,6 +604,7 @@ namespace Prowl.PaperUI
         void SetClipboardText(string text);
     }
 
+    /// <summary> Identifies a key on the Paper input device. </summary>
     public enum PaperKey
     {
         Unknown = 0,

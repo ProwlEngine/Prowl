@@ -14,6 +14,7 @@ using Prowl.Vector.Spatial;
 
 namespace Prowl.PaperUI
 {
+    /// <summary> The main entry point for the Paper immediate-mode UI system. Manages the frame lifecycle, element hierarchy, rendering, text layout, and input scaling. </summary>
     public partial class Paper
     {
         #region Fields & Properties
@@ -50,14 +51,19 @@ namespace Prowl.PaperUI
         public void Log(string message, PaperDevTools.LogLevel level = PaperDevTools.LogLevel.Info) => _devTools.Log(message, level);
 
         // Events
+        /// <summary> Invoked at the end of each frame, before the element layout phase. </summary>
         public Action? OnEndOfFramePreLayout = null;
+        /// <summary> Invoked at the end of each frame, after element layout has completed. </summary>
         public Action? OnEndOfFramePostLayout = null;
 
         // Performance metrics
+        /// <summary> Total milliseconds spent processing the most recent frame. Updated at the end of EndFrame. </summary>
         public float MillisecondsSpent { get; private set; }
+        /// <summary> Total number of elements created during the current frame. Updated at the end of each frame for performance metrics. </summary>
         public uint CountOfAllElements { get; private set; }
 
         // Public properties
+        /// <summary> Rect covering the full viewport in logical coordinates, from (0,0) to (Width, Height). </summary>
         public Rect ScreenRect => new Rect(0, 0, _canvas?.Width ?? _width, _canvas?.Height ?? _height);
 
         /// <summary>Viewport width in logical units (matches <see cref="ScreenRect"/>.Width).</summary>
@@ -66,6 +72,7 @@ namespace Prowl.PaperUI
         /// <summary>Viewport height in logical units (matches <see cref="ScreenRect"/>.Height).</summary>
         public float Height => _canvas?.Height ?? _height;
 
+        /// <summary> Gets the root element of the UI hierarchy. All other elements are descendants of this element. </summary>
         public ElementHandle RootElement => _rootElementHandle;
         public Canvas Canvas => _canvas;
         public ICanvasRenderer Renderer => _renderer;
@@ -78,10 +85,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public Float2 DisplayFramebufferScale = new Float2(1.0f, 1.0f);
 
-        /// <summary>
-        /// Accumulated scale applied to the registered default dimensional values by
-        /// <see cref="ScaleAllSizes"/>.
-        /// </summary>
+        /// <summary> Accumulated scale applied to the registered default dimensional values by ScaleAllSizes. </summary>
         public float MainScale { get; private set; } = 1.0f;
 
         /// <summary>
@@ -89,11 +93,7 @@ namespace Prowl.PaperUI
         /// </summary>
         public float DpiScale => DisplayFramebufferScale.X;
 
-        /// <summary>
-        /// Multiplies every registered default dimensional value by <paramref name="scaleFactor"/>.
-        /// Call this <b>once</b> at init — typically with the monitor's DPI ratio — to adapt
-        /// default style values (padding, border width, spacing, etc.) to a HiDPI display.
-        /// </summary>
+        /// Multiplies every registered default dimensional value by <paramref name="scaleFactor"/>. Call this <b>once</b> at init, typically with the monitor's DPI ratio, to adapt default style values (padding, border width, spacing, etc.) to a HiDPI display.
         public void ScaleAllSizes(float scaleFactor)
         {
             if (scaleFactor <= 0) throw new ArgumentOutOfRangeException(nameof(scaleFactor));
@@ -119,13 +119,7 @@ namespace Prowl.PaperUI
 
         #region Initialization and Frame Management
 
-        /// <summary>
-        /// Initializes Paper with a renderer and dimensions.
-        /// </summary>
-        /// <param name="renderer">The canvas renderer implementation</param>
-        /// <param name="width">Viewport width</param>
-        /// <param name="height">Viewport height</param>
-        /// <param name="fontAtlas">Font atlas settings for text rendering</param>
+        /// <summary> Initializes a new Paper with a renderer, viewport dimensions, and font atlas settings for text rendering. </summary>
         public Paper(ICanvasRenderer renderer, float width, float height, FontAtlasSettings fontAtlas)
         {
             _width = width;
@@ -162,14 +156,18 @@ namespace Prowl.PaperUI
             _height = height;
         }
 
+        /// <summary> Registers a font that Paper will use as a fallback when a glyph is missing from the primary font. </summary>
         public void AddFallbackFont(FontFile font) => _canvas.AddFallbackFont(font);
 
         public IEnumerable<FontFile> EnumerateSystemFonts() => _canvas.EnumerateSystemFonts();
 
+        /// <summary> Measures the rendered width and height of the given text at the specified pixel size, font, and letter spacing. </summary>
         public Float2 MeasureText(string text, float pixelSize, FontFile font, float letterSpacing = 0.0f) => _canvas.MeasureText(text, (float)pixelSize, font, (float)letterSpacing);
 
+        /// <summary> Measures the width and height of the specified text when laid out with the given settings. </summary>
         public Float2 MeasureText(string text, TextLayoutSettings settings) => _canvas.MeasureText(text, settings);
 
+        /// <summary> Creates a pre-computed text layout for the given text and settings, which can be positioned and drawn efficiently. </summary>
         public TextLayout CreateLayout(string text, TextLayoutSettings settings) => _canvas.CreateLayout(text, settings);
 
         /// <summary>
@@ -846,15 +844,14 @@ namespace Prowl.PaperUI
             CurrentParent.Data.ChildIndices.Add(handle.Index);
         }
 
+        /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes before the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
         public void Draw(Action<Canvas, Rect> renderAction)
         {
             var current = CurrentParent;
             Draw(ref current, renderAction);
         }
 
-        /// <summary>
-        /// Adds a custom render action to an element. Draws before children.
-        /// </summary>
+        /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes before the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
         public void Draw(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
             if (renderAction == null)
@@ -867,19 +864,14 @@ namespace Prowl.PaperUI
             });
         }
 
-        /// <summary>
-        /// Adds a foreground render action to the current parent. Draws after children.
-        /// </summary>
+        /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes after the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
         public void DrawForeground(Action<Canvas, Rect> renderAction)
         {
             var current = CurrentParent;
             DrawForeground(ref current, renderAction);
         }
 
-        /// <summary>
-        /// Adds a custom render action that draws after all children have been rendered.
-        /// Useful for overlays, borders, and decorations that should appear on top of content.
-        /// </summary>
+        /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes after the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
         public void DrawForeground(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
             if (renderAction == null)
@@ -927,7 +919,7 @@ namespace Prowl.PaperUI
 
         #region Element Storage
 
-        /// <summary> Get a value from the global GUI storage this persists across all Frames and Elements </summary>
+        /// <summary> Get a value from the root element this persists across all Frames and Elements </summary>
         public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElementHandle, key, default);
         /// <summary> Set a value in the root element </summary>
         public void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElementHandle, key, value);
@@ -947,12 +939,12 @@ namespace Prowl.PaperUI
             return defaultValue;
         }
 
-        /// <summary> Check if a key exists in the current element's storage </summary>
+        /// <summary> Returns whether the specified element has a value stored for the given key. </summary>
         public bool HasElementStorage(ElementHandle el, string key) => _storage.TryGetValue(el.Data.ID, out var storage) && storage.ContainsKey(key);
 
-        /// <summary> Set a value in the current element's storage </summary>
+        /// <summary> Set a value in the current element's storage, persisting across frames. </summary>
         public void SetElementStorage<T>(string key, T value) => SetElementStorage(CurrentParent, key, value);
-        /// <summary> Set a value in the current element's storage </summary>
+        /// <summary> Set a value in the specified element's storage, persisting across frames. </summary>
         public void SetElementStorage<T>(ElementHandle el, string key, T value)
         {
             if (!_storage.TryGetValue(el.Data.ID, out var storage))
@@ -984,10 +976,7 @@ namespace Prowl.PaperUI
         /// <summary>DevTools helper: the raw per-element storage table for an ID (null if none).</summary>
         internal Hashtable DebugGetStorage(int id) => _storage.TryGetValue(id, out var storage) ? storage : null;
 
-        /// <summary>
-        /// Resets animation start time on a rich-text element — replays typewriter / shake / etc.
-        /// from the next frame's draw. No-op if the element has no rich-text layout cached yet.
-        /// </summary>
+        /// <summary> Resets animation start time on a rich-text element - replays typewriter / shake / etc. from the next frame's draw. No-op if the element has no rich-text layout cached yet. </summary>
         public void ResetRichText(ElementHandle el)
         {
             ClearElementStorageKey(el.Data.ID, RichTextLayoutKey);

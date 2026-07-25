@@ -29,6 +29,7 @@ public struct UnitValue : IEquatable<UnitValue>
     /// <summary>Content-size multiplier. 1 = use full content size; 0 = ignore content.</summary>
     public float AutoFactor;
 
+    /// <summary> Initialises a UnitValue from its four component values: pixel offset, percentage of parent, stretch factor, and content-size multiplier. </summary>
     public UnitValue(float px, float pct = 0f, float grow = 0f, float autoFactor = 0f)
     {
         Px = px;
@@ -39,9 +40,10 @@ public struct UnitValue : IEquatable<UnitValue>
 
     #region Factory Methods
 
-    /// <summary>Pre-allocated common values to avoid repeating the constructor.</summary>
+    /// <summary> A layout value that sizes to the element's natural content size with no stretch, pixel offset, or percentage. </summary>
     public static readonly UnitValue Auto = new UnitValue(0f, 0f, 0f, 1f);
     public static readonly UnitValue ZeroPixels = new UnitValue(0f, 0f, 0f, 0f);
+    /// <summary> A pre-allocated stretch taking one share of leftover space, with no pixel or percent floor. </summary>
     public static readonly UnitValue StretchOne = new UnitValue(0f, 0f, 1f, 0f);
 
     /// <summary>A stretch factor with no pixel/percent floor.</summary>
@@ -85,12 +87,7 @@ public struct UnitValue : IEquatable<UnitValue>
     /// </summary>
     public readonly float Floor(float parentValue) => Px + (Pct * 0.01f) * parentValue;
 
-    /// <summary>
-    /// Resolves this value to pixels.
-    /// <paramref name="defaultValue"/> is multiplied by the Grow and AutoFactor components, mirroring
-    /// the legacy "default" fallback for stretch/auto units. Most layout sites pass 0 here so only the
-    /// fixed floor is returned; the layout engine then layers stretch and content contributions on top.
-    /// </summary>
+    /// <summary> Resolves this composite value to a pixel length: Px + (Pct / 100) * parentValue + (Grow + AutoFactor) * defaultValue. </summary>
     public readonly float ToPx(float parentValue, float defaultValue)
         => Px + (Pct * 0.01f) * parentValue + (Grow + AutoFactor) * defaultValue;
 
@@ -118,29 +115,36 @@ public struct UnitValue : IEquatable<UnitValue>
         );
     }
 
-    /// <summary>UnitValue is a value type; Clone is provided for source compatibility.</summary>
+    /// <summary> Returns a copy of this instance. </summary>
     public readonly UnitValue Clone() => this;
 
     #region Operators
 
+    /// <summary> Adds two UnitValues component-wise, combining their Px, Pct, Grow, and AutoFactor independently. </summary>
     public static UnitValue operator +(in UnitValue a, in UnitValue b)
         => new UnitValue(a.Px + b.Px, a.Pct + b.Pct, a.Grow + b.Grow, a.AutoFactor + b.AutoFactor);
 
+    /// <summary> Returns the component-wise difference of two UnitValues; each field (Px, Pct, Grow, AutoFactor) is subtracted independently. </summary>
     public static UnitValue operator -(in UnitValue a, in UnitValue b)
         => new UnitValue(a.Px - b.Px, a.Pct - b.Pct, a.Grow - b.Grow, a.AutoFactor - b.AutoFactor);
 
+    /// <summary> Negates all components (Px, Pct, Grow, AutoFactor) of the UnitValue. </summary>
     public static UnitValue operator -(in UnitValue a)
         => new UnitValue(-a.Px, -a.Pct, -a.Grow, -a.AutoFactor);
 
+    /// <summary> Returns a UnitValue whose four components (Px, Pct, Grow, AutoFactor) are each multiplied by scalar. </summary>
     public static UnitValue operator *(in UnitValue a, float scalar)
         => new UnitValue(a.Px * scalar, a.Pct * scalar, a.Grow * scalar, a.AutoFactor * scalar);
 
     public static UnitValue operator *(float scalar, in UnitValue a) => a * scalar;
 
+    /// <summary> Divides all four components (Px, Pct, Grow, AutoFactor) by the given scalar. </summary>
     public static UnitValue operator /(in UnitValue a, float scalar)
         => new UnitValue(a.Px / scalar, a.Pct / scalar, a.Grow / scalar, a.AutoFactor / scalar);
 
+    /// <summary> Implicitly converts an integer to a UnitValue representing that many pixels. </summary>
     public static implicit operator UnitValue(int value) => new UnitValue(value);
+    /// <summary> Implicitly converts a float to a pure pixel-length UnitValue. </summary>
     public static implicit operator UnitValue(float value) => new UnitValue(value);
 
     public static bool operator ==(in UnitValue a, in UnitValue b) => a.Equals(b);
@@ -150,6 +154,7 @@ public struct UnitValue : IEquatable<UnitValue>
 
     #region Equality
 
+    /// <summary> Returns true when all four components (Px, Pct, Grow, AutoFactor) are equal to those of the other UnitValue. </summary>
     public readonly bool Equals(UnitValue other)
         => Px == other.Px && Pct == other.Pct && Grow == other.Grow && AutoFactor == other.AutoFactor;
 
@@ -159,6 +164,7 @@ public struct UnitValue : IEquatable<UnitValue>
 
     #endregion
 
+    /// <summary> Returns a human-readable representation of this value, combining non-zero components with '+' (e.g. "10px + 50% + 1grow"). Returns '0px" when all components are zero. </summary>
     public override readonly string ToString()
     {
         var parts = new List<string>(4);

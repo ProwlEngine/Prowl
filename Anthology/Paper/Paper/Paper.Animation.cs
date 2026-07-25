@@ -169,11 +169,7 @@ public partial class Paper
         return easing?.Invoke(state.t) ?? state.t;
     }
 
-    /// <summary>
-    /// A continuously-cycling 0..1 oscillator driven by <see cref="Time"/>. Returns a smooth cosine
-    /// pulse with the given <paramref name="period"/> in seconds; useful for breathing highlights,
-    /// blinking cursors, and similar idle effects. Stateless.
-    /// </summary>
+    /// <summary> A continuously-cycling oscillator driven by Time that returns a smooth cosine pulse between 0 and 1 for the given period in seconds. </summary>
     public float Pulse(float period = 1.5f)
     {
         if (period <= 0f) return 0f;
@@ -181,10 +177,7 @@ public partial class Paper
         return 0.5f - 0.5f * Maths.Cos(phase * Maths.PI * 2f);
     }
 
-    /// <summary>
-    /// Color-flavoured <see cref="AnimateFloat"/> > exponential per-channel chase toward
-    /// <paramref name="target"/>. Each call site stored independently on <see cref="CurrentParent"/>.
-    /// </summary>
+    /// <summary> Per-channel exponential smoothing of R/G/B/A toward target, using the same frame-rate-independent algorithm as AnimateFloat. State is stored independently on CurrentParent for each call site. </summary>
     public Color AnimateColor(
         Color target,
         float speed = 8f,
@@ -227,12 +220,7 @@ public partial class Paper
         return current;
     }
 
-    /// <summary>
-    /// Angle (in degrees) variant of <see cref="AnimateFloat"/>, taking the shortest path around the
-    /// circle so animating from 350° to 10° goes the short way (through 360°), not the long way.
-    /// The returned value is the running angle and may drift outside [0, 360); apply <c>% 360f</c> if
-    /// you need a normalized output.
-    /// </summary>
+    /// <summary> Angle (in degrees) variant of <see cref="AnimateFloat"/>, taking the shortest path around the circle so animating from 350° to 10° goes the short way (through 360°), not the long way. The returned value is the running angle and may drift outside [0, 360); apply <c>% 360f</c> if you need a normalized output. </summary>
     public float AnimateAngle(
         float targetDegrees,
         float speed = 8f,
@@ -252,24 +240,7 @@ public partial class Paper
         return current;
     }
 
-    /// <summary>
-    /// Returns the number of seconds <paramref name="current"/> has held its present value. Resets to
-    /// 0 the frame the value flips. Tiny primitive that unlocks long-press detection, hover-delayed
-    /// tooltips, staggered entrances, idle detection > anywhere "X has been true (or false) for N
-    /// seconds" matters.
-    /// <example>
-    /// <code>
-    /// // Long-press: trigger after 0.5s of held activity
-    /// if (IsActive &amp;&amp; gui.StableFor(IsActive) &gt; 0.5f) DoLongPress();
-    ///
-    /// // Hover-delayed tooltip
-    /// float tip = gui.AnimateBool(IsHovered &amp;&amp; gui.StableFor(IsHovered) &gt; 0.4f);
-    ///
-    /// // Stagger a list entrance > each row delays its mount by index*40ms
-    /// float t = gui.AnimateBool(visible &amp;&amp; gui.StableFor(visible) &gt; index * 0.04f);
-    /// </code>
-    /// </example>
-    /// </summary>
+    /// Returns the number of seconds <paramref name="current"/> has held its current value. Resets to 0 the frame the value changes. Each call site gets its own independent timer, keyed by <paramref name="id"/> or caller line number.
     public float StableFor(
         bool current,
         string? id = null,
