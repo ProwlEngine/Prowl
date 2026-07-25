@@ -32,6 +32,9 @@ internal sealed class SceneComponentRegistry
     // Which callbacks a concrete component type overrides. Computed once per type.
     private static readonly Dictionary<Type, Ticks> s_typeTicks = new();
 
+    [OnAssemblyUnload]
+    public static void ClearTypeCache() => s_typeTicks.Clear();
+
     private static Ticks GetTicks(Type type)
     {
         if (s_typeTicks.TryGetValue(type, out Ticks cached))
