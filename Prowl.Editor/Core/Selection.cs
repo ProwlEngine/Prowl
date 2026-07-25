@@ -154,6 +154,16 @@ public static class Selection
         PingedGuid = guid;
         PingTimer = PingDuration;
     }
+    /// <summary>
+    /// Ping an asset or object by GUID - panels that display this GUID should
+    /// scroll to it and show a temporary yellow highlight without changing selection.
+    /// </summary>
+    public static void FastPing(Guid guid)
+    {
+        if (guid == Guid.Empty) return;
+        PingedGuid = guid;
+        PingTimer = 0.05f;
+    }
 
     /// <summary>Call once per frame to tick down the ping timer.</summary>
     public static void UpdatePing(float deltaTime)
