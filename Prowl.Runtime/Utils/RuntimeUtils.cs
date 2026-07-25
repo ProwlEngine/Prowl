@@ -607,4 +607,15 @@ public static class RuntimeUtils
         }
         return null;
     }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> overrides the public virtual <paramref name="method"/> declared on
+    /// <paramref name="baseType"/>. Used to detect which optional MonoBehaviour callbacks a component implements.
+    /// </summary>
+    internal static bool OverridesVirtual(Type type, string method, Type baseType)
+    {
+        MethodInfo? mi = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .FirstOrDefault(m => m.Name == method && m.GetBaseDefinition().DeclaringType == baseType);
+        return mi != null && mi.DeclaringType != baseType;
+    }
 }

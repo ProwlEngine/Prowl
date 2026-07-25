@@ -50,13 +50,7 @@ internal sealed class SceneComponentRegistry
         return ticks;
     }
 
-    private static bool Overrides(Type type, string method)
-    {
-        // All the callbacks are public virtual on MonoBehaviour; an override's DeclaringType differs.
-        MethodInfo? mi = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-            .FirstOrDefault(m => m.Name == method && m.GetBaseDefinition().DeclaringType == typeof(MonoBehaviour));
-        return mi != null && mi.DeclaringType != typeof(MonoBehaviour);
-    }
+    private static bool Overrides(Type type, string method) => RuntimeUtils.OverridesVirtual(type, method, typeof(MonoBehaviour));
 
     /// <summary>One callback's membership: an insertion-ordered list plus an execution-order-sorted
     /// snapshot rebuilt only when membership changes. Iterating the snapshot also keeps a loop safe
