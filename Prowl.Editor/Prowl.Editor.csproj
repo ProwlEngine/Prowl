@@ -43,6 +43,7 @@
     <PackageReference Include="Prowl.Photonic" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Rosetta" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
   </ItemGroup>
 
   <ItemGroup>
