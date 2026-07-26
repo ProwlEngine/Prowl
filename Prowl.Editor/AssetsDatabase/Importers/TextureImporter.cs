@@ -16,7 +16,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
 public class TextureImporter : AssetImporter
 {
-    public override int Version => 3; // Bumped: emits sprite sub-assets from settings["sprite"]
+    public override int Version => 4;
 
     public override bool Import(ImportContext ctx)
     {
@@ -25,7 +25,7 @@ public class TextureImporter : AssetImporter
 
         // Load texture WITHOUT mipmaps first we'll generate them after applying settings
         var texture = Texture2D.FromFile(ctx.AbsolutePath, false);
-        texture.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+        texture.Name = ctx.FileName;
 
         // Read filter/wrap settings (defaults merged by RunImport)
         var minFilter = ctx.Settings?.TryGet("minFilter", out var minTag2) == true

@@ -230,6 +230,7 @@ public sealed class Texture2D : Texture, ISerializable
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("IsMipMapped", new(IsMipmapped));
@@ -255,6 +256,8 @@ public sealed class Texture2D : Texture, ISerializable
         Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
         object[] values = new object[] { Width, Height, false, imageFormat };
         typeof(Texture2D).GetConstructor(param).Invoke(this, values);
+
+        DeserializeHeader(value);
 
         Memory<byte> memory = value["Data"].ByteArrayValue;
         SetData(memory);

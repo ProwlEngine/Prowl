@@ -1759,6 +1759,7 @@ public class Mesh : EngineObject, ISerializable
                 }
             }
 
+            SerializeHeader(compoundTag);
             compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
             compoundTag.Add("MeshType", new EchoObject((int)meshTopology));
             compoundTag.Add("MeshIndexFormat", new EchoObject((int)indexFormat));
@@ -1773,6 +1774,8 @@ public class Mesh : EngineObject, ISerializable
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
+        DeserializeHeader(value);
+
         meshTopology = (Topology)value["MeshType"].IntValue;
         indexFormat = (IndexFormat)value["MeshIndexFormat"].IntValue;
         bounds = new AABB(

@@ -23,7 +23,10 @@ public class InputActionMapImporter : AssetImporter
 
             var map = Serializer.Deserialize<InputActionMap>(echo);
             if (map != null)
+            {
+                map.Name = ctx.FileName;
                 ctx.SetMainAsset(map);
+            }
         }
         catch (Exception ex)
         {

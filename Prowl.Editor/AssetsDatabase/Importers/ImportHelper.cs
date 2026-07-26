@@ -36,6 +36,7 @@ public static class ImportHelper
             var asset = Serializer.Deserialize<T>(echo, serCtx);
             if (asset != null)
             {
+                asset.Name = ctx.FileName;
                 ctx.SetMainAsset(asset);
                 foreach (var dep in dependencies)
                     ctx.AddDependency(dep);

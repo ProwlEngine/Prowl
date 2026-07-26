@@ -219,6 +219,8 @@ public sealed class AudioClip : EngineObject, ISerializable
     {
         // Restore the name
         clipName = value["Name"].StringValue;
+        if (!string.IsNullOrEmpty(clipName))
+            Name = clipName;
 
         bool isFileBased = value["IsFileBased"].BoolValue;
 

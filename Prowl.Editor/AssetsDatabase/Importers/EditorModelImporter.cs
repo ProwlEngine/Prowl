@@ -13,7 +13,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
-    private const int BaseVersion = 5;
+    private const int BaseVersion = 6;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
@@ -65,7 +65,7 @@ public class EditorModelImporter : AssetImporter
             // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
             //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
             //    reflects what its GameObject hierarchy actually references.
-            var model = new Model(Path.GetFileNameWithoutExtension(ctx.AbsolutePath));
+            var model = new Model(ctx.FileName);
             if (data.RootGO != null)
             {
                 var goSerCtx = ImportHelper.CreateTrackingContext(out var goDependencies);
