@@ -10,8 +10,8 @@ using Prowl.Vector;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Records GPU commands. Rented/begun and ended/submitted by the render context, not by passes. Not thread-safe.
-/// Some commands need state bound first. Needs a reset before reuse.
+/// Records GPU commands. Render context rents/begins/ends/submits it, not passes. Not thread-safe.
+/// Some commands need state bound first. Reset before reuse.
 /// </summary>
 public abstract partial class CommandBuffer : DeviceResource, IDisposable
 {
@@ -32,13 +32,13 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Merged property table. Backend reads at draw time.</summary>
     private protected readonly PropertySet _activeProperties = new();
 
-    /// <summary>Bumps every time active properties change. Backend uses it to skip redundant work.</summary>
+    /// <summary>Bumps on every active property change. Backend uses it to skip redundant work.</summary>
     private protected uint _activePropertiesEpoch;
 
     private PropertySet? _lastAppliedSource;
     private uint _lastAppliedSourceVersion;
 
-    /// <summary>Execution this buffer was rented for. Null for one-off stuff not tied to an execution.</summary>
+    /// <summary>Execution this buffer was rented for. Null if not tied to one.</summary>
     internal ExecutionTask? Execution { get; set; }
 
     /// <summary>Pass this buffer was rented during, for profiler timing. Null outside a pass.</summary>
@@ -47,10 +47,20 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Bound execution's id, or 0.</summary>
     internal ulong ExecutionId => Execution?.Id ?? 0;
 
-    /// <summary>Monotonic id stamped fresh on every rental, so profiler consumers can tell distinct rentals of a pooled/reused instance apart.</summary>
+    /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
     internal ulong RentalId { get; set; }
 
     private CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
+
+    /// <summary>
+    /// True if profiler wants metadata via RecordMetadata. Check before building a metadata object.
+    /// </summary>
+    public bool WantsMetadata => Execution?.Device.Profiler?.RequestMetadata ?? false;
+
+    /// <summary>
+    /// Attaches metadata to every draw/dispatch since last call (or since open).
+    /// </summary>
+    public void RecordMetadata(object metadata) => Execution?.Device.Profiler?.RecordDrawMetadata(ProfilerInfo, metadata);
 
     /// <summary>Reports a resource-set bind to the profiler, if any.</summary>
     internal void RecordResourceSetBind(uint setCount) => Execution?.Device.Profiler?.RecordResourceSetBind(setCount);
@@ -59,13 +69,12 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private BufferBindingInfo? _capturedIndexBuffer;
 
     /// <summary>
-    /// True when the profiler wants draw-time buffer bindings captured. Backends must check this
-    /// before reporting resolved bindings via CaptureResolvedVertexBinding/CaptureResolvedIndexBinding,
-    /// since building BufferBindingInfo for every draw is pure overhead when nothing consumes it.
+    /// True if profiler wants draw-time buffer bindings captured. Check before reporting via
+    /// CaptureResolvedVertexBinding/CaptureResolvedIndexBinding, building BufferBindingInfo unread is wasted work.
     /// </summary>
     internal bool WantsDrawBufferCapture => Execution?.Device.Profiler?.RequestCapture ?? false;
 
-    /// <summary>Clears capture state before a backend resolves buffers for a new draw. Only call when WantsDrawBufferCapture is true.</summary>
+    /// <summary>Clears capture state before backend resolves a new draw's buffers. Only if WantsDrawBufferCapture.</summary>
     internal void BeginDrawBufferCapture()
     {
         _capturedVertexBuffers.Clear();
@@ -73,9 +82,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// Reports the vertex buffer a backend just resolved (via IVertexSource) and bound to the GPU for
-    /// the current draw. Only call when WantsDrawBufferCapture is true - this must be the same
-    /// resolution used for the actual GPU bind, not a second, independent query of IVertexSource.
+    /// Reports the vertex buffer backend just resolved and bound for the current draw. Only if
+    /// WantsDrawBufferCapture - must be same resolution used for the real GPU bind, not a second query.
     /// </summary>
     internal void CaptureResolvedVertexBinding(in VertexBinding binding)
     {
@@ -85,9 +93,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// Reports the index buffer a backend just resolved (via IVertexSource) and bound to the GPU for
-    /// the current draw. Only call when WantsDrawBufferCapture is true - this must be the same
-    /// resolution used for the actual GPU bind, not a second, independent query of IVertexSource.
+    /// Reports the index buffer backend just resolved and bound for the current draw. Only if
+    /// WantsDrawBufferCapture - must be same resolution used for the real GPU bind, not a second query.
     /// </summary>
     internal void CaptureResolvedIndexBinding(DeviceBuffer buffer, IndexFormat format, uint indexCount)
     {
@@ -96,9 +103,8 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     }
 
     /// <summary>
-    /// Reports the buffers already resolved and bound for the draw that just recorded (by the backend,
-    /// via CaptureResolvedVertexBinding/CaptureResolvedIndexBinding) plus any buffer-kind entries in the
-    /// active PropertySet, to the profiler. Only runs when the profiler actually requested a capture.
+    /// Reports buffers already bound for the just-recorded draw (captured earlier) plus any buffer-kind
+    /// entries in active properties, to the profiler. No-op unless profiler requested a capture.
     /// </summary>
     private void RecordDrawBuffersIfRequested()
     {
@@ -145,10 +151,10 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         unchecked { _activePropertiesEpoch++; }
     }
 
-    /// <summary>Resets and starts recording. Render context calls this on rent, not passes.</summary>
+    /// <summary>Resets and starts recording. Context calls on rent, not passes.</summary>
     internal abstract void Begin();
 
-    /// <summary>Finishes recording, makes buffer executable. Render context calls this on submit, not passes.</summary>
+    /// <summary>Finishes recording, makes buffer executable. Context calls on submit, not passes.</summary>
     internal abstract void End();
 
     /// <summary>
@@ -188,7 +194,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     private protected abstract void SetComputeShaderCore(ComputeProgram program);
 
     /// <summary>Binds vertex/index buffers and topology for next draws. Fully replaces old source.</summary>
-    /// <param name="source">Source to bind. Not null, use an empty one for none.</param>
+    /// <param name="source">Source to bind. Not null, pass an empty one for none.</param>
     public void SetVertexSource(IVertexSource source)
     {
         SetVertexSource_CheckNonNull(source);
@@ -219,7 +225,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         SetPropertiesCore(properties);
     }
 
-    /// <summary>Backend work for a property merge. Base class table already updated.</summary>
+    /// <summary>Backend work for a property merge. Base table already updated.</summary>
     private protected abstract void SetPropertiesCore(PropertySet properties);
 
     /// <summary>

@@ -28,7 +28,7 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
     public readonly List<(PassInfo? Pass, ulong CommandBufferId, string BufferName, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
-    public bool RequestExecutionTiming { get; set; }
+    public bool RequestGPUStatistics { get; set; }
     public bool RequestCapture => false;
 
     public void Allocate(AllocBin type, long bytes) { }
@@ -37,6 +37,9 @@ file sealed class RecordingProfiler : IProfiler
     public void FreeMemory(BufferRoleBin role, long bytes) { }
     public void Record(BufferOpBin op, long bytes) { }
     public void RecordSwap(SwapBin evt, long bytes) { }
+
+    public void BeginView(in ViewInfo view) { }
+    public void EndView(in ViewInfo view) { }
 
     public void BeginPass(in PassInfo pass) => PassesBegun.Add(pass);
     public void EndPass(in PassInfo pass) => PassesEnded.Add(pass);
@@ -49,12 +52,19 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) => Dispatches.Add(info);
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) => PipelineSwitches.Add(info);
+
+    public bool RequestMetadata => false;
+    public void RecordPassMetadata(in PassInfo pass, object metadata) { }
+    public void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata) { }
+
     public void RecordResourceSetBind(uint setCount) => ResourceSetBinds.Add(setCount);
     public void RecordBarrier(BarrierBin kind, uint count) => Barriers.Add((kind, count));
     public void RecordSubmit(in ProfilerSubmitInfo info) => Submits.Add(info);
 
     public void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds)
         => ExecutionTimes.Add((pass, commandBufferId, bufferName, isTransfer, milliseconds));
+
+    public void RecordGpuVertexStats(PassInfo? pass, ulong commandBufferId, string bufferName, in GpuVertexStats stats) { }
 }
 
 file readonly struct ProfilerView : IRenderView
@@ -285,7 +295,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void RequestExecutionTiming_True_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new() { RequestExecutionTiming = true };
+        RecordingProfiler profiler = new() { RequestGPUStatistics = true };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
@@ -307,7 +317,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void RequestExecutionTiming_False_NeverRecordsExecutionTime()
     {
-        RecordingProfiler profiler = new() { RequestExecutionTiming = false };
+        RecordingProfiler profiler = new() { RequestGPUStatistics = false };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
@@ -367,7 +377,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
     [Fact]
     public void SubmitAndWaitTransfer_WithTiming_RecordsExecutionTime()
     {
-        RecordingProfiler profiler = new() { RequestExecutionTiming = true };
+        RecordingProfiler profiler = new() { RequestGPUStatistics = true };
         using GraphicsDevice device = CreateProfiledDevice(profiler);
 
         DeviceBuffer source = device.ResourceFactory.CreateBuffer(new BufferDescription(256, BufferUsage.StructuredBufferReadWrite, sizeof(uint)));

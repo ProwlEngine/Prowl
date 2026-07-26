@@ -15,7 +15,7 @@ internal unsafe partial class VkGraphicsDevice
     // timing this submission; null otherwise. Must be called during recording, before End().
     internal QueryPool? BeginTiming(Silk.NET.Vulkan.CommandBuffer cb)
     {
-        if (Profiler is not { RequestExecutionTiming: true })
+        if (Profiler is not { RequestGPUStatistics: true })
             return null;
 
         QueryPool pool = GetFreeTimingQueryPool();

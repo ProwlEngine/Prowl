@@ -25,7 +25,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private bool _destroyed;
 
     /// <summary>
-    /// True if not mid-recording, so it can be reset and reused. Begun-but-not-ended cannot recycle, must dispose instead.
+    /// True if not mid-recording, safe to reset and reuse. Begun-but-not-ended must dispose instead.
     /// </summary>
     internal bool CanRecycle => !_commandBufferBegun && !_destroyed;
 
@@ -41,6 +41,10 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     // End() has written the closing timestamp. Never read back on this object after that point -
     // a later Begin() may reuse this wrapper for a new recording while the old one is still in flight.
     private QueryPool? _pendingTimingPool;
+
+    // GPU vertex/primitive-count query pool for the current recording - same lifecycle as
+    // _pendingTimingPool above, just a different query type.
+    private QueryPool? _pendingStatsPool;
 
     // Graphics State
     private VkFramebufferBase _currentFramebuffer;
@@ -112,6 +116,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _gd.Vk.BeginCommandBuffer(_cb, in beginInfo);
         _commandBufferBegun = true;
         _pendingTimingPool = _gd.BeginTiming(_cb);
+        _pendingStatsPool = _gd.BeginPipelineStats(_cb);
 
         ClearCachedState();
         _currentFramebuffer = null;
@@ -366,6 +371,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         }
 
         _gd.EndTiming(_cb, _pendingTimingPool);
+        _gd.EndPipelineStats(_cb, _pendingStatsPool);
         _gd.Vk.EndCommandBuffer(_cb);
         _submittedCommandBuffers.Add(_cb);
     }
@@ -376,6 +382,14 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     {
         QueryPool? pool = _pendingTimingPool;
         _pendingTimingPool = null;
+        return pool;
+    }
+
+    // Same as TakePendingTimingPool, for the pipeline-statistics query pool.
+    internal QueryPool? TakePendingStatsPool()
+    {
+        QueryPool? pool = _pendingStatsPool;
+        _pendingStatsPool = null;
         return pool;
     }
 

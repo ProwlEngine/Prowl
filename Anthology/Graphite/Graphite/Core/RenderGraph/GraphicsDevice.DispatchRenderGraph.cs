@@ -7,10 +7,10 @@ namespace Prowl.Graphite;
 public abstract partial class GraphicsDevice
 {
     /// <summary>
-    /// Runs a pipeline for the given views as one graph execution.
+    /// Runs a pipeline for the views as one graph execution.
     /// </summary>
     /// <param name="pipeline">Pipeline to run.</param>
-    /// <param name="views">Views to render, one execution each. Not null.</param>
+    /// <param name="views">Views to render.</param>
     public ExecutionTask DispatchGraph<T>(
         RenderPipeline<T> pipeline,
         IReadOnlyList<T> views)
@@ -24,12 +24,18 @@ public abstract partial class GraphicsDevice
         ExecutionTask task = BeginExecution();
         bool present = false;
 
+        int index = 0;
         foreach (T view in views)
         {
             var context = new RenderContext<T>(
                 this, task, graph, view);
 
+            var viewInfo = new ViewInfo(view.Name, index++, view.PixelWidth, view.PixelHeight);
+
+            Profiler?.BeginView(viewInfo);
             pipeline.ExecuteView(context);
+            Profiler?.EndView(viewInfo);
+
             present |= context.RequestPresent;
         }
 

@@ -4,6 +4,7 @@ namespace Prowl.Graphite;
 
 public interface IProfiler
 {
+    // hardware-level counters
     void Allocate(AllocBin type, long bytes);
     void Free(AllocBin type, long bytes);
 
@@ -11,34 +12,45 @@ public interface IProfiler
     void FreeMemory(BufferRoleBin role, long bytes);
 
     void Record(BufferOpBin op, long bytes);
-
     void RecordSwap(SwapBin evt, long bytes);
 
-    void BeginPass(in PassInfo pass);
-    void EndPass(in PassInfo pass);
-
-    void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
-
-    bool RequestCapture { get; }
-    void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer);
-
-    void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info);
-    void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info);
-
-    /// <summary>
-    /// Reports the vertex/index/bound buffers used by the draw call that was just recorded. Only
-    /// called when RequestCapture is true, since resolving the current bindings is not free.
-    /// </summary>
-    void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info);
-
-    void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);
-
     void RecordResourceSetBind(uint setCount);
-
     void RecordBarrier(BarrierBin kind, uint count);
 
+
+    // pipelines/executing views
+    void BeginView(in ViewInfo view);
+    void EndView(in ViewInfo view);
+
+    // passes for a pipeline
+    void BeginPass(in PassInfo pass);
+    void EndPass(in PassInfo pass);
+    void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
+
+    // command buffer submit
     void RecordSubmit(in ProfilerSubmitInfo info);
 
-    bool RequestExecutionTiming { get; }
-    void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds);
+    // pipeline switches
+    void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);
+
+    // draws
+    void RecordDraw(in CommandBufferInfo commandBuffer, in DrawCallInfo info);
+    void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info);
+
+    // dispatches
+    void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info);
+
+    // caller metadata hooks
+    bool RequestMetadata { get; }
+    void RecordPassMetadata(in PassInfo pass, object metadata);
+    void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata);
+
+    // native GPU stats for GPU execution timing and true primitives/triangles drawn
+    bool RequestGPUStatistics { get; }
+    void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds);
+    void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats);
+
+    // hookpoint in between pass execution to copy a pass's outputs in-flight before full submit
+    bool RequestCapture { get; }
+    void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer);
 }

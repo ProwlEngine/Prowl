@@ -1,7 +1,7 @@
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Minimal size info for sizing view-relative render targets. Implementers add richer view data on top.
+/// Minimal size info for view-relative render targets. Concrete views add richer data.
 /// </summary>
 public interface IRenderView
 {
@@ -10,4 +10,9 @@ public interface IRenderView
 
     /// <summary>Height in pixels.</summary>
     uint PixelHeight { get; }
+
+    /// <summary>
+    /// Display name for profiler/debug tooling. Defaults to the type name; override to tell instances apart (e.g. per camera).
+    /// </summary>
+    string Name => GetType().Name;
 }

@@ -3,6 +3,22 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite;
 
+public readonly struct ViewInfo
+{
+    public string Name { get; }
+    public int Index { get; }
+    public uint PixelWidth { get; }
+    public uint PixelHeight { get; }
+
+    public ViewInfo(string name, int index, uint pixelWidth, uint pixelHeight)
+    {
+        Name = name;
+        Index = index;
+        PixelWidth = pixelWidth;
+        PixelHeight = pixelHeight;
+    }
+}
+
 public readonly struct PassInfo
 {
     public string Name { get; }
@@ -29,8 +45,7 @@ public readonly struct DrawCallInfo
     public uint DrawCount { get; }
     public bool IsIndirect { get; }
 
-    /// <summary>The bound IVertexSource's topology at draw time - a profiler needs this to turn
-    /// VertexOrIndexCount into a primitive count (triangle list vs strip vs line/point kinds).</summary>
+    /// <summary>Topology at draw time. Needed to turn VertexOrIndexCount into a primitive count.</summary>
     public PrimitiveTopology Topology { get; }
 
     public DrawCallInfo(DrawKind kind, uint vertexOrIndexCount, uint instanceCount, uint drawCount, bool isIndirect, PrimitiveTopology topology)
@@ -61,10 +76,7 @@ public readonly struct DispatchCallInfo
 }
 
 /// <summary>
-/// One buffer binding observed at draw time: which buffer, which byte range of it (a whole
-/// DeviceBuffer isn't always one logical resource - e.g. a transient ring buffer serves many
-/// independent sub-allocations across a frame, one per draw), and the buffer's ContentVersion as of
-/// this draw, so a consumer can tell whether two draws sharing a buffer actually saw the same bytes.
+/// One buffer binding at draw time: buffer, byte range (a buffer can serve many sub-allocations), and ContentVersion so callers can tell if two draws saw the same bytes.
 /// </summary>
 public readonly struct BufferBindingInfo
 {
@@ -87,9 +99,7 @@ public readonly struct BufferBindingInfo
 }
 
 /// <summary>
-/// Buffers bound for the draw call that just recorded: resolved vertex/index buffers plus any
-/// buffer-kind entries in the active PropertySet at draw time. Only reported when the profiler
-/// requests a capture (IProfiler.RequestCapture), since resolving this is not free.
+/// Buffers bound for the draw that just recorded: vertex/index buffers plus buffer entries in the active PropertySet. Only reported when profiler requests a capture, resolving isn't free.
 /// </summary>
 public readonly struct DrawBufferInfo
 {
@@ -111,8 +121,7 @@ public readonly struct PipelineBindInfo
     public bool IsCompute { get; }
     public ShaderStages Stages { get; }
 
-    /// <summary>The bound GraphicsProgram or ComputeProgram instance. Typed as object since IProfiler
-    /// doesn't reference either type; a consumer that wants full pipeline state casts this itself.</summary>
+    /// <summary>Bound GraphicsProgram or ComputeProgram. Typed as object since IProfiler doesn't reference either; cast it yourself.</summary>
     public object Program { get; }
 
     public PipelineBindInfo(string shaderName, bool isCompute, ShaderStages stages, object program)
@@ -125,13 +134,11 @@ public readonly struct PipelineBindInfo
 }
 
 /// <summary>
-/// Identity of the CommandBuffer that issued a profiler event, captured by value at record time - the
-/// underlying CommandBuffer object is pooled/reused, so consumers reading this later (e.g. after a
-/// deferred GPU-timing resolve) can't rely on the live object still representing the same rental.
+/// Identity of the CommandBuffer that issued a profiler event, captured by value - the underlying object is pooled/reused so don't trust the live object later.
 /// </summary>
 public readonly struct CommandBufferInfo
 {
-    /// <summary>Monotonic id stamped fresh on every rental. Unique per rental, not per pooled object.</summary>
+    /// <summary>Fresh id per rental, not per pooled object.</summary>
     public ulong Id { get; }
     public string Name { get; }
     public PassInfo? Pass { get; }
@@ -159,5 +166,24 @@ public readonly struct ProfilerSubmitInfo
         Kind = kind;
         Name = name;
         CommandBufferCount = commandBufferCount;
+    }
+}
+
+/// <summary>
+/// GPU-reported vertex/primitive counts from a pipeline-statistics query (see VkGraphicsDevice.PipelineStats.cs). Real hardware numbers, not CPU estimates - includes indirect draws, and ClippingPrimitives shows what got culled before rasterization.
+/// </summary>
+public readonly struct GpuVertexStats
+{
+    public ulong InputAssemblyVertices { get; }
+    public ulong InputAssemblyPrimitives { get; }
+    public ulong ClippingInvocations { get; }
+    public ulong ClippingPrimitives { get; }
+
+    public GpuVertexStats(ulong inputAssemblyVertices, ulong inputAssemblyPrimitives, ulong clippingInvocations, ulong clippingPrimitives)
+    {
+        InputAssemblyVertices = inputAssemblyVertices;
+        InputAssemblyPrimitives = inputAssemblyPrimitives;
+        ClippingInvocations = clippingInvocations;
+        ClippingPrimitives = clippingPrimitives;
     }
 }

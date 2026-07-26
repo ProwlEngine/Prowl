@@ -4,8 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite.RenderGraph;
 
 /// <summary>
-/// Per-view context passed to passes and present pass. Fresh each view. Holds view, command buffers,
-/// transient textures, resolved render targets for this execution.
+/// Per-view context for passes and present pass. Fresh each view. Holds command buffers, transient textures, resolved targets.
 /// </summary>
 public sealed class RenderContext<TView>
     where TView : IRenderView
@@ -44,15 +43,28 @@ public sealed class RenderContext<TView>
     /// <summary>View being rendered.</summary>
     public TView View => _view;
 
-    /// <summary>Device's profiler, null if none attached.</summary>
+    /// <summary>Device's profiler, null if none.</summary>
     public IProfiler? Profiler => _device.Profiler;
 
-    /// <summary>Sets the pass currently rendering, stamped on command buffers rented after this. Null outside a pass.</summary>
+    /// <summary>Sets the currently rendering pass, stamped on command buffers rented after. Null outside a pass.</summary>
     internal void SetCurrentPass(in PassInfo? pass) => _currentPass = pass;
 
     /// <summary>
-    /// Rents a command buffer, already begun, ready to record. Submit via SubmitCommandBuffer when done.
-    /// Don't begin/end it yourself.
+    /// True if profiler wants metadata via RecordPassMetadata. Check before building one, it's wasted work otherwise.
+    /// </summary>
+    public bool WantsMetadata => Profiler?.RequestMetadata ?? false;
+
+    /// <summary>
+    /// Attaches caller metadata to the open pass. Only valid mid-pass; no-op otherwise.
+    /// </summary>
+    public void RecordPassMetadata(object metadata)
+    {
+        if (_currentPass is { } pass)
+            Profiler?.RecordPassMetadata(pass, metadata);
+    }
+
+    /// <summary>
+    /// Rents a command buffer, already begun. Submit via SubmitCommandBuffer. Don't begin/end it yourself.
     /// </summary>
     /// <param name="name">Optional debug name.</param>
     public CommandBuffer GetCommandBuffer(string name = "")
@@ -72,7 +84,7 @@ public sealed class RenderContext<TView>
         return cb;
     }
 
-    /// <summary>Ends and submits a command buffer rented from this context.</summary>
+    /// <summary>Ends and submits a command buffer rented here.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
     public void SubmitCommandBuffer(CommandBuffer cmd)
     {
@@ -82,10 +94,9 @@ public sealed class RenderContext<TView>
     }
 
     /// <summary>
-    /// Warns and releases command buffers rented in the named scope but never submitted. Left
-    /// begun-but-unsubmitted; ring disposes on recycle. Called by pipeline after each pass and present pass.
+    /// Warns and drops command buffers rented in this scope but never submitted. Ring disposes them on recycle. Called after each pass and present pass.
     /// </summary>
-    /// <param name="scopeName">Pass name for the warning message.</param>
+    /// <param name="scopeName">Pass name for the warning.</param>
     internal void ReclaimUnsubmittedCommandBuffers(string scopeName)
     {
         if (_pendingCommandBuffers.Count == 0)
@@ -101,7 +112,7 @@ public sealed class RenderContext<TView>
         _pendingCommandBuffers.Clear();
     }
 
-    /// <summary>Rents a transfer command buffer, buffer/texture copies only.</summary>
+    /// <summary>Rents a transfer command buffer, copies only.</summary>
     /// <param name="name">Optional debug name.</param>
     public TransferCommandBuffer GetTransferCommandBuffer(string name = "")
     {
@@ -122,23 +133,21 @@ public sealed class RenderContext<TView>
     public DeviceBufferRange AllocateTransient(uint sizeInBytes) => _task.AllocateTransientInternal(sizeInBytes);
 
     /// <summary>
-    /// Rents a scratch transient texture, freed once the dispatch's fence signals. For scratch targets not
-    /// declared as graph resources.
+    /// Rents a scratch transient texture, freed when the dispatch's fence signals. For scratch targets not declared as graph resources.
     /// </summary>
     /// <param name="desc">Texture to rent.</param>
     public Texture GetTransientTexture(in GraphTextureDesc desc)
         => _device.RentTransientTexture(_task, ToTransientDesc(desc));
 
     /// <summary>Resolves a declared texture handle to its allocated render target.</summary>
-    /// <param name="handle">Handle from the builder during setup.</param>
+    /// <param name="handle">Handle from the builder.</param>
     public RenderTexture GetRenderTexture(TextureHandle handle) => GetRenderTexture(handle, 0);
 
     /// <summary>
-    /// Resolves a texture handle by age. 0 is the current write target, higher values resolve older
-    /// copies of a history resource, up to its declared depth.
+    /// Resolves a texture handle by age. 0 is current, higher values are older history copies up to declared depth.
     /// </summary>
-    /// <param name="handle">Handle from the builder during setup.</param>
-    /// <param name="framesAgo">Executions back to resolve; 0 is current.</param>
+    /// <param name="handle">Handle from the builder.</param>
+    /// <param name="framesAgo">Executions back; 0 is current.</param>
     public RenderTexture GetRenderTexture(TextureHandle handle, int framesAgo)
     {
         if (!handle.IsValid)
@@ -177,15 +186,14 @@ public sealed class RenderContext<TView>
     }
 
     /// <summary>Resolves a declared buffer handle to its allocated device buffer.</summary>
-    /// <param name="handle">Handle from the builder during setup.</param>
+    /// <param name="handle">Handle from the builder.</param>
     public DeviceBuffer GetRenderBuffer(BufferHandle handle) => GetRenderBuffer(handle, 0);
 
     /// <summary>
-    /// Resolves a buffer handle by age. 0 is the current write target, higher values resolve older
-    /// copies of a history resource, up to its declared depth.
+    /// Resolves a buffer handle by age. 0 is current, higher values are older history copies up to declared depth.
     /// </summary>
-    /// <param name="handle">Handle from the builder during setup.</param>
-    /// <param name="framesAgo">Executions back to resolve; 0 is current.</param>
+    /// <param name="handle">Handle from the builder.</param>
+    /// <param name="framesAgo">Executions back; 0 is current.</param>
     public DeviceBuffer GetRenderBuffer(BufferHandle handle, int framesAgo)
     {
         if (!handle.IsValid)
@@ -233,15 +241,14 @@ public sealed class RenderContext<TView>
     }
 
     /// <summary>
-    /// Window's swapchain target for this view. Null unless the present pass requested it via
-    /// RequestSwapchain during setup, or if the device has no swapchain (offscreen dispatch).
+    /// Window swapchain target for this view. Null unless present pass requested it, or device has no swapchain.
     /// </summary>
     public Framebuffer? SwapchainTarget => _graph.PresentRequestsSwapchain ? _device.SwapchainFramebuffer : null;
 
-    /// <summary>Requests present when this dispatch finishes. Call from present pass after drawing to swapchain. No call means view stays offscreen.</summary>
+    /// <summary>Requests present on dispatch finish. Call from present pass after drawing to swapchain. Skip it, view stays offscreen.</summary>
     public void Present() => _presentRequested = true;
 
-    /// <summary>Resolves a texture or buffer handle to the resource the profiler should see for a pass read.</summary>
+    /// <summary>Resolves a texture or buffer handle to what the profiler should see for a pass read.</summary>
     internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)
     {
         if (IsTextureResource(resource))

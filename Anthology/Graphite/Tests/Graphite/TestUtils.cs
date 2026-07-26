@@ -329,6 +329,9 @@ public sealed class TestCountingProfiler : IProfiler
     public void Record(BufferOpBin op, long bytes) { }
     public void RecordSwap(SwapBin evt, long bytes) { }
 
+    public void BeginView(in ViewInfo view) { }
+    public void EndView(in ViewInfo view) { }
+
     public void BeginPass(in PassInfo pass) { }
     public void EndPass(in PassInfo pass) { }
 #nullable enable
@@ -342,10 +345,16 @@ public sealed class TestCountingProfiler : IProfiler
     public void RecordDrawBuffers(in CommandBufferInfo commandBuffer, in DrawBufferInfo info) { }
     public void RecordDispatch(in CommandBufferInfo commandBuffer, in DispatchCallInfo info) { }
     public void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info) { }
+
+    public bool RequestMetadata => false;
+    public void RecordPassMetadata(in PassInfo pass, object metadata) { }
+    public void RecordDrawMetadata(in CommandBufferInfo commandBuffer, object metadata) { }
+
     public void RecordResourceSetBind(uint setCount) { }
     public void RecordBarrier(BarrierBin kind, uint count) { }
     public void RecordSubmit(in ProfilerSubmitInfo info) { }
 
-    public bool RequestExecutionTiming => false;
+    public bool RequestGPUStatistics => false;
     public void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds) { }
+    public void RecordGpuVertexStats(PassInfo? pass, ulong commandBufferId, string bufferName, in GpuVertexStats stats) { }
 }

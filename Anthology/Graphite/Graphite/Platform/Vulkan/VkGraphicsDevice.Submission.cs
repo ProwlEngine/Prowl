@@ -24,11 +24,11 @@ internal unsafe partial class VkGraphicsDevice
         VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
         SubmitCommandBuffer(
             null, vkCb.CommandBuffer, 0, null, 0, null, null,
-            vkCb.TakePendingTimingPool(), vkCb.Name, isTransfer: true, pass: null);
+            timingPool: vkCb.TakePendingTimingPool(), statsPool: null, bufferName: vkCb.Name, isTransfer: true, pass: null);
     }
 
     /// <summary>
-    /// Submits a one-shot command buffer, blocks until GPU finishes. Doesn't touch frame ring-buffer state, safe anytime.
+    /// Submits a one-shot command buffer and blocks until GPU finishes. Doesn't touch frame ring state, safe anytime.
     /// </summary>
     internal void SubmitAndWaitTransfer(Silk.NET.Vulkan.CommandBuffer cb, QueryPool? timingPool, string bufferName)
     {
@@ -77,7 +77,7 @@ internal unsafe partial class VkGraphicsDevice
         vkCL.CommandBufferSubmitted(vkCB);
         SubmitCommandBuffer(
             vkCL, vkCB, waitSemaphoreCount, waitSemaphoresPtr, signalSemaphoreCount, signalSemaphoresPtr, fence,
-            vkCL.TakePendingTimingPool(), vkCL.Name, isTransfer: false, pass: vkCL.Pass);
+            vkCL.TakePendingTimingPool(), vkCL.TakePendingStatsPool(), vkCL.Name, isTransfer: false, pass: vkCL.Pass);
     }
 
     internal void SubmitCommandBuffer(
@@ -89,6 +89,7 @@ internal unsafe partial class VkGraphicsDevice
         VkSemaphore* signalSemaphoresPtr,
         Fence? fence,
         QueryPool? timingPool = null,
+        QueryPool? statsPool = null,
         string bufferName = "",
         bool isTransfer = false,
         PassInfo? pass = null)
@@ -137,7 +138,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_submittedFencesLock)
         {
-            _submittedFences.Add(new FenceSubmissionInfo(submissionFence, vkCL, vkCB, timingPool, bufferName, isTransfer, pass));
+            _submittedFences.Add(new FenceSubmissionInfo(submissionFence, vkCL, vkCB, timingPool, statsPool, bufferName, isTransfer, pass));
         }
     }
 
@@ -173,6 +174,12 @@ internal unsafe partial class VkGraphicsDevice
         {
             double milliseconds = ResolveTiming(pool);
             Profiler?.RecordExecutionTime(fsi.Pass, fsi.CommandBuffer?.RentalId ?? 0, fsi.BufferName, fsi.IsTransfer, milliseconds);
+        }
+
+        if (fsi.StatsPool is { } statsPool)
+        {
+            GpuVertexStats stats = ResolvePipelineStats(statsPool);
+            Profiler?.RecordGpuVertexStats(fsi.Pass, fsi.CommandBuffer?.RentalId ?? 0, fsi.BufferName, in stats);
         }
 
         _vk.ResetFences(_device, 1, &fence).CheckResult();
@@ -240,6 +247,7 @@ internal unsafe partial class VkGraphicsDevice
         public VkCommandBuffer? CommandBuffer;
         public Silk.NET.Vulkan.CommandBuffer VulkanCommandBuffer;
         public QueryPool? TimingPool;
+        public QueryPool? StatsPool;
         public string BufferName;
         public bool IsTransfer;
         public PassInfo? Pass;
@@ -249,6 +257,7 @@ internal unsafe partial class VkGraphicsDevice
             VkCommandBuffer? commandBuffer,
             Silk.NET.Vulkan.CommandBuffer vulkanCommandBuffer,
             QueryPool? timingPool,
+            QueryPool? statsPool,
             string bufferName,
             bool isTransfer,
             PassInfo? pass)
@@ -257,6 +266,7 @@ internal unsafe partial class VkGraphicsDevice
             CommandBuffer = commandBuffer;
             VulkanCommandBuffer = vulkanCommandBuffer;
             TimingPool = timingPool;
+            StatsPool = statsPool;
             BufferName = bufferName;
             IsTransfer = isTransfer;
             Pass = pass;
