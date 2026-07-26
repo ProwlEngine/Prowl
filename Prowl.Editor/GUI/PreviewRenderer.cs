@@ -172,9 +172,8 @@ public class PreviewRenderer : IDisposable
         // RenderPipelineManager.Current) - see the field comment on _pipeline.
         _scene.CollectRenderables();
         CameraView view = CameraView.From(_camera, new RenderingData { DisplayGrid = ShowGrid });
-        RenderProfilerHooks.Sink?.BeginView($"Preview:{_assetName}");
+        view.Name = $"Preview:{_assetName}";
         Graphics.Device.DispatchGraph(_pipeline, new[] { view });
-        RenderProfilerHooks.Sink?.EndView();
         _camera.SavePreviousViewProjectionMatrix();
     }
 
