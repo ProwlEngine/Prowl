@@ -122,12 +122,19 @@ public abstract class EditorTestHarness : IDisposable
         return CompileGameAssembly();
     }
 
+    private readonly Dictionary<Assembly, byte[]> _compiledBytes = new();
+
+    protected Func<Assembly, byte[]?> AssemblyBytesResolver => asm => _compiledBytes.TryGetValue(asm, out var bytes) ? bytes : null;
+
     /// <summary>Compile whatever scripts are on disk, assert success, and load the fresh game assembly.</summary>
     protected Assembly CompileGameAssembly()
     {
         var result = ScriptCompiler.CompileAll(Project);
         Assert.True(result.Success, $"Compilation failed: {result.Errors}");
-        return Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath));
+        byte[] bytes = File.ReadAllBytes(Project.GameAssemblyPath);
+        var asm = Assembly.Load(bytes);
+        _compiledBytes[asm] = bytes;
+        return asm;
     }
 
     /// <summary>Enters play mode with a deterministic time source until the returned scope is disposed.</summary>
