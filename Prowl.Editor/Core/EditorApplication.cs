@@ -9,6 +9,7 @@ using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Profiling;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Projects.Settings;
@@ -66,6 +67,8 @@ public class EditorApplication : Game
         Instance = this;
         Application.IsEditor = true;
         Application.IsPlaying = false;
+
+        EditorProfiler.AttachShared(Graphics.Device);
 
         InitializeFont();
 
