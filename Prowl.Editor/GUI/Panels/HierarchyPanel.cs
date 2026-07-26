@@ -308,6 +308,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                     .OnRightClick(e =>
                     {
                         var go = (GameObject)e.Node.UserData!;
+                        // Select the object with Right click as well if we're not performing a multiple selection action
+                        if (!paper.IsKeyDown(PaperKey.LeftControl) && !paper.IsKeyDown(PaperKey.LeftShift))
+                            Selection.Select(go);
                         if (!Selection.IsSelected(go)) Selection.AddToSelection(go);
                     })
                     .OnDragStart(n =>
@@ -344,7 +347,13 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
                         {
-                            RenameOverlay.Draw(paper, $"hier_rename_{goId}");
+                            using (paper.Box($"hier_renamebox_{goId}")
+                                       .Width(UnitValue.StretchOne)
+                                       .Height(EditorTheme.RowHeight)
+                                       .Enter())
+                            {
+                                RenameOverlay.Draw(paper, $"hier_rename_{goId}");
+                            }
                         }
                         else
                         {
@@ -879,6 +888,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
         if (beginRename)
         {
+            Selection.FastPing(go.Identifier);
             // Enter rename via global overlay
             string goIdStr = go.Identifier.ToString();
             var goGuid = go.Identifier;
