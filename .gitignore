@@ -357,3 +357,4 @@ refresh-anthology.sh
 /OldPipeline
 /ProfilerTasks
 /profiler.txt
+/.claude
