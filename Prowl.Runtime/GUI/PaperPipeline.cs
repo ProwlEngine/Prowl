@@ -21,6 +21,7 @@ public sealed class PaperView : IRenderView
 {
     public uint PixelWidth { get; set; }
     public uint PixelHeight { get; set; }
+    public string Name => "UI";
 }
 
 /// <summary>
@@ -118,9 +119,7 @@ public sealed class PaperPipeline : RenderPipeline<PaperView>, ICanvasRenderer
             PixelHeight = (uint)_paper.PixelHeight,
         };
 
-        RenderProfilerHooks.Sink?.BeginView("UI");
         Graphics.Device.DispatchGraph(this, [view]);
-        RenderProfilerHooks.Sink?.EndView();
     }
 
     public void Cleanup() => _paper.Cleanup();

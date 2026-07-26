@@ -92,35 +92,35 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
             renderable.GetCullingData(out bool isRenderable, out _);
             if (!isRenderable)
             {
-                EmitRenderable(renderable, "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, "", "", culled: true, drawCallCount: 0);
                 continue;
             }
 
             renderable.GetRenderingData(viewer, out PropertySet properties, out Mesh mesh, out Float4x4 model, out InstanceData[]? instanceData);
             if (instanceData != null && instanceData.Length > 0)
             {
-                EmitRenderable(renderable, "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, "", "", culled: true, drawCallCount: 0);
                 continue;
             }
 
             Material material = renderable.GetMaterial();
             if (mesh.IsNotValid() || material.IsNotValid())
             {
-                EmitRenderable(renderable, material?.Name ?? "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, material?.Name ?? "", "", culled: true, drawCallCount: 0);
                 continue;
             }
 
             cmd.DrawMesh(mesh, material, 0, model, properties);
-            EmitRenderable(renderable, material.Name, mesh.Name, culled: false, drawCallCount: 1);
+            EmitRenderable(cmd, renderable, material.Name, mesh.Name, culled: false, drawCallCount: 1);
         }
     }
 
-    internal static void EmitRenderable(IRenderable renderable, string materialName, string meshName, bool culled, int drawCallCount)
+    internal static void EmitRenderable(CommandBuffer cmd, IRenderable renderable, string materialName, string meshName, bool culled, int drawCallCount)
     {
-        if (RenderProfilerHooks.Sink == null)
+        if (!cmd.WantsMetadata)
             return;
 
-        RenderProfilerHooks.Sink.Renderable(new RenderableRecord
+        cmd.RecordMetadata(new RenderableMetadata
         {
             MaterialName = materialName,
             MeshName = meshName,

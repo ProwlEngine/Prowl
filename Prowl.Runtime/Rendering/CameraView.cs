@@ -48,6 +48,9 @@ public sealed class CameraView : IRenderView
     public uint PixelWidth { get; set; }
     public uint PixelHeight { get; set; }
 
+    /// <summary>Identifies this view to the profiler - the owning camera's GameObject name.</summary>
+    public string Name { get; set; } = "";
+
     /// <summary>Builds the view for one camera's render: refreshes its per-frame pixel/projection data
     /// (<see cref="Camera.UpdateRenderData"/>) and resolves its target.</summary>
     public static CameraView From(Camera camera, in RenderingData data)
@@ -61,6 +64,7 @@ public sealed class CameraView : IRenderView
             Target = target,
             PixelWidth = camera.PixelWidth,
             PixelHeight = camera.PixelHeight,
+            Name = camera.GameObject.Name,
         };
     }
 }

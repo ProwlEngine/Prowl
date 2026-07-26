@@ -52,7 +52,17 @@ public static class Window
 
     public static event Action? Load;
     public static event Action<float>? Update;
+
+    /// <summary>Fires immediately before <see cref="Render"/>, once per main-loop iteration - the
+    /// window-level "a frame's rendering is about to start" signal a profiler can latch onto directly
+    /// instead of needing an engine-side hook.</summary>
+    public static event Action? FrameBegin;
     public static event Action<float>? Render;
+
+    /// <summary>Fires immediately after <see cref="Render"/>, before <see cref="PostRender"/> - the
+    /// window-level "this frame's rendering is done" signal a profiler can latch onto directly instead
+    /// of needing an engine-side hook.</summary>
+    public static event Action? FrameEnd;
     public static event Action<float>? PostRender;
     public static event Action<bool>? FocusChanged;
     public static event Action<Vector2D<int>>? Resize;
@@ -273,9 +283,9 @@ public static class Window
             // No ambient frame anymore - each camera/Paper dispatch opens and closes its own
             // execution via Device.DispatchGraph (see Scene.Render/Camera.Render, PaperRenderer), including
             // its own SwapBuffers when it presents. Render/PostRender just drive that per-view work.
-            RenderProfilerHooks.Sink?.BeginFrame();
+            FrameBegin?.Invoke();
             Render?.Invoke(delta);
-            RenderProfilerHooks.Sink?.EndFrame();
+            FrameEnd?.Invoke();
             PostRender?.Invoke(delta);
         }
     }

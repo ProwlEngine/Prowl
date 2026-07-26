@@ -154,9 +154,8 @@ public class EditorCamera
         // Render - native Graphite invocation: collect the scene, build this camera's view, dispatch.
         scene.CollectRenderables();
         CameraView view = CameraView.From(_camera, renderData);
-        RenderProfilerHooks.Sink?.BeginView("Scene");
+        view.Name = "Scene";
         Graphics.Device.DispatchGraph(RenderPipelineManager.Current, new[] { view });
-        RenderProfilerHooks.Sink?.EndView();
         _camera.SavePreviousViewProjectionMatrix();
 
         // Remove from scene if we added it

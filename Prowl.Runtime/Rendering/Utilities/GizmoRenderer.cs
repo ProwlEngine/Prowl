@@ -50,7 +50,7 @@ public static class GizmoRenderer
 
     private static void DrawBatch(CommandBuffer cmd, ShaderPass pass, Material material, GizmoBuilder.Batch batch)
     {
-        RenderCommandExtensions.EmitShaderBind(pass, material.Name);
+        cmd.EmitShaderBind(pass, material.Name);
         cmd.SetShader(pass);
         cmd.SetMaterialProperties(material);
         cmd.SetVertexSource(batch);

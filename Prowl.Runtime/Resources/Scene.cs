@@ -728,9 +728,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         CollectRenderables();
 
         var views = Cameras.Select(cam => CameraView.From(cam, new RenderingData())).ToList();
-        RenderProfilerHooks.Sink?.BeginView("Game");
         Graphics.Device.DispatchGraph(RenderPipelineManager.Current, views);
-        RenderProfilerHooks.Sink?.EndView();
         foreach (CameraView view in views)
             view.Camera.SavePreviousViewProjectionMatrix();
 
