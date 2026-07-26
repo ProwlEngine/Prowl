@@ -102,7 +102,7 @@ public abstract class EngineObject : IDisposable
 
     protected void DeserializeHeader(EchoObject value)
     {
-        Name = value.Get("Name")?.StringValue ?? string.Empty;
+        Name = value.Get("Name")?.StringValue ?? Name;
         AssetPath = value.Get("AssetPath")?.StringValue ?? string.Empty;
         if (Guid.TryParse(value.Get("AssetID")?.StringValue, out Guid assetId))
             AssetID = assetId;

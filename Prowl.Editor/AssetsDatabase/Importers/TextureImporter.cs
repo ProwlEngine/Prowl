@@ -16,7 +16,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
 public class TextureImporter : AssetImporter
 {
-    public override int Version => 3; // Bumped: emits sprite sub-assets from settings["sprite"]
+    public override int Version => 4;
 
     public override bool Import(ImportContext ctx)
     {

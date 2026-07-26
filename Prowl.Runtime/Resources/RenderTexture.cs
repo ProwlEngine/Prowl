@@ -84,6 +84,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("NumTextures", new(numTextures));
@@ -109,6 +110,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Type[] param = new[] { typeof(int), typeof(int), typeof(bool), typeof(TextureImageFormat[]) };
         object[] values = new object[] { Width, Height, hasDepthAttachment, textureFormats };
         typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
+
+        DeserializeHeader(value);
     }
 
     #region Pool

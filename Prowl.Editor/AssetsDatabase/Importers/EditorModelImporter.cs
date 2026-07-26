@@ -13,7 +13,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
-    private const int BaseVersion = 5;
+    private const int BaseVersion = 6;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
