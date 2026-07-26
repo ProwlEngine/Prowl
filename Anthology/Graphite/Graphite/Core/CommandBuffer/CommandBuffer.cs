@@ -371,7 +371,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
 
         Execution?.Device.Profiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false));
+            ProfilerInfo, new DrawCallInfo(DrawKind.Draw, vertexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
 
@@ -394,7 +394,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndexedCore(instanceCount, indexStart, vertexOffset, instanceStart);
 
         Execution?.Device.Profiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexed, _currentIndexCount, instanceCount, drawCount: 1, isIndirect: false, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
 
@@ -416,7 +416,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
 
         Execution?.Device.Profiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
 
@@ -444,7 +444,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
         DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
 
         Execution?.Device.Profiler?.RecordDraw(
-            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true));
+            ProfilerInfo, new DrawCallInfo(DrawKind.DrawIndexedIndirect, vertexOrIndexCount: 0, instanceCount: 0, drawCount, isIndirect: true, _currentVertexSource?.Topology ?? PrimitiveTopology.TriangleList));
         RecordDrawBuffersIfRequested();
     }
 

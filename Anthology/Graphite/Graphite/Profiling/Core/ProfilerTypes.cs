@@ -29,13 +29,18 @@ public readonly struct DrawCallInfo
     public uint DrawCount { get; }
     public bool IsIndirect { get; }
 
-    public DrawCallInfo(DrawKind kind, uint vertexOrIndexCount, uint instanceCount, uint drawCount, bool isIndirect)
+    /// <summary>The bound IVertexSource's topology at draw time - a profiler needs this to turn
+    /// VertexOrIndexCount into a primitive count (triangle list vs strip vs line/point kinds).</summary>
+    public PrimitiveTopology Topology { get; }
+
+    public DrawCallInfo(DrawKind kind, uint vertexOrIndexCount, uint instanceCount, uint drawCount, bool isIndirect, PrimitiveTopology topology)
     {
         Kind = kind;
         VertexOrIndexCount = vertexOrIndexCount;
         InstanceCount = instanceCount;
         DrawCount = drawCount;
         IsIndirect = isIndirect;
+        Topology = topology;
     }
 }
 
