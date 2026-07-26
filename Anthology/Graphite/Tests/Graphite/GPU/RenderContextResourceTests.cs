@@ -229,10 +229,6 @@ file sealed class RecordingProfiler : IProfiler
     public void EndPass(in PassInfo pass) { }
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 
-    public void BeginSample(string name) { }
-
-    public void EndSample() { }
-
     public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer)
     {
         transfer.Begin();

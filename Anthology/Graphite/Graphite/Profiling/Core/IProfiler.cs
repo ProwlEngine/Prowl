@@ -19,9 +19,6 @@ public interface IProfiler
 
     void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
 
-    void BeginSample(string name);
-    void EndSample();
-
     bool RequestCapture { get; }
     void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer);
 

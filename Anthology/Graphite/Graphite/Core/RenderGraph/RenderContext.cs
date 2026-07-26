@@ -241,13 +241,6 @@ public sealed class RenderContext<TView>
     /// <summary>Requests present when this dispatch finishes. Call from present pass after drawing to swapchain. No call means view stays offscreen.</summary>
     public void Present() => _presentRequested = true;
 
-    /// <summary>Opens a nested timing region in the current pass. Pair with EndSample.</summary>
-    /// <param name="name">Name of the sample.</param>
-    public void BeginSample(string name) => _device.Profiler?.BeginSample(name);
-
-    /// <summary>Closes the most recently opened sample region.</summary>
-    public void EndSample() => _device.Profiler?.EndSample();
-
     /// <summary>Resolves a texture or buffer handle to the resource the profiler should see for a pass read.</summary>
     internal void ResolveForProfiler(RenderResourceID resource, out RenderTexture? texture, out DeviceBuffer? buffer)
     {

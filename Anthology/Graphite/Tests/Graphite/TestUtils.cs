@@ -335,9 +335,6 @@ public sealed class TestCountingProfiler : IProfiler
     public void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer) { }
 #nullable restore
 
-    public void BeginSample(string name) { }
-    public void EndSample() { }
-
     public bool RequestCapture => false;
     public void Capture(in PassInfo pass, IReadOnlyList<Framebuffer> passOutputs, TransferCommandBuffer transfer) { }
 
