@@ -2412,9 +2412,14 @@ namespace Prowl.PaperUI
                 var fontSize = _handle.Data._elementStyle.GetFontSize();
                 var letterSpacing = _handle.Data._elementStyle.GetLetterSpacing();
                 var displayValue = GetDisplayValue(state.Value, settings);
+                // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
+                var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
+
                 var cursorPos = GetCursorPositionFromIndex(displayValue, settings.Font, fontSize, letterSpacing, state.CursorPosition) * invFb;
 
                 float visibleWidth = _handle.Data.LayoutWidth;
+                if (visibleWidth == 0)
+                    visibleWidth = textSize.X;
                 const float margin = 20.0f;
 
                 if (cursorPos.X < state.ScrollOffsetX + margin)
@@ -2422,8 +2427,6 @@ namespace Prowl.PaperUI
                 else if (cursorPos.X > state.ScrollOffsetX + visibleWidth - margin)
                     state.ScrollOffsetX = (float)cursorPos.X - visibleWidth + margin;
 
-                // MeasureText returns logical units already (Canvas divides its pixel result by FramebufferScale).
-                var textSize = _paper.MeasureText(displayValue, CreateTextLayoutSettings(settings, false, float.MaxValue));
                 state.ClampScrollOffsets((float)textSize.X, (float)textSize.Y, visibleWidth, _handle.Data.LayoutHeight);
             }
         }
