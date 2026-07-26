@@ -8,6 +8,9 @@ namespace Prowl.Editor.GUI.RenderProfiler;
 
 public class SnapshotViewerPanel : DockPanel
 {
+    [MenuItem("Window/Debug/Snapshot Viewer", priority: 102)]
+    static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SnapshotViewerPanel));
+
     public override string Title => "Snapshot Viewer";
     public override string Icon => EditorIcons.MagnifyingGlassChart;
 
