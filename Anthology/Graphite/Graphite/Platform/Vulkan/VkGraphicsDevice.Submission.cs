@@ -53,7 +53,7 @@ internal unsafe partial class VkGraphicsDevice
         if (timingPool is { } pool)
         {
             double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(null, 0, bufferName, isTransfer: true, milliseconds);
+            Profiler?.RecordExecutionTime(new CommandBufferInfo(0, bufferName, null), isTransfer: true, milliseconds);
         }
     }
 
@@ -173,13 +173,13 @@ internal unsafe partial class VkGraphicsDevice
         if (fsi.TimingPool is { } pool)
         {
             double milliseconds = ResolveTiming(pool);
-            Profiler?.RecordExecutionTime(fsi.Pass, fsi.CommandBuffer?.RentalId ?? 0, fsi.BufferName, fsi.IsTransfer, milliseconds);
+            Profiler?.RecordExecutionTime(fsi.CommandBuffer?.ProfilerInfo ?? new(0, "", null), fsi.IsTransfer, milliseconds);
         }
 
         if (fsi.StatsPool is { } statsPool)
         {
             GpuVertexStats stats = ResolvePipelineStats(statsPool);
-            Profiler?.RecordGpuVertexStats(fsi.Pass, fsi.CommandBuffer?.RentalId ?? 0, fsi.BufferName, in stats);
+            Profiler?.RecordGpuVertexStats(fsi.CommandBuffer?.ProfilerInfo ?? new(0, "", null), in stats);
         }
 
         _vk.ResetFences(_device, 1, &fence).CheckResult();

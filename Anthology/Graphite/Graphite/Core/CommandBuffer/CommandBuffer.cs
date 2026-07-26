@@ -50,7 +50,7 @@ public abstract partial class CommandBuffer : DeviceResource, IDisposable
     /// <summary>Fresh id stamped per rental, so profiler can tell reused instances apart.</summary>
     internal ulong RentalId { get; set; }
 
-    private CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
+    internal CommandBufferInfo ProfilerInfo => new(RentalId, Name, Pass);
 
     /// <summary>
     /// True if profiler wants metadata via RecordMetadata. Check before building a metadata object.
