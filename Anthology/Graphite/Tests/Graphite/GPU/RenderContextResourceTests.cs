@@ -253,8 +253,8 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordSubmit(in ProfilerSubmitInfo info) { }
 
     public bool RequestGPUStatistics => false;
-    public void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds) { }
-    public void RecordGpuVertexStats(PassInfo? pass, ulong commandBufferId, string bufferName, in GpuVertexStats stats) { }
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
 
 file sealed class ResourceTestPipeline : RenderPipeline<ResourceView>

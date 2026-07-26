@@ -26,7 +26,7 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
-    public readonly List<(PassInfo? Pass, ulong CommandBufferId, string BufferName, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
+    public readonly List<(CommandBufferInfo info, bool IsTransfer, double Milliseconds)> ExecutionTimes = new();
 
     public bool RequestGPUStatistics { get; set; }
     public bool RequestCapture => false;
@@ -61,10 +61,10 @@ file sealed class RecordingProfiler : IProfiler
     public void RecordBarrier(BarrierBin kind, uint count) => Barriers.Add((kind, count));
     public void RecordSubmit(in ProfilerSubmitInfo info) => Submits.Add(info);
 
-    public void RecordExecutionTime(PassInfo? pass, ulong commandBufferId, string bufferName, bool isTransfer, double milliseconds)
-        => ExecutionTimes.Add((pass, commandBufferId, bufferName, isTransfer, milliseconds));
+    public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
+        => ExecutionTimes.Add((commandBuffer, isTransfer, milliseconds));
 
-    public void RecordGpuVertexStats(PassInfo? pass, ulong commandBufferId, string bufferName, in GpuVertexStats stats) { }
+    public void RecordGpuVertexStats(in CommandBufferInfo commandBuffer, in GpuVertexStats stats) { }
 }
 
 file readonly struct ProfilerView : IRenderView
@@ -309,7 +309,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         });
         device.WaitForIdle();
 
-        (PassInfo? _, ulong _, string _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
+        (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
         Assert.False(isTransfer);
         Assert.True(milliseconds >= 0);
     }
@@ -389,7 +389,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         transfer.End();
         device.SubmitAndWait(transfer);
 
-        (PassInfo? _, ulong _, string _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
+        (CommandBufferInfo _, bool isTransfer, double milliseconds) = Assert.Single(profiler.ExecutionTimes);
         Assert.True(isTransfer);
         Assert.True(milliseconds >= 0);
     }
