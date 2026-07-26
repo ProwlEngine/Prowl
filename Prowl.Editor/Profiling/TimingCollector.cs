@@ -1,26 +1,14 @@
 using System.Collections.Generic;
-using System.Diagnostics;
 
 using Prowl.Graphite;
 
 namespace Prowl.Editor.Profiling;
 
 /// <summary>
-/// Writes CPU/GPU timing and profiling samples to the currently building frame.
+/// Writes GPU timing samples to the currently building frame.
 /// </summary>
 public sealed class TimingCollector
 {
-    // Scratch for one open CPU scope
-    private sealed class CpuNode
-    {
-        public string Name = "";
-        public long StartTimestamp;
-        public readonly List<TimeSample> Children = new();
-    }
-
-    private readonly Stack<CpuNode> _cpuStack = new();
-    private readonly Stack<CpuNode> _cpuNodePool = new();
-
     // Keyed by pass name (a small, stable set), so the outer dictionary and each inner list persist
     // across frames - only their contents are cleared - instead of being discarded and rebuilt.
     private readonly List<string> _gpuGroupOrder = new();
@@ -28,56 +16,22 @@ public sealed class TimingCollector
     private bool _hasGpuData;
 
     private readonly Dictionary<ulong, double> _commandBufferGpuMs = new();
+    private readonly Dictionary<ulong, GpuVertexStats> _commandBufferVertexStats = new();
 
-    private ProfiledFrame? _frame;
-    private string _currentView = "";
-
-    public void OnFrameBegin(ProfiledFrame frame)
+    public void OnFrameBegin()
     {
-        _frame = frame;
-
-        _cpuStack.Clear();
-        PushCpu("Frame");
-
         _gpuGroupOrder.Clear();
         foreach (List<TimeSample> leaves in _gpuGroups.Values)
             leaves.Clear();
         _hasGpuData = false;
 
         _commandBufferGpuMs.Clear();
-
-        _currentView = "";
+        _commandBufferVertexStats.Clear();
     }
 
-    public void OnViewBegin(string view)
+    public void OnExecutionTime(in CommandBufferInfo info, bool isTransfer, double ms)
     {
-        _currentView = view;
-        PushCpu(view);
-    }
-
-    public void OnViewEnd()
-    {
-        TimeSample sample = PopCpuMeasured();
-        if (_currentView.Length > 0 && _frame != null)
-            _frame.View(_currentView).SetCpuMilliseconds(sample.InclusiveMilliseconds);
-        _currentView = "";
-    }
-
-    public void OnPassBegin(in PassInfo p) => PushCpu(p.Name);
-
-    public void OnPassEnd(in PassInfo p)
-    {
-        TimeSample sample = PopCpuMeasured();
-        if (_frame != null)
-            _frame.View(_currentView).Pass(p.Index, p.Name).SetCpuTiming(sample.InclusiveMilliseconds, sample.Children);
-    }
-
-    public void OnSampleBegin(string name) => PushCpu(name);
-    public void OnSampleEnd() => PopCpu();
-
-    public void OnExecutionTime(PassInfo? p, ulong commandBufferId, string bufferName, bool isTransfer, double ms)
-    {
-        string key = p.HasValue ? p.Value.Name : "Transfer";
+        string key = info.Pass.HasValue ? info.Pass.Value.Name : "Transfer";
         if (!_gpuGroups.TryGetValue(key, out List<TimeSample>? leaves))
         {
             leaves = new List<TimeSample>();
@@ -88,29 +42,32 @@ public sealed class TimingCollector
         // means this key hasn't been touched yet this frame - not necessarily that it's brand new.
         if (leaves.Count == 0)
             _gpuGroupOrder.Add(key);
-        leaves.Add(new TimeSample(bufferName, ms, isTransfer, []));
+        leaves.Add(new TimeSample(info.Name, ms, isTransfer, []));
         _hasGpuData = true;
 
-        if (commandBufferId != 0)
+        if (info.Id != 0)
         {
-            _commandBufferGpuMs.TryGetValue(commandBufferId, out double existing);
-            _commandBufferGpuMs[commandBufferId] = existing + ms;
+            _commandBufferGpuMs.TryGetValue(info.Id, out double existing);
+            _commandBufferGpuMs[info.Id] = existing + ms;
         }
     }
 
     public double GetCommandBufferGpuMs(ulong commandBufferId) => _commandBufferGpuMs.TryGetValue(commandBufferId, out double ms) ? ms : 0.0;
 
+    // A command buffer id is only ever reported once per frame (one query per rental), unlike GPU
+    // timing which can accumulate multiple execution-time reports under the same id - so this is a
+    // plain last-write, not a running sum.
+    public void OnGpuVertexStats(in CommandBufferInfo info, in GpuVertexStats stats)
+    {
+        if (info.Id != 0)
+            _commandBufferVertexStats[info.Id] = stats;
+    }
+
+    public GpuVertexStats GetCommandBufferVertexStats(ulong commandBufferId)
+        => _commandBufferVertexStats.TryGetValue(commandBufferId, out GpuVertexStats stats) ? stats : default;
+
     public void FinalizeFrame(ProfiledFrame frame)
     {
-        while (_cpuStack.Count > 1)
-            PopCpu();
-
-        if (_cpuStack.Count == 1)
-        {
-            CpuNode root = _cpuStack.Pop();
-            frame.SetCpuRoot(FinalizeCpu(root));
-        }
-
         if (!_hasGpuData)
             return;
 
@@ -127,50 +84,5 @@ public sealed class TimingCollector
         }
 
         frame.SetGpuRoot(new TimeSample("GPU", total, false, groups.ToArray()));
-    }
-
-    private void PushCpu(string name)
-    {
-        CpuNode node = _cpuNodePool.Count > 0 ? _cpuNodePool.Pop() : new CpuNode();
-        node.Name = name;
-        node.StartTimestamp = Stopwatch.GetTimestamp();
-        node.Children.Clear();
-        _cpuStack.Push(node);
-    }
-
-    private void PopCpu()
-    {
-        if (_cpuStack.Count <= 1)
-            return;
-
-        CpuNode node = _cpuStack.Pop();
-        _cpuStack.Peek().Children.Add(FinalizeCpu(node));
-    }
-
-    private static readonly TimeSample s_emptySample = new("", 0.0, false, System.Array.Empty<TimeSample>());
-
-    private TimeSample PopCpuMeasured()
-    {
-        if (_cpuStack.Count <= 1)
-            return s_emptySample;
-
-        CpuNode node = _cpuStack.Pop();
-        TimeSample sample = FinalizeCpu(node);
-        _cpuStack.Peek().Children.Add(sample);
-        return sample;
-    }
-
-    private TimeSample FinalizeCpu(CpuNode node)
-    {
-        double ms = ElapsedMs(node.StartTimestamp);
-        var sample = new TimeSample(node.Name, ms, false, node.Children.ToArray());
-        _cpuNodePool.Push(node);
-        return sample;
-    }
-
-    private static double ElapsedMs(long startTimestamp)
-    {
-        long elapsed = Stopwatch.GetTimestamp() - startTimestamp;
-        return elapsed * 1000.0 / Stopwatch.Frequency;
     }
 }

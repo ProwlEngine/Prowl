@@ -129,9 +129,10 @@ public sealed class SnapshotCapturer
             var attachments = new List<(string Name, Texture Src, Texture Staging)>();
 
             foreach (FramebufferAttachment color in fb.ColorTargets)
-                attachments.Add((color.Target.Name, color.Target, CopyToStaging(_device, transfer, color.Target)));
-            if (fb.DepthTarget is { } depth)
-                attachments.Add((depth.Target.Name, depth.Target, CopyToStaging(_device, transfer, depth.Target)));
+                if (CopyToStaging(_device, transfer, color.Target) is { } colorStaging)
+                    attachments.Add((color.Target.Name, color.Target, colorStaging));
+            if (fb.DepthTarget is { } depth && CopyToStaging(_device, transfer, depth.Target) is { } depthStaging)
+                attachments.Add((depth.Target.Name, depth.Target, depthStaging));
 
             if (attachments.Count == 0)
                 continue;
@@ -239,9 +240,10 @@ public sealed class SnapshotCapturer
                     var attachments = new List<(string Name, Texture Src, Texture Staging)>();
 
                     foreach (Texture color in rt.ColorTextures)
-                        attachments.Add((color.Name, color, CopyToStaging(device, xfer, color)));
-                    if (rt.DepthTexture != null)
-                        attachments.Add((rt.DepthTexture.Name, rt.DepthTexture, CopyToStaging(device, xfer, rt.DepthTexture)));
+                        if (CopyToStaging(device, xfer, color) is { } colorStaging)
+                            attachments.Add((color.Name, color, colorStaging));
+                    if (rt.DepthTexture != null && CopyToStaging(device, xfer, rt.DepthTexture) is { } depthStaging)
+                        attachments.Add((rt.DepthTexture.Name, rt.DepthTexture, depthStaging));
 
                     stagingTextures.Add((entry.Key, rt.Framebuffer.Name, 0, attachments));
                 }
@@ -293,8 +295,17 @@ public sealed class SnapshotCapturer
         return new Snapshot(null, frame.FrameIndex, frame, result);
     }
 
-    private static Texture CopyToStaging(GraphicsDevice device, TransferCommandBuffer xfer, Texture src)
+    // Depth-stencil formats require TextureUsage.DepthStencil, which can't be combined with
+    // TextureUsage.Staging (the only usage Map() accepts for CPU readback) - so these formats
+    // have no legal staging-texture representation and can't be captured here.
+    private static bool IsStageable(PixelFormat format)
+        => format != PixelFormat.D24_UNorm_S8_UInt && format != PixelFormat.D32_Float_S8_UInt;
+
+    private static Texture? CopyToStaging(GraphicsDevice device, TransferCommandBuffer xfer, Texture src)
     {
+        if (!IsStageable(src.Format))
+            return null;
+
         TextureDescription desc = TextureDescription.Texture2D(
             src.Width, src.Height, src.MipLevels, src.ArrayLayers, src.Format, TextureUsage.Staging);
         Texture staging = device.ResourceFactory.CreateTexture(desc);

@@ -5,30 +5,12 @@ using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor.Profiling.Scene;
 
-/// <summary>
-/// Bridges <see cref="RenderProfilerHooks.Sink"/> (Prowl.Runtime's marker stream) into
-/// <see cref="EditorProfiler"/>, and builds the PipelineSwitch/CallingObject/DrawCall layer of the
-/// hierarchy directly into the frame's <see cref="ProfiledFrame"/> as events stream in. Only runs when
-/// a capture is armed for the frame - on every other frame these hooks are no-ops beyond the always-on
-/// object counters, which is what keeps live recording capped at the CommandBuffer depth.
-///
-/// Correlation: a <see cref="RenderableRecord"/> arrives (see <see cref="Renderable"/>) after the
-/// draws it produced have already fired OnDraw/OnDispatch, so this collector buffers draws for the
-/// currently-open switch and, once a Renderable arrives, claims every buffered draw since the last
-/// claim into a new CallingObject node under that switch.
-///
-/// Not every draw gets a Renderable, though - a post-process blit, a fullscreen triangle, a
-/// user-invoked immediate draw all issue OnDraw/OnDispatch with no correlating marker ever coming.
-/// Pending is scoped to "whatever's buffered under the current switch, not yet claimed"; anything
-/// still sitting there when the switch changes (or the view/frame ends without one) is flushed
-/// straight onto that switch's own <see cref="ProfiledPipelineSwitch.Draws"/> instead of being
-/// silently dropped or, worse, wrongly claimed by some later, unrelated Renderable.
-/// </summary>
-public sealed class DrawHierarchyCollector : IRenderProfilerSink
+
+public sealed class DrawHierarchyCollector
 {
     private sealed class ViewState
     {
-        public ProfiledPipelineSwitch? CurrentSwitch;
+        public ProfiledPipeline? CurrentSwitch;
         public readonly List<ProfiledDrawCall> Pending = new();
         public int Boundary;
 
@@ -40,46 +22,23 @@ public sealed class DrawHierarchyCollector : IRenderProfilerSink
         }
     }
 
-    private EditorProfiler? _profiler;
     private ProfiledFrame? _frame;
     private bool _armed;
     private readonly Dictionary<string, ViewState> _views = new();
     private string _currentView = "";
 
-    /// <summary>
-    /// This collector is owned by the <see cref="EditorProfiler"/> it forwards markers into; call
-    /// <see cref="Attach"/> once both objects exist.
-    /// </summary>
-    public void Attach(EditorProfiler profiler)
+
+    public void OnRenderableMetadata(string currentView, in CommandBufferInfo commandBuffer, in RenderableMetadata r)
     {
-        _profiler = profiler;
-        RenderProfilerHooks.Sink = this;
-    }
-
-    /// <summary>Clears <see cref="RenderProfilerHooks.Sink"/> if it still points at this instance.</summary>
-    public void Detach()
-    {
-        if (ReferenceEquals(RenderProfilerHooks.Sink, this))
-            RenderProfilerHooks.Sink = null;
-        _profiler = null;
-    }
-
-    // IRenderProfilerSink - forwarded straight to EditorProfiler markers.
-
-    void IRenderProfilerSink.BeginFrame() => _profiler?.BeginFrame();
-    void IRenderProfilerSink.EndFrame() => _profiler?.EndFrame();
-    void IRenderProfilerSink.BeginView(string name) => _profiler?.BeginView(name);
-    void IRenderProfilerSink.EndView() => _profiler?.EndView();
-    void IRenderProfilerSink.ShaderBind(in ShaderBindRecord r) => _profiler?.NoteShaderBind(in r);
-
-    void IRenderProfilerSink.Renderable(in RenderableRecord r)
-    {
-        if (_currentView.Length == 0)
+        if (currentView.Length == 0)
             return;
 
-        ViewState state = GetOrCreateView(_currentView);
+        ViewState state = GetOrCreateView(currentView);
 
-        _frame?.View(_currentView).AddObjectCounts(r.Registered, r.Culled, r.DrawCallCount);
+        ProfiledView? view = _frame?.View(currentView);
+        view?.AddObjectCounts(r.Registered, r.Culled, r.DrawCallCount);
+        if (commandBuffer.Pass is { } pass)
+            view?.Pass(pass.Index, pass.Name).AddObjectCounts(r.Registered, r.Culled, r.DrawCallCount);
 
         if (state.Pending.Count == state.Boundary || state.CurrentSwitch == null)
         {
@@ -91,9 +50,13 @@ public sealed class DrawHierarchyCollector : IRenderProfilerSink
             ? ""
             : $"{r.MeshName} / {r.MaterialName}";
 
-        ProfiledCallingObject obj = state.CurrentSwitch.AddObject(label, r.MaterialName, r.MeshName, r.Layer, r.Position, r.Registered, r.Culled);
+        ProfiledPipeline sw = state.CurrentSwitch;
+        int drawStart = sw.Draws.Count;
         for (int i = state.Boundary; i < state.Pending.Count; i++)
-            obj.AddDraw(state.Pending[i]);
+            sw.AddDraw(state.Pending[i]);
+        int drawEnd = sw.Draws.Count;
+
+        sw.AddObject(label, r.MaterialName, r.MeshName, r.Layer, r.Position, r.Registered, r.Culled, drawStart, drawEnd);
 
         state.Boundary = state.Pending.Count;
     }
@@ -118,17 +81,12 @@ public sealed class DrawHierarchyCollector : IRenderProfilerSink
         _currentView = "";
     }
 
-    /// <summary>Called once per frame from EditorProfiler.EndFrame, after the last view has closed -
-    /// catches any switch's leftover pending draws that never got a chance to flush via OnViewEnd
-    /// (e.g. a view that never explicitly ends before the frame does).</summary>
     public void FinalizeFrame()
     {
         foreach (ViewState state in _views.Values)
             FlushLooseDraws(state);
     }
 
-    /// <summary>Moves every not-yet-claimed pending draw straight onto the current switch's own
-    /// Draws list, then clears Pending/Boundary. Safe to call repeatedly or with nothing pending.</summary>
     private static void FlushLooseDraws(ViewState state)
     {
         if (state.CurrentSwitch != null)
@@ -152,7 +110,7 @@ public sealed class DrawHierarchyCollector : IRenderProfilerSink
         ProfiledPipelineState? pstate = BuildState(info);
 
         ProfiledCommandBuffer cb = _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(commandBuffer.Id, commandBuffer.Name);
-        ProfiledPipelineSwitch sw = cb.AddSwitch(info.ShaderName, info.IsCompute, info.Stages, passName, variant, tags, materialName, pstate);
+        ProfiledPipeline sw = cb.AddSwitch(info.ShaderName, info.IsCompute, info.Stages, passName, variant, tags, materialName, pstate);
 
         state.CurrentSwitch = sw;
     }

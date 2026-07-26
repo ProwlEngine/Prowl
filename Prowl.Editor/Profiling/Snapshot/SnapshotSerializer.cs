@@ -49,7 +49,6 @@ public static class SnapshotSerializer
         e.Add("Fps", new EchoObject(f.Fps));
         e.Add("Counters", CountersToEcho(f.Counters));
         e.Add("Views", ListToEcho(f.Views, ViewToEcho));
-        e.Add("CpuRoot", f.CpuRoot is { } cpuRoot ? TimeSampleToEcho(cpuRoot) : new EchoObject(EchoType.Null, null));
         e.Add("GpuRoot", f.GpuRoot is { } gpuRoot ? TimeSampleToEcho(gpuRoot) : new EchoObject(EchoType.Null, null));
         e.Add("Submits", ListToEcho(f.Submits, SubmitToEcho));
         e.Add("HasCaptureDepth", new EchoObject(f.HasCaptureDepth));
@@ -64,7 +63,6 @@ public static class SnapshotSerializer
             FrameMilliseconds = e["FrameMilliseconds"].DoubleValue,
             Fps = e["Fps"].DoubleValue,
             HasCaptureDepth = e["HasCaptureDepth"].BoolValue,
-            CpuRoot = e["CpuRoot"].TagType == EchoType.Null ? null : TimeSampleFromEcho(e["CpuRoot"]),
             GpuRoot = e["GpuRoot"].TagType == EchoType.Null ? null : TimeSampleFromEcho(e["GpuRoot"]),
         };
         frame.SetCounters(CountersFromEcho(e["Counters"]));
@@ -104,7 +102,6 @@ public static class SnapshotSerializer
     {
         EchoObject e = EchoObject.NewCompound();
         e.Add("Name", new EchoObject(v.Name));
-        e.Add("CpuMilliseconds", new EchoObject(v.CpuMilliseconds));
         // GpuMilliseconds is a computed rollup of the Passes below - not serialized, it's re-derived on load.
         e.Add("RegisteredObjects", new EchoObject(v.RegisteredObjects));
         e.Add("CulledObjects", new EchoObject(v.CulledObjects));
@@ -118,7 +115,6 @@ public static class SnapshotSerializer
     private static void ViewFromEcho(ProfiledFrame frame, EchoObject e)
     {
         ProfiledView view = frame.View(e["Name"].StringValue);
-        view.SetCpuMilliseconds(e["CpuMilliseconds"].DoubleValue);
         view.SetObjectCounts(
             e["RegisteredObjects"].IntValue,
             e["CulledObjects"].IntValue,
@@ -136,20 +132,26 @@ public static class SnapshotSerializer
         EchoObject e = EchoObject.NewCompound();
         e.Add("Index", new EchoObject(p.Index));
         e.Add("Name", new EchoObject(p.Name));
-        e.Add("CpuMilliseconds", new EchoObject(p.CpuMilliseconds));
-        // GpuMilliseconds is a computed rollup of the CommandBuffers below - not serialized.
+        // GpuMilliseconds/TrianglesDrawn are computed rollups of the CommandBuffers below - not serialized.
         e.Add("Inputs", ListToEcho(p.Inputs, ResourceRefToEcho));
         e.Add("Outputs", ListToEcho(p.Outputs, ResourceRefToEcho));
         e.Add("CommandBuffers", ListToEcho(p.CommandBuffers, CommandBufferToEcho));
-        e.Add("CpuSamples", ListToEcho(p.CpuSamples, TimeSampleToEcho));
+        e.Add("RegisteredObjects", new EchoObject(p.RegisteredObjects));
+        e.Add("CulledObjects", new EchoObject(p.CulledObjects));
+        e.Add("TotalObjects", new EchoObject(p.TotalObjects));
+        e.Add("DrawCallCount", new EchoObject(p.DrawCallCount));
         return e;
     }
 
     private static void PassFromEcho(ProfiledView view, EchoObject e)
     {
         ProfiledPass pass = view.Pass(e["Index"].IntValue, e["Name"].StringValue);
-        pass.SetCpuTiming(e["CpuMilliseconds"].DoubleValue, ListFromEcho(e["CpuSamples"], TimeSampleFromEcho));
         pass.SetResources(ListFromEcho(e["Inputs"], ResourceRefFromEcho), ListFromEcho(e["Outputs"], ResourceRefFromEcho));
+        pass.SetObjectCounts(
+            e["RegisteredObjects"].IntValue,
+            e["CulledObjects"].IntValue,
+            e["TotalObjects"].IntValue,
+            e["DrawCallCount"].IntValue);
 
         foreach (EchoObject cbEcho in e["CommandBuffers"].List)
             CommandBufferFromEcho(pass, cbEcho);
@@ -173,6 +175,10 @@ public static class SnapshotSerializer
         e.Add("Id", new EchoObject(c.Id));
         e.Add("Name", new EchoObject(c.Name));
         e.Add("GpuMilliseconds", new EchoObject(c.GpuMilliseconds));
+        e.Add("InputAssemblyVertices", new EchoObject(c.InputAssemblyVertices));
+        e.Add("InputAssemblyPrimitives", new EchoObject(c.InputAssemblyPrimitives));
+        e.Add("ClippingInvocations", new EchoObject(c.ClippingInvocations));
+        e.Add("ClippingPrimitives", new EchoObject(c.ClippingPrimitives));
         e.Add("Switches", ListToEcho(c.Switches, SwitchToEcho));
         return e;
     }
@@ -181,32 +187,37 @@ public static class SnapshotSerializer
     {
         ProfiledCommandBuffer cb = pass.CommandBuffer(e["Id"].ULongValue, e["Name"].StringValue);
         cb.SetGpuMs(e["GpuMilliseconds"].DoubleValue);
+        cb.SetGpuVertexStats(new GpuVertexStats(
+            e["InputAssemblyVertices"].ULongValue,
+            e["InputAssemblyPrimitives"].ULongValue,
+            e["ClippingInvocations"].ULongValue,
+            e["ClippingPrimitives"].ULongValue));
 
-        foreach (ProfiledPipelineSwitch sw in ListFromEcho(e["Switches"], SwitchFromEcho))
+        foreach (ProfiledPipeline sw in ListFromEcho(e["Switches"], SwitchFromEcho))
             cb.AddSwitchInstance(sw);
     }
 
-    private static EchoObject SwitchToEcho(ProfiledPipelineSwitch s)
+    private static EchoObject SwitchToEcho(ProfiledPipeline s)
     {
         EchoObject e = EchoObject.NewCompound();
         e.Add("ShaderName", new EchoObject(s.ShaderName));
         e.Add("IsCompute", new EchoObject(s.IsCompute));
         e.Add("Stages", new EchoObject((int)s.Stages));
-        e.Add("PassName", new EchoObject(s.PassName));
+        e.Add("PassName", new EchoObject(s.ShaderPassName));
         e.Add("Variant", new EchoObject(s.Variant));
         e.Add("Tags", TagsToEcho(s.Tags));
         e.Add("MaterialName", new EchoObject(s.MaterialName));
         e.Add("State", s.State is { } state ? PipelineStateToEcho(state) : new EchoObject(EchoType.Null, null));
-        e.Add("Objects", ListToEcho(s.Objects, CallingObjectToEcho));
-        // Draws not tied to any calling object - post-process blits, fullscreen passes, user-invoked
-        // immediate draws. See DrawHierarchyCollector.FlushLooseDraws.
+        // Every draw under this switch, in order - each object's DrawStart/DrawEnd (see
+        // CallingObjectToEcho) indexes into this single array instead of duplicating draws per-object.
         e.Add("Draws", ListToEcho(s.Draws, DrawCallToEcho));
+        e.Add("Objects", ListToEcho(s.Objects, CallingObjectToEcho));
         return e;
     }
 
-    private static ProfiledPipelineSwitch SwitchFromEcho(EchoObject e)
+    private static ProfiledPipeline SwitchFromEcho(EchoObject e)
     {
-        var sw = new ProfiledPipelineSwitch(
+        var sw = new ProfiledPipeline(
             e["ShaderName"].StringValue,
             e["IsCompute"].BoolValue,
             (ShaderStages)e["Stages"].IntValue,
@@ -216,10 +227,10 @@ public static class SnapshotSerializer
             e["MaterialName"].StringValue,
             e["State"].TagType == EchoType.Null ? null : PipelineStateFromEcho(e["State"]));
 
-        foreach (ProfiledCallingObject obj in ListFromEcho(e["Objects"], CallingObjectFromEcho))
-            sw.AddObjectInstance(obj);
         foreach (ProfiledDrawCall draw in ListFromEcho(e["Draws"], DrawCallFromEcho))
             sw.AddDraw(draw);
+        foreach (ProfiledCallingObject obj in ListFromEcho(e["Objects"], CallingObjectFromEcho))
+            sw.AddObjectInstance(obj);
 
         return sw;
     }
@@ -267,25 +278,23 @@ public static class SnapshotSerializer
         e.Add("Position", Float3ToEcho(o.Position));
         e.Add("Registered", new EchoObject(o.Registered));
         e.Add("Culled", new EchoObject(o.Culled));
-        e.Add("Draws", ListToEcho(o.Draws, DrawCallToEcho));
+        e.Add("DrawStart", new EchoObject(o.DrawStart));
+        e.Add("DrawEnd", new EchoObject(o.DrawEnd));
         return e;
     }
 
     private static ProfiledCallingObject CallingObjectFromEcho(EchoObject e)
     {
-        var obj = new ProfiledCallingObject(
+        return new ProfiledCallingObject(
             e["Label"].StringValue,
             e["MaterialName"].StringValue,
             e["MeshName"].StringValue,
             e["Layer"].IntValue,
             Float3FromEcho(e["Position"]),
             e["Registered"].BoolValue,
-            e["Culled"].BoolValue);
-
-        foreach (ProfiledDrawCall draw in ListFromEcho(e["Draws"], DrawCallFromEcho))
-            obj.AddDraw(draw);
-
-        return obj;
+            e["Culled"].BoolValue,
+            e["DrawStart"].IntValue,
+            e["DrawEnd"].IntValue);
     }
 
     private static EchoObject DrawCallToEcho(ProfiledDrawCall d)
@@ -315,11 +324,12 @@ public static class SnapshotSerializer
         e.Add("InstanceCount", new EchoObject(d.InstanceCount));
         e.Add("DrawCount", new EchoObject(d.DrawCount));
         e.Add("IsIndirect", new EchoObject(d.IsIndirect));
+        e.Add("Topology", new EchoObject((int)d.Topology));
         return e;
     }
 
     private static DrawCallInfo DrawCallInfoFromEcho(EchoObject e)
-        => new((DrawKind)e["Kind"].IntValue, e["VertexOrIndexCount"].UIntValue, e["InstanceCount"].UIntValue, e["DrawCount"].UIntValue, e["IsIndirect"].BoolValue);
+        => new((DrawKind)e["Kind"].IntValue, e["VertexOrIndexCount"].UIntValue, e["InstanceCount"].UIntValue, e["DrawCount"].UIntValue, e["IsIndirect"].BoolValue, (PrimitiveTopology)e["Topology"].IntValue);
 
     private static EchoObject DispatchCallInfoToEcho(DispatchCallInfo d)
     {

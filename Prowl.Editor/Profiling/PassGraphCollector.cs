@@ -136,16 +136,32 @@ public sealed class PassGraphCollector
         _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
     }
 
+    /// <summary>Bumps the switch count on the command buffer a pipeline bind landed on - always-on,
+    /// unlike DrawHierarchyCollector.OnPipelineSwitch which only builds the capture-tier
+    /// ProfiledPipelineSwitch (shader/material identity) when a capture is armed.</summary>
+    public void OnPipelineSwitch(string currentView, in CommandBufferInfo cb)
+    {
+        if (_frame == null || cb.Pass is not { } pass)
+            return;
+
+        _touchedViews.Add(currentView);
+        _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name).IncrementPipelineSwitchCount();
+    }
+
     public void FinalizeFrame(ProfiledFrame frame, TimingCollector timing)
     {
-        // Pass/View GpuMilliseconds are computed properties (sum of their CommandBuffers/Passes), so
-        // there's nothing to roll up here beyond stamping the leaf-level number onto each command buffer.
+        // Pass/View GpuMilliseconds/TrianglesDrawn are computed properties (sum of their
+        // CommandBuffers/Passes), so there's nothing to roll up here beyond stamping the leaf-level
+        // numbers onto each command buffer.
         foreach (string viewName in _touchedViews)
         {
             ProfiledView view = frame.View(viewName);
             foreach (ProfiledPass pass in view.Passes)
                 foreach (ProfiledCommandBuffer cb in pass.CommandBuffers)
+                {
                     cb.SetGpuMs(timing.GetCommandBufferGpuMs(cb.Id));
+                    cb.SetGpuVertexStats(timing.GetCommandBufferVertexStats(cb.Id));
+                }
         }
     }
 
