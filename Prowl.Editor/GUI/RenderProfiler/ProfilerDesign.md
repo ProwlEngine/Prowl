@@ -146,21 +146,6 @@ be the next always-on step here if wanted, but isn't wired yet.
 - CPU-side GPU-wait/stall time (fence/`WaitForIdle` blocking) - not tracked anywhere
 - Command buffer submit-to-execute latency - only total GPU ms is measured, not queue wait time
 
-## Closed (implemented)
-
-- Overdraw / depth complexity estimate - `FragmentShaderInvocationsBit` added to
-  `VkGraphicsDevice.PipelineStats.cs` `PipelineStatsFlags`, `FragmentShaderInvocations` added to
-  `GpuVertexStats`/`ProfiledCommandBuffer`/`ProfiledPass`, rolled up into `ProfiledView.Overdraw`
-  (`FragmentShaderInvocations / (PixelWidth * PixelHeight)`). `ProfiledView.PixelWidth`/`PixelHeight`
-  added from `ViewInfo`, stamped every `BeginView`. Same always-on gate as `TrianglesDrawn`.
-- VRAM budget vs used - `GraphicsDevice.GetMemoryBudget()` added (virtual, `default` on backends that
-  don't support it), backed by `VK_EXT_memory_budget` in `VkGraphicsDevice.MemoryBudget.cs`. Polled
-  once per frame into `ProfiledFrame.HasVramBudget`/`VramBudgetBytes`/`VramUsedBytes` - driver-reported,
-  not this profiler's own `Resident/{bin}` counters, so it accounts for other processes sharing the GPU.
-- Instance count per draw call - already present, wasn't actually a gap: `ProfiledDrawCall.Draw` is a
-  `DrawCallInfo?`, and `DrawCallInfo.InstanceCount` has always been there. Capture-tier only (needs the
-  per-draw-call tree), same tier as the rest of `ProfiledDrawCall`.
-
 ## Closed, not planned
 
 - GPU memory bandwidth per frame - not derivable from any CPU-observable data (no vertex stride

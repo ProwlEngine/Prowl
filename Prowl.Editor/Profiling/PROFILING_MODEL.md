@@ -40,10 +40,10 @@ profiler.EndFrame();
 ```
 
 `BeginFrame`/`EndFrame` are the only two calls you must bracket every frame with. `BeginView`/
-`EndView` are optional per-view scopes (call once per named view you want CPU timing and object
-counts attributed to, e.g. `"Game"`, `"Scene"`). Everything below view level (`BeginPass`,
-`RecordDraw`, `RecordPipelineSwitch`, ...) is Graphite calling into the profiler through
-`IProfiler` as it walks the render graph - you don't call those.
+`EndView` are optional per-view scopes (call once per named view you want object counts attributed
+to, e.g. `"Game"`, `"Scene"`). Everything below view level (`BeginPass`, `RecordDraw`,
+`RecordPipelineSwitch`, ...) is Graphite calling into the profiler through `IProfiler` as it walks
+the render graph - you don't call those.
 
 ### Stop / pause
 
@@ -95,7 +95,7 @@ IReadOnlyList<ProfiledFrame> allHistory = profiler.History; // up to 240 frames,
 double frameMs = latest?.FrameMilliseconds ?? 0.0;
 foreach (ProfiledView view in latest?.Views ?? Array.Empty<ProfiledView>())
 {
-    Console.WriteLine($"{view.Name}: cpu={view.CpuMilliseconds}ms gpu={view.GpuMilliseconds}ms " +
+    Console.WriteLine($"{view.Name}: gpu={view.GpuMilliseconds}ms " +
                        $"objects={view.RenderedObjects}/{view.TotalObjects} draws={view.DrawCallCount}");
 }
 
@@ -104,20 +104,20 @@ IReadOnlyList<double> liveMeshes = profiler.CounterHistory("Live/Mesh");
 IReadOnlyList<string> allCounterNames = profiler.CounterNames;
 ```
 
-### Turning on GPU execution timing
+### GPU execution timing
 
-GPU timing is off by default (Graphite still records `RecordExecutionTime` callbacks internally,
-but `IProfiler.RequestExecutionTiming` gates whether it's worth Graphite's while to report them).
-Flip it on/off any time:
+GPU timing is the only timing tier this profiler tracks (CPU timing is a general-purpose CPU
+profiler's job, not this one's), so it has no separate on/off switch - `IProfiler.RequestExecutionTiming`
+just mirrors `!IsPaused`. Resuming the profiler turns command buffer timing on with it; pausing turns
+it off. `ProfiledFrame.GpuRoot`, `ProfiledPass.GpuMilliseconds`, and
+`ProfiledCommandBuffer.GpuMilliseconds` get populated whenever the profiler is recording (with the
+usual multi-frame lag - see [GPU timing always lags](#gpu-timing-always-lags)). While paused,
+`GpuRoot` stays `null` and all GPU millisecond fields read `0`.
 
-```csharp
-profiler.RequestExecutionTiming = true;
-```
-
-When on, `ProfiledFrame.GpuRoot`, `ProfiledPass.GpuMilliseconds`, and
-`ProfiledCommandBuffer.GpuMilliseconds` start getting populated (with the usual multi-frame lag -
-see [GPU timing always lags](#gpu-timing-always-lags)). When off, `GpuRoot` stays `null` and all
-GPU millisecond fields read `0`.
+The same switch also gates the GPU vertex/primitive-count queries behind `ProfiledPass.TrianglesDrawn`
+- see [Triangle count](#triangle-count-two-tiers-not-one-number). One knob controls everything
+GPU-query-based; there's no reason to split it further since both ride the same query-pool-per-command-
+buffer lifecycle and resolve at the same point (after the submission's fence signals).
 
 ## API reference
 
@@ -129,10 +129,9 @@ yours to call.
 |---|---|
 | `Attach(GraphicsDevice)` / `Detach()` | Registers/unregisters as the device's `IProfiler` |
 | `BeginFrame()` / `EndFrame()` | Frame boundary - required every frame |
-| `BeginView(string)` / `EndView()` | Optional named-view scope for CPU timing + object counts |
-| `Pause()` / `Resume()` / `IsPaused` | Freeze/thaw recording; all calls no-op while paused |
+| `BeginView(string)` / `EndView()` | Optional named-view scope for object counts |
+| `Pause()` / `Resume()` / `IsPaused` | Freeze/thaw recording; all calls no-op while paused. Also gates GPU execution-time reporting - see [GPU execution timing](#gpu-execution-timing) |
 | `RequestCaptureNextFrame()` | Arms the next frame for deep capture + `Snapshot` production |
-| `RequestExecutionTiming` (get/set) | Toggles GPU execution-time reporting |
 | `CaptureHandler` (set) | Delegate invoked mid-frame per pass with texture outputs while armed - normally `SnapshotCapturer.HandleCapture` |
 | `CaptureFinalizeHandler` (set) | Delegate invoked once at end of an armed frame to assemble the `Snapshot` - normally `SnapshotCapturer.Finalize` |
 | `SnapshotCaptured` (event) | Fires with the finished `Snapshot` once `CaptureFinalizeHandler` returns non-null |
@@ -182,16 +181,15 @@ command buffers), not by what's drawn.
 | `FrameIndex` | `EditorProfiler.BeginFrame` | Monotonic, matches the engine's own frame counter |
 | `FrameMilliseconds`, `Fps` | `EditorProfiler` wall clock (`Stopwatch`) around `BeginFrame`/`EndFrame` | CPU-side frame time, not GPU |
 | `HasCaptureDepth` | `EditorProfiler.BeginFrame` | True only if a capture was armed for this frame |
-| `CpuRoot` | `TimingCollector` | Root of the CPU flame tree - see [Timing](#timing-cpu-and-gpu) |
-| `GpuRoot` | `TimingCollector` | Root of the GPU flame tree; null if no GPU timing arrived this frame |
+| `GpuRoot` | `TimingCollector` | Root of the GPU flame tree - see [Timing](#gpu-timing); null if no GPU timing arrived this frame |
 | `Counters` | `CountersCollector` | Flat array of named counter values - see [Counters](#counters) |
 | `Submits` | `CountersCollector` (`IProfiler.RecordSubmit`) | One `SubmitRecord` per submit call this frame: kind, name, command buffer count |
+| `HasVramBudget`, `VramBudgetBytes`, `VramUsedBytes` | `EditorProfiler.BeginFrame` (`GraphicsDevice.GetMemoryBudget()`) | Driver-reported VRAM budget/usage, polled once per frame - see [VRAM budget](#vram-budget) |
 
 ### View level (`ProfiledView`, keyed by view name e.g. `"Game"`/`"Scene"`)
 
 | Field | Source | Notes |
 |---|---|---|
-| `CpuMilliseconds` | `TimingCollector` (`BeginView`/`EndView` scope) | Inclusive CPU time for the whole view |
 | `GpuMilliseconds` | **derived** | Sum of this view's passes' `GpuMilliseconds` - not stored separately |
 | `RegisteredObjects` | `DrawHierarchyCollector` (`Renderable` events) | Count of objects the culler registered this view |
 | `CulledObjects` | `DrawHierarchyCollector` | Count of objects culled this view |
@@ -200,6 +198,10 @@ command buffers), not by what's drawn.
 | `DrawCallCount` | `DrawHierarchyCollector` | Sum of `DrawCallCount` across all `Renderable` events |
 | `Passes` | `PassGraphCollector` | Ordered list of passes touched this view this frame |
 | `Edges` | `PassGraphCollector` | Producer -> consumer edges between passes, detected from resource read/write overlap |
+| `TrianglesDrawn` | **derived** | Sum of this view's passes' `TrianglesDrawn` - see below |
+| `PixelWidth`, `PixelHeight` | `EditorProfiler.BeginView` (`ViewInfo`) | Render target size this view drew at this frame |
+| `FragmentShaderInvocations` | **derived** | Sum of this view's passes' `FragmentShaderInvocations` |
+| `Overdraw` | **derived** | `FragmentShaderInvocations / (PixelWidth * PixelHeight)` - see [Overdraw](#overdraw--depth-complexity) |
 
 Object counts are always-on regardless of capture: they come from the `Renderable` marker stream,
 not from the deep draw-call tree.
@@ -209,9 +211,9 @@ not from the deep draw-call tree.
 | Field | Source | Notes |
 |---|---|---|
 | `Index`, `Name` | Render graph `PassInfo` | Stable identity across frames (same pipeline structure) |
-| `CpuMilliseconds` | `TimingCollector` (`BeginPass`/`EndPass` scope) | Inclusive CPU time for the pass |
-| `CpuSamples` | `TimingCollector` | Nested `BeginSample`/`EndSample` scopes recorded inside this pass, as a `TimeSample` tree |
 | `GpuMilliseconds` | **derived** | Sum of this pass's command buffers' `GpuMilliseconds` |
+| `TrianglesDrawn` | **derived** | Sum of this pass's command buffers' `ClippingPrimitives` - real GPU-reported primitive count, not a CPU estimate. See [Triangle count](#triangle-count-two-tiers-not-one-number) |
+| `FragmentShaderInvocations` | **derived** | Sum of this pass's command buffers' `FragmentShaderInvocations` - see [Overdraw](#overdraw--depth-complexity) |
 | `Inputs`, `Outputs` | `PassGraphCollector` (`RecordPassRead`) | `ResourceRef` list: numeric id, resolved name, `Texture`/`Buffer`/`Unknown` kind. `Resource` (a `SnapshotResourceID`) is only valid when a capture is armed - otherwise it's `SnapshotResourceID.Invalid` |
 | `CommandBuffers` | `PassGraphCollector` (`OnCommandBufferSeen`) | Ordered list, identity-by-id **within this frame only** (see [Command buffer ids](#command-buffer-ids-are-not-stable-across-frames)) |
 
@@ -221,6 +223,8 @@ not from the deep draw-call tree.
 |---|---|---|
 | `Id`, `Name` | Graphite `CommandBufferInfo` | Id is a rental counter, see below |
 | `GpuMilliseconds` | `TimingCollector.GetCommandBufferGpuMs`, stamped by `PassGraphCollector.FinalizeFrame` | GPU execution time; see [GPU timing lag](#gpu-timing-always-lags) |
+| `InputAssemblyVertices`, `InputAssemblyPrimitives`, `ClippingInvocations`, `ClippingPrimitives` | `TimingCollector.GetCommandBufferVertexStats`, stamped by `PassGraphCollector.FinalizeFrame` | Raw `VK_QUERY_TYPE_PIPELINE_STATISTICS` counters; see [Triangle count](#triangle-count-two-tiers-not-one-number) |
+| `FragmentShaderInvocations` | Same as above (`GpuVertexStats.FragmentShaderInvocations`) | Raw fragment-invocation count for this command buffer; see [Overdraw](#overdraw--depth-complexity) |
 | `Switches` | `DrawHierarchyCollector` | **Empty unless a capture is armed** - this is the boundary into capture-only data |
 
 ### Counters
@@ -255,39 +259,25 @@ foreach (CounterValue c in profiler.Latest!.Counters)
     Console.WriteLine($"[{c.Category}] {c.Name} = {c.Value} ({c.Unit})");
 ```
 
-### Timing (CPU and GPU)
+### GPU timing
 
-`TimingCollector` builds two independent flame-style trees, always on:
+CPU timing is deliberately out of scope for this profiler - a general-purpose CPU profiler
+elsewhere in the engine owns that, so tracking a redundant CPU flame tree here for render-graph
+scopes was cut. `TimingCollector` builds a single flame-style tree, GPU only:
 
-- **CPU tree** (`CpuRoot`): a `TimeSample` tree rooted at `"Frame"`, with `BeginView`/`EndView` and
-  `BeginPass`/`EndPass` as automatic scopes, plus any manual `BeginSample`/`EndSample` calls nested
-  inside. Wall-clock (`Stopwatch`), measured directly - not derived from anything else.
 - **GPU tree** (`GpuRoot`): grouped by pass name (or `"Transfer"`), each leaf a `TimeSample` for one
-  `RecordExecutionTime` callback. Only present if `RequestExecutionTiming` is on and Graphite
-  actually reported execution times this frame (`GpuRoot` is `null` otherwise).
-
-Manual CPU samples nest inside whatever view/pass scope is currently open, by calling straight
-into the attached `IProfiler` (there's no separate "user" API - it's the same interface Graphite
-itself calls):
+  `RecordExecutionTime` callback. Only present while the profiler is recording (`RequestExecutionTiming`
+  mirrors `!IsPaused`, see [GPU execution timing](#gpu-execution-timing)) and Graphite actually
+  reported execution times this frame (`GpuRoot` is `null` otherwise).
 
 ```csharp
-device.Profiler?.BeginSample("SkinningUpdate");
-UpdateSkinning();
-device.Profiler?.EndSample();
-```
-
-```csharp
-// Print the CPU flame tree for the latest frame.
+// Print the GPU flame tree for the latest frame.
 void PrintTree(TimeSample s, int depth)
 {
     Console.WriteLine($"{new string(' ', depth * 2)}{s.Name}: {s.InclusiveMilliseconds:F3}ms");
     foreach (TimeSample child in s.Children)
         PrintTree(child, depth + 1);
 }
-if (profiler.Latest?.CpuRoot is { } root)
-    PrintTree(root, 0);
-
-// GPU tree only has data if RequestExecutionTiming was on for that frame.
 if (profiler.Latest?.GpuRoot is { } gpu)
     PrintTree(gpu, 0);
 ```
@@ -312,6 +302,71 @@ frame; ids never repeat. `ProfiledPass` accounts for this: `CommandBuffer` nodes
 plain object pool (identity-agnostic), not persisted by id like `View`/`Pass` are - persisting them
 by id would leak a dictionary entry per rental, forever.
 
+### Triangle count: two tiers, not one number
+
+Two independent ways to read a triangle count exist, deliberately kept apart:
+
+**`ProfiledPass.TrianglesDrawn` / `ProfiledView.TrianglesDrawn`** - the real, always-on, GPU-reported
+aggregate. A `VK_QUERY_TYPE_PIPELINE_STATISTICS` query brackets each command buffer's recorded
+commands (`VkGraphicsDevice.PipelineStats.cs`, mirroring the timestamp-query pattern in
+`VkGraphicsDevice.Timing.cs` exactly: a pooled, reused `QueryPool`, resolved only after the
+submission's fence has already signaled, so no CPU stall). Gated by the same `RequestExecutionTiming`
+switch as GPU timing - no separate toggle. `ClippingPrimitives` is the specific counter this rolls up
+(`ProfiledPass.TrianglesDrawn` = sum of its command buffers' `ClippingPrimitives`,
+`ProfiledView.TrianglesDrawn` = sum of its passes'). `ProfiledCommandBuffer` also exposes the raw
+`InputAssemblyVertices`/`InputAssemblyPrimitives`/`ClippingInvocations` alongside it. This is a real
+hardware number: it correctly includes indirect draws (the CPU never sees their true vertex count)
+and excludes anything clipped/backface-culled before rasterization.
+
+**`ProfiledDrawCall.TriangleCount`** (capture-tier only, see below) - a CPU-side estimate for one
+single draw, computed on read (not stored) from `DrawCallInfo.Topology` + `VertexOrIndexCount` +
+`InstanceCount`:
+
+```csharp
+TriangleList  -> (VertexOrIndexCount / 3) * InstanceCount
+TriangleStrip -> max(0, VertexOrIndexCount - 2) * InstanceCount
+Line/Point    -> 0
+```
+
+`DrawCallInfo.Topology` is the one piece Graphite adds to make this possible - the bound
+`IVertexSource.Topology` at draw time, forwarded as-is (no counting happens in Graphite; the math is
+entirely in `ProfiledDrawCall`'s computed property). `null` for dispatches and for indirect draws
+(`DrawIndirect`/`DrawIndexedIndirect` report `VertexOrIndexCount == 0` - the real count lives in a GPU
+buffer the CPU never reads).
+
+**Why these are never merged into one number:** `TriangleCount` is the fallback for inspecting a
+single draw call when drilling into a capture - it is deliberately never summed across a pass or
+command buffer. Doing so would either silently undercount (indirect draws contribute nothing to a CPU
+sum, unlike the real GPU aggregate which counts them correctly) or overcount relative to reality (no
+clipping/culling is accounted for). `ProfiledPass.TrianglesDrawn` is the number to actually watch for
+a pass/view's geometry load; `ProfiledDrawCall.TriangleCount` is only for looking at one draw at a
+time.
+
+### Overdraw / depth complexity
+
+`ProfiledView.Overdraw` = `FragmentShaderInvocations / (PixelWidth * PixelHeight)`, where
+`FragmentShaderInvocations` is the sum of the view's passes' command buffers'
+`GpuVertexStats.FragmentShaderInvocations` (`FragmentShaderInvocationsBit` on the same
+`VK_QUERY_TYPE_PIPELINE_STATISTICS` query `TrianglesDrawn` reads from - `VkGraphicsDevice.PipelineStats.cs`)
+and `PixelWidth`/`PixelHeight` are stamped from `ViewInfo` every `BeginView`. `1.0` means every pixel
+in the view was shaded exactly once; higher means the fragment shader ran more than once per pixel on
+average (translucency, unsorted opaque geometry, no early-Z, etc). Reads `0` if `PixelWidth`/
+`PixelHeight` is unset (e.g. a snapshot saved before this field existed) or the profiler isn't
+recording. Same always-on gate as `TrianglesDrawn` - no separate toggle.
+
+### VRAM budget
+
+`GraphicsDevice.GetMemoryBudget()` returns a `MemoryBudgetInfo { IsSupported, BudgetBytes, UsageBytes }`
+- driver-reported, summed across every device-local Vulkan memory heap via `VK_EXT_memory_budget`
+(`VkGraphicsDevice.MemoryBudget.cs`). This is **not** the same thing as this profiler's own
+`Resident/{bin}`/`Resident/{role}` counters: those only ever see bytes this process itself allocated
+through Graphite, while the driver's budget/usage numbers account for everything else sharing the GPU
+too (other processes, the desktop compositor, etc). `IsSupported` is false (both byte fields `0`) if
+the extension isn't available on this device/driver - callers should fall back to the `Resident/*`
+counters in that case. `EditorProfiler.BeginFrame` polls this once per frame into
+`ProfiledFrame.HasVramBudget`/`VramBudgetBytes`/`VramUsedBytes`; there's no per-frame delta tracking
+here, just the latest snapshot, since the driver already aggregates it.
+
 ## Capture-only data
 
 Only built on a frame where `RequestCaptureNextFrame()` was called beforehand (`HasCaptureDepth ==
@@ -328,9 +383,9 @@ if (frame.HasCaptureDepth)
     foreach (ProfiledCommandBuffer cb in pass.CommandBuffers)
     foreach (ProfiledPipelineSwitch sw in cb.Switches)
     {
-        Console.WriteLine($"{sw.ShaderName} ({sw.Variant}) - {sw.Objects.Count} objects, {sw.Draws.Count} loose draws");
+        Console.WriteLine($"{sw.ShaderName} ({sw.Variant}) - {sw.Objects.Count} objects, {sw.Draws.Count} draws total");
         foreach (ProfiledCallingObject obj in sw.Objects)
-            Console.WriteLine($"  {obj.Label}: {obj.Draws.Count} draw(s), culled={obj.Culled}");
+            Console.WriteLine($"  {obj.Label}: {obj.DrawEnd - obj.DrawStart} draw(s), culled={obj.Culled}");
     }
 }
 ```
@@ -344,11 +399,16 @@ One per `RecordPipelineSwitch` event within an armed command buffer:
 - `State` (`ProfiledPipelineState`) - full blend/depth-stencil/rasterizer state for a graphics switch,
   or thread-group size for a compute switch (whichever doesn't apply is null)
 - `Objects` - the calling objects drawn under this switch before the next one
-- `Draws` - draws issued under this switch that never correlated to a `Renderable` event: a
-  post-process blit, a fullscreen triangle, a user-invoked immediate draw, anything outside the
-  normal culled-object pipeline. `DrawHierarchyCollector` flushes whatever's still buffered and
-  unclaimed straight here whenever the switch changes, the view ends, or the frame ends - so these
-  draws are never silently dropped, and never misattributed to some later, unrelated object either.
+- `Draws` - every draw/dispatch issued under this switch, in order, both the ones claimed by a calling
+  object and the loose ones that never correlated to a `Renderable` event (a post-process blit, a
+  fullscreen triangle, a user-invoked immediate draw, anything outside the normal culled-object
+  pipeline). Each `ProfiledCallingObject` owns a contiguous range of this array via
+  `DrawStart`/`DrawEnd` (see `GetDraws`) - a draw outside every object's range is a loose one.
+  `DrawHierarchyCollector` flushes whatever's still buffered and unclaimed straight here whenever the
+  switch changes, the view ends, or the frame ends - so these draws are never silently dropped, and
+  never misattributed to some later, unrelated object either.
+- `GetDraws(ProfiledCallingObject)` - returns the `ReadOnlySpan<ProfiledDrawCall>` slice of `Draws`
+  that object owns, using its `DrawStart`/`DrawEnd`
 
 No stable identity across frames (a switch is "the Nth issued this frame in this command buffer"),
 so unlike View/Pass/CommandBuffer these are always fresh-allocated, never pooled - acceptable since
@@ -360,14 +420,17 @@ One per renderable object drawn under a switch, correlated from the `Renderable`
 
 - `Label` (mesh/material name), `MaterialName`, `MeshName`, `Layer`, `Position`
 - `Registered`, `Culled` - same booleans that feed the always-on view-level counts
-- `Draws` - every draw/dispatch call this object issued (can be more than one if the object's draws
-  straddled a pipeline rebind)
+- `DrawStart`, `DrawEnd` - the range of indices into the owning `ProfiledPipelineSwitch.Draws` this
+  object claims (can span more than one draw if the object's draws straddled a pipeline rebind); use
+  `ProfiledPipelineSwitch.GetDraws(obj)` rather than slicing `Draws` by hand
 
 ### DrawCall level (`ProfiledDrawCall`)
 
 One per `RecordDraw`/`RecordDispatch` call:
 
 - `Draw` or `Dispatch` (`DrawCallInfo?`/`DispatchCallInfo?`, whichever kind this call was)
+- `TriangleCount` (computed property, not stored) - CPU-side estimate for this one draw, see
+  [Triangle count](#triangle-count-two-tiers-not-one-number). `null` for dispatches and indirect draws
 - `Culled`
 - `ReferenceBuffers` - vertex/index/bound buffers this draw referenced (`RecordDrawBuffers`), each
   with a `SnapshotResourceID` that's only valid (non-default) when a capture is armed
@@ -428,7 +491,7 @@ profiler.SnapshotCaptured += snapshot =>
 
     // Resolve which SnapshotResource a specific draw call's vertex buffer points at:
     ProfiledPipelineSwitch sw = snapshot.Frame.Views[0].Passes[0].CommandBuffers[0].Switches[0];
-    ReferenceBuffer vb = sw.Objects[0].Draws[0].ReferenceBuffers[0];
+    ReferenceBuffer vb = sw.GetDraws(sw.Objects[0])[0].ReferenceBuffers[0];
     if (vb.Resource.IsValid)
     {
         SnapshotResource owner = snapshot.Resources.First(r => r.ResourceId == vb.Resource.ResourceId);
