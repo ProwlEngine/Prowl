@@ -17,6 +17,7 @@ public sealed class ProfiledCommandBuffer
     public ulong InputAssemblyPrimitives { get; private set; }
     public ulong ClippingInvocations { get; private set; }
     public ulong ClippingPrimitives { get; private set; }
+    public ulong FragmentShaderInvocations { get; private set; }
 
     public int PipelineSwitchCount { get; private set; }
 
@@ -40,6 +41,7 @@ public sealed class ProfiledCommandBuffer
         InputAssemblyPrimitives = 0;
         ClippingInvocations = 0;
         ClippingPrimitives = 0;
+        FragmentShaderInvocations = 0;
         PipelineSwitchCount = 0;
     }
 
@@ -54,6 +56,7 @@ public sealed class ProfiledCommandBuffer
         InputAssemblyPrimitives = stats.InputAssemblyPrimitives;
         ClippingInvocations = stats.ClippingInvocations;
         ClippingPrimitives = stats.ClippingPrimitives;
+        FragmentShaderInvocations = stats.FragmentShaderInvocations;
     }
 
     /// <summary>Appends an already-built switch - used by SnapshotSerializer.</summary>
@@ -73,7 +76,7 @@ public sealed class ProfiledCommandBuffer
     {
         var clone = new ProfiledCommandBuffer(Id, Name);
         clone.SetGpuMs(GpuMilliseconds);
-        clone.SetGpuVertexStats(new GpuVertexStats(InputAssemblyVertices, InputAssemblyPrimitives, ClippingInvocations, ClippingPrimitives));
+        clone.SetGpuVertexStats(new GpuVertexStats(InputAssemblyVertices, InputAssemblyPrimitives, ClippingInvocations, ClippingPrimitives, FragmentShaderInvocations));
         clone.SetPipelineSwitchCount(PipelineSwitchCount);
         foreach (ProfiledPipeline sw in _switches)
             clone._switches.Add(sw.Clone());

@@ -20,6 +20,7 @@ public sealed class ProfiledPass
     public int CulledObjects { get; internal set; }
     public int TotalObjects { get; internal set; }
     public int DrawCallCount { get; internal set; }
+    public int DispatchCallCount { get; internal set; }
 
     /// <summary>Rendered = not culled - see ProfiledView.RenderedObjects for why this is derived.</summary>
     public int RenderedObjects => TotalObjects - CulledObjects;
@@ -45,6 +46,31 @@ public sealed class ProfiledPass
             ulong sum = 0;
             foreach (ProfiledCommandBuffer cb in _activeCommandBuffers)
                 sum += cb.ClippingPrimitives;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of this pass's command buffers' InputAssemblyVertices.</summary>
+    public ulong InputAssemblyVertices
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledCommandBuffer cb in _activeCommandBuffers)
+                sum += cb.InputAssemblyVertices;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of this pass's command buffers' FragmentShaderInvocations - the numerator for an
+    /// overdraw/depth-complexity estimate, see ProfiledView.Overdraw.</summary>
+    public ulong FragmentShaderInvocations
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledCommandBuffer cb in _activeCommandBuffers)
+                sum += cb.FragmentShaderInvocations;
             return sum;
         }
     }
@@ -96,6 +122,7 @@ public sealed class ProfiledPass
         CulledObjects = 0;
         TotalObjects = 0;
         DrawCallCount = 0;
+        DispatchCallCount = 0;
     }
 
     public void AddObjectCounts(bool registered, bool culled, int drawCallCount)
@@ -105,6 +132,12 @@ public sealed class ProfiledPass
         TotalObjects += 1;
         DrawCallCount += drawCallCount;
     }
+
+    /// <summary>Always-on, unlike DrawCallCount which comes from scene RenderableMetadata - dispatches
+    /// aren't scene renderables, so this is bumped directly from the raw RecordDispatch event.</summary>
+    public void AddDispatchCount() => DispatchCallCount++;
+
+    internal void SetDispatchCallCount(int count) => DispatchCallCount = count;
 
     /// <summary>Overwrites the object counts wholesale - see ProfiledView.SetObjectCounts, used the
     /// same way by SnapshotSerializer.</summary>
@@ -187,6 +220,7 @@ public sealed class ProfiledPass
             CulledObjects = CulledObjects,
             TotalObjects = TotalObjects,
             DrawCallCount = DrawCallCount,
+            DispatchCallCount = DispatchCallCount,
         };
         clone._inputs.AddRange(_inputs);
         clone._outputs.AddRange(_outputs);

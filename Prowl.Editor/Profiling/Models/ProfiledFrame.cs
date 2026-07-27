@@ -15,6 +15,13 @@ public sealed class ProfiledFrame
 
     public bool HasCaptureDepth { get; internal set; }
 
+    /// <summary>Driver-reported VRAM budget/usage, polled once per frame from
+    /// GraphicsDevice.GetMemoryBudget() - see MemoryBudgetInfo. False if the backend/device can't
+    /// report it (e.g. VK_EXT_memory_budget unavailable); Budget/UsedBytes both read 0 in that case.</summary>
+    public bool HasVramBudget { get; internal set; }
+    public ulong VramBudgetBytes { get; internal set; }
+    public ulong VramUsedBytes { get; internal set; }
+
     private CounterValue[] _counters = Array.Empty<CounterValue>();
 
     private readonly Dictionary<string, ProfiledView> _views = new();
@@ -33,6 +40,99 @@ public sealed class ProfiledFrame
 
     public int TimelineElementCount => _timelineEntryTracker.Count;
 
+    /// <summary>Sum of every view's GpuMilliseconds plus every free command buffer's.</summary>
+    public double GpuMilliseconds
+    {
+        get
+        {
+            double sum = 0.0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.GpuMilliseconds;
+            foreach (ProfiledCommandBuffer cb in _activeFreeCommandBuffers)
+                sum += cb.GpuMilliseconds;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of every view's TrianglesDrawn plus every free command buffer's ClippingPrimitives.</summary>
+    public ulong TrianglesDrawn
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.TrianglesDrawn;
+            foreach (ProfiledCommandBuffer cb in _activeFreeCommandBuffers)
+                sum += cb.ClippingPrimitives;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of every view's InputAssemblyVertices plus every free command buffer's.</summary>
+    public ulong InputAssemblyVertices
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.InputAssemblyVertices;
+            foreach (ProfiledCommandBuffer cb in _activeFreeCommandBuffers)
+                sum += cb.InputAssemblyVertices;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of every view's DrawCallCount.</summary>
+    public int DrawCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.DrawCallCount;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of every view's DispatchCallCount.</summary>
+    public int DispatchCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.DispatchCallCount;
+            return sum;
+        }
+    }
+
+    public int ViewCount => _activeViews.Count;
+
+    /// <summary>Sum of every view's pass count.</summary>
+    public int PassCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.Passes.Count;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of every pass's command buffer count plus FreeCommandBuffers - also the frame's total submit count, since one submit maps to exactly one command buffer.</summary>
+    public int CommandBufferCount
+    {
+        get
+        {
+            int sum = _activeFreeCommandBuffers.Count;
+            foreach (ProfiledView view in _activeViews)
+                foreach (ProfiledPass pass in view.Passes)
+                    sum += pass.CommandBuffers.Count;
+            return sum;
+        }
+    }
+
     internal IReadOnlyList<int> TimelineEntries => _timelineEntryTracker;
 
     internal void Reset(long frameIndex, bool hasCaptureDepth)
@@ -41,6 +141,9 @@ public sealed class ProfiledFrame
         FrameMilliseconds = 0;
         Fps = 0;
         HasCaptureDepth = hasCaptureDepth;
+        HasVramBudget = false;
+        VramBudgetBytes = 0;
+        VramUsedBytes = 0;
         _activeViews.Clear();
         foreach (ProfiledView view in _views.Values)
             view.Reset();
@@ -48,6 +151,13 @@ public sealed class ProfiledFrame
         _freeCommandBuffers.Clear();
         _activeFreeCommandBuffers.Clear();
         _timelineEntryTracker.Clear();
+    }
+
+    internal void SetVramBudget(in MemoryBudgetInfo budget)
+    {
+        HasVramBudget = budget.IsSupported;
+        VramBudgetBytes = budget.BudgetBytes;
+        VramUsedBytes = budget.UsageBytes;
     }
 
     public void SetCounterValues(double[] values)
@@ -142,6 +252,9 @@ public sealed class ProfiledFrame
             FrameMilliseconds = FrameMilliseconds,
             Fps = Fps,
             HasCaptureDepth = HasCaptureDepth,
+            HasVramBudget = HasVramBudget,
+            VramBudgetBytes = VramBudgetBytes,
+            VramUsedBytes = VramUsedBytes,
         };
         clone.SetCounters(_counters);
         foreach (ProfiledView view in _activeViews)

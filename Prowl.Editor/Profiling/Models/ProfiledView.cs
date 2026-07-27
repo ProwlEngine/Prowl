@@ -14,6 +14,11 @@ public sealed class ProfiledView
     public int CulledObjects { get; internal set; }
     public int TotalObjects { get; internal set; }
     public int DrawCallCount { get; internal set; }
+    public int DispatchCallCount { get; internal set; }
+
+    /// <summary>Render target size this view drew at, from ViewInfo.PixelWidth/PixelHeight - see Overdraw.</summary>
+    public uint PixelWidth { get; internal set; }
+    public uint PixelHeight { get; internal set; }
 
     /// <summary>Rendered = not culled. Derived rather than stored separately - it was always exactly
     /// TotalObjects - CulledObjects, just tracked as its own independently-incremented counter before.</summary>
@@ -44,6 +49,43 @@ public sealed class ProfiledView
             foreach (ProfiledPass pass in _activePasses)
                 sum += pass.TrianglesDrawn;
             return sum;
+        }
+    }
+
+    /// <summary>Sum of this view's passes' InputAssemblyVertices.</summary>
+    public ulong InputAssemblyVertices
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledPass pass in _activePasses)
+                sum += pass.InputAssemblyVertices;
+            return sum;
+        }
+    }
+
+    /// <summary>Sum of this view's passes' FragmentShaderInvocations - see Overdraw.</summary>
+    public ulong FragmentShaderInvocations
+    {
+        get
+        {
+            ulong sum = 0;
+            foreach (ProfiledPass pass in _activePasses)
+                sum += pass.FragmentShaderInvocations;
+            return sum;
+        }
+    }
+
+    /// <summary>Overdraw/depth-complexity estimate: FragmentShaderInvocations divided by this view's
+    /// pixel count. 1.0 means every pixel was shaded exactly once; higher means shading ran more than
+    /// once per pixel (translucency, unsorted opaque geometry, no early-Z, etc). 0 if PixelWidth/Height
+    /// is unset (e.g. a snapshot from before this field existed).</summary>
+    public double Overdraw
+    {
+        get
+        {
+            ulong pixels = (ulong)PixelWidth * PixelHeight;
+            return pixels == 0 ? 0.0 : FragmentShaderInvocations / (double)pixels;
         }
     }
 
@@ -80,6 +122,7 @@ public sealed class ProfiledView
         CulledObjects = 0;
         TotalObjects = 0;
         DrawCallCount = 0;
+        DispatchCallCount = 0;
         foreach (ProfiledPass pass in _passes.Values)
             pass.Reset();
     }
@@ -97,6 +140,20 @@ public sealed class ProfiledView
     }
 
     public void AddEdge(PassEdge edge) => _edges.Add(edge);
+
+    /// <summary>Stamped every BeginView from ViewInfo - render target size can change frame to frame
+    /// (window resize), so this isn't reset in Reset() like the per-frame counters, just overwritten.</summary>
+    internal void SetPixelSize(uint width, uint height)
+    {
+        PixelWidth = width;
+        PixelHeight = height;
+    }
+
+    /// <summary>Always-on, unlike DrawCallCount which comes from scene RenderableMetadata - dispatches
+    /// aren't scene renderables, so this is bumped directly from the raw RecordDispatch event.</summary>
+    public void AddDispatchCount() => DispatchCallCount++;
+
+    internal void SetDispatchCallCount(int count) => DispatchCallCount = count;
 
     public void AddObjectCounts(bool registered, bool culled, int drawCallCount)
     {
@@ -124,6 +181,9 @@ public sealed class ProfiledView
             CulledObjects = CulledObjects,
             TotalObjects = TotalObjects,
             DrawCallCount = DrawCallCount,
+            DispatchCallCount = DispatchCallCount,
+            PixelWidth = PixelWidth,
+            PixelHeight = PixelHeight,
         };
         clone._edges.AddRange(_edges);
         foreach (ProfiledPass pass in _activePasses)

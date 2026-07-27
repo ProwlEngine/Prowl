@@ -111,6 +111,8 @@ public sealed class EditorProfiler : IProfiler
         int slot = (int)(_frameIndex % RingSize);
         ProfiledFrame frame = _ring[slot] ??= new ProfiledFrame();
         frame.Reset(_frameIndex, _captureActiveThisFrame);
+        if (_device != null)
+            frame.SetVramBudget(_device.GetMemoryBudget());
         _current = frame;
 
         _frameStopwatch.Restart();
@@ -264,6 +266,7 @@ public sealed class EditorProfiler : IProfiler
             return;
 
         _currentView = view.Name;
+        _current?.View(view.Name).SetPixelSize(view.PixelWidth, view.PixelHeight);
         DrawHierarchy.OnViewBegin(view.Name);
     }
 
@@ -329,6 +332,7 @@ public sealed class EditorProfiler : IProfiler
         if (!ShouldRecord)
             return;
         _passGraph.OnCommandBufferSeen(_currentView, in commandBuffer);
+        _passGraph.OnDispatch(_currentView, in commandBuffer);
         _counters.OnDispatch(in info);
         DrawHierarchy.OnDispatch(_currentView, in info);
     }

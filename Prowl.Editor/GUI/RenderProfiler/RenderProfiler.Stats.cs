@@ -26,6 +26,9 @@ public partial class RenderProfilerPanel : DockPanel
     private double[] _viewRend = [];
     private double[] _viewDraws = [];
     private double[] _viewTris = [];
+    private double[] _viewOverdraw = [];
+    private double[] _vramBudget = [];
+    private double[] _vramUsed = [];
 
     private void DrawStatsViewer(Paper paper, float width, float height)
     {
@@ -41,6 +44,9 @@ public partial class RenderProfilerPanel : DockPanel
             _viewRend = new double[history.Count];
             _viewDraws = new double[history.Count];
             _viewTris = new double[history.Count];
+            _viewOverdraw = new double[history.Count];
+            _vramBudget = new double[history.Count];
+            _vramUsed = new double[history.Count];
         }
 
         for (int i = 0; i < history.Count; i++)
@@ -48,6 +54,8 @@ public partial class RenderProfilerPanel : DockPanel
             ProfiledFrame frame = history[i];
 
             _msStats[i] = frame.FrameMilliseconds;
+            _vramBudget[i] = frame.HasVramBudget ? frame.VramBudgetBytes / (1024.0 * 1024.0) : 0;
+            _vramUsed[i] = frame.HasVramBudget ? frame.VramUsedBytes / (1024.0 * 1024.0) : 0;
 
             if (_selectedView >= frame.Views.Count)
             {
@@ -58,6 +66,7 @@ public partial class RenderProfilerPanel : DockPanel
                 _viewDraws[i] = 0;
                 _viewTotal[i] = 0;
                 _viewTris[i] = 0;
+                _viewOverdraw[i] = 0;
 
                 continue;
             }
@@ -71,6 +80,7 @@ public partial class RenderProfilerPanel : DockPanel
             _viewTotal[i] = view.TotalObjects;
             _viewMsGpu[i] = view.GpuMilliseconds;
             _viewTris[i] = view.TrianglesDrawn;
+            _viewOverdraw[i] = view.Overdraw;
         }
 
         using (paper.Column("rdp_stats_box").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Padding(6).Enter())
@@ -113,6 +123,21 @@ public partial class RenderProfilerPanel : DockPanel
                     // support pipelineStatisticsQuery.
                     DrawChart(paper, viewport, ref cursorY, "rdp_chart_tris", "Triangles (GPU)",
                         ("Triangles", EditorTheme.Green500, _viewTris));
+
+                    // FragmentShaderInvocations / (view pixel width * height), from the same
+                    // pipeline-statistics query as Triangles above. 1.0 = every pixel shaded exactly
+                    // once; higher means overlapping/unsorted geometry shaded pixels more than once.
+                    // 0 while the profiler isn't recording or the device doesn't support
+                    // pipelineStatisticsQuery.
+                    DrawChart(paper, viewport, ref cursorY, "rdp_chart_overdraw", "Overdraw (GPU)",
+                        ("Overdraw", EditorTheme.Red500, _viewOverdraw));
+
+                    // Driver-reported VRAM (VK_EXT_memory_budget), not this process's own tracked
+                    // Resident/{bin} counters - accounts for other processes sharing the GPU. Both read
+                    // 0 if the extension is unavailable.
+                    DrawChart(paper, viewport, ref cursorY, "rdp_chart_vram", "VRAM (MB)",
+                        ("Budget", EditorTheme.Neutral500, _vramBudget),
+                        ("Used", EditorTheme.Amber500, _vramUsed));
                 });
             }
         }

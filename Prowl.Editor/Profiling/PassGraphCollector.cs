@@ -153,6 +153,19 @@ public sealed class PassGraphCollector
         }
     }
 
+    /// <summary>Bumps DispatchCallCount on the view/pass a dispatch landed in - always-on, unlike
+    /// DrawCallCount which comes from scene RenderableMetadata (dispatches aren't scene renderables).</summary>
+    public void OnDispatch(string currentView, in CommandBufferInfo cb)
+    {
+        if (_frame == null || cb.Pass is not { } pass)
+            return;
+
+        _touchedViews.Add(currentView);
+        ProfiledView view = _frame.View(currentView);
+        view.AddDispatchCount();
+        view.Pass(pass.Index, pass.Name).AddDispatchCount();
+    }
+
     /// <summary>Bumps the switch count on the command buffer a pipeline bind landed on - always-on,
     /// unlike DrawHierarchyCollector.OnPipelineSwitch which only builds the capture-tier
     /// ProfiledPipelineSwitch (shader/material identity) when a capture is armed.</summary>
