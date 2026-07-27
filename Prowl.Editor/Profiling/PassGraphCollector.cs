@@ -136,6 +136,23 @@ public sealed class PassGraphCollector
         _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
     }
 
+
+    public void OnCommandBufferSubmitted(string currentView, in CommandBufferInfo cb, bool isTransfer)
+    {
+        if (_frame == null)
+            return;
+
+        if (cb.Pass is { } pass)
+        {
+            _touchedViews.Add(currentView);
+            _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        }
+        else
+        {
+            _frame.FreeCommandBuffer(cb.Id, cb.Name);
+        }
+    }
+
     /// <summary>Bumps the switch count on the command buffer a pipeline bind landed on - always-on,
     /// unlike DrawHierarchyCollector.OnPipelineSwitch which only builds the capture-tier
     /// ProfiledPipelineSwitch (shader/material identity) when a capture is armed.</summary>
@@ -162,6 +179,12 @@ public sealed class PassGraphCollector
                     cb.SetGpuMs(timing.GetCommandBufferGpuMs(cb.Id));
                     cb.SetGpuVertexStats(timing.GetCommandBufferVertexStats(cb.Id));
                 }
+        }
+
+        foreach (ProfiledCommandBuffer cb in frame.FreeCommandBuffers)
+        {
+            cb.SetGpuMs(timing.GetCommandBufferGpuMs(cb.Id));
+            cb.SetGpuVertexStats(timing.GetCommandBufferVertexStats(cb.Id));
         }
     }
 

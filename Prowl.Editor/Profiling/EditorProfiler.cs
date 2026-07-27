@@ -137,7 +137,6 @@ public sealed class EditorProfiler : IProfiler
         frame.Fps = ms > 0.0 ? 1000.0 / ms : 0.0;
 
         DrawHierarchy.FinalizeFrame();
-        _timing.FinalizeFrame(frame);
         _counters.Contribute(frame);
         _passGraph.FinalizeFrame(frame, _timing);
 
@@ -392,11 +391,12 @@ public sealed class EditorProfiler : IProfiler
         _counters.OnBarrier(kind, count);
     }
 
-    void IProfiler.RecordSubmit(in ProfilerSubmitInfo info)
+    void IProfiler.RecordSubmit(in CommandBufferInfo info, bool isTransfer)
     {
         if (!ShouldRecord)
             return;
-        _counters.OnSubmit(in info);
+        _counters.OnSubmit(isTransfer);
+        _passGraph.OnCommandBufferSubmitted(_currentView, in info, isTransfer);
     }
 
     void IProfiler.RecordExecutionTime(in CommandBufferInfo info, bool isTransfer, double milliseconds)

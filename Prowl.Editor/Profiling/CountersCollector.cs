@@ -12,7 +12,6 @@ public sealed class CountersCollector
     private static readonly BufferOpBin[] s_bufferOpBins = Enum.GetValues<BufferOpBin>();
     private static readonly SwapBin[] s_swapBins = Enum.GetValues<SwapBin>();
     private static readonly BarrierBin[] s_barrierBins = Enum.GetValues<BarrierBin>();
-    private static readonly SubmitKind[] s_submitKinds = Enum.GetValues<SubmitKind>();
 
     private readonly long[] _liveCount = new long[s_allocBins.Length];
     private readonly long[] _residentBytes = new long[s_allocBins.Length];
@@ -26,7 +25,7 @@ public sealed class CountersCollector
 
     private readonly long[] _swapCount = new long[s_swapBins.Length];
     private readonly long[] _barrierCount = new long[s_barrierBins.Length];
-    private readonly long[] _submitCount = new long[s_submitKinds.Length];
+    private readonly long[] _submitCount = new long[2];
 
     private uint _resourceSetBinds;
     private long _drawCount;
@@ -35,8 +34,6 @@ public sealed class CountersCollector
     private static readonly List<CounterDef> s_registry = BuildRegistry();
 
     private readonly double[] _values = new double[s_registry.Count];
-
-    private readonly List<SubmitRecord> _pendingSubmits = [];
 
     public static List<CounterDef> Registry => s_registry;
 
@@ -48,7 +45,7 @@ public sealed class CountersCollector
             s_bufferOpBins.Length * 2 +
             s_swapBins.Length +
             s_barrierBins.Length +
-            s_submitKinds.Length +
+            2 +
             3);
 
         foreach (AllocBin bin in s_allocBins)
@@ -74,8 +71,8 @@ public sealed class CountersCollector
         foreach (BarrierBin bin in s_barrierBins)
             defs.Add(new CounterDef($"Barrier/{bin}", CounterCategory.Barrier, CounterUnit.Count));
 
-        foreach (SubmitKind kind in s_submitKinds)
-            defs.Add(new CounterDef($"Submit/{kind}", CounterCategory.Submit, CounterUnit.Count));
+        defs.Add(new CounterDef("Submit/Graphics", CounterCategory.Submit, CounterUnit.Count));
+        defs.Add(new CounterDef("Submit/Transfer", CounterCategory.Submit, CounterUnit.Count));
 
         defs.Add(new CounterDef("ResourceSet/Binds", CounterCategory.ResourceSet, CounterUnit.Count));
         defs.Add(new CounterDef("Draw/Count", CounterCategory.DrawDispatch, CounterUnit.Count));
@@ -97,7 +94,6 @@ public sealed class CountersCollector
         _resourceSetBinds = 0;
         _drawCount = 0;
         _dispatchCount = 0;
-        _pendingSubmits.Clear();
     }
 
     public void OnAllocate(AllocBin t, long bytes)
@@ -148,10 +144,9 @@ public sealed class CountersCollector
         _barrierCount[(int)kind] += count;
     }
 
-    public void OnSubmit(in ProfilerSubmitInfo s)
+    public void OnSubmit(bool isTransfer)
     {
-        _submitCount[(int)s.Kind]++;
-        _pendingSubmits.Add(new SubmitRecord(s.Kind, s.Name, s.CommandBufferCount));
+        _submitCount[isTransfer ? 1 : 0]++;
     }
 
     public void OnDraw(in DrawCallInfo d)
@@ -191,7 +186,7 @@ public sealed class CountersCollector
         for (int i = 0; i < s_barrierBins.Length; i++)
             _values[idx++] = _barrierCount[i];
 
-        for (int i = 0; i < s_submitKinds.Length; i++)
+        for (int i = 0; i < _submitCount.Length; i++)
             _values[idx++] = _submitCount[i];
 
         _values[idx++] = _resourceSetBinds;
@@ -199,8 +194,5 @@ public sealed class CountersCollector
         _values[idx++] = _dispatchCount;
 
         build.SetCounterValues(_values);
-
-        foreach (SubmitRecord s in _pendingSubmits)
-            build.AddSubmit(s);
     }
 }

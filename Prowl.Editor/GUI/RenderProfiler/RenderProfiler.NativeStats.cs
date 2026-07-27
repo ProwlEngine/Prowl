@@ -20,7 +20,6 @@ public partial class RenderProfilerPanel : DockPanel
     private static readonly BufferOpBin[] s_bufferOpBins = Enum.GetValues<BufferOpBin>();
     private static readonly SwapBin[] s_swapBins = Enum.GetValues<SwapBin>();
     private static readonly BarrierBin[] s_barrierBins = Enum.GetValues<BarrierBin>();
-    private static readonly SubmitKind[] s_submitKinds = Enum.GetValues<SubmitKind>();
 
     private static readonly Color[] s_palette =
     {
@@ -59,7 +58,9 @@ public partial class RenderProfilerPanel : DockPanel
 
                 DrawEnumChart(paper, viewport, ref cursorY, "rdp_native_swap", "Swapchain Ops", null, s_swapBins, bin => $"Swap/{bin}");
                 DrawEnumChart(paper, viewport, ref cursorY, "rdp_native_barrier", "Barriers", null, s_barrierBins, bin => $"Barrier/{bin}");
-                DrawEnumChart(paper, viewport, ref cursorY, "rdp_native_submit", "Submits", null, s_submitKinds, kind => $"Submit/{kind}");
+                DrawChart(paper, viewport, ref cursorY, "rdp_native_submit", "Submits", null,
+                    ("Graphics", PaletteColor(0), _profiler.CounterHistory("Submit/Graphics")),
+                    ("Transfer", PaletteColor(1), _profiler.CounterHistory("Submit/Transfer")));
 
                 DrawChart(paper, viewport, ref cursorY, "rdp_native_misc", "Draws / Dispatches / Binds", null,
                     ("Resource Set Binds", PaletteColor(0), _profiler.CounterHistory("ResourceSet/Binds")),

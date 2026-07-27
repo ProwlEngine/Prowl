@@ -8,15 +8,16 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
 ## Directly available
 
 ### Frame (`ProfiledFrame`)
-- [ ] `double FrameMilliseconds`
-- [ ] `double Fps`
-- [ ] `TimeSample? GpuRoot` - flame tree (GPU time per command buffer, grouped by pass; 1+ frame lag).
-  `TimeSample` = `string Name`, `double InclusiveMilliseconds`, `bool IsTransfer`, `TimeSample[] Children`
-- [ ] `IReadOnlyList<SubmitRecord> Submits` - `SubmitKind Kind`, `string Name`, `uint CommandBufferCount`
-- [ ] `long FrameIndex`
-- [ ] `bool HasCaptureDepth`
-- [ ] `IReadOnlyList<CounterValue> Counters` - see Counters below
+- [x] `double FrameMilliseconds`
+- [x] `double Fps`
+- [x] `long FrameIndex`
+- [x] `bool HasCaptureDepth`
 - [ ] `IReadOnlyList<ProfiledView> Views`
+- [ ] `IReadOnlyList<ProfiledCommandBuffer> FreeCommandBuffers`
+- [ ] `int TimelineElementCount` / `GetTimelineElement(int, out ProfiledView?, out ProfiledCommandBuffer?)`
+  / `EnumerateTimeline()` - 
+
+- [ ] `IReadOnlyList<CounterValue> Counters` - see Counters below
 
 ### View (`ProfiledView`)
 - [ ] `double GpuMilliseconds`
@@ -74,8 +75,7 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
   - `Map`, `Unmap`, `Update`, `Copy`
 - [ ] `BufferOpBytes/{op}` (BufferUpdate, bytes) - `Unmap` always records `0` bytes and stays zeroed
   - `Map`, `Update`, `Copy`
-- [ ] `Submit/{kind}` (Submit) - all `SubmitKind` values
-  - `Graphics`, `Transfer`
+- [ ] `Submit/Graphics`, `Submit/Transfer` 
 - [ ] `ResourceSet/Binds`
 - [ ] `Swap/{bin}` (Swapchain) - all `SwapBin` values
   - `Present`, `Resize`, `Acquire`
@@ -84,7 +84,6 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
 
 ## Derived (computed on read, no storage)
 
-- [ ] Self time per `TimeSample` node = `InclusiveMilliseconds - sum(children's InclusiveMilliseconds)`
 - [ ] Frame budget usage % = `FrameMilliseconds / target frame time`
 - [ ] Culled % / Registered % per view = `CulledObjects / TotalObjects`, `RegisteredObjects / TotalObjects`
 - [ ] Net Live delta between frames = `Live/{bin}[N] - Live/{bin}[N-1]` (via `EditorProfiler.History`)
@@ -94,14 +93,12 @@ gated by the same Resume/Pause switch as `TrianglesDrawn`).
 - [ ] Average bytes per buffer op = `BufferOpBytes/{op} / BufferOp/{op}`
 - [ ] Total resident memory = sum of all `Resident/{bin}` + `Resident/{role}`
 - [ ] Total barrier count = sum of `Barrier/{bin}`
-- [ ] Submit efficiency = `sum(Submits[].CommandBufferCount) / Submits.Count`
 - [ ] Pass fan-in/fan-out = `Inputs.Count` / `Outputs.Count`
 - [ ] Graph in/out-degree per pass = scan `Edges` for `FromPass == X` / `ToPass == X`
 - [ ] Critical path length through pass DAG = longest chain walk through `Edges`
 - [ ] Feedback-pass flag = pass whose `Inputs` and `Outputs` share a resource id
-- [ ] Transfer vs render GPU time split = sum `InclusiveMilliseconds` of `IsTransfer == true` vs `false`
-  nodes in `GpuRoot`
-- [ ] Max flame graph depth = nesting depth of `GpuRoot`
+- [ ] Transfer vs render GPU time split = sum `FreeCommandBuffers[].GpuMilliseconds` vs sum of every
+  `View.Passes[].CommandBuffers[].GpuMilliseconds`
 - [ ] Frame pacing jitter = stddev of `FrameMilliseconds` over N frames of `History`
 - [ ] Pipeline switch density per command buffer = `CommandBuffer.PipelineSwitchCount / CommandBuffer.GpuMilliseconds`
   - a proxy for how much state rebinding one command buffer does per unit of GPU time, no capture needed

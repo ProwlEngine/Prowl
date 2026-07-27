@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -49,8 +50,8 @@ public static class SnapshotSerializer
         e.Add("Fps", new EchoObject(f.Fps));
         e.Add("Counters", CountersToEcho(f.Counters));
         e.Add("Views", ListToEcho(f.Views, ViewToEcho));
-        e.Add("GpuRoot", f.GpuRoot is { } gpuRoot ? TimeSampleToEcho(gpuRoot) : new EchoObject(EchoType.Null, null));
-        e.Add("Submits", ListToEcho(f.Submits, SubmitToEcho));
+        e.Add("FreeCommandBuffers", ListToEcho(f.FreeCommandBuffers, CommandBufferToEcho));
+        e.Add("Timeline", IntListToEcho(f.TimelineEntries));
         e.Add("HasCaptureDepth", new EchoObject(f.HasCaptureDepth));
         return e;
     }
@@ -63,13 +64,15 @@ public static class SnapshotSerializer
             FrameMilliseconds = e["FrameMilliseconds"].DoubleValue,
             Fps = e["Fps"].DoubleValue,
             HasCaptureDepth = e["HasCaptureDepth"].BoolValue,
-            GpuRoot = e["GpuRoot"].TagType == EchoType.Null ? null : TimeSampleFromEcho(e["GpuRoot"]),
         };
         frame.SetCounters(CountersFromEcho(e["Counters"]));
-        foreach (SubmitRecord s in ListFromEcho(e["Submits"], SubmitFromEcho))
-            frame.AddSubmit(s);
         foreach (EchoObject viewEcho in e["Views"].List)
             ViewFromEcho(frame, viewEcho);
+        foreach (EchoObject cbEcho in e["FreeCommandBuffers"].List)
+            CommandBufferFromEcho(frame.FreeCommandBuffer, cbEcho);
+        // Overwrites the bogus timeline order View()/FreeCommandBuffer() built up while loading (list
+        // order, not interleaved) with the real recorded order.
+        frame.SetTimeline(ListFromEcho(e["Timeline"], t => t.IntValue));
         return frame;
     }
 
@@ -154,7 +157,7 @@ public static class SnapshotSerializer
             e["DrawCallCount"].IntValue);
 
         foreach (EchoObject cbEcho in e["CommandBuffers"].List)
-            CommandBufferFromEcho(pass, cbEcho);
+            CommandBufferFromEcho(pass.CommandBuffer, cbEcho);
     }
 
     private static EchoObject PassEdgeToEcho(PassEdge p)
@@ -183,9 +186,9 @@ public static class SnapshotSerializer
         return e;
     }
 
-    private static void CommandBufferFromEcho(ProfiledPass pass, EchoObject e)
+    private static void CommandBufferFromEcho(Func<ulong, string, ProfiledCommandBuffer> factory, EchoObject e)
     {
-        ProfiledCommandBuffer cb = pass.CommandBuffer(e["Id"].ULongValue, e["Name"].StringValue);
+        ProfiledCommandBuffer cb = factory(e["Id"].ULongValue, e["Name"].StringValue);
         cb.SetGpuMs(e["GpuMilliseconds"].DoubleValue);
         cb.SetGpuVertexStats(new GpuVertexStats(
             e["InputAssemblyVertices"].ULongValue,
@@ -421,31 +424,6 @@ public static class SnapshotSerializer
     private static Float3 Float3FromEcho(EchoObject e)
         => new(e["X"].FloatValue, e["Y"].FloatValue, e["Z"].FloatValue);
 
-    private static EchoObject SubmitToEcho(SubmitRecord s)
-    {
-        EchoObject e = EchoObject.NewCompound();
-        e.Add("Kind", new EchoObject((int)s.Kind));
-        e.Add("Name", new EchoObject(s.Name));
-        e.Add("CommandBufferCount", new EchoObject(s.CommandBufferCount));
-        return e;
-    }
-
-    private static SubmitRecord SubmitFromEcho(EchoObject e)
-        => new((SubmitKind)e["Kind"].IntValue, e["Name"].StringValue, e["CommandBufferCount"].UIntValue);
-
-    private static EchoObject TimeSampleToEcho(TimeSample t)
-    {
-        EchoObject e = EchoObject.NewCompound();
-        e.Add("Name", new EchoObject(t.Name));
-        e.Add("InclusiveMilliseconds", new EchoObject(t.InclusiveMilliseconds));
-        e.Add("IsTransfer", new EchoObject(t.IsTransfer));
-        e.Add("Children", ListToEcho(t.Children, TimeSampleToEcho));
-        return e;
-    }
-
-    private static TimeSample TimeSampleFromEcho(EchoObject e)
-        => new(e["Name"].StringValue, e["InclusiveMilliseconds"].DoubleValue, e["IsTransfer"].BoolValue, ListFromEcho(e["Children"], TimeSampleFromEcho).ToArray());
-
     // Snapshot resources
 
     private static EchoObject ResourceToEcho(SnapshotResource r)
@@ -555,4 +533,12 @@ public static class SnapshotSerializer
 
     private static IReadOnlyList<T> ListFromEcho<T>(EchoObject e, System.Func<EchoObject, T> fromEcho)
         => e.List.Select(fromEcho).ToList();
+
+    private static EchoObject IntListToEcho(IReadOnlyList<int> values)
+    {
+        EchoObject list = EchoObject.NewList();
+        foreach (int v in values)
+            list.ListAdd(new EchoObject(v));
+        return list;
+    }
 }

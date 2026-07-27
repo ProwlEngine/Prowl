@@ -73,8 +73,6 @@ public readonly record struct ProfiledPipelineState(
     RasterizerStateDescription? RasterizerState,
     uint? ThreadGroupSizeX, uint? ThreadGroupSizeY, uint? ThreadGroupSizeZ);
 
-public readonly record struct SubmitRecord(SubmitKind Kind, string Name, uint CommandBufferCount);
-
 public readonly record struct CounterDef(string Name, CounterCategory Category, CounterUnit Unit);
 
 public readonly record struct CounterValue(string Name, CounterCategory Category, CounterUnit Unit, double Value);
@@ -101,7 +99,3 @@ public enum CounterUnit
     Milliseconds
 }
 
-/// <summary>InclusiveMilliseconds is the sum of this node's own time and all of its children's. A
-/// struct: one of these is built per GPU execution-time report, every frame, so as a class it would
-/// be one of the hottest allocation sites in the profiler.</summary>
-public readonly record struct TimeSample(string Name, double InclusiveMilliseconds, bool IsTransfer, TimeSample[] Children);
