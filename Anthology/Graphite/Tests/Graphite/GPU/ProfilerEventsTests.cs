@@ -22,7 +22,7 @@ file sealed class RecordingProfiler : IProfiler
     public readonly List<DispatchCallInfo> Dispatches = new();
     public readonly List<uint> ResourceSetBinds = new();
     public readonly List<(BarrierBin Kind, uint Count)> Barriers = new();
-    public readonly List<ProfilerSubmitInfo> Submits = new();
+    public readonly List<(CommandBufferInfo Info, bool IsTransfer)> Submits = new();
     public readonly List<PassInfo> PassesBegun = new();
     public readonly List<PassInfo> PassesEnded = new();
     public readonly List<(PassInfo Pass, RenderResourceID Resource, RenderTexture? Texture, DeviceBuffer? Buffer)> PassReads = new();
@@ -59,7 +59,7 @@ file sealed class RecordingProfiler : IProfiler
 
     public void RecordResourceSetBind(uint setCount) => ResourceSetBinds.Add(setCount);
     public void RecordBarrier(BarrierBin kind, uint count) => Barriers.Add((kind, count));
-    public void RecordSubmit(in ProfilerSubmitInfo info) => Submits.Add(info);
+    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) => Submits.Add((commandBuffer, isTransfer));
 
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds)
         => ExecutionTimes.Add((commandBuffer, isTransfer, milliseconds));
@@ -268,7 +268,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
 
         // Both passes submit exactly one graphics command buffer each.
         Assert.Equal(2, profiler.Submits.Count);
-        Assert.All(profiler.Submits, s => Assert.Equal(SubmitKind.Graphics, s.Kind));
+        Assert.All(profiler.Submits, s => Assert.False(s.IsTransfer));
 
         Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.TextureTransition);
         Assert.Contains(profiler.Barriers, b => b.Kind == BarrierBin.MemoryBarrier);
@@ -289,7 +289,7 @@ public abstract class ProfilerEventsTests<T> : GraphicsDeviceTestBase<T> where T
         transfer.End();
         device.SubmitAndWait(transfer);
 
-        Assert.Contains(profiler.Submits, s => s.Kind == SubmitKind.Transfer);
+        Assert.Contains(profiler.Submits, s => s.IsTransfer);
     }
 
     [Fact]

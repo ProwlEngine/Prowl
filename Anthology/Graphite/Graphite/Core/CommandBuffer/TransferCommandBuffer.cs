@@ -18,10 +18,17 @@ namespace Prowl.Graphite;
 /// </summary>
 public abstract partial class TransferCommandBuffer : DeviceResource, IDisposable
 {
+    private static long s_nextId;
+
     /// <summary>
     /// True if End was called since the last Begin. Used by SubmitAndWait to validate before submission.
     /// </summary>
     internal bool HasEnded { get; private protected set; }
+
+    /// <summary>Fresh id per instance, so profiler events across this buffer's lifetime can be correlated. Never tied to a Pass.</summary>
+    internal ulong Id { get; } = (ulong)System.Threading.Interlocked.Increment(ref s_nextId);
+
+    internal CommandBufferInfo ProfilerInfo => new(Id, Name, null);
 
     /// <summary>
     /// Owning device.

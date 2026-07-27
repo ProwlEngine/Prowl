@@ -78,7 +78,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
     internal void SubmitAndWait()
     {
-        _gd.SubmitAndWaitTransfer(_cb, TakePendingTimingPool(), _name);
+        _gd.SubmitAndWaitTransfer(_cb, TakePendingTimingPool(), _name, Id);
     }
 
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)

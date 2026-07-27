@@ -57,7 +57,7 @@ internal sealed class VkExecutionTask : ExecutionTask
         SubmitCommands_CheckEnded(commandList);
         _gd.SubmitCommandBufferInternal(commandList);
 
-        _gd.Profiler?.RecordSubmit(new ProfilerSubmitInfo(SubmitKind.Graphics, commandList.Name, 1));
+        _gd.Profiler?.RecordSubmit(commandList.ProfilerInfo, isTransfer: false);
     }
 
 

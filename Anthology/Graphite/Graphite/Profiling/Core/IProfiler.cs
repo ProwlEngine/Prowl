@@ -28,7 +28,7 @@ public interface IProfiler
     void RecordPassRead(in PassInfo pass, RenderResourceID resource, RenderTexture? texture, DeviceBuffer? buffer);
 
     // command buffer submit
-    void RecordSubmit(in ProfilerSubmitInfo info);
+    void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer);
 
     // pipeline switches
     void RecordPipelineSwitch(in CommandBufferInfo commandBuffer, in PipelineBindInfo info);

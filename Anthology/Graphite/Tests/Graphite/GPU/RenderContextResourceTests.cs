@@ -250,7 +250,7 @@ file sealed class RecordingProfiler : IProfiler
 
     public void RecordResourceSetBind(uint setCount) { }
     public void RecordBarrier(BarrierBin kind, uint count) { }
-    public void RecordSubmit(in ProfilerSubmitInfo info) { }
+    public void RecordSubmit(in CommandBufferInfo commandBuffer, bool isTransfer) { }
 
     public bool RequestGPUStatistics => false;
     public void RecordExecutionTime(in CommandBufferInfo commandBuffer, bool isTransfer, double milliseconds) { }

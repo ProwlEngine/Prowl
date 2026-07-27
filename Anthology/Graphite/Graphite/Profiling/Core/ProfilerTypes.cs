@@ -153,22 +153,6 @@ public readonly struct CommandBufferInfo
 
 public enum BarrierBin { TextureTransition, BufferTransition, MemoryBarrier }
 
-public enum SubmitKind { Graphics, Transfer }
-
-public readonly struct ProfilerSubmitInfo
-{
-    public SubmitKind Kind { get; }
-    public string Name { get; }
-    public uint CommandBufferCount { get; }
-
-    public ProfilerSubmitInfo(SubmitKind kind, string name, uint commandBufferCount)
-    {
-        Kind = kind;
-        Name = name;
-        CommandBufferCount = commandBufferCount;
-    }
-}
-
 /// <summary>
 /// GPU-reported vertex/primitive counts from a pipeline-statistics query (see VkGraphicsDevice.PipelineStats.cs). Real hardware numbers, not CPU estimates - includes indirect draws, and ClippingPrimitives shows what got culled before rasterization.
 /// </summary>

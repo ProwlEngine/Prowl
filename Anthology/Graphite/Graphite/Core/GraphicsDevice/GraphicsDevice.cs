@@ -342,7 +342,7 @@ public abstract partial class GraphicsDevice : IDisposable
         SubmitAndWait_CheckEnded(commandBuffer);
         SubmitAndWaitCore(commandBuffer);
 
-        Profiler?.RecordSubmit(new ProfilerSubmitInfo(SubmitKind.Transfer, commandBuffer.Name, 1));
+        Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
     }
 
     private protected virtual void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
@@ -359,7 +359,7 @@ public abstract partial class GraphicsDevice : IDisposable
         SubmitAndWait_CheckEnded(commandBuffer);
         SubmitTransferCore(commandBuffer);
 
-        Profiler?.RecordSubmit(new ProfilerSubmitInfo(SubmitKind.Transfer, commandBuffer.Name, 1));
+        Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
     }
 
     private protected virtual void SubmitTransferCore(TransferCommandBuffer commandBuffer)
