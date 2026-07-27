@@ -256,6 +256,7 @@ internal unsafe partial class VkGraphicsDevice
         bool hasMemReqs2 = false;
         bool hasDedicatedAllocation = false;
         bool hasDriverProperties = false;
+        bool hasMemoryBudget = false;
         IntPtr[] activeExtensions = new IntPtr[props.Length];
         uint activeExtensionCount = 0;
 
@@ -298,6 +299,12 @@ internal unsafe partial class VkGraphicsDevice
                     activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
                     requiredInstanceExtensions.Remove(extensionName);
                     hasDriverProperties = true;
+                }
+                else if (extensionName == "VK_EXT_memory_budget")
+                {
+                    activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].ExtensionName;
+                    requiredInstanceExtensions.Remove(extensionName);
+                    hasMemoryBudget = true;
                 }
                 else if (extensionName == CommonStrings.VK_KHR_portability_subset)
                 {
@@ -367,6 +374,11 @@ internal unsafe partial class VkGraphicsDevice
                 ?? GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2KHR");
             _getImageMemoryRequirements2 = GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2")
                 ?? GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2KHR");
+        }
+        if (_getPhysicalDeviceProperties2 != null && hasMemoryBudget)
+        {
+            _getPhysicalDeviceMemoryProperties2 = GetInstanceProcAddr<vkGetPhysicalDeviceMemoryProperties2_t>("vkGetPhysicalDeviceMemoryProperties2")
+                ?? GetInstanceProcAddr<vkGetPhysicalDeviceMemoryProperties2_t>("vkGetPhysicalDeviceMemoryProperties2KHR");
         }
         if (_getPhysicalDeviceProperties2 != null && hasDriverProperties)
         {

@@ -154,7 +154,7 @@ public readonly struct CommandBufferInfo
 public enum BarrierBin { TextureTransition, BufferTransition, MemoryBarrier }
 
 /// <summary>
-/// GPU-reported vertex/primitive counts from a pipeline-statistics query (see VkGraphicsDevice.PipelineStats.cs). Real hardware numbers, not CPU estimates - includes indirect draws, and ClippingPrimitives shows what got culled before rasterization.
+/// GPU-reported vertex/primitive/fragment counts from a pipeline-statistics query (see VkGraphicsDevice.PipelineStats.cs). Real hardware numbers, not CPU estimates - includes indirect draws, and ClippingPrimitives shows what got culled before rasterization. FragmentShaderInvocations divided by the render target's pixel count gives an overdraw/depth-complexity estimate.
 /// </summary>
 public readonly struct GpuVertexStats
 {
@@ -162,12 +162,14 @@ public readonly struct GpuVertexStats
     public ulong InputAssemblyPrimitives { get; }
     public ulong ClippingInvocations { get; }
     public ulong ClippingPrimitives { get; }
+    public ulong FragmentShaderInvocations { get; }
 
-    public GpuVertexStats(ulong inputAssemblyVertices, ulong inputAssemblyPrimitives, ulong clippingInvocations, ulong clippingPrimitives)
+    public GpuVertexStats(ulong inputAssemblyVertices, ulong inputAssemblyPrimitives, ulong clippingInvocations, ulong clippingPrimitives, ulong fragmentShaderInvocations)
     {
         InputAssemblyVertices = inputAssemblyVertices;
         InputAssemblyPrimitives = inputAssemblyPrimitives;
         ClippingInvocations = clippingInvocations;
         ClippingPrimitives = clippingPrimitives;
+        FragmentShaderInvocations = fragmentShaderInvocations;
     }
 }

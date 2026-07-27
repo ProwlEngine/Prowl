@@ -11,15 +11,16 @@ namespace Prowl.Graphite.Vk;
 // non-blocking behavior.
 internal unsafe partial class VkGraphicsDevice
 {
-    // Only the counters relevant to vertex/primitive counting - order here must match ascending bit
-    // value among the flags actually requested, since that's the order GetQueryPoolResults writes them
-    // in (InputAssemblyVertices=bit0, InputAssemblyPrimitives=bit1, ClippingInvocations=bit5,
-    // ClippingPrimitives=bit6).
+    // Only the counters relevant to vertex/primitive/overdraw counting - order here must match ascending
+    // bit value among the flags actually requested, since that's the order GetQueryPoolResults writes
+    // them in (InputAssemblyVertices=bit0, InputAssemblyPrimitives=bit1, ClippingInvocations=bit5,
+    // ClippingPrimitives=bit6, FragmentShaderInvocations=bit7).
     private const QueryPipelineStatisticFlags PipelineStatsFlags =
         QueryPipelineStatisticFlags.InputAssemblyVerticesBit |
         QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit |
         QueryPipelineStatisticFlags.ClippingInvocationsBit |
-        QueryPipelineStatisticFlags.ClippingPrimitivesBit;
+        QueryPipelineStatisticFlags.ClippingPrimitivesBit |
+        QueryPipelineStatisticFlags.FragmentShaderInvocationsBit;
 
     private readonly ConcurrentQueue<QueryPool> _availablePipelineStatsQueryPools = new();
 
@@ -51,14 +52,14 @@ internal unsafe partial class VkGraphicsDevice
     // the pool to the free list.
     internal GpuVertexStats ResolvePipelineStats(QueryPool pool)
     {
-        ulong* results = stackalloc ulong[4];
+        ulong* results = stackalloc ulong[5];
         _vk.GetQueryPoolResults(
             _device, pool, 0, 1,
-            (nuint)(sizeof(ulong) * 4), results, sizeof(ulong) * 4,
+            (nuint)(sizeof(ulong) * 5), results, sizeof(ulong) * 5,
             QueryResultFlags.ResultWaitBit | QueryResultFlags.Result64Bit).CheckResult();
 
         _availablePipelineStatsQueryPools.Enqueue(pool);
-        return new GpuVertexStats(results[0], results[1], results[2], results[3]);
+        return new GpuVertexStats(results[0], results[1], results[2], results[3], results[4]);
     }
 
     private QueryPool GetFreePipelineStatsQueryPool()

@@ -12,6 +12,7 @@ internal unsafe delegate void vkGetBufferMemoryRequirements2_t(Device device, Bu
 internal unsafe delegate void vkGetImageMemoryRequirements2_t(Device device, ImageMemoryRequirementsInfo2KHR* pInfo, MemoryRequirements2KHR* pMemoryRequirements);
 
 internal unsafe delegate void vkGetPhysicalDeviceProperties2_t(PhysicalDevice physicalDevice, void* properties);
+internal unsafe delegate void vkGetPhysicalDeviceMemoryProperties2_t(PhysicalDevice physicalDevice, void* memoryProperties);
 
 // VK_MVK_macos_surface (legacy, no Silk.NET extension class available)
 internal unsafe delegate Result vkCreateMacOSSurfaceMVK_t(

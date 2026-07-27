@@ -79,6 +79,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
     private vkGetBufferMemoryRequirements2_t? _getBufferMemoryRequirements2;
     private vkGetImageMemoryRequirements2_t? _getImageMemoryRequirements2;
     private vkGetPhysicalDeviceProperties2_t? _getPhysicalDeviceProperties2;
+    private vkGetPhysicalDeviceMemoryProperties2_t? _getPhysicalDeviceMemoryProperties2;
 
     private readonly VkBuffer _emptyUniformBuffer;
     private readonly VkBuffer _emptyStructuredBuffer;
