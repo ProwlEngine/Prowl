@@ -111,12 +111,10 @@ public static class SnapshotSerializer
     {
         EchoObject e = EchoObject.NewCompound();
         e.Add("Name", new EchoObject(v.Name));
-        // GpuMilliseconds is a computed rollup of the Passes below - not serialized, it's re-derived on load.
+        // GpuMilliseconds/DrawCallCount/DispatchCallCount are computed rollups of the Passes below - not serialized, re-derived on load.
         e.Add("RegisteredObjects", new EchoObject(v.RegisteredObjects));
         e.Add("CulledObjects", new EchoObject(v.CulledObjects));
         e.Add("TotalObjects", new EchoObject(v.TotalObjects));
-        e.Add("DrawCallCount", new EchoObject(v.DrawCallCount));
-        e.Add("DispatchCallCount", new EchoObject(v.DispatchCallCount));
         e.Add("PixelWidth", new EchoObject(v.PixelWidth));
         e.Add("PixelHeight", new EchoObject(v.PixelHeight));
         e.Add("Passes", ListToEcho(v.Passes, PassToEcho));
@@ -130,9 +128,7 @@ public static class SnapshotSerializer
         view.SetObjectCounts(
             e["RegisteredObjects"].IntValue,
             e["CulledObjects"].IntValue,
-            e["TotalObjects"].IntValue,
-            e["DrawCallCount"].IntValue);
-        view.SetDispatchCallCount(e["DispatchCallCount"].IntValue);
+            e["TotalObjects"].IntValue);
         view.SetPixelSize(e["PixelWidth"].UIntValue, e["PixelHeight"].UIntValue);
 
         foreach (EchoObject passEcho in e["Passes"].List)
@@ -146,15 +142,13 @@ public static class SnapshotSerializer
         EchoObject e = EchoObject.NewCompound();
         e.Add("Index", new EchoObject(p.Index));
         e.Add("Name", new EchoObject(p.Name));
-        // GpuMilliseconds/TrianglesDrawn are computed rollups of the CommandBuffers below - not serialized.
+        // GpuMilliseconds/TrianglesDrawn/DrawCallCount/DispatchCallCount are computed rollups of the CommandBuffers below - not serialized.
         e.Add("Inputs", ListToEcho(p.Inputs, ResourceRefToEcho));
         e.Add("Outputs", ListToEcho(p.Outputs, ResourceRefToEcho));
         e.Add("CommandBuffers", ListToEcho(p.CommandBuffers, CommandBufferToEcho));
         e.Add("RegisteredObjects", new EchoObject(p.RegisteredObjects));
         e.Add("CulledObjects", new EchoObject(p.CulledObjects));
         e.Add("TotalObjects", new EchoObject(p.TotalObjects));
-        e.Add("DrawCallCount", new EchoObject(p.DrawCallCount));
-        e.Add("DispatchCallCount", new EchoObject(p.DispatchCallCount));
         return e;
     }
 
@@ -165,9 +159,7 @@ public static class SnapshotSerializer
         pass.SetObjectCounts(
             e["RegisteredObjects"].IntValue,
             e["CulledObjects"].IntValue,
-            e["TotalObjects"].IntValue,
-            e["DrawCallCount"].IntValue);
-        pass.SetDispatchCallCount(e["DispatchCallCount"].IntValue);
+            e["TotalObjects"].IntValue);
 
         foreach (EchoObject cbEcho in e["CommandBuffers"].List)
             CommandBufferFromEcho(pass.CommandBuffer, cbEcho);
@@ -196,6 +188,8 @@ public static class SnapshotSerializer
         e.Add("ClippingInvocations", new EchoObject(c.ClippingInvocations));
         e.Add("ClippingPrimitives", new EchoObject(c.ClippingPrimitives));
         e.Add("FragmentShaderInvocations", new EchoObject(c.FragmentShaderInvocations));
+        e.Add("DrawCallCount", new EchoObject(c.DrawCallCount));
+        e.Add("DispatchCallCount", new EchoObject(c.DispatchCallCount));
         e.Add("Switches", ListToEcho(c.Switches, SwitchToEcho));
         return e;
     }
@@ -210,6 +204,7 @@ public static class SnapshotSerializer
             e["ClippingInvocations"].ULongValue,
             e["ClippingPrimitives"].ULongValue,
             e["FragmentShaderInvocations"].ULongValue));
+        cb.SetCallCounts(e["DrawCallCount"].IntValue, e["DispatchCallCount"].IntValue);
 
         foreach (ProfiledPipeline sw in ListFromEcho(e["Switches"], SwitchFromEcho))
             cb.AddSwitchInstance(sw);

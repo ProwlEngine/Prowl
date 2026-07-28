@@ -20,6 +20,8 @@ public sealed class ProfiledCommandBuffer
     public ulong FragmentShaderInvocations { get; private set; }
 
     public int PipelineSwitchCount { get; private set; }
+    public int DrawCallCount { get; private set; }
+    public int DispatchCallCount { get; private set; }
 
     public IReadOnlyList<ProfiledPipeline> Switches => _switches;
 
@@ -43,12 +45,21 @@ public sealed class ProfiledCommandBuffer
         ClippingPrimitives = 0;
         FragmentShaderInvocations = 0;
         PipelineSwitchCount = 0;
+        DrawCallCount = 0;
+        DispatchCallCount = 0;
     }
 
     internal void SetName(string name) => Name = name;
     public void SetGpuMs(double ms) => GpuMilliseconds = ms;
     public void SetPipelineSwitchCount(int count) => PipelineSwitchCount = count;
     internal void IncrementPipelineSwitchCount() => PipelineSwitchCount++;
+    public void AddDrawCalls(int count) => DrawCallCount += count;
+    public void AddDispatchCount() => DispatchCallCount++;
+    internal void SetCallCounts(int drawCallCount, int dispatchCallCount)
+    {
+        DrawCallCount = drawCallCount;
+        DispatchCallCount = dispatchCallCount;
+    }
 
     public void SetGpuVertexStats(in GpuVertexStats stats)
     {
@@ -78,6 +89,7 @@ public sealed class ProfiledCommandBuffer
         clone.SetGpuMs(GpuMilliseconds);
         clone.SetGpuVertexStats(new GpuVertexStats(InputAssemblyVertices, InputAssemblyPrimitives, ClippingInvocations, ClippingPrimitives, FragmentShaderInvocations));
         clone.SetPipelineSwitchCount(PipelineSwitchCount);
+        clone.SetCallCounts(DrawCallCount, DispatchCallCount);
         foreach (ProfiledPipeline sw in _switches)
             clone._switches.Add(sw.Clone());
         return clone;

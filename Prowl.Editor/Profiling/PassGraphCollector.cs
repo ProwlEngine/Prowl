@@ -162,8 +162,7 @@ public sealed class PassGraphCollector
 
         _touchedViews.Add(currentView);
         ProfiledView view = _frame.View(currentView);
-        view.AddDispatchCount();
-        view.Pass(pass.Index, pass.Name).AddDispatchCount();
+        view.Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name).AddDispatchCount();
     }
 
     /// <summary>Bumps the switch count on the command buffer a pipeline bind landed on - always-on,

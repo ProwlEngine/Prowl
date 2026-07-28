@@ -106,6 +106,20 @@ public sealed class ProfiledFrame
         }
     }
 
+    /// <summary>Sum of every view's PipelineSwitchCount plus every free command buffer's.</summary>
+    public int PipelineSwitchCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledView view in _activeViews)
+                sum += view.PipelineSwitchCount;
+            foreach (ProfiledCommandBuffer cb in _activeFreeCommandBuffers)
+                sum += cb.PipelineSwitchCount;
+            return sum;
+        }
+    }
+
     public int ViewCount => _activeViews.Count;
 
     /// <summary>Sum of every view's pass count.</summary>

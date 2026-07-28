@@ -19,8 +19,28 @@ public sealed class ProfiledPass
     public int RegisteredObjects { get; internal set; }
     public int CulledObjects { get; internal set; }
     public int TotalObjects { get; internal set; }
-    public int DrawCallCount { get; internal set; }
-    public int DispatchCallCount { get; internal set; }
+
+    public int DrawCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledCommandBuffer cb in _activeCommandBuffers)
+                sum += cb.DrawCallCount;
+            return sum;
+        }
+    }
+
+    public int DispatchCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledCommandBuffer cb in _activeCommandBuffers)
+                sum += cb.DispatchCallCount;
+            return sum;
+        }
+    }
 
     /// <summary>Rendered = not culled - see ProfiledView.RenderedObjects for why this is derived.</summary>
     public int RenderedObjects => TotalObjects - CulledObjects;
@@ -121,32 +141,22 @@ public sealed class ProfiledPass
         RegisteredObjects = 0;
         CulledObjects = 0;
         TotalObjects = 0;
-        DrawCallCount = 0;
-        DispatchCallCount = 0;
     }
 
-    public void AddObjectCounts(bool registered, bool culled, int drawCallCount)
+    public void AddObjectCounts(bool registered, bool culled)
     {
         RegisteredObjects += registered ? 1 : 0;
         CulledObjects += culled ? 1 : 0;
         TotalObjects += 1;
-        DrawCallCount += drawCallCount;
     }
-
-    /// <summary>Always-on, unlike DrawCallCount which comes from scene RenderableMetadata - dispatches
-    /// aren't scene renderables, so this is bumped directly from the raw RecordDispatch event.</summary>
-    public void AddDispatchCount() => DispatchCallCount++;
-
-    internal void SetDispatchCallCount(int count) => DispatchCallCount = count;
 
     /// <summary>Overwrites the object counts wholesale - see ProfiledView.SetObjectCounts, used the
     /// same way by SnapshotSerializer.</summary>
-    internal void SetObjectCounts(int registered, int culled, int total, int drawCalls)
+    internal void SetObjectCounts(int registered, int culled, int total)
     {
         RegisteredObjects = registered;
         CulledObjects = culled;
         TotalObjects = total;
-        DrawCallCount = drawCalls;
     }
 
     internal void AddInputPlaceholder(ResourceRef r) => _inputs.Add(r);
@@ -219,8 +229,6 @@ public sealed class ProfiledPass
             RegisteredObjects = RegisteredObjects,
             CulledObjects = CulledObjects,
             TotalObjects = TotalObjects,
-            DrawCallCount = DrawCallCount,
-            DispatchCallCount = DispatchCallCount,
         };
         clone._inputs.AddRange(_inputs);
         clone._outputs.AddRange(_outputs);

@@ -13,8 +13,6 @@ public sealed class ProfiledView
     public int RegisteredObjects { get; internal set; }
     public int CulledObjects { get; internal set; }
     public int TotalObjects { get; internal set; }
-    public int DrawCallCount { get; internal set; }
-    public int DispatchCallCount { get; internal set; }
 
     /// <summary>Render target size this view drew at, from ViewInfo.PixelWidth/PixelHeight - see Overdraw.</summary>
     public uint PixelWidth { get; internal set; }
@@ -76,6 +74,40 @@ public sealed class ProfiledView
         }
     }
 
+    /// <summary>Sum of this view's passes' PipelineSwitchCount.</summary>
+    public int PipelineSwitchCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledPass pass in _activePasses)
+                sum += pass.PipelineSwitchCount;
+            return sum;
+        }
+    }
+
+    public int DrawCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledPass pass in _activePasses)
+                sum += pass.DrawCallCount;
+            return sum;
+        }
+    }
+
+    public int DispatchCallCount
+    {
+        get
+        {
+            int sum = 0;
+            foreach (ProfiledPass pass in _activePasses)
+                sum += pass.DispatchCallCount;
+            return sum;
+        }
+    }
+
     /// <summary>Overdraw/depth-complexity estimate: FragmentShaderInvocations divided by this view's
     /// pixel count. 1.0 means every pixel was shaded exactly once; higher means shading ran more than
     /// once per pixel (translucency, unsorted opaque geometry, no early-Z, etc). 0 if PixelWidth/Height
@@ -121,8 +153,6 @@ public sealed class ProfiledView
         RegisteredObjects = 0;
         CulledObjects = 0;
         TotalObjects = 0;
-        DrawCallCount = 0;
-        DispatchCallCount = 0;
         foreach (ProfiledPass pass in _passes.Values)
             pass.Reset();
     }
@@ -149,28 +179,20 @@ public sealed class ProfiledView
         PixelHeight = height;
     }
 
-    /// <summary>Always-on, unlike DrawCallCount which comes from scene RenderableMetadata - dispatches
-    /// aren't scene renderables, so this is bumped directly from the raw RecordDispatch event.</summary>
-    public void AddDispatchCount() => DispatchCallCount++;
-
-    internal void SetDispatchCallCount(int count) => DispatchCallCount = count;
-
-    public void AddObjectCounts(bool registered, bool culled, int drawCallCount)
+    public void AddObjectCounts(bool registered, bool culled)
     {
         RegisteredObjects += registered ? 1 : 0;
         CulledObjects += culled ? 1 : 0;
         TotalObjects += 1;
-        DrawCallCount += drawCallCount;
     }
 
     /// <summary>Overwrites the object counts wholesale - used by SnapshotSerializer, which
     /// deserializes already-final rollups rather than replaying individual Renderable events.</summary>
-    internal void SetObjectCounts(int registered, int culled, int total, int drawCalls)
+    internal void SetObjectCounts(int registered, int culled, int total)
     {
         RegisteredObjects = registered;
         CulledObjects = culled;
         TotalObjects = total;
-        DrawCallCount = drawCalls;
     }
 
     internal ProfiledView Clone()
@@ -180,8 +202,6 @@ public sealed class ProfiledView
             RegisteredObjects = RegisteredObjects,
             CulledObjects = CulledObjects,
             TotalObjects = TotalObjects,
-            DrawCallCount = DrawCallCount,
-            DispatchCallCount = DispatchCallCount,
             PixelWidth = PixelWidth,
             PixelHeight = PixelHeight,
         };

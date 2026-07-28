@@ -36,9 +36,13 @@ public sealed class DrawHierarchyCollector
         ViewState state = GetOrCreateView(currentView);
 
         ProfiledView? view = _frame?.View(currentView);
-        view?.AddObjectCounts(r.Registered, r.Culled, r.DrawCallCount);
+        view?.AddObjectCounts(r.Registered, r.Culled);
         if (commandBuffer.Pass is { } pass)
-            view?.Pass(pass.Index, pass.Name).AddObjectCounts(r.Registered, r.Culled, r.DrawCallCount);
+        {
+            ProfiledPass? passObj = view?.Pass(pass.Index, pass.Name);
+            passObj?.AddObjectCounts(r.Registered, r.Culled);
+            passObj?.CommandBuffer(commandBuffer.Id, commandBuffer.Name).AddDrawCalls(r.DrawCallCount);
+        }
 
         if (state.Pending.Count == state.Boundary || state.CurrentSwitch == null)
         {
