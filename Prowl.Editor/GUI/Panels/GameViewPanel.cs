@@ -135,17 +135,9 @@ public class GameViewPanel : DockPanel
 
             EnsureRT(rtW, rtH);
 
-            // Render all cameras
-            // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) collects a
-            // nested camera once per active ancestor - Distinct() prevents rendering it multiple
-            // times (matches Scene.Render). Without it, a parented camera renders N times, doubling
-            // every stat and doing a full duplicate color + shadow pass.
-            var cameras = scene.ActiveObjects
-                .SelectMany(go => go.GetComponentsInChildren<Camera>())
-                .Distinct()
-                .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-                .OrderBy(c => c.Depth)
-                .ToList();
+            // Render all cameras.
+            var cameras = scene.GatherActiveCameras();
+            cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
 
             RenderStats.BeginFrame();
             foreach (var cam in cameras)
