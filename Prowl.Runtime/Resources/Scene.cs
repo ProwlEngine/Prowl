@@ -717,6 +717,31 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
+    /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
+    /// </summary>
+    internal List<Camera> GatherActiveCameras()
+    {
+        var cameras = new List<Camera>();
+
+        for (int i = 0; i < _allObj.Count; i++)
+        {
+            GameObject go = _allObj[i];
+            if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+
+            foreach (MonoBehaviour component in go._components)
+            {
+                if (component is Camera camera)
+                {
+                    cameras.Add(camera);
+                }
+            }
+        }
+
+        cameras.Sort(static (a, b) => a.Depth.CompareTo(b.Depth));
+        return cameras;
+    }
+
+    /// <summary>
     /// Renders all cameras in this scene, sorted by depth.
     /// </summary>
     /// <param name="target">Optional render target to render into</param>
@@ -726,11 +751,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         // Renderables are now collected per-camera inside pipeline.Render()
 
-        // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a
-        // child camera once per active ancestor - Distinct() prevents rendering it multiple times.
-        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).Distinct().ToList();
-
-        Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+        List<Camera> Cameras = GatherActiveCameras();
 
         if (Cameras.Count == 0)
             return false;
