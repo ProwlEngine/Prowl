@@ -786,19 +786,34 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
             builder.Separator();
 
-            // Move to View / Move View To
+            // Move to View / Align With View / Move View To
             var cam = SceneViewPanel.ActiveCamera;
             if (cam != null)
             {
+                // Pose writes go to the top-level selection only: a GameObject whose ancestor is
+                // also selected already travels with that ancestor, so writing its world pose
+                // separately would fight the parent's write (order-dependent) and bloat the undo step.
+                var poseTargets = ExcludeNestedSelections(selectedGOs);
+
+                // Position only, at the centre of the view - rotation is deliberately untouched.
                 builder.Item(Loc.Get("hierarchy.move_to_view"), () =>
                 {
-                    foreach (var go in selectedGOs)
-                    {
-                        go.Transform.Position = cam.Position;
-                        go.Transform.LocalEulerAngles = new Float3(cam.Pitch, cam.Yaw, 0);
-                    }
+                    Undo.ApplyGameObjectChanges(poseTargets, "Move to View",
+                        g => g.Transform.Position,
+                        (g, position) => g.Transform.Position = position,
+                        cam.ViewFocusPoint);
                     EditorSceneManager.MarkDirty();
                 }, icon: EditorIcons.ArrowRight);
+
+                // Position *and* rotation, so the object looks exactly where the view looks.
+                builder.Item(Loc.Get("hierarchy.align_with_view"), () =>
+                {
+                    Undo.ApplyGameObjectChanges<(Float3 Position, Quaternion Rotation)>(poseTargets, "Align With View",
+                        g => (g.Transform.Position, g.Transform.Rotation),
+                        (g, pose) => g.Transform.SetPositionAndRotation(pose.Position, pose.Rotation),
+                        (cam.Position, cam.Rotation));
+                    EditorSceneManager.MarkDirty();
+                }, icon: EditorIcons.ArrowsToEye);
 
                 builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
                 {

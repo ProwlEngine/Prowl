@@ -153,6 +153,7 @@
   "hierarchy.drop_to_spawn": "Soltar para crear aqui",
   "hierarchy.scene_empty": "La escena esta vacia",
   "hierarchy.move_to_view": "Mover a la vista",
+  "hierarchy.align_with_view": "Alinear con la vista",
   "hierarchy.move_view_to": "Mover vista hacia",
   "hierarchy.select_prefab_asset": "Seleccionar asset Prefab",
   "hierarchy.apply_prefab_overrides": "Aplicar cambios de Prefab",

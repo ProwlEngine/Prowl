@@ -76,6 +76,16 @@ public class EditorCamera
     public float Pitch => _pitch;
     public Float3 Forward => _cameraObject.Transform.Forward;
 
+    /// <summary>World rotation matching the camera's current yaw/pitch.</summary>
+    public Quaternion Rotation => _cameraObject.Transform.Rotation;
+
+    /// <summary>
+    /// The point the view is centred on: straight ahead of the camera at the current orbit/zoom
+    /// distance. "Move to View" drops objects here so they land in front of the camera instead of
+    /// inside it (where they'd be clipped away by the near plane).
+    /// </summary>
+    public Float3 ViewFocusPoint => _position + _cameraObject.Transform.Forward * _orbitDistance;
+
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
     {

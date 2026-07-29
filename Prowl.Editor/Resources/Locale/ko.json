@@ -175,6 +175,7 @@
   "hierarchy.drop_to_spawn": "여기에 놓아서 생성",
   "hierarchy.scene_empty": "씬이 비어 있습니다",
   "hierarchy.move_to_view": "뷰로 이동",
+  "hierarchy.align_with_view": "뷰에 정렬",
   "hierarchy.move_view_to": "뷰를 이동",
   "hierarchy.select_prefab_asset": "프리팹 에셋 선택",
   "hierarchy.apply_prefab_overrides": "프리팹 변경사항 적용",

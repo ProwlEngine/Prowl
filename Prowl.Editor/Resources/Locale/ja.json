@@ -153,6 +153,7 @@
   "hierarchy.drop_to_spawn": "ここにドロップして生成",
   "hierarchy.scene_empty": "シーンは空です",
   "hierarchy.move_to_view": "ビューに移動",
+  "hierarchy.align_with_view": "ビューに合わせる",
   "hierarchy.move_view_to": "ビューを移動",
   "hierarchy.select_prefab_asset": "プレハブアセットを選択",
   "hierarchy.apply_prefab_overrides": "プレハブの変更を適用",

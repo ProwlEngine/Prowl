@@ -175,6 +175,7 @@
   "hierarchy.drop_to_spawn": "Перетащите для создания",
   "hierarchy.scene_empty": "Сцена пуста",
   "hierarchy.move_to_view": "Переместить к виду",
+  "hierarchy.align_with_view": "Выровнять по виду",
   "hierarchy.move_view_to": "Переместить вид к",
   "hierarchy.select_prefab_asset": "Выбрать ассет префаба",
   "hierarchy.apply_prefab_overrides": "Применить изменения префаба",
