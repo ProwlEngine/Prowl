@@ -35,10 +35,11 @@ public sealed class EditorProfiler : IProfiler
     private GraphicsDevice? _device;
 
     private bool _paused = true;
+    private bool _frameOpen;
     private bool _captureArmedNext;
     private bool _captureActiveThisFrame;
 
-    private bool ShouldRecord => !_paused;
+    private bool ShouldRecord => _frameOpen;
 
     public bool IsCaptureArmed => _captureArmedNext || _captureActiveThisFrame;
 
@@ -97,8 +98,10 @@ public sealed class EditorProfiler : IProfiler
 
     public void BeginFrame()
     {
-        if (!ShouldRecord)
+        if (_paused)
             return;
+
+        _frameOpen = true;
 
         _frameIndex++;
 
@@ -153,6 +156,7 @@ public sealed class EditorProfiler : IProfiler
         }
 
         _captureActiveThisFrame = false;
+        _frameOpen = false;
     }
 
     // Control
