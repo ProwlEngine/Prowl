@@ -24,10 +24,6 @@ public partial class RenderProfilerPanel : DockPanel
     public override string Icon => EditorIcons.ChartLine;
 
     private readonly EditorProfiler _profiler;
-    private int _selectedTab;
-    private int _selectedFrame;
-    private int _selectedView;
-    private ProfiledFrame? _selectedProfiledFrame => _profiler.FrameAgo(_selectedFrame);
 
 
     public RenderProfilerPanel()
@@ -57,122 +53,44 @@ public partial class RenderProfilerPanel : DockPanel
                 .IsNotInteractable()
                 .BackgroundColor(EditorTheme.BorderStrong);
 
-            using (paper.Box("rdp_body").ChildRight().Enter())
-            {
-                switch (_selectedTab)
-                {
-                    case 0:
-                        // _profiler.DrawTiming(paper);
-                        DrawTimingViewer(paper);
-                        break;
-                    case 1:
-                        // _profiler.DrawMemory(paper);
-                        DrawStatsViewer(paper, width, height);
-                        break;
-                    case 2:
-                        // _profiler.DrawRenderables(paper);
-                        DrawRenderablesViewer(paper);
-                        break;
-                    case 3:
-                        // _profiler.DrawNativeStats(paper);
-                        DrawNativeStatsViewer(paper, width, height);
-                        break;
-                    case 4:
-                        // _profiler.DrawRenderGraph(paper);
-                        DrawRenderGraphViewer(paper);
-                        break;
-                }
-            }
+            paper.Box("rdp_contents")
+                .IsNotInteractable()
+                .BackgroundColor(Color.Red);
         }
     }
 
 
     private void DrawToolbar(Paper paper)
     {
-        using (paper.Row("rpe_toolbar")
-            .Height(36)
+        using (paper.Row("rdp_toolbar")
+            .Height(32)
             .ColBetween(6)
+            .Padding(6)
             .Enter())
         {
-            Origami.Tabs(paper, "rpe_views", _selectedTab, i => _selectedTab = i)
-                .Tab("Timing")
-                .Tab("Stats")
-                .Tab("Renderables")
-                .Tab("Native Stats")
-                .Tab("Render Graph")
-                .Height(36)
+            Origami.IconButton(paper, "record", EditorIcons.CircleDot_I, TogglePaused)
+                .Variant(_profiler.IsPaused ? OrigamiVariant.Default : OrigamiVariant.Danger)
+                .Soft()
+                .Rounding(90)
+                .Width(20)
+                .Height(20)
                 .Show();
 
-            paper.Box("rpe_toolbar_div")
-                .Width((UnitValue)1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
+            Origami.Label(paper, "record_label", _profiler.IsPaused ? "Paused" : "Recording")
+                .AlignCenter()
+                .AlignLeft()
+                .Height(20)
+                .Show();
 
-            using (paper.Row("rpe_toolbar_spacer")
-                .Padding(6)
-                .RowBetween(9)
-                .ChildLeft()
-                .ChildRight()
-                .Clip()
-                .Enter())
-            {
-                if (_selectedProfiledFrame != null)
-                {
-                    Origami.Label(paper, "fps", $"FPS: {_selectedProfiledFrame.Fps:F2}")
-                        .Width(80)
-                        .Show();
+            paper.Box("rdp_toolbar_spacer");
 
-                    Origami.Label(paper, "ms", $"ms: {_selectedProfiledFrame.FrameMilliseconds:F2} ms")
-                        .Width(80)
-                        .Show();
-
-                    Origami.Label(paper, "frame_num", $"Frame: {_selectedProfiledFrame.FrameIndex}")
-                        .Width(100)
-                        .Show();
-
-                    Origami.Label(paper, "rendered_views", $"Views: {_selectedProfiledFrame.Views.Count}")
-                        .Width(100)
-                        .Show();
-                }
-            }
-
-            paper.Box("rpe_toolbar_div")
-                .Width((UnitValue)1)
-                .IsNotInteractable()
-                .BackgroundColor(EditorTheme.BorderStrong);
-
-            using (paper.Row("rpe_toolbar_right")
-                .ChildTop()
-                .ChildBottom()
-                .ChildLeft()
-                .Padding(6)
-                .RowBetween(9)
-                .Width(250)
-                .Enter())
-            {
-                Origami.NumericField(paper, "frameselect", _selectedFrame, (x) => _selectedFrame = Maths.Clamp(x, 0, System.Math.Max(0, _profiler.History.Count - 1)))
-                    .DraggableLabel("Frame", EditorTheme.Amber500)
-                    .Width(100)
-                    .Show();
-
-                Origami.IconButton(paper, "record", EditorIcons.CircleDot_I, TogglePaused)
-                    .Variant(_profiler.IsPaused ? OrigamiVariant.Default : OrigamiVariant.Danger)
-                    .Soft()
-                    .Rounding(90)
-                    .Width(20)
-                    .Height(20)
-                    .Show();
-
-                Origami.Button(paper, "snapshot", "Snapshot", _profiler.RequestCaptureNextFrame)
-                    .Disabled(_profiler.IsCaptureArmed)
-                    .Warning()
-                    .Soft()
-                    .Width(80)
-                    .Height(20)
-                    .Show();
-            }
-
-            // left-aligned button for creating a snapsho
+            Origami.Button(paper, "snapshot", "Snapshot", _profiler.RequestCaptureNextFrame)
+                .Disabled(_profiler.IsCaptureArmed)
+                .Warning()
+                .Soft()
+                .Width(80)
+                .Height(20)
+                .Show();
         }
     }
 
