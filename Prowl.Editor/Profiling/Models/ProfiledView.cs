@@ -12,15 +12,14 @@ public sealed class ProfiledView
     public string Name { get; }
     public int RegisteredObjects { get; internal set; }
     public int CulledObjects { get; internal set; }
-    public int TotalObjects { get; internal set; }
 
     /// <summary>Render target size this view drew at, from ViewInfo.PixelWidth/PixelHeight - see Overdraw.</summary>
     public uint PixelWidth { get; internal set; }
     public uint PixelHeight { get; internal set; }
 
     /// <summary>Rendered = not culled. Derived rather than stored separately - it was always exactly
-    /// TotalObjects - CulledObjects, just tracked as its own independently-incremented counter before.</summary>
-    public int RenderedObjects => TotalObjects - CulledObjects;
+    /// RegisteredObjects - CulledObjects, just tracked as its own independently-incremented counter before.</summary>
+    public int RenderedObjects => RegisteredObjects - CulledObjects;
 
     /// <summary>Sum of this view's passes' GpuMilliseconds. Derived rather than cached: the numbers
     /// already live on the passes (which sum their own command buffers, see ProfiledPass), so storing a
@@ -152,7 +151,6 @@ public sealed class ProfiledView
         _edges.Clear();
         RegisteredObjects = 0;
         CulledObjects = 0;
-        TotalObjects = 0;
         foreach (ProfiledPass pass in _passes.Values)
             pass.Reset();
     }
@@ -179,20 +177,18 @@ public sealed class ProfiledView
         PixelHeight = height;
     }
 
-    public void AddObjectCounts(bool registered, bool culled)
+    public void AddObjectCounts(bool culled)
     {
-        RegisteredObjects += registered ? 1 : 0;
+        RegisteredObjects += 1;
         CulledObjects += culled ? 1 : 0;
-        TotalObjects += 1;
     }
 
     /// <summary>Overwrites the object counts wholesale - used by SnapshotSerializer, which
     /// deserializes already-final rollups rather than replaying individual Renderable events.</summary>
-    internal void SetObjectCounts(int registered, int culled, int total)
+    internal void SetObjectCounts(int registered, int culled)
     {
         RegisteredObjects = registered;
         CulledObjects = culled;
-        TotalObjects = total;
     }
 
     internal ProfiledView Clone()
@@ -201,7 +197,6 @@ public sealed class ProfiledView
         {
             RegisteredObjects = RegisteredObjects,
             CulledObjects = CulledObjects,
-            TotalObjects = TotalObjects,
             PixelWidth = PixelWidth,
             PixelHeight = PixelHeight,
         };

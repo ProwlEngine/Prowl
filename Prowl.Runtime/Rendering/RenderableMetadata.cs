@@ -14,7 +14,6 @@ public readonly struct RenderableMetadata
     public string MeshName { get; init; }
     public int Layer { get; init; }
     public Float3 Position { get; init; }
-    public bool Registered { get; init; }
     public bool Culled { get; init; }
 
     /// <summary>Draws this object emitted this pass (0 if culled/skipped).</summary>

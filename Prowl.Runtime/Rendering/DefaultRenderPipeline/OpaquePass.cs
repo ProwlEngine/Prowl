@@ -126,7 +126,6 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
             MeshName = meshName,
             Layer = renderable.GetLayer(),
             Position = renderable.GetPosition(),
-            Registered = true,
             Culled = culled,
             DrawCallCount = drawCallCount,
         });

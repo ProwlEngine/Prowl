@@ -18,7 +18,6 @@ public sealed class ProfiledPass
 
     public int RegisteredObjects { get; internal set; }
     public int CulledObjects { get; internal set; }
-    public int TotalObjects { get; internal set; }
 
     public int DrawCallCount
     {
@@ -43,7 +42,7 @@ public sealed class ProfiledPass
     }
 
     /// <summary>Rendered = not culled - see ProfiledView.RenderedObjects for why this is derived.</summary>
-    public int RenderedObjects => TotalObjects - CulledObjects;
+    public int RenderedObjects => RegisteredObjects - CulledObjects;
 
     /// <summary>Sum of this pass's command buffers' GpuMilliseconds - see ProfiledView.GpuMilliseconds
     /// for why this is derived instead of a separately-stored rollup.</summary>
@@ -140,23 +139,20 @@ public sealed class ProfiledPass
         _activeCommandBuffers.Clear();
         RegisteredObjects = 0;
         CulledObjects = 0;
-        TotalObjects = 0;
     }
 
-    public void AddObjectCounts(bool registered, bool culled)
+    public void AddObjectCounts(bool culled)
     {
-        RegisteredObjects += registered ? 1 : 0;
+        RegisteredObjects += 1;
         CulledObjects += culled ? 1 : 0;
-        TotalObjects += 1;
     }
 
     /// <summary>Overwrites the object counts wholesale - see ProfiledView.SetObjectCounts, used the
     /// same way by SnapshotSerializer.</summary>
-    internal void SetObjectCounts(int registered, int culled, int total)
+    internal void SetObjectCounts(int registered, int culled)
     {
         RegisteredObjects = registered;
         CulledObjects = culled;
-        TotalObjects = total;
     }
 
     internal void AddInputPlaceholder(ResourceRef r) => _inputs.Add(r);
@@ -228,7 +224,6 @@ public sealed class ProfiledPass
         {
             RegisteredObjects = RegisteredObjects,
             CulledObjects = CulledObjects,
-            TotalObjects = TotalObjects,
         };
         clone._inputs.AddRange(_inputs);
         clone._outputs.AddRange(_outputs);

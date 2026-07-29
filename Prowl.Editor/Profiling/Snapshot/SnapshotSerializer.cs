@@ -114,7 +114,6 @@ public static class SnapshotSerializer
         // GpuMilliseconds/DrawCallCount/DispatchCallCount are computed rollups of the Passes below - not serialized, re-derived on load.
         e.Add("RegisteredObjects", new EchoObject(v.RegisteredObjects));
         e.Add("CulledObjects", new EchoObject(v.CulledObjects));
-        e.Add("TotalObjects", new EchoObject(v.TotalObjects));
         e.Add("PixelWidth", new EchoObject(v.PixelWidth));
         e.Add("PixelHeight", new EchoObject(v.PixelHeight));
         e.Add("Passes", ListToEcho(v.Passes, PassToEcho));
@@ -127,8 +126,7 @@ public static class SnapshotSerializer
         ProfiledView view = frame.View(e["Name"].StringValue);
         view.SetObjectCounts(
             e["RegisteredObjects"].IntValue,
-            e["CulledObjects"].IntValue,
-            e["TotalObjects"].IntValue);
+            e["CulledObjects"].IntValue);
         view.SetPixelSize(e["PixelWidth"].UIntValue, e["PixelHeight"].UIntValue);
 
         foreach (EchoObject passEcho in e["Passes"].List)
@@ -148,7 +146,6 @@ public static class SnapshotSerializer
         e.Add("CommandBuffers", ListToEcho(p.CommandBuffers, CommandBufferToEcho));
         e.Add("RegisteredObjects", new EchoObject(p.RegisteredObjects));
         e.Add("CulledObjects", new EchoObject(p.CulledObjects));
-        e.Add("TotalObjects", new EchoObject(p.TotalObjects));
         return e;
     }
 
@@ -158,8 +155,7 @@ public static class SnapshotSerializer
         pass.SetResources(ListFromEcho(e["Inputs"], ResourceRefFromEcho), ListFromEcho(e["Outputs"], ResourceRefFromEcho));
         pass.SetObjectCounts(
             e["RegisteredObjects"].IntValue,
-            e["CulledObjects"].IntValue,
-            e["TotalObjects"].IntValue);
+            e["CulledObjects"].IntValue);
 
         foreach (EchoObject cbEcho in e["CommandBuffers"].List)
             CommandBufferFromEcho(pass.CommandBuffer, cbEcho);
@@ -289,7 +285,6 @@ public static class SnapshotSerializer
         e.Add("MeshName", new EchoObject(o.MeshName));
         e.Add("Layer", new EchoObject(o.Layer));
         e.Add("Position", Float3ToEcho(o.Position));
-        e.Add("Registered", new EchoObject(o.Registered));
         e.Add("Culled", new EchoObject(o.Culled));
         e.Add("DrawStart", new EchoObject(o.DrawStart));
         e.Add("DrawEnd", new EchoObject(o.DrawEnd));
@@ -304,7 +299,6 @@ public static class SnapshotSerializer
             e["MeshName"].StringValue,
             e["Layer"].IntValue,
             Float3FromEcho(e["Position"]),
-            e["Registered"].BoolValue,
             e["Culled"].BoolValue,
             e["DrawStart"].IntValue,
             e["DrawEnd"].IntValue);

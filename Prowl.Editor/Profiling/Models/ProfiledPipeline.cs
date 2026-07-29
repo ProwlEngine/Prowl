@@ -46,9 +46,9 @@ public sealed class ProfiledPipeline
 
     public ProfiledCallingObject AddObject(
         string label, string materialName, string meshName, int layer, Vector.Float3 position,
-        bool registered, bool culled, int drawStart, int drawEnd)
+        bool culled, int drawStart, int drawEnd)
     {
-        var obj = new ProfiledCallingObject(label, materialName, meshName, layer, position, registered, culled, drawStart, drawEnd);
+        var obj = new ProfiledCallingObject(label, materialName, meshName, layer, position, culled, drawStart, drawEnd);
         _objects.Add(obj);
         return obj;
     }
