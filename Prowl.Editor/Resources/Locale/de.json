@@ -153,6 +153,7 @@
   "hierarchy.drop_to_spawn": "Hier ablegen zum Erstellen",
   "hierarchy.scene_empty": "Szene ist leer",
   "hierarchy.move_to_view": "Zur Ansicht bewegen",
+  "hierarchy.align_with_view": "An Ansicht ausrichten",
   "hierarchy.move_view_to": "Ansicht bewegen zu",
   "hierarchy.select_prefab_asset": "Prefab-Asset auswaehlen",
   "hierarchy.apply_prefab_overrides": "Prefab-Aenderungen anwenden",

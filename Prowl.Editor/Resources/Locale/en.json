@@ -154,6 +154,7 @@
   "hierarchy.drop_to_spawn": "Drop to spawn here",
   "hierarchy.scene_empty": "Scene is empty",
   "hierarchy.move_to_view": "Move to View",
+  "hierarchy.align_with_view": "Align With View",
   "hierarchy.move_view_to": "Move View To",
   "hierarchy.select_prefab_asset": "Select Prefab Asset",
   "hierarchy.apply_prefab_overrides": "Apply Prefab Overrides",
