@@ -174,6 +174,16 @@ public sealed class HashContainerMigrator : IValueMigrator
 
         public override void Rebuild(object source, object target, MigrationContext context)
         {
+            // Only the instance knows: a type implementing IDictionary is free to reject every mutation, and
+            // third party immutables do exactly that without sharing a namespace we could recognise.
+            if (_to.IsReadOnly(target))
+            {
+                context.Report(ReloadCode.CollectionReadOnly, ReloadSeverity.Warning,
+                    "The container rejects mutation, so its entries keep pointing at the previous types.",
+                    target.GetType().FullName);
+                return;
+            }
+
             bool inPlace = ReferenceEquals(source, target);
 
             // Reading has to finish before clearing when both sides are the same container.

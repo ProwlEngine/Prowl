@@ -141,9 +141,10 @@ internal sealed class LambdaMatcher
         var userType = _types.Resolve(identity.UserType);
         if (userType.Target is not { } currentUserType) return null;
 
-        // A lambda in an untouched, non generic type is still itself.
-        if (userType.IsUnchanged && !previous.IsGenericMethod && !previous.DeclaringType!.IsGenericType)
-            return previous;
+        // The lambda's own definition is untouched, so its counterpart is that same method, re-closed over the
+        // migrated type arguments if it had any. Deliberately ahead of the index: an assembly this reload does
+        // not replace still owns lambdas, and reaching the index would demand metadata nobody has to supply.
+        if (userType.IsUnchanged) return Reuse(previous);
 
         var scope = _indexes.For(identity.UserType.Assembly)
             .FindScopeMethod(Definition(identity.UserType), identity.ScopeName, identity.ScopeOrdinal);
@@ -171,6 +172,42 @@ internal sealed class LambdaMatcher
     }
 
     private static Type Definition(Type type) => type.IsConstructedGenericType ? type.GetGenericTypeDefinition() : type;
+
+    /// <summary>
+    /// The counterpart of a lambda whose declaring type this reload does not replace. A closure is generic when
+    /// its scope method or its declaring type is, so being generic says nothing on its own: only an argument
+    /// that is itself replaced forces the method to be rebound, and the definition is reused either way.
+    /// </summary>
+    private MethodInfo? Reuse(MethodInfo previous)
+    {
+        var declaring = previous.DeclaringType!;
+        var container = declaring;
+
+        if (declaring.IsConstructedGenericType)
+        {
+            var resolved = _types.Resolve(declaring);
+            if (resolved.Target is not { } target) return null;
+            container = target;
+        }
+
+        bool sameContainer = ReferenceEquals(container, declaring);
+        if (sameContainer && !previous.IsGenericMethod) return previous;
+
+        var method = sameContainer ? previous : container.GetMethod(previous.Name, AllDeclared);
+        if (method == null || !previous.IsGenericMethod) return method;
+
+        var arguments = previous.GetGenericArguments();
+        var mapped = new Type[arguments.Length];
+
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            if (_types.Resolve(arguments[i]).Target is not { } target) return null;
+            mapped[i] = target;
+        }
+
+        try { return method.GetGenericMethodDefinition().MakeGenericMethod(mapped); }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return null; }
+    }
 
     /// <summary>
     /// The index stores open definitions, so a generic container has to be closed before a method can be bound

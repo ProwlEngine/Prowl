@@ -45,6 +45,7 @@ public enum ReloadCode
     CollectionRebuildFailed = 5003,
     CollectionComparerDropped = 5004,
     CollectionElementFailed = 5005,
+    CollectionReadOnly = 5006,
 
     // 6xxx, lifecycle
     DetachHookThrew = 6001,

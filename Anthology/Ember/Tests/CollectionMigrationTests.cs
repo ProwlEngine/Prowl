@@ -1084,4 +1084,133 @@ public class CollectionMigrationTests : MigrationTestBase
 
         Assert.Same(current, comparer);
     }
+
+    /// <summary>A dictionary that honours the read interface and rejects every mutation, as third party immutables do.</summary>
+    private sealed class FrozenMap<TKey, TValue> : IDictionary<TKey, TValue> where TKey : notnull
+    {
+        private readonly Dictionary<TKey, TValue> _entries = new();
+
+        public void Seed(TKey key, TValue value) => _entries[key] = value;
+
+        public bool IsReadOnly => true;
+        public int Count => _entries.Count;
+        public ICollection<TKey> Keys => _entries.Keys;
+        public ICollection<TValue> Values => _entries.Values;
+
+        public TValue this[TKey key]
+        {
+            get => _entries[key];
+            set => throw new NotSupportedException();
+        }
+
+        public bool ContainsKey(TKey key) => _entries.ContainsKey(key);
+        public bool TryGetValue(TKey key, out TValue value) => _entries.TryGetValue(key, out value!);
+        public bool Contains(KeyValuePair<TKey, TValue> item) => ((IDictionary<TKey, TValue>)_entries).Contains(item);
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int index) => ((IDictionary<TKey, TValue>)_entries).CopyTo(array, index);
+        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => _entries.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public void Add(TKey key, TValue value) => throw new NotSupportedException();
+        public void Add(KeyValuePair<TKey, TValue> item) => throw new NotSupportedException();
+        public bool Remove(TKey key) => throw new NotSupportedException();
+        public bool Remove(KeyValuePair<TKey, TValue> item) => throw new NotSupportedException();
+        public void Clear() => throw new NotSupportedException();
+    }
+
+    private sealed class FrozenHolder
+    {
+        public FrozenMap<string, object>? Map;
+    }
+
+    /// <summary>
+    /// A read only container cannot be drained and refilled. Reporting that beats throwing out of the migrator,
+    /// which is what a namespace based exclusion list produces the moment it meets an unfamiliar immutable.
+    /// </summary>
+    [Fact]
+    public void ReadOnlyContainer_IsReportedRatherThanThrowing()
+    {
+        Assembly v1 = Compile("public class E { public int Id; }");
+        Assembly v2 = Compile("public class E { public int Id; public int Extra; }");
+
+        object entry = Activator.CreateInstance(v1.GetType("E")!)!;
+        var map = new FrozenMap<string, object>();
+        map.Seed("only", entry);
+
+        var holder = new FrozenHolder { Map = map };
+
+        Migrate(v1, v2, holder);
+
+        Assert.True(Reported(ReloadCode.CollectionReadOnly));
+        Assert.False(Reported(ReloadCode.MigratorThrew));
+        Assert.False(Reported(ReloadCode.CollectionRebuildFailed));
+    }
+
+    private readonly struct StructMap : IDictionary<string, object>
+    {
+        private readonly Dictionary<string, object> _entries;
+
+        public StructMap(Dictionary<string, object> entries) => _entries = entries;
+
+        public bool IsReadOnly => false;
+        public int Count => _entries.Count;
+        public ICollection<string> Keys => _entries.Keys;
+        public ICollection<object> Values => _entries.Values;
+
+        public object this[string key]
+        {
+            get => _entries[key];
+            set => _entries[key] = value;
+        }
+
+        public bool ContainsKey(string key) => _entries.ContainsKey(key);
+        public bool TryGetValue(string key, out object value) => _entries.TryGetValue(key, out value!);
+        public bool Contains(KeyValuePair<string, object> item) => ((IDictionary<string, object>)_entries).Contains(item);
+        public void CopyTo(KeyValuePair<string, object>[] array, int index) => ((IDictionary<string, object>)_entries).CopyTo(array, index);
+        public IEnumerator<KeyValuePair<string, object>> GetEnumerator() => _entries.GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public void Add(string key, object value) => _entries.Add(key, value);
+        public void Add(KeyValuePair<string, object> item) => _entries.Add(item.Key, item.Value);
+        public bool Remove(string key) => _entries.Remove(key);
+        public bool Remove(KeyValuePair<string, object> item) => _entries.Remove(item.Key);
+        public void Clear() => _entries.Clear();
+    }
+
+    /// <summary>
+    /// A struct container arrives at a plan boxed, so draining and refilling it would mutate the box and leave
+    /// the field holding its original value. It has to fall through to the field walk instead.
+    /// </summary>
+    [Fact]
+    public void StructContainer_IsNotClaimedAsAKeyedContainer()
+    {
+        Assert.Equal(CollectionKind.None, CollectionShape.Probe(typeof(StructMap)).Kind);
+        Assert.False(new HashContainerMigrator().Handles(typeof(StructMap)));
+    }
+
+    private sealed class StructMapHolder
+    {
+        public StructMap Map;
+    }
+
+    /// <summary>The struct's contents still have to migrate, by way of the dictionary it wraps.</summary>
+    [Fact]
+    public void StructContainer_ContentsStillMigrate()
+    {
+        Assembly v1 = Compile("public class E { public int Id; }");
+        Assembly v2 = Compile("public class E { public int Id; public int Extra; }");
+
+        object entry = Activator.CreateInstance(v1.GetType("E")!)!;
+        v1.GetType("E")!.GetField("Id")!.SetValue(entry, 42);
+
+        var holder = new StructMapHolder
+        {
+            Map = new StructMap(new Dictionary<string, object> { ["only"] = entry }),
+        };
+
+        Migrate(v1, v2, holder);
+
+        object migrated = holder.Map["only"];
+        Assert.Equal(v2.GetType("E"), migrated.GetType());
+        Assert.Equal(42, v2.GetType("E")!.GetField("Id")!.GetValue(migrated));
+    }
 }

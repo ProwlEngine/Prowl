@@ -80,6 +80,10 @@ internal sealed class CollectionShape
     /// </summary>
     private static bool IsUnsuitable(Type type)
     {
+        // A struct container is boxed by the time a plan sees it, so draining and refilling would mutate the box
+        // and leave the field holding its original value. Field walking carries its storage across instead.
+        if (type.IsValueType) return true;
+
         // Immutable and frozen collections implement IList and IDictionary with throwing mutators. The two
         // whose hash trees genuinely have to be rebuilt are claimed by ImmutableMigrator, ahead of this one.
         var space = type.Namespace;
@@ -132,6 +136,9 @@ internal interface IKeyedAccessor
     IEnumerable<KeyValuePair<object?, object?>> Entries(object collection);
     void Clear(object collection);
     bool Add(object collection, object? key, object? value);
+
+    /// <summary>Whether this instance rejects mutation, which no probe of its type alone can tell.</summary>
+    bool IsReadOnly(object collection);
 }
 
 internal interface ISequenceAccessor
@@ -151,6 +158,8 @@ internal sealed class DictionaryAccessor<TKey, TValue> : IKeyedAccessor where TK
 
     public void Clear(object collection) => ((IDictionary<TKey, TValue>)collection).Clear();
 
+    public bool IsReadOnly(object collection) => ((IDictionary<TKey, TValue>)collection).IsReadOnly;
+
     public bool Add(object collection, object? key, object? value)
     {
         var dictionary = (IDictionary<TKey, TValue>)collection;
@@ -169,6 +178,8 @@ internal sealed class SetAccessor<T> : IKeyedAccessor
 
     public void Clear(object collection) => ((ISet<T>)collection).Clear();
 
+    public bool IsReadOnly(object collection) => ((ISet<T>)collection).IsReadOnly;
+
     public bool Add(object collection, object? key, object? value)
         => key is T typed && ((ISet<T>)collection).Add(typed);
 }
@@ -180,6 +191,8 @@ internal sealed class WeakTableAccessor<TKey, TValue> : IKeyedAccessor
         => ((ConditionalWeakTable<TKey, TValue>)collection).Select(x => new KeyValuePair<object?, object?>(x.Key, x.Value));
 
     public void Clear(object collection) => ((ConditionalWeakTable<TKey, TValue>)collection).Clear();
+
+    public bool IsReadOnly(object collection) => false;
 
     public bool Add(object collection, object? key, object? value)
         => key is TKey typedKey && ((ConditionalWeakTable<TKey, TValue>)collection).TryAdd(typedKey, (TValue)value!);

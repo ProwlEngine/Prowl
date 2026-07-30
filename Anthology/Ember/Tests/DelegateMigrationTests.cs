@@ -971,4 +971,58 @@ public class DelegateMigrationTests : MigrationTestBase
         Assert.Null(v2.GetType("H")!.GetField("F")!.GetValue(null));
         Assert.Equal(1, report.Statistics.DelegatesBroken);
     }
+
+    private sealed class HandlerHolder
+    {
+        public Action? Handler;
+    }
+
+    // Generic in T, so the closure Roslyn emits for it is a generic display class.
+    private static Action MakeGenericClosure<T>(T value, List<string> log)
+        => () => log.Add($"{typeof(T).Name}:{value}");
+
+    /// <summary>
+    /// A lambda living in an assembly the reload does not replace, whose display class happens to be generic.
+    /// The host supplies no IL for that assembly, so a matcher that reaches for metadata here cannot succeed.
+    /// This is the shape every UI library handler has.
+    /// </summary>
+    [Fact]
+    public void Lambda_GenericClosureInUnchangedAssembly_SurvivesWithoutMetadata()
+    {
+        Assembly v1 = Compile(EV1);
+        Assembly v2 = Compile(EV2);
+
+        var log = new List<string>();
+        var holder = new HandlerHolder { Handler = MakeGenericClosure(7, log) };
+
+        var report = Migrate(v1, v2, holder);
+
+        Assert.Equal(0, report.Statistics.DelegatesBroken);
+        Assert.False(Reported(ReloadCode.DelegateBroken));
+        Assert.False(Reported(ReloadCode.LambdaScopeUnresolved));
+
+        holder.Handler!();
+        Assert.Equal(new[] { "Int32:7" }, log);
+    }
+
+    /// <summary>The same closure, kept in a list, which is how a multi subscriber event holds its handlers.</summary>
+    [Fact]
+    public void Lambda_GenericClosureInUnchangedAssembly_MulticastKeepsEverySubscriber()
+    {
+        Assembly v1 = Compile(EV1);
+        Assembly v2 = Compile(EV2);
+
+        var log = new List<string>();
+        var holder = new HandlerHolder
+        {
+            Handler = MakeGenericClosure(1, log) + MakeGenericClosure("two", log),
+        };
+
+        var report = Migrate(v1, v2, holder);
+
+        Assert.Equal(0, report.Statistics.DelegatesBroken);
+
+        holder.Handler!();
+        Assert.Equal(new[] { "Int32:1", "String:two" }, log);
+    }
 }
