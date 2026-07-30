@@ -46,6 +46,37 @@ public static class ScriptAssemblyManager
     private static DllImportResolver? s_nativeResolver;
     private static string s_pluginLoadDir = "";
 
+    static ScriptAssemblyManager()
+    {
+        RuntimeUtils.AssemblySource = LiveAssemblies;
+    }
+
+    /// <summary>
+    /// Every loaded assembly worth reflecting over, the live script build first and superseded builds left out.
+    /// A hot reload leaves the outgoing assembly loaded under the same simple name, so without this a lookup by
+    /// name lands on the previous types and an enumeration reports every user type twice.
+    /// </summary>
+    public static IEnumerable<Assembly> LiveAssemblies()
+    {
+        var live = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var asm in s_scriptAssemblies)
+        {
+            live.Add(asm.GetName().Name ?? string.Empty);
+            yield return asm;
+        }
+
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (s_scriptAssemblies.Contains(asm)) continue;
+
+            // Sharing a name with a live script assembly without being one means it is a previous build.
+            if (live.Contains(asm.GetName().Name ?? string.Empty)) continue;
+
+            yield return asm;
+        }
+    }
+
     /// <summary>Signal that scripts have changed and need recompilation.</summary>
     public static void RequestRecompile()
     {

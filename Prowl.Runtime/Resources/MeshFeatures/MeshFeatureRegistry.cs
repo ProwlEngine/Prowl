@@ -67,7 +67,7 @@ public static class MeshFeatureRegistry
         if (_initialized) return;
         _initialized = true;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var assembly in RuntimeUtils.AssemblySource())
         {
             Type[] types;
             try { types = assembly.GetTypes(); }

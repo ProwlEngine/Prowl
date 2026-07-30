@@ -53,6 +53,14 @@ public static class RuntimeUtils
     // assembly finishes loading.
     private static readonly ReloadCache<string, Type> s_resolvedTypeCache = new();
 
+    /// <summary>
+    /// Where reflection lookups enumerate assemblies. The editor points this at the live script assemblies,
+    /// because after a hot reload both builds are loaded under the same simple name and the domain lists them
+    /// in load order, so a name would otherwise always resolve to the outgoing build.
+    /// </summary>
+    public static Func<IEnumerable<Assembly>> AssemblySource { get; set; }
+        = static () => AppDomain.CurrentDomain.GetAssemblies();
+
     public static bool IsARM() =>
         RuntimeInformation.OSArchitecture == Architecture.Arm ||
         RuntimeInformation.OSArchitecture == Architecture.Arm64;
@@ -98,7 +106,7 @@ public static class RuntimeUtils
         // Assembly matched on simple name only, since a script assembly keeps its name across hot reloads.
         if (!string.IsNullOrEmpty(assemblyName))
         {
-            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly asm in AssemblySource())
             {
                 if (!string.Equals(asm.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -110,7 +118,7 @@ public static class RuntimeUtils
             }
         }
 
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
         {
             t = asm.GetType(qualifiedTypeName);
             if (t != null)
@@ -188,7 +196,7 @@ public static class RuntimeUtils
 
     private static Assembly? ResolveLoadedAssembly(AssemblyName name)
     {
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
             if (string.Equals(asm.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase))
                 return asm;
 
@@ -201,7 +209,7 @@ public static class RuntimeUtils
             return asm.GetType(typeName, throwOnError: false, ignoreCase);
 
         // No assembly qualifier on this portion of the name - search every loaded assembly.
-        foreach (Assembly candidate in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly candidate in AssemblySource())
         {
             Type? t = candidate.GetType(typeName, throwOnError: false, ignoreCase);
             if (t != null)
@@ -402,7 +410,7 @@ public static class RuntimeUtils
 
     public static IEnumerable<Type> GetTypesWithAttribute<T>()
     {
-        Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var assemblies = AssemblySource();
         foreach (Assembly assembly in assemblies)
             foreach (Type type in assembly.GetTypes())
                 if (type.GetCustomAttributes(typeof(T), true).Length > 0)
@@ -412,7 +420,7 @@ public static class RuntimeUtils
     public static List<Type> FindTypesImplementing(Type propertyType, bool ignoreGenerics = false)
     {
         List<Type> types = [];
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
         {
             foreach (Type type in asm.GetTypes())
             {
