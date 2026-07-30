@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+    <PackageReference Include="Prowl.Ember" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" />
   </ItemGroup>
 
   <!-- Fix for Linux Builds -->
