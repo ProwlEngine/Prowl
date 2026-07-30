@@ -49,6 +49,10 @@ public static class ScriptAssemblyManager
     static ScriptAssemblyManager()
     {
         RuntimeUtils.AssemblySource = LiveAssemblies;
+
+        // Echo resolves a persisted $type by scanning the domain, which finds the superseded build first. Its
+        // override hook is consulted after the predefined and structural cases, so this only redirects the scan.
+        Prowl.Echo.TypeNameRegistry.TypeResolver = RuntimeUtils.FindType;
     }
 
     /// <summary>
