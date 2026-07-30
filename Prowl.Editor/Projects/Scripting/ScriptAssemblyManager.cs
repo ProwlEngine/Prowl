@@ -1,39 +1,43 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Threading.Tasks;
 
-using Prowl.Echo;
 using Prowl.Editor.Core;
-using Prowl.Editor.GUI.SceneView;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Projects.Scripting;
 
 /// <summary>
-/// Manages script assembly compilation, loading, and hot-reload.
-/// Uses a collectible AssemblyLoadContext so assemblies can be fully unloaded
-/// and replaced. Falls back to an editor restart if unloading fails.
+/// Manages script assembly compilation, loading, and hot-reload. Recompiles migrate the live graph onto the
+/// new types in place via <see cref="SceneHotReload"/>, which is the only reload path: there is no unload and
+/// no restart, so there is no second path to keep in step with this one. A failed migration is logged and
+/// toasted, and the previous code stays running until the next successful reload.
 /// </summary>
 public static class ScriptAssemblyManager
 {
     private static bool _recompileRequested;
     private static DateTime _lastScriptChange;
     private static bool _isCompiling;
-    private static ScriptCompiler.CompileResult? _pendingResult;
-    private static bool _restartDeferred;
+    private static readonly object _pendingLock = new();
+    private static ScriptCompiler.CompileResult? _pendingResult; // published cross-thread under _pendingLock
+    private static DateTime _compileStartedUtc; // when the in-flight compile began, for the summary timing
     private static TimeSpan DebounceDelay = TimeSpan.FromSeconds(1);
 
     private static AssemblyLoadContext? s_scriptContext;
     private static readonly List<Assembly> s_scriptAssemblies = [];
-    private const int MaxGCAttempts = 10;
+
+    // Raw IL bytes of each loaded user assembly, kept so hot reload can read a swapped assembly's IL with
+    // Cecil (for lambda/closure migration). Keyed weakly so an unloaded assembly's bytes can be collected.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Assembly, byte[]> s_assemblyBytes = new();
+
+    /// <summary>The raw IL bytes an assembly was loaded from, or null if it wasn't loaded through here.</summary>
+    internal static byte[]? GetAssemblyBytes(Assembly asm) => s_assemblyBytes.TryGetValue(asm, out var bytes) ? bytes : null;
 
     // Plugin resolution state, refreshed each time assemblies are (re)loaded.
     private static readonly Dictionary<string, string> s_managedPlugins = new(StringComparer.OrdinalIgnoreCase);
@@ -51,59 +55,13 @@ public static class ScriptAssemblyManager
     /// <summary>Call once per frame. Triggers compilation after debounce period.</summary>
     public static void Update()
     {
-        // Check if background compilation finished
-        if (_pendingResult.HasValue)
-        {
-            // A compile that kicked off during the debounce window can finish after the user
-            // has entered play mode. Restarting now would snapshot the in-play scene over
-            // the user's saved scene, so park the result until play mode ends.
-            if (Application.IsPlaying)
-            {
-                if (!_restartDeferred)
-                {
-                    _restartDeferred = true;
-                    Runtime.Debug.Log("[ScriptAssemblyManager] Compilation finished during play. Restart deferred until play mode ends.");
-                }
-                return;
-            }
-
-            var result = _pendingResult.Value;
-            _pendingResult = null;
-            _isCompiling = false;
-            _restartDeferred = false;
-
-            if (result.Success)
-            {
-                if (result.RequiresReload)
-                {
-                    Runtime.Debug.Log("[ScriptAssemblyManager] Compilation successful. Attempting hot-reload...");
-
-                    if (!TryHotReload(Project.Current!))
-                    {
-                        Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot-reload failed. Restarting editor...");
-                        RestartEditor(Project.Current!);
-                    }
-                }
-                else
-                {
-                    Runtime.Debug.LogSuccess("[ScriptAssemblyManager] Packages restored.");
-                }
-            }
-            else
-            {
-                Runtime.Debug.LogError("[ScriptAssemblyManager] Compilation failed. Fix errors and save to retry.");
-            }
-            return;
-        }
+        if (ConsumeFinishedCompile()) return;
 
         if (!_recompileRequested || _isCompiling) return;
         if (Project.Current == null) return;
 
-        // Only compile when the editor window is focused (don't spam while user is editing externally)
+        // Only compile when the editor window is focused (don't spam while user is editing externally).
         if (!Window.IsFocused) return;
-
-        // Only compile when not Playing
-        if (Application.IsPlaying) return;
 
         // Wait for debounce
         if (DateTime.UtcNow - _lastScriptChange < DebounceDelay) return;
@@ -117,33 +75,84 @@ public static class ScriptAssemblyManager
 
         // Nothing to build and no packages to restore, so there is nothing to do.
         if (!hasScripts && !hasPackages)
-        {
-            Runtime.Debug.Log("[ScriptAssemblyManager] No scripts or packages found, skipping compilation.");
             return;
-        }
 
         _isCompiling = true;
-        Runtime.Debug.Log(hasScripts
-            ? "[ScriptAssemblyManager] Starting compilation..."
-            : "[ScriptAssemblyManager] Restoring packages...");
+        _compileStartedUtc = DateTime.UtcNow;
 
-        // Notify [OnScriptCompile] listeners only when scripts will actually reload.
+        // Toast that a compile started, only when scripts will actually reload.
         if (hasScripts)
-            Core.ScriptReloadCallbacks.InvokeScriptCompile();
+            EditorApplication.Instance?.NotifyCompiling();
 
-        // Run on background thread result polled on main thread via _pendingResult
+        // Compile on a background thread; the result is published to the main thread under _pendingLock.
         Task.Run(() =>
         {
+            ScriptCompiler.CompileResult result;
             try
             {
-                _pendingResult = ScriptCompiler.CompileAll(project);
+                result = ScriptCompiler.CompileAll(project);
             }
             catch (Exception ex)
             {
                 Runtime.Debug.LogError($"[ScriptAssemblyManager] Compilation exception: {ex.Message}");
-                _pendingResult = new ScriptCompiler.CompileResult { Success = false, Errors = ex.Message };
+                result = new ScriptCompiler.CompileResult { Success = false, Errors = ex.Message };
             }
+            lock (_pendingLock) _pendingResult = result;
         });
+    }
+
+    /// <summary>
+    /// If a background compile finished, act on it: hot-reload live (works in play mode too). A reload that
+    /// fails is logged and toasted, and the previous code keeps running until the next successful reload, since
+    /// nothing is unloaded and the editor never restarts. Returns true if a finished result was handled this
+    /// frame.
+    /// </summary>
+    private static bool ConsumeFinishedCompile()
+    {
+        ScriptCompiler.CompileResult result;
+        lock (_pendingLock)
+        {
+            if (_pendingResult == null) return false;
+            result = _pendingResult.Value;
+            _pendingResult = null;
+        }
+        _isCompiling = false;
+
+        int elapsedMs = (int)(DateTime.UtcNow - _compileStartedUtc).TotalMilliseconds;
+
+        if (!result.Success)
+        {
+            // The per line compiler errors are already in the console (the "why"); summarise and toast.
+            Runtime.Debug.LogError("[Scripts] Compilation failed. See the errors above.");
+            EditorApplication.Instance?.NotifyCompileFailed();
+            return true;
+        }
+        if (!result.RequiresReload)
+        {
+            Runtime.Debug.LogSuccess($"[Scripts] Packages restored in {elapsedMs}ms.");
+            return true;
+        }
+
+        // Guard the whole reload so nothing (a registry rebuild) can escape into the GUI frame.
+        try
+        {
+            if (TryHotReload(Project.Current!))
+            {
+                Runtime.Debug.LogSuccess($"[Scripts] Recompiled and hot reloaded in {elapsedMs}ms.");
+                EditorApplication.Instance?.NotifyScriptsReloaded($"Recompiled and reloaded in {elapsedMs}ms.");
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[ScriptAssemblyManager] Hot-reload threw: {ex.Message}\n{ex.StackTrace}");
+        }
+
+        // The migration failed. The old assemblies are still the active set (the commit only happens on
+        // success), so the editor keeps running on the old code; the user fixes it and saves to retry.
+        EditorApplication.Instance?.NotifyReloadFailed();
+        Runtime.Debug.LogWarning("[ScriptAssemblyManager] Hot reload failed; keeping the old code. Fix and save to retry.");
+        return true;
     }
 
     // ================================================================
@@ -212,6 +221,17 @@ public static class ScriptAssemblyManager
         s_nativePlugins.Clear();
         s_pluginLoadDir = Path.Combine(project.ScriptAssemblyPath, ".loaded");
 
+        // Managed plugins are still copied into this folder (see ResolveManagedPlugin) to keep their
+        // source unlocked, so clear stale copies from a previous load here now that the script
+        // assemblies no longer use it. Safe: the old context was unloaded before we got here.
+        try
+        {
+            if (Directory.Exists(s_pluginLoadDir))
+                foreach (var f in Directory.EnumerateFiles(s_pluginLoadDir))
+                    try { File.Delete(f); } catch { }
+        }
+        catch { }
+
         foreach (var plugin in PluginScanner.ScanAll(project))
         {
             if (plugin.IsManaged)
@@ -265,109 +285,49 @@ public static class ScriptAssemblyManager
         return IntPtr.Zero;
     }
 
+    /// <summary>Load the user assemblies into a caller-owned context (not the active one) and return them.</summary>
+    private static List<Assembly> LoadAssembliesInto(Project project, AssemblyLoadContext context)
+    {
+        var loaded = new List<Assembly>();
+        foreach (var dll in ScriptCompiler.GetEditorAssemblyPaths(project))
+        {
+            if (!File.Exists(dll)) continue;
+
+            byte[] bytes = File.ReadAllBytes(dll);
+            using var stream = new MemoryStream(bytes);
+            var asm = context.LoadFromStream(stream);
+            s_assemblyBytes.AddOrUpdate(asm, bytes);
+            loaded.Add(asm);
+
+            if (s_nativeResolver != null && s_nativePlugins.Count > 0)
+                try { NativeLibrary.SetDllImportResolver(asm, s_nativeResolver); } catch { }
+        }
+        return loaded;
+    }
+
     private static void LoadAssembly(string dllPath, string label)
     {
         if (!File.Exists(dllPath) || s_scriptContext == null) return;
 
         try
         {
-            // Copy to a unique temp path so the original stays unlocked for recompilation
-            string tempDir = Path.Combine(Path.GetDirectoryName(dllPath)!, ".loaded");
-            Directory.CreateDirectory(tempDir);
-
-            // Purge leftover files from previous sessions
-            foreach (var f in Directory.EnumerateFiles(tempDir))
-                try { File.Delete(f); } catch { }
-
-            string stem = Path.GetFileNameWithoutExtension(dllPath);
-            string tempPath = Path.Combine(tempDir, $"{stem}_{Guid.NewGuid():N}.dll");
-            File.Copy(dllPath, tempPath, true);
-
-            // Also copy the .pdb so stack traces resolve to user source lines
-            string pdbPath = Path.ChangeExtension(dllPath, ".pdb");
-            if (File.Exists(pdbPath))
-            {
-                try { File.Copy(pdbPath, Path.ChangeExtension(tempPath, ".pdb"), true); } catch { }
-            }
-
-            var asm = s_scriptContext.LoadFromAssemblyPath(Path.GetFullPath(tempPath));
+            // Load from the bytes, not the path, so the DLL on disk stays unlocked for the next
+            // recompile (no on disk copy needed). The PDB is embedded in the image, so stack traces
+            // still resolve to user source lines.
+            byte[] bytes = File.ReadAllBytes(dllPath);
+            using var stream = new MemoryStream(bytes);
+            var asm = s_scriptContext.LoadFromStream(stream);
+            s_assemblyBytes.AddOrUpdate(asm, bytes);
             s_scriptAssemblies.Add(asm);
 
             // Let this assembly's P/Invokes resolve against the project's native plugins.
             if (s_nativeResolver != null && s_nativePlugins.Count > 0)
                 try { NativeLibrary.SetDllImportResolver(asm, s_nativeResolver); } catch { }
-
-            Runtime.Debug.Log($"[ScriptAssemblyManager] Loaded {label} assembly: {Path.GetFileName(dllPath)}");
         }
         catch (Exception ex)
         {
             Runtime.Debug.LogError($"[ScriptAssemblyManager] Failed to load {label} assembly: {ex.Message}");
         }
-    }
-
-    // ================================================================
-    //  Unloading
-    // ================================================================
-
-    /// <summary>
-    /// Unload the script assembly context, then verify it is truly gone via a forced GC loop.
-    /// Returns false if it survives (caller should restart). The strong reference to the context
-    /// is confined entirely to <see cref="UnloadContext"/>: this method only ever holds the
-    /// <see cref="WeakReference"/>, so no live local roots the context across the GC loop.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static bool UnloadScriptAssemblies()
-    {
-        if (s_scriptContext == null)
-            return true;
-
-        // Drop framework reflection caches that key off the user assemblies.
-        foreach (var asm in s_scriptAssemblies)
-            TypeDescriptor.Refresh(asm);
-        s_scriptAssemblies.Clear();
-
-        WeakReference weakCtx = UnloadContext();
-
-        // Forced GC loop. Collect, run finalizers, collect again so anything resurrected for
-        // finalization is reclaimed within the same iteration.
-        // In this section, it's useless to re-assign s_scriptContext as it pins down the ALC and, if it fails to reload,
-        // the editor will restart anyway so there's no need to have it here
-        for (int i = 0; i < MaxGCAttempts && weakCtx.IsAlive; i++)
-        {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-        }
-
-        if (weakCtx.IsAlive)
-        {
-            string hint = System.Diagnostics.Debugger.IsAttached
-                ? " A DEBUGGER IS ATTACHED - the CLR keeps collectible assemblies alive for the whole debug " +
-                  "session, so hot-reload cannot unload while debugging. Run without the debugger (Ctrl+F5 / " +
-                  "launch the built exe) to get true hot-reload; under the debugger the editor restarts instead."
-                : " No debugger attached - the pin is a runtime type/method handle (reflection or JIT/emit cache " +
-                  "of a script type), which a heap dump's managed graph can't show. Falling back to editor restart.";
-            Debug.LogError($"[ScriptAssemblyManager] Script context still alive after {MaxGCAttempts} GC attempts." + hint);
-            return false;
-        }
-
-        Debug.Log("[ScriptAssemblyManager] Unload successful.");
-        return true;
-    }
-
-    /// <summary>
-    /// Nulls the static field and unloads the context. The only strong reference to the context
-    /// lives in this method's <c>ctx</c> local, which goes out of scope on return so the caller's
-    /// GC loop can collect it. NoInlining keeps that local out of the caller's stack frame.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static WeakReference UnloadContext()
-    {
-        AssemblyLoadContext ctx = s_scriptContext!;
-        s_scriptContext = null;
-        var weak = new WeakReference(ctx);
-        ctx.Unload();
-        return weak;
     }
 
     // ================================================================
@@ -380,161 +340,108 @@ public static class ScriptAssemblyManager
            && Directory.EnumerateFiles(project.ScriptAssemblyPath, "*.dll").Any();
 
     /// <summary>
-    /// Attempt to hot-reload script assemblies without restarting the editor.
-    /// Saves the scene, unloads old assemblies, loads new ones, reinitializes
-    /// registries, and restores the scene. Returns false if unloading fails.
+    /// The single reload path: migrate the live graph onto the new types in place when there are loaded
+    /// assemblies to swap away from, otherwise (first load) just load them and rebuild registries. Returns
+    /// false on failure, leaving the old code active for the caller to toast and keep running.
     /// </summary>
     private static bool TryHotReload(Project project)
     {
+        // Migration needs the currently loaded assemblies to swap away from.
+        if (s_scriptContext != null && s_scriptAssemblies.Count > 0)
+            return MigrateHotReload(project);
+
+        return InitialLoad(project);
+    }
+
+    /// <summary>
+    /// Load the new assemblies alongside the old, migrate the live scene and statics onto the new types, rebuild
+    /// registries, then best-effort unload the old context. Never depends on that unload succeeding, so it
+    /// reloads even when the old assemblies stay pinned. On failure returns false with the old code still active.
+    /// </summary>
+    private static bool MigrateHotReload(Project project)
+    {
         try
         {
-            // 1. Save the current scene state
-            SaveSceneForRestart(project);
-            EditorApplication.Instance?.SaveProjectState();
+            var scene = Scene.Current;
+            AssemblyLoadContext oldContext = s_scriptContext!;
+            var oldAssemblies = s_scriptAssemblies.ToList();
 
-            // 2. Drop every editor/runtime strong reference into the old assemblies. Without this
-            //    the collectible context stays rooted and the unload below fails, forcing a restart.
-            EditorApplication.Instance?.ReleaseScriptReferences();
+            // Load the new assemblies into a fresh collectible context, keeping the old ones loaded.
+            RefreshPluginResolution(project);
+            var newContext = new AssemblyLoadContext("ProwlScripts", isCollectible: true);
+            newContext.Resolving += ResolveManagedPlugin;
 
-            // 3. Unload old assemblies - if this fails, caller will restart.
-            if (!UnloadScriptAssemblies())
+            var newAssemblies = LoadAssembliesInto(project, newContext);
+            if (newAssemblies.Count == 0)
+            {
+                try { newContext.Unload(); } catch { }
                 return false;
+            }
 
+            // Undo history holds closures + references captured against the old code; a recompile is a natural
+            // boundary, so drop it. Do this before the walk so watching the editor doesn't migrate it needlessly.
+            try { Undo.Clear(); } catch { }
+
+            // Migrate the live scene onto the new types (both assemblies loaded, no unload needed). Do this
+            // BEFORE committing the new context as active, so a mid-migration throw leaves the old assemblies
+            // as the active set - the editor then keeps running on the old code. The walk also migrates the
+            // editor's own references into the scene (selection, inspector, hierarchy), so no repointing needed.
+            if (scene != null)
+            {
+                var pairs = new List<(Assembly, Assembly)>();
+                foreach (var oldAsm in oldAssemblies)
+                {
+                    string? name = oldAsm.GetName().Name;
+                    Assembly? match = newAssemblies.FirstOrDefault(a => a.GetName().Name == name);
+                    if (match != null)
+                        pairs.Add((oldAsm, match));
+                }
+                if (pairs.Count > 0)
+                    SceneHotReload.Migrate(scene, pairs);
+            }
+
+            // Migration succeeded: the new assemblies become the active set that registries scan.
+            s_scriptContext = newContext;
+            s_scriptAssemblies.Clear();
+            s_scriptAssemblies.AddRange(newAssemblies);
             DebounceDelay = TimeSpan.FromSeconds(1);
 
-            // 4. Load the new assemblies into a fresh context.
-            LoadAssemblies(project);
-
-            // 5. Reinitialize all editor registries (re-scans assemblies for attributes)
+            // Rebuild the editor registries (custom editors, menu items, ...) against the new assemblies.
             EditorApplication.Instance?.ReinitializeAfterReload();
 
-            // 6. Restore the scene
-            string autoSavePath = project.AutoSaveScenePath;
-            if (File.Exists(autoSavePath))
-                EditorApplication.Instance?.RestoreAutoSavedScene(autoSavePath);
+            // Per-type caches (RuntimeUtils, registries, ...) are ReloadCaches now and clear themselves
+            // through the walk, so nothing to drop explicitly here.
 
-            EditorApplication.Instance?.RestoreSelectionAfterReload();
+            // Best-effort unload the old context. No forced GC and no restart if it stays pinned.
+            try { oldContext.Unload(); } catch { }
 
-            Runtime.Debug.LogSuccess("[ScriptAssemblyManager] Hot-reload successful!");
             return true;
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"[ScriptAssemblyManager] Hot-reload failed: {ex.Message}\n{ex.StackTrace}");
+            Runtime.Debug.LogError($"[ScriptAssemblyManager] Migration hot-reload failed: {ex.Message}\n{ex.StackTrace}");
             return false;
         }
     }
 
-    // ================================================================
-    //  Editor Restart (fallback)
-    // ================================================================
-
-    /// <summary>Save all state and restart the editor process.</summary>
-    private static void RestartEditor(Project project)
+    /// <summary>
+    /// First load (nothing loaded yet to migrate from): load the assemblies into the script context and rebuild
+    /// registries. No unload and no scene reserialize, because there is no previous graph to migrate off; this
+    /// path only loads and starts watching.
+    /// </summary>
+    private static bool InitialLoad(Project project)
     {
-        SaveSceneForRestart(project);
-        EditorApplication.Instance?.SaveProjectState();
-
-        string? exePath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(exePath))
-        {
-            Runtime.Debug.LogError("[ScriptAssemblyManager] Cannot determine editor executable path for restart.");
-            return;
-        }
-
-        string args = $"--project \"{project.RootPath}\"";
-        if (File.Exists(project.AutoSaveScenePath))
-            args += $" --restore-scene \"{project.AutoSaveScenePath}\"";
-
         try
         {
-            System.Diagnostics.Process? child;
-
-            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)
-                && TryFindAppBundle(exePath, out string? appBundle))
-            {
-                string openArgs = $"-n -a \"{appBundle}\" --args {args}";
-                Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting via open: {openArgs}");
-                child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "/usr/bin/open",
-                    Arguments = openArgs,
-                    UseShellExecute = false,
-                });
-            }
-            else
-            {
-                Runtime.Debug.Log($"[ScriptAssemblyManager] Restarting: {exePath} {args}");
-                child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = args,
-                    UseShellExecute = false,
-                });
-            }
-
-            if (child != null)
-                Runtime.Debug.Log($"[ScriptAssemblyManager] Spawned PID {child.Id}");
+            DebounceDelay = TimeSpan.FromSeconds(1);
+            LoadAssemblies(project);
+            EditorApplication.Instance?.ReinitializeAfterReload();
+            return true;
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"[ScriptAssemblyManager] Failed to restart: {ex.Message}");
-            return;
-        }
-
-        Environment.Exit(0);
-    }
-
-    private static bool TryFindAppBundle(string executablePath, out string? appBundle)
-    {
-        appBundle = null;
-        var dir = new DirectoryInfo(Path.GetDirectoryName(executablePath) ?? "");
-        while (dir != null)
-        {
-            if (dir.Extension.Equals(".app", StringComparison.OrdinalIgnoreCase))
-            {
-                appBundle = dir.FullName;
-                return true;
-            }
-            dir = dir.Parent;
-        }
-        return false;
-    }
-
-    // ================================================================
-    //  Scene Save/Restore
-    // ================================================================
-
-    private static void SaveSceneForRestart(Project project)
-    {
-        if (PrefabEditingMode.IsEditing)
-            PrefabEditingMode.Exit();
-
-        var scene = Scene.Current;
-        if (scene == null) return;
-
-        try
-        {
-            var savedId = scene.AssetID;
-            scene.AssetID = Guid.Empty;
-
-            var echo = Serializer.Serialize(scene);
-            scene.AssetID = savedId;
-
-            if (echo != null)
-            {
-                File.WriteAllText(project.AutoSaveScenePath, echo.WriteToString());
-
-                string? originalPath = EditorSceneManager.CurrentScenePath;
-                string sidecar = (originalPath ?? "") + "\n" + savedId.ToString();
-                File.WriteAllText(project.AutoSaveScenePath + ".meta", sidecar);
-
-                Runtime.Debug.Log("[ScriptAssemblyManager] Scene auto-saved for restart.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogWarning($"[ScriptAssemblyManager] Failed to auto-save scene: {ex.Message}");
+            Runtime.Debug.LogError($"[ScriptAssemblyManager] Initial script load failed: {ex.Message}\n{ex.StackTrace}");
+            return false;
         }
     }
 }

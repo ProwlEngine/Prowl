@@ -11,6 +11,8 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
+using Prowl.Ember;
+
 namespace Prowl.Runtime;
 
 /// <summary>
@@ -49,15 +51,19 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     // one treats its default value as "not known yet", so arriving zeroed is always the safe outcome.
 
     /// <summary>Which optional callbacks this component's type overrides. Resolved on first dispatch.</summary>
+    [SerializeIgnore, ReloadIgnore]
     internal SceneCallbacks _callbacks;
 
     /// <summary>One past the index in the dispatcher's registration array. Zero means not registered.</summary>
+    [SerializeIgnore, ReloadIgnore]
     internal int _dispatchSlot;
 
     /// <summary>Cached [ExecutionOrder], the primary sort key for every per-frame channel.</summary>
+    [SerializeIgnore, ReloadIgnore]
     internal int _dispatchOrder;
 
     /// <summary>Registration counter, the tie-break that keeps equal execution orders in registration order.</summary>
+    [SerializeIgnore, ReloadIgnore]
     internal int _dispatchSequence;
 
     /// <summary>

@@ -1286,7 +1286,6 @@ public static class GameObjectInspector
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
     /// including user ones) so the script AssemblyLoadContext can be collected.
     /// </summary>
-    [Runtime.OnAssemblyUnload]
     public static void ClearAddComponentCache() => _cachedComponents = null;
 
     private static void ToggleAddComponentPopup(GameObject target)

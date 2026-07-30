@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -14,6 +14,8 @@ using System.Text;
 using System.Threading;
 
 using Prowl.Echo;
+
+using Prowl.Ember;
 
 namespace Prowl.Runtime;
 
@@ -43,22 +45,13 @@ public enum Platform
 [RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
 public static class RuntimeUtils
 {
-    private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
-    private static readonly Dictionary<Type, int> s_executionOrderCache = [];
-
-    // Concurrent because assets (and therefore their type names) are resolved on background
-    // load threads as well as the main thread. Only successful lookups are stored, so a name
-    // that isn't resolvable yet stays resolvable once its assembly finishes loading.
-    private static readonly ConcurrentDictionary<string, Type> s_resolvedTypeCache = new(StringComparer.Ordinal);
-
-    [OnAssemblyUnload]
-    public static void ClearCache()
-    {
-        s_deepCopyByAssignmentCache.Clear();
-        s_executionOrderCache.Clear();
-        // Must be cleared before the script ALC unloads - a cached Type would pin it alive.
-        s_resolvedTypeCache.Clear();
-    }
+    // Reflection caches: each is a ReloadCache so it clears itself through the hot reload walk (its entries
+    // reference old types). Filled manually because they skip caching failures / compute recursively.
+    private static readonly ReloadCache<TypeInfo, bool> s_deepCopyByAssignmentCache = new();
+    private static readonly ReloadCache<Type, int> s_executionOrderCache = new();
+    // Only successful lookups are stored, so a name that isn't resolvable yet stays resolvable once its
+    // assembly finishes loading.
+    private static readonly ReloadCache<string, Type> s_resolvedTypeCache = new();
 
     public static bool IsARM() =>
         RuntimeInformation.OSArchitecture == Architecture.Arm ||
@@ -188,7 +181,7 @@ public static class RuntimeUtils
 
         // Only successful resolutions are cached; a miss may just mean the assembly isn't loaded yet.
         if (resolved != null)
-            s_resolvedTypeCache[assemblyQualifiedName] = resolved;
+            s_resolvedTypeCache.Set(assemblyQualifiedName, resolved);
 
         return resolved;
     }
@@ -497,7 +490,7 @@ public static class RuntimeUtils
                     }
                 }
 
-                s_deepCopyByAssignmentCache[typeInfo] = isPlainOldData;
+                s_deepCopyByAssignmentCache.Set(typeInfo, isPlainOldData);
                 return isPlainOldData;
             }
         }

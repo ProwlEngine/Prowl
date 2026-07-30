@@ -110,10 +110,8 @@ public static class EditorRegistries
 
     private static bool _initialized;
 
-    [Runtime.OnAssemblyLoad]
     public static void Reinitialize() { ClearAll(); Initialize(); OnProjectOpened(); }
 
-    [Runtime.OnAssemblyUnload]
     public static void ClearAll()
     {
         _initialized = false;

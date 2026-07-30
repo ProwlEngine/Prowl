@@ -167,6 +167,7 @@
   "menu.assets.create_script": "C# Betik Olustur",
   "menu.assets.refresh": "Yenile",
   "menu.assets.reimport_all": "Tumunu Yeniden Ice Aktar",
+  "menu.assets.reload_scripts": "Betikleri Yeniden Yukle (Yeniden Baslat)",
 
   "hierarchy.back": "Geri",
   "hierarchy.save_and_exit": "Kaydet ve Cik",

@@ -58,13 +58,12 @@ public class RuntimeUtilsTests
     }
 
     [Fact]
-    public void ResolveType_SurvivesCacheClear()
+    public void ResolveType_IsRepeatable()
     {
         string aqn = typeof(RuntimeUtils).AssemblyQualifiedName!;
 
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn));
-        RuntimeUtils.ClearCache();
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn));
+        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // resolves + caches
+        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // cache hit, same result
     }
 
     // The reason ResolveType exists: user scripts (and their EngineObject/asset types) live in a

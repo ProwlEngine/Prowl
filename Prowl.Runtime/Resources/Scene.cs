@@ -105,11 +105,34 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     [SerializeIgnore]
     private readonly SceneDispatcher _dispatcher = new();
 
-    /// <summary>Per-scene registry of components that implement per-frame callbacks. Drives Update.</summary>
-    internal SceneComponentRegistry ComponentRegistry => _componentRegistry;
     /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
     internal SceneDispatcher Dispatcher => _dispatcher;
 
+    /// <summary>
+    /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
+    /// components and rebuilds its lookup, then the dispatcher re-derives membership and ordering from the new
+    /// types. Ordered that way deliberately, since the dispatcher must not re-register a component that is
+    /// about to be dropped.
+    /// </summary>
+    internal void OnHotReload()
+    {
+        foreach (GameObject go in _allObj)
+            if (go is not null && !go.IsDisposed)
+                go.OnHotReload();
+
+        // Re-registering from the live scene rather than from what was registered before is what lets a
+        // component whose new type gained its first per-frame callback start dispatching at all.
+        _dispatcher.Reset();
+
+        foreach (GameObject go in _allObj)
+        {
+            if (go is null || go.IsDisposed) continue;
+
+            foreach (MonoBehaviour comp in go._components)
+                if (comp is not null && !comp.IsDisposed && comp.EnabledInHierarchy)
+                    _dispatcher.Register(comp);
+        }
+    }
 
     [SerializeIgnore]
     private bool _isActive = false;
