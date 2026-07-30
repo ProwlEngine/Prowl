@@ -103,10 +103,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
 
     [SerializeIgnore]
-    private readonly SceneComponentRegistry _componentRegistry = new();
+    private readonly SceneDispatcher _dispatcher = new();
 
     /// <summary>Per-scene registry of components that implement per-frame callbacks. Drives Update.</summary>
     internal SceneComponentRegistry ComponentRegistry => _componentRegistry;
+    /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
+    internal SceneDispatcher Dispatcher => _dispatcher;
+
 
     [SerializeIgnore]
     private bool _isActive = false;
@@ -656,9 +659,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Update()
     {
         EnsureNotDisposed();
-        _componentRegistry.RunStart();
-        _componentRegistry.RunUpdate();
-        _componentRegistry.RunLateUpdate();
+        _dispatcher.RunStart();
+        _dispatcher.RunUpdate();
+        _dispatcher.RunLateUpdate();
 
         Flush();
     }
@@ -672,13 +675,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
-        _componentRegistry.RunStart();
+        _dispatcher.RunStart();
 
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
         catch (Exception ex) { Debug.LogError($"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
-        _componentRegistry.RunFixedUpdate();
+        _dispatcher.RunFixedUpdate();
 
         Flush();
     }
@@ -690,7 +693,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
         EnsureNotDisposed();
-        _componentRegistry.RunRenderCollect(camera, renderables, lights);
+        _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 
     /// <summary>
@@ -699,7 +702,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void DrawGizmos()
     {
         EnsureNotDisposed();
-        _componentRegistry.RunDrawGizmos();
+        _dispatcher.RunDrawGizmos();
 
         Flush();
     }
@@ -711,7 +714,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnGui(Paper paper)
     {
         EnsureNotDisposed();
-        _componentRegistry.RunOnGui(paper);
+        _dispatcher.RunOnGui(paper);
 
         Flush();
     }

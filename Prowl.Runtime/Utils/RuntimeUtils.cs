@@ -594,18 +594,19 @@ public static class RuntimeUtils
     private static unsafe int NonNormalizedAsInt(bool b) =>
         *(byte*)(&b);
 
-    internal static int? GetExecutionOrder(MonoBehaviour a)
+    /// <summary>
+    /// The component's [ExecutionOrder], or zero when it has none. The absence of the attribute is cached too:
+    /// most types do not carry one, and leaving that uncached meant a reflection lookup every single call.
+    /// </summary>
+    internal static int GetExecutionOrder(MonoBehaviour a)
     {
         Type type = a.GetType();
         if (s_executionOrderCache.TryGetValue(type, out int order))
             return order;
-        ExecutionOrderAttribute? attr = type.GetCustomAttribute<ExecutionOrderAttribute>();
-        if (attr != null)
-        {
-            s_executionOrderCache[type] = attr.Order;
-            return attr.Order;
-        }
-        return null;
+
+        order = type.GetCustomAttribute<ExecutionOrderAttribute>()?.Order ?? 0;
+        s_executionOrderCache.Set(type, order);
+        return order;
     }
 
     /// <summary>
