@@ -4,11 +4,14 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <!-- Shipped inside Prowl.Ember.Contracts' analyzers folder, not as its own package or lib output. -->
-    <IsPackable>false</IsPackable>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Ember.Analyzers</PackageId>
+    <Title>Prowl.Ember.Analyzers</Title>
+    <Description>The hot reload safety analyzer for Prowl.Ember, shipped as a referenceable library. Prowl.Ember.Contracts already applies these rules automatically, so take this package only to host the analyzer yourself, for example to run it inside your own Roslyn compilation.</Description>
+    <PackageTags>analyzer;roslyn;hot-reload;diagnostics;prowl;dotnet;csharp</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,9 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Analyzer-only Roslyn reference: kept off the referencing project's asset graph, and pinned low so
-         the analyzer loads in the widest range of Roslyn hosts (older IDEs and the in-process editor alike). -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <!-- Pinned low so the analyzer loads in the widest range of Roslyn hosts (older IDEs and the in-process
+         editor alike). Declared as a real dependency because a host referencing this package needs Roslyn. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
   </ItemGroup>
 
 </Project>
