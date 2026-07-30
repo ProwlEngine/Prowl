@@ -93,6 +93,26 @@ public class ScriptCompilationTests : EditorTestHarness
         Assert.Equal("VERSION_TWO", InvokeVersionedTag());
     }
 
+    // Incremental: a recompile with no source change rebuilds nothing and reports nothing to reload;
+    // editing a file makes the next recompile rebuild again.
+    [Fact]
+    public void Recompile_Unchanged_IsSkipped()
+    {
+        WriteScript("Stable.cs", "public static class Stable { public static int V() => 1; }");
+        var first = ScriptCompiler.CompileAll(Project);
+        Assert.True(first.Success);
+        Assert.True(first.RequiresReload);
+
+        var second = ScriptCompiler.CompileAll(Project);
+        Assert.True(second.Success);
+        Assert.False(second.RequiresReload);
+
+        WriteScript("Stable.cs", "public static class Stable { public static int V() => 2; }");
+        var third = ScriptCompiler.CompileAll(Project);
+        Assert.True(third.Success);
+        Assert.True(third.RequiresReload);
+    }
+
     // An editor script can declare a DockPanel with a [MenuItem]-attributed static opener method,
     // discoverable by the engine's scan (the unified menu system replaced the old [EditorWindow] attribute).
     [Fact]
