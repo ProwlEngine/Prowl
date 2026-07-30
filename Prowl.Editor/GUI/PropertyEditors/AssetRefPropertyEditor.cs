@@ -12,7 +12,7 @@ using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.PropertyEditors;
 
 /// <summary>
-/// PropertyEditor for AssetRef&lt;T&gt; fields (via the IAssetRef interface).
+/// PropertyEditor for AssetRef<T> fields (via the IAssetRef interface).
 /// Supports asset references, runtime instances, drag-drop from project/hierarchy/inspector.
 /// </summary>
 [CustomPropertyEditor(typeof(IAssetRef))]

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using Prowl.Ember;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -22,8 +23,11 @@ public class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 
+    // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
+    // in OnHotReload.
     internal List<MonoBehaviour> _components = [];
-    private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
+    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
@@ -580,6 +584,20 @@ public class GameObject : EngineObject, ISerializable
         _componentCache.Add(comp.GetType(), comp);
 
         NotifyComponentAddedToScene(comp);
+    }
+
+    /// <summary>
+    /// Post-hot-reload fixup, after the walk migrated the component references in place: drop any component
+    /// whose type was removed (the walk left it null) and rebuild the type-keyed lookup against the new types.
+    /// The lookup is keyed on the previous types, so it has to be rebuilt rather than repointed.
+    /// </summary>
+    internal void OnHotReload()
+    {
+        _components.RemoveAll(c => c is null);
+
+        _componentCache = [];
+        foreach (MonoBehaviour comp in _components)
+            _componentCache.Add(comp.GetType(), comp);
     }
 
     /// <summary>

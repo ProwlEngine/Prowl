@@ -37,7 +37,6 @@ public class Project
     public string EditorAssemblyPath => Path.Combine(ScriptAssemblyPath, $"{Name}.Editor.dll");
     public string GameCsprojPath => Path.Combine(RootPath, $"{Name}.Game.csproj");
     public string EditorCsprojPath => Path.Combine(RootPath, $"{Name}.Editor.csproj");
-    public string AutoSaveScenePath => Path.Combine(LibraryPath, "~autosave.scene");
 
     private Project(string rootPath, string name)
     {

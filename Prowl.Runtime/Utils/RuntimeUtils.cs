@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -14,6 +14,8 @@ using System.Text;
 using System.Threading;
 
 using Prowl.Echo;
+
+using Prowl.Ember;
 
 namespace Prowl.Runtime;
 
@@ -43,22 +45,21 @@ public enum Platform
 [RequiresUnreferencedCode("These methods use reflection and can't be statically analyzed.")]
 public static class RuntimeUtils
 {
-    private static readonly Dictionary<TypeInfo, bool> s_deepCopyByAssignmentCache = [];
-    private static readonly Dictionary<Type, int> s_executionOrderCache = [];
+    // Reflection caches: each is a ReloadCache so it clears itself through the hot reload walk (its entries
+    // reference old types). Filled manually because they skip caching failures / compute recursively.
+    private static readonly ReloadCache<TypeInfo, bool> s_deepCopyByAssignmentCache = new();
+    private static readonly ReloadCache<Type, int> s_executionOrderCache = new();
+    // Only successful lookups are stored, so a name that isn't resolvable yet stays resolvable once its
+    // assembly finishes loading.
+    private static readonly ReloadCache<string, Type> s_resolvedTypeCache = new();
 
-    // Concurrent because assets (and therefore their type names) are resolved on background
-    // load threads as well as the main thread. Only successful lookups are stored, so a name
-    // that isn't resolvable yet stays resolvable once its assembly finishes loading.
-    private static readonly ConcurrentDictionary<string, Type> s_resolvedTypeCache = new(StringComparer.Ordinal);
-
-    [OnAssemblyUnload]
-    public static void ClearCache()
-    {
-        s_deepCopyByAssignmentCache.Clear();
-        s_executionOrderCache.Clear();
-        // Must be cleared before the script ALC unloads - a cached Type would pin it alive.
-        s_resolvedTypeCache.Clear();
-    }
+    /// <summary>
+    /// Where reflection lookups enumerate assemblies. The editor points this at the live script assemblies,
+    /// because after a hot reload both builds are loaded under the same simple name and the domain lists them
+    /// in load order, so a name would otherwise always resolve to the outgoing build.
+    /// </summary>
+    public static Func<IEnumerable<Assembly>> AssemblySource { get; set; }
+        = static () => AppDomain.CurrentDomain.GetAssemblies();
 
     public static bool IsARM() =>
         RuntimeInformation.OSArchitecture == Architecture.Arm ||
@@ -105,7 +106,7 @@ public static class RuntimeUtils
         // Assembly matched on simple name only, since a script assembly keeps its name across hot reloads.
         if (!string.IsNullOrEmpty(assemblyName))
         {
-            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (Assembly asm in AssemblySource())
             {
                 if (!string.Equals(asm.GetName().Name, assemblyName, StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -117,7 +118,7 @@ public static class RuntimeUtils
             }
         }
 
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
         {
             t = asm.GetType(qualifiedTypeName);
             if (t != null)
@@ -188,14 +189,14 @@ public static class RuntimeUtils
 
         // Only successful resolutions are cached; a miss may just mean the assembly isn't loaded yet.
         if (resolved != null)
-            s_resolvedTypeCache[assemblyQualifiedName] = resolved;
+            s_resolvedTypeCache.Set(assemblyQualifiedName, resolved);
 
         return resolved;
     }
 
     private static Assembly? ResolveLoadedAssembly(AssemblyName name)
     {
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
             if (string.Equals(asm.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase))
                 return asm;
 
@@ -208,7 +209,7 @@ public static class RuntimeUtils
             return asm.GetType(typeName, throwOnError: false, ignoreCase);
 
         // No assembly qualifier on this portion of the name - search every loaded assembly.
-        foreach (Assembly candidate in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly candidate in AssemblySource())
         {
             Type? t = candidate.GetType(typeName, throwOnError: false, ignoreCase);
             if (t != null)
@@ -409,7 +410,7 @@ public static class RuntimeUtils
 
     public static IEnumerable<Type> GetTypesWithAttribute<T>()
     {
-        Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var assemblies = AssemblySource();
         foreach (Assembly assembly in assemblies)
             foreach (Type type in assembly.GetTypes())
                 if (type.GetCustomAttributes(typeof(T), true).Length > 0)
@@ -419,7 +420,7 @@ public static class RuntimeUtils
     public static List<Type> FindTypesImplementing(Type propertyType, bool ignoreGenerics = false)
     {
         List<Type> types = [];
-        foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (Assembly asm in AssemblySource())
         {
             foreach (Type type in asm.GetTypes())
             {
@@ -497,7 +498,7 @@ public static class RuntimeUtils
                     }
                 }
 
-                s_deepCopyByAssignmentCache[typeInfo] = isPlainOldData;
+                s_deepCopyByAssignmentCache.Set(typeInfo, isPlainOldData);
                 return isPlainOldData;
             }
         }
@@ -594,17 +595,29 @@ public static class RuntimeUtils
     private static unsafe int NonNormalizedAsInt(bool b) =>
         *(byte*)(&b);
 
-    internal static int? GetExecutionOrder(MonoBehaviour a)
+    /// <summary>
+    /// The component's [ExecutionOrder], or zero when it has none. The absence of the attribute is cached too:
+    /// most types do not carry one, and leaving that uncached meant a reflection lookup every single call.
+    /// </summary>
+    internal static int GetExecutionOrder(MonoBehaviour a)
     {
         Type type = a.GetType();
         if (s_executionOrderCache.TryGetValue(type, out int order))
             return order;
-        ExecutionOrderAttribute? attr = type.GetCustomAttribute<ExecutionOrderAttribute>();
-        if (attr != null)
-        {
-            s_executionOrderCache[type] = attr.Order;
-            return attr.Order;
-        }
-        return null;
+
+        order = type.GetCustomAttribute<ExecutionOrderAttribute>()?.Order ?? 0;
+        s_executionOrderCache.Set(type, order);
+        return order;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="type"/> overrides the public virtual <paramref name="method"/> declared on
+    /// <paramref name="baseType"/>. Used to detect which optional MonoBehaviour callbacks a component implements.
+    /// </summary>
+    internal static bool OverridesVirtual(Type type, string method, Type baseType)
+    {
+        MethodInfo? mi = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+            .FirstOrDefault(m => m.Name == method && m.GetBaseDefinition().DeclaringType == baseType);
+        return mi != null && mi.DeclaringType != baseType;
     }
 }

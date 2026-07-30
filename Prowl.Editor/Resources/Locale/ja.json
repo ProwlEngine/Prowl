@@ -206,6 +206,7 @@
   "menu.assets.create_script": "C#スクリプトを作成",
   "menu.assets.refresh": "更新",
   "menu.assets.reimport_all": "全て再インポート",
+  "menu.assets.reload_scripts": "スクリプトを再読み込み (再起動)",
 
   "launcher.tab_recent": "最近",
   "launcher.recent_projects": "最近のプロジェクト",

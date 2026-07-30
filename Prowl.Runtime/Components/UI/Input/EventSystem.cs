@@ -118,11 +118,6 @@ public sealed class EventSystem : MonoBehaviour
         Tick(Time.TimeSinceStartup);
     }
 
-    // Clear the static reference on script hot-reload so it doesn't pin a disposed component (and its
-    // collectible AssemblyLoadContext).
-    [OnAssemblyUnload]
-    public static void ResetStatics() => s_current = null;
-
     private void ClearState()
     {
         _hovered = null;

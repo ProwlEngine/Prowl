@@ -206,6 +206,7 @@
   "menu.assets.create_script": "C#-Skript erstellen",
   "menu.assets.refresh": "Aktualisieren",
   "menu.assets.reimport_all": "Alle reimportieren",
+  "menu.assets.reload_scripts": "Skripte neu laden (Neustart)",
 
   "launcher.tab_recent": "Zuletzt",
   "launcher.recent_projects": "Zuletzt verwendete Projekte",

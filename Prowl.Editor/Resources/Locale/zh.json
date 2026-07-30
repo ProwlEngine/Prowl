@@ -167,6 +167,7 @@
   "menu.assets.create_script": "创建C#脚本",
   "menu.assets.refresh": "刷新",
   "menu.assets.reimport_all": "全部重新导入",
+  "menu.assets.reload_scripts": "重新加载脚本 (重启)",
 
   "hierarchy.back": "返回",
   "hierarchy.save_and_exit": "保存并退出",

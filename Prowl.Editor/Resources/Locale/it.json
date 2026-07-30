@@ -167,6 +167,7 @@
   "menu.assets.create_script": "Crea script C#",
   "menu.assets.refresh": "Aggiorna",
   "menu.assets.reimport_all": "Reimporta tutto",
+  "menu.assets.reload_scripts": "Ricarica script (Riavvio)",
 
   "hierarchy.back": "Indietro",
   "hierarchy.save_and_exit": "Salva ed Esci",

@@ -167,6 +167,7 @@
   "menu.assets.create_script": "Utworz skrypt C#",
   "menu.assets.refresh": "Odswiez",
   "menu.assets.reimport_all": "Reimportuj wszystko",
+  "menu.assets.reload_scripts": "Przeladuj skrypty (Restart)",
 
   "hierarchy.back": "Wstecz",
   "hierarchy.save_and_exit": "Zapisz i wyjdz",

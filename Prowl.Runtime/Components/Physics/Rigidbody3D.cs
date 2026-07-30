@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -254,16 +254,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Event triggered when this rigidbody begins colliding with another rigidbody.
-    /// </summary>
-    public event Action<Rigidbody3D, ContactInfo> BeginCollide;
-
-    /// <summary>
-    /// Event triggered when this rigidbody stops colliding with another rigidbody.
-    /// </summary>
-    public event Action<Rigidbody3D> EndCollide;
-
-    /// <summary>
     /// Information about a collision contact.
     /// </summary>
     public struct ContactInfo
@@ -335,7 +325,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 ImpulseMagnitude = contact.Impulse
             };
 
-            BeginCollide?.Invoke(userData.Rigidbody, contactInfo);
+            SceneDispatcher.CollisionBegin(GameObject, userData.Rigidbody, contactInfo);
         }
     }
 
@@ -346,7 +336,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
         {
-            EndCollide?.Invoke(userData.Rigidbody);
+            SceneDispatcher.CollisionEnd(GameObject, userData.Rigidbody);
         }
     }
 
