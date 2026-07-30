@@ -92,6 +92,6 @@ public static class SceneHotReload
     // Native and heavy third-party assembly families the walk must not cascade into.
     private static readonly string[] s_excludedAssemblyPrefixes =
     {
-        "Silk.NET", "Jitter2", "Magick.NET",
+        "Silk.NET", "Jitter2", "Magick.NET", "Microsoft.CodeAnalysis",
     };
 }

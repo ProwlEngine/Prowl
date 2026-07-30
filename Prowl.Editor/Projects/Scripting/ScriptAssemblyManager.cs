@@ -34,6 +34,7 @@ public static class ScriptAssemblyManager
 
     // Raw IL bytes of each loaded user assembly, kept so hot reload can read a swapped assembly's IL with
     // Cecil (for lambda/closure migration). Keyed weakly so an unloaded assembly's bytes can be collected.
+    [Prowl.Ember.ReloadIgnore]
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Assembly, byte[]> s_assemblyBytes = new();
 
     /// <summary>The raw IL bytes an assembly was loaded from, or null if it wasn't loaded through here.</summary>
