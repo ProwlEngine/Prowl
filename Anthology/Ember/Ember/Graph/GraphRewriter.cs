@@ -104,8 +104,19 @@ internal sealed class GraphRewriter
             return;
         }
 
-        // A readonly static cannot be assigned, so whatever is already in it is upgraded in place.
-        var existing = root.Destination.Read();
+        // A readonly static cannot be assigned, so whatever is already in it is upgraded in place. Reading it
+        // runs the current side type initializer for the first time, so it can fail where the source did not.
+        object? existing;
+        try
+        {
+            existing = root.Destination.Read();
+        }
+        catch (Exception e)
+        {
+            _report.Report(ReloadCode.FieldReadFailed, e, root.Destination.ToString());
+            return;
+        }
+
         if (existing == null)
         {
             _report.Report(ReloadCode.ReadOnlyStaticUnset, ReloadSeverity.Info,

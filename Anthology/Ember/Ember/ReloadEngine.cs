@@ -81,11 +81,18 @@ public sealed class ReloadEngine
             foreach (var scoped in ScopedMigrators())
                 scoped.OnReloadStarting(session.PlanContext);
 
-            var rewriter = new GraphRewriter(session.Planner, session.Types, session.Members, session.Report);
-            rewriter.Run(EnumerateRoots(session), request.Roots);
-
-            foreach (var scoped in ScopedMigrators())
-                scoped.OnReloadFinished(session.PlanContext);
+            // The pair brackets the reload, so a walk that throws still has to close it: a framework cache
+            // cleared on the way in would otherwise keep whatever the half finished migration put back into it.
+            try
+            {
+                var rewriter = new GraphRewriter(session.Planner, session.Types, session.Members, session.Report);
+                rewriter.Run(EnumerateRoots(session), request.Roots);
+            }
+            finally
+            {
+                foreach (var scoped in ScopedMigrators())
+                    scoped.OnReloadFinished(session.PlanContext);
+            }
 
             // The include set moves onto the current side, or the next reload would walk assemblies that no
             // longer exist. This is the only state a reload carries over.

@@ -2,9 +2,28 @@ using System;
 using System.Linq;
 using System.Reflection;
 
+using System.Collections.Generic;
+
 using Xunit;
 
 namespace Prowl.Ember.Tests;
+
+file sealed class ThrowingRootProvider : IRootProvider
+{
+    public IEnumerable<Root> Enumerate(RootContext context) => throw new InvalidOperationException("root boom");
+}
+
+file sealed class RecordingScopedMigrator : IValueMigrator, IReloadScopedMigrator
+{
+    public int Started;
+    public int Finished;
+
+    public bool Handles(Type type) => false;
+    public MigrationPlan Plan(Type type, PlanContext context) => throw new NotSupportedException();
+
+    public void OnReloadStarting(PlanContext context) => Started++;
+    public void OnReloadFinished(PlanContext context) => Finished++;
+}
 
 /// <summary>
 /// What a reload reports about itself: the codes raised, the replacement map, and the counts a host displays.
@@ -130,5 +149,57 @@ public class DiagnosticsTests : MigrationTestBase
 
         Assert.Null(v2.GetType("H")!.GetField("Value")!.GetValue(null));
         Assert.Equal(1, report.Statistics.ObjectsDropped);
+    }
+
+    /// <summary>
+    /// A readonly static is upgraded in place, which means reading it on the current side. That read runs the
+    /// type initializer for the first time, so it is exactly as able to throw as the source read that is already
+    /// guarded, and one bad type must not take the whole reload down with it.
+    /// </summary>
+    [Fact]
+    public void ReadOnlyStaticWhoseInitializerThrows_IsReportedNotFatal()
+    {
+        Assembly v1 = Compile(
+            "public class Boom { public static readonly object F = new object(); } " +
+            "public class Keep { public int Id; } " +
+            "public static class H { public static Keep K; public static void Setup(){ K = new Keep { Id = 7 }; } }");
+        v1.GetType("H")!.GetMethod("Setup")!.Invoke(null, null);
+
+        Assembly v2 = Compile(
+            "public class Boom { public static readonly object F = Make(); static object Make() => throw new System.Exception(\"boom\"); } " +
+            "public class Keep { public int Id; public int Extra; } " +
+            "public static class H { public static Keep K; public static void Setup(){ } }");
+
+        var report = Reload(o => o.Scope.Include(v1), b => b.Replace(v1, v2));
+
+        // The rest of the reload still has to happen.
+        object? kept = v2.GetType("H")!.GetField("K")!.GetValue(null);
+        Assert.NotNull(kept);
+        Assert.Equal(v2.GetType("Keep"), kept!.GetType());
+        Assert.Equal(7, v2.GetType("Keep")!.GetField("Id")!.GetValue(kept));
+        Assert.Contains(report.Diagnostics, d => d.Severity >= ReloadSeverity.Warning);
+    }
+
+    /// <summary>
+    /// OnReloadStarting and OnReloadFinished bracket a reload, and the documented use is clearing a framework
+    /// cache keyed on the previous types. A walk that throws must still close the bracket, or that cache stays
+    /// holding whatever the half finished migration put in it.
+    /// </summary>
+    [Fact]
+    public void ScopedMigrator_WalkThrows_StillRunsOnReloadFinished()
+    {
+        Assembly v1 = Compile(EV1);
+        Assembly v2 = Compile(EV2);
+
+        var scoped = new RecordingScopedMigrator();
+
+        Assert.Throws<InvalidOperationException>(() => Reload(o =>
+        {
+            o.Migrators.Add(scoped);
+            o.Roots.Add(new ThrowingRootProvider());
+        }, b => b.Replace(v1, v2)));
+
+        Assert.Equal(1, scoped.Started);
+        Assert.Equal(1, scoped.Finished);
     }
 }
