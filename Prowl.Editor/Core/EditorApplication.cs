@@ -716,7 +716,14 @@ public class EditorApplication : Game
             var bar = Origami.MenuBar(paper, "menubar").Height(barH);
             foreach (var root in MenuRegistry.RootMenus)
                 if (root.HasSubItems)
-                    bar.Menu(root.Label, ctx => BuildMenu(ctx, root.SubItems));
+                    bar.Menu(root.Label, ctx =>
+                    {
+                        // A menu-bar dropdown has no object of its own to act on, so drop any pin a
+                        // panel's right-click menu left behind; GameObject/... then creates under the
+                        // active selection instead of wherever that menu was last opened.
+                        MenuContext.Clear();
+                        BuildMenu(ctx, root.SubItems);
+                    });
             bar.Show();
 
             // Quick-access to Preferences > Theme (theming is a big part of the editor now).

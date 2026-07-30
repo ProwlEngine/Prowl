@@ -173,6 +173,7 @@
   "hierarchy.save_and_exit": "저장 후 종료",
   "hierarchy.no_scene_loaded": "로드된 씬 없음",
   "hierarchy.new_scene": "새 씬",
+  "hierarchy.create": "만들기",
   "hierarchy.drop_to_spawn": "여기에 놓아서 생성",
   "hierarchy.scene_empty": "씬이 비어 있습니다",
   "hierarchy.move_to_view": "뷰로 이동",

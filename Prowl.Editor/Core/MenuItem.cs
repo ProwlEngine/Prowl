@@ -12,8 +12,33 @@ namespace Prowl.Editor;
 
 public static class MenuContext
 {
-    public static GameObject? ActiveGameObject { get; private set; }
-    public static void Set(GameObject? go) => ActiveGameObject = go;
+    private static GameObject? _pinned;
+    private static bool _isPinned;
+
+    /// <summary>
+    /// The GameObject that a "GameObject/..." menu action parents its result to. Menus that carry a
+    /// context of their own - the hierarchy's row and background menus - pin it explicitly; every
+    /// other entry point (the main menu bar, the hierarchy's + button) leaves it unpinned so new
+    /// objects land under the active selection, which is what the equivalent menu does in Unity.
+    /// A pin to a since-destroyed object falls back to the scene root.
+    /// </summary>
+    public static GameObject? ActiveGameObject => _isPinned
+        ? (_pinned.IsValid() ? _pinned : null)
+        : Selection.GetSelected<GameObject>().FirstOrDefault();
+
+    /// <summary>Pin the context to <paramref name="go"/>, or to the scene root when it is null.</summary>
+    public static void Set(GameObject? go)
+    {
+        _pinned = go;
+        _isPinned = true;
+    }
+
+    /// <summary>Drop the pin so the context follows the active selection again.</summary>
+    public static void Clear()
+    {
+        _pinned = null;
+        _isPinned = false;
+    }
 }
 
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]

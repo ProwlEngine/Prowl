@@ -150,6 +150,7 @@
   "hierarchy.save_and_exit": "Guardar y Salir",
   "hierarchy.no_scene_loaded": "Sin escena cargada",
   "hierarchy.new_scene": "Nueva escena",
+  "hierarchy.create": "Crear",
   "hierarchy.drop_to_spawn": "Soltar para crear aqui",
   "hierarchy.scene_empty": "La escena esta vacia",
   "hierarchy.move_to_view": "Mover a la vista",

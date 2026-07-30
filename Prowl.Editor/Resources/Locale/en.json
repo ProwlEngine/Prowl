@@ -151,6 +151,7 @@
   "hierarchy.save_and_exit": "Save & Exit",
   "hierarchy.no_scene_loaded": "No Scene Loaded",
   "hierarchy.new_scene": "New Scene",
+  "hierarchy.create": "Create",
   "hierarchy.drop_to_spawn": "Drop to spawn here",
   "hierarchy.scene_empty": "Scene is empty",
   "hierarchy.move_to_view": "Move to View",
