@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Libraries/">
+    <Project Path="Ember/Prowl.Ember.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Prowl.Ember.Tests.csproj" />
+  </Folder>
+</Solution>
