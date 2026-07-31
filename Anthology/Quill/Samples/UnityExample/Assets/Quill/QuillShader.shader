@@ -37,8 +37,8 @@ Shader "Quill/CanvasShader"
             #pragma warning(disable : 3557)
             #endif
 
-            #line 13369 "hlsl.meta.slang"
-            #line 13369
+            #line 13674 "hlsl.meta.slang"
+            #line 13674
             float4x4 projection;
                 float2 fragTexCoord_0 : TEXCOORD0;
                 float4 fragColor_0 : COLOR0;
@@ -72,26 +72,26 @@ Shader "Quill/CanvasShader"
             #pragma warning(disable : 3557)
             #endif
 
-            #line 90 "core"
+            #line 93 "core"
             Texture2D<float4 > fontTexture;
 
-            #line 1094 "hlsl.meta.slang"
+            #line 1187 "hlsl.meta.slang"
             SamplerState sampler_fontTexture;
 
-            #line 1094
+            #line 1187
             Texture2D<float4 > texture0;
 
-            #line 1094
+            #line 1187
             SamplerState sampler_texture0;
 
-            #line 1094
+            #line 1187
             Texture2D<float4 > backdropTexture;
 
-            #line 1094
+            #line 1187
             SamplerState sampler_backdropTexture;
 
-            #line 11223
-            #line 11223
+            #line 11528
+            #line 11528
             float4x4 scissorMat;
             float2 scissorExt;
             float4x4 brushMat;
