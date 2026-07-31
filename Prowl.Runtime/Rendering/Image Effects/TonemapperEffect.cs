@@ -33,7 +33,7 @@ public sealed class TonemapperEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-            _mat ??= new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
+            if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.Tonemapper));
 
         _mat.SetKeyword("TONEMAP_MELON", Type == TonemapperType.Melon);
         _mat.SetKeyword("TONEMAP_ACES", Type == TonemapperType.ACES);
@@ -76,7 +76,7 @@ public sealed class TonemapperEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

@@ -26,13 +26,13 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
     #region ITerrainHeightProvider samples directly from TerrainData
 
-    public int Width => _terrain?.Data.Res?.HeightmapResolution ?? 0;
-    public int Height => _terrain?.Data.Res?.HeightmapResolution ?? 0;
+    public int Width => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
+    public int Height => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
 
     public bool TryGetHeight(int x, int z, out float height)
     {
         height = 0;
-        var data = _terrain?.Data.Res;
+        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
         if (data == null || data.Heights == null) return false;
 
         int res = data.HeightmapResolution;
@@ -46,13 +46,13 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
     public bool IsValidCell(int x, int z)
     {
-        int res = _terrain?.Data.Res?.HeightmapResolution ?? 0;
+        int res = _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
         return x >= 0 && x < res - 1 && z >= 0 && z < res - 1;
     }
 
     public bool IsCellHole(int x, int z)
     {
-        var data = _terrain?.Data.Res;
+        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
         return data != null && data.IsCellHole(x, z);
     }
 
@@ -91,7 +91,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
     private void RegisterWithPhysics()
     {
-        if (_isRegistered || GameObject?.Scene?.Physics == null || _terrain == null)
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (_isRegistered || scene.IsNotValid() || scene.Physics == null || _terrain == null)
             return;
 
         // Collider registration happens once: block-load the terrain data (prioritized) so a
@@ -140,7 +141,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
     private void UnregisterFromPhysics()
     {
-        if (!_isRegistered || GameObject?.Scene?.Physics == null)
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (!_isRegistered || scene.IsNotValid() || scene.Physics == null)
             return;
 
         var physics = GameObject.Scene.Physics;
@@ -156,7 +158,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     /// </summary>
     public float GetWorldHeight(float worldX, float worldZ)
     {
-        var data = _terrain?.Data.Res;
+        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
         if (data == null) return 0;
 
         Float3 localPos = Transform.InverseTransformPoint(new Float3(worldX, 0, worldZ));

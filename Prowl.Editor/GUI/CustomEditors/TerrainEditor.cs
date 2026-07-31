@@ -236,7 +236,8 @@ public class TerrainEditor : CustomEditor
             {
                 int idx = i;
                 bool selected = PaintLayer == i;
-                string lname = data.Layers[i].Albedo.Res?.Name ?? $"Layer {i}";
+                Texture2D? albedo = data.Layers[i].Albedo.Res;
+                string lname = albedo.IsValid() ? albedo.Name : $"Layer {i}";
                 using (paper.Row($"{id}_l{i}").Width(UnitValue.StretchOne).Height(28).Rounded(7).Padding(8, 8, 0, 0).RowBetween(8)
                     .BackgroundColor(selected ? EditorTheme.Selected : SColor.Transparent)
                     .Hovered.BackgroundColor(selected ? EditorTheme.Selected : EditorTheme.Hover).End()
@@ -313,7 +314,13 @@ public class TerrainEditor : CustomEditor
             i =>
             {
                 var p = data.DetailPrototypes[i];
-                return p.RenderMode == DetailRenderMode.Mesh ? (p.Mesh.Res?.Name ?? "Empty") : (p.Texture.Res?.Name ?? "Empty");
+                if (p.RenderMode == DetailRenderMode.Mesh)
+                {
+                    var mesh = p.Mesh.Res;
+                    return mesh.IsValid() ? mesh.Name : "Empty";
+                }
+                var tex = p.Texture.Res;
+                return tex.IsValid() ? tex.Name : "Empty";
             },
             i => data.DetailPrototypes[i].RenderMode == DetailRenderMode.Mesh ? EditorIcons.Cube_I : EditorIcons.Seedling_I,
             () => { data.AddDetailPrototype(new DetailPrototype()); MarkDetailsDirty(); },
@@ -387,7 +394,11 @@ public class TerrainEditor : CustomEditor
 
         DrawProtoGrid(paper, $"{id}_grid", font, data.TreePrototypes.Count, ActiveTreePrototype,
             i => ActiveTreePrototype = i,
-            i => data.TreePrototypes[i].Mesh.Res?.Name ?? "Empty",
+            i =>
+            {
+                var mesh = data.TreePrototypes[i].Mesh.Res;
+                return mesh.IsValid() ? mesh.Name : "Empty";
+            },
             _ => EditorIcons.Leaf_I,
             () => { data.TreePrototypes.Add(new TreePrototype()); _isDirty = true; },
             i => data.TreePrototypes[i].Mesh.AssetID);
@@ -979,7 +990,7 @@ public class TerrainEditor : CustomEditor
     private void MarkDetailsDirty()
     {
         _isDirty = true;
-        _terrain?.InvalidateGrassCache();
+        if (_terrain.IsValid()) _terrain.InvalidateGrassCache();
     }
 
     // Static accessor for the scene editor to find the active TerrainEditor instance

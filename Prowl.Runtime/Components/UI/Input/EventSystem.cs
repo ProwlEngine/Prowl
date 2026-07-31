@@ -98,7 +98,7 @@ public sealed class EventSystem : MonoBehaviour
     public override void OnEnable()
     {
         // First enabled instance wins; any extras stay inert so the tick only runs once per frame.
-        s_current ??= this;
+        if (s_current.IsNotValid()) s_current = this;
     }
 
     public override void OnDisable()
@@ -198,7 +198,7 @@ public sealed class EventSystem : MonoBehaviour
             {
                 if (comp is TInterface handler && comp.EnabledInHierarchy)
                 {
-                    first ??= node;
+                    if (first.IsNotValid()) first = node;
                     try { action(handler, e); }
                     catch (Exception ex) { Debug.LogError($"[EventSystem] {typeof(TInterface).Name} threw on {comp.Name}: {ex.Message}\n{ex.StackTrace}"); }
                     if (e.Used) return first;
@@ -376,8 +376,8 @@ public sealed class EventSystem : MonoBehaviour
         // drags keep tracking the pointer instead of snapping the value to the canvas origin.
         if (hovered == null)
         {
-            GameObject? tracked = e.Dragging ?? e.PressedOn;
-            GameCanvas? canvas = tracked?.GetComponentInParent<GameCanvas>(includeSelf: true);
+            GameObject? tracked = e.Dragging.IsValid() ? e.Dragging : e.PressedOn;
+            GameCanvas? canvas = tracked.IsValid() ? tracked.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
             if (canvas != null && UIRaycaster.TryProjectPointer(canvas, pos, winSize, out Float2 dp))
                 e.DesignPosition = dp;
         }

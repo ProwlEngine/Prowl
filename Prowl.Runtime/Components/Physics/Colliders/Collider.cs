@@ -84,7 +84,8 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private void AttachToStatic()
     {
-        if (GameObject?.Scene?.Physics == null)
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid() || scene.Physics == null)
             return;
 
         _attachedRigidbody3D = null;

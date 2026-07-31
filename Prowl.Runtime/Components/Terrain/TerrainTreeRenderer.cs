@@ -36,7 +36,7 @@ internal class TerrainTreeRenderer
             var mesh = proto.Mesh.Res;
             if (mesh == null) continue;
 
-            s_defaultStandardMat ??= Material.LoadDefault(DefaultMaterial.Standard);
+            if (s_defaultStandardMat.IsNotValid()) s_defaultStandardMat = Material.LoadDefault(DefaultMaterial.Standard);
 
             _transforms.Clear();
             _colors.Clear();
@@ -92,7 +92,7 @@ internal class TerrainTreeRenderer
             {
                 Material? mat = null;
                 if (sub < proto.Materials.Count) mat = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res;
-                mat ??= s_defaultStandardMat;
+                if (mat.IsNotValid()) mat = s_defaultStandardMat;
                 if (mat == null) continue;
 
                 renderables.Add(new InstancedMeshRenderable(

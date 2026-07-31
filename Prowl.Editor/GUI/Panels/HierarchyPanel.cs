@@ -554,9 +554,9 @@ public class HierarchyPanel : DockPanel
             }
 
             // Capture state for undo (BEFORE the move)
-            var oldParentId = dragged.Parent?.Identifier ?? Guid.Empty;
+            var oldParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var oldSiblingIdx = dragged.GetSiblingIndex() ?? -1;
-            var oldRootIdx = oldParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
+            var oldRootIdx = oldParentId == Guid.Empty ? (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(dragged) : -1) : -1;
             var draggedId = dragged.Identifier;
 
             switch (dropPos)
@@ -606,9 +606,9 @@ public class HierarchyPanel : DockPanel
             }
 
             // Register undo for reparent/reorder
-            var newParentId = dragged.Parent?.Identifier ?? Guid.Empty;
+            var newParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var newSiblingIdx = dragged.GetSiblingIndex() ?? -1;
-            var newRootIdx = newParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
+            var newRootIdx = newParentId == Guid.Empty ? (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(dragged) : -1) : -1;
 
             bool changed = oldParentId != newParentId || oldSiblingIdx != newSiblingIdx
                 || (oldParentId == Guid.Empty && newParentId == Guid.Empty && oldRootIdx != newRootIdx);

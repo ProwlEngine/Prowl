@@ -167,7 +167,7 @@ public class LineRenderer : MonoBehaviour, IRenderable
     public override void OnDisable()
     {
         // Clean up the mesh when disabled
-        _cachedMesh?.OnDispose();
+        if (_cachedMesh.IsValid()) _cachedMesh.OnDispose();
         _cachedMesh = null;
     }
 

@@ -29,7 +29,7 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.BokehDoF));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.BokehDoF));
 
         int fullWidth = context.Width;
         int fullHeight = context.Height;
@@ -86,7 +86,7 @@ public sealed class BokehDepthOfFieldEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

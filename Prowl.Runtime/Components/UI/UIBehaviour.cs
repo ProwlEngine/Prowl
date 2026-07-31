@@ -37,13 +37,15 @@ public abstract class UIBehaviour : MonoBehaviour
 
     public override void OnEnable()
     {
-        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
+        var canvas = GetCanvas();
+        if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.Hierarchy);
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
     public override void OnDisable()
     {
-        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
+        var canvas = GetCanvas();
+        if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.Hierarchy);
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
@@ -52,26 +54,29 @@ public abstract class UIBehaviour : MonoBehaviour
         // Run the OnValide only in the editor- During runtime, dirtying should be driven by the fields themselves.
         if (!Application.IsPlaying)
         {
-            GetCanvas()?.MarkDirty(UIDirtyFlags.All);
+            var canvas = GetCanvas();
+            if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.All);
             MarkDirty(UIDirtyFlags.All);
         }
     }
 
     public override void OnAddedToScene()
     {
-        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
+        var canvas = GetCanvas();
+        if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.Hierarchy);
         MarkDirty(UIDirtyFlags.Hierarchy);
     }
 
     public override void OnRemovedFromScene()
     {
-        GetCanvas()?.MarkDirty(UIDirtyFlags.Hierarchy);
+        var canvas = GetCanvas();
+        if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.Hierarchy);
 
         MarkDirty(UIDirtyFlags.Hierarchy);
 
         // Free the baked GPU buffers - the canvas will re-bake from scratch if this element
         // is ever re-added. Without this every created/destroyed UI element leaks its mesh.
-        CachedMesh?.OnDispose();
+        if (CachedMesh.IsValid()) CachedMesh.OnDispose();
         CachedMesh = null;
         DirtyFlags |= UIDirtyFlags.Vertices;
     }
@@ -88,7 +93,8 @@ public abstract class UIBehaviour : MonoBehaviour
     public void MarkDirty(UIDirtyFlags flags)
     {
         DirtyFlags |= flags;
-        GetCanvas()?.MarkDirty(flags);
+        var canvas = GetCanvas();
+        if (canvas.IsValid()) canvas.MarkDirty(flags);
     }
 
     /// <summary>

@@ -324,7 +324,7 @@ public static class Undo
         // Now serialize all components have been added by this point
         var serialized = Serializer.Serialize(typeof(object), go);
         var goId = go.Identifier;
-        var parentId = go.Parent?.Identifier ?? Guid.Empty;
+        var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
 
         _pendingActions.Add((description, new ActionRecord(
@@ -380,7 +380,7 @@ public static class Undo
 
         // Serialize the entire GO tree before destruction
         var serialized = Serializer.Serialize(typeof(object), go);
-        var parentId = go.Parent?.Identifier ?? Guid.Empty;
+        var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
         var goId = go.Identifier;
 

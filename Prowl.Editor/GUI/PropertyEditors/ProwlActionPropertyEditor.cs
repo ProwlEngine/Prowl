@@ -100,7 +100,9 @@ public class ProwlActionPropertyEditor : PropertyEditor
         
         // The stored Target is the exact object the call runs on (a GameObject or one of its
         // Components); the picker edits the owning GameObject, which we recover from either.
-        GameObject? owner = call.Target as GameObject ?? (call.Target as MonoBehaviour)?.GameObject;
+        GameObject? ownerGo = call.Target as GameObject;
+        MonoBehaviour? ownerComp = call.Target as MonoBehaviour;
+        GameObject? owner = ownerGo.IsValid() ? ownerGo : (ownerComp.IsValid() ? ownerComp.GameObject : null);
 
         using (paper.Column(id).Height(UnitValue.Auto)
             .Rounded(6).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)

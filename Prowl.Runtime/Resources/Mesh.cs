@@ -389,9 +389,9 @@ public class Mesh : EngineObject, ISerializable
 
     private void DisposeMorphTextures()
     {
-        _morphPosTex?.Dispose(); _morphPosTex = null;
-        _morphNrmTex?.Dispose(); _morphNrmTex = null;
-        _morphTanTex?.Dispose(); _morphTanTex = null;
+        if (_morphPosTex.IsValid()) _morphPosTex.Dispose(); _morphPosTex = null;
+        if (_morphNrmTex.IsValid()) _morphNrmTex.Dispose(); _morphNrmTex = null;
+        if (_morphTanTex.IsValid()) _morphTanTex.Dispose(); _morphTanTex = null;
     }
 
     // Submesh support: each submesh defines a range within the shared index buffer

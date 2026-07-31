@@ -155,7 +155,7 @@ public sealed class Cubemap : Texture, ISerializable
 
         if (withDepth)
         {
-            _captureDepth ??= new Texture2D(Size, Size, false, TextureImageFormat.Depth24f);
+            if (_captureDepth.IsNotValid()) _captureDepth = new Texture2D(Size, Size, false, TextureImageFormat.Depth24f);
             attachments =
             [
                 color,
@@ -177,7 +177,7 @@ public sealed class Cubemap : Texture, ISerializable
         foreach (var fb in _faceTargets.Values)
             fb?.Dispose();
         _faceTargets.Clear();
-        _captureDepth?.Dispose();
+        if (_captureDepth.IsValid()) _captureDepth.Dispose();
         _captureDepth = null;
         base.OnDispose();
     }

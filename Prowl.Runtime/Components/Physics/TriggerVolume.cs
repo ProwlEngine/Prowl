@@ -56,7 +56,7 @@ public sealed class TriggerVolume : MonoBehaviour
 
     public override void FixedUpdate()
     {
-        PhysicsWorld physics = GameObject?.Scene?.Physics;
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
         if (physics == null) return;
 
         // Swap buffers: last step's occupants become the baseline we diff against.

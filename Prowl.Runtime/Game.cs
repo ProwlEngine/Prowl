@@ -309,7 +309,7 @@ public abstract class Game
             int count = 0;
             while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
             {
-                currentScene?.FixedUpdate();
+                if (currentScene.IsValid()) currentScene.FixedUpdate();
                 fixedTimeAccumulator -= Time.FixedDeltaTime;
             }
 
@@ -348,21 +348,21 @@ public abstract class Game
     /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
     public virtual void OnUpdate(Scene? scene)
     {
-        scene?.Update();
-        if (DrawGizmos)
-            scene?.DrawGizmos();
+        if (scene.IsValid()) scene.Update();
+        if (DrawGizmos && scene.IsValid())
+            scene.DrawGizmos();
     }
 
     /// <summary>Called during render. Override to control scene rendering.</summary>
     public virtual void OnRender(Scene? scene)
     {
-        scene?.Render();
+        if (scene.IsValid()) scene.Render();
     }
 
     /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>
     public virtual void OnGui(Scene? scene, Paper paper)
     {
-        scene?.OnGui(paper);
+        if (scene.IsValid()) scene.OnGui(paper);
     }
 
     public virtual void Resize(int width, int height) { }

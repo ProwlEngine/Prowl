@@ -99,7 +99,7 @@ public static class PackageImportDialog
         _enabledPaths.Clear();
         _selectedAssetPath = null;
         foreach (var tex in _thumbCache.Values)
-            tex?.Dispose();
+            if (tex.IsValid()) tex.Dispose();
         _thumbCache.Clear();
     }
 

@@ -149,7 +149,8 @@ public class GameViewPanel : DockPanel
                 cam.Target = _rt;
                 cam.UpdateRenderData();
 
-                var pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
+                var camPipeline = cam.Pipeline;
+                var pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
                 pipeline.Render(cam, new RenderingData());
 
                 cam.Target = origTarget;
@@ -278,7 +279,7 @@ public class GameViewPanel : DockPanel
                         _displayAbsRect = rect;
                         paper.Draw(ref handle, (canvas, r) =>
                     {
-                        if (capturedRT?.MainTexture == null) return;
+                        if (capturedRT.IsNotValid() || capturedRT.MainTexture == null) return;
                         float rx = (float)r.Min.X;
                         float ry = (float)r.Min.Y;
                         float rw = (float)r.Size.X;
@@ -531,13 +532,13 @@ public class GameViewPanel : DockPanel
     private void EnsureRT(int w, int h)
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(w, h, true, new[] { TextureImageFormat.Color4b });
     }
 
     private void InvalidateRT()
     {
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = null;
     }
 

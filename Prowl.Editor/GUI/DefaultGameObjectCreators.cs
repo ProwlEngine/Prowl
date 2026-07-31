@@ -410,7 +410,7 @@ internal static class DefaultGameObjectCreators
 
     private static void EnsureEventSystem(Scene? scene)
     {
-        scene ??= Scene.Current;
+        if (scene.IsNotValid()) scene = Scene.Current;
         if (scene == null) return;
         foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
             if (es != null) return;
@@ -420,7 +420,7 @@ internal static class DefaultGameObjectCreators
 
     private static GameObject ResolveCanvasParent(GameObject? parent)
     {
-        GameCanvas? canvas = parent?.GetComponentInParent<GameCanvas>(includeSelf: true);
+        GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
         if (canvas != null) return parent!;
 
         var scene = Scene.Current;

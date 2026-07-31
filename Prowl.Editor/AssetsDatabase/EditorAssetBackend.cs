@@ -1041,7 +1041,7 @@ public class EditorAssetBackend : AssetBackendBase
     {
         if (_thumbnailTextures.TryGetValue(guid, out var tex))
         {
-            tex?.Dispose();
+            if (tex.IsValid()) tex.Dispose();
             _thumbnailTextures.Remove(guid);
         }
     }
@@ -1050,7 +1050,7 @@ public class EditorAssetBackend : AssetBackendBase
     public void ClearThumbnailTextureCache()
     {
         foreach (var tex in _thumbnailTextures.Values)
-            tex?.Dispose();
+            if (tex.IsValid()) tex.Dispose();
         _thumbnailTextures.Clear();
     }
 

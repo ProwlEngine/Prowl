@@ -90,7 +90,7 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     // No geometry of its own; the background/mask/content draw themselves.
     public override void GenerateMesh(UIMeshBuilder builder, in UIContext context) { }
 
-    private Rect ViewportRect() => (_viewport ?? GameObject.RectTransform)!.ComputedRect;
+    private Rect ViewportRect() => (_viewport.IsValid() ? _viewport : GameObject.RectTransform)!.ComputedRect;
 
     public void OnBeginDrag(PointerEventData e)
     {
@@ -221,8 +221,8 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         float fullW = rootRect.Size.X, fullH = rootRect.Size.Y;
         float contentW = ct.Size.X, contentH = ct.Size.Y;
 
-        RectTransform? vRt = _verticalScrollbar?.GameObject.RectTransform;
-        RectTransform? hRt = _horizontalScrollbar?.GameObject.RectTransform;
+        RectTransform? vRt = _verticalScrollbar.IsValid() ? _verticalScrollbar.GameObject.RectTransform : null;
+        RectTransform? hRt = _horizontalScrollbar.IsValid() ? _horizontalScrollbar.GameObject.RectTransform : null;
         float vbarW = vRt != null ? MathF.Abs(vRt.SizeDelta.X) : 0f; // fixed thickness (line-anchored axis)
         float hbarH = hRt != null ? MathF.Abs(hRt.SizeDelta.Y) : 0f;
 

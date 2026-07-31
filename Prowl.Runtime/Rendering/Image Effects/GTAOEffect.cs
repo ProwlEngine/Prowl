@@ -84,8 +84,8 @@ public sealed class GTAOEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.GTAO));
-        _noise ??= Texture2D.LoadDefault(DefaultTexture.Noise);
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.GTAO));
+        if (_noise.IsNotValid()) _noise = Texture2D.LoadDefault(DefaultTexture.Noise);
 
         if (!context.DepthNormals.IsValid())
             return;
@@ -98,8 +98,8 @@ public sealed class GTAOEffect : ImageEffect
         // Persistent AO history (at AO resolution). Free it when temporal is off or on resize.
         if ((!UseTemporal || (_aoHistory != null && (_aoHistory.Width != width || _aoHistory.Height != height))))
             ReleaseHistory();
-        if (UseTemporal)
-            _aoHistory ??= new RenderTexture(width, height, false, [TextureImageFormat.Color4b]);
+        if (UseTemporal && _aoHistory.IsNotValid())
+            _aoHistory = new RenderTexture(width, height, false, [TextureImageFormat.Color4b]);
 
         RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
 
@@ -163,14 +163,14 @@ public sealed class GTAOEffect : ImageEffect
 
     private void ReleaseHistory()
     {
-        _aoHistory?.Dispose();
+        if (_aoHistory.IsValid()) _aoHistory.Dispose();
         _aoHistory = null;
         _historyValid = false;
     }
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
         ReleaseHistory();
         _frameIndex = 0;

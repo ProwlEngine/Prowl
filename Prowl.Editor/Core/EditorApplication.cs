@@ -162,7 +162,11 @@ public class EditorApplication : Game
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
-        PropertyGridConfig.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+        PropertyGridConfig.OnFieldChanged = target =>
+        {
+            var eo = target as Runtime.EngineObject;
+            if (eo.IsValid()) eo.OnValidate();
+        };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
@@ -215,7 +219,7 @@ public class EditorApplication : Game
                     : null;
             }
             if (EditorSceneManager.Save())
-                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" });
+                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" });
 
             // No path yet - prompt for one, but never interrupt an unattended auto-save.
             if (!SaveManager.IsAutoSave)
@@ -1266,7 +1270,7 @@ public class EditorApplication : Game
 
             if (EditorSceneManager.SaveAs(rel))
                 Toasts.Success(Loc.Get("save.saved"),
-                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" }));
+                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" }));
         }, Project.Current.AssetsPath,
            new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
     }
@@ -1711,7 +1715,7 @@ public class EditorApplication : Game
         if (Application.ShouldRunGameplay)
             Application.IsGameplayExecuting = true;
 
-        scene?.Update();
+        if (scene.IsValid()) scene.Update();
 
         Application.IsGameplayExecuting = false;
 

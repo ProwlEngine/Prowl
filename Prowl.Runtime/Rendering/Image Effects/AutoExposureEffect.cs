@@ -42,7 +42,7 @@ public sealed class AutoExposureEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.AutoExposure));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.AutoExposure));
 
         int w = context.Width / 2;
         int h = context.Height / 2;
@@ -76,7 +76,7 @@ public sealed class AutoExposureEffect : ImageEffect
             _historyValid = false;
         }
 
-        _adaptedLuminance ??= new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
+        if (_adaptedLuminance.IsNotValid()) _adaptedLuminance = new RenderTexture(1, 1, false, [TextureImageFormat.Short]);
 
         var newAdapted = RenderTexture.GetTemporaryRT(1, 1, false, [TextureImageFormat.Short]);
         _mat.SetTexture("_AdaptedTex", _adaptedLuminance.MainTexture);
@@ -107,9 +107,9 @@ public sealed class AutoExposureEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        _adaptedLuminance?.Dispose();
+        if (_adaptedLuminance.IsValid()) _adaptedLuminance.Dispose();
         _adaptedLuminance = null;
         _historyValid = false;
     }

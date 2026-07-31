@@ -788,7 +788,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             // other cameras or the whole frame. Contain it and keep rendering the rest.
             try
             {
-                RenderPipeline pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
+                var camPipeline = cam.Pipeline;
+                RenderPipeline pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
 
                 // If we have a target and the Camera doesnt, draw into the target
                 if (target.IsValid() && cam.Target.IsNotValid())
@@ -804,7 +805,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Render] Camera '{cam.GameObject?.Name}' render threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError($"[Render] Camera '{(cam.GameObject.IsValid() ? cam.GameObject.Name : null)}' render threw and was skipped: {ex.Message}\n{ex.StackTrace}");
             }
         }
 

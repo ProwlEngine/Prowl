@@ -65,7 +65,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
 
     public override void OnValidate()
     {
-        if (GameObject?.Scene?.IsNotValid() ?? true) return;
+        if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
         RecreateConstraint();
     }
 

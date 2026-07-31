@@ -19,7 +19,7 @@ public sealed class FXAAEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.FXAA));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.FXAA));
 
         // Set shader parameters
         _mat.SetFloat("_EdgeThresholdMax", EdgeThresholdMax);
@@ -38,7 +38,7 @@ public sealed class FXAAEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

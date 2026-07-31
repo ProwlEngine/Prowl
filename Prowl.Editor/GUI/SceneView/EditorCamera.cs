@@ -99,7 +99,7 @@ public class EditorCamera
 
         if (_renderTarget == null || _renderTarget.Width != width || _renderTarget.Height != height)
         {
-            _renderTarget?.Dispose();
+            if (_renderTarget.IsValid()) _renderTarget.Dispose();
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
                 new[] { TextureImageFormat.Color4b });
@@ -144,7 +144,7 @@ public class EditorCamera
         };
 
         // Render
-        var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
+        var pipeline = _camera.Pipeline.IsValid() ? _camera.Pipeline : DefaultRenderPipeline.Default;
         pipeline.Render(_camera, renderData);
 
         // Remove from scene if we added it
@@ -557,7 +557,7 @@ public class EditorCamera
     public void Dispose()
     {
         DisposeClonedEffects();
-        _renderTarget?.Dispose();
+        if (_renderTarget.IsValid()) _renderTarget.Dispose();
         _renderTarget = null;
     }
 }

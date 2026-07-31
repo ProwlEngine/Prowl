@@ -89,10 +89,10 @@ public class DefaultRenderPipeline : RenderPipeline
 
     private static void ValidateDefaults()
     {
-        s_quadMesh ??= Mesh.GetFullscreenQuad();
-        s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Standard));
-        s_skybox ??= new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
-        s_gizmo ??= new Material(Shader.LoadDefault(DefaultShader.Gizmos));
+        if (s_quadMesh.IsNotValid()) s_quadMesh = Mesh.GetFullscreenQuad();
+        if (s_defaultMaterial.IsNotValid()) s_defaultMaterial = new Material(Shader.LoadDefault(DefaultShader.Standard));
+        if (s_skybox.IsNotValid()) s_skybox = new Material(Shader.LoadDefault(DefaultShader.ProceduralSkybox));
+        if (s_gizmo.IsNotValid()) s_gizmo = new Material(Shader.LoadDefault(DefaultShader.Gizmos));
 
         if (s_skyDome.IsNotValid())
         {
@@ -639,7 +639,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
             case Scene.SkyboxMode.Gradient:
             {
-                s_gradientSkybox ??= new Material(Shader.LoadDefault(DefaultShader.GradientSkybox));
+                if (s_gradientSkybox.IsNotValid()) s_gradientSkybox = new Material(Shader.LoadDefault(DefaultShader.GradientSkybox));
                 s_gradientSkybox.SetColor("_TopColor", skyParams.GradientTop);
                 s_gradientSkybox.SetColor("_BottomColor", skyParams.GradientBottom);
                 s_gradientSkybox.SetFloat("_Exponent", skyParams.GradientExponent);
@@ -703,8 +703,8 @@ public class DefaultRenderPipeline : RenderPipeline
         var icons = Debug.GetGizmoIcons();
         if (icons.Count > 0)
         {
-            s_iconMaterial ??= new Material(Shader.LoadDefault(DefaultShader.GizmoIcon));
-            s_iconQuad ??= Mesh.GetFullscreenQuad();
+            if (s_iconMaterial.IsNotValid()) s_iconMaterial = new Material(Shader.LoadDefault(DefaultShader.GizmoIcon));
+            if (s_iconQuad.IsNotValid()) s_iconQuad = Mesh.GetFullscreenQuad();
 
             foreach (var icon in icons)
             {

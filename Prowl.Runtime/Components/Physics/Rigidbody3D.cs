@@ -274,7 +274,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     private void EnsureBody()
     {
         if (_body != null && !_body.Handle.IsZero) return;
-        World? world = GameObject?.Scene?.Physics?.World;
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
     }
 
@@ -285,7 +286,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         UpdateShapes(_body);
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
-        GameObject?.Scene?.Physics?.RegisterBody(this);
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsValid()) scene.Physics?.RegisterBody(this);
         _body.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,
@@ -342,7 +344,7 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnValidate()
     {
-        if (GameObject?.Scene?.IsNotValid() ?? true) return;
+        if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
 
         if (_body == null || _body.Handle.IsZero)
             _body = GameObject.Scene.Physics.World.CreateRigidBody();

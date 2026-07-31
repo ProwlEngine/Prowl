@@ -81,7 +81,12 @@ public class Selectable : UIBehaviour,
     /// <summary>The <see cref="UIImage"/> whose <c>Color</c> the state machine drives. Defaults to a UIImage on this GameObject.</summary>
     public UIImage? TargetGraphic
     {
-        get => _targetGraphic ??= GetComponent<UIImage>();
+        get
+        {
+            if (_targetGraphic.IsNotValid())
+                _targetGraphic = GetComponent<UIImage>();
+            return _targetGraphic;
+        }
         set => _targetGraphic = value;
     }
 

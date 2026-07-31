@@ -139,7 +139,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
     /// <see cref="GameObject"/>.
     /// </summary>
-    public Scene? Scene => GameObject?.Scene ?? null;
+    public Scene? Scene
+    {
+        get
+        {
+            if (GameObject.IsNotValid()) return null;
+            Scene? scene = GameObject.Scene;
+            return scene.IsValid() ? scene : null;
+        }
+    }
 
     public MonoBehaviour() : base() { }
 
@@ -411,7 +419,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         _hasBeenEnabled = true;
         // Register for ticking whenever enabled in an active scene, regardless of play mode; the
         // per-tick gate (ShouldExecuteGameplay) decides whether the callbacks actually run.
-        GameObject?.Scene?.Dispatcher.Register(this);
+        if (GameObject.IsValid())
+        {
+            Scene? scene = GameObject.Scene;
+            if (scene.IsValid())
+                scene.Dispatcher.Register(this);
+        }
         if (!ShouldExecuteGameplay) return;
         try { OnEnable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -420,7 +433,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnDisable()
     {
-        GameObject?.Scene?.Dispatcher.Unregister(this);
+        if (GameObject.IsValid())
+        {
+            Scene? scene = GameObject.Scene;
+            if (scene.IsValid())
+                scene.Dispatcher.Unregister(this);
+        }
         if (!ShouldExecuteGameplay) return;
         try { OnDisable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
