@@ -15,8 +15,9 @@ namespace Prowl.OrigamiUI;
 /// <summary>
 /// Box-and-whisker chart. Every group is summarised into a five-number summary and drawn as a Q1..Q3
 /// body with whiskers reaching the most extreme values inside the 1.5*IQR fences, plus a dot per value
-/// beyond them. The whole plot is a single band and the groups sit side by side in slots within it, so
-/// the x axis carries no per-group tick and group identity is read off the legend instead.
+/// beyond them. Each group owns one x band and its box is centred in it, so the axis carries a tick per
+/// group labelled with that group's name and hiding a group leaves its band empty rather than reflowing
+/// the rest.
 /// </summary>
 public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
 {
@@ -24,13 +25,14 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
         : base(paper, id, theme, data) { }
 
     private readonly Dictionary<CartesianSeries<T>, DistributionSummary> _summaries = new();
+    private readonly List<string> _bandLabels = new();
 
     private bool _showMean;
     private bool _showMedian = true;
     private bool _showOutliers = true;
+    private float _boxWidth = 0.5f;
+    private float _maxBoxWidth = 56f;
 
-    private const float GroupWidthFactor = 0.8f;
-    private const float BoxGap = 0.2f;
     private const float CapWidthFactor = 0.5f;
     private const float MeanMarkerSize = 7f;
     private const float OutlierSize = 5f;
@@ -38,6 +40,9 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
 
     protected override bool BandedX => true;
     protected override bool TickPerBand => true;
+
+    protected override string DefaultXTickLabel(int index)
+        => index >= 0 && index < _bandLabels.Count ? _bandLabels[index] : "";
 
     /// <summary>Draw a marker at each group's mean alongside its median. Off by default.</summary>
     public BoxPlotChart<T> ShowMean(bool show = true) { _showMean = show; return this; }
@@ -48,16 +53,51 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
     /// <summary>Draw a dot for every value beyond a group's 1.5*IQR fences. On by default.</summary>
     public BoxPlotChart<T> ShowOutliers(bool show = true) { _showOutliers = show; return this; }
 
-    protected override void OnDeriveBegin(IReadOnlyList<IReadOnlyList<double>> groups) => _summaries.Clear();
+    /// <summary>Fraction of a band, in (0, 1], filled by that band's box. Default 0.5.</summary>
+    public BoxPlotChart<T> BoxWidth(float width) { _boxWidth = Math.Clamp(width, 0.001f, 1f); return this; }
 
+    /// <summary>Upper bound in pixels on a box's width, so boxes stay readable on a wide chart with few
+    /// groups instead of growing with the band. Default 56; pass zero to let the band decide alone.</summary>
+    public BoxPlotChart<T> MaxBoxWidth(float width) { _maxBoxWidth = MathF.Max(0f, width); return this; }
+
+    protected override void OnDeriveBegin(IReadOnlyList<IReadOnlyList<double>> groups)
+    {
+        _summaries.Clear();
+        _bandLabels.Clear();
+    }
+
+    /// <summary>Pads with blanks so that the group's median lands at x = its own ordinal, which gives every
+    /// group a band of its own rather than stacking them all into band zero.</summary>
     protected override void DeriveGroup(CartesianSeries<T> group, IReadOnlyList<double> values, List<double> derived)
     {
         DistributionSummary summary = ComputeSummary(values);
         _summaries[group] = summary;
 
+        int band = BandOf(group);
+        while (_bandLabels.Count <= band) _bandLabels.Add("");
+        _bandLabels[band] = group.Label;
+
         if (summary.Count == 0) return;
 
+        for (int i = 0; i < band; i++) derived.Add(double.NaN);
         derived.Add(summary.Median);
+    }
+
+    private int BandOf(CartesianSeries<T> group)
+    {
+        for (int i = 0; i < SeriesList.Count; i++)
+            if (ReferenceEquals(SeriesList[i], group)) return i;
+        return 0;
+    }
+
+    private void BoxBounds(float bandLeft, float bandWidth, out float left, out float width, out float cx)
+    {
+        width = bandWidth * _boxWidth;
+        if (_maxBoxWidth > 0f) width = MathF.Min(width, _maxBoxWidth);
+        width = MathF.Max(1f, width);
+
+        cx = bandLeft + bandWidth * 0.5f;
+        left = cx - width * 0.5f;
     }
 
     protected override void OnDeriveEnd()
@@ -117,9 +157,6 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
         List<CartesianSeries<T>> visible = VisibleGroups(ctx.Series);
         if (visible.Count == 0) return;
 
-        float bandLeft = ctx.BandLeft(0);
-        var slots = new BandSlots(ctx.BandWidth, GroupWidthFactor, BoxGap, visible.Count);
-
         for (int k = 0; k < visible.Count; k++)
         {
             CartesianSeries<T> group = visible[k];
@@ -131,9 +168,7 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
             Color32 stroke = ToC32(strokeColor);
             float strokeWidth = group.StrokeWidth ?? 1f;
 
-            float left = slots.Left(bandLeft, k);
-            float width = slots.MarkWidth;
-            float cx = slots.Center(bandLeft, k);
+            BoxBounds(ctx.BandLeft(BandOf(group)), ctx.BandWidth, out float left, out float width, out float cx);
             float capHalf = MathF.Max(1f, width * CapWidthFactor) * 0.5f;
 
             float top = ctx.YPos(summary.Q3);
@@ -206,29 +241,28 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
         }
     }
 
-    /// <summary>Highlights the single band, rings the body of the group the pointer is over, and reads
-    /// out that group's five-number summary, since a box encodes values its series' y never carries.</summary>
+    /// <summary>Highlights the sampled group's band, rings its body, and reads out its five-number
+    /// summary, since a box encodes values its series' y never carries.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
-        List<CartesianSeries<T>> visible = VisibleGroups(ctx.Series);
-        if (visible.Count == 0) return;
+        CartesianSeries<T>? group = null;
+        foreach (CartesianSeries<T> s in VisibleGroups(ctx.Series))
+            if (BandOf(s) == ctx.Index) { group = s; break; }
+
+        if (group == null) return;
+
+        DistributionSummary summary = _summaries[group];
 
         float bandLeft = ctx.BandLeft(ctx.Index);
         SampleBand(paper, in ctx, bandLeft, ctx.BandWidth);
 
-        var slots = new BandSlots(ctx.BandWidth, GroupWidthFactor, BoxGap, visible.Count);
-        int slot = slots.SlotAt(bandLeft, ctx.Pointer.X, visible.Count);
-        CartesianSeries<T> group = visible[slot];
-        DistributionSummary summary = _summaries[group];
-
-        float width = slots.MarkWidth;
-        float cx = slots.Center(bandLeft, slot);
+        BoxBounds(bandLeft, ctx.BandWidth, out float left, out float width, out float cx);
         float top = Math.Clamp(ctx.YPos(summary.Q3), ctx.PlotT, ctx.PlotB);
         float bottom = Math.Clamp(ctx.YPos(summary.Q1), ctx.PlotT, ctx.PlotB);
 
         Color color = group.Color ?? System.Drawing.Color.Gray;
 
-        SampleRing(paper, slot.ToString(), cx, (top + bottom) * 0.5f, MathF.Max(width, bottom - top), color);
+        SampleRing(paper, ctx.Index.ToString(), cx, (top + bottom) * 0.5f, MathF.Max(width, bottom - top), color);
 
         var rows = new List<(Color Color, string Text)>
         {
@@ -243,6 +277,6 @@ public sealed class BoxPlotChart<T> : DistributionCore<BoxPlotChart<T>, T>
             rows.Add((color, $"Mean: {FormatValue(summary.Mean)}"));
 
         string header = group.Label.Length > 0 ? group.Label : SampleHeader(ctx.Index);
-        SamplePopup(paper, in ctx, slots.Left(bandLeft, slot) + width, header, rows);
+        SamplePopup(paper, in ctx, left + width, header, rows);
     }
 }
