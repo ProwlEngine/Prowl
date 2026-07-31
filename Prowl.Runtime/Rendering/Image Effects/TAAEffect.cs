@@ -100,7 +100,7 @@ public sealed class TAAEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.TAA));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.TAA));
 
         int w = context.Width;
         int h = context.Height;
@@ -114,7 +114,7 @@ public sealed class TAAEffect : ImageEffect
             _historyValid = false;
         }
 
-        _history ??= new RenderTexture(w, h, false, [format]);
+        if (_history.IsNotValid()) _history = new RenderTexture(w, h, false, [format]);
 
         // Set uniforms
         _mat.SetVector("_Resolution", new Float2(w, h));
@@ -149,9 +149,9 @@ public sealed class TAAEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        _history?.Dispose();
+        if (_history.IsValid()) _history.Dispose();
         _history = null;
         _historyValid = false;
         _frameIndex = 0;

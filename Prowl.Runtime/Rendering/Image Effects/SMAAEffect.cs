@@ -26,7 +26,7 @@ public sealed class SMAAEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.SMAA));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.SMAA));
 
         int w = context.Width;
         int h = context.Height;
@@ -65,7 +65,7 @@ public sealed class SMAAEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

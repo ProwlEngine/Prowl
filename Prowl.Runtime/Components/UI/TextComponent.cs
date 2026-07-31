@@ -34,7 +34,14 @@ public class TextComponent : UIBehaviour
     }
 
     /// <summary>The assigned font, or the engine's embedded default font when none is set.</summary>
-    public FontAsset? ResolvedFont => _font.Res ?? FontAsset.LoadDefault();
+    public FontAsset? ResolvedFont
+    {
+        get
+        {
+            var f = _font.Res;
+            return f.IsValid() ? f : FontAsset.LoadDefault();
+        }
+    }
 
     [SerializeField] private Color _textColor = Color.White;
     public Color TextColor
@@ -90,7 +97,11 @@ public class TextComponent : UIBehaviour
         set => SetField(ref _material, value, UIDirtyFlags.Material);
     }
 
-    public override Material GetMaterial() => _material.Res ?? GameCanvas.SharedTextMaterial;
+    public override Material GetMaterial()
+    {
+        var m = _material.Res;
+        return m.IsValid() ? m : GameCanvas.SharedTextMaterial;
+    }
 
     /// <summary>
     /// Atlas version recorded at the last successful bake. When Scribe grows the atlas
@@ -130,7 +141,7 @@ public class TextComponent : UIBehaviour
     public override void GenerateMesh(UIMeshBuilder builder, in UIContext context)
     {
         FontAsset? font = ResolvedFont;
-        if (font?.FontFile is null || string.IsNullOrEmpty(Text)) return;
+        if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(Text)) return;
 
         var rt = GameObject.RectTransform;
         if (rt is null) return;
@@ -216,7 +227,7 @@ public class TextComponent : UIBehaviour
     public float MeasureWidth(string? s)
     {
         FontAsset? font = ResolvedFont;
-        if (font?.FontFile is null || string.IsNullOrEmpty(s)) return 0f;
+        if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(s)) return 0f;
 
         TextLayoutSettings settings = new TextLayoutSettings
         {
@@ -239,7 +250,8 @@ public class TextComponent : UIBehaviour
     {
         // Always re-read the atlas through System.Texture - it can be replaced when the
         // atlas grows. Falls back to a 1x1 white texture if Scribe hasn't allocated yet.
-        Texture2D atlas = UIFontSystem.Default.Atlas ?? Texture2D.LoadDefault(DefaultTexture.White);
+        Texture2D? atlasTex = UIFontSystem.Default.Atlas;
+        Texture2D atlas = atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White);
         p.SetTexture("_MainTex", atlas);
         p.SetColor("_MainColor", Color.White);
         p.SetVector("_Tiling", new Float2(1, 1));

@@ -55,7 +55,7 @@ public class ShaderImporter : AssetImporter
             return false;
         }
 
-        shader.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+        shader.Name = ctx.FileName;
         ctx.SetMainAsset(shader);
         return true;
     }

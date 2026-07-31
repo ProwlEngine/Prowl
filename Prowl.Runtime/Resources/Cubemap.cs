@@ -155,7 +155,7 @@ public sealed class Cubemap : Texture, ISerializable
 
         if (withDepth)
         {
-            _captureDepth ??= new Texture2D(Size, Size, false, TextureImageFormat.Depth24f);
+            if (_captureDepth.IsNotValid()) _captureDepth = new Texture2D(Size, Size, false, TextureImageFormat.Depth24f);
             attachments =
             [
                 color,
@@ -177,7 +177,7 @@ public sealed class Cubemap : Texture, ISerializable
         foreach (var fb in _faceTargets.Values)
             fb?.Dispose();
         _faceTargets.Clear();
-        _captureDepth?.Dispose();
+        if (_captureDepth.IsValid()) _captureDepth.Dispose();
         _captureDepth = null;
         base.OnDispose();
     }
@@ -190,6 +190,7 @@ public sealed class Cubemap : Texture, ISerializable
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Size", new(Size));
         compoundTag.Add("MipLevels", new(MipLevels));
         compoundTag.Add("ImageFormat", new((int)ImageFormat));
@@ -222,6 +223,8 @@ public sealed class Cubemap : Texture, ISerializable
         Type[] param = [typeof(uint), typeof(bool), typeof(TextureImageFormat)];
         object[] values = [size, mipLevels > 1, imageFormat];
         typeof(Cubemap).GetConstructor(param)!.Invoke(this, values);
+
+        DeserializeHeader(value);
 
         EchoObject faces = value["Faces"];
         int idx = 0;

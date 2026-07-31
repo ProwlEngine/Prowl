@@ -608,7 +608,7 @@ public sealed class TerrainData : EngineObject, ISerializable
             for (int i = 0; i < count; i++)
                 _heightmapFloatBuffer[i] = Heights[i] * scale;
 
-            _heightmapTexture?.Dispose();
+            if (_heightmapTexture.IsValid()) _heightmapTexture.Dispose();
             _heightmapTexture = new Texture2D((uint)HeightmapResolution, (uint)HeightmapResolution, false, TextureImageFormat.Float);
             _heightmapTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
             Graphics.SetWrapS(_heightmapTexture.Handle, TextureWrap.ClampToEdge);
@@ -636,7 +636,7 @@ public sealed class TerrainData : EngineObject, ISerializable
         {
             // Dispose old textures
             if (_splatmapTextures != null)
-                foreach (var t in _splatmapTextures) t?.Dispose();
+                foreach (var t in _splatmapTextures) if (t.IsValid()) t.Dispose();
 
             _splatmapTextures = new List<Texture2D>(texCount);
             var buffer = new float[pixelCount * 4];
@@ -685,7 +685,7 @@ public sealed class TerrainData : EngineObject, ISerializable
             for (int i = 0; i < count; i++)
                 _holesFloatBuffer[i] = Holes[i] > 0 ? 1f : 0f;
 
-            _holesTexture?.Dispose();
+            if (_holesTexture.IsValid()) _holesTexture.Dispose();
             _holesTexture = new Texture2D((uint)SplatmapResolution, (uint)SplatmapResolution, false, TextureImageFormat.Float);
             _holesTexture.SetTextureFilters(TextureMin.Nearest, TextureMag.Nearest);
             Graphics.SetWrapS(_holesTexture.Handle, TextureWrap.ClampToEdge);

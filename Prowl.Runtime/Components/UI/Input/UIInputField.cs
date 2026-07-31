@@ -118,14 +118,49 @@ public class UIInputField : Selectable,
     [SerializeIgnore] private UIImage? _selectionImage;
 
     private string DisplayText => _isPassword ? new string(_maskChar, _text.Length) : _text;
-    private RectTransform Area => _textArea ?? _textComponent?.GameObject.RectTransform ?? GameObject.RectTransform!;
+    private RectTransform Area
+    {
+        get
+        {
+            if (_textArea.IsValid()) return _textArea;
+            if (_textComponent.IsValid())
+            {
+                RectTransform rt = _textComponent.GameObject.RectTransform;
+                if (rt.IsValid()) return rt;
+            }
+            return GameObject.RectTransform!;
+        }
+    }
     private int SelMin => Math.Min(_selectionAnchor, _caretPos);
     private int SelMax => Math.Max(_selectionAnchor, _caretPos);
     private bool HasSelection => _selectionAnchor != _caretPos;
-    private bool IsFocused => ReferenceEquals(EventSystem.Current?.Selected, GameObject) && IsInteractable();
+    private bool IsFocused
+    {
+        get
+        {
+            EventSystem? es = EventSystem.Current;
+            return ReferenceEquals(es.IsValid() ? es.Selected : null, GameObject) && IsInteractable();
+        }
+    }
 
-    private UIImage? CaretImage => _caretImage ??= _caret?.GameObject.GetComponent<UIImage>();
-    private UIImage? SelectionImage => _selectionImage ??= _selection?.GameObject.GetComponent<UIImage>();
+    private UIImage? CaretImage
+    {
+        get
+        {
+            if (_caretImage.IsNotValid())
+                _caretImage = _caret.IsValid() ? _caret.GameObject.GetComponent<UIImage>() : null;
+            return _caretImage;
+        }
+    }
+    private UIImage? SelectionImage
+    {
+        get
+        {
+            if (_selectionImage.IsNotValid())
+                _selectionImage = _selection.IsValid() ? _selection.GameObject.GetComponent<UIImage>() : null;
+            return _selectionImage;
+        }
+    }
 
     public override void OnEnable()
     {
@@ -166,7 +201,8 @@ public class UIInputField : Selectable,
         if (!IsInteractable()) return;
         try { OnSubmitted?.Invoke(_text); }
         catch (Exception ex) { Debug.LogError($"[UIInputField] OnSubmitted on '{Name}' threw: {ex.Message}\n{ex.StackTrace}"); }
-        EventSystem.Current?.SetSelected(null); // ends editing (fires OnDeselect -> EndEdit)
+        var es = EventSystem.Current;
+        if (es.IsValid()) es.SetSelected(null); // ends editing (fires OnDeselect -> EndEdit)
     }
 
     public void OnCancel()
@@ -492,7 +528,7 @@ public class UIInputField : Selectable,
 
     private void ShiftText(float x)
     {
-        RectTransform? trt = _textComponent?.GameObject.RectTransform;
+        RectTransform? trt = _textComponent.IsValid() ? _textComponent.GameObject.RectTransform : null;
         if (trt is null) return;
         if (trt.AnchoredPosition.X != x)
             trt.AnchoredPosition = new Float2(x, trt.AnchoredPosition.Y);

@@ -100,10 +100,10 @@ public class TerrainComponent : MonoBehaviour
     public void InvalidateGrassCache() => _grassRenderer?.InvalidateCache();
 
     /// <summary>Shortcut to terrain size from the data asset.</summary>
-    public float TerrainSize => Data.Res?.Size ?? 1024f;
+    public float TerrainSize { get { var d = Data.Res; return d.IsValid() ? d.Size : 1024f; } }
 
     /// <summary>Shortcut to terrain height from the data asset.</summary>
-    public float TerrainHeight => Data.Res?.Height ?? 100f;
+    public float TerrainHeight { get { var d = Data.Res; return d.IsValid() ? d.Height : 100f; } }
 
     #endregion
 
@@ -125,7 +125,7 @@ public class TerrainComponent : MonoBehaviour
     public override void OnDisable()
     {
         base.OnDisable();
-        _baseMesh?.Dispose();
+        if (_baseMesh.IsValid()) _baseMesh.Dispose();
         _baseMesh = null;
         _materialInstance = null;
         _grassMaterialInstance = null;
@@ -194,10 +194,12 @@ public class TerrainComponent : MonoBehaviour
             var layer = terrainData.Layers[i];
             string prefix = $"_Layer{i}";
 
-            s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
-            s_defaultNormal ??= Texture2D.LoadDefault(DefaultTexture.Normal);
-            _properties.SetTexture(prefix, layer.Albedo.Res ?? s_defaultWhite);
-            _properties.SetTexture(prefix + "Normal", layer.NormalMap.Res ?? s_defaultNormal);
+            if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
+            if (s_defaultNormal.IsNotValid()) s_defaultNormal = Texture2D.LoadDefault(DefaultTexture.Normal);
+            var albedoTex = layer.Albedo.Res;
+            _properties.SetTexture(prefix, albedoTex.IsValid() ? albedoTex : s_defaultWhite);
+            var normalTex = layer.NormalMap.Res;
+            _properties.SetTexture(prefix + "Normal", normalTex.IsValid() ? normalTex : s_defaultNormal);
 
             _properties.SetFloat(prefix + "Tiling", layer.Tiling);
             _properties.SetFloat(prefix + "Roughness", layer.Roughness);
@@ -268,7 +270,7 @@ public class TerrainComponent : MonoBehaviour
         var sourceMat = Material.Res;
         if (sourceMat == null)
         {
-            s_defaultTerrainMat ??= Resources.Material.LoadDefault(DefaultMaterial.Terrain);
+            if (s_defaultTerrainMat.IsNotValid()) s_defaultTerrainMat = Resources.Material.LoadDefault(DefaultMaterial.Terrain);
             sourceMat = s_defaultTerrainMat;
         }
         if (sourceMat == null) return null;
@@ -284,7 +286,7 @@ public class TerrainComponent : MonoBehaviour
         var sourceMat = GrassMaterial.Res;
         if (sourceMat == null)
         {
-            s_defaultGrassMat ??= Resources.Material.LoadDefault(DefaultMaterial.Grass);
+            if (s_defaultGrassMat.IsNotValid()) s_defaultGrassMat = Resources.Material.LoadDefault(DefaultMaterial.Grass);
             sourceMat = s_defaultGrassMat;
         }
         if (sourceMat == null) return null;

@@ -321,13 +321,27 @@ public static class Undo
 
     private static void FlushCreatedObject(GameObject go, string description)
     {
-        // Now serialize all components have been added by this point
+        var (undo, redo) = CaptureCreatedObject(go);
+        _pendingActions.Add((description, new ActionRecord(undo, redo)));
+    }
+
+    /// <summary>
+    /// Build the undo/redo pair for a just-created GameObject without pushing it as its own step,
+    /// so a compound operation can hand it to <see cref="RegisterActionGroup"/> together with the
+    /// follow-up actions that depend on it (e.g. "Create Empty Parent" = new object + reparenting).
+    /// Splitting those across two steps would let the object be destroyed while the objects moved
+    /// under it still live there, taking them down with it.
+    /// Unlike <see cref="RegisterCreatedObject"/> this serializes immediately, so call it while the
+    /// object is still in the state redo should restore it to - before the follow-up actions run.
+    /// </summary>
+    public static (Action undo, Action redo) CaptureCreatedObject(GameObject go)
+    {
         var serialized = Serializer.Serialize(typeof(object), go);
         var goId = go.Identifier;
-        var parentId = go.Parent?.Identifier ?? Guid.Empty;
+        var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
 
-        _pendingActions.Add((description, new ActionRecord(
+        return (
             undo: () =>
             {
                 var scene = Scene.Current;
@@ -366,7 +380,7 @@ public static class Undo
 
                 Selection.Select(restored);
                 EditorSceneManager.MarkDirty();
-            })));
+            });
     }
 
     /// <summary>
@@ -380,7 +394,7 @@ public static class Undo
 
         // Serialize the entire GO tree before destruction
         var serialized = Serializer.Serialize(typeof(object), go);
-        var parentId = go.Parent?.Identifier ?? Guid.Empty;
+        var parentId = go.Parent.IsValid() ? go.Parent.Identifier : Guid.Empty;
         var siblingIndex = go.Parent != null ? go.Parent.Children.IndexOf(go) : -1;
         var goId = go.Identifier;
 

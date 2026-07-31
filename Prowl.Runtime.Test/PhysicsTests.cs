@@ -404,6 +404,18 @@ public class PhysicsTests : RuntimeTestBase
     // Trigger volumes
     // ---------------------------------------------------------------------
 
+    // Records the trigger callbacks now delivered as MonoBehaviour overrides. Lives on the trigger's GameObject.
+    private sealed class TriggerRecorder : MonoBehaviour
+    {
+        public readonly List<Rigidbody3D> Entered = new();
+        public readonly List<Rigidbody3D> Exited = new();
+        public int StayCount;
+
+        public override void OnTriggerEnter(Rigidbody3D other) => Entered.Add(other);
+        public override void OnTriggerStay(Rigidbody3D other) => StayCount++;
+        public override void OnTriggerExit(Rigidbody3D other) => Exited.Add(other);
+    }
+
     private TriggerVolume AddBoxTrigger(Scene scene, Float3 position, Float3 size)
     {
         var go = CreateGameObject("Trigger");
@@ -411,9 +423,12 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = go.AddComponent<TriggerVolume>();
         trigger.Shape = TriggerShape.Box;
         trigger.Size = size;
+        go.AddComponent<TriggerRecorder>();
         scene.Add(go);
         return trigger;
     }
+
+    private static TriggerRecorder Recorder(TriggerVolume trigger) => trigger.GetComponent<TriggerRecorder>()!;
 
     [Fact]
     public void Trigger_Entered_FiresForRigidbodyInside()
@@ -422,12 +437,9 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
-        var entered = new List<Rigidbody3D>();
-        trigger.Entered += entered.Add;
-
         StepPhysics(scene);
 
-        Assert.Contains(rb, entered);
+        Assert.Contains(rb, Recorder(trigger).Entered);
     }
 
     [Fact]
@@ -437,14 +449,11 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
-        int staying = 0;
-        trigger.Staying += _ => staying++;
-
         StepPhysics(scene);   // Entered
         StepPhysics(scene);   // Staying
         StepPhysics(scene);   // Staying
 
-        Assert.Equal(2, staying);
+        Assert.Equal(2, Recorder(trigger).StayCount);
     }
 
     [Fact]
@@ -454,14 +463,11 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(2, 2, 2));
         var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
-        var exited = new List<Rigidbody3D>();
-        trigger.Exited += exited.Add;
-
         StepPhysics(scene); // Entered
         rb.MovePosition(new Float3(50, 0, 0));
         StepPhysics(scene); // Exited
 
-        Assert.Contains(rb, exited);
+        Assert.Contains(rb, Recorder(trigger).Exited);
     }
 
     [Fact]
@@ -471,12 +477,9 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         AddStaticBox(scene, Float3.Zero, new Float3(1, 1, 1)); // no Rigidbody3D
 
-        bool fired = false;
-        trigger.Entered += _ => fired = true;
-
         StepPhysics(scene);
 
-        Assert.False(fired);
+        Assert.Empty(Recorder(trigger).Entered);
         Assert.Empty(trigger.Overlapping);
     }
 
@@ -488,12 +491,9 @@ public class PhysicsTests : RuntimeTestBase
         trigger.LayerMask = OnlyLayer(5);
         AddDynamicBox(scene, Float3.Zero, gravity: false, layer: 3); // not in the mask
 
-        bool fired = false;
-        trigger.Entered += _ => fired = true;
-
         StepPhysics(scene);
 
-        Assert.False(fired);
+        Assert.Empty(Recorder(trigger).Entered);
     }
 
     [Fact]
@@ -503,13 +503,10 @@ public class PhysicsTests : RuntimeTestBase
         var trigger = AddBoxTrigger(scene, Float3.Zero, new Float3(4, 4, 4));
         var rb = AddDynamicBox(scene, Float3.Zero, gravity: false);
 
-        var exited = new List<Rigidbody3D>();
-        trigger.Exited += exited.Add;
-
         StepPhysics(scene); // Entered, now occupant
         trigger.Enabled = false;
 
-        Assert.Contains(rb, exited);
+        Assert.Contains(rb, Recorder(trigger).Exited);
     }
 
     // ---------------------------------------------------------------------

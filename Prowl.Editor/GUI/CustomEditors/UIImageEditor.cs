@@ -101,7 +101,8 @@ public class UIImageEditor : CustomEditor
     {
         const float size = 128f;
         var sprite = img.Sprite.Res;
-        var tex = sprite?.Texture.Res ?? UIImage.defaultTexture;
+        Texture2D spriteTex = sprite.IsValid() ? sprite.Texture.Res : null;
+        var tex = spriteTex.IsValid() ? spriteTex : UIImage.defaultTexture;
         var color = img.Color;
 
         // Aspect of the drawn region: the sprite's rect when available, else the texture.
@@ -227,7 +228,8 @@ public class UIImageEditor : CustomEditor
         EditorGUI.Row(paper, id, string.Empty, () =>
             Origami.Button(paper, $"{id}_b", "Set Native Size", () =>
             {
-                var rt = img.GameObject?.RectTransform;
+                var go = img.GameObject;
+                var rt = go.IsValid() ? go.RectTransform : null;
                 if (rt == null) return;
                 Undo.Snapshot(rt);
 

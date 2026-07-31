@@ -890,7 +890,8 @@ public static class GameObjectInspector
 
                     var overridden = new HashSet<string>();
                     // Overrides are stored on the instance root with root-relative paths.
-                    var overrideHost = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+                    var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+                    var overrideHost = prefabRoot.IsValid() ? prefabRoot : go;
                     foreach (var ov in overrideHost.PrefabOverrides)
                     {
                         if (ov.Path.StartsWith(pathPrefix))
@@ -1004,8 +1005,8 @@ public static class GameObjectInspector
             {
                 var oldIdx = index; var newIdx = index - 1;
                 Undo.RegisterAction("Move Component Up",
-                    () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(oldIdx); },
-                    () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(newIdx); });
+                    () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
+                    () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
                 comp.SetSiblingIndex(newIdx);
             }
         }, icon: EditorIcons.ArrowUp, enabled: index > 0);
@@ -1014,8 +1015,8 @@ public static class GameObjectInspector
         {
             var oldIdx = index; var newIdx = index + 1;
             Undo.RegisterAction("Move Component Down",
-                () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(oldIdx); },
-                () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(newIdx); });
+                () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
+                () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
             comp.SetSiblingIndex(newIdx);
         }, icon: EditorIcons.ArrowDown);
 
@@ -1160,7 +1161,8 @@ public static class GameObjectInspector
     {
         float fs = EditorTheme.FontSize;
         // Overrides for the whole prefab instance are stored on its root.
-        go = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+        var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+        go = prefabRoot.IsValid() ? prefabRoot : go;
         var overrides = go.PrefabOverrides;
 
         using (paper.Column("gi_prefab_ov_list")
@@ -1273,11 +1275,11 @@ public static class GameObjectInspector
     {
         var canvas = rt.GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
         var parentGo = rt.GameObject.Parent;
-        var parentRt = parentGo?.RectTransform;
-        if (parentRt != null && parentGo != canvas?.GameObject &&
+        var parentRt = parentGo.IsValid() ? parentGo.RectTransform : null;
+        if (parentRt != null && parentGo != (canvas.IsValid() ? canvas.GameObject : null) &&
             parentRt.ComputedRect.Size.X > 0 && parentRt.ComputedRect.Size.Y > 0)
             return parentRt.ComputedRect;
-        return canvas?.RootRect ?? default;
+        return canvas.IsValid() ? canvas.RootRect : default;
     }
 
     // ================================================================
@@ -1307,7 +1309,6 @@ public static class GameObjectInspector
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
     /// including user ones) so the script AssemblyLoadContext can be collected.
     /// </summary>
-    [Runtime.OnAssemblyUnload]
     public static void ClearAddComponentCache() => _cachedComponents = null;
 
     private static void ToggleAddComponentPopup(GameObject target)

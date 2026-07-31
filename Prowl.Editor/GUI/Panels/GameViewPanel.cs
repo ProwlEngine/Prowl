@@ -39,6 +39,9 @@ public class GameViewPanel : DockPanel
     private PaperRenderer? _gamePaperRenderer;
     private Paper? _gamePaper;
 
+    private readonly PanelLockContext _lockContext = new();
+    private bool _lockContextPushed;
+
     private static readonly (string name, int w, int h)[] Resolutions =
     {
         ("Free", 0, 0),
@@ -135,12 +138,9 @@ public class GameViewPanel : DockPanel
 
             EnsureRT(rtW, rtH);
 
-            // Render all cameras
-            var cameras = scene.ActiveObjects
-                .SelectMany(go => go.GetComponentsInChildren<Camera>())
-                .Where(c => !c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave))
-                .OrderBy(c => c.Depth)
-                .ToList();
+            // Render all cameras.
+            var cameras = scene.GatherActiveCameras();
+            cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
 
             RenderStats.BeginFrame();
             foreach (var cam in cameras)
@@ -149,13 +149,55 @@ public class GameViewPanel : DockPanel
                 cam.Target = _rt;
                 cam.UpdateRenderData();
 
-                var pipeline = cam.Pipeline ?? DefaultRenderPipeline.Default;
+                var camPipeline = cam.Pipeline;
+                var pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
                 pipeline.Render(cam, new RenderingData());
 
                 cam.Target = origTarget;
             }
             RenderStats.EndFrame();
             _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)
+
+            bool hovered = paper.IsParentHovered;
+            GameViewInputHandler.IsGameViewFocused = hovered;
+
+            Float2 pointerInRT = Float2.Zero;
+            bool pointerInside = false;
+
+            if (_displayAbsRect.Size.X > 0 && _displayAbsRect.Size.Y > 0)
+            {
+                Float2 origin = new((float)_displayAbsRect.Min.X, (float)_displayAbsRect.Min.Y);
+                Float2 size = new((float)_displayAbsRect.Size.X, (float)_displayAbsRect.Size.Y);
+                Float2 local = paper.PointerPos - origin;
+                pointerInRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
+                pointerInside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
+
+                _lockContext.PanelOrigin = origin;
+                _lockContext.PanelSize = size;
+                if (!_lockContextPushed)
+                {
+                    Input.PushLockContext(_lockContext);
+                    _lockContextPushed = true;
+                }
+
+                // Gameplay scripts read Input.MousePosition in render-target pixel space (matching
+                // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
+                GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
+
+                if (RuntimeEventSystem.Current is { } es)
+                    es.Viewport = new RuntimeEventSystem.HostViewport
+                    {
+                        ReferenceSize = new Float2(rtW, rtH),
+                        PointerPosition = pointerInRT,
+                        ReceivesInput = hovered && pointerInside,
+                    };
+            }
+            else
+            {
+                GameViewInputHandler.Viewport = null;
+                if (RuntimeEventSystem.Current is { } es)
+                    es.Viewport = null;
+            }
 
             // Render game UI into the RT
             if (Application.IsPlaying && _rt != null)
@@ -170,6 +212,7 @@ public class GameViewPanel : DockPanel
                     Graphics.Submit(bind);
                 }
 
+                PaperInputBridge.Pump(_gamePaper!, pointerInRT, hovered && pointerInside);
                 _gamePaper!.BeginFrame(Time.DeltaTime, -1f);
                 scene.OnGui(_gamePaper);
                 _gamePaper.EndFrame();
@@ -236,7 +279,7 @@ public class GameViewPanel : DockPanel
                         _displayAbsRect = rect;
                         paper.Draw(ref handle, (canvas, r) =>
                     {
-                        if (capturedRT?.MainTexture == null) return;
+                        if (capturedRT.IsNotValid() || capturedRT.MainTexture == null) return;
                         float rx = (float)r.Min.X;
                         float ry = (float)r.Min.Y;
                         float rw = (float)r.Size.X;
@@ -263,40 +306,6 @@ public class GameViewPanel : DockPanel
                         canvas.Stroke();
                         });
                     });
-
-                // Route game input into the new UI system. The cursor is rescaled from the letterboxed
-                // display rect into the RT's pixel space so clicks map to the same coords the canvas was
-                // laid out at (the pipeline pushed the RT size as GameCanvas.ScreenSizeOverride).
-                bool hovered = paper.IsParentHovered;
-                GameViewInputHandler.IsGameViewFocused = hovered;
-
-                if (_displayAbsRect.Size.X > 0 && _displayAbsRect.Size.Y > 0)
-                {
-                    Float2 origin = new((float)_displayAbsRect.Min.X, (float)_displayAbsRect.Min.Y);
-                    Float2 size = new((float)_displayAbsRect.Size.X, (float)_displayAbsRect.Size.Y);
-                    Float2 local = paper.PointerPos - origin;
-                    Float2 inRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
-                    bool inside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
-
-                    // Gameplay scripts read Input.MousePosition in render-target pixel space (matching
-                    // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
-                    // Published unconditionally (unlike the UI viewport below, which needs an EventSystem).
-                    GameViewInputHandler.Viewport = new GameViewInputHandler.GameViewport(origin, size, new Int2(rtW, rtH));
-
-                    if (RuntimeEventSystem.Current is { } es)
-                        es.Viewport = new RuntimeEventSystem.HostViewport
-                        {
-                            ReferenceSize = new Float2(rtW, rtH),
-                            PointerPosition = inRT,
-                            ReceivesInput = hovered && inside,
-                        };
-                }
-                else
-                {
-                    GameViewInputHandler.Viewport = null;
-                    if (RuntimeEventSystem.Current is { } es)
-                        es.Viewport = null;
-                }
 
                 // Stats overlay (top-right of viewport, theme sized)
                 if (_showStats)
@@ -523,18 +532,24 @@ public class GameViewPanel : DockPanel
     private void EnsureRT(int w, int h)
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(w, h, true, new[] { TextureImageFormat.Color4b });
     }
 
     private void InvalidateRT()
     {
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = null;
     }
 
     public override void OnClosed()
     {
+        if (_lockContextPushed)
+        {
+            Input.PopLockContext();
+            _lockContextPushed = false;
+        }
+
         InvalidateRT();
         _gamePaperRenderer?.Dispose();
         _gamePaperRenderer = null;

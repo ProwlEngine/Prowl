@@ -140,15 +140,7 @@ public class EditorApplication : Game
             if (savedLayout != null)
                 _dockSpace.Root = savedLayout;
 
-            // Restore scene (from --restore-scene or last saved)
-            if (Program.RestoreScenePath != null && System.IO.File.Exists(Program.RestoreScenePath))
-            {
-                RestoreAutoSavedScene(Program.RestoreScenePath);
-            }
-            else
-            {
-                EditorSceneManager.EnsureSceneLoaded();
-            }
+            EditorSceneManager.EnsureSceneLoaded();
 
             // Skip launcher and intro animation entirely
             ProjectLauncher.Close();
@@ -170,7 +162,11 @@ public class EditorApplication : Game
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
-        PropertyGridConfig.OnFieldChanged = target => (target as Runtime.EngineObject)?.OnValidate();
+        PropertyGridConfig.OnFieldChanged = target =>
+        {
+            var eo = target as Runtime.EngineObject;
+            if (eo.IsValid()) eo.OnValidate();
+        };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
@@ -223,7 +219,7 @@ public class EditorApplication : Game
                     : null;
             }
             if (EditorSceneManager.Save())
-                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" });
+                return Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" });
 
             // No path yet - prompt for one, but never interrupt an unattended auto-save.
             if (!SaveManager.IsAutoSave)
@@ -419,7 +415,7 @@ public class EditorApplication : Game
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
 
-                // ReinitializeRegistries() runs the [OnAssemblyLoad] hooks, which include the project-settings reload.
+                // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
 
                 // Restore layout from project (or use default)
@@ -724,7 +720,14 @@ public class EditorApplication : Game
             var bar = Origami.MenuBar(paper, "menubar").Height(barH);
             foreach (var root in MenuRegistry.RootMenus)
                 if (root.HasSubItems)
-                    bar.Menu(root.Label, ctx => BuildMenu(ctx, root.SubItems));
+                    bar.Menu(root.Label, ctx =>
+                    {
+                        // A menu-bar dropdown has no object of its own to act on, so drop any pin a
+                        // panel's right-click menu left behind; GameObject/... then creates under the
+                        // active selection instead of wherever that menu was last opened.
+                        MenuContext.Clear();
+                        BuildMenu(ctx, root.SubItems);
+                    });
             bar.Show();
 
             // Quick-access to Preferences > Theme (theming is a big part of the editor now).
@@ -1274,7 +1277,7 @@ public class EditorApplication : Game
 
             if (EditorSceneManager.SaveAs(rel))
                 Toasts.Success(Loc.Get("save.saved"),
-                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current?.Name ?? "Untitled" }));
+                    Loc.Get("save.scene", new { name = Runtime.Resources.Scene.Current.IsValid() ? Runtime.Resources.Scene.Current.Name : "Untitled" }));
         }, Project.Current.AssetsPath,
            new[] { "*.scene" }, new[] { Loc.Get("editor.filter_scene") });
     }
@@ -1377,223 +1380,28 @@ public class EditorApplication : Game
         ReinitializeRegistries();
     }
 
-    /// <summary>
-    /// Drops every strong reference the editor holds into the script <see cref="System.Runtime.Loader.AssemblyLoadContext"/>
-    /// so it can actually be collected when unloaded. This is the counterpart to
-    /// <see cref="ReinitializeAfterReload"/>: tear everything down here, rebuild it there.
-    ///
-    /// Anything that survives this call and transitively reaches a user type (a live instance, a
-    /// <see cref="Type"/> handle, a delegate bound to user code, a <see cref="FieldInfo"/>) pins
-    /// the old context and forces a full editor restart instead of a hot-reload.
-    /// </summary>
-    public void ReleaseScriptReferences()
-    {
-        CaptureSelectionForReload();
+    /// <summary>Transient toast shown while a script recompile is in progress.</summary>
+    public void NotifyCompiling() => Toasts.Show("Compiling", "Compiling scripts...", ToastType.Info, 2f);
 
-        // 1. Live object graph: the scene's GameObjects hold user MonoBehaviour instances.
-        //    The scene was already serialized to disk by SaveSceneForRestart().
-        Selection.Clear();
-        Undo.Clear();
-        Runtime.Resources.Scene.Unload();
+    /// <summary>Toast shown when scripts recompiled and hot reloaded successfully.</summary>
+    public void NotifyScriptsReloaded(string detail) => Toasts.Success("Scripts Reloaded", detail);
 
-        // 1b. Long-lived editor panels cache scene objects (e.g. the Inspector's last target,
-        //     the Hierarchy's drag target). Let each drop its references before the unload.
-        if (_dockSpace != null)
-            foreach (var panel in EnumerateAllPanels())
-                if (panel is IScriptReloadCleanup cleanup)
-                    try { cleanup.OnScriptReloadCleanup(); } catch { }
+    /// <summary>Toast shown when a script recompile failed; the errors are in the console.</summary>
+    public void NotifyCompileFailed() => Toasts.Error("Compile Failed", "See the console for the errors.");
 
-        // Release Paper callbacks as they might otherwise pin ALC types across a reload.
-        ReleasePaperRetainedCallbacks();
-
-
-        // 2. Play-mode leftovers (normally empty outside play mode; cleared defensively).
-        _savedEditorScene = null;
-        _savedEditorTime = null;
-        MenuRegistry.Clear();
-
-        // 3. The Echo serializer cache lives in an external package so we can't call OnAssemblyUnload there.
-        Echo.Serializer.ClearCache();
-
-        // 4. Everything tagged [OnAssemblyUnload]
-        ScriptReloadCallbacks.InvokeAssemblyUnload();
-    }
-
-    private void ReleasePaperRetainedCallbacks()
-    {
-        try
-        {
-            var paper = PaperInstance;
-            if (paper == null) return;
-
-            Type t = paper.GetType();
-            const BindingFlags BF = BindingFlags.NonPublic | BindingFlags.Instance;
-
-            if (t.GetField("_elements", BF)?.GetValue(paper) is not Array elements) return;
-
-            int count = t.GetField("_elementCount", BF)?.GetValue(paper) is int c ? c : 0;
-            count = Math.Clamp(count, 0, elements.Length);
-            if (count < elements.Length)
-                Array.Clear(elements, count, elements.Length - count);
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogWarning($"[EditorApplication] Could not reset PaperUI retained callbacks: {ex.Message}");
-        }
-    }
-
-    // ================================================================
-    //  Selection preserve/restore across a hot-reload
-    // ================================================================
-
-    private List<SelectionToken>? _reloadSelection;
-    private SelectionToken _reloadActive;
-    private bool _hasReloadActive;
-
-    /// <summary>
-    /// Snapshot the current selection as identifier tokens (called before the selection is cleared).
-    /// </summary>
-    private void CaptureSelectionForReload()
-    {
-        _reloadSelection = new List<SelectionToken>();
-        _hasReloadActive = false;
-
-        foreach (var obj in Selection.Selected)
-        {
-            if (!TryMakeSelectionToken(obj, out var token))
-                continue;
-
-            _reloadSelection.Add(token);
-            if (ReferenceEquals(obj, Selection.ActiveObject))
-            {
-                _reloadActive = token;
-                _hasReloadActive = true;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Tries to create a selection token to then restore the selection after script reload.
-    /// </summary>
-    private static bool TryMakeSelectionToken(object obj, out SelectionToken token)
-    {
-        switch (obj)
-        {
-            // Scene GameObject - restore by stable scene identifier.
-            case GameObject go:
-                token = new SelectionToken(SelKind.GameObject, go.Identifier, Guid.Empty, "", "", false);
-                return true;
-            // Scene component - restore by owning GameObject + component identifier.
-            case MonoBehaviour mb when mb.GameObject.IsValid():
-                token = new SelectionToken(SelKind.Component, mb.GameObject.Identifier, mb.Identifier, "", "", false);
-                return true;
-            // Project asset - restore by AssetID via the asset database.
-            case EngineObject eo when eo.AssetID != Guid.Empty:
-                token = new SelectionToken(SelKind.Asset, eo.AssetID, Guid.Empty, "", "", false);
-                return true;
-            // Project browser item - identifier-only, rebuilt from its path/guid.
-            case ContentItem ci:
-                token = new SelectionToken(SelKind.Content, ci.Guid, Guid.Empty, ci.RelativePath, ci.Name, ci.IsFolder);
-                return true;
-            default:
-                token = default;
-                return false;
-        }
-    }
-
-    /// <summary>
-    /// Re-resolve the captured selection tokens against the freshly reloaded scene/assets and re-select them.
-    /// </summary>
-    public void RestoreSelectionAfterReload()
-    {
-        if (_reloadSelection == null)
-            return;
-
-        var tokens = _reloadSelection;
-        _reloadSelection = null;
-
-        Selection.Clear();
-        object? active = null;
-
-        foreach (var token in tokens)
-        {
-            object? resolved = ResolveSelectionToken(token);
-            if (resolved == null)
-                continue;
-
-            Selection.AddToSelection(resolved);
-            if (_hasReloadActive && token.Equals(_reloadActive))
-                active = resolved;
-        }
-
-        if (active != null)
-            Selection.ActiveObject = active;
-
-        _hasReloadActive = false;
-    }
-
-    private static object? ResolveSelectionToken(SelectionToken token)
-    {
-        switch (token.Kind)
-        {
-            case SelKind.GameObject:
-                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id);
-            case SelKind.Component:
-                return Runtime.Resources.Scene.Current?.FindObjectByIdentifier<GameObject>(token.Id)?.GetComponentByIdentifier(token.CompId);
-            case SelKind.Asset:
-                return Runtime.AssetDatabase.Get(token.Id);
-            case SelKind.Content:
-                // ContentItem compares by Guid + RelativePath, so a rebuilt instance re-selects the same item.
-                return new ContentItem { Guid = token.Id, RelativePath = token.Path, Name = token.Name, IsFolder = token.IsFolder };
-            default:
-                return null;
-        }
-    }
+    /// <summary>Toast shown when a live hot reload failed; the old code keeps running until the next reload.</summary>
+    public void NotifyReloadFailed() => Toasts.Error("Hot Reload Failed", "Kept the old code running. Fix the error and save to retry.");
 
     private void ReinitializeRegistries()
     {
-        ScriptReloadCallbacks.InvokeAssemblyLoad();
+        // Scan-based registries and type caches the hot-reload walk can't re-derive: reset them so they
+        // re-scan the new assemblies (picking up newly-compiled types and dropping removed ones). Runs on
+        // both the migrate and initial-load paths.
+        Prowl.Runtime.MeshFeatures.MeshFeatureRegistry.ClearCache();
+        EditorRegistries.Reinitialize();
+        Inspector.GameObjectInspector.ClearAddComponentCache();
         MenuRegistry.Clear();
         RegisterMenus();
-    }
-
-    public void RestoreAutoSavedScene(string path)
-    {
-        try
-        {
-            string text = System.IO.File.ReadAllText(path);
-            var echo = Echo.EchoObject.ReadFromString(text);
-            var ctx = Importers.ImportHelper.CreateTrackingContext(out _);
-            var scene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(echo, ctx);
-            if (scene != null)
-            {
-                // Sidecar (written by SaveSceneForRestart) carries the original Assets-relative
-                // path + AssetID. Restoring both means subsequent Ctrl+S writes back to the
-                // original scene file instead of prompting Save-As.
-                string sidecarPath = path + ".meta";
-                if (System.IO.File.Exists(sidecarPath))
-                {
-                    var lines = System.IO.File.ReadAllLines(sidecarPath);
-                    if (lines.Length > 0 && !string.IsNullOrEmpty(lines[0]))
-                        EditorSceneManager.CurrentScenePath = lines[0];
-                    if (lines.Length > 1 && Guid.TryParse(lines[1], out var id))
-                        scene.AssetID = id;
-                    try { System.IO.File.Delete(sidecarPath); } catch { }
-                }
-
-                Runtime.Resources.Scene.Load(scene);
-                Undo.Clear();
-                Runtime.Debug.Log("Restored auto-saved scene.");
-            }
-
-            // Clean up the temp file
-            try { System.IO.File.Delete(path); } catch { }
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogError($"Failed to restore auto-saved scene: {ex.Message}");
-            EditorSceneManager.EnsureSceneLoaded();
-        }
     }
 
     // ================================================================
@@ -1698,6 +1506,7 @@ public class EditorApplication : Game
         // Clean up current project
         EditorAssetBackend.Instance?.Dispose();
         Runtime.AssetDatabase.Current = null;
+        Projects.Scripting.RoslynScriptBackend.Reset(); // drop the closed project's incremental compile state
 
         // Reset state
         _introTime = double.MaxValue;
@@ -1913,7 +1722,7 @@ public class EditorApplication : Game
         if (Application.ShouldRunGameplay)
             Application.IsGameplayExecuting = true;
 
-        scene?.Update();
+        if (scene.IsValid()) scene.Update();
 
         Application.IsGameplayExecuting = false;
 

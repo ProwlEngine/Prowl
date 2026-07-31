@@ -15,7 +15,7 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".mesh")]
 public class MeshImporter : AssetImporter
 {
-    private const int BaseVersion = 1;
+    private const int BaseVersion = 2;
 
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
@@ -35,6 +35,7 @@ public class MeshImporter : AssetImporter
                 return false;
             }
 
+            mesh.Name = ctx.FileName;
             ctx.SetMainAsset(mesh);
 
             foreach (var dep in dependencies)

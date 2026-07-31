@@ -122,8 +122,8 @@ public sealed class Sprite : EngineObject
     {
         EnsureNotDisposed();
         Texture2D? tex = Texture.Res;
-        int texW = (int)(tex?.Width ?? (uint)Math.Max(1, Rect.MaxX));
-        int texH = (int)(tex?.Height ?? (uint)Math.Max(1, Rect.MaxY));
+        int texW = (int)(tex.IsValid() ? tex.Width : (uint)Math.Max(1, Rect.MaxX));
+        int texH = (int)(tex.IsValid() ? tex.Height : (uint)Math.Max(1, Rect.MaxY));
         BuildQuadGeometry(texW, texH);
     }
 

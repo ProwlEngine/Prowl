@@ -30,6 +30,7 @@ public class PrefabImporter : AssetImporter
 
             var prefab = new PrefabAsset();
             prefab.GameObjectData = goEcho;
+            prefab.Name = ctx.FileName;
 
             ctx.SetMainAsset(prefab);
             foreach (var dep in dependencies)

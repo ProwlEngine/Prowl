@@ -392,14 +392,14 @@ public sealed class CommandBuffer : IDisposable
     {
         WriteHeader(CommandOpcode.SetUniformTexture);
         Write(InternName(name));
-        Write(PushObject(tex?.Handle));
+        Write(PushObject(tex.IsValid() ? tex.Handle : null));
     }
 
     public void SetTexture(string name, Texture3D? tex)
     {
         WriteHeader(CommandOpcode.SetUniformTexture);
         Write(InternName(name));
-        Write(PushObject(tex?.Handle));
+        Write(PushObject(tex.IsValid() ? tex.Handle : null));
     }
 
     public void SetTexture(string name, GraphicsTexture? tex)
@@ -566,7 +566,7 @@ public sealed class CommandBuffer : IDisposable
                      Material? material = null, int pass = 0,
                      bool clearDepth = false, bool clearColor = false, Color color = default)
     {
-        material ??= Rendering.RenderPipeline.GetBlitMaterial();
+        if (material.IsNotValid()) material = Rendering.RenderPipeline.GetBlitMaterial();
         if (source != null)
             material.SetTexture("_MainTex", source.MainTexture);
 
@@ -598,7 +598,7 @@ public sealed class CommandBuffer : IDisposable
     public void Blit(Texture2D source, RenderTexture destination,
                      Material? material = null, int pass = 0)
     {
-        material ??= Rendering.RenderPipeline.GetBlitMaterial();
+        if (material.IsNotValid()) material = Rendering.RenderPipeline.GetBlitMaterial();
         material.SetTexture("_MainTex", source);
         SetRenderTarget(destination.frameBuffer);
         SetViewport(0, 0, (uint)destination.Width, (uint)destination.Height);

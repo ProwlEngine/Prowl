@@ -208,7 +208,7 @@ public static class Input
     public static InputAction? FindAction(string mapName, string actionName)
     {
         InputActionMap? map = _actionMaps.FirstOrDefault(m => m.Name == mapName);
-        return map?.FindAction(actionName);
+        return map.IsValid() ? map.FindAction(actionName) : null;
     }
 
     /// <summary>

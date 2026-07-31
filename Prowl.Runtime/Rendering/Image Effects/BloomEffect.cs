@@ -29,7 +29,7 @@ public sealed class BloomEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.Bloom));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.Bloom));
 
         int w = context.Width / 2;
         int h = context.Height / 2;
@@ -83,7 +83,7 @@ public sealed class BloomEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

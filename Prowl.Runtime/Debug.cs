@@ -718,11 +718,12 @@ public class GizmoBuilder
         bool hasWire = _wireData.Vertices.Count > 0;
         if (hasWire)
         {
-            _wire ??= new()
-            {
-                MeshTopology = Topology.Lines,
-                IndexFormat = IndexFormat.UInt32,
-            };
+            if (_wire.IsNotValid())
+                _wire = new()
+                {
+                    MeshTopology = Topology.Lines,
+                    IndexFormat = IndexFormat.UInt32,
+                };
 
             _wire.Vertices = [.. _wireData.Vertices.Select(v => (Float3)v)];
             _wire.Colors = [.. _wireData.Colors];
@@ -734,11 +735,12 @@ public class GizmoBuilder
         bool hasSolid = _solidData.Vertices.Count > 0;
         if (hasSolid)
         {
-            _solid ??= new()
-            {
-                MeshTopology = Topology.Triangles,
-                IndexFormat = IndexFormat.UInt32,
-            };
+            if (_solid.IsNotValid())
+                _solid = new()
+                {
+                    MeshTopology = Topology.Triangles,
+                    IndexFormat = IndexFormat.UInt32,
+                };
 
             _solid.Vertices = [.. _solidData.Vertices.Select(v => (Float3)v)];
 

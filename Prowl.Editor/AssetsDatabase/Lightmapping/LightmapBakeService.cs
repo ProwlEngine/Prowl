@@ -21,7 +21,7 @@ namespace Prowl.Editor.Lightmapping;
 /// <summary>
 /// Drives a lightmap bake for the open scene with Prowl.Photonic: gathers lightmap-static renderers
 /// + lights + probes, runs the CPU baker on its background thread, then (on the main thread) writes
-/// the atlas pages as RGBM PNGs into a <c>&lt;SceneName&gt;_lightmaps/</c> folder, assigns per-renderer
+/// the atlas pages as RGBM PNGs into a SceneName_lightmaps folder, assigns per-renderer
 /// lightmap index/scale-offset, bakes + tetrahedralizes light probes, and saves the scene.
 /// </summary>
 public sealed class LightmapBakeService
@@ -205,7 +205,7 @@ public sealed class LightmapBakeService
     public static bool HasBakedData(Scene scene) => scene.BakedLighting.HasLightmaps || scene.BakedLighting.HasProbes;
 
     /// <summary>
-    /// Remove all baked lighting from the scene: delete the <c>&lt;SceneName&gt;_lightmaps/</c> folder,
+    /// Remove all baked lighting from the scene: delete the SceneName_lightmaps folder,
     /// clear the scene's baked data + probes, and reset every renderer's lightmap index. Saves the scene.
     /// </summary>
     public void Clear(Scene scene)

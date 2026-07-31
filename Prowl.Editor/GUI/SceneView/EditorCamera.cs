@@ -13,39 +13,12 @@ namespace Prowl.Editor.GUI.SceneView;
 /// Editor camera controller with orbit, pan, zoom, and FPS navigation modes.
 /// Manages a hidden runtime Camera that renders the scene to a RenderTexture.
 /// </summary>
-/// <summary>
-/// Cursor lock context for the scene view, locks to the center of the scene panel.
-/// Paper-logical coordinates now equal window-logical pixels (winSize space), which
-/// is also what the OS expects for cursor position on all platforms, so no scaling needed.
-/// </summary>
-public class SceneViewLockContext : CursorLockContext
-{
-    /// <summary>Panel origin in Paper-logical (= window-logical) coordinates.</summary>
-    public Float2 PanelOrigin;
-    /// <summary>Panel size in Paper-logical (= window-logical) coordinates.</summary>
-    public Float2 PanelSize;
-
-    public override Int2 GetLockCenter()
-    {
-        var fb = Window.InternalWindow.FramebufferSize;
-        var win = Window.InternalWindow.Size;
-        float cs = Window.ContentScale;
-        float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
-        // Paper coords are in [0, fbSize/cs]; OS cursor expects winSize coords.
-        // scale = cs/csFbWin converts paper -> winSize (== 1 on macOS, == cs on DPI-unaware Windows).
-        float scale = csFbWin > 0 ? cs / csFbWin : 1f;
-        float centerX = (PanelOrigin.X + PanelSize.X / 2) * scale;
-        float centerY = (PanelOrigin.Y + PanelSize.Y / 2) * scale;
-        return new Int2((int)centerX, (int)centerY);
-    }
-}
-
 public class EditorCamera
 {
     private GameObject _cameraObject;
     private Camera _camera;
     private RenderTexture? _renderTarget;
-    private SceneViewLockContext _lockContext = new();
+    private PanelLockContext _lockContext = new();
 
     // Camera state
     private Float3 _position = new Float3(0, 5, -15);
@@ -75,6 +48,16 @@ public class EditorCamera
     public float Yaw => _yaw;
     public float Pitch => _pitch;
     public Float3 Forward => _cameraObject.Transform.Forward;
+
+    /// <summary>World rotation matching the camera's current yaw/pitch.</summary>
+    public Quaternion Rotation => _cameraObject.Transform.Rotation;
+
+    /// <summary>
+    /// The point the view is centred on: straight ahead of the camera at the current orbit/zoom
+    /// distance. "Move to View" drops objects here so they land in front of the camera instead of
+    /// inside it (where they'd be clipped away by the near plane).
+    /// </summary>
+    public Float3 ViewFocusPoint => _position + _cameraObject.Transform.Forward * _orbitDistance;
 
     /// <summary>Set the camera position directly.</summary>
     public void SetPosition(Float3 position)
@@ -116,7 +99,7 @@ public class EditorCamera
 
         if (_renderTarget == null || _renderTarget.Width != width || _renderTarget.Height != height)
         {
-            _renderTarget?.Dispose();
+            if (_renderTarget.IsValid()) _renderTarget.Dispose();
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
                 new[] { TextureImageFormat.Color4b });
@@ -161,7 +144,7 @@ public class EditorCamera
         };
 
         // Render
-        var pipeline = _camera.Pipeline ?? DefaultRenderPipeline.Default;
+        var pipeline = _camera.Pipeline.IsValid() ? _camera.Pipeline : DefaultRenderPipeline.Default;
         pipeline.Render(_camera, renderData);
 
         // Remove from scene if we added it
@@ -574,7 +557,7 @@ public class EditorCamera
     public void Dispose()
     {
         DisposeClonedEffects();
-        _renderTarget?.Dispose();
+        if (_renderTarget.IsValid()) _renderTarget.Dispose();
         _renderTarget = null;
     }
 }

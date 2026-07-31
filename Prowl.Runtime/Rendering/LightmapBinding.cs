@@ -55,7 +55,7 @@ public static class LightmapBinding
 
         // 2) Light-probe SH for renderers with NO baked lightmap (index -1): dynamic / non-static
         //    objects such as skinned characters, when the scene has baked probes.
-        var vol = scene?.ProbeVolume;
+        var vol = scene.IsValid() ? scene.ProbeVolume : null;
         if (vol != null && vol.HasProbes)
         {
             var p = vol.SampleSH(worldPos).ToShaderCoefficients();

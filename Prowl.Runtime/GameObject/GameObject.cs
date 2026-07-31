@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+using Prowl.Ember;
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -22,8 +23,11 @@ public class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 
+    // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
+    // in OnHotReload.
     internal List<MonoBehaviour> _components = [];
-    private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
+    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
 
@@ -190,7 +194,10 @@ public class GameObject : EngineObject, ISerializable
     /// Ensures this GameObject has a <see cref="RectTransform"/> component, adding one if missing.
     /// </summary>
     public RectTransform EnsureRectTransform()
-        => GetComponent<RectTransform>() ?? AddComponent<RectTransform>();
+    {
+        RectTransform? rect = GetComponent<RectTransform>();
+        return rect.IsValid() ? rect : AddComponent<RectTransform>();
+    }
 
     /// <summary>
     /// Checks if this GameObject is a child or the same as the given parent transform.
@@ -254,8 +261,8 @@ public class GameObject : EngineObject, ISerializable
 
         if (newScene != Scene)
         {
-            Scene?.Remove(this);
-            newScene?.Add(this);
+            if (Scene.IsValid()) Scene.Remove(this);
+            if (newScene.IsValid()) newScene.Add(this);
         }
 
         // Save world-space transform before reparenting
@@ -316,9 +323,9 @@ public class GameObject : EngineObject, ISerializable
         // Draw order and layout are derived from the child tree at canvas build time, and a same-scene
         // reparent fires no OnAdded/Removed - so mark the affected canvas(es) dirty explicitly.
         GameCanvas? uiNewCanvas = GetComponentInParent<GameCanvas>();
-        uiOldCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
-        if (!ReferenceEquals(uiNewCanvas, uiOldCanvas))
-            uiNewCanvas?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        if (uiOldCanvas.IsValid()) uiOldCanvas.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        if (!ReferenceEquals(uiNewCanvas, uiOldCanvas) && uiNewCanvas.IsValid())
+            uiNewCanvas.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
 
         return true;
     }
@@ -339,7 +346,7 @@ public class GameObject : EngineObject, ISerializable
     public bool IsParentOf(GameObject go)
     {
         if (go.IsNotValid()) return false;
-        if (go.Parent?.InstanceID == InstanceID)
+        if (go.Parent.IsValid() && go.Parent.InstanceID == InstanceID)
             return true;
 
         foreach (GameObject child in Children)
@@ -364,21 +371,21 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="otherName">The name of the GameObject to find.</param>
     /// <param name="ignoreCase">If true, the search is case-insensitive.</param>
     /// <returns>The first GameObject with the given name, or null if not found.</returns>
-    public GameObject Find(string otherName, bool ignoreCase = false) => Scene?.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+    public GameObject Find(string otherName, bool ignoreCase = false) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.Name.Equals(otherName, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) : null;
 
     /// <summary>
     /// Finds a GameObject with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>The first GameObject with the given tag, or null if not found.</returns>
-    public GameObject FindGameObjectWithTag(string otherTag) => Scene?.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
+    public GameObject FindGameObjectWithTag(string otherTag) => Scene.IsValid() ? Scene.AllObjects.FirstOrDefault(gameObject => gameObject.CompareTag(otherTag)) : null;
 
     /// <summary>
     /// Finds all GameObjects with the specified tag in the same scene.
     /// </summary>
     /// <param name="otherTag">The tag to search for.</param>
     /// <returns>An array of GameObjects with the given tag.</returns>
-    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene?.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray() ?? [];
+    public GameObject[] FindGameObjectsWithTag(string otherTag) => Scene.IsValid() ? Scene.AllObjects.Where(gameObject => gameObject.CompareTag(otherTag)).ToArray() : [];
 
 
     /// <summary>
@@ -497,7 +504,8 @@ public class GameObject : EngineObject, ISerializable
 
         // Sibling order feeds the canvas draw-order (depth-first index); force a rebuild so the
         // reorder is reflected instead of drawing in the stale order.
-        GetComponentInParent<GameCanvas>()?.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
+        GameCanvas? canvas = GetComponentInParent<GameCanvas>();
+        if (canvas.IsValid()) canvas.MarkDirty(Prowl.Runtime.UI.UIDirtyFlags.Hierarchy);
     }
 
     /// <summary>
@@ -580,6 +588,20 @@ public class GameObject : EngineObject, ISerializable
         _componentCache.Add(comp.GetType(), comp);
 
         NotifyComponentAddedToScene(comp);
+    }
+
+    /// <summary>
+    /// Post-hot-reload fixup, after the walk migrated the component references in place: drop any component
+    /// whose type was removed (the walk left it null) and rebuild the type-keyed lookup against the new types.
+    /// The lookup is keyed on the previous types, so it has to be rebuilt rather than repointed.
+    /// </summary>
+    internal void OnHotReload()
+    {
+        _components.RemoveAll(c => c is null);
+
+        _componentCache = [];
+        foreach (MonoBehaviour comp in _components)
+            _componentCache.Add(comp.GetType(), comp);
     }
 
     /// <summary>

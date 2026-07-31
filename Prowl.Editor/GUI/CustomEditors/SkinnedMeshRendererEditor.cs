@@ -30,7 +30,7 @@ public class SkinnedMeshRendererEditor : CustomEditor
         DrawDefaultInspector(paper, id, renderer);
 
         var mesh = renderer.SharedMesh.Res;
-        int count = mesh?.BlendShapeCount ?? 0;
+        int count = mesh.IsValid() ? mesh.BlendShapeCount : 0;
         if (mesh == null || count == 0)
             return;
 

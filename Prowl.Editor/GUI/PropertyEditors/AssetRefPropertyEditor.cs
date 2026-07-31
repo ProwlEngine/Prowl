@@ -12,7 +12,7 @@ using Prowl.Editor.Theming;
 namespace Prowl.Editor.GUI.PropertyEditors;
 
 /// <summary>
-/// PropertyEditor for AssetRef&lt;T&gt; fields (via the IAssetRef interface).
+/// PropertyEditor for AssetRef<T> fields (via the IAssetRef interface).
 /// Supports asset references, runtime instances, drag-drop from project/hierarchy/inspector.
 /// </summary>
 [CustomPropertyEditor(typeof(IAssetRef))]
@@ -36,8 +36,7 @@ public class AssetRefPropertyEditor : PropertyEditor
 
         bool isAsset = instance != null && instance.AssetID != Guid.Empty;
         bool isInstance = instance != null && instance.AssetID == Guid.Empty;
-        string suffix = isAsset ? instance!.GetType().Name : isInstance ? "Instance" : fieldType.Name;
-        string displayName = instance != null ? $"{instance.Name} ({suffix})" : $"None ({fieldType.Name})";
+        string displayName = PropertyGridUtils.DescribeObjectRef(instance, fieldType);
         string icon = isAsset ? EditorIcons.Cube : isInstance ? EditorIcons.CircleDot : EditorIcons.Circle;
         var iconColor = isAsset ? EditorTheme.Purple400 : isInstance ? EditorTheme.Ink500 : EditorTheme.Ink300;
 

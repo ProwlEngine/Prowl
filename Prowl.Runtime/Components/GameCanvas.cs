@@ -98,7 +98,14 @@ public class GameCanvas : MonoBehaviour
     /// Lazy-allocated; reused across every UI element that doesn't override
     /// <see cref="UIBehaviour.GetMaterial"/>.</summary>
     public static Material SharedUIMaterial
-        => s_sharedUIMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DefaultUI));
+    {
+        get
+        {
+            if (s_sharedUIMaterial.IsNotValid())
+                s_sharedUIMaterial = new Material(Shader.LoadDefault(DefaultShader.DefaultUI));
+            return s_sharedUIMaterial;
+        }
+    }
 
     private static Material? s_sharedTextMaterial;
     /// <summary>Shared <see cref="Material"/> using the <c>Default/DefaultText</c> shader, which
@@ -106,7 +113,14 @@ public class GameCanvas : MonoBehaviour
     /// element (UI <c>TextComponent</c> and the 3D <c>TextMeshComponent</c>) that doesn't override
     /// its material.</summary>
     public static Material SharedTextMaterial
-        => s_sharedTextMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DefaultText));
+    {
+        get
+        {
+            if (s_sharedTextMaterial.IsNotValid())
+                s_sharedTextMaterial = new Material(Shader.LoadDefault(DefaultShader.DefaultText));
+            return s_sharedTextMaterial;
+        }
+    }
 
     // ----------------------------------------------------------------
     // NEW: render tree + dirty state
@@ -300,7 +314,8 @@ public class GameCanvas : MonoBehaviour
                 else
                 {
                     // Standalone element: let a ContentSizeFitter size it to its content first.
-                    child.GetComponent<ContentSizeFitter>()?.ApplyFit();
+                    ContentSizeFitter? fitter = child.GetComponent<ContentSizeFitter>();
+                    if (fitter.IsValid()) fitter.ApplyFit();
                     childRect = rt.ComputeRect(parentRect);
                 }
             }
@@ -364,7 +379,8 @@ public class GameCanvas : MonoBehaviour
         // size, and the inherited alpha). The dirty flag only covers the first; a parent resize or
         // an ancestor CanvasGroup alpha change moves the other two without flagging this element,
         // so compare them explicitly or a stretched child would render at its stale size/alpha.
-        Float2 size = ui.GameObject.RectTransform?.ComputedRect.Size ?? Float2.Zero;
+        RectTransform? sizeRt = ui.GameObject.RectTransform;
+        Float2 size = sizeRt.IsValid() ? sizeRt.ComputedRect.Size : Float2.Zero;
         bool needsBake = ui.CachedMesh is null
                       || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0
                       || !ui.LastBakeSize.Equals(size)
@@ -379,12 +395,12 @@ public class GameCanvas : MonoBehaviour
             {
                 // Element produced no geometry (e.g. empty text): drop the old mesh, disposing its
                 // GPU buffers rather than orphaning them.
-                ui.CachedMesh?.OnDispose();
+                if (ui.CachedMesh.IsValid()) ui.CachedMesh.OnDispose();
                 ui.CachedMesh = null;
             }
             else
             {
-                ui.CachedMesh ??= new Mesh();
+                if (ui.CachedMesh.IsNotValid()) ui.CachedMesh = new Mesh();
                 builder.Bake(ui.CachedMesh);
             }
         }

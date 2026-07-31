@@ -33,6 +33,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Editor", "Prowl.Edito
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Editor.Test", "Prowl.Editor.Test\Prowl.Editor.Test.csproj", "{E322A63A-8D99-4D4E-ABDA-61813172418F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Analyzers", "Prowl.Analyzers\Prowl.Analyzers.csproj", "{85602794-3399-4FC1-B19E-7D41C14B2FE4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -211,6 +213,18 @@ Global
 		{E322A63A-8D99-4D4E-ABDA-61813172418F}.Release|x64.Build.0 = Release|Any CPU
 		{E322A63A-8D99-4D4E-ABDA-61813172418F}.Release|x86.ActiveCfg = Release|Any CPU
 		{E322A63A-8D99-4D4E-ABDA-61813172418F}.Release|x86.Build.0 = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|x64.Build.0 = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Debug|x86.Build.0 = Debug|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|x64.ActiveCfg = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|x64.Build.0 = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|x86.ActiveCfg = Release|Any CPU
+		{85602794-3399-4FC1-B19E-7D41C14B2FE4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

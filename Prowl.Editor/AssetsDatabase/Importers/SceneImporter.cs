@@ -29,6 +29,7 @@ public class SceneImporter : AssetImporter
             var scene = Serializer.Deserialize<Scene>(echo, serCtx);
             if (scene != null)
             {
+                scene.Name = ctx.FileName;
                 ctx.SetMainAsset(scene);
 
                 // Also walk the raw echo for PrefabAssetId references

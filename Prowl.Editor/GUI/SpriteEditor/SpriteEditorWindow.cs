@@ -62,7 +62,14 @@ public class SpriteEditorWindow : DockPanel
     private EditSnapshot? _dragBefore;
     private bool _dragChanged;
 
-    public override string Title => $"Sprite: {_texture.Res?.Name ?? "?"}";
+    public override string Title
+    {
+        get
+        {
+            var tex = _texture.Res;
+            return $"Sprite: {(tex.IsValid() ? tex.Name : "?")}";
+        }
+    }
     public override string Icon => EditorIcons.Image;
 
     private bool IsSingle => _settings.Mode == SpriteMode.Single;

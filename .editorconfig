@@ -224,3 +224,8 @@ end_of_line = lf
 
 [*.{cmd,bat}]
 end_of_line = crlf
+
+# Native interop bindings: pointer fields are declarations of native layout, never migrated by hot reload,
+# so EMBA002 has nothing actionable to say about them.
+[Prowl.Runtime/Audio/Native/*.cs]
+dotnet_diagnostic.EMBA002.severity = none

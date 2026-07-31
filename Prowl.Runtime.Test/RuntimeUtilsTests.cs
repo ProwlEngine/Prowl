@@ -58,13 +58,12 @@ public class RuntimeUtilsTests
     }
 
     [Fact]
-    public void ResolveType_SurvivesCacheClear()
+    public void ResolveType_IsRepeatable()
     {
         string aqn = typeof(RuntimeUtils).AssemblyQualifiedName!;
 
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn));
-        RuntimeUtils.ClearCache();
-        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn));
+        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // resolves + caches
+        Assert.Equal(typeof(RuntimeUtils), RuntimeUtils.ResolveType(aqn)); // cache hit, same result
     }
 
     // The reason ResolveType exists: user scripts (and their EngineObject/asset types) live in a
@@ -102,6 +101,44 @@ public class RuntimeUtilsTests
         Type resolvedArray = RuntimeUtils.ResolveType(array.AssemblyQualifiedName!)!;
         Assert.NotNull(resolvedArray);
         Assert.Same(outOfContext, resolvedArray.GetElementType());
+    }
+
+    // A hot reload leaves the outgoing script assembly loaded under the same simple name as the incoming one,
+    // and the domain lists it first. Resolving a component's persisted $type has to reach the current build,
+    // or the scene comes back running the code the user just replaced.
+    [Fact]
+    public void FindType_TwoBuildsOfOneAssembly_ResolvesAgainstTheLiveOne()
+    {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return;
+
+        Type stale = DefineNamedType("HotReloadDuplicate", "Comp");
+        Type live = DefineNamedType("HotReloadDuplicate", "Comp");
+        Assert.NotSame(stale, live);
+
+        var previous = RuntimeUtils.AssemblySource;
+        try
+        {
+            // Live first, exactly as the editor orders it. The stale build is still enumerable.
+            RuntimeUtils.AssemblySource = () => new[] { live.Assembly, stale.Assembly };
+            Assert.Same(live, RuntimeUtils.FindType("Comp, HotReloadDuplicate"));
+
+            // Load order alone must not decide it, which is the bug: the domain would hand back the stale one.
+            RuntimeUtils.AssemblySource = () => new[] { stale.Assembly, live.Assembly };
+            Assert.Same(stale, RuntimeUtils.FindType("Comp, HotReloadDuplicate"));
+        }
+        finally
+        {
+            RuntimeUtils.AssemblySource = previous;
+        }
+    }
+
+    private static Type DefineNamedType(string assemblyName, string typeName)
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName(assemblyName), AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule(assemblyName);
+        return module.DefineType(typeName, TypeAttributes.Public).CreateType()!;
     }
 
     private static Type? s_outOfContextType;

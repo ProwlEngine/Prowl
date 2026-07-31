@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -254,16 +254,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Event triggered when this rigidbody begins colliding with another rigidbody.
-    /// </summary>
-    public event Action<Rigidbody3D, ContactInfo> BeginCollide;
-
-    /// <summary>
-    /// Event triggered when this rigidbody stops colliding with another rigidbody.
-    /// </summary>
-    public event Action<Rigidbody3D> EndCollide;
-
-    /// <summary>
     /// Information about a collision contact.
     /// </summary>
     public struct ContactInfo
@@ -284,7 +274,8 @@ public sealed class Rigidbody3D : MonoBehaviour
     private void EnsureBody()
     {
         if (_body != null && !_body.Handle.IsZero) return;
-        World? world = GameObject?.Scene?.Physics?.World;
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        World? world = scene.IsValid() ? scene.Physics?.World : null;
         if (world != null) CreateBody(world);
     }
 
@@ -295,7 +286,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         UpdateShapes(_body);
         UpdateTransform(_body);
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
-        GameObject?.Scene?.Physics?.RegisterBody(this);
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsValid()) scene.Physics?.RegisterBody(this);
         _body.Tag = new RigidBodyUserData()
         {
             Rigidbody = this,
@@ -335,7 +327,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 ImpulseMagnitude = contact.Impulse
             };
 
-            BeginCollide?.Invoke(userData.Rigidbody, contactInfo);
+            SceneDispatcher.CollisionBegin(GameObject, userData.Rigidbody, contactInfo);
         }
     }
 
@@ -346,13 +338,13 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
         {
-            EndCollide?.Invoke(userData.Rigidbody);
+            SceneDispatcher.CollisionEnd(GameObject, userData.Rigidbody);
         }
     }
 
     public override void OnValidate()
     {
-        if (GameObject?.Scene?.IsNotValid() ?? true) return;
+        if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
 
         if (_body == null || _body.Handle.IsZero)
             _body = GameObject.Scene.Physics.World.CreateRigidBody();

@@ -143,7 +143,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
     /// or any other shared material so your mutations don't leak to other callers.
     /// </summary>
-    public Material(Material source) : base(source?.Name ?? "New Material")
+    public Material(Material source) : base(source.IsValid() ? source.Name : "New Material")
     {
         ArgumentNullException.ThrowIfNull(source);
 

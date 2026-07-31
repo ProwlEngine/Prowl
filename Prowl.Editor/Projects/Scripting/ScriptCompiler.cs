@@ -65,30 +65,58 @@ public static class ScriptCompiler
         if (compileUnits.Count == 0)
             return RestorePackagesOnly(project, units);
 
+        // Resolve NuGet references once (restores only when Directory.Build.props changed).
+        var nugetRefs = NuGetReferenceResolver.Resolve(project, compileUnits);
+
         var output = new StringBuilder();
         var errors = new StringBuilder();
+        var peerRefs = new Dictionary<string, Microsoft.CodeAnalysis.MetadataReference>(StringComparer.OrdinalIgnoreCase);
+        bool anyRecompiled = false;
 
-        // Compile in dependency order so each unit's referenced DLLs already exist on disk.
-        // `-t:Rebuild` forces a full recompile even when MSBuild thinks inputs are unchanged,
-        // avoiding the stale-DLL bug where edits appear to compile but the old code still runs.
+        Directory.CreateDirectory(project.ScriptAssemblyPath);
+
+        // Compile in dependency order so each unit can reference the ones before it.
         foreach (var unit in compileUnits)
         {
-            Runtime.Debug.Log($"[ScriptCompiler] Compiling {unit.Name} ({unit.Scripts.Count} scripts)...");
-            var result = RunDotnetCommand($"build \"{unit.CsprojPath}\" --configuration Release -t:Rebuild", project.RootPath);
-            output.AppendLine(result.stdout);
-            if (!string.IsNullOrEmpty(result.stderr))
-                errors.AppendLine(result.stderr);
+            string stateKey = $"{project.RootPath}::{unit.Name}";
+            var outcome = RoslynScriptBackend.Compile(stateKey, unit, peerRefs,
+                nugetRefs.TryGetValue(unit.Name, out var pkgs) ? pkgs : Array.Empty<string>());
 
-            if (result.exitCode != 0)
+            foreach (var d in outcome.Diagnostics)
+            {
+                string line = d.ToString();
+                output.AppendLine(line);
+                if (d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                {
+                    Runtime.Debug.LogError(line);
+                    errors.AppendLine(line);
+                }
+                else
+                {
+                    Runtime.Debug.LogWarning(line);
+                }
+            }
+
+            if (outcome.Image == null)
             {
                 Runtime.Debug.LogError($"[ScriptCompiler] {unit.Name} compilation failed.");
-                LogBuildOutput(result.stdout, result.stderr);
                 return new CompileResult { Success = false, Output = output.ToString(), Errors = errors.ToString() };
             }
-            Runtime.Debug.Log($"[ScriptCompiler] {unit.Name} compiled successfully.");
+
+            // Write the DLL where the player build and the assembly loader expect it. Skip the write
+            // when the unit was unchanged, unless the file went missing.
+            if (outcome.Recompiled || !File.Exists(unit.OutputDllPath))
+            {
+                File.WriteAllBytes(unit.OutputDllPath, outcome.Image);
+                anyRecompiled = true;
+            }
+
+            if (outcome.SelfReference != null)
+                peerRefs[unit.Name] = outcome.SelfReference;
         }
 
-        return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString(), RequiresReload = true };
+        // Nothing actually rebuilt (a spurious or no-op recompile) means there is nothing to reload.
+        return new CompileResult { Success = true, Output = output.ToString(), Errors = errors.ToString(), RequiresReload = anyRecompiled };
     }
 
     /// <summary>
@@ -384,6 +412,7 @@ public static class ScriptCompiler
             {
                 string name = Path.GetFileNameWithoutExtension(dll);
                 if (name == "Prowl.Runtime" || name == "Prowl.Editor" || unitNames.Contains(name)) continue;
+                if (name == "Prowl.Ember.Analyzers" || name == "Prowl.Analyzers") continue; // added below as <Analyzer>, not plain references
 
                 // A self-contained Prowl publish drops the whole .NET runtime next to the app. Never
                 // reference the shared-framework assemblies (esp. System.Private.CoreLib): they are the
@@ -394,6 +423,15 @@ public static class ScriptCompiler
                 if (!IsManagedAssembly(dll)) continue;
 
                 AppendReference(sb, emitted, name, dll, copyLocal: true);
+            }
+
+            // Run the Prowl script-safety analyzers over user scripts so the warnings show in the IDE too,
+            // matching the editor's own in-process compile.
+            foreach (string analyzer in new[] { "Prowl.Ember.Analyzers.dll", "Prowl.Analyzers.dll" })
+            {
+                string analyzerDll = Path.Combine(engineDir, analyzer);
+                if (File.Exists(analyzerDll))
+                    sb.AppendLine($"    <Analyzer Include=\"{Xml(analyzerDll)}\" />");
             }
         }
 

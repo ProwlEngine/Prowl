@@ -103,8 +103,8 @@ public sealed class LightBVHTextures : IDisposable
 
     public void Dispose()
     {
-        _lightTex?.Dispose();
-        _nodeTex?.Dispose();
+        if (_lightTex.IsValid()) _lightTex.Dispose();
+        if (_nodeTex.IsValid()) _nodeTex.Dispose();
         _lightTex = null;
         _nodeTex = null;
         _lightStaging = Array.Empty<float>();
@@ -132,7 +132,7 @@ public sealed class LightBVHTextures : IDisposable
 
         if (_lightTex != null && dim == LightTextureSize) return false;
 
-        _lightTex?.Dispose();
+        if (_lightTex.IsValid()) _lightTex.Dispose();
         _lightTex = new Texture2D((uint)dim, (uint)dim, false, TextureImageFormat.Float4);
         // texelFetch ignores filtering and wrap, so leaving them at the texture defaults is fine.
         LightTextureSize = dim;
@@ -157,7 +157,7 @@ public sealed class LightBVHTextures : IDisposable
 
         if (_nodeTex != null && dim == NodeTextureSize) return false;
 
-        _nodeTex?.Dispose();
+        if (_nodeTex.IsValid()) _nodeTex.Dispose();
         _nodeTex = new Texture2D((uint)dim, (uint)dim, false, TextureImageFormat.Float4);
         NodeTextureSize = dim;
 

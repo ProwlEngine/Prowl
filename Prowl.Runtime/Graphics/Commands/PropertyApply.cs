@@ -291,7 +291,9 @@ internal static class PropertyApply
             {
                 // Asset is still streaming in (.Res above queued the load). Bind white so the
                 // sampler reads something sane until the real texture arrives.
-                tex = s_whiteFallback ??= Texture2D.LoadDefault(DefaultTexture.White);
+                if (s_whiteFallback.IsNotValid())
+                    s_whiteFallback = Texture2D.LoadDefault(DefaultTexture.White);
+                tex = s_whiteFallback;
                 if (!tex.IsValid()) continue;
             }
             BindTexUniform(p, key, tex.Handle, exec);

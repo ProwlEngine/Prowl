@@ -73,7 +73,7 @@ public class PaperRenderer : ICanvasRenderer
         _elementBuffer?.Dispose();
         _vertexArrayObject?.Dispose();
         _shaderProgram?.Dispose();
-        _defaultTexture?.Dispose();
+        if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
     }
 
     private void InitializeShaders()
@@ -132,7 +132,7 @@ public class PaperRenderer : ICanvasRenderer
             CullFace = RasterizerState.PolyFace.None,
         };
 
-        _blurMat ??= new Resources.Material(Shader.LoadDefault(DefaultShader.UI));
+        if (_blurMat.IsNotValid()) _blurMat = new Resources.Material(Shader.LoadDefault(DefaultShader.UI));
 
         using var cmd = Graphics.GetCommandBuffer("Paper UI");
 
@@ -273,7 +273,7 @@ public class PaperRenderer : ICanvasRenderer
     public void Dispose()
     {
         Cleanup();
-        _blurMat?.Dispose();
+        if (_blurMat.IsValid()) _blurMat.Dispose();
         _blurMat = null;
     }
 }

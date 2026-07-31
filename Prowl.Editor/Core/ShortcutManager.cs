@@ -308,6 +308,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Hierarchy/Copy", "Copy Selected", KeyCode.C, ctrl: true);
         ShortcutManager.Register("Hierarchy/Paste", "Paste", KeyCode.V, ctrl: true);
         ShortcutManager.Register("Hierarchy/Rename", "Rename Selected", KeyCode.F2);
+        ShortcutManager.Register("Hierarchy/CreateEmptyChild", "Create Empty Child", KeyCode.N, shift: true, alt: true);
+        ShortcutManager.Register("Hierarchy/CreateEmptyParent", "Create Empty Parent", KeyCode.G, ctrl: true, shift: true);
 
         // Project
         ShortcutManager.Register("Project/Delete", "Delete Selected", KeyCode.Delete);

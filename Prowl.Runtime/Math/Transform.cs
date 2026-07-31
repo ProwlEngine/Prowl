@@ -235,8 +235,16 @@ public class Transform
 
     public Transform Parent
     {
-        get => GameObject?.Parent?.Transform;
-        set => GameObject?.SetParent(value?.GameObject, true);
+        get
+        {
+            if (GameObject.IsNotValid()) return null;
+            GameObject parent = GameObject.Parent;
+            return parent.IsValid() ? parent.Transform : null;
+        }
+        set
+        {
+            if (GameObject.IsValid()) GameObject.SetParent(value?.GameObject, true);
+        }
     }
 
     // https://forum.unity.com/threads/transform-haschanged-would-be-better-if-replaced-by-a-version-number.700004/
@@ -567,14 +575,14 @@ public class Transform
     /// parent's frame and keeps its local pose (effectively snapping to the new parent).
     /// </summary>
     public bool SetParent(Transform? parent, bool worldPositionStays = true)
-        => GameObject?.SetParent(parent?.GameObject, worldPositionStays) ?? false;
+        => GameObject.IsValid() ? GameObject.SetParent(parent?.GameObject, worldPositionStays) : false;
 
     #endregion
 
     #region Children
 
     /// <summary>Number of direct children on the owning GameObject.</summary>
-    public int ChildCount => GameObject?.Children.Count ?? 0;
+    public int ChildCount => GameObject.IsValid() ? GameObject.Children.Count : 0;
 
     /// <summary>Direct child transform by index. Throws if out of range.</summary>
     public Transform GetChild(int index) => GameObject.Children[index].Transform;

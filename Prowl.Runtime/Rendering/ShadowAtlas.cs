@@ -39,7 +39,7 @@ public static class ShadowAtlas
         bool supports8k = Graphics.MaxTextureSize >= 8192;
         size = supports8k ? 8192 : 4096;
 
-        atlas ??= new RenderTexture(size, size, true, []);
+        if (atlas.IsNotValid()) atlas = new RenderTexture(size, size, true, []);
 
         // Sample the atlas through hardware depth comparison: a sampler2DShadow in the lighting
         // shaders then gets fixed-function 2x2 PCF (with LINEAR filtering) instead of the manual

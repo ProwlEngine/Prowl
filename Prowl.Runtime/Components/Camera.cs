@@ -251,7 +251,7 @@ public class Camera : MonoBehaviour
 
     public void Render(in RenderingData? data = null)
     {
-        RenderPipeline pipeline = Pipeline ?? DefaultRenderPipeline.Default;
+        RenderPipeline pipeline = Pipeline.IsValid() ? Pipeline : DefaultRenderPipeline.Default;
         pipeline.Render(this, data ?? new());
     }
 
@@ -263,8 +263,8 @@ public class Camera : MonoBehaviour
         if (Target.IsValid())
             camTarget = Target;
 
-        int width = camTarget?.Width ?? Window.InternalWindow.FramebufferSize.X;
-        int height = camTarget?.Height ?? Window.InternalWindow.FramebufferSize.Y;
+        int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;
+        int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow.FramebufferSize.Y;
 
         float renderScale = Maths.Clamp(RenderScale, 0.1f, 2.0f);
         PixelWidth = (uint)Maths.Max(1, (int)(width * renderScale));

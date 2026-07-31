@@ -61,7 +61,7 @@ public struct RaycastHit
 
         Hit = true;
         Rigidbody = userData.Rigidbody;
-        Transform = Rigidbody?.GameObject?.Transform;
+        Transform = Rigidbody.IsValid() && Rigidbody.GameObject.IsValid() ? Rigidbody.GameObject.Transform : null;
         Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
         Distance = result.Lambda;
         Point = origin + (direction * Distance);

@@ -68,7 +68,7 @@ internal class TerrainGrassRenderer
 
     public void Dispose()
     {
-        _quadMesh?.Dispose();
+        if (_quadMesh.IsValid()) _quadMesh.Dispose();
         _quadMesh = null;
         _patchCache.Clear();
     }
@@ -124,7 +124,7 @@ internal class TerrainGrassRenderer
                 if (meshRes == null) continue;
                 renderMesh = meshRes;
                 subMeshCount = meshRes.SubMeshCount;
-                s_defaultStandardMat ??= Resources.Material.LoadDefault(DefaultMaterial.Standard);
+                if (s_defaultStandardMat.IsNotValid()) s_defaultStandardMat = Resources.Material.LoadDefault(DefaultMaterial.Standard);
                 renderMat = s_defaultStandardMat; // unused in mesh mode per-submesh lookup handles it
             }
             else
@@ -159,8 +159,9 @@ internal class TerrainGrassRenderer
                     grassMat = baseMaterial;
                 }
 
-                s_defaultWhite ??= Texture2D.LoadDefault(DefaultTexture.White);
-                var tex = proto.Texture.Res ?? s_defaultWhite;
+                if (s_defaultWhite.IsNotValid()) s_defaultWhite = Texture2D.LoadDefault(DefaultTexture.White);
+                var texRes = proto.Texture.Res;
+                var tex = texRes.IsValid() ? texRes : s_defaultWhite;
                 grassMat.SetTexture("_MainTex", tex);
                 // Pass billboard flag to shader via uniform
                 grassMat.SetFloat("_Billboard", proto.RenderMode == DetailRenderMode.TextureBillboard ? 1f : 0f);
@@ -200,7 +201,7 @@ internal class TerrainGrassRenderer
                         {
                             subMat = null!;
                             if (sub < proto.Materials.Count) subMat = CollectionsMarshal.AsSpan(proto.Materials)[sub].Res!;
-                            subMat ??= renderMat; // default Standard
+                            if (subMat.IsNotValid()) subMat = renderMat; // default Standard
                         }
                         else
                         {

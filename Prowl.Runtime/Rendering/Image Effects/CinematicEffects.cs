@@ -96,7 +96,7 @@ public sealed class CinematicEffects : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.CinematicEffects));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.CinematicEffects));
 
         // Toggle keywords
         _mat.SetKeyword("VIGNETTE", EnableVignette);
@@ -212,7 +212,7 @@ public sealed class CinematicEffects : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 
