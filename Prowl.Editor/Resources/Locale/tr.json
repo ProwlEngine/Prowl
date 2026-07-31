@@ -173,6 +173,7 @@
   "hierarchy.save_and_exit": "Kaydet ve Cik",
   "hierarchy.no_scene_loaded": "Sahne yuklenmedi",
   "hierarchy.new_scene": "Yeni sahne",
+  "hierarchy.create": "Olustur",
   "hierarchy.drop_to_spawn": "Olusturmak icin birakin",
   "hierarchy.scene_empty": "Sahne bos",
   "hierarchy.move_to_view": "Gorunume tasi",

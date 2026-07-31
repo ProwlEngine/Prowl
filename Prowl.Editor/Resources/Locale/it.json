@@ -173,6 +173,7 @@
   "hierarchy.save_and_exit": "Salva ed Esci",
   "hierarchy.no_scene_loaded": "Nessuna scena caricata",
   "hierarchy.new_scene": "Nuova scena",
+  "hierarchy.create": "Crea",
   "hierarchy.drop_to_spawn": "Rilascia per creare qui",
   "hierarchy.scene_empty": "La scena e vuota",
   "hierarchy.move_to_view": "Sposta alla vista",

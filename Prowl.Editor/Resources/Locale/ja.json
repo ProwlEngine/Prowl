@@ -150,6 +150,7 @@
   "hierarchy.save_and_exit": "保存して終了",
   "hierarchy.no_scene_loaded": "シーンが読み込まれていません",
   "hierarchy.new_scene": "新しいシーン",
+  "hierarchy.create": "作成",
   "hierarchy.drop_to_spawn": "ここにドロップして生成",
   "hierarchy.scene_empty": "シーンは空です",
   "hierarchy.move_to_view": "ビューに移動",

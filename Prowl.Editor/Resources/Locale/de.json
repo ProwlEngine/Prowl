@@ -150,6 +150,7 @@
   "hierarchy.save_and_exit": "Speichern & Beenden",
   "hierarchy.no_scene_loaded": "Keine Szene geladen",
   "hierarchy.new_scene": "Neue Szene",
+  "hierarchy.create": "Erstellen",
   "hierarchy.drop_to_spawn": "Hier ablegen zum Erstellen",
   "hierarchy.scene_empty": "Szene ist leer",
   "hierarchy.move_to_view": "Zur Ansicht bewegen",
