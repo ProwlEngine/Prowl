@@ -475,8 +475,8 @@ void main()
         // If any shape needs a backdrop blur, render the whole canvas into an offscreen scene
         // target so the blur passes can sample what has been drawn so far, then blit to screen.
         bool anyBlur = false;
-        foreach (var dc in canvas.DrawCalls)
-            if (dc.Brush.BackdropBlur > 0f) { anyBlur = true; break; }
+        for (int i = 0; i < drawCalls.Count; i++)
+            if (drawCalls[i].Brush.BackdropBlur > 0f) { anyBlur = true; break; }
 
         if (anyBlur)
         {
@@ -489,9 +489,14 @@ void main()
         BeginBlendMode(BlendMode.AlphaPremultiply);
         Rlgl.DrawRenderBatchActive();
 
+        // Hoisted out of the per-triangle loop: reading these through the canvas properties on
+        // every vertex lookup was the dominant cost of this backend.
+        ReadOnlySpan<Vertex> vertices = canvas.Vertices;
+        ReadOnlySpan<uint> indices = canvas.Indices;
+
         int index = 0;
 
-        foreach (var drawCall in canvas.DrawCalls)
+        foreach (var drawCall in drawCalls)
         {
             // Backdrop blur: flush the scene drawn so far, blur it, then resume.
             if (anyBlur && drawCall.Brush.BackdropBlur > 0f)
@@ -548,9 +553,9 @@ void main()
                     }
                 }
 
-                var a = canvas.Vertices[(int)canvas.Indices[index]];
-                var b = canvas.Vertices[(int)canvas.Indices[index + 1]];
-                var c = canvas.Vertices[(int)canvas.Indices[index + 2]];
+                var a = vertices[(int)indices[index]];
+                var b = vertices[(int)indices[index + 1]];
+                var c = vertices[(int)indices[index + 2]];
 
                 Rlgl.Color4ub(a.r, a.g, a.b, a.a);
                 Rlgl.TexCoord2f(a.u, a.v);

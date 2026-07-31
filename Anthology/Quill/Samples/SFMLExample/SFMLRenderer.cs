@@ -442,7 +442,11 @@ void main()
                 BlendMode.Equation.Add // Alpha equation
             );
 
+            ReadOnlySpan<Prowl.Quill.Vertex> vertices = canvas.Vertices;
+            ReadOnlySpan<uint> indices = canvas.Indices;
+
             // Draw all draw calls in the canvas
+            int indexOffset = 0;
             for (int i = 0; i < drawCalls.Count; i++)
             {
                 var drawCall = drawCalls[i];
@@ -458,21 +462,14 @@ void main()
                 // Get texture to use
                 Texture texture = (drawCall.Texture as TextureSFML)?.Handle ?? _defaultTexture;
 
-                // Calculate start index
-                int indexOffset = 0;
-                for (int j = 0; j < i; j++)
-                {
-                    indexOffset += drawCalls[j].ElementCount;
-                }
-
                 // Create vertex array for this draw call
                 _vertexArray.Clear();
 
                 // Create vertices for this draw call
                 for (int j = 0; j < drawCall.ElementCount; j++)
                 {
-                    int idx = (int)canvas.Indices[indexOffset + j];
-                    var vertex = canvas.Vertices[idx];
+                    int idx = (int)indices[indexOffset + j];
+                    var vertex = vertices[idx];
 
                     SFML.Graphics.Vertex sfmlVertex = new(
                         new((float)vertex.Position.X, (float)vertex.Position.Y),
@@ -570,6 +567,8 @@ void main()
                 );
 
                 _window.Draw(_vertexArray, states);
+
+                indexOffset += drawCall.ElementCount;
             }
         }
 

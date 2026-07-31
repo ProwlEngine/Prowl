@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 using Prowl.Quill;
 using Prowl.Vector;
 
@@ -12,8 +14,6 @@ public class WebGLCanvasRenderer : ICanvasRenderer
     private readonly Dictionary<int, (int w, int h)> _textureSizes = new();
 
     // Reusable buffers to avoid per-frame allocations
-    private byte[] _vertexBuffer = Array.Empty<byte>();
-    private int[] _indexBuffer = Array.Empty<int>();
     private int[] _drawCallInfoBuffer = Array.Empty<int>();
     private double[] _scissorBuffer = Array.Empty<double>();
     private double[] _brushBuffer = Array.Empty<double>();
@@ -58,40 +58,26 @@ public class WebGLCanvasRenderer : ICanvasRenderer
     {
         if (drawCalls.Count == 0) return;
 
-        var vertices = canvas.Vertices;
-        var indices = canvas.Indices;
-        int vertexCount = vertices.Count;
-        int indexCount = indices.Count;
+        ReadOnlySpan<Vertex> vertices = canvas.Vertices;
+        ReadOnlySpan<uint> indices = canvas.Indices;
+        int vertexCount = vertices.Length;
+        int indexCount = indices.Length;
 
         if (vertexCount == 0 || indexCount == 0) return;
 
+        // JS interop marshals a copy of whatever it is handed, so build the exact-sized arrays
+        // directly from the canvas backing store rather than staging them through a scratch buffer.
         int vertexBytes = vertexCount * VERTEX_SIZE;
-        EnsureSize(ref _vertexBuffer, vertexBytes);
-        EnsureSize(ref _indexBuffer, indexCount);
+        var vertexSlice = new byte[vertexBytes];
+        MemoryMarshal.AsBytes(vertices).CopyTo(vertexSlice);
+
+        var indexSlice = new int[indexCount];
+        MemoryMarshal.Cast<uint, int>(indices).CopyTo(indexSlice);
 
         int dcCount = drawCalls.Count;
         EnsureSize(ref _drawCallInfoBuffer, dcCount * DC_INFO_STRIDE);
         EnsureSize(ref _scissorBuffer, dcCount * 18);
         EnsureSize(ref _brushBuffer, dcCount * 47);
-
-        // Convert vertices to raw bytes (20 bytes each)
-        for (int i = 0; i < vertexCount; i++)
-        {
-            var v = vertices[i];
-            int offset = i * VERTEX_SIZE;
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset), v.x);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 4), v.y);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 8), v.u);
-            BitConverter.TryWriteBytes(_vertexBuffer.AsSpan(offset + 12), v.v);
-            _vertexBuffer[offset + 16] = v.r;
-            _vertexBuffer[offset + 17] = v.g;
-            _vertexBuffer[offset + 18] = v.b;
-            _vertexBuffer[offset + 19] = v.a;
-        }
-
-        // Convert indices
-        for (int i = 0; i < indexCount; i++)
-            _indexBuffer[i] = (int)indices[i];
 
         for (int i = 0; i < dcCount; i++)
         {
@@ -147,10 +133,6 @@ public class WebGLCanvasRenderer : ICanvasRenderer
         }
 
         // Pass exact-sized arrays to JS (oversized buffers cause JS to iterate garbage)
-        var vertexSlice = new byte[vertexBytes];
-        Array.Copy(_vertexBuffer, vertexSlice, vertexBytes);
-        var indexSlice = new int[indexCount];
-        Array.Copy(_indexBuffer, indexSlice, indexCount);
         var dcInfoSlice = new int[dcCount * DC_INFO_STRIDE];
         Array.Copy(_drawCallInfoBuffer, dcInfoSlice, dcCount * DC_INFO_STRIDE);
         var scissorSlice = new double[dcCount * 18];

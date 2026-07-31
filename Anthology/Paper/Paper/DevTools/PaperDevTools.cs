@@ -93,8 +93,8 @@ public sealed partial class PaperDevTools
         {
             var dcs = canvas.DrawCalls;
             _statDrawCalls = dcs.Count;
-            _statVerts = canvas.Vertices.Count;
-            _statTris = canvas.Indices.Count / 3;
+            _statVerts = canvas.VertexCount;
+            _statTris = canvas.IndexCount / 3;
             CaptureDrawCalls(dcs);
         }
 

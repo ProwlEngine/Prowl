@@ -237,7 +237,7 @@ namespace SilkExample
 
         public unsafe void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
         {
-            if (drawCalls.Count == 0 || canvas.Vertices.Count == 0 || canvas.Indices.Count == 0)
+            if (drawCalls.Count == 0 || canvas.VertexCount == 0 || canvas.IndexCount == 0)
                 return;
 
             // Set up rendering state
@@ -273,25 +273,25 @@ namespace SilkExample
         
         private unsafe void UploadGeometryData(Canvas canvas)
         {
-            // Upload vertices
+            // Upload vertices straight from the canvas backing store
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-            fixed (Vertex* vertexPtr = canvas.Vertices.ToArray())
+            fixed (Vertex* vertexPtr = canvas.VertexBuffer)
             {
                 _gl.BufferData(
                     BufferTargetARB.ArrayBuffer,
-                    (nuint)(canvas.Vertices.Count * Vertex.SizeInBytes),
+                    (nuint)(canvas.VertexCount * Vertex.SizeInBytes),
                     vertexPtr,
                     BufferUsageARB.StreamDraw
                 );
             }
-    
+
             // Upload indices
             _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _ebo);
-            fixed (uint* indexPtr = canvas.Indices.ToArray())
+            fixed (uint* indexPtr = canvas.IndexBuffer)
             {
                 _gl.BufferData(
                     BufferTargetARB.ElementArrayBuffer,
-                    (nuint)(canvas.Indices.Count * sizeof(uint)),
+                    (nuint)(canvas.IndexCount * sizeof(uint)),
                     indexPtr,
                     BufferUsageARB.StreamDraw
                 );

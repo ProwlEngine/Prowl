@@ -386,7 +386,7 @@ namespace OpenTKSample
 
             // Upload vertex data (20 bytes per vertex)
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, canvas.Vertices.Count * Vertex.SizeInBytes, canvas.Vertices.ToArray(), BufferUsageHint.StreamDraw);
+            GL.BufferData(BufferTarget.ArrayBuffer, canvas.VertexCount * Vertex.SizeInBytes, canvas.VertexBuffer, BufferUsageHint.StreamDraw);
 
             int stride = Vertex.SizeInBytes; // 20
 
@@ -404,7 +404,7 @@ namespace OpenTKSample
 
             // Upload index data
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.Indices.Count * sizeof(uint), canvas.Indices.ToArray(), BufferUsageHint.StreamDraw);
+            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.IndexCount * sizeof(uint), canvas.IndexBuffer, BufferUsageHint.StreamDraw);
 
             // Active texture unit for sampling
             GL.ActiveTexture(TextureUnit.Texture0);
