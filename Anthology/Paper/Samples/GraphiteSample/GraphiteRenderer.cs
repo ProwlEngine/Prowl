@@ -267,6 +267,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         private readonly Texture[] _blurTex = new Texture[MaxBlurLevels];
         private readonly Framebuffer[] _blurFB = new Framebuffer[MaxBlurLevels];
         private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
+        private bool _backdropDirty = true;
+        private float _lastBlurRadius = -1f;
         private int _blurBuiltW;
         private int _blurBuiltH;
 
@@ -286,6 +288,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         public void Render(RenderContext<CanvasView> context)
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
+
+            _backdropDirty = true;
 
             bool hasGeometry = _drawCalls.Count > 0 && _canvas.VertexCount > 0 && _canvas.IndexCount > 0;
 
@@ -352,18 +356,25 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             Int2 texSize = _owner.GetTextureSize(fontTex);
             _properties.SetFloat2("atlasTexelSize", new Float2(texSize.X > 0 ? 1f / texSize.X : 0f, texSize.Y > 0 ? 1f / texSize.Y : 0f));
 
-            drawCall.GetScissor(out Float4x4 scissorMat, out Float2 scissorExt);
-            _properties.SetMatrix("scissorMat", scissorMat);
+            // Scissor and brush transforms are 2D affines with the framebuffer scale already folded
+            // in, so the shader needs neither a matrix nor a dpi divide.
+            drawCall.GetScissor(dpiScale, out Float4 scissorXf, out Float2 scissorT, out Float2 scissorExt);
+            _properties.SetFloat4("scissorTransform", scissorXf);
+            _properties.SetFloat2("scissorTranslation", scissorT);
             _properties.SetFloat2("scissorExt", scissorExt);
 
-            _properties.SetMatrix("brushMat", brush.BrushMatrix);
+            drawCall.GetBrushTransform(dpiScale, out Float4 brushXf, out Float2 brushT);
+            _properties.SetFloat4("brushTransform", brushXf);
+            _properties.SetFloat2("brushTranslation", brushT);
             _properties.SetInt("brushType", (int)brush.Type);
             _properties.SetFloat4("brushColor1", ToFloat4(brush.Color1));
             _properties.SetFloat4("brushColor2", ToFloat4(brush.Color2));
             _properties.SetFloat4("brushParams", new Float4(brush.Point1.X, brush.Point1.Y, brush.Point2.X, brush.Point2.Y));
             _properties.SetFloat2("brushParams2", new Float2(brush.CornerRadii, brush.Feather));
-            _properties.SetMatrix("brushTextureMat", brush.TextureMatrix);
-            _properties.SetFloat("dpiScale", dpiScale);
+            drawCall.GetTextureTransform(dpiScale, out Float4 texXf, out Float2 texT);
+            _properties.SetFloat4("textureTransform", texXf);
+            _properties.SetFloat2("textureTranslation", texT);
+            _properties.SetFloat("sdfPxRange", _canvas.Text.FontEngine.DistanceRange);
 
             _properties.SetFloat2("viewportSize", new Float2(_owner._fbWidth, _owner._fbHeight));
             _properties.SetFloat("backdropBlurAmount", blur);
@@ -388,6 +399,9 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
             cmd.SetProperties(_properties);
 
             cmd.DrawIndexed(1, (uint)indexOffset, 0, 0);
+
+
+            _backdropDirty = true;
         }
 
 
@@ -401,6 +415,14 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         private void RenderBackdropBlur(CommandBuffer cmd, RenderTexture scene, float radius)
         {
+            // Two frosted shapes in a row see the same scene behind them, so the pyramid only needs
+            // rebuilding when something has been drawn since the last one, or the radius moved.
+            if (!_backdropDirty && radius == _lastBlurRadius)
+                return;
+
+            _backdropDirty = false;
+            _lastBlurRadius = radius;
+
             ComputeBlurParams(radius, out int iterations, out float offset);
 
             // Downsample pass

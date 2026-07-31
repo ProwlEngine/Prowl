@@ -38,21 +38,30 @@ Shader "Quill/Canvas"
 
         uniform float4x4 projection;
 
-        uniform float4x4 scissorMat;
-        uniform float2 scissorExt;
+        // The three transforms below are 2D affines packed as (A, C, B, D) plus (E, F), with the
+        // framebuffer scale already folded into the linear part. Evaluating one is two dot products and an
+        // add, against the sixteen multiply-adds a float4x4 cost, and it removes the pixel-to-logical
+        // divide the fragment stage used to do three times per fragment.
+        uniform float4 scissorTransform;
+        uniform float2 scissorTranslation;
+        uniform float2 scissorExt;      // logical half-extent, half-pixel feather already added
 
-        uniform float4x4 brushMat;
+        uniform float4 brushTransform;
+        uniform float2 brushTranslation;
         uniform int brushType;          // 0=none, 1=linear, 2=radial, 3=box
         uniform float4 brushColor1;
         uniform float4 brushColor2;
         uniform float4 brushParams;
         uniform float2 brushParams2;
 
-        uniform float4x4 brushTextureMat;
-        uniform float dpiScale;
+        uniform float4 textureTransform;
+        uniform float2 textureTranslation;
 
         // 1 / font atlas size, so the text distance-field screen range is correct at any zoom.
         uniform float2 atlasTexelSize;
+
+        // Width of the signed-distance range in atlas texels, supplied by Scribe rather than hardcoded.
+        uniform float sdfPxRange;
 
         // Backdrop blur
         uniform float2 viewportSize;      // framebuffer size in pixels, for screen->uv mapping
@@ -63,8 +72,12 @@ Shader "Quill/Canvas"
         uniform Sampler2D fontTexture;     // dedicated font-atlas unit, so text batches with shapes
         uniform Sampler2D backdropTexture; // blurred copy of the framebuffer behind the shape
 
-        // Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
-        static const float sdfPxRange = 4.0;
+
+        /// Applies a packed 2D affine to a pixel-space point.
+        float2 applyTransform(float4 transform, float2 translation, float2 p)
+        {
+            return float2(dot(transform.xy, p), dot(transform.zw, p)) + translation;
+        }
 
 
         [shader("vertex")]
@@ -81,8 +94,7 @@ Shader "Quill/Canvas"
 
         float calculateBrushFactor(float2 fragPos)
         {
-            float2 logicalPos = fragPos / dpiScale;
-            float2 transformedPoint = (mul(brushMat, float4(logicalPos, 0.0, 1.0))).xy;
+            float2 transformedPoint = applyTransform(brushTransform, brushTranslation, fragPos);
 
             if (brushType == 1)
             {
@@ -119,12 +131,8 @@ Shader "Quill/Canvas"
             if (scissorExt.x < 0.0 || scissorExt.y < 0.0)
                 return 1.0;
 
-            float2 logicalP = p / dpiScale;
-            float2 transformedPoint = (mul(scissorMat, float4(logicalP, 0.0, 1.0))).xy;
-            float2 logicalExt = scissorExt / dpiScale;
-            float2 distanceFromEdges = abs(transformedPoint) - logicalExt;
-            float halfPixelLogical = 0.5 / dpiScale;
-            float2 smoothEdges = float2(halfPixelLogical) - distanceFromEdges;
+            // scissorExt already carries the half-pixel feather, so the edge distance is a plain subtract.
+            float2 smoothEdges = scissorExt - abs(applyTransform(scissorTransform, scissorTranslation, p));
 
             return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
         }
@@ -168,8 +176,7 @@ Shader "Quill/Canvas"
             // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
             float edgeAlpha = clamp(input.fragTexCoord.x, 0.0, 1.0);
 
-            float2 logicalPos = input.fragPos / dpiScale;
-            float4 fill = color * texture0.Sample(mul(brushTextureMat, float4(logicalPos, 0.0, 1.0)).xy);
+            float4 fill = color * texture0.Sample(applyTransform(textureTransform, textureTranslation, input.fragPos));
 
             // Backdrop blur: composite the fill over the blurred framebuffer behind the shape.
             if (backdropBlurAmount > 0.0)

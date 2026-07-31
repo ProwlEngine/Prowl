@@ -25,17 +25,21 @@ internal class PaperRenderer : ICanvasRenderer
     private int _projectionLocation;
     private int _textureSamplerLocation;
     private int _fontTextureLoc;
-    private int _scissorMatLoc = 0;
     private int _scissorExtLoc = 0;
 
-    static int _brushMatLoc;
+    static int _scissorTransformLoc;
+    static int _scissorTranslationLoc;
+    static int _brushTransformLoc;
+    static int _brushTranslationLoc;
+    static int _textureTransformLoc;
+    static int _textureTranslationLoc;
+    static int _sdfPxRangeLoc;
+    static float _sdfPxRange = 4f;
     static int _brushTypeLoc;
     static int _brushColor1Loc;
     static int _brushColor2Loc;
     static int _brushParamsLoc;
     static int _brushParams2Loc;
-    static int _brushTextureMatLoc;
-    static int _dpiScaleLoc;
     static int _atlasTexelSizeLoc;
     static int _backdropFlipYLoc;
 
@@ -57,6 +61,11 @@ internal class PaperRenderer : ICanvasRenderer
     private const int MaxBlurLevels = 6;
     private int[] _blurTex = new int[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
     private Vector2i[] _blurSize = new Vector2i[MaxBlurLevels];
+    private int _vertexBufferCapacity;
+    private int _indexBufferCapacity;
+    private bool _backdropDirty = true;
+    private float _lastBlurRadius = -1f;
+
     private int _blurBaseW;        // viewport size the pyramid was built for
     private int _blurBaseH;
 
@@ -151,17 +160,20 @@ internal class PaperRenderer : ICanvasRenderer
         _projectionLocation = GL.GetUniformLocation(_shaderProgram, "projection");
         _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "texture0");
         _fontTextureLoc = GL.GetUniformLocation(_shaderProgram, "fontTexture");
-        _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
+        _scissorTransformLoc = GL.GetUniformLocation(_shaderProgram, "scissorTransform");
         _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
 
-        _brushMatLoc = GL.GetUniformLocation(_shaderProgram, "brushMat");
+        _scissorTranslationLoc = GL.GetUniformLocation(_shaderProgram, "scissorTranslation");
+            _brushTransformLoc = GL.GetUniformLocation(_shaderProgram, "brushTransform");
+            _brushTranslationLoc = GL.GetUniformLocation(_shaderProgram, "brushTranslation");
         _brushTypeLoc = GL.GetUniformLocation(_shaderProgram, "brushType");
         _brushColor1Loc = GL.GetUniformLocation(_shaderProgram, "brushColor1");
         _brushColor2Loc = GL.GetUniformLocation(_shaderProgram, "brushColor2");
         _brushParamsLoc = GL.GetUniformLocation(_shaderProgram, "brushParams");
         _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
-        _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
-        _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
+        _textureTransformLoc = GL.GetUniformLocation(_shaderProgram, "textureTransform");
+            _textureTranslationLoc = GL.GetUniformLocation(_shaderProgram, "textureTranslation");
+        _sdfPxRangeLoc = GL.GetUniformLocation(_shaderProgram, "sdfPxRange");
         _atlasTexelSizeLoc = GL.GetUniformLocation(_shaderProgram, "atlasTexelSize");
         _backdropFlipYLoc = GL.GetUniformLocation(_shaderProgram, "backdropFlipY");
         _backdropTexLoc = GL.GetUniformLocation(_shaderProgram, "backdropTexture");
@@ -316,8 +328,31 @@ internal class PaperRenderer : ICanvasRenderer
     /// restoring the default framebuffer/viewport so the caller can draw the masking shape that
     /// samples the blurred texture (bound on texture unit 3).
     /// </summary>
+    private static void UploadStream<T>(BufferTarget target, ref int capacity, int sizeInBytes, T[] data) where T : struct
+    {
+        // Round up on growth so a steadily growing canvas does not resize every frame.
+        if (sizeInBytes > capacity)
+            capacity = Math.Max(sizeInBytes, capacity == 0 ? 64 * 1024 : capacity * 2);
+
+        // Same call either way: it allocates on the first pass and orphans on every later one.
+        GL.BufferData(target, capacity, IntPtr.Zero, BufferUsageHint.StreamDraw);
+        GL.BufferSubData(target, IntPtr.Zero, sizeInBytes, data);
+    }
+
     private void RenderBackdropBlur(float radius)
     {
+        // Two frosted shapes in a row see the same framebuffer behind them.
+        if (!_backdropDirty && radius == _lastBlurRadius && _blurTex[0] != 0)
+        {
+            GL.ActiveTexture(TextureUnit.Texture3);
+            GL.BindTexture(TextureTarget.Texture2D, _blurTex[0]);
+            GL.ActiveTexture(TextureUnit.Texture0);
+            return;
+        }
+
+        _backdropDirty = false;
+        _lastBlurRadius = radius;
+
         EnsureBlurTargets(_fbWidth, _fbHeight);
         ComputeBlurParams(radius, out int iterations, out float offset);
 
@@ -375,6 +410,11 @@ internal class PaperRenderer : ICanvasRenderer
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
 
+        _sdfPxRange = canvas.Text.FontEngine.DistanceRange;
+
+        _backdropDirty = true;
+
+
         // Skip if canvas is empty
         if (drawCalls.Count == 0)
             return;
@@ -393,7 +433,7 @@ internal class PaperRenderer : ICanvasRenderer
 
         // Upload vertex data (20 bytes per vertex)
         GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-        GL.BufferData(BufferTarget.ArrayBuffer, canvas.VertexCount * Vertex.SizeInBytes, canvas.VertexBuffer, BufferUsageHint.StreamDraw);
+        UploadStream(BufferTarget.ArrayBuffer, ref _vertexBufferCapacity, canvas.VertexCount * Vertex.SizeInBytes, canvas.VertexBuffer);
 
         int stride = Vertex.SizeInBytes; // 20
 
@@ -411,7 +451,7 @@ internal class PaperRenderer : ICanvasRenderer
 
         // Upload index data
         GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
-        GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.IndexCount * sizeof(uint), canvas.IndexBuffer, BufferUsageHint.StreamDraw);
+        UploadStream(BufferTarget.ElementArrayBuffer, ref _indexBufferCapacity, canvas.IndexCount * sizeof(uint), canvas.IndexBuffer);
 
         // Active texture unit for sampling
         GL.ActiveTexture(TextureUnit.Texture0);
@@ -457,18 +497,19 @@ internal class PaperRenderer : ICanvasRenderer
                 GL.UseProgram(_shaderProgram);
                 GL.UniformMatrix4(_projectionLocation, true, ref _projection);
 
-                // Set DPI scale for converting pixel coords to logical coords in shader
-                GL.Uniform1(_dpiScaleLoc, (float)canvas.FramebufferScale);
+                // Scissor and brush transforms are 2D affines with the framebuffer scale already
+                // folded in, so the shader needs neither a matrix nor a dpi divide.
+                float fbScale = canvas.FramebufferScale;
 
-                // Set scissor rectangle
-                drawCall.GetScissor(out var scissor, out var extent);
-                var tkScissor = ToTK(scissor);
-                GL.UniformMatrix4(_scissorMatLoc, true, ref tkScissor);
+                drawCall.GetScissor(fbScale, out var scissorXf, out var scissorT, out var extent);
+                GL.Uniform4(_scissorTransformLoc, (float)scissorXf.X, (float)scissorXf.Y, (float)scissorXf.Z, (float)scissorXf.W);
+                GL.Uniform2(_scissorTranslationLoc, (float)scissorT.X, (float)scissorT.Y);
                 GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
 
                 // Set brush parameters
-                var brushMat = ToTK(drawCall.Brush.BrushMatrix);
-                GL.UniformMatrix4(_brushMatLoc, true, ref brushMat);
+                drawCall.GetBrushTransform(fbScale, out var brushXf, out var brushT);
+                GL.Uniform4(_brushTransformLoc, (float)brushXf.X, (float)brushXf.Y, (float)brushXf.Z, (float)brushXf.W);
+                GL.Uniform2(_brushTranslationLoc, (float)brushT.X, (float)brushT.Y);
                 GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
                 GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
                 GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
@@ -476,8 +517,10 @@ internal class PaperRenderer : ICanvasRenderer
                 GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
 
                 // Set texture transform parameters
-                var textureMat = ToTK(drawCall.Brush.TextureMatrix);
-                GL.UniformMatrix4(_brushTextureMatLoc, true, ref textureMat);
+                drawCall.GetTextureTransform(fbScale, out var texXf, out var texT);
+                GL.Uniform4(_textureTransformLoc, (float)texXf.X, (float)texXf.Y, (float)texXf.Z, (float)texXf.W);
+                GL.Uniform2(_textureTranslationLoc, (float)texT.X, (float)texT.Y);
+                GL.Uniform1(_sdfPxRangeLoc, _sdfPxRange);
 
                 // Backdrop blur: viewport size for screen->uv, blurred texture on unit 3
                 GL.Uniform2(_viewportSizeLoc, (float)_fbWidth, (float)_fbHeight);
@@ -492,6 +535,7 @@ internal class PaperRenderer : ICanvasRenderer
             }
 
             GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
+            _backdropDirty = true;
             indexOffset += drawCall.ElementCount;
         }
 

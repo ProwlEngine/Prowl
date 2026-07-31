@@ -24,16 +24,20 @@ namespace SilkExample
         private int _projectionLocation;
         private int _textureSamplerLocation;
         private int _fontTextureLocation;
-        private int _scissorMatLocation;
+        private int _scissorTransformLocation;
+        private int _scissorTranslationLocation;
         private int _scissorExtLocation;
-        private int _brushMatLocation;
+        private int _brushTransformLocation;
+        private int _brushTranslationLocation;
         private int _brushTypeLocation;
         private int _brushColor1Location;
         private int _brushColor2Location;
         private int _brushParamsLocation;
         private int _brushParams2Location;
-        private int _brushTextureMatLocation;
-        private int _dpiScaleLocation;
+        private int _textureTransformLocation;
+        private int _textureTranslationLocation;
+        private int _sdfPxRangeLocation;
+        private float _sdfPxRange = 4f;
         private int _atlasTexelSizeLocation;
         private int _backdropFlipYLocation;
 
@@ -52,6 +56,11 @@ namespace SilkExample
         private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
         private int _fbWidth;
         private int _fbHeight;
+        private int _vertexBufferCapacity;
+        private int _indexBufferCapacity;
+        private bool _backdropDirty = true;
+        private float _lastBlurRadius = -1f;
+
         private int _blurBaseW;
         private int _blurBaseH;
 
@@ -143,16 +152,19 @@ namespace SilkExample
             _projectionLocation = _gl.GetUniformLocation(_program, "projection");
             _textureSamplerLocation = _gl.GetUniformLocation(_program, "texture0");
             _fontTextureLocation = _gl.GetUniformLocation(_program, "fontTexture");
-            _scissorMatLocation = _gl.GetUniformLocation(_program, "scissorMat");
+            _scissorTransformLocation = _gl.GetUniformLocation(_program, "scissorTransform");
+            _scissorTranslationLocation = _gl.GetUniformLocation(_program, "scissorTranslation");
             _scissorExtLocation = _gl.GetUniformLocation(_program, "scissorExt");
-            _brushMatLocation = _gl.GetUniformLocation(_program, "brushMat");
+            _brushTransformLocation = _gl.GetUniformLocation(_program, "brushTransform");
+            _brushTranslationLocation = _gl.GetUniformLocation(_program, "brushTranslation");
             _brushTypeLocation = _gl.GetUniformLocation(_program, "brushType");
             _brushColor1Location = _gl.GetUniformLocation(_program, "brushColor1");
             _brushColor2Location = _gl.GetUniformLocation(_program, "brushColor2");
             _brushParamsLocation = _gl.GetUniformLocation(_program, "brushParams");
             _brushParams2Location = _gl.GetUniformLocation(_program, "brushParams2");
-            _brushTextureMatLocation = _gl.GetUniformLocation(_program, "brushTextureMat");
-            _dpiScaleLocation = _gl.GetUniformLocation(_program, "dpiScale");
+            _textureTransformLocation = _gl.GetUniformLocation(_program, "textureTransform");
+            _textureTranslationLocation = _gl.GetUniformLocation(_program, "textureTranslation");
+            _sdfPxRangeLocation = _gl.GetUniformLocation(_program, "sdfPxRange");
             _backdropTexLocation = _gl.GetUniformLocation(_program, "backdropTexture");
             _viewportSizeLocation = _gl.GetUniformLocation(_program, "viewportSize");
             _backdropBlurAmountLocation = _gl.GetUniformLocation(_program, "backdropBlurAmount");
@@ -249,6 +261,12 @@ namespace SilkExample
                 return;
 
             // Set up rendering state
+            _sdfPxRange = canvas.Text.FontEngine.DistanceRange;
+
+            // A fresh frame means the framebuffer behind any frosted shape has changed, and another
+            // renderer may have driven this program since, so the per-group cache is dropped too.
+            _backdropDirty = true;
+
             SetupRenderState();
     
             // Upload vertex and index data
@@ -284,26 +302,30 @@ namespace SilkExample
             // Upload vertices straight from the canvas backing store
             _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
             fixed (Vertex* vertexPtr = canvas.VertexBuffer)
-            {
-                _gl.BufferData(
-                    BufferTargetARB.ArrayBuffer,
-                    (nuint)(canvas.VertexCount * Vertex.SizeInBytes),
-                    vertexPtr,
-                    BufferUsageARB.StreamDraw
-                );
-            }
+                UploadStream(BufferTargetARB.ArrayBuffer, ref _vertexBufferCapacity,
+                    canvas.VertexCount * Vertex.SizeInBytes, vertexPtr);
 
             // Upload indices
             _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _ebo);
             fixed (uint* indexPtr = canvas.IndexBuffer)
-            {
-                _gl.BufferData(
-                    BufferTargetARB.ElementArrayBuffer,
-                    (nuint)(canvas.IndexCount * sizeof(uint)),
-                    indexPtr,
-                    BufferUsageARB.StreamDraw
-                );
-            }
+                UploadStream(BufferTargetARB.ElementArrayBuffer, ref _indexBufferCapacity,
+                    canvas.IndexCount * sizeof(uint), indexPtr);
+        }
+
+        /// <summary>
+        /// Streams a frame's geometry into a buffer. The store is reallocated only when it needs to
+        /// grow; otherwise it is orphaned and refilled, so the driver hands back fresh memory instead
+        /// of stalling on the previous frame's contents still being read.
+        /// </summary>
+        private unsafe void UploadStream(BufferTargetARB target, ref int capacity, int sizeInBytes, void* data)
+        {
+            // Round up on growth so a steadily growing canvas does not resize every frame.
+            if (sizeInBytes > capacity)
+                capacity = Math.Max(sizeInBytes, capacity == 0 ? 64 * 1024 : capacity * 2);
+
+            // Same call either way: it allocates on the first pass and orphans on every later one.
+            _gl.BufferData(target, (nuint)capacity, (void*)0, BufferUsageARB.StreamDraw);
+            _gl.BufferSubData(target, 0, (nuint)sizeInBytes, data);
         }
         
         private unsafe uint CreateBlurTexture(int w, int h)
@@ -350,6 +372,19 @@ namespace SilkExample
         /// </summary>
         private void RenderBackdropBlur(float radius)
         {
+            // Two frosted shapes in a row see the same framebuffer behind them, so the pyramid only
+            // needs rebuilding when something has been drawn since the last one, or the radius moved.
+            if (!_backdropDirty && radius == _lastBlurRadius && _blurTex[0] != 0)
+            {
+                _gl.ActiveTexture(TextureUnit.Texture3);
+                _gl.BindTexture(TextureTarget.Texture2D, _blurTex[0]);
+                _gl.ActiveTexture(TextureUnit.Texture0);
+                return;
+            }
+
+            _backdropDirty = false;
+            _lastBlurRadius = radius;
+
             EnsureBlurTargets(_fbWidth, _fbHeight);
             ComputeBlurParams(radius, out int iterations, out float offset);
 
@@ -434,13 +469,12 @@ namespace SilkExample
                 _gl.UseProgram(_program);
                 SetProjectionMatrix();
 
-                // Set DPI scale for converting pixel coords to logical coords in shader
-                _gl.Uniform1(_dpiScaleLocation, dpiScale);
-
-                // Set scissor and brush uniforms
-                drawCall.GetScissor(out var scissorMat, out var scissorExt);
-                SetScissorUniforms(scissorMat, scissorExt);
-                SetBrushUniforms(drawCall.Brush);
+                // Scissor and brush transforms are 2D affines with the framebuffer scale already
+                // folded in, so the shader needs neither a matrix nor a dpi divide.
+                drawCall.GetScissor(dpiScale, out var scissorXf, out var scissorT, out var scissorExt);
+                SetScissorUniforms(scissorXf, scissorT, scissorExt);
+                SetBrushUniforms(in drawCall, dpiScale);
+                _gl.Uniform1(_sdfPxRangeLocation, _sdfPxRange);
 
                 // Font atlas texel size, so the text distance field resolves at any zoom. The
                 // generated shader takes this as a uniform rather than calling textureSize.
@@ -462,6 +496,8 @@ namespace SilkExample
                 DrawElementsType.UnsignedInt,
                 (void*)(indexOffset * sizeof(uint))
             );
+
+            _backdropDirty = true;
         }
 
         private void SetProjectionMatrix()
@@ -469,16 +505,26 @@ namespace SilkExample
             SetCanvasMatrixUniform(_projectionLocation, _projection);
         }
 
-        private void SetScissorUniforms(Prowl.Vector.Float4x4 matrix, Float2 extent)
+
+        private void SetScissorUniforms(Float4 transform, Float2 translation, Float2 extent)
         {
-            SetCanvasMatrixUniform(_scissorMatLocation, matrix);
+            _gl.Uniform4(_scissorTransformLocation, (float)transform.X, (float)transform.Y, (float)transform.Z, (float)transform.W);
+            _gl.Uniform2(_scissorTranslationLocation, (float)translation.X, (float)translation.Y);
             _gl.Uniform2(_scissorExtLocation, (float)extent.X, (float)extent.Y);
         }
 
-        private void SetBrushUniforms(Brush brush)
+        private void SetBrushUniforms(in DrawCall drawCall, float framebufferScale)
         {
-            // Set brush matrix using the helper
-            SetCanvasMatrixUniform(_brushMatLocation, brush.BrushMatrix);
+            Brush brush = drawCall.Brush;
+
+            drawCall.GetBrushTransform(framebufferScale, out Float4 brushXf, out Float2 brushT);
+            drawCall.GetTextureTransform(framebufferScale, out Float4 texXf, out Float2 texT);
+
+            _gl.Uniform4(_textureTransformLocation, (float)texXf.X, (float)texXf.Y, (float)texXf.Z, (float)texXf.W);
+            _gl.Uniform2(_textureTranslationLocation, (float)texT.X, (float)texT.Y);
+
+            _gl.Uniform4(_brushTransformLocation, (float)brushXf.X, (float)brushXf.Y, (float)brushXf.Z, (float)brushXf.W);
+            _gl.Uniform2(_brushTranslationLocation, (float)brushT.X, (float)brushT.Y);
 
             // Set other brush parameters
             _gl.Uniform1(_brushTypeLocation, (int)brush.Type);
@@ -509,8 +555,6 @@ namespace SilkExample
                 (float)brush.CornerRadii,
                 (float)brush.Feather);
 
-            // Set texture transform parameters
-            SetCanvasMatrixUniform(_brushTextureMatLocation, brush.TextureMatrix);
         }
 
         private unsafe void SetCustomUniforms(uint program, ShaderUniforms uniforms)
