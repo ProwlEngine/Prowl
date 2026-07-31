@@ -114,7 +114,7 @@ namespace Prowl.Quill
             // Scribe hands us an indexed mesh (4 unique vertices + 6 indices per glyph). Transform
             // each unique vertex once and reuse Scribe's indices offset by our base, rather than
             // de-indexing to 6 vertices per glyph.
-            uint baseIndex = (uint)_canvas.Vertices.Count;
+            uint baseIndex = (uint)_canvas.VertexCount;
 
             if (transform.IsIdentityOrTranslation)
             {

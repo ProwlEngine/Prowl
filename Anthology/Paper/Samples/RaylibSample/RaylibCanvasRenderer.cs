@@ -14,213 +14,7 @@ public class RaylibCanvasRenderer : ICanvasRenderer
 {
     // Raylib uses its own vertex attribute names (vertexPosition, vertexTexCoord, vertexColor)
     // and doesn't support custom vertex attributes, so Slug rendering is not available.
-    public const string Stroke_FS = @"
-#version 330
-in vec2 fragTexCoord;
-in vec4 fragColor;
-in vec2 fragPos;
-out vec4 finalColor;
-
-uniform sampler2D texture0;
-uniform sampler2D fontTexture; // dedicated font-atlas unit, so text batches with shapes
-uniform mat4 scissorMat;
-uniform vec2 scissorExt;
-
-uniform mat4 brushMat;
-uniform int brushType;       // 0=none, 1=linear, 2=radial, 3=box
-uniform vec4 brushColor1;    // Start color
-uniform vec4 brushColor2;    // End color
-uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+radius for radial)
-uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
-
-uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
-
-uniform float dpiScale;           // DPI scale factor (pixels / logical units)
-
-// Backdrop blur
-uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
-uniform vec2 viewportSize;         // framebuffer size in pixels
-uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
-uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
-
-float calculateBrushFactor() {
-    // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
-    vec2 logicalPos = fragPos / dpiScale;
-    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
-
-    // Linear brush - projects position onto the line between start and end
-    if (brushType == 1) {
-        vec2 startPoint = brushParams.xy;
-        vec2 endPoint = brushParams.zw;
-        vec2 line = endPoint - startPoint;
-        float lineLength = length(line);
-
-        if (lineLength < 0.001) return 0.0;
-
-        vec2 posToStart = transformedPoint - startPoint;
-        float projection = dot(posToStart, line) / (lineLength * lineLength);
-        return clamp(projection, 0.0, 1.0);
-    }
-
-    // Radial brush - based on distance from center
-    if (brushType == 2) {
-        vec2 center = brushParams.xy;
-        float innerRadius = brushParams.z;
-        float outerRadius = brushParams.w;
-
-        if (outerRadius < 0.001) return 0.0;
-
-        float distance = smoothstep(innerRadius, outerRadius, length(transformedPoint - center));
-        return clamp(distance, 0.0, 1.0);
-    }
-
-    // Box brush - like radial but uses max distance in x or y direction
-    if (brushType == 3) {
-        vec2 center = brushParams.xy;
-        vec2 halfSize = brushParams.zw;
-        float radius = brushParams2.x;
-        float feather = brushParams2.y;
-
-        if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-
-        vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
-        float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-
-        return smoothstep(-feather * 0.5, feather * 0.5, dist);
-    }
-
-    return 0.0;
-}
-
-float scissorMask(vec2 p) {
-    if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-
-    // Convert from pixel to logical coordinates, then transform to scissor space
-    vec2 logicalP = p / dpiScale;
-    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
-
-    // Convert scissorExt from pixels to logical units to match transformedPoint
-    vec2 logicalExt = scissorExt / dpiScale;
-
-    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
-
-    float halfPixelLogical = 0.5 / dpiScale;
-    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
-
-    return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
-}
-
-// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
-const float sdfPxRange = 4.0;
-
-// Screen-space width (in pixels) that one distance-field unit spans at this fragment.
-float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
-    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
-    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
-}
-
-void main()
-{
-    float mask = scissorMask(fragPos);
-
-    vec4 color = fragColor;
-
-    // Apply brush if active
-    if (brushType > 0) {
-        float factor = calculateBrushFactor();
-        color = mix(brushColor1, brushColor2, factor);
-    }
-
-    // Text mode: UV >= 2.0 means text rendering - fast path
-    if (fragTexCoord.x >= 2.0) {
-        vec2 uv = fragTexCoord - vec2(2.0);
-        float sd = texture(fontTexture, uv).r;
-        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
-        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-        finalColor = color * coverage * mask;
-        return;
-    }
-
-    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
-    // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
-    float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
-
-    vec2 logicalPos = fragPos / dpiScale;
-    vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
-
-    // Backdrop blur: composite the fill over the blurred scene behind the shape.
-    if (backdropBlurAmount > 0.0) {
-        vec2 uv = fragPos / viewportSize;
-        if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
-        vec3 blurred = texture(backdropTexture, uv).rgb;
-        vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
-        finalColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
-        return;
-    }
-
-    finalColor = fill * edgeAlpha * mask;
-}";
-
-    // Dual Kawase blur shaders (sample texture0, the texture being drawn)
-    public const string BlurDown_FS = @"
-#version 330
-in vec2 fragTexCoord;
-out vec4 finalColor;
-uniform sampler2D texture0;
-uniform vec2 halfpixel;
-uniform float offset;
-void main()
-{
-    vec2 uv = fragTexCoord;
-    vec4 sum = texture(texture0, uv) * 4.0;
-    sum += texture(texture0, uv - halfpixel.xy * offset);
-    sum += texture(texture0, uv + halfpixel.xy * offset);
-    sum += texture(texture0, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
-    sum += texture(texture0, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
-    finalColor = sum / 8.0;
-}";
-
-    public const string BlurUp_FS = @"
-#version 330
-in vec2 fragTexCoord;
-out vec4 finalColor;
-uniform sampler2D texture0;
-uniform vec2 halfpixel;
-uniform float offset;
-void main()
-{
-    vec2 uv = fragTexCoord;
-    vec4 sum = texture(texture0, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture(texture0, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture(texture0, uv + vec2(0.0, halfpixel.y * 2.0) * offset);
-    sum += texture(texture0, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture(texture0, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture(texture0, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
-    sum += texture(texture0, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
-    sum += texture(texture0, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
-    finalColor = sum / 12.0;
-}";
-
-    public const string Vertex_VS = @"
-#version 330
-in vec3 vertexPosition;
-in vec2 vertexTexCoord;
-in vec4 vertexColor;
-
-uniform mat4 mvp;
-
-out vec2 fragTexCoord;
-out vec4 fragColor;
-out vec2 fragPos;
-
-void main()
-{
-    fragTexCoord = vertexTexCoord;
-    fragColor = vertexColor;
-    fragPos = vertexPosition.xy;
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
-}";
+    // Generated from Quill/Shaders/Canvas.slang and Blur.slang; see Shaders/CanvasShaders.generated.cs
 
     Shader shader;
     int scissorMatLoc;
@@ -234,6 +28,7 @@ void main()
     int _brushParams2Loc;
     int _brushTextureMatLoc;
     int _dpiScaleLoc;
+    int _atlasTexelSizeLoc;
 
     // Backdrop blur
     public bool SupportsBackdropBlur => true;
@@ -256,7 +51,7 @@ void main()
     public RaylibCanvasRenderer()
     {
         // Load shader with scissoring support
-        shader = LoadShaderFromMemory(Vertex_VS, Stroke_FS);
+        shader = LoadShaderFromMemory(CanvasShaders.Vertex, CanvasShaders.Fragment);
         scissorMatLoc = GetShaderLocation(shader, "scissorMat");
         scissorExtLoc = GetShaderLocation(shader, "scissorExt");
 
@@ -275,10 +70,12 @@ void main()
         _backdropBlurAmountLoc = GetShaderLocation(shader, "backdropBlurAmount");
         _backdropFlipYLoc = GetShaderLocation(shader, "backdropFlipY");
 
-        _blurDown = LoadShaderFromMemory(null, BlurDown_FS);
+        _atlasTexelSizeLoc = GetShaderLocation(shader, "atlasTexelSize");
+
+        _blurDown = LoadShaderFromMemory(null, CanvasShaders.BlurDownsample);
         _downHalfpixelLoc = GetShaderLocation(_blurDown, "halfpixel");
         _downOffsetLoc = GetShaderLocation(_blurDown, "offset");
-        _blurUp = LoadShaderFromMemory(null, BlurUp_FS);
+        _blurUp = LoadShaderFromMemory(null, CanvasShaders.BlurUpsample);
         _upHalfpixelLoc = GetShaderLocation(_blurUp, "halfpixel");
         _upOffsetLoc = GetShaderLocation(_blurUp, "offset");
     }
@@ -402,14 +199,16 @@ void main()
         // Set scissor rectangle
         drawCall.GetScissor(out var scissor, out var extent);
 
-        SetShaderValueMatrix(shader, scissorMatLoc, (Float4x4)scissor);
+        // Every matrix goes up transposed: the generated shader comes from Slang, which emits
+        // mul(M, v) as v * M. Raylib has no transpose flag, so it is applied here.
+        SetShaderValueMatrix(shader, scissorMatLoc, Float4x4.Transpose((Float4x4)scissor));
         SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
 
         // Set gradient parameters
         SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
         if (drawCall.Brush.Type != BrushType.None)
         {
-            SetShaderValueMatrix(shader, _brushMatLoc, (Float4x4)drawCall.Brush.BrushMatrix);
+            SetShaderValueMatrix(shader, _brushMatLoc, Float4x4.Transpose((Float4x4)drawCall.Brush.BrushMatrix));
             var brcol1 = (Prowl.Vector.Color)drawCall.Brush.Color1;
             var brcol2 = (Prowl.Vector.Color)drawCall.Brush.Color2;
             SetShaderValue(shader, _brushColor1Loc, brcol1, ShaderUniformDataType.Vec4);
@@ -419,11 +218,17 @@ void main()
         }
 
         // Set texture transform parameters
-        SetShaderValueMatrix(shader, _brushTextureMatLoc, (Float4x4)drawCall.Brush.TextureMatrix);
+        SetShaderValueMatrix(shader, _brushTextureMatLoc, Float4x4.Transpose((Float4x4)drawCall.Brush.TextureMatrix));
 
         // Font atlas on its own sampler so text batches with shapes (text samples it).
         if (drawCall.FontAtlas is Texture2D fontTex)
+        {
             SetShaderValueTexture(shader, _fontTextureLoc, fontTex);
+            // Feeds the distance-field range; the generated shader takes this as a uniform.
+            SetShaderValue(shader, _atlasTexelSizeLoc,
+                new Float2(fontTex.Width > 0 ? 1f / fontTex.Width : 0f, fontTex.Height > 0 ? 1f / fontTex.Height : 0f),
+                ShaderUniformDataType.Vec2);
+        }
 
         // Backdrop blur uniforms
         float blurAmount = (float)drawCall.Brush.BackdropBlur;
@@ -475,8 +280,8 @@ void main()
         // If any shape needs a backdrop blur, render the whole canvas into an offscreen scene
         // target so the blur passes can sample what has been drawn so far, then blit to screen.
         bool anyBlur = false;
-        foreach (var dc in canvas.DrawCalls)
-            if (dc.Brush.BackdropBlur > 0f) { anyBlur = true; break; }
+        for (int i = 0; i < drawCalls.Count; i++)
+            if (drawCalls[i].Brush.BackdropBlur > 0f) { anyBlur = true; break; }
 
         if (anyBlur)
         {
@@ -489,9 +294,14 @@ void main()
         BeginBlendMode(BlendMode.AlphaPremultiply);
         Rlgl.DrawRenderBatchActive();
 
+        // Hoisted out of the per-triangle loop: reading these through the canvas properties on
+        // every vertex lookup was the dominant cost of this backend.
+        ReadOnlySpan<Vertex> vertices = canvas.Vertices;
+        ReadOnlySpan<uint> indices = canvas.Indices;
+
         int index = 0;
 
-        foreach (var drawCall in canvas.DrawCalls)
+        foreach (var drawCall in drawCalls)
         {
             // Backdrop blur: flush the scene drawn so far, blur it, then resume.
             if (anyBlur && drawCall.Brush.BackdropBlur > 0f)
@@ -548,9 +358,9 @@ void main()
                     }
                 }
 
-                var a = canvas.Vertices[(int)canvas.Indices[index]];
-                var b = canvas.Vertices[(int)canvas.Indices[index + 1]];
-                var c = canvas.Vertices[(int)canvas.Indices[index + 2]];
+                var a = vertices[(int)indices[index]];
+                var b = vertices[(int)indices[index + 1]];
+                var c = vertices[(int)indices[index + 2]];
 
                 Rlgl.Color4ub(a.r, a.g, a.b, a.a);
                 Rlgl.TexCoord2f(a.u, a.v);

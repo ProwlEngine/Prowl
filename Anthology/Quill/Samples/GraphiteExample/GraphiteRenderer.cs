@@ -287,7 +287,7 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
         {
             EnsureBlurTargets(_owner._fbWidth, _owner._fbHeight);
 
-            bool hasGeometry = _drawCalls.Count > 0 && _canvas.Vertices.Count > 0 && _canvas.Indices.Count > 0;
+            bool hasGeometry = _drawCalls.Count > 0 && _canvas.VertexCount > 0 && _canvas.IndexCount > 0;
 
             CommandBuffer cmd = context.GetCommandBuffer(Name);
 
@@ -317,14 +317,14 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         private void UploadGeometry(CommandBuffer cmd, ExecutionTask task)
         {
-            Vertex[] vertices = [.. _canvas.Vertices];
-            uint[] indices = [.. _canvas.Indices];
+            int vertexCount = _canvas.VertexCount;
+            int indexCount = _canvas.IndexCount;
 
-            _activeVbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(vertices.Length * Vertex.SizeInBytes), BufferUsage.VertexBuffer));
-            _activeEbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(indices.Length * sizeof(uint)), BufferUsage.IndexBuffer));
+            _activeVbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(vertexCount * Vertex.SizeInBytes), BufferUsage.VertexBuffer));
+            _activeEbo = _owner._gl.RentTransientBuffer(task, new BufferDescription((uint)(indexCount * sizeof(uint)), BufferUsage.IndexBuffer));
 
-            cmd.UpdateBuffer(_activeVbo, 0, vertices);
-            cmd.UpdateBuffer(_activeEbo, 0, indices);
+            cmd.UpdateBuffer(_activeVbo, 0, _canvas.Vertices);
+            cmd.UpdateBuffer(_activeEbo, 0, _canvas.Indices);
         }
 
 
@@ -367,6 +367,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             _properties.SetFloat2("viewportSize", new Float2(_owner._fbWidth, _owner._fbHeight));
             _properties.SetFloat("backdropBlurAmount", blur);
+            // Vulkan stores the scene top-left origin, so the backdrop samples upright.
+            _properties.SetInt("backdropFlipY", 0);
 
             // backdropTexture always needs a bound sampler; use the blurred scene when blurring, else any texture.
             if (blur > 0f)

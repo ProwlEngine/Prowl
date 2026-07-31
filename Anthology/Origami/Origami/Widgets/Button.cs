@@ -426,9 +426,7 @@ public sealed class ButtonBuilder
         float r = s.Rounding;
 
         // Coloured glow (filled variants) or a soft drop shadow.
-        if (c.DrawGlow)
-            PaintGlow(canvas, x, y, w, h, r, c.Glow, 4f, 18f, -4f);
-        else if (s.Shadow && s.Style != ButtonStyle.Ghost && s.Style != ButtonStyle.Link)
+        if (s.Shadow && s.Style != ButtonStyle.Ghost && s.Style != ButtonStyle.Link)
         {
             byte a = (byte)Math.Clamp((int)(50 + 20 * s.HoverT), 0, 120);
             canvas.RoundedRectFilled(x + 1f, y + 3f, w, h, r, Color.FromArgb(a, 0, 0, 0));
@@ -533,7 +531,6 @@ public sealed class ButtonBuilder
         public Color BgTop, BgBottom; public bool Gradient;
         public Color Border; public bool DrawBorder;
         public Color Label;
-        public Color Glow; public bool DrawGlow;
         public bool Lift;
     }
 
@@ -561,7 +558,6 @@ public sealed class ButtonBuilder
                     bot = OrigamiRamp.LerpColor(bot, ramp.C400, 0.5f * s.PressT);
                     r.BgTop = top; r.BgBottom = bot; r.Gradient = true;
                     r.Label = ink.C700;
-                    r.Glow = Alpha(ramp.C500, 0.45f + 0.2f * s.HoverT); r.DrawGlow = true;
                     r.Lift = true;
                 }
                 else
@@ -605,27 +601,12 @@ public sealed class ButtonBuilder
 
         if (s.Disabled)
         {
-            r.Gradient = false; r.DrawGlow = false; r.Lift = false;
+            r.Gradient = false; r.Lift = false;
             r.BgTop = MulA(r.BgTop, 0.4f); r.BgBottom = r.BgTop;
             r.Border = MulA(r.Border, 0.4f);
             r.Label = Alpha(r.Label, 0.4f);
         }
         return r;
-    }
-
-    /// <summary>Feathered coloured glow under a filled button (emulates the prototype box-shadow).</summary>
-    private static void PaintGlow(Canvas canvas, float x, float y, float w, float h, float rounding, Color glow, float offY, float blur, float spread)
-    {
-        if (!Origami.GlowsEnabled) return;
-        float cx = x + w * 0.5f, cy = y + h * 0.5f + offY;
-        float bw = w + spread * 2f, bh = h + spread * 2f;
-        canvas.SaveState();
-        canvas.SetBoxBrush(cx, cy, bw, bh, rounding, blur, glow, Color.FromArgb(0, glow.R, glow.G, glow.B));
-        canvas.BeginPath();
-        float pad = blur + 6f;
-        canvas.Rect(x - pad, y + offY - pad, w + pad * 2f, h + pad * 2f);
-        canvas.Fill();
-        canvas.RestoreState();
     }
 
     private static Color ChooseFocusRingColor(in ButtonRenderSnapshot s)

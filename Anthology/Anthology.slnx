@@ -17,10 +17,13 @@
     <Project Path="Graphite/Graphite/Prowl.Graphite.csproj" />
     <Project Path="Graphite/ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
     <Project Path="Graphite/ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <Project Path="Ember/Ember/Prowl.Ember.csproj" />
+    <Project Path="Ember/Contracts/Prowl.Ember.Contracts.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
     <Project Path="Slang/COMApi/Prowl.Slang.COMApi.csproj" />
+    <Project Path="Ember/Analyzers/Prowl.Ember.Analyzers.csproj" />
   </Folder>
   <Folder Name="/Samples/">
     <Project Path="Origami/Samples/OpenTK/Origami.Sample.OpenTK.csproj" />
@@ -40,5 +43,6 @@
     <Project Path="Graphite/Tests/Graphite/Prowl.Graphite.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
+    <Project Path="Ember/Tests/Prowl.Ember.Tests.csproj" />
   </Folder>
 </Solution>

@@ -42,18 +42,22 @@ namespace Quill.Unity
         private Camera _camera;
 
         // Shader property IDs
-        private static readonly int _MainTexID = Shader.PropertyToID("_MainTex");
-        private static readonly int _FontTexID = Shader.PropertyToID("_FontTex");
-        private static readonly int _ScissorMatID = Shader.PropertyToID("_ScissorMat");
-        private static readonly int _ScissorExtID = Shader.PropertyToID("_ScissorExt");
-        private static readonly int _BrushMatID = Shader.PropertyToID("_BrushMat");
-        private static readonly int _BrushTypeID = Shader.PropertyToID("_BrushType");
-        private static readonly int _BrushColor1ID = Shader.PropertyToID("_BrushColor1");
-        private static readonly int _BrushColor2ID = Shader.PropertyToID("_BrushColor2");
-        private static readonly int _BrushParamsID = Shader.PropertyToID("_BrushParams");
-        private static readonly int _BrushParams2ID = Shader.PropertyToID("_BrushParams2");
-        private static readonly int _BrushTextureMatID = Shader.PropertyToID("_BrushTextureMat");
-        private static readonly int _DpiScaleID = Shader.PropertyToID("_DpiScale");
+        private static readonly int _MainTexID = Shader.PropertyToID("texture0");
+        private static readonly int _FontTexID = Shader.PropertyToID("fontTexture");
+        private static readonly int _ScissorMatID = Shader.PropertyToID("scissorMat");
+        private static readonly int _ScissorExtID = Shader.PropertyToID("scissorExt");
+        private static readonly int _BrushMatID = Shader.PropertyToID("brushMat");
+        private static readonly int _BrushTypeID = Shader.PropertyToID("brushType");
+        private static readonly int _BrushColor1ID = Shader.PropertyToID("brushColor1");
+        private static readonly int _BrushColor2ID = Shader.PropertyToID("brushColor2");
+        private static readonly int _BrushParamsID = Shader.PropertyToID("brushParams");
+        private static readonly int _BrushParams2ID = Shader.PropertyToID("brushParams2");
+        private static readonly int _BrushTextureMatID = Shader.PropertyToID("brushTextureMat");
+        private static readonly int _DpiScaleID = Shader.PropertyToID("dpiScale");
+        private static readonly int _AtlasTexelSizeID = Shader.PropertyToID("atlasTexelSize");
+        private static readonly int _ViewportSizeID = Shader.PropertyToID("viewportSize");
+        private static readonly int _BackdropBlurAmountID = Shader.PropertyToID("backdropBlurAmount");
+        private static readonly int _BackdropFlipYID = Shader.PropertyToID("backdropFlipY");
 
         // Vertex layout: Position (2 floats) + UV (2 floats) + Color (4 bytes packed as 1 uint)
         private static readonly VertexAttributeDescriptor[] s_vertexAttributes = new[]
@@ -243,11 +247,22 @@ namespace Quill.Unity
 
                 // Set texture
                 var texture = drawCall.Texture as Texture2D ?? _defaultTexture;
+                var fontAtlas = drawCall.FontAtlas as Texture2D ?? _defaultTexture;
                 _material.SetTexture(_MainTexID, texture);
-                _material.SetTexture(_FontTexID, drawCall.FontAtlas as Texture2D ?? _defaultTexture);
+                _material.SetTexture(_FontTexID, fontAtlas);
 
                 // Set DPI scale
                 _material.SetFloat(_DpiScaleID, (float)canvas.FramebufferScale);
+
+                // Font atlas texel size, so the text distance field resolves at any zoom.
+                _material.SetVector(_AtlasTexelSizeID, new Vector2(
+                    fontAtlas.width > 0 ? 1f / fontAtlas.width : 0f,
+                    fontAtlas.height > 0 ? 1f / fontAtlas.height : 0f));
+
+                // This backend has no backdrop blur pass, so the composite branch stays off.
+                _material.SetVector(_ViewportSizeID, new Vector2(Screen.width, Screen.height));
+                _material.SetFloat(_BackdropBlurAmountID, 0f);
+                _material.SetInt(_BackdropFlipYID, 0);
 
                 // Set scissor parameters
                 drawCall.GetScissor(out var scissorMat, out var scissorExt);

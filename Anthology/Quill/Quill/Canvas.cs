@@ -431,17 +431,36 @@ namespace Prowl.Quill
         /// <summary>
         /// Gets the list of draw calls accumulated during rendering.
         /// </summary>
-        public IReadOnlyList<DrawCall> DrawCalls => _drawCalls.AsReadOnly();
+        public IReadOnlyList<DrawCall> DrawCalls => _drawCalls;
 
         /// <summary>
-        /// Gets the list of triangle indices for all accumulated geometry.
+        /// Gets the triangle indices for all accumulated geometry.
         /// </summary>
-        public IReadOnlyList<uint> Indices => _indices.AsReadOnly();
+        public ReadOnlySpan<uint> Indices => _indices.AsSpan();
 
         /// <summary>
-        /// Gets the list of vertices for all accumulated geometry.
+        /// Gets the vertices for all accumulated geometry.
         /// </summary>
-        public IReadOnlyList<Vertex> Vertices => _vertices.AsReadOnly();
+        public ReadOnlySpan<Vertex> Vertices => _vertices.AsSpan();
+
+        /// <summary>
+        /// The live vertex backing store. Only the first <see cref="VertexCount"/> entries are valid,
+        /// and the array is replaced when the canvas grows. Backends upload straight from this rather
+        /// than copying the geometry out every frame.
+        /// </summary>
+        public Vertex[] VertexBuffer => _vertices.Array;
+
+        /// <summary>The number of valid entries in <see cref="VertexBuffer"/>.</summary>
+        public int VertexCount => _vertices.Count;
+
+        /// <summary>
+        /// The live index backing store. Only the first <see cref="IndexCount"/> entries are valid,
+        /// and the array is replaced when the canvas grows.
+        /// </summary>
+        public uint[] IndexBuffer => _indices.Array;
+
+        /// <summary>The number of valid entries in <see cref="IndexBuffer"/>.</summary>
+        public int IndexCount => _indices.Count;
 
         /// <summary>
         /// Gets the current point of the active path, or Zero if no path is active.
@@ -463,8 +482,8 @@ namespace Prowl.Quill
         // with shapes. Part of the draw-state hash so a change cleanly splits the batch.
         private object? _currentFontAtlas;
 
-        internal List<uint> _indices = new List<uint>();
-        internal List<Vertex> _vertices = new List<Vertex>();
+        internal GeometryBuffer<uint> _indices = new GeometryBuffer<uint>();
+        internal GeometryBuffer<Vertex> _vertices = new GeometryBuffer<Vertex>();
 
         private readonly List<SubPath> _subPaths = new List<SubPath>();
         private SubPath? _currentSubPath = null;
@@ -1183,7 +1202,7 @@ namespace Prowl.Quill
         public void AddVertices(List<Vertex> verts)
         {
             float globalAlpha = _globalAlpha;
-            Reserve(_vertices, verts.Count);
+            _vertices.Reserve(verts.Count);
             for (int i = 0; i < verts.Count; i++)
                 _vertices.Add(Premultiply(verts[i], globalAlpha));
         }
@@ -1219,16 +1238,7 @@ namespace Prowl.Quill
         // per-vertex premultiply that AddVertices performs.
         private void AddVerticesRaw(List<Vertex> verts)
         {
-            Reserve(_vertices, verts.Count);
             _vertices.AddRange(verts);
-        }
-
-        // netstandard2.1 has no List.EnsureCapacity, so grow via the Capacity setter instead.
-        private static void Reserve<T>(List<T> list, int additional)
-        {
-            int needed = list.Count + additional;
-            if (list.Capacity < needed)
-                list.Capacity = needed;
         }
 
         /// <summary>
@@ -1271,7 +1281,7 @@ namespace Prowl.Quill
             if (indices.Count == 0)
                 return;
 
-            Reserve(_indices, indices.Count);
+            _indices.Reserve(indices.Count);
             for (int i = 0; i < indices.Count; i++)
                 _indices.Add(indices[i]);
 
@@ -1838,8 +1848,8 @@ namespace Prowl.Quill
 
             // Create vertices and triangles
             uint startVertexIndex = (uint)_vertices.Count;
-            Reserve(_vertices, vertices.Length);
-            Reserve(_indices, indices.Length);
+            _vertices.Reserve(vertices.Length);
+            _indices.Reserve(indices.Length);
             for (int i = 0; i < vertices.Length; i++)
             {
                 var vertex = vertices[i];
@@ -2026,7 +2036,7 @@ namespace Prowl.Quill
 
             uint startVertexIndex = (uint)_vertices.Count;
             AddVerticesRaw(verts);
-            Reserve(_indices, idxs.Count);
+            _indices.Reserve(idxs.Count);
             for (int i = 0; i < idxs.Count; i++)
                 _indices.Add(startVertexIndex + idxs[i]);
 

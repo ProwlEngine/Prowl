@@ -13,7 +13,7 @@
 
   <!-- Copy index.html to AppBundle -->
   <Target Name="CopyIndexHtml" AfterTargets="WasmBuildApp" Condition="'$(WasmAppDir)' != ''">
-    <Copy SourceFiles="index.html" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="index.html;canvasShaders.generated.js" DestinationFolder="$(WasmAppDir)" />
   </Target>
 
 </Project>

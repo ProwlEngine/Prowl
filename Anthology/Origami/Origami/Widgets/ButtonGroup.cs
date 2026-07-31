@@ -266,9 +266,7 @@ public sealed class ButtonGroupBuilder
 
         if (s.IsSelected)
         {
-            // Selected pill lifts with a tight downward glow (segmented only, like the prototype).
-            if (s.Segmented && !s.IsDisabled)
-                PillGlow(canvas, x, y, w, h, rr, selBg);
+            // Selected pill lifts (segmented only).
             Color bg = OrigamiRamp.LerpColor(selBg, accent.C600, s.HoverT);
             bg = OrigamiRamp.LerpColor(bg, accent.C400, s.PressT * 0.5f);
             if (s.IsDisabled) bg = OrigamiRamp.LerpColor(bg, neutral.C400, 0.5f);
@@ -319,20 +317,6 @@ public sealed class ButtonGroupBuilder
         }
         if (drawLabel)
             canvas.DrawText(s.Label, cx, cy, labelCol, s.FontSize, s.Font);
-    }
-
-    // Tight coloured drop-glow beneath a selected pill (prototype box-shadow: 0 2px 8px -2px).
-    // Wrapped in Save/Restore so the box brush never leaks into the following text/fill draws.
-    internal static void PillGlow(Canvas canvas, float x, float y, float w, float h, float r, Color c)
-    {
-        if (!Origami.GlowsEnabled) return;
-        Color glow = Color.FromArgb(140, c.R, c.G, c.B);
-        canvas.SaveState();
-        canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 3f, w - 4f, h - 4f, r, 13f, glow, Color.FromArgb(0, c.R, c.G, c.B));
-        canvas.BeginPath();
-        canvas.Rect(x - 16f, y - 8f, w + 32f, h + 28f);
-        canvas.Fill();
-        canvas.RestoreState();
     }
 
     private void DrawSegmentTooltip(ElementHandle segHandle, string text, Prowl.Scribe.FontFile font, float fontSize)
