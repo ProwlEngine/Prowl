@@ -392,7 +392,7 @@ public static class ScriptCompiler
         // project; every reference is added explicitly below.
         sb.AppendLine("    <EnableDefaultItems>false</EnableDefaultItems>");
         sb.AppendLine($"    <AllowUnsafeBlocks>{(unit.AllowUnsafe ? "true" : "false")}</AllowUnsafeBlocks>");
-        sb.AppendLine("    <Nullable>enable</Nullable>");
+        sb.AppendLine("    <Nullable>annotations</Nullable>");
         sb.AppendLine($"    <OutputPath>{Xml(outputDir)}</OutputPath>");
         sb.AppendLine("    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>");
         sb.AppendLine("    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>");

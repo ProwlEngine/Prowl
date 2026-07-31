@@ -215,7 +215,7 @@ internal static class RoslynScriptBackend
             .WithPlatform(Platform.AnyCpu)
             .WithOptimizationLevel(OptimizationLevel.Debug)
             .WithAllowUnsafe(unit.AllowUnsafe)
-            .WithNullableContextOptions(NullableContextOptions.Enable)
+            .WithNullableContextOptions(NullableContextOptions.Annotations)
             .WithConcurrentBuild(true)
             // Referencing runtime implementation assemblies (from the TPA list) instead of ref
             // assemblies produces harmless version mismatch noise. Silence it.
