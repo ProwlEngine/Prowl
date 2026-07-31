@@ -138,8 +138,8 @@ public sealed class OHLCChart<T> : CartesianCore<OHLCChart<T>, T>
         }
     }
 
-    /// <summary>Highlights the sampled bar's band, marks its close tick, and reads out all four prices,
-    /// since a bar encodes three values the base series' y never carries.</summary>
+    /// <summary>Highlights the sampled bar's band and reads out all four prices, since a bar encodes
+    /// three values the base series' y never carries.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
         if (_open == null || _high == null || _low == null || _close == null) return;
@@ -163,8 +163,6 @@ public sealed class OHLCChart<T> : CartesianCore<OHLCChart<T>, T>
         Color col = close >= open
             ? _upColor ?? _theme.Get(OrigamiVariant.Success).C500
             : _downColor ?? _theme.Get(OrigamiVariant.Danger).C500;
-
-        SampleDot(paper, "close", cx + ctx.BandWidth * TickWidthFactor, Math.Clamp(ctx.YPos(close), ctx.PlotT, ctx.PlotB), col);
 
         var rows = new List<(Color Color, string Text)>
         {

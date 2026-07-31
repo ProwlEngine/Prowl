@@ -94,8 +94,7 @@ public sealed class BarChart<T> : CartesianCore<BarChart<T>, T>
         }
     }
 
-    /// <summary>Highlights the sampled band as a whole and marks the top of each series' bar inside it,
-    /// since a bar's value is read off its end rather than off a point on a line.</summary>
+    /// <summary>Highlights the sampled band as a whole.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
         List<CartesianSeries<T>> visible = VisibleSeries(ctx.Series);
@@ -104,7 +103,6 @@ public sealed class BarChart<T> : CartesianCore<BarChart<T>, T>
         float bandLeft = ctx.BandLeft(ctx.Index);
         SampleBand(paper, in ctx, bandLeft, ctx.BandWidth);
 
-        var slots = new BandSlots(ctx.BandWidth, _barWidth, _barGap, visible.Count);
         var rows = new List<(Color Color, string Text)>();
 
         for (int k = 0; k < visible.Count; k++)
@@ -116,9 +114,7 @@ public sealed class BarChart<T> : CartesianCore<BarChart<T>, T>
             if (double.IsNaN(value) || double.IsInfinity(value)) continue;
 
             Color color = s.Color ?? System.Drawing.Color.Gray;
-            float cx = slots.Center(bandLeft, k);
 
-            SampleDot(paper, k.ToString(), cx, Math.Clamp(ctx.YPos(value), ctx.PlotT, ctx.PlotB), color);
             rows.Add((color, $"{s.Label}: {FormatValue(value)}"));
         }
 

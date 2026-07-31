@@ -430,8 +430,8 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     /// <summary>When true, a <see cref="BandedX"/> chart with no explicit <see cref="XTicks"/> gets one
     /// x tick per band rather than a capped, evenly spread subset. Set on the categorical types whose
-    /// bands each carry a name worth reading (Bar, StackedBar, BoxPlot); left false on the types whose
-    /// bands are a long numeric sequence (Candlestick, OHLC, Histogram) where one label per band would
+    /// bands each carry a name worth reading (Bar, StackedBar, BoxPlot, Histogram); left false on the
+    /// types whose bands are a long numeric sequence (Candlestick, OHLC) where one label per band would
     /// be unreadable. Ignored when <see cref="BandedX"/> is false.</summary>
     protected virtual bool TickPerBand => false;
 

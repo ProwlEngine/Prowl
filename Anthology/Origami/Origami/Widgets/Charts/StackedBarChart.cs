@@ -174,9 +174,8 @@ public sealed class StackedBarChart<T> : CartesianCore<StackedBarChart<T>, T>
         }
     }
 
-    /// <summary>Highlights the sampled band and marks the outer end of each stack in it. The readout
-    /// lists every segment in the band plus each multi-segment stack's total, which is the value the
-    /// bar's overall height actually shows.</summary>
+    /// <summary>Highlights the sampled band. The readout lists every segment in the band plus each
+    /// multi-segment stack's total, which is the value the bar's overall height actually shows.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
         List<List<CartesianSeries<T>>> groups = BuildGroups(ctx.Series);
@@ -184,10 +183,6 @@ public sealed class StackedBarChart<T> : CartesianCore<StackedBarChart<T>, T>
 
         float bandLeft = ctx.BandLeft(ctx.Index);
         SampleBand(paper, in ctx, bandLeft, ctx.BandWidth);
-
-        float groupWidth = ctx.BandWidth * _barWidth;
-        float groupInset = (ctx.BandWidth - groupWidth) * 0.5f;
-        float slotWidth = groupWidth / groups.Count;
 
         var rows = new List<(Color Color, string Text)>();
 
@@ -208,14 +203,6 @@ public sealed class StackedBarChart<T> : CartesianCore<StackedBarChart<T>, T>
             }
 
             if (segments == 0) continue;
-
-            float cx = bandLeft + groupInset + slotWidth * (g + 0.5f);
-
-            if (posOffset > 0d)
-                SampleDot(paper, $"{g}_pos", cx, Math.Clamp(ctx.YPos(posOffset), ctx.PlotT, ctx.PlotB), SampleColor);
-
-            if (negOffset < 0d)
-                SampleDot(paper, $"{g}_neg", cx, Math.Clamp(ctx.YPos(negOffset), ctx.PlotT, ctx.PlotB), SampleColor);
 
             if (segments > 1)
                 rows.Add((SampleColor, $"Total: {FormatValue(posOffset + negOffset)}"));

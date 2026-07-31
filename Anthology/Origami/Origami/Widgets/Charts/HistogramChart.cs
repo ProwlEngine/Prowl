@@ -34,6 +34,7 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
     private const float MinRoundedHeight = 4f;
 
     protected override bool BandedX => true;
+    protected override bool TickPerBand => true;
 
     /// <summary>Number of equal bins the value range is split into. Default 10, ignored once
     /// <see cref="BinWidth"/> is set.</summary>
@@ -117,8 +118,8 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
         }
     }
 
-    /// <summary>Highlights the sampled bin and marks the top of each group's bar in it. The popup header
-    /// names the bin's value range rather than its index, since a histogram band is a range of values.</summary>
+    /// <summary>Highlights the sampled bin. The popup header names the bin's value range rather than
+    /// its index, since a histogram band is a range of values.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
         List<CartesianSeries<T>> visible = VisibleGroups(ctx.Series);
@@ -127,7 +128,6 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
         float bandLeft = ctx.BandLeft(ctx.Index);
         SampleBand(paper, in ctx, bandLeft, ctx.BandWidth);
 
-        var slots = new BandSlots(ctx.BandWidth, BandFill, SlotGap, visible.Count);
         var rows = new List<(Color Color, string Text)>();
 
         for (int k = 0; k < visible.Count; k++)
@@ -139,9 +139,7 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
             if (!IsFinite(value)) continue;
 
             Color color = FillColorOf(s);
-            float cx = slots.Center(bandLeft, k);
 
-            SampleDot(paper, k.ToString(), cx, Math.Clamp(ctx.YPos(value), ctx.PlotT, ctx.PlotB), color);
             rows.Add((color, s.Label.Length > 0 ? $"{s.Label}: {FormatValue(value)}" : FormatValue(value)));
         }
 

@@ -58,8 +58,8 @@ public sealed class StepChart<T> : CartesianCore<StepChart<T>, T>
     }
 
 
-    /// <summary>Crosshair through the sampled point's x with a dot on every visible series' tread at
-    /// that point, and a readout of the value each series holds there.</summary>
+    /// <summary>Crosshair through the sampled point's x, and a readout of the value each visible
+    /// series holds there.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext ctx)
     {
         CartesianSeries<T>? longest = LongestVisible(ctx.Series);
@@ -78,7 +78,6 @@ public sealed class StepChart<T> : CartesianCore<StepChart<T>, T>
             double value = s.Points[ctx.Index].Y;
             Color color = s.Color ?? System.Drawing.Color.Gray;
 
-            SampleDot(paper, i.ToString(), lx, Math.Clamp(ctx.YPos(value), ctx.PlotT, ctx.PlotB), color);
             rows.Add((color, $"{s.Label}: {FormatValue(value)}"));
         }
 
