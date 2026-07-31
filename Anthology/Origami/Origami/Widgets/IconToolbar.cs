@@ -94,7 +94,7 @@ public sealed class IconToolbarBuilder
                     .OnClick(_ => _setter(idx));
 
                 if (on)
-                    b.BackgroundColor(acc).Glow(0, 2, 12, -2, Color.FromArgb(160, acc.R, acc.G, acc.B));
+                    b.BackgroundColor(acc);
                 else
                     b.Hovered.BackgroundColor(_theme.Hover).End();
 

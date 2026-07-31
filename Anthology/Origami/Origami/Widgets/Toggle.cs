@@ -439,19 +439,6 @@ public sealed class ToggleBuilder
                 float knobY = y + pad;
                 float textBoxW = w - knob - pad * 2f;
 
-                // On-glow beneath the track (fades in with the value). Save/Restore so the box
-                // brush never leaks into the track / knob / text draws that follow.
-                if (t > 0.02f && Origami.GlowsEnabled)
-                {
-                    Color glow = Color.FromArgb((int)(95 * t), onBg.R, onBg.G, onBg.B);
-                    canvas.SaveState();
-                    canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 2f, w - 2f, h - 2f, h * 0.5f, 13f, glow, Color.FromArgb(0, onBg.R, onBg.G, onBg.B));
-                    canvas.BeginPath();
-                    canvas.Rect(x - 16f, y - 10f, w + 32f, h + 28f);
-                    canvas.Fill();
-                    canvas.RestoreState();
-                }
-
                 // Track — single hardware-accelerated rounded rect.
                 canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, trackBg);
 
@@ -598,18 +585,6 @@ public sealed class ToggleBuilder
                 float cx = x + w * 0.5f;
                 float cy = y + h * 0.5f;
 
-                // Dot glow (fades in with the value). Save/Restore so the box brush never leaks
-                // into the ring stroke / dot fill that follow.
-                if (anim > 0.02f && !_disabled && Origami.GlowsEnabled)
-                {
-                    Color glow = Color.FromArgb((int)(90 * anim), onColor.R, onColor.G, onColor.B);
-                    canvas.SaveState();
-                    canvas.SetBoxBrush(cx, cy, r, r, r, 7f, glow, Color.FromArgb(0, onColor.R, onColor.G, onColor.B));
-                    canvas.BeginPath();
-                    canvas.Rect(x - 8f, y - 8f, w + 16f, h + 16f);
-                    canvas.Fill();
-                    canvas.RestoreState();
-                }
 
                 // Ring (stroked so the centre stays transparent).
                 canvas.SaveState();

@@ -713,8 +713,7 @@ public class DockSpace
             .Layer(Layer.Topmost)
             .IsNotInteractable()
             .Rounded(1.5f)
-            .BackgroundColor(theme.Primary.C500)
-            .Glow(0, 0, 8, 0, OrigamiTheme.WithAlpha(theme.Primary.C500, 140));
+            .BackgroundColor(theme.Primary.C500);
     }
 
     // ================================================================

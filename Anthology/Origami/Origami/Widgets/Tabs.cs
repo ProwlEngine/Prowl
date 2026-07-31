@@ -233,9 +233,7 @@ public sealed class TabsBuilder
         Color labelCol;
         if (s.Pills)
         {
-            // Selected pill: accent fill + tight drop-glow. Unselected: transparent + hover tint.
-            if (s.SelT > 0.01f)
-                Glow(canvas, x, y, w, h, h * 0.5f, acc, s.SelT);
+            // Selected pill: accent fill. Unselected: transparent + hover tint.
             if (s.HoverT > 0.001f && s.SelT < 0.99f)
                 canvas.RoundedRectFilled(x, y, w, h, h * 0.5f, Color.FromArgb((int)(0.12f * 255 * s.HoverT * (1f - s.SelT)), acc.R, acc.G, acc.B));
             if (s.SelT > 0.01f)
@@ -245,20 +243,6 @@ public sealed class TabsBuilder
         else
         {
             labelCol = OrigamiRamp.LerpColor(OrigamiRamp.LerpColor(ink.C300, ink.C400, s.HoverT), ink.C500, s.SelT);
-            // Accent underline for the active tab (soft glow behind, crisp line on top).
-            if (s.SelT > 0.01f)
-            {
-                float uy = y + h - 2f;
-                if (Origami.GlowsEnabled)
-                {
-                    Color glow = Color.FromArgb((int)(150 * s.SelT), acc.R, acc.G, acc.B);
-                    canvas.SaveState();
-                    canvas.SetBoxBrush(x + w * 0.5f, uy + 1f, w - 2f, 2f, 1f, 10f, glow, Color.FromArgb(0, acc.R, acc.G, acc.B));
-                    canvas.BeginPath(); canvas.Rect(x - 14f, uy - 11f, w + 28f, 24f); canvas.Fill();
-                    canvas.RestoreState();
-                }
-                canvas.RectFilled(x, uy, w, 2f, Color.FromArgb((int)(255 * s.SelT), acc.R, acc.G, acc.B));
-            }
         }
 
         if (s.Font == null) return;
@@ -303,20 +287,5 @@ public sealed class TabsBuilder
             canvas.DrawText(s.Badge!, bx + (bw - (float)bts.X) * 0.5f, by + (bh - (float)bts.Y) * 0.5f, s.Accent.C700, bfs, s.Font);
         }
     }
-
-    // Tight coloured drop-glow beneath a selected pill; Save/Restore so the box brush never
-    // leaks into the fill/text draws that follow.
-    private static void Glow(Canvas canvas, float x, float y, float w, float h, float r, Color c, float t)
-    {
-        if (!Origami.GlowsEnabled) return;
-        Color glow = Color.FromArgb((int)(140 * t), c.R, c.G, c.B);
-        canvas.SaveState();
-        canvas.SetBoxBrush(x + w * 0.5f, y + h * 0.5f + 3f, w - 4f, h - 4f, r, 13f, glow, Color.FromArgb(0, c.R, c.G, c.B));
-        canvas.BeginPath();
-        canvas.Rect(x - 16f, y - 8f, w + 32f, h + 28f);
-        canvas.Fill();
-        canvas.RestoreState();
-    }
-
     private readonly record struct TabItem(string Label, IOrigamiIcon? Icon, string? Glyph, string? Badge);
 }
