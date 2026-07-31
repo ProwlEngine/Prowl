@@ -393,7 +393,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
             double pos = ((idx + 0.5d) - bandFirst) / bandSpan;
             if (pos < -1e-6d || pos > 1d + 1e-6d) continue;
 
-            string label = _xTickFormatter != null ? (_xTickFormatter(idx) ?? "") : idx.ToString();
+            string label = _xTickFormatter != null ? (_xTickFormatter(idx) ?? "") : DefaultXTickLabel(idx);
             result.Add(new AxisTick(pos, xVal, label));
         }
         return result;
@@ -434,6 +434,11 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// bands are a long numeric sequence (Candlestick, OHLC, Histogram) where one label per band would
     /// be unreadable. Ignored when <see cref="BandedX"/> is false.</summary>
     protected virtual bool TickPerBand => false;
+
+    /// <summary>Label for band <paramref name="index"/> when the caller set no <see cref="XTickFormatter"/>.
+    /// Chart types whose bands are not point indices - a box plot band is a whole group - override this so
+    /// the axis names the band without every caller having to supply a formatter.</summary>
+    protected virtual string DefaultXTickLabel(int index) => index.ToString();
 
     /// <summary>When true the sampler picks the point closest to the pointer in both axes rather than
     /// the one closest in x alone. Scatter and Bubble override this because their points are scattered
