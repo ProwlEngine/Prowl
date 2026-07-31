@@ -58,6 +58,11 @@ internal class PaperRenderer : ICanvasRenderer
     private int _upSrcLoc, _upHalfpixelLoc, _upOffsetLoc;
     private int _blurVao;          // empty VAO for fullscreen-triangle draws
     private int _blurFbo;          // reused framebuffer for the blur passes
+    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+    // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+    // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+    // eight pixel radius, since detail finer than the blur is destroyed anyway.
+    private const int BlurBaseShift = 2;
     private const int MaxBlurLevels = 6;
     private int[] _blurTex = new int[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
     private Vector2i[] _blurSize = new Vector2i[MaxBlurLevels];
@@ -299,8 +304,8 @@ internal class PaperRenderer : ICanvasRenderer
         // Level 0 is half the viewport; each subsequent level halves again.
         for (int i = 0; i < MaxBlurLevels; i++)
         {
-            int w = Math.Max(1, baseW >> (i + 1));
-            int h = Math.Max(1, baseH >> (i + 1));
+            int w = Math.Max(1, baseW >> (i + BlurBaseShift));
+            int h = Math.Max(1, baseH >> (i + BlurBaseShift));
             _blurSize[i] = new Vector2i(w, h);
             _blurTex[i] = CreateBlurTexture(w, h);
         }
@@ -318,7 +323,13 @@ internal class PaperRenderer : ICanvasRenderer
         // A dual Kawase pyramid of n iterations with sample offset o spreads light by roughly
         // o * 2^(n+1) source texels. We pick n from the radius and solve o so the product equals
         // the requested radius: that keeps the effective blur continuous even as n steps.
-        float r = MathF.Max(radius, 2f);
+        // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+        // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+        // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+        float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
         iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }

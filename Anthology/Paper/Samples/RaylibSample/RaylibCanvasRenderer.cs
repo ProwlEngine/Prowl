@@ -47,6 +47,11 @@ public class RaylibCanvasRenderer : ICanvasRenderer
     Shader _blurUp;
     int _downHalfpixelLoc, _downOffsetLoc;
     int _upHalfpixelLoc, _upOffsetLoc;
+    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+    // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+    // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+    // eight pixel radius, since detail finer than the blur is destroyed anyway.
+    private const int BlurBaseShift = 2;
     const int MaxBlurLevels = 6;
     RenderTexture2D _sceneRT;
     RenderTexture2D[] _blurLevels = new RenderTexture2D[MaxBlurLevels];
@@ -102,8 +107,8 @@ public class RaylibCanvasRenderer : ICanvasRenderer
         SetTextureFilter(_sceneRT.Texture, TextureFilter.Bilinear);
         for (int i = 0; i < MaxBlurLevels; i++)
         {
-            int lw = Math.Max(1, w >> (i + 1));
-            int lh = Math.Max(1, h >> (i + 1));
+            int lw = Math.Max(1, w >> (i + BlurBaseShift));
+            int lh = Math.Max(1, h >> (i + BlurBaseShift));
             _blurLevels[i] = LoadRenderTexture(lw, lh);
             SetTextureFilter(_blurLevels[i].Texture, TextureFilter.Bilinear);
         }
@@ -113,7 +118,13 @@ public class RaylibCanvasRenderer : ICanvasRenderer
 
     private static void ComputeBlurParams(float radius, out int iterations, out float offset)
     {
-        float r = MathF.Max(radius, 2f);
+        // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+        // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+        // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+        float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
         iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }

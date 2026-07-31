@@ -57,6 +57,11 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
     }
 
 
+    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+    // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+    // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+    // eight pixel radius, since detail finer than the blur is destroyed anyway.
+    private const int BlurBaseShift = 2;
     private const int MaxBlurLevels = 6;
     private const PixelFormat TargetFormat = PixelFormat.R8_G8_B8_A8_UNorm;
     private static readonly Color ClearColor = new(0f, 0f, 0f, 1f);
@@ -407,7 +412,13 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
         private static void ComputeBlurParams(float radius, out int iterations, out float offset)
         {
-            float r = MathF.Max(radius, 2f);
+            // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+            // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+            // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+            float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
             iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
             offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
         }
@@ -465,8 +476,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             for (int i = 0; i < MaxBlurLevels; i++)
             {
-                int w = Math.Max(1, width >> (i + 1));
-                int h = Math.Max(1, height >> (i + 1));
+                int w = Math.Max(1, width >> (i + BlurBaseShift));
+                int h = Math.Max(1, height >> (i + BlurBaseShift));
                 _blurSize[i] = new Int2(w, h);
 
                 TextureDescription blurDesc = TextureDescription.Texture2D((uint)w, (uint)h, 1, 1, TargetFormat, TextureUsage.Sampled | TextureUsage.RenderTarget);

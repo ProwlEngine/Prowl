@@ -51,6 +51,11 @@ namespace SilkExample
         private int _upSrcLoc, _upHalfpixelLoc, _upOffsetLoc;
         private uint _blurVao;
         private uint _blurFbo;
+        // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+        // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+        // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+        // eight pixel radius, since detail finer than the blur is destroyed anyway.
+        private const int BlurBaseShift = 2;
         private const int MaxBlurLevels = 6;
         private readonly uint[] _blurTex = new uint[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
         private readonly Int2[] _blurSize = new Int2[MaxBlurLevels];
@@ -60,6 +65,16 @@ namespace SilkExample
         private int _indexBufferCapacity;
         private bool _backdropDirty = true;
         private float _lastBlurRadius = -1f;
+
+        // Offscreen scene target, used only on frames that actually contain a frosted shape. Drawing
+        // through it lets the blur sample the scene as a texture instead of blitting the default
+        // framebuffer once per blurred draw call, and removes the mid-frame read-back stall.
+        private uint _sceneFbo;
+        private uint _sceneTex;
+        private int _sceneW, _sceneH;
+        private bool _renderingOffscreen;
+
+
 
         private int _blurBaseW;
         private int _blurBaseH;
@@ -267,6 +282,29 @@ namespace SilkExample
             // renderer may have driven this program since, so the per-group cache is dropped too.
             _backdropDirty = true;
 
+            // Only frames that actually contain a frosted shape pay for the offscreen target; anything
+            // else draws straight to the default framebuffer exactly as before.
+            _renderingOffscreen = false;
+            for (int i = 0; i < drawCalls.Count; i++)
+            {
+                if (drawCalls[i].Brush.BackdropBlur > 0f) { _renderingOffscreen = true; break; }
+            }
+
+            if (_renderingOffscreen)
+            {
+                EnsureSceneTarget(_fbWidth, _fbHeight);
+
+                // Seed with what is already on screen, so a frosted shape blurs whatever the host
+                // drew underneath the canvas and not just the canvas's own content.
+                _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+                _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _sceneFbo);
+                _gl.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+                    ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+
+                _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+                _gl.Viewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
+            }
+
             SetupRenderState();
     
             // Upload vertex and index data
@@ -280,6 +318,17 @@ namespace SilkExample
                 indexOffset += drawCall.ElementCount;
             }
     
+            // Present the offscreen scene to the window.
+            if (_renderingOffscreen)
+            {
+                _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _sceneFbo);
+                _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+                _gl.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+                    ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+                _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                _renderingOffscreen = false;
+            }
+
             // Cleanup state
             _gl.BindVertexArray(0);
             _gl.UseProgram(0);
@@ -341,6 +390,33 @@ namespace SilkExample
             return tex;
         }
 
+        private unsafe void EnsureSceneTarget(int w, int h)
+        {
+            if (_sceneTex != 0 && _sceneW == w && _sceneH == h)
+                return;
+
+            if (_sceneTex != 0) _gl.DeleteTexture(_sceneTex);
+            if (_sceneFbo == 0) _sceneFbo = _gl.GenFramebuffer();
+
+            _sceneTex = _gl.GenTexture();
+            _gl.BindTexture(TextureTarget.Texture2D, _sceneTex);
+            _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)w, (uint)h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (void*)0);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            _gl.BindTexture(TextureTarget.Texture2D, 0);
+
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+            _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _sceneTex, 0);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+
+            _sceneW = w;
+            _sceneH = h;
+        }
+
+
+
         private void EnsureBlurTargets(int baseW, int baseH)
         {
             if (_blurTex[0] != 0 && _blurBaseW == baseW && _blurBaseH == baseH)
@@ -350,8 +426,8 @@ namespace SilkExample
 
             for (int i = 0; i < MaxBlurLevels; i++)
             {
-                int w = Math.Max(1, baseW >> (i + 1));
-                int h = Math.Max(1, baseH >> (i + 1));
+                int w = Math.Max(1, baseW >> (i + BlurBaseShift));
+                int h = Math.Max(1, baseH >> (i + BlurBaseShift));
                 _blurSize[i] = new Int2(w, h);
                 _blurTex[i] = CreateBlurTexture(w, h);
             }
@@ -361,7 +437,13 @@ namespace SilkExample
 
         private static void ComputeBlurParams(float radius, out int iterations, out float offset)
         {
-            float r = MathF.Max(radius, 2f);
+            // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+            // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+            // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+            float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
             iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
             offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
         }
@@ -392,17 +474,15 @@ namespace SilkExample
             _gl.BindVertexArray(_blurVao);
             _gl.ActiveTexture(TextureUnit.Texture0);
 
-            // Capture default framebuffer into level 0 (half res) via a linear blit.
-            _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _blurFbo);
-            _gl.FramebufferTexture2D(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _blurTex[0], 0);
-            _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-            _gl.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _blurSize[0].X, _blurSize[0].Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
-
             _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _blurFbo);
 
+            // Downsample chain. The first pass reads the scene texture straight into level 0, so the
+            // full-resolution blit the old capture needed is gone, and the scene is filtered by the
+            // five-tap kernel rather than a single bilinear step (which would alias at this ratio).
             _gl.UseProgram(_blurDownProgram);
             _gl.Uniform1(_downSrcLoc, 0);
             _gl.Uniform1(_downOffsetLoc, offset);
+            BlurPass(_sceneTex, _blurTex[0], _blurSize[0], _downHalfpixelLoc, new Int2(_fbWidth, _fbHeight));
             for (int i = 0; i < iterations; i++)
                 BlurPass(_blurTex[i], _blurTex[i + 1], _blurSize[i + 1], _downHalfpixelLoc, _blurSize[i]);
 
@@ -412,8 +492,8 @@ namespace SilkExample
             for (int i = iterations; i > 0; i--)
                 BlurPass(_blurTex[i], _blurTex[i - 1], _blurSize[i - 1], _upHalfpixelLoc, _blurSize[i - 1]);
 
-            // Restore state for canvas drawing.
-            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            // Restore state for canvas drawing, back into whichever target the frame is drawing to.
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _renderingOffscreen ? _sceneFbo : 0);
             _gl.Viewport(0, 0, (uint)_fbWidth, (uint)_fbHeight);
             _gl.Enable(EnableCap.Blend);
             _gl.BindVertexArray(_vao);
