@@ -79,8 +79,8 @@ namespace Prowl.Quill
             int tlS = SegCount(tlRadii), trS = SegCount(trRadii), brS = SegCount(brRadii), blS = SegCount(blRadii);
             int columns = (tlRadii > 0 ? tlS + 1 : 1) + (trRadii > 0 ? trS + 1 : 1)
                         + (brRadii > 0 ? brS + 1 : 1) + (blRadii > 0 ? blS + 1 : 1);
-            Reserve(_vertices, columns * 4);  // 4 verts per column
-            Reserve(_indices, columns * 18);  // 6 triangles (18 indices) per segment
+            _vertices.Reserve(columns * 4);  // 4 verts per column
+            _indices.Reserve(columns * 18);  // 6 triangles (18 indices) per segment
 
             // Appends one outline vertex's 4-vertex column (screen-space positions), in radial order
             // outer->inner: outer fringe (coverage 0), outer core (1), inner core (1), inner fringe (0).
@@ -172,8 +172,8 @@ namespace Prowl.Quill
             Float2 edge = new Float2(0f, 0f);
             Color32 pm = PremultiplyColor(color); // premultiply once; append raw (see RoundedRectBorder)
             uint b = (uint)_vertices.Count;
-            Reserve(_vertices, segments * 4);  // 4 verts per column
-            Reserve(_indices, segments * 18);  // 6 triangles (18 indices) per segment
+            _vertices.Reserve(segments * 4);  // 4 verts per column
+            _indices.Reserve(segments * 18);  // 6 triangles (18 indices) per segment
 
             double da = Math.PI * 2 / segments, ca = Math.Cos(da), sa = Math.Sin(da);
             double dx = 1, dy = 0;
