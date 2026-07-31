@@ -14,4 +14,32 @@
     <ProjectReference Include="..\..\Scribe\Scribe\Scribe.csproj" />
   </ItemGroup>
 
+  <!--
+    Regenerates every backend's shader from Shaders/Canvas.slang. Runs once per build rather than
+    once per target framework, and only when the Slang source is newer than what it produced. The
+    generated files are checked in, so a machine without the Slang native libraries still builds:
+    the step warns and leaves the existing output alone.
+  -->
+  <PropertyGroup>
+    <QuillShaderGenDir>$(MSBuildThisFileDirectory)..\ShaderGen</QuillShaderGenDir>
+    <QuillShaderSource>$(MSBuildThisFileDirectory)Shaders\Canvas.slang</QuillShaderSource>
+    <QuillGeneratedShader>$(MSBuildThisFileDirectory)Shaders\.shadergen.stamp</QuillGeneratedShader>
+    <QuillSkipShaderGen Condition="'$(QuillSkipShaderGen)' == ''">false</QuillSkipShaderGen>
+  </PropertyGroup>
+
+  <Target Name="QuillGenerateShaders"
+          AfterTargets="Build"
+          Condition="'$(QuillSkipShaderGen)' != 'true' AND '$(TargetFramework)' == 'net10.0' AND Exists('$(QuillShaderGenDir)\Quill.ShaderGen.csproj')"
+          Inputs="$(QuillShaderSource)"
+          Outputs="$(QuillGeneratedShader)">
+    <Message Importance="high" Text="Quill: regenerating backend shaders from Canvas.slang" />
+    <Exec Command="dotnet run --project &quot;$(QuillShaderGenDir)\Quill.ShaderGen.csproj&quot; -c Release --no-launch-profile"
+          ContinueOnError="true"
+          StandardOutputImportance="high">
+      <Output TaskParameter="ExitCode" PropertyName="QuillShaderGenExit" />
+    </Exec>
+    <Warning Condition="'$(QuillShaderGenExit)' != '0'"
+             Text="Quill shader generation failed (exit $(QuillShaderGenExit)); the checked-in generated shaders were left unchanged." />
+  </Target>
+
 </Project>

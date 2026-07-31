@@ -23,9 +23,10 @@
     <EmbeddedResource Include="..\Common\SVGs\*.svg" />
   </ItemGroup>
 
-  <!-- Copy index.html to AppBundle -->
+  <!-- Copy index.html and the generated shader module to AppBundle. main.js imports the latter
+       relatively, so it has to sit next to it in the bundle. -->
   <Target Name="CopyIndexHtml" AfterTargets="WasmBuildApp" Condition="'$(WasmAppDir)' != ''">
-    <Copy SourceFiles="index.html" DestinationFolder="$(WasmAppDir)" />
+    <Copy SourceFiles="index.html;canvasShaders.generated.js" DestinationFolder="$(WasmAppDir)" />
   </Target>
 
 </Project>

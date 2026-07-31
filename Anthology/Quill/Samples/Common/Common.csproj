@@ -9,7 +9,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Fonts\**;Textures\**;SVGs\**;Shaders\**" CopyToOutputDirectory="Always" />
+    <!-- Common carries demo assets only. Shaders live with the backend that uses them, generated
+         from Quill/Shaders by Quill.ShaderGen. -->
+    <Content Include="Fonts\**;Textures\**;SVGs\**" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
 </Project>

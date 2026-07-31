@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Common;
 
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
@@ -15,8 +14,8 @@ namespace OpenTKSample;
 internal class PaperRenderer : ICanvasRenderer
 {
     // Use shared shader source from Common
-    public static string STROKE_FRAGMENT_SHADER => CanvasShaderSource.FragmentShader;
-    private static string DEFAULT_VERTEX_SHADER => CanvasShaderSource.VertexShader;
+    public static string STROKE_FRAGMENT_SHADER => CanvasShaders.Fragment;
+    private static string DEFAULT_VERTEX_SHADER => CanvasShaders.Vertex;
 
     // OpenGL objects
     private int _shaderProgram;
@@ -37,6 +36,8 @@ internal class PaperRenderer : ICanvasRenderer
     static int _brushParams2Loc;
     static int _brushTextureMatLoc;
     static int _dpiScaleLoc;
+    static int _atlasTexelSizeLoc;
+    static int _backdropFlipYLoc;
 
     private Matrix4 _projection;
     private TextureTK _defaultTexture;
@@ -161,17 +162,19 @@ internal class PaperRenderer : ICanvasRenderer
         _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
         _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
         _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
+        _atlasTexelSizeLoc = GL.GetUniformLocation(_shaderProgram, "atlasTexelSize");
+        _backdropFlipYLoc = GL.GetUniformLocation(_shaderProgram, "backdropFlipY");
         _backdropTexLoc = GL.GetUniformLocation(_shaderProgram, "backdropTexture");
         _viewportSizeLoc = GL.GetUniformLocation(_shaderProgram, "viewportSize");
         _backdropBlurAmountLoc = GL.GetUniformLocation(_shaderProgram, "backdropBlurAmount");
 
         // Compile the dual Kawase down/up programs used for backdrop blur passes
-        _blurDownProgram = BuildBlurProgram(CanvasShaderSource.BlurDownsampleShader);
+        _blurDownProgram = BuildBlurProgram(CanvasShaders.BlurDownsample);
         _downSrcLoc = GL.GetUniformLocation(_blurDownProgram, "src");
         _downHalfpixelLoc = GL.GetUniformLocation(_blurDownProgram, "halfpixel");
         _downOffsetLoc = GL.GetUniformLocation(_blurDownProgram, "offset");
 
-        _blurUpProgram = BuildBlurProgram(CanvasShaderSource.BlurUpsampleShader);
+        _blurUpProgram = BuildBlurProgram(CanvasShaders.BlurUpsample);
         _upSrcLoc = GL.GetUniformLocation(_blurUpProgram, "src");
         _upHalfpixelLoc = GL.GetUniformLocation(_blurUpProgram, "halfpixel");
         _upOffsetLoc = GL.GetUniformLocation(_blurUpProgram, "offset");
@@ -181,7 +184,7 @@ internal class PaperRenderer : ICanvasRenderer
     {
         int program = GL.CreateProgram();
         int vs = GL.CreateShader(ShaderType.VertexShader);
-        GL.ShaderSource(vs, CanvasShaderSource.BlurVertexShader);
+        GL.ShaderSource(vs, CanvasShaders.BlurVertex);
         GL.CompileShader(vs);
         int fs = GL.CreateShader(ShaderType.FragmentShader);
         GL.ShaderSource(fs, fragmentSource);
@@ -383,7 +386,7 @@ internal class PaperRenderer : ICanvasRenderer
 
         // Use shader and set projection
         GL.UseProgram(_shaderProgram);
-        GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+        GL.UniformMatrix4(_projectionLocation, true, ref _projection);
 
         // Bind vertex array
         GL.BindVertexArray(_vertexArrayObject);
@@ -452,7 +455,7 @@ internal class PaperRenderer : ICanvasRenderer
             {
                 // Use default shader
                 GL.UseProgram(_shaderProgram);
-                GL.UniformMatrix4(_projectionLocation, false, ref _projection);
+                GL.UniformMatrix4(_projectionLocation, true, ref _projection);
 
                 // Set DPI scale for converting pixel coords to logical coords in shader
                 GL.Uniform1(_dpiScaleLoc, (float)canvas.FramebufferScale);
@@ -460,12 +463,12 @@ internal class PaperRenderer : ICanvasRenderer
                 // Set scissor rectangle
                 drawCall.GetScissor(out var scissor, out var extent);
                 var tkScissor = ToTK(scissor);
-                GL.UniformMatrix4(_scissorMatLoc, false, ref tkScissor);
+                GL.UniformMatrix4(_scissorMatLoc, true, ref tkScissor);
                 GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
 
                 // Set brush parameters
                 var brushMat = ToTK(drawCall.Brush.BrushMatrix);
-                GL.UniformMatrix4(_brushMatLoc, false, ref brushMat);
+                GL.UniformMatrix4(_brushMatLoc, true, ref brushMat);
                 GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
                 GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
                 GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
@@ -474,12 +477,18 @@ internal class PaperRenderer : ICanvasRenderer
 
                 // Set texture transform parameters
                 var textureMat = ToTK(drawCall.Brush.TextureMatrix);
-                GL.UniformMatrix4(_brushTextureMatLoc, false, ref textureMat);
+                GL.UniformMatrix4(_brushTextureMatLoc, true, ref textureMat);
 
                 // Backdrop blur: viewport size for screen->uv, blurred texture on unit 3
                 GL.Uniform2(_viewportSizeLoc, (float)_fbWidth, (float)_fbHeight);
                 GL.Uniform1(_backdropTexLoc, 3);
+                // Font atlas texel size, so the text distance field resolves at any zoom. The generated
+                // shader takes this as a uniform rather than calling textureSize.
+                var atlas = drawCall.FontAtlas as TextureTK ?? _defaultTexture;
+                GL.Uniform2(_atlasTexelSizeLoc, atlas.Width > 0 ? 1f / atlas.Width : 0f, atlas.Height > 0 ? 1f / atlas.Height : 0f);
                 GL.Uniform1(_backdropBlurAmountLoc, (float)drawCall.Brush.BackdropBlur);
+                // The default framebuffer is bottom-left origin here, so the backdrop sample flips.
+                GL.Uniform1(_backdropFlipYLoc, 1);
             }
 
             GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));

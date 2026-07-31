@@ -1,4 +1,5 @@
 import { dotnet } from './_framework/dotnet.js';
+import { CANVAS_VERTEX_SHADER, CANVAS_FRAGMENT_SHADER } from './canvasShaders.generated.js';
 
 let gl = null;
 let program = null;
@@ -8,104 +9,31 @@ let ebo = null;
 let textures = new Map();
 let whiteTexture = null;
 
-let uViewportLoc, uTextureLoc, uFontTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
+let uProjectionLoc, uTextureLoc, uFontTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
 let uBrushMatLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
 let uBrushParamsLoc, uBrushParams2Loc, uBrushTextureMatLoc;
+let uAtlasTexelSizeLoc, uViewportSizeLoc, uBackdropBlurAmountLoc, uBackdropFlipYLoc;
 
 const VERTEX_SIZE = 20; // 8 position + 8 uv + 4 color
 const DC_INFO_STRIDE = 3; // texId, fontTexId, elemCount
 const _mat32 = new Float32Array(16);
+const _proj32 = new Float32Array(16);
 
-const VS_SOURCE = `#version 300 es
-precision highp float;
-layout(location = 0) in vec2 aPos;
-layout(location = 1) in vec2 aUV;
-layout(location = 2) in vec4 aColor;
-uniform vec2 uViewport;
-out vec2 vUV;
-out vec4 vColor;
-out vec2 vPos;
-void main() {
-    vec2 pos = (aPos / uViewport) * 2.0 - 1.0;
-    pos.y = -pos.y;
-    gl_Position = vec4(pos, 0.0, 1.0);
-    vUV = aUV;
-    vColor = aColor;
-    vPos = aPos;
-}
-`;
+// The generated shader comes from Slang, which emits mul(M, v) as v * M, so every matrix is
+// uploaded transposed. The .NET side already hands over column-major data, which is what that needs.
+const MATRIX_TRANSPOSE = true;
 
-const FS_SOURCE = `#version 300 es
-precision highp float;
-in vec2 vUV;
-in vec4 vColor;
-in vec2 vPos;
-uniform sampler2D uTexture;
-uniform sampler2D uFontTexture; // dedicated font-atlas unit, so text batches with shapes
-uniform mat4 uScissorMat;
-uniform vec2 uScissorExt;
-uniform float uDpiScale;
-uniform mat4 uBrushMat;
-uniform int uBrushType;
-uniform vec4 uBrushColor1;
-uniform vec4 uBrushColor2;
-uniform vec4 uBrushParams;
-uniform vec2 uBrushParams2;
-uniform mat4 uBrushTextureMat;
-
-out vec4 fragColor;
-
-// ============== Canvas functions ==============
-
-float calculateBrushFactor() {
-    vec2 lp = vPos / uDpiScale, tp = (uBrushMat * vec4(lp, 0.0, 1.0)).xy;
-    if (uBrushType == 1) { vec2 s=uBrushParams.xy,e=uBrushParams.zw,l=e-s; float len=length(l); if(len<0.001)return 0.0; return clamp(dot(tp-s,l)/(len*len),0.0,1.0); }
-    if (uBrushType == 2) { vec2 c=uBrushParams.xy; if(uBrushParams.w<0.001)return 0.0; return clamp(smoothstep(uBrushParams.z,uBrushParams.w,length(tp-c)),0.0,1.0); }
-    if (uBrushType == 3) { vec2 c=uBrushParams.xy,hs=uBrushParams.zw; float r=uBrushParams2.x,f=uBrushParams2.y; if(hs.x<0.001||hs.y<0.001)return 0.0; vec2 q=abs(tp-c)-(hs-vec2(r)); float d=min(max(q.x,q.y),0.0)+length(max(q,0.0))-r; return clamp((d+f*0.5)/f,0.0,1.0); }
-    return 0.0;
-}
-float scissorMask(vec2 p) {
-    if (uScissorExt.x<0.0||uScissorExt.y<0.0) return 1.0;
-    vec2 lp=p/uDpiScale, tp=(uScissorMat*vec4(lp,0.0,1.0)).xy, le=uScissorExt/uDpiScale;
-    vec2 d=abs(tp)-le; float hp=0.5/uDpiScale; vec2 se=vec2(hp)-d;
-    return clamp(se.x,0.0,1.0)*clamp(se.y,0.0,1.0);
+// Orthographic projection matching the other backends (0, w, h, 0, -1, 1), written column-major.
+function setProjection(w, h) {
+    _proj32.fill(0);
+    _proj32[0] = 2 / w;
+    _proj32[5] = -2 / h;
+    _proj32[10] = -1;
+    _proj32[12] = -1;
+    _proj32[13] = 1;
+    _proj32[15] = 1;
 }
 
-// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
-const float sdfPxRange = 4.0;
-
-// Screen-space width (in pixels) that one distance-field unit spans at this fragment.
-float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(uFontTexture, 0));
-    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
-    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
-}
-
-void main() {
-    float mask = scissorMask(vPos);
-    vec4 color = vColor;
-    if (uBrushType > 0) {
-        color = mix(uBrushColor1, uBrushColor2, calculateBrushFactor());
-    }
-
-    // Text mode: UV >= 2.0
-    if (vUV.x >= 2.0) {
-        vec2 uv = vUV - vec2(2.0);
-        float sd = texture(uFontTexture, uv).r; // font atlas on the dedicated unit
-        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
-        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-        fragColor = color * coverage * mask;
-        return;
-    }
-
-    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
-    // vUV.x (1 = solid core, 0 = outer fringe edge).
-    float ea = clamp(vUV.x, 0.0, 1.0);
-
-    vec2 lp = vPos / uDpiScale;
-    fragColor = color * texture(uTexture, (uBrushTextureMat * vec4(lp, 0.0, 1.0)).xy) * ea * mask;
-}
-`;
 
 function createShader(type, source) {
     const s = gl.createShader(type);
@@ -137,25 +65,29 @@ const webgl = {
         gl = canvas.getContext('webgl2', { alpha: false, antialias: true, premultipliedAlpha: true });
         if (!gl) { console.error('WebGL2 not supported'); return; }
 
-        const vs = createShader(gl.VERTEX_SHADER, VS_SOURCE);
-        const fs = createShader(gl.FRAGMENT_SHADER, FS_SOURCE);
+        const vs = createShader(gl.VERTEX_SHADER, CANVAS_VERTEX_SHADER);
+        const fs = createShader(gl.FRAGMENT_SHADER, CANVAS_FRAGMENT_SHADER);
         program = createProgram(vs, fs);
         gl.deleteShader(vs);
         gl.deleteShader(fs);
 
-        uViewportLoc = gl.getUniformLocation(program, 'uViewport');
-        uTextureLoc = gl.getUniformLocation(program, 'uTexture');
-        uFontTextureLoc = gl.getUniformLocation(program, 'uFontTexture');
-        uScissorMatLoc = gl.getUniformLocation(program, 'uScissorMat');
-        uScissorExtLoc = gl.getUniformLocation(program, 'uScissorExt');
-        uDpiScaleLoc = gl.getUniformLocation(program, 'uDpiScale');
-        uBrushMatLoc = gl.getUniformLocation(program, 'uBrushMat');
-        uBrushTypeLoc = gl.getUniformLocation(program, 'uBrushType');
-        uBrushColor1Loc = gl.getUniformLocation(program, 'uBrushColor1');
-        uBrushColor2Loc = gl.getUniformLocation(program, 'uBrushColor2');
-        uBrushParamsLoc = gl.getUniformLocation(program, 'uBrushParams');
-        uBrushParams2Loc = gl.getUniformLocation(program, 'uBrushParams2');
-        uBrushTextureMatLoc = gl.getUniformLocation(program, 'uBrushTextureMat');
+        uProjectionLoc = gl.getUniformLocation(program, "projection");
+        uAtlasTexelSizeLoc = gl.getUniformLocation(program, "atlasTexelSize");
+        uViewportSizeLoc = gl.getUniformLocation(program, "viewportSize");
+        uBackdropBlurAmountLoc = gl.getUniformLocation(program, "backdropBlurAmount");
+        uBackdropFlipYLoc = gl.getUniformLocation(program, "backdropFlipY");
+        uTextureLoc = gl.getUniformLocation(program, "texture0");
+        uFontTextureLoc = gl.getUniformLocation(program, "fontTexture");
+        uScissorMatLoc = gl.getUniformLocation(program, "scissorMat");
+        uScissorExtLoc = gl.getUniformLocation(program, "scissorExt");
+        uDpiScaleLoc = gl.getUniformLocation(program, "dpiScale");
+        uBrushMatLoc = gl.getUniformLocation(program, "brushMat");
+        uBrushTypeLoc = gl.getUniformLocation(program, "brushType");
+        uBrushColor1Loc = gl.getUniformLocation(program, "brushColor1");
+        uBrushColor2Loc = gl.getUniformLocation(program, "brushColor2");
+        uBrushParamsLoc = gl.getUniformLocation(program, "brushParams");
+        uBrushParams2Loc = gl.getUniformLocation(program, "brushParams2");
+        uBrushTextureMatLoc = gl.getUniformLocation(program, "brushTextureMat");
 
         vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
@@ -233,7 +165,13 @@ const webgl = {
         if (vertexBytes.length === 0 || indexDataI32.length === 0) return;
 
         gl.useProgram(program);
-        gl.uniform2f(uViewportLoc, canvas.width, canvas.height);
+        // Framebuffer size, not CSS size, so the projection stays correct on HiDPI displays.
+        setProjection(canvas.width, canvas.height);
+        gl.uniformMatrix4fv(uProjectionLoc, MATRIX_TRANSPOSE, _proj32);
+        gl.uniform2f(uViewportSizeLoc, canvas.width, canvas.height);
+        // This backend has no backdrop blur pass, so the composite branch stays off.
+        gl.uniform1f(uBackdropBlurAmountLoc, 0);
+        gl.uniform1i(uBackdropFlipYLoc, 0);
         gl.uniform1f(uDpiScaleLoc, canvasScale || 1.0);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -258,9 +196,14 @@ const webgl = {
             const fontTexId = drawCallInfoI32[di + 1];
             const elemCount = drawCallInfoI32[di + 2];
 
-            // Font atlas on unit 1 (for text)
+            // Font atlas on unit 1 (for text). Its texel size feeds the distance-field range, which
+            // the generated shader takes as a uniform rather than calling textureSize.
             gl.activeTexture(gl.TEXTURE1);
-            gl.bindTexture(gl.TEXTURE_2D, (fontTexId > 0 && textures.has(fontTexId)) ? textures.get(fontTexId).glTex : whiteTexture);
+            const fontInfo = (fontTexId > 0 && textures.has(fontTexId)) ? textures.get(fontTexId) : null;
+            gl.bindTexture(gl.TEXTURE_2D, fontInfo ? fontInfo.glTex : whiteTexture);
+            gl.uniform2f(uAtlasTexelSizeLoc,
+                fontInfo && fontInfo.width > 0 ? 1 / fontInfo.width : 0,
+                fontInfo && fontInfo.height > 0 ? 1 / fontInfo.height : 0);
 
             // Bind main (brush/shape) texture on unit 0
             gl.activeTexture(gl.TEXTURE0);
@@ -273,7 +216,7 @@ const webgl = {
             // Scissor
             const sb = i * 18;
             for (let j = 0; j < 16; j++) _mat32[j] = scissorDataF64[sb + j];
-            gl.uniformMatrix4fv(uScissorMatLoc, false, _mat32);
+            gl.uniformMatrix4fv(uScissorMatLoc, MATRIX_TRANSPOSE, _mat32);
             gl.uniform2f(uScissorExtLoc, scissorDataF64[sb + 16], scissorDataF64[sb + 17]);
 
             // Brush
@@ -281,13 +224,13 @@ const webgl = {
             const brushType = brushDataF64[bb] | 0;
             gl.uniform1i(uBrushTypeLoc, brushType);
             for (let j = 0; j < 16; j++) _mat32[j] = brushDataF64[bb + 1 + j];
-            gl.uniformMatrix4fv(uBrushMatLoc, false, _mat32);
+            gl.uniformMatrix4fv(uBrushMatLoc, MATRIX_TRANSPOSE, _mat32);
             gl.uniform4f(uBrushColor1Loc, brushDataF64[bb+17], brushDataF64[bb+18], brushDataF64[bb+19], brushDataF64[bb+20]);
             gl.uniform4f(uBrushColor2Loc, brushDataF64[bb+21], brushDataF64[bb+22], brushDataF64[bb+23], brushDataF64[bb+24]);
             gl.uniform4f(uBrushParamsLoc, brushDataF64[bb+25], brushDataF64[bb+26], brushDataF64[bb+27], brushDataF64[bb+28]);
             gl.uniform2f(uBrushParams2Loc, brushDataF64[bb+29], brushDataF64[bb+30]);
             for (let j = 0; j < 16; j++) _mat32[j] = brushDataF64[bb + 31 + j];
-            gl.uniformMatrix4fv(uBrushTextureMatLoc, false, _mat32);
+            gl.uniformMatrix4fv(uBrushTextureMatLoc, MATRIX_TRANSPOSE, _mat32);
 
             gl.drawElements(gl.TRIANGLES, elemCount, gl.UNSIGNED_INT, indexOffset * 4);
             indexOffset += elemCount;

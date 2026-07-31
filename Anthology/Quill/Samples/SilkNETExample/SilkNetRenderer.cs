@@ -13,8 +13,8 @@ namespace SilkExample
     {
         // Shader source for the fragment shader
         // Use shared shader source from Common
-        public static string FRAGMENT_SHADER_SOURCE => CanvasShaderSource.FragmentShader;
-        private static string VERTEX_SHADER_SOURCE => CanvasShaderSource.VertexShader;
+        public static string FRAGMENT_SHADER_SOURCE => CanvasShaders.Fragment;
+        private static string VERTEX_SHADER_SOURCE => CanvasShaders.Vertex;
 
         private readonly GL _gl;
         private uint _program;
@@ -34,6 +34,8 @@ namespace SilkExample
         private int _brushParams2Location;
         private int _brushTextureMatLocation;
         private int _dpiScaleLocation;
+        private int _atlasTexelSizeLocation;
+        private int _backdropFlipYLocation;
 
         // Backdrop blur (dual Kawase)
         private int _backdropTexLocation;
@@ -93,11 +95,11 @@ namespace SilkExample
             CacheUniformLocations();
 
             // Dual Kawase blur programs and shared blur objects
-            _blurDownProgram = BuildBlurProgram(CanvasShaderSource.BlurDownsampleShader);
+            _blurDownProgram = BuildBlurProgram(CanvasShaders.BlurDownsample);
             _downSrcLoc = _gl.GetUniformLocation(_blurDownProgram, "src");
             _downHalfpixelLoc = _gl.GetUniformLocation(_blurDownProgram, "halfpixel");
             _downOffsetLoc = _gl.GetUniformLocation(_blurDownProgram, "offset");
-            _blurUpProgram = BuildBlurProgram(CanvasShaderSource.BlurUpsampleShader);
+            _blurUpProgram = BuildBlurProgram(CanvasShaders.BlurUpsample);
             _upSrcLoc = _gl.GetUniformLocation(_blurUpProgram, "src");
             _upHalfpixelLoc = _gl.GetUniformLocation(_blurUpProgram, "halfpixel");
             _upOffsetLoc = _gl.GetUniformLocation(_blurUpProgram, "offset");
@@ -108,7 +110,7 @@ namespace SilkExample
         private uint BuildBlurProgram(string fragmentSource)
         {
             uint program = _gl.CreateProgram();
-            uint vs = CompileShader(ShaderType.VertexShader, CanvasShaderSource.BlurVertexShader);
+            uint vs = CompileShader(ShaderType.VertexShader, CanvasShaders.BlurVertex);
             uint fs = CompileShader(ShaderType.FragmentShader, fragmentSource);
             _gl.AttachShader(program, vs);
             _gl.AttachShader(program, fs);
@@ -154,6 +156,8 @@ namespace SilkExample
             _backdropTexLocation = _gl.GetUniformLocation(_program, "backdropTexture");
             _viewportSizeLocation = _gl.GetUniformLocation(_program, "viewportSize");
             _backdropBlurAmountLocation = _gl.GetUniformLocation(_program, "backdropBlurAmount");
+            _atlasTexelSizeLocation = _gl.GetUniformLocation(_program, "atlasTexelSize");
+            _backdropFlipYLocation = _gl.GetUniformLocation(_program, "backdropFlipY");
         }
         
         private void CheckProgramLinking(uint program)
@@ -225,13 +229,17 @@ namespace SilkExample
         
         private unsafe void SetMatrix4Uniform(int location, Float4x4 matrix)
         {
-            //float* matrixPtr = stackalloc float[16];
-            //matrixPtr[0] = matrix.M11;  matrixPtr[1] = matrix.M12;  matrixPtr[2] = matrix.M13;  matrixPtr[3] = matrix.M14;
-            //matrixPtr[4] = matrix.M21;  matrixPtr[5] = matrix.M22;  matrixPtr[6] = matrix.M23;  matrixPtr[7] = matrix.M24;
-            //matrixPtr[8] = matrix.M31;  matrixPtr[9] = matrix.M32;  matrixPtr[10] = matrix.M33; matrixPtr[11] = matrix.M34;
-            //matrixPtr[12] = matrix.M41; matrixPtr[13] = matrix.M42; matrixPtr[14] = matrix.M43; matrixPtr[15] = matrix.M44;
-
             _gl.UniformMatrix4(location, 1, false, in matrix.c0.X);
+        }
+
+        /// <summary>
+        /// Uploads a matrix for the built-in canvas program, which is generated from Slang and so
+        /// expects the transpose (Slang emits mul(M, v) as v * M). Custom user shaders keep the
+        /// untransposed convention through <see cref="SetMatrix4Uniform"/>.
+        /// </summary>
+        private unsafe void SetCanvasMatrixUniform(int location, Float4x4 matrix)
+        {
+            _gl.UniformMatrix4(location, 1, true, in matrix.c0.X);
         }
 
 
@@ -434,10 +442,17 @@ namespace SilkExample
                 SetScissorUniforms(scissorMat, scissorExt);
                 SetBrushUniforms(drawCall.Brush);
 
-                // Backdrop blur uniforms (blurred texture bound on unit 3 by RenderBackdropBlur)
+                // Font atlas texel size, so the text distance field resolves at any zoom. The
+                // generated shader takes this as a uniform rather than calling textureSize.
+                var atlas = drawCall.FontAtlas as TextureSilk ?? _defaultTexture;
+                _gl.Uniform2(_atlasTexelSizeLocation, atlas.Width > 0 ? 1f / atlas.Width : 0f, atlas.Height > 0 ? 1f / atlas.Height : 0f);
+
+                // Backdrop blur uniforms (blurred texture bound on unit 3 by RenderBackdropBlur).
+                // The default framebuffer is bottom-left origin here, so the sample flips.
                 _gl.Uniform2(_viewportSizeLocation, (float)_fbWidth, (float)_fbHeight);
                 _gl.Uniform1(_backdropTexLocation, 3);
                 _gl.Uniform1(_backdropBlurAmountLocation, (float)drawCall.Brush.BackdropBlur);
+                _gl.Uniform1(_backdropFlipYLocation, 1);
             }
 
             // Draw the elements
@@ -451,19 +466,19 @@ namespace SilkExample
 
         private void SetProjectionMatrix()
         {
-            SetMatrix4Uniform(_projectionLocation, _projection);
+            SetCanvasMatrixUniform(_projectionLocation, _projection);
         }
 
         private void SetScissorUniforms(Prowl.Vector.Float4x4 matrix, Float2 extent)
         {
-            SetMatrix4Uniform(_scissorMatLocation, matrix);
+            SetCanvasMatrixUniform(_scissorMatLocation, matrix);
             _gl.Uniform2(_scissorExtLocation, (float)extent.X, (float)extent.Y);
         }
 
         private void SetBrushUniforms(Brush brush)
         {
             // Set brush matrix using the helper
-            SetMatrix4Uniform(_brushMatLocation, brush.BrushMatrix);
+            SetCanvasMatrixUniform(_brushMatLocation, brush.BrushMatrix);
 
             // Set other brush parameters
             _gl.Uniform1(_brushTypeLocation, (int)brush.Type);
@@ -495,7 +510,7 @@ namespace SilkExample
                 (float)brush.Feather);
 
             // Set texture transform parameters
-            SetMatrix4Uniform(_brushTextureMatLocation, brush.TextureMatrix);
+            SetCanvasMatrixUniform(_brushTextureMatLocation, brush.TextureMatrix);
         }
 
         private unsafe void SetCustomUniforms(uint program, ShaderUniforms uniforms)

@@ -367,6 +367,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             _properties.SetFloat2("viewportSize", new Float2(_owner._fbWidth, _owner._fbHeight));
             _properties.SetFloat("backdropBlurAmount", blur);
+            // Vulkan stores the scene top-left origin, so the backdrop samples upright.
+            _properties.SetInt("backdropFlipY", 0);
 
             // backdropTexture always needs a bound sampler; use the blurred scene when blurring, else any texture.
             if (blur > 0f)
