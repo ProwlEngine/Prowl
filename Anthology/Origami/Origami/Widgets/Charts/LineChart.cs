@@ -129,18 +129,14 @@ public sealed class LineChart<T> : CartesianCore<LineChart<T>, T>
         float baseline = Math.Clamp(ctx.YPos(0d), ctx.PlotT, ctx.PlotB);
         Color32 fillCol = ToC32(s.Color ?? strokeColor, 0.18f);
 
-        for (int i = 0; i < pts.Count - 1; i++)
-        {
-            Float2 a = pts[i], b = pts[i + 1];
-            canvas.BeginPath();
-            canvas.MoveTo(a.X, baseline);
-            canvas.LineTo(a.X, a.Y);
-            canvas.LineTo(b.X, b.Y);
-            canvas.LineTo(b.X, baseline);
-            canvas.ClosePath();
-            canvas.SetFillColor(fillCol);
-            canvas.Fill();
-        }
+        canvas.BeginPath();
+        canvas.MoveTo(pts[0].X, baseline);
+        for (int i = 0; i < pts.Count; i++)
+            canvas.LineTo(pts[i].X, pts[i].Y);
+        canvas.LineTo(pts[pts.Count - 1].X, baseline);
+        canvas.ClosePath();
+        canvas.SetFillColor(fillCol);
+        canvas.FillComplexAA();
     }
 
     private static void PaintStroke(Canvas canvas, List<Float2> pts, Color strokeColor, float strokeWidth, CartesianDash dash)
