@@ -41,6 +41,9 @@ public static class SceneHotReload
             foreach (var prefix in s_excludedAssemblyPrefixes)
                 options.Scope.ExcludePrefix(prefix);
 
+            foreach (var name in s_excludedAssemblies)
+                options.Scope.Exclude(name);
+
             // The engine and the editor: their statics and delegates hold user references, including the editor's
             // own into the scene (selection, inspector target, hierarchy). Walking the editor headless is covered
             // by a test, so no separate repoint pass is needed.
@@ -93,5 +96,13 @@ public static class SceneHotReload
     private static readonly string[] s_excludedAssemblyPrefixes =
     {
         "Silk.NET", "Jitter2", "Magick.NET", "Microsoft.CodeAnalysis",
+    };
+
+    // Immediate mode UI: elements and their handlers are rebuilt from scratch every frame, so migrating them is
+    // work the next frame throws away. Matched exactly rather than by prefix, so a game assembly whose name
+    // merely begins with one of these keeps migrating.
+    private static readonly string[] s_excludedAssemblies =
+    {
+        "Paper", "Origami",
     };
 }
