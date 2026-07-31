@@ -1025,8 +1025,8 @@ public class HierarchyPanel : DockPanel
         Guid goId = go.Identifier;
         Guid newParentId = newParent.Identifier;
         var oldParent = go.Parent.IsValid() ? go.Parent : null;
-        Guid oldParentId = oldParent?.Identifier ?? Guid.Empty;
-        int oldIndex = oldParent != null ? (go.GetSiblingIndex() ?? -1) : (Scene.Current?.GetRootIndex(go) ?? -1);
+        Guid oldParentId = oldParent.IsValid() ? oldParent.Identifier : Guid.Empty;
+        int oldIndex = oldParent != null ? (go.GetSiblingIndex() ?? -1) : (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(go) : -1);
 
         go.SetParent(newParent);
 
