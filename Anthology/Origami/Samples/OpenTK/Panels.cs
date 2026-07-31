@@ -1549,7 +1549,7 @@ public sealed class ChartsPanel : DockPanel
             .Series("Desktop", Palette.C(96, 165, 250), _desktopBase).Stack("traffic")
             .Series("Mobile", Palette.C(167, 139, 250), _mobileBase).Stack("traffic")
             .Series("Tablet", Palette.C(45, 212, 191), _tabletBase).Stack("traffic")
-            .Series("Churn", Palette.C(251, 113, 133), _churnBase).Stack("traffic")
+            .Series("Churn", Palette.C(251, 113, 133), _churnBase).Stack("churn")
             .Padding(6)
             .Show();
     }
@@ -1713,7 +1713,6 @@ public sealed class ChartsPanel : DockPanel
             .ShowMedian(true)
             .ShowOutliers(true)
             .ValueFormatter(v => $"{v:0.#}ms")
-            .XTickFormatter(_ => "Latency")
             .Series("NA", Palette.C(96, 165, 250), _latencyNA)
             .Series("EU", Palette.C(167, 139, 250), _latencyEU)
             .Series("APAC", Palette.C(250, 204, 21), _latencyAPAC)
