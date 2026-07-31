@@ -16,7 +16,7 @@ namespace Prowl.OrigamiUI;
 /// Multiple consumers in the same process scope their styling with <see cref="PushTheme"/>;
 /// a game running inside the editor can theme its own UI without disturbing the editor's.</para>
 /// </summary>
-public static class Origami
+public static partial class Origami
 {
     [ThreadStatic] private static Stack<OrigamiTheme>? t_stack;
 
@@ -49,6 +49,8 @@ public static class Origami
     /// buttons, tab underlines, etc.). Default true. Gates <see cref="OrigamiShadow.Glow{T}"/> and the
     /// widgets' canvas-painted glows.</summary>
     public static bool GlowsEnabled = true;
+
+    public static bool LegendSelectionEnabled = true;
 
     // Transition state (lerp from start → target over duration).
     private static OrigamiTheme? _transitionStart;

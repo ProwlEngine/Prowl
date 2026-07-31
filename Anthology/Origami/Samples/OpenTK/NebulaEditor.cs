@@ -108,6 +108,7 @@ public class NebulaEditor
         var scene = new EmptyPanel("Scene", "Scene viewport", _geistSemi, _geist);
         var shader = new NodeGraphPanel();
         var visual = new EmptyPanel("Visual Scripts", "Block canvas", _geistSemi, _geist);
+        var charts = new ChartsPanel();
         _widgets = new WidgetPlaygroundPanel(_geist, _geistMed, _geistSemi, _mono);
         var widgets = _widgets;
 
@@ -116,8 +117,8 @@ public class NebulaEditor
         var assets = new EmptyPanel("Assets", "Project browser", _geistSemi, _geist);
         var console = new EmptyPanel("Console", "Log output", _geistSemi, _geist);
 
-        _centerLeaf = DockNode.Leaf(scene, shader, visual, widgets);
-        _centerLeaf.ActiveTabIndex = 3; // show the Widget Playground
+        _centerLeaf = DockNode.Leaf(scene, shader, visual, charts, widgets);
+        _centerLeaf.ActiveTabIndex = 4; // show the Widget Playground
 
         var mainRow = DockNode.Split(SplitDirection.Horizontal, 0.23f, DockNode.Leaf(hierarchy), _centerLeaf);
         var bottomRow = DockNode.Split(SplitDirection.Horizontal, 0.5f, DockNode.Leaf(assets), DockNode.Leaf(console));
