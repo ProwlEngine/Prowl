@@ -412,7 +412,7 @@ public static class ScriptCompiler
             {
                 string name = Path.GetFileNameWithoutExtension(dll);
                 if (name == "Prowl.Runtime" || name == "Prowl.Editor" || unitNames.Contains(name)) continue;
-                if (name == "Prowl.Ember.Analyzers") continue; // added below as an <Analyzer>, not a plain reference
+                if (name == "Prowl.Ember.Analyzers" || name == "Prowl.Analyzers") continue; // added below as <Analyzer>, not plain references
 
                 // A self-contained Prowl publish drops the whole .NET runtime next to the app. Never
                 // reference the shared-framework assemblies (esp. System.Private.CoreLib): they are the
@@ -425,11 +425,14 @@ public static class ScriptCompiler
                 AppendReference(sb, emitted, name, dll, copyLocal: true);
             }
 
-            // Run the hot reload safety analyzer over user scripts so the warnings show in the IDE too,
+            // Run the Prowl script-safety analyzers over user scripts so the warnings show in the IDE too,
             // matching the editor's own in-process compile.
-            string analyzerDll = Path.Combine(engineDir, "Prowl.Ember.Analyzers.dll");
-            if (File.Exists(analyzerDll))
-                sb.AppendLine($"    <Analyzer Include=\"{Xml(analyzerDll)}\" />");
+            foreach (string analyzer in new[] { "Prowl.Ember.Analyzers.dll", "Prowl.Analyzers.dll" })
+            {
+                string analyzerDll = Path.Combine(engineDir, analyzer);
+                if (File.Exists(analyzerDll))
+                    sb.AppendLine($"    <Analyzer Include=\"{Xml(analyzerDll)}\" />");
+            }
         }
 
         // Managed plugin references.

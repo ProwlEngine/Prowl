@@ -23,6 +23,9 @@
     <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
     <PackageReference Include="Prowl.Ember" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" />
+    <!-- EngineObject null-safety analyzer: analyzes the editor's own source, and (as a normal reference) is
+         copied to output + made available in-process so RoslynScriptBackend applies it to user scripts too. -->
+    <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" />
   </ItemGroup>
 
   <!-- Fix for Linux Builds -->

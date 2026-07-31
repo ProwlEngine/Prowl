@@ -13,6 +13,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
 
+using Prowl.Analyzers;
 using Prowl.Ember.Analyzers;
 
 using CompilationUnit = Prowl.Editor.Projects.Scripting.ScriptCompiler.CompilationUnit;
@@ -157,7 +158,7 @@ internal static class RoslynScriptBackend
             var diagnostics = result.Diagnostics
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
                 .ToList();
-            diagnostics.AddRange(RunHotReloadAnalyzers(compilation));
+            diagnostics.AddRange(RunScriptAnalyzers(compilation));
             byte[]? image = result.Success ? peStream.ToArray() : null;
 
             // 6. Update state. Compilation/trees/refs reflect what we just built; the success snapshot
@@ -190,15 +191,15 @@ internal static class RoslynScriptBackend
         }
     }
 
-    private static readonly ImmutableArray<DiagnosticAnalyzer> s_hotReloadAnalyzers =
-        ImmutableArray.Create<DiagnosticAnalyzer>(new ReloadDiagnosticAnalyzer());
+    private static readonly ImmutableArray<DiagnosticAnalyzer> s_scriptAnalyzers =
+        ImmutableArray.Create<DiagnosticAnalyzer>(new ReloadDiagnosticAnalyzer(), new EngineObjectNullAnalyzer());
 
-    /// <summary>Run the hot-reload-safety analyzers over the compilation and surface their warnings.</summary>
-    private static IEnumerable<Diagnostic> RunHotReloadAnalyzers(CSharpCompilation compilation)
+    /// <summary>Run the Prowl script-safety analyzers over the compilation and surface their diagnostics.</summary>
+    private static IEnumerable<Diagnostic> RunScriptAnalyzers(CSharpCompilation compilation)
     {
         try
         {
-            return compilation.WithAnalyzers(s_hotReloadAnalyzers)
+            return compilation.WithAnalyzers(s_scriptAnalyzers)
                 .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult()
                 .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning);
         }
