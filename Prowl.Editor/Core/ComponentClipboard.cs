@@ -112,29 +112,26 @@ public static class ComponentClipboard
             go.AddComponent(comp);
             comp.OnValidate();
 
-            // Capture only strings/echo in the undo closures - no Type, no live references - so an
-            // undo entry can't pin the collectible script load context. Re-resolve from the name on
-            // redo. (AssemblyQualifiedName is non-null for any concrete type; FullName won't do, as
-            // ResolveType needs the qualifier to reach user scripts.)
+            // Look the GameObject back up by identifier rather than capturing it: undoing a destroy
+            // recreates objects as new instances, so a captured reference would go stale.
             var goId = go.Identifier;
             var compId = comp.Identifier;
-            string typeName = type.AssemblyQualifiedName!;
-            var capturedData = data;
+            Type compType = type;
+            EchoObject compData = data;
 
             Undo.RegisterAction("Paste Component",
                 undo: () =>
                 {
-                    var g = Undo.FindGO(goId);
-                    var c = g?.GetComponentByIdentifier(compId);
-                    if (g != null && c != null) g.RemoveComponent(c);
+                    GameObject g = Undo.FindGO(goId)!;
+                    if (g.IsNotValid()) return;
+                    MonoBehaviour c = g.GetComponentByIdentifier(compId)!;
+                    if (c.IsValid()) g.RemoveComponent(c);
                 },
                 redo: () =>
                 {
-                    var g = Undo.FindGO(goId);
-                    if (g == null) return;
-                    var t = RuntimeUtils.ResolveType(typeName);
-                    if (t == null) return;
-                    var restored = Serializer.Deserialize(capturedData, t, DeserializeContext()) as MonoBehaviour;
+                    GameObject g = Undo.FindGO(goId)!;
+                    if (g.IsNotValid()) return;
+                    var restored = Serializer.Deserialize(compData, compType, DeserializeContext()) as MonoBehaviour;
                     if (restored == null) return;
                     restored.Identifier = compId;
                     g.AddComponent(restored);

@@ -56,7 +56,10 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
         // GameObject and MonoBehaviour share the FindObjectByIdentifier lookup; a Transform key is
         // its GameObject's id, so resolve the GameObject and hand back its Transform.
         if (typeof(Transform).IsAssignableFrom(targetType))
-            return scene.FindObjectByIdentifier<GameObject>(id)?.Transform;
+        {
+            GameObject owner = scene.FindObjectByIdentifier<GameObject>(id)!;
+            return owner.IsValid() ? owner.Transform : null;
+        }
 
         return scene.FindObjectByIdentifier<EngineObject>(id);
     }
