@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -112,8 +113,8 @@ public abstract class EngineObject : IDisposable
 public static class EngineObjectExtensions
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotValid(this EngineObject obj) => obj is null || obj.IsDisposed;
+    public static bool IsNotValid([NotNullWhen(false)] this EngineObject? obj) => obj is null || obj.IsDisposed;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsValid(this EngineObject obj) => obj is not null && !obj.IsDisposed;
+    public static bool IsValid([NotNullWhen(true)] this EngineObject? obj) => obj is not null && !obj.IsDisposed;
 }
