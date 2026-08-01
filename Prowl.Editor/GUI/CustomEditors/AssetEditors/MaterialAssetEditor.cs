@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
@@ -19,15 +21,22 @@ public class MaterialAssetEditor : AssetImporterEditor
 {
     private readonly PreviewWidget _preview = new();
     private Guid _currentGuid;
-    private bool _dirty;
+
+    // Materials with edits not yet written to disk, keyed by asset GUID. Static rather than
+    // per-instance to have a behaviour more coherent with user expectations
+    private static readonly Dictionary<Guid, (Material Material, AssetEntry Entry)> _pending = new();
+
+    static MaterialAssetEditor()
+    {
+        SaveManager.OnSave += () => SavePending(showToast: false);
+    }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change reset dirty flag and force preview refresh
+        // Detect asset change and force a preview refresh.
         if (_currentGuid != entry.Guid)
         {
             _currentGuid = entry.Guid;
-            _dirty = false;
             _preview.Invalidate();
         }
 
@@ -47,8 +56,7 @@ public class MaterialAssetEditor : AssetImporterEditor
             newVal =>
             {
                 material.ShaderRef = (AssetRef<Shader>)newVal!;
-                _dirty = true;
-                _preview.Invalidate();
+                MarkDirty(material, entry);
             }, 0);
 
         // Shader properties one field per property declared by the shader. Values
@@ -58,21 +66,22 @@ public class MaterialAssetEditor : AssetImporterEditor
         var shader = material.Shader;
         if (shader != null)
         {
-                        Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
+            Origami.Header(paper, $"{id}_h_props", "Properties").Underline().Show();
 
             foreach (var prop in shader.Properties)
             {
                 MaterialPropertyDrawer.DrawPropertyRow(paper, $"{id}_p_{prop.Name}", material, prop,
-                    onChanged: () => { _dirty = true; _preview.Invalidate(); });
+                    onChanged: () => MarkDirty(material, entry));
             }
 
         }
 
         // Save button writes material to disk then reimports
-        if (_dirty)
+        if (_pending.ContainsKey(entry.Guid))
         {
             Origami.Separator(paper, $"{id}_sep_save").Show();
-            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material", () => { SaveMaterial(material, entry); }).Show();
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material",
+                () => SavePending(showToast: true)).Show();
         }
 
         // 3D Preview
@@ -81,34 +90,83 @@ public class MaterialAssetEditor : AssetImporterEditor
         _preview.Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
-    private void SaveMaterial(Material material, AssetEntry entry)
+    /// <summary>Record that <paramref name="material"/> has edits not yet written to disk.</summary>
+    private void MarkDirty(Material material, AssetEntry entry)
     {
-        if (Project.Current == null) return;
+        _pending[entry.Guid] = (material, entry);
+        _preview.Invalidate();
+    }
 
-        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+    /// <summary>
+    /// Write every pending material to disk.
+    /// </summary>
+    private static string? SavePending(bool showToast)
+    {
+        if (_pending.Count == 0) return null;
+
+        var db = EditorAssetBackend.Instance;
+        if (db == null || Project.Current == null) return null;
+
+        var names = new List<string>();
+
+        foreach (var (guid, pending) in _pending.ToArray())
+        {
+            var (material, entry) = pending;
+
+            // Pending edits that can never be written- drop them instead.
+            if (material.IsNotValid() || !ReferenceEquals(db.GetEntry(entry.Guid), entry))
+            {
+                _pending.Remove(guid);
+                continue;
+            }
+
+            // A failed write stays pending (and was logged) so the next save retries it rather than
+            // silently discarding the user's edits.
+            if (!Write(material, entry)) continue;
+
+            _pending.Remove(guid);
+
+            // Reimport refreshes the cache + thumbnail and replaces the loaded instance, so it has
+            // to run after this material leaves the pending set
+            db.Reimport(entry.Guid);
+
+            names.Add(Path.GetFileNameWithoutExtension(entry.Path));
+        }
+
+        if (names.Count == 0) return null;
+
+        names.Sort(StringComparer.OrdinalIgnoreCase);
+        string label = string.Join(", ", names);
+
+        if (showToast)
+            Toasts.Success(Prowl.Rosetta.Loc.Get("save.saved"), label);
+
+        return label;
+    }
+
+    /// <summary>Serialize one material over its .mat file. Returns false (and logs) on failure.</summary>
+    private static bool Write(Material material, AssetEntry entry)
+    {
+        string absolutePath = Path.Combine(Project.Current!.AssetsPath, entry.Path);
         try
         {
+            EchoObject? echo;
+
             // Temporarily clear AssetID so the serializer writes the full object
             // instead of just an $assetId reference
             var savedId = material.AssetID;
             material.AssetID = Guid.Empty;
+            try { echo = Serializer.Serialize(typeof(object), material); }
+            finally { material.AssetID = savedId; }
 
-            var echo = Serializer.Serialize(typeof(object), material);
-            material.AssetID = savedId;
-
-            if (echo != null)
-            {
-                File.WriteAllText(absolutePath, echo.WriteToString());
-                _dirty = false;
-                _preview.Invalidate();
-
-                // Reimport to update cache + thumbnail
-                EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            }
+            if (echo == null) return false;
+            File.WriteAllText(absolutePath, echo.WriteToString());
+            return true;
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogError($"Failed to save material: {ex.Message}");
+            Runtime.Debug.LogError($"Failed to save material '{entry.Path}': {ex.Message}");
+            return false;
         }
     }
 }
