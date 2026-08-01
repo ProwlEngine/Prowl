@@ -58,8 +58,11 @@ public static class ScriptCompiler
 
         // Generate the default Game/Editor csproj (and any asmdef unit that owns scripts) up front so
         // NuGet packages restore and IDEs resolve references even before the first script exists.
-        foreach (var unit in units.Where(u => u.Source == null || u.Scripts.Count > 0))
+        var generated = units.Where(u => u.Source == null || u.Scripts.Count > 0).ToList();
+        foreach (var unit in generated)
             GenerateCsproj(project, unit, units);
+
+        GenerateSolutionIfMissing(project, generated);
 
         var compileUnits = units.Where(u => u.Scripts.Count > 0).ToList();
         if (compileUnits.Count == 0)
@@ -461,6 +464,33 @@ public static class ScriptCompiler
         sb.AppendLine("</Project>");
 
         File.WriteAllText(unit.CsprojPath, sb.ToString());
+    }
+
+    /// <summary>
+    /// Writes a .slnx listing the generated csproj files, so an IDE has a single solution to open.
+    /// Only created when absent: the file is a user-editable entry point (they may add their own
+    /// projects to it) as needed.
+    /// </summary>
+    private static void GenerateSolutionIfMissing(Project project, List<CompilationUnit> generatedUnits)
+    {
+        if (File.Exists(project.ProjectSolutionPath) || generatedUnits.Count == 0)
+            return;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("<Solution>");
+        foreach (var unit in generatedUnits.OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase))
+            sb.AppendLine($"  <Project Path=\"{Xml(Path.GetRelativePath(project.RootPath, unit.CsprojPath))}\" />");
+        sb.AppendLine("</Solution>");
+
+        try
+        {
+            File.WriteAllText(project.ProjectSolutionPath, sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            // A missing solution file never blocks compilation.
+            Runtime.Debug.LogWarning($"[ScriptCompiler] Failed to write solution file: {ex.Message}");
+        }
     }
 
     /// <summary>Appends a Reference item, skipping duplicates (by Include name) and XML-escaping values.</summary>
