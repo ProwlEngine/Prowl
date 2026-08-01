@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 
 using Prowl.Quill;
@@ -33,6 +32,10 @@ public class PaperRenderer : ICanvasRenderer
     private const int MaxBlurLevels = 6;
     private Resources.Material _blurMat;
     private readonly List<RenderTexture> _tempBlurRTs = new();
+
+    // Reused upload scratch that grows to the UI's high-water mark once and is then allocation-free.
+    private Vertex[] _vertexScratch = Array.Empty<Vertex>();
+    private uint[] _indexScratch = Array.Empty<uint>();
 
     public void Initialize(int width, int height)
     {
@@ -116,6 +119,22 @@ public class PaperRenderer : ICanvasRenderer
         tex.SetData(new Memory<byte>(data), bounds.Min.X, bounds.Min.Y, (uint)bounds.Size.X, (uint)bounds.Size.Y);
     }
 
+    /// <summary>
+    /// Bulk-copy without allocating: Canvas exposes ReadOnlyCollection wrappers, whose ICollection path is a memcpy of the backing List.
+    /// Indexer loop is the fallback for any other IReadOnlyList implementation.
+    /// </summary>
+    private static void CopyInto<T>(IReadOnlyList<T> source, T[] destination)
+    {
+        if (source is ICollection<T> collection)
+        {
+            collection.CopyTo(destination, 0);
+            return;
+        }
+
+        for (int i = 0; i < source.Count; i++)
+            destination[i] = source[i];
+    }
+
     public void RenderCalls(Canvas canvas, IReadOnlyList<DrawCall> drawCalls)
     {
         if (drawCalls.Count == 0) return;
@@ -142,19 +161,25 @@ public class PaperRenderer : ICanvasRenderer
         cmd.SetFloat("dpiScale", dpiScale);
         cmd.SetTexture("backdropTexture", _defaultTexture);
 
-        // Upload raw Vertex data (20 bytes per vertex)
-        if (canvas.Vertices.Count > 0)
+        // Upload raw Vertex data (20 bytes per vertex).
+        // UpdateBuffer copies the span into the command buffer's pooled store, so nothing here allocates in steady state.
+        int vertexCount = canvas.Vertices.Count;
+        if (vertexCount > 0)
         {
-            var vertices = canvas.Vertices.ToArray();
-            byte[] rawData = new byte[vertices.Length * Vertex.SizeInBytes];
-            var handle = GCHandle.Alloc(vertices, GCHandleType.Pinned);
-            try { Marshal.Copy(handle.AddrOfPinnedObject(), rawData, 0, rawData.Length); }
-            finally { handle.Free(); }
-            cmd.UpdateBuffer<byte>(_vertexBuffer, rawData);
+            if (_vertexScratch.Length < vertexCount)
+                _vertexScratch = new Vertex[Math.Max(vertexCount, _vertexScratch.Length * 2)];
+            CopyInto(canvas.Vertices, _vertexScratch);
+            cmd.UpdateBuffer<byte>(_vertexBuffer, MemoryMarshal.AsBytes(_vertexScratch.AsSpan(0, vertexCount)));
         }
 
-        if (canvas.Indices.Count > 0)
-            cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices.ToArray());
+        int indexCount = canvas.Indices.Count;
+        if (indexCount > 0)
+        {
+            if (_indexScratch.Length < indexCount)
+                _indexScratch = new uint[Math.Max(indexCount, _indexScratch.Length * 2)];
+            CopyInto(canvas.Indices, _indexScratch);
+            cmd.UpdateBuffer<uint>(_elementBuffer, _indexScratch.AsSpan(0, indexCount));
+        }
 
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
