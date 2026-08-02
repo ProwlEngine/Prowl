@@ -29,7 +29,13 @@ public abstract class AssetBackendBase
         if (_loadedAssets.TryGetValue(guid, out var found) && found != null && !found.IsDisposed)
         {
             obj = found;
-            AssetDatabase.Touch(guid);
+            // Coalesced through the instance where its ID matches the key, so a cache hit on every
+            // draw call doesn't reach the database. Falls back for anything stored under a
+            // different GUID than it carries, which must still be tracked under the key.
+            if (found.AssetID == guid)
+                found.TouchAsset();
+            else
+                AssetDatabase.Touch(guid);
             return true;
         }
         obj = null!;
