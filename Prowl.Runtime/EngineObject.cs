@@ -77,16 +77,47 @@ public abstract class EngineObject : IDisposable
     /// being read regularly still counts as in-use and won't be idle-swept out from under it - only
     /// an asset nobody reads at all, via any path, goes idle.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void EnsureNotDisposed(
         [System.Runtime.CompilerServices.CallerMemberName] string? member = null)
     {
         if (IsDisposed)
-            throw new ObjectDisposedException(Name,
-                $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
-                "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
-                ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
-                "for something that must survive being unused for a while.");
+            ThrowDisposed(member);
 
+        TouchAsset();
+    }
+
+    // Kept out of line so EnsureNotDisposed stays small enough for the JIT to inline into the
+    // hundreds of property getters that call it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowDisposed(string? member)
+        => throw new ObjectDisposedException(Name,
+            $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
+            "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
+            ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
+            "for something that must survive being unused for a while.");
+
+    private long _lastTouchTick;
+
+    // Reading one property a thousand times in a frame says nothing more about liveness than
+    // reading it once, so activity is reported at most this often per object. Three orders of
+    // magnitude finer than the idle timeout it feeds, so eviction behaviour is unchanged.
+    private const long TouchIntervalMs = 1000;
+
+    /// <summary>Report this object as in use, so the idle sweep won't evict it. Cheap enough to call
+    /// from any accessor - repeat calls within a second are dropped without reaching the database.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void TouchAsset()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastTouchTick >= TouchIntervalMs)
+            TouchAssetSlow(now);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void TouchAssetSlow(long now)
+    {
+        _lastTouchTick = now;
         if (AssetID != Guid.Empty)
             AssetDatabase.Touch(AssetID);
     }

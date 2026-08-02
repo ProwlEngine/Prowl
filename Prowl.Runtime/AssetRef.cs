@@ -46,7 +46,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
                 // Touched even on this already-cached fast path: an idle-timeout sweep only knows
                 // a GUID is in use if something says so, and the database's own resolve path
                 // (TryGetLoaded/SetLoaded) is bypassed entirely once instance is already cached.
-                AssetDatabase.Touch(AssetID);
+                // Goes through the instance so repeat reads coalesce instead of hitting the database.
+                instance.TouchAsset();
                 return instance;
             }
 
@@ -131,7 +132,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
         if (instance.IsValid())
         {
-            AssetDatabase.Touch(AssetID);
+            instance.TouchAsset();
             return;
         }
 
