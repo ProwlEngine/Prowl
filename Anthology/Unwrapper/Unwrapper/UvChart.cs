@@ -105,4 +105,14 @@ internal sealed class UvChart
 
         RefreshUvArea();
     }
+
+    /// <summary>Scale the UV layout so its area roughly matches the 3D area it came from.</summary>
+    public void NormaliseToSurfaceArea()
+    {
+        double scale = UvArea < NumericHelpers.FloatTiny ? 1.0 : System.Math.Sqrt(SurfaceArea / UvArea);
+        for (int i = 0; i < UVs.Length; ++i) UVs[i] *= scale;
+        UvMin *= scale;
+        UvMax *= scale;
+        RefreshUvArea();
+    }
 }

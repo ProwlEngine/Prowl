@@ -10,8 +10,8 @@
     <PackageId>Prowl.Unwrapper</PackageId>
     <Title>Prowl.Unwrapper</Title>
 
-    <Description>Mesh UV unwrapper for the Prowl Game Engine. Produces lightmap-style atlases from arbitrary triangle meshes using Lloyd-style chart segmentation, angle-based flattening (LinABF), and least-squares conformal mapping (LSCM), then packs the charts into [0,1]². Parallel, SIMD-vectorised CG solver, ~30s on Sponza (260k tris) on a desktop CPU.</Description>
-    <PackageTags>uv;unwrap;lightmap;atlas;lscm;parametrization;mesh;3d;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+    <Description>Mesh UV unwrapper for the Prowl Game Engine. Produces lightmap-style atlases from arbitrary triangle meshes and packs the charts into [0,1]². Two methods: a box-projection unwrapper (default) that charts by dominant normal direction for near-uniform texel density in ~1.5s on Sponza (260k tris), and a conformal one using Lloyd-style chart segmentation, angle-based flattening (LinABF) and least-squares conformal mapping (LSCM) for tighter atlases at ~10x the cost. Parallel, SIMD-vectorised CG solver.</Description>
+    <PackageTags>uv;unwrap;lightmap;atlas;lscm;projection;parametrization;mesh;3d;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

@@ -6,7 +6,7 @@ namespace Photonic.Demo;
 /// <summary>How the bake-time UV1 layer is produced for a given model on import.</summary>
 internal enum UV1Strategy
 {
-    /// <summary>Run Prowl.Unwrapper. Best quality, slow on large meshes.</summary>
+    /// <summary>Run Prowl.Unwrapper. Best quality.</summary>
     AutoUnwrap,
     /// <summary>Per-triangle shelf-pack. Every triangle gets a unique atlas region; no chart overlap.</summary>
     TrianglePack,

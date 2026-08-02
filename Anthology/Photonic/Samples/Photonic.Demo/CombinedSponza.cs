@@ -50,7 +50,7 @@ internal sealed class CombinedSponza
 
     public enum UV1Mode
     {
-        /// <summary>Run Prowl.Unwrapper. Best quality, slowest.</summary>
+        /// <summary>Run Prowl.Unwrapper. Best quality.</summary>
         AutoUnwrap,
         /// <summary>Per-triangle shelf pack. Every triangle gets a unique atlas region, no chart overlap. Use for diagnostics or when artifacts plague the auto-unwrap.</summary>
         PerTrianglePack,
@@ -151,7 +151,7 @@ internal sealed class CombinedSponza
         {
             case UV1Mode.AutoUnwrap:
             {
-                progress?.Invoke("Unwrapping UV1 via Prowl.Unwrapper (this can take 30s+ on Sponza)...");
+                progress?.Invoke("Unwrapping UV1 via Prowl.Unwrapper...");
                 var doublePos = new Double3[result.Vertices.Length];
                 for (int i = 0; i < result.Vertices.Length; i++)
                     doublePos[i] = new Double3(result.Vertices[i].X, result.Vertices[i].Y, result.Vertices[i].Z);

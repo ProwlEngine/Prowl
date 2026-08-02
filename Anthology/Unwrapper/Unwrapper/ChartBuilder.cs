@@ -27,12 +27,14 @@ internal sealed class ChartBuilder
         public int FaceIndex;
         public double Priority0;  // baseline used while sorting
         public double Priority;   // recomputed after each insertion
+        public int Stamp;         // _faceStamp value Priority was computed against; -1 = never
 
         public Candidate(int faceIndex, double priority)
         {
             FaceIndex = faceIndex;
             Priority0 = priority;
             Priority = priority;
+            Stamp = -1;
         }
     }
 
@@ -76,15 +78,24 @@ internal sealed class ChartBuilder
     private int[] _faceToChartPrev2 = System.Array.Empty<int>();
     private double _regionArea;
 
+    // Flat mirrors of the half-edge topology the growth loop reads on every candidate rescore.
+    // Indexed by 3 * faceIndex + side, walking FirstEdge, .Next, .Next.
+    private double[] _cornerEdgeLength = System.Array.Empty<double>();
+    private int[] _cornerNeighbourFace = System.Array.Empty<int>();
+
+    // Bumped for every face whose neighbourhood changed, so a candidate whose stamp still
+    // matches is known to already hold its current priority.
+    private int[] _faceStamp = System.Array.Empty<int>();
+
     public ChartBuilder(MeshRegion source, UnwrapOptions options)
     {
         _source = source;
-        _smallChartAreaFraction = options.ChartAreaThreshold;
-        _smallChartFaceFraction = options.ChartFacetCountThreshold;
-        _compactnessPower = options.CompactnessPower;
-        _straightnessPower = options.StraightnessPower;
-        _stableChangeFraction = options.LloydChangePrevThreshold;
-        _stableChangeFraction2 = options.LloydChangePrev2Threshold;
+        _smallChartAreaFraction = options.Conformal.ChartAreaThreshold;
+        _smallChartFaceFraction = options.Conformal.ChartFacetCountThreshold;
+        _compactnessPower = options.Conformal.CompactnessPower;
+        _straightnessPower = options.Conformal.StraightnessPower;
+        _stableChangeFraction = options.Conformal.LloydChangePrevThreshold;
+        _stableChangeFraction2 = options.Conformal.LloydChangePrev2Threshold;
     }
 
     public void Initialise(double discardThreshold)
@@ -140,6 +151,9 @@ internal sealed class ChartBuilder
             _faceToChartPrev[i] = -1;
             _faceToChartPrev2[i] = -1;
         }
+
+        _faceStamp = new int[_workMesh.Triangles.Count];
+        BuildCornerTables();
 
         // Seed placement loop: spawn a chart at the worst-fitting facet, regrow, repeat until covered.
         int seedI = 0;
@@ -332,6 +346,7 @@ internal sealed class ChartBuilder
                     chart.FaceCount++;
 
                     _faceToChart[target.FaceIndex] = chartI;
+                    MarkNeighboursChanged(target.FaceIndex);
                     ExtendFrontier(_workMesh.Triangles[target.FaceIndex]);
 
                     for (int ci = 0; ci < _charts.Count; ++ci)
@@ -339,17 +354,34 @@ internal sealed class ChartBuilder
                         var dirty = _charts[ci];
                         if (!dirty.FrontierDirty) continue;
 
-                        for (int e = 0; e < dirty.Frontier.Count; ++e)
+                        var entries = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(dirty.Frontier);
+                        for (int e = 0; e < entries.Length; ++e)
                         {
-                            var v = dirty.Frontier[e];
+                            ref var v = ref entries[e];
+                            int stamp = _faceStamp[v.FaceIndex];
+                            if (v.Stamp == stamp) continue;
                             v.Priority = StraightnessAdjustedPriority(v.FaceIndex, ci, v.Priority0);
-                            dirty.Frontier[e] = v;
+                            v.Stamp = stamp;
                         }
-                        dirty.Frontier.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+                        dirty.Frontier.Sort(static (a, b) => a.Priority.CompareTo(b.Priority));
                         dirty.FrontierDirty = false;
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Claiming a face only moves the shared-vs-cut split of its direct neighbours, so their
+    /// straightness scores are the only ones a rescore can change.
+    /// </summary>
+    private void MarkNeighboursChanged(int faceI)
+    {
+        int corner = 3 * faceI;
+        for (int side = 0; side < 3; ++side)
+        {
+            int neighbour = _cornerNeighbourFace[corner + side];
+            if (neighbour >= 0) ++_faceStamp[neighbour];
         }
     }
 
@@ -463,9 +495,9 @@ internal sealed class ChartBuilder
         Double3 v1 = f.FirstEdge!.Next!.Apex!.Position;
         Double3 v2 = f.FirstEdge!.Next!.Next!.Apex!.Position;
 
-        double[] d = new double[3];
         double dist = 0.0;
         var chart = _charts[chartI];
+        double d0 = 0, d1 = 0, d2 = 0;
         for (int side = 0; side < 3; ++side)
         {
             Double3 p = side == 0 ? v0 : (side == 1 ? v1 : v2);
@@ -473,45 +505,58 @@ internal sealed class ChartBuilder
             offset -= Double3.Dot(offset, chart.ProxyNormal) * chart.ProxyNormal;
             double len2 = Double3.Dot(offset, offset);
             dist += len2;
-            d[side] = System.Math.Sqrt(len2);
+            double d = System.Math.Sqrt(len2);
+            if (side == 0) d0 = d; else if (side == 1) d1 = d; else d2 = d;
         }
-        dist += d[0] * d[1] + d[1] * d[2] + d[2] * d[0];
+        dist += d0 * d1 + d1 * d2 + d2 * d0;
         dist *= _workMesh.FaceAttributes[faceI].Area / 6.0;
         return dist;
+    }
+
+    /// <summary>
+    /// Flatten the per-corner edge length and across-edge neighbour into contiguous arrays.
+    /// The growth loop rescores candidates hundreds of millions of times on large regions, and
+    /// walking the half-edge objects for every one of those is the bulk of the segmentation cost.
+    /// </summary>
+    private void BuildCornerTables()
+    {
+        int faceCount = _workMesh.Triangles.Count;
+        _cornerEdgeLength = new double[3 * faceCount];
+        _cornerNeighbourFace = new int[3 * faceCount];
+
+        for (int faceI = 0; faceI < faceCount; ++faceI)
+        {
+            HalfEdge edge = _workMesh.Triangles[faceI].FirstEdge!;
+            for (int side = 0; side < 3; ++side)
+            {
+                MeshFace? neighbour = edge.Twin!.Face;
+                _cornerEdgeLength[3 * faceI + side] = _workMesh.EdgeAttributes[edge.Index].Length;
+                _cornerNeighbourFace[3 * faceI + side] = neighbour is null ? -1 : neighbour.Index;
+                edge = edge.Next!;
+            }
+        }
     }
 
     /// <summary>Ratio of shared-vs-cut edges — pushes the segmentation toward contiguous charts.</summary>
     private double StraightnessRatio(int chartI, int faceI)
     {
-        MeshFace f = _workMesh.Triangles[faceI];
-        HalfEdge he0 = f.FirstEdge!;
-        HalfEdge he1 = he0.Next!;
-        HalfEdge he2 = he1.Next!;
-        MeshFace?[] neighbours =
-        {
-            he0.Twin!.Face,
-            he1.Twin!.Face,
-            he2.Twin!.Face,
-        };
-        HalfEdge[] edges = { he0, he1, he2 };
-
         double outer = 0.0, inner = 0.0;
+        int corner = 3 * faceI;
         for (int side = 0; side < 3; ++side)
         {
-            double len = _workMesh.EdgeAttributes[_workMesh.IndexOf(edges[side])].Length;
-            if (neighbours[side] is not null && _faceToChart[_workMesh.IndexOf(neighbours[side]!)] == chartI)
-                inner += len;
-            else
-                outer += len;
+            double len = _cornerEdgeLength[corner + side];
+            int neighbour = _cornerNeighbourFace[corner + side];
+            if (neighbour >= 0 && _faceToChart[neighbour] == chartI) inner += len;
+            else outer += len;
         }
         return inner > 0.0 ? outer / inner : 0.0;
     }
 
     private double BasePriority(int faceI, int chartI)
-        => NormalDeviation(chartI, faceI) * System.Math.Pow(InPlaneDistanceSq(chartI, faceI), _compactnessPower);
+        => NormalDeviation(chartI, faceI) * NumericHelpers.Pow(InPlaneDistanceSq(chartI, faceI), _compactnessPower);
 
     private double StraightnessAdjustedPriority(int faceI, int chartI, double basePriority)
-        => basePriority * System.Math.Pow(StraightnessRatio(chartI, faceI), _straightnessPower);
+        => basePriority * NumericHelpers.Pow(StraightnessRatio(chartI, faceI), _straightnessPower);
 
     // ---- Boundary collection + chart merging ------------------------------------------------
 
@@ -625,7 +670,11 @@ internal sealed class ChartBuilder
         UpdateProxies();
         ResnapSeeds();
 
-        foreach (var b in boundaries) b.FitError = MeasureMergeError(b);
+        // Only the surviving chart's face set moved, so every boundary that doesn't touch it
+        // keeps the error it already had.
+        int merged = kept > removed ? kept - 1 : kept;
+        foreach (var b in boundaries)
+            if (b.First == merged || b.Second == merged) b.FitError = MeasureMergeError(b);
 
         var tail = boundaries.GetRange(targetIndex + 1, boundaries.Count - (targetIndex + 1));
         var indexed = new List<(ChartBoundary Info, int Order)>(tail.Count);

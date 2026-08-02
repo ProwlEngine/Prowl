@@ -448,7 +448,7 @@ internal sealed class DemoWindow : GameWindow
         ImGui.Combo("##importUv", ref _importUV1Idx, UV1ModeLabels, UV1ModeLabels.Length);
         ImGui.TextWrapped(_importUV1Idx switch
         {
-            0 => "Run Prowl.Unwrapper. Best quality, slow on big meshes.",
+            0 => "Run Prowl.Unwrapper. Best quality.",
             1 => "Per-triangle shelf-pack. Every triangle gets a unique region (no overlap).",
             _ => "Use the model's best-existing UV layer (prefers UV2 / UV1; falls back to UV0 with a warning).",
         });
@@ -497,7 +497,7 @@ internal sealed class DemoWindow : GameWindow
                     UV1Mode = uv1,
                 };
                 // Pre-seed Baked* with source data, then run the chosen UV1 strategy. UV1
-                // generation can take 30s+ for an auto-unwrap on a big mesh -- doing it here on
+                // generation takes seconds for an auto-unwrap on a big mesh -- doing it here on
                 // the background thread keeps the UI responsive and means StartBake is instant.
                 sm.BakedPositions = loaded.Positions;
                 sm.BakedNormals   = loaded.Normals;

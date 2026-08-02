@@ -2,19 +2,39 @@
 
 A mesh UV unwrapper built for the Prowl Game Engine. Given an arbitrary triangle mesh, Prowl.Unwrapper produces a non-overlapping UV atlas suitable for lightmaps, AO bakes, signed-distance bakes, or any other texture-space workflow that needs a clean parametrisation.
 
-The pipeline cleans the input mesh, segments it into roughly developable charts, flattens each chart with LSCM, and packs the charts into the unit square. All in pure C# with no native dependencies.
+The pipeline cleans the input mesh, segments it into charts, flattens each chart, and packs the charts into the unit square. All in pure C# with no native dependencies.
+
+## Choosing a method
+
+`UnwrapOptions.Method` picks the algorithm.
+
+| | `Projection` (default) | `Conformal` |
+| --- | --- | --- |
+| How charts form | grouped by which cube face the normal points at | Lloyd segmentation + distortion-aware merging |
+| How charts flatten | dropped onto the projection plane | LinABF angle field, then an LSCM solve |
+| Sponza (262k tris) | 1.5 s | 15 s |
+| Atlas coverage | ~27% | ~46% |
+| Texel density spread | 1.6x | can exceed 100x on awkward charts |
+
+Projection is the better default for lightmaps: near-uniform texel density matters more than atlas coverage, and it finishes fast enough to run on import. Reach for `Conformal` when atlas space is tight or when long unbroken charts matter more than turnaround time.
+
+```csharp
+var result = new UnwrapMesh(positions, triangles)
+    .Unwrap(new UnwrapOptions { Method = UnwrapMethod.Conformal });
+```
 
 ## Performance
 
 Tested on Sponza (262k triangles, the standard glTF sample model) on a desktop CPU:
 
 ```
-  Cleanup + half-edge build:   1.2 s
-  Chart segmentation:          7.4 s
-  LinABF + LSCM solve:         9.1 s
-  Atlas packing:               5.1 s
-                              ------
-  Total:                      22.8 s
+  Projection                        Conformal
+  ------------------------------    ------------------------------
+  Cleanup + half-edge build 1.0 s   Cleanup + half-edge build  1.0 s
+  Charting + projection     0.2 s   Segmentation + LSCM       13.5 s
+  Atlas packing             0.3 s   Atlas packing              0.3 s
+                           ------                            ------
+  Total                     1.5 s   Total                     14.8 s
 ```
 
 Hot paths use SIMD via `System.Numerics.Vector<double>`, the linear solver is a Jacobi-preconditioned conjugate gradient over a CSC sparse matrix, and chart processing is parallelised across logical cores via `Parallel.For`. Hash maps for half-edge lookups use a custom open-addressing `long -> int` table with SplitMix64 mixing, which is roughly 5x faster than `Dictionary<long, int>` for this workload.
@@ -27,13 +47,19 @@ Hot paths use SIMD via `System.Numerics.Vector<double>`, the linear solver is a 
   - Non-manifold geometry fixer using local edge cutting (Gueziec / Taubin), so dirty real-world meshes work
   - Optional per-corner material UV input used as a seam hint
 
-- **Segmentation**
+- **Projection charting** (`UnwrapMethod.Projection`)
+  - Every triangle picks the cube-face direction its normal points closest to
+  - Connected same-direction triangles become a chart, flattened by dropping it onto that plane
+  - Optional eight cube-corner directions on top of the six face directions
+  - Undersized clusters fold into the neighbour they share the most border with, guarded so nothing gets squashed edge-on
+
+- **Conformal segmentation** (`UnwrapMethod.Conformal`)
   - Lloyd-style chart growth scored by 3D compactness and developability
   - Hard-edge detection from a configurable dihedral threshold
   - Distortion-aware merging: adjacent chart pairs are trial-flattened and accepted only if mean angular and area distortion stay below the configured thresholds
   - Time-budgeted merge pass for pathological inputs
 
-- **Parametrisation**
+- **Parametrisation** (conformal only)
   - Linear Angle-Based Flattening (LinABF) provides the initial angle field
   - Least Squares Conformal Maps (LSCM) produces the per-chart UVs
   - Two pinned vertices selected from the chart boundary for stable rotation
@@ -80,14 +106,18 @@ var result = new UnwrapMesh(positions, triangles)
 
 ### Tuning chart quality
 
+Shared knobs sit on `UnwrapOptions`; per-method knobs live under `.Projection` and `.Conformal`.
+
 ```csharp
 var options = new UnwrapOptions
 {
-    AngleDistortionThreshold = 0.05,   // stricter than default 0.08
-    AreaDistortionThreshold  = 0.10,
-    HardAngle                = 75.0,   // more aggressive crease cutting
-    PackMargin               = 1.0 / 512.0,
+    Method     = UnwrapMethod.Conformal,
+    HardAngle  = 75.0,           // more aggressive crease cutting
+    PackMargin = 1.0 / 512.0,
 };
+options.Conformal.AngleDistortionThreshold = 0.05;   // stricter than the default 0.08
+options.Conformal.AreaDistortionThreshold = 0.10;
+options.Projection.UseDiagonalAxes = true;           // 14 directions instead of 6
 
 var result = new UnwrapMesh(positions, triangles).Unwrap(options);
 ```
@@ -117,6 +147,7 @@ if (result.DegenerateTriangleIndices is { } skipped)
 - Output UVs are per-corner, not per-vertex. Callers wanting a vertex buffer must split shared vertices along seams themselves.
 - Pure CPU. There is no GPU path.
 - The unwrapper minimises distortion, not seam length. For artist-facing UVs you may want a different tool.
+- `Projection` has no overlap validation pass. Every triangle in a chart faces its projection plane so charts cannot fold, but a connected surface that spirals back over itself without leaving one direction bucket can still self-overlap. Use `Conformal` if that shape appears in your content.
 
 ## License
 
