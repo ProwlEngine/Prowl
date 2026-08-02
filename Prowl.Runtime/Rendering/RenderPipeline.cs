@@ -224,6 +224,18 @@ public abstract class RenderPipeline : EngineObject
         return (renderables, lights);
     }
 
+    /// <summary>Collect into caller-owned lists instead of fresh ones. Both lists are cleared first.
+    /// <para>The allocating overload above hands back two lists sized to the whole visible scene, on
+    /// every camera of every frame. Growing a list of references copies under a write barrier, which
+    /// made it one of the larger per-frame allocation sources. Callers that render every frame should
+    /// keep their lists and use this.</para></summary>
+    public static void CollectRenderables(Scene scene, Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
+    {
+        renderables.Clear();
+        lights.Clear();
+        scene.CollectRenderables(camera, renderables, lights);
+    }
+
     public virtual void Render(Camera camera, in RenderingData data)
     {
         // Clean up unused matrices after rendering
