@@ -71,6 +71,14 @@ internal class PaperRenderer : ICanvasRenderer
     private bool _backdropDirty = true;
     private float _lastBlurRadius = -1f;
 
+    // Offscreen scene target, used only on frames that actually contain a frosted shape. Drawing
+    // through it lets the blur sample the scene as a texture instead of blitting the default
+    // framebuffer once per blurred draw call, and removes the mid-frame read-back stall.
+    private int _sceneFbo;
+    private int _sceneTex;
+    private int _sceneW, _sceneH;
+    private bool _renderingOffscreen;
+
     private int _blurBaseW;        // viewport size the pyramid was built for
     private int _blurBaseH;
 
@@ -135,6 +143,10 @@ internal class PaperRenderer : ICanvasRenderer
             _blurTex[i] = 0;
         }
         _blurDownProgram = _blurUpProgram = _blurVao = _blurFbo = 0;
+    if (_sceneTex != 0) GL.DeleteTexture(_sceneTex);
+    if (_sceneFbo != 0) GL.DeleteFramebuffer(_sceneFbo);
+    _sceneTex = _sceneFbo = 0;
+    _sceneW = _sceneH = 0;
         _blurBaseW = _blurBaseH = 0;
     }
 
@@ -294,6 +306,31 @@ internal class PaperRenderer : ICanvasRenderer
         return tex;
     }
 
+    private void EnsureSceneTarget(int w, int h)
+    {
+        if (_sceneTex != 0 && _sceneW == w && _sceneH == h)
+            return;
+
+        if (_sceneTex != 0) GL.DeleteTexture(_sceneTex);
+        if (_sceneFbo == 0) _sceneFbo = GL.GenFramebuffer();
+
+        _sceneTex = GL.GenTexture();
+        GL.BindTexture(TextureTarget.Texture2D, _sceneTex);
+        GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, w, h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        GL.BindTexture(TextureTarget.Texture2D, 0);
+
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+        GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _sceneTex, 0);
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+
+        _sceneW = w;
+        _sceneH = h;
+    }
+
     private void EnsureBlurTargets(int baseW, int baseH)
     {
         if (_blurTex[0] != 0 && _blurBaseW == baseW && _blurBaseH == baseH)
@@ -371,18 +408,15 @@ internal class PaperRenderer : ICanvasRenderer
         GL.BindVertexArray(_blurVao);
         GL.ActiveTexture(TextureUnit.Texture0);
 
-        // Capture the default framebuffer into level 0 (half res) via a linear blit.
-        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _blurFbo);
-        GL.FramebufferTexture2D(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _blurTex[0], 0);
-        GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-        GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _blurSize[0].X, _blurSize[0].Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
-
         GL.BindFramebuffer(FramebufferTarget.Framebuffer, _blurFbo);
 
-        // Downsample chain: level 0 -> 1 -> ... -> iterations.
+        // Downsample chain. The first pass reads the scene texture straight into level 0, so the
+        // full-resolution blit the old capture needed is gone, and the scene is filtered by the
+        // five-tap kernel rather than a single bilinear step (which would alias at this ratio).
         GL.UseProgram(_blurDownProgram);
         GL.Uniform1(_downSrcLoc, 0);
         GL.Uniform1(_downOffsetLoc, offset);
+        BlurPass(_sceneTex, _blurTex[0], _blurSize[0], _downHalfpixelLoc, new Vector2i(_fbWidth, _fbHeight));
         for (int i = 0; i < iterations; i++)
             BlurPass(_blurTex[i], _blurTex[i + 1], _blurSize[i + 1], _downHalfpixelLoc, _blurSize[i]);
 
@@ -393,8 +427,8 @@ internal class PaperRenderer : ICanvasRenderer
         for (int i = iterations; i > 0; i--)
             BlurPass(_blurTex[i], _blurTex[i - 1], _blurSize[i - 1], _upHalfpixelLoc, _blurSize[i - 1]);
 
-        // Restore state for canvas drawing.
-        GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        // Restore state for canvas drawing, back into whichever target the frame is drawing to.
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _renderingOffscreen ? _sceneFbo : 0);
         GL.Viewport(0, 0, _fbWidth, _fbHeight);
         GL.Enable(EnableCap.Blend);
         GL.BindVertexArray(_vertexArrayObject);
@@ -430,7 +464,30 @@ internal class PaperRenderer : ICanvasRenderer
         if (drawCalls.Count == 0)
             return;
 
-        // Configure OpenGL state
+        // Only frames that actually contain a frosted shape pay for the offscreen target; anything
+    // else draws straight to the default framebuffer exactly as before.
+    _renderingOffscreen = false;
+    for (int i = 0; i < drawCalls.Count; i++)
+    {
+        if (drawCalls[i].Brush.BackdropBlur > 0f) { _renderingOffscreen = true; break; }
+    }
+
+    if (_renderingOffscreen)
+    {
+        EnsureSceneTarget(_fbWidth, _fbHeight);
+
+        // Seed with what is already on screen, so a frosted shape blurs whatever the host
+        // drew underneath the canvas and not just the canvas own content.
+        GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+        GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _sceneFbo);
+        GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+            ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+
+        GL.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+        GL.Viewport(0, 0, _fbWidth, _fbHeight);
+    }
+
+    // Configure OpenGL state
         GL.Disable(EnableCap.DepthTest);
         GL.Enable(EnableCap.Blend);
         GL.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
@@ -548,6 +605,17 @@ internal class PaperRenderer : ICanvasRenderer
             GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
             _backdropDirty = true;
             indexOffset += drawCall.ElementCount;
+        }
+
+        // Present the offscreen scene to the window.
+        if (_renderingOffscreen)
+        {
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _sceneFbo);
+            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+            GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+                ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            _renderingOffscreen = false;
         }
 
         // Clean up
