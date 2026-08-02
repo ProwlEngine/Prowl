@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -217,18 +217,34 @@ public partial class PropertyState
             _matrices[item.Key] = item.Value;
         foreach (KeyValuePair<string, Float4x4[]> item in properties._matrixArr)
             _matrixArr[item.Key] = item.Value;
-        foreach (KeyValuePair<string, AssetRef<Texture2D>> item in properties._textures)
-            _textures[item.Key] = item.Value;
-        foreach (KeyValuePair<string, AssetRef<Texture3D>> item in properties._textures3D)
-            _textures3D[item.Key] = item.Value;
-        foreach (KeyValuePair<string, AssetRef<Cubemap>> item in properties._texturesCube)
-            _texturesCube[item.Key] = item.Value;
+        // Resolve into the SOURCE before copying. An AssetRef caches its resolved instance in the
+        // struct it is read from, and a snapshot rented from PropertyStatePool is cleared on return -
+        // so resolving in the copy throws the work away and leaves every draw call re-resolving its
+        // textures through the asset database. Resolving here caches on the material itself, and the
+        // copy carries an already-resolved ref.
+        ResolveAndCopy(properties._textures, _textures);
+        ResolveAndCopy(properties._textures3D, _textures3D);
+        ResolveAndCopy(properties._texturesCube, _texturesCube);
         foreach (KeyValuePair<string, GraphicsBuffer> item in properties._buffers)
             _buffers[item.Key] = item.Value;
         foreach (KeyValuePair<string, uint> item in properties._bufferBindings)
             _bufferBindings[item.Key] = item.Value;
+
     }
 
+    // GetValueRefOrNullRef so .Res writes its cache back into the source dictionary's slot rather
+    // than a copy. Reading .Res only assigns the ref's instance field, so a concurrent read of the
+    // same material sees either the old or the new reference, never a torn one.
+    private static void ResolveAndCopy<T>(Dictionary<string, AssetRef<T>> source, Dictionary<string, AssetRef<T>> dest)
+        where T : EngineObject
+    {
+        foreach (string key in source.Keys)
+        {
+            ref AssetRef<T> src = ref CollectionsMarshal.GetValueRefOrNullRef(source, key);
+            _ = src.Res;
+            dest[key] = src;
+        }
+    }
 }
 
 public partial class PropertyState
