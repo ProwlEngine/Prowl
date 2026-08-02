@@ -21,7 +21,10 @@ internal sealed class ChartBuilder
     private readonly double _stableChangeFraction;
     private readonly double _stableChangeFraction2;
 
-    /// <summary>Candidate facet sitting on a chart's frontier; lower priority = added sooner.</summary>
+    /// <summary>
+    /// Candidate facet sitting on a chart's frontier. Priority is an error score, so lower is a
+    /// better fit and gets added sooner. Frontiers are kept sorted descending for that reason.
+    /// </summary>
     private struct Candidate
     {
         public int FaceIndex;
@@ -363,7 +366,8 @@ internal sealed class ChartBuilder
                             v.Priority = StraightnessAdjustedPriority(v.FaceIndex, ci, v.Priority0);
                             v.Stamp = stamp;
                         }
-                        dirty.Frontier.Sort(static (a, b) => a.Priority.CompareTo(b.Priority));
+                        // Descending, so the cheapest candidate sits at the tail and pops in O(1).
+                        dirty.Frontier.Sort(static (a, b) => b.Priority.CompareTo(a.Priority));
                         dirty.FrontierDirty = false;
                     }
                 }

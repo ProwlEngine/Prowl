@@ -12,9 +12,9 @@ The pipeline cleans the input mesh, segments it into charts, flattens each chart
 | --- | --- | --- |
 | How charts form | grouped by which cube face the normal points at | Lloyd segmentation + distortion-aware merging |
 | How charts flatten | dropped onto the projection plane | LinABF angle field, then an LSCM solve |
-| Sponza (262k tris) | 1.5 s | 15 s |
-| Atlas coverage | ~27% | ~46% |
-| Texel density spread | 1.6x | can exceed 100x on awkward charts |
+| Sponza (262k tris) | 1.5 s | 11 s |
+| Atlas coverage | ~27% | ~43% |
+| L2 texture stretch | 1.00 | 1.02 |
 
 Projection is the better default for lightmaps: near-uniform texel density matters more than atlas coverage, and it finishes fast enough to run on import. Reach for `Conformal` when atlas space is tight or when long unbroken charts matter more than turnaround time.
 
@@ -31,10 +31,10 @@ Tested on Sponza (262k triangles, the standard glTF sample model) on a desktop C
   Projection                        Conformal
   ------------------------------    ------------------------------
   Cleanup + half-edge build 1.0 s   Cleanup + half-edge build  1.0 s
-  Charting + projection     0.2 s   Segmentation + LSCM       13.5 s
+  Charting + projection     0.2 s   Segmentation + LSCM       10.0 s
   Atlas packing             0.3 s   Atlas packing              0.3 s
                            ------                            ------
-  Total                     1.5 s   Total                     14.8 s
+  Total                     1.5 s   Total                     11.3 s
 ```
 
 Hot paths use SIMD via `System.Numerics.Vector<double>`, the linear solver is a Jacobi-preconditioned conjugate gradient over a CSC sparse matrix, and chart processing is parallelised across logical cores via `Parallel.For`. Hash maps for half-edge lookups use a custom open-addressing `long -> int` table with SplitMix64 mixing, which is roughly 5x faster than `Dictionary<long, int>` for this workload.
