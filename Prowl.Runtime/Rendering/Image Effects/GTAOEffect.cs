@@ -63,7 +63,7 @@ public sealed class GTAOEffect : ImageEffect
 
     /// <summary>Resolution the AO is computed at. Lower = faster; the result is bilinearly upsampled
     /// at composite so the scene image itself stays full resolution.</summary>
-    public EffectResolution Resolution = EffectResolution.Half;
+    public EffectResolution Resolution = EffectResolution.Quarter;
 
     // Private fields
     private Material _mat;
