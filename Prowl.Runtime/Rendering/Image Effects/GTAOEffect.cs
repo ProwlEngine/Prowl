@@ -103,6 +103,12 @@ public sealed class GTAOEffect : ImageEffect
 
         RenderTexture aoRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Color4b]);
 
+        // Depth at AO resolution. The horizon search takes dozens of scattered taps per pixel, and
+        // pointing them at a texture the same size as the pass instead of the full-res buffer is
+        // what keeps those taps in cache. Float, not Color4b - 8 bits of depth would destroy the
+        // view-position reconstruction the horizon search depends on.
+        RenderTexture depthRT = RenderTexture.GetTemporaryRT(width, height, false, [TextureImageFormat.Float]);
+
         // Pass 0: Calculate GTAO (blue-noise + per-frame jitter).
         _mat.SetInt("_Slices", Slices);
         _mat.SetInt("_DirectionSamples", DirectionSamples);
@@ -111,10 +117,15 @@ public sealed class GTAOEffect : ImageEffect
         _mat.SetTexture("_Noise", _noise);
         _mat.SetVector("_NoiseScale", new Float2(width / (float)_noise.Width, height / (float)_noise.Height));
         _mat.SetVector("_JitterOffset", _jitter);
-        _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
         _mat.SetTexture("_CameraNormalsTexture", context.DepthNormals.InternalTextures[0]);
 
         using var cmd = Graphics.GetCommandBuffer("GTAO");
+
+        // Pass 4: shrink depth to AO resolution, then point every later pass at the small copy.
+        _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
+        cmd.Blit(context.SceneColor, depthRT, _mat, 4);
+        _mat.SetTexture("_CameraDepthTexture", depthRT.MainTexture);
+
         cmd.Blit(context.SceneColor, aoRT, _mat, 0);
 
         // Pass 3: Temporal accumulate against history, then store the (pre-blur) result for next frame.
@@ -158,6 +169,7 @@ public sealed class GTAOEffect : ImageEffect
         RenderTexture.ReleaseTemporaryRT(temp);
         if (blurTempRT != null) RenderTexture.ReleaseTemporaryRT(blurTempRT);
         if (temporalRT != null) RenderTexture.ReleaseTemporaryRT(temporalRT);
+        RenderTexture.ReleaseTemporaryRT(depthRT);
         RenderTexture.ReleaseTemporaryRT(aoRT);
     }
 
