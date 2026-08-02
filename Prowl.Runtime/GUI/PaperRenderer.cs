@@ -30,6 +30,12 @@ public class PaperRenderer : ICanvasRenderer
     private const int BackdropFlipY = 1;
     private const int BlurDownPass = 1;
     private const int BlurUpPass = 2;
+    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The UI
+    // shader composites straight from the base level, so this also decides the resolution the
+    // backdrop is sampled at. Quarter is four times cheaper across every pass and is imperceptible
+    // above roughly an eight pixel radius, since detail finer than the blur is destroyed anyway.
+    private const int BlurBaseShift = 2;
+
     private const int MaxBlurLevels = 6;
     private Resources.Material _blurMat;
     private readonly List<RenderTexture> _tempBlurRTs = new();
@@ -120,7 +126,7 @@ public class PaperRenderer : ICanvasRenderer
     {
         if (drawCalls.Count == 0) return;
 
-        float dpiScale = canvas.FramebufferScale;
+        float fbScale = canvas.FramebufferScale;
 
         var state = new RasterizerState
         {
@@ -139,22 +145,15 @@ public class PaperRenderer : ICanvasRenderer
         cmd.SetRasterState(state);
         cmd.SetShader(_shaderProgram);
         cmd.SetMatrix("projection", in _projection);
-        cmd.SetFloat("dpiScale", dpiScale);
         cmd.SetTexture("backdropTexture", _defaultTexture);
 
-        // Upload raw Vertex data (20 bytes per vertex)
-        if (canvas.Vertices.Count > 0)
-        {
-            var vertices = canvas.Vertices.ToArray();
-            byte[] rawData = new byte[vertices.Length * Vertex.SizeInBytes];
-            var handle = GCHandle.Alloc(vertices, GCHandleType.Pinned);
-            try { Marshal.Copy(handle.AddrOfPinnedObject(), rawData, 0, rawData.Length); }
-            finally { handle.Free(); }
-            cmd.UpdateBuffer<byte>(_vertexBuffer, rawData);
-        }
+        // Upload raw Vertex data (20 bytes per vertex). The canvas hands out its backing store
+        // directly, so this reinterprets it in place rather than copying the geometry out twice.
+        if (canvas.VertexCount > 0)
+            cmd.UpdateBuffer<byte>(_vertexBuffer, MemoryMarshal.AsBytes(canvas.Vertices));
 
-        if (canvas.Indices.Count > 0)
-            cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices.ToArray());
+        if (canvas.IndexCount > 0)
+            cmd.UpdateBuffer<uint>(_elementBuffer, canvas.Indices);
 
         int indexOffset = 0;
         foreach (DrawCall drawCall in drawCalls)
@@ -171,7 +170,6 @@ public class PaperRenderer : ICanvasRenderer
                 cmd.SetRasterState(state);
                 cmd.SetShader(_shaderProgram);
                 cmd.SetMatrix("projection", in _projection);
-                cmd.SetFloat("dpiScale", dpiScale);
                 cmd.SetTexture("backdropTexture", blurred.MainTexture);
                 cmd.SetVector("viewportSize", new Float2(_fbWidth, _fbHeight));
                 cmd.SetInt("backdropFlipY", BackdropFlipY);
@@ -186,14 +184,24 @@ public class PaperRenderer : ICanvasRenderer
             Texture2D? fontTexture = new AssetRef<Texture2D>(drawCall.FontAtlas as Texture2D).Res;
             cmd.SetTexture("fontTexture", fontTexture.IsValid() ? fontTexture : _defaultTexture);
 
-            // Scissor
-            drawCall.GetScissor(out Float4x4 scissor, out Float2 extent);
-            cmd.SetMatrix("scissorMat", in scissor);
+            // Font atlas metrics, so the text distance field resolves at any zoom.
+            Int2 atlasSize = fontTexture.IsValid() ? new Int2((int)fontTexture.Width, (int)fontTexture.Height) : new Int2(1, 1);
+            cmd.SetVector("atlasTexelSize", new Float2(
+                atlasSize.X > 0 ? 1f / atlasSize.X : 0f,
+                atlasSize.Y > 0 ? 1f / atlasSize.Y : 0f));
+            cmd.SetFloat("sdfPxRange", canvas.Text.FontEngine.DistanceRange);
+
+            // Scissor and brush transforms are 2D affines with the framebuffer scale already folded
+            // in, so the shader needs neither a matrix nor a dpi divide.
+            drawCall.GetScissor(fbScale, out Float4 scissorXf, out Float2 scissorT, out Float2 extent);
+            cmd.SetVector("scissorTransform", scissorXf);
+            cmd.SetVector("scissorTranslation", scissorT);
             cmd.SetVector("scissorExt", extent);
 
             // Brush
-            Float4x4 brushMat = drawCall.Brush.BrushMatrix;
-            cmd.SetMatrix("brushMat", in brushMat);
+            drawCall.GetBrushTransform(fbScale, out Float4 brushXf, out Float2 brushT);
+            cmd.SetVector("brushTransform", brushXf);
+            cmd.SetVector("brushTranslation", brushT);
             cmd.SetInt("brushType", (int)drawCall.Brush.Type);
             cmd.SetVector("brushColor1", ToFloat4(drawCall.Brush.Color1));
             cmd.SetVector("brushColor2", ToFloat4(drawCall.Brush.Color2));
@@ -202,8 +210,9 @@ public class PaperRenderer : ICanvasRenderer
                 drawCall.Brush.Point2.X, drawCall.Brush.Point2.Y));
             cmd.SetVector("brushParams2", new Float2(
                 drawCall.Brush.CornerRadii, drawCall.Brush.Feather));
-            Float4x4 brushTexMat = drawCall.Brush.TextureMatrix;
-            cmd.SetMatrix("brushTextureMat", in brushTexMat);
+            drawCall.GetTextureTransform(fbScale, out Float4 texXf, out Float2 texT);
+            cmd.SetVector("textureTransform", texXf);
+            cmd.SetVector("textureTranslation", texT);
 
             cmd.DrawIndexed(_vertexArrayObject, Topology.Triangles, (uint)drawCall.ElementCount, (uint)indexOffset, 0, true);
             indexOffset += drawCall.ElementCount;
@@ -226,7 +235,10 @@ public class PaperRenderer : ICanvasRenderer
     /// </summary>
     private static void ComputeBlurParams(float radius, out int iterations, out float offset)
     {
-        float r = MathF.Max(radius, 2f);
+        // radius is in screen pixels, but the pyramid maths below works in base-level texels, and one
+        // of those spans 1 << BlurBaseShift pixels. Converting here is what makes a 22 pixel blur
+        // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+        float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
         iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }
@@ -240,8 +252,8 @@ public class PaperRenderer : ICanvasRenderer
     {
         ComputeBlurParams(radius, out int iterations, out float offset);
 
-        int w = Math.Max(1, _fbWidth / 2);
-        int h = Math.Max(1, _fbHeight / 2);
+        int w = Math.Max(1, _fbWidth >> BlurBaseShift);
+        int h = Math.Max(1, _fbHeight >> BlurBaseShift);
 
         // Capture the backbuffer (read) into a half-res render texture (draw) via a linear blit.
         RenderTexture capture = RenderTexture.GetTemporaryRT(w, h, false, [TextureImageFormat.Color4b]);
