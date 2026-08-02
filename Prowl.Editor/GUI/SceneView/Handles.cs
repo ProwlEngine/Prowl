@@ -73,7 +73,7 @@ public static class Handles
                                     ref Float3 position, ref Quaternion rotation, ref Float3 scale, out bool hot)
     {
         hot = false;
-        var camGo = camera?.GameObject;
+        var camGo = camera.IsValid() ? camera.GameObject : null;
         if (camGo == null) return false;
 
         if (!_gizmos.TryGetValue(id, out var g))

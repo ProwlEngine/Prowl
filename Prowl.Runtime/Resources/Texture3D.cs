@@ -190,6 +190,7 @@ public sealed class Texture3D : Texture, ISerializable
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("Depth", new(Depth));
@@ -216,6 +217,8 @@ public sealed class Texture3D : Texture, ISerializable
         Type[] param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(bool), typeof(PixelFormat) };
         object[] values = new object[] { Width, Height, Depth, isMipMapped, imageFormat };
         typeof(Texture3D).GetConstructor(param).Invoke(this, values);
+
+        DeserializeHeader(value);
 
         Memory<byte> memory = value["Data"].ByteArrayValue;
         SetData(memory);

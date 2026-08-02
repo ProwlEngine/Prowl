@@ -420,9 +420,9 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     private void DisposeMorphTextures()
     {
-        _morphPosTex?.Dispose(); _morphPosTex = null;
-        _morphNrmTex?.Dispose(); _morphNrmTex = null;
-        _morphTanTex?.Dispose(); _morphTanTex = null;
+        if (_morphPosTex.IsValid()) _morphPosTex.Dispose(); _morphPosTex = null;
+        if (_morphNrmTex.IsValid()) _morphNrmTex.Dispose(); _morphNrmTex = null;
+        if (_morphTanTex.IsValid()) _morphTanTex.Dispose(); _morphTanTex = null;
     }
 
     // Submesh support: each submesh defines a range within the shared index buffer
@@ -1494,6 +1494,8 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
         EnsureNotDisposed();
         if (isWritable == false)
             throw new InvalidOperationException("Mesh is not writable");
+        if (VertexCount == 0)
+            throw new ArgumentException("Vertices data must not be empty when assigning vertex data");
         if ((value == null || length == 0 || length != VertexCount) && mustMatchLength)
             throw new ArgumentException("Array length should match vertices length");
         changed = true;
@@ -1753,6 +1755,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
                 }
             }
 
+            SerializeHeader(compoundTag);
             compoundTag.Add("MeshData", new EchoObject(memoryStream.ToArray()));
             compoundTag.Add("MeshType", new EchoObject((int)topology));
             compoundTag.Add("MeshIndexFormat", new EchoObject((int)indexFormat));
@@ -1767,6 +1770,8 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
+        DeserializeHeader(value);
+
         topology = (PrimitiveTopology)value["MeshType"].IntValue;
         indexFormat = (IndexFormat)value["MeshIndexFormat"].IntValue;
         bounds = new AABB(

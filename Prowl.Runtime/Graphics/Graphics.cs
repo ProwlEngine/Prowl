@@ -59,6 +59,22 @@ public static class Graphics
 
         // Graphite exposes no color-attachment-count query; 8 is the value every backend guarantees.
         MaxFramebufferColorAttachments = 8;
+
+        LogAdapter();
+    }
+
+    // On a hybrid machine the backend silently picks an adapter for us, and picking the integrated
+    // one costs far more performance than anything in the renderer. Worth a line in the log.
+    private static void LogAdapter()
+    {
+        try
+        {
+            Debug.Log($"GPU: {Device.DeviceName} ({Device.VendorName}) - {Device.BackendType} {Device.ApiVersion}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Could not query graphics adapter info: {ex.Message}");
+        }
     }
 
     /// <summary>

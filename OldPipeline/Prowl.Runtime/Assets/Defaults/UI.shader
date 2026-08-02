@@ -50,18 +50,29 @@ Pass "UI"
 
         uniform sampler2D texture0;
         uniform sampler2D fontTexture;     // dedicated font-atlas sampler, so text batches with shapes
-        uniform mat4 scissorMat;
-        uniform vec2 scissorExt;
 
-        uniform mat4 brushMat;
+        // The three transforms below are 2D affines packed as (A, C, B, D) plus (E, F), with the
+        // framebuffer scale already folded into the linear part by Quill. Evaluating one is two dot
+        // products and an add rather than a mat4 multiply, and the pixel-to-logical divide that used
+        // to run three times per fragment is gone with it.
+        uniform vec4 scissorTransform;
+        uniform vec2 scissorTranslation;
+        uniform vec2 scissorExt;           // logical half-extent, half-pixel feather already added
+
+        uniform vec4 brushTransform;
+        uniform vec2 brushTranslation;
         uniform int brushType;
         uniform vec4 brushColor1;
         uniform vec4 brushColor2;
         uniform vec4 brushParams;
         uniform vec2 brushParams2;
 
-        uniform mat4 brushTextureMat;
-        uniform float dpiScale;
+        uniform vec4 textureTransform;
+        uniform vec2 textureTranslation;
+
+        // Font atlas metrics, supplied by Quill rather than probed with textureSize and hardcoded.
+        uniform vec2 atlasTexelSize;       // 1 / font atlas size
+        uniform float sdfPxRange;          // distance range in atlas texels, from Scribe
 
         // Backdrop blur
         uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
@@ -71,9 +82,13 @@ Pass "UI"
 
         // ============== Canvas functions ==============
 
+        // Applies a packed 2D affine to a pixel-space point.
+        vec2 applyTransform(vec4 xf, vec2 t, vec2 p) {
+            return vec2(dot(xf.xy, p), dot(xf.zw, p)) + t;
+        }
+
         float calculateBrushFactor() {
-            vec2 logicalPos = fragPos / max(dpiScale, 0.001);
-            vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
+            vec2 transformedPoint = applyTransform(brushTransform, brushTranslation, fragPos);
 
             if (brushType == 1) {
                 vec2 startPoint = brushParams.xy; vec2 endPoint = brushParams.zw;
@@ -98,21 +113,14 @@ Pass "UI"
 
         float scissorMask(vec2 p) {
             if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-            float dpi = max(dpiScale, 0.001);
-            vec2 logicalP = p / dpi;
-            vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
-            vec2 logicalExt = scissorExt / dpi;
-            vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
-            float halfPixelLogical = 0.5 / dpi;
-            vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
+            // scissorExt already carries the half-pixel feather, so this is a plain subtract.
+            vec2 smoothEdges = scissorExt - abs(applyTransform(scissorTransform, scissorTranslation, p));
             return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
         }
 
-        // Single-channel SDF text: width of the distance range in atlas texels (matches Scribe's
-        // FontSystem.DistanceRange), and the screen-space span of one unit at this fragment.
-        const float sdfPxRange = 4.0;
+        // Single-channel SDF text: the screen-space span of one distance unit at this fragment.
         float sdfScreenPxRange(vec2 uv) {
-            vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
+            vec2 unitRange = vec2(sdfPxRange) * atlasTexelSize;
             vec2 screenTexSize = vec2(1.0) / fwidth(uv);
             return max(0.5 * dot(unitRange, screenTexSize), 1.0);
         }
@@ -157,9 +165,7 @@ Pass "UI"
             // in fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
             float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
 
-            float dpi = max(dpiScale, 0.001);
-            vec2 logicalPos = fragPos / dpi;
-            vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
+            vec4 fill = color * texture(texture0, applyTransform(textureTransform, textureTranslation, fragPos));
 
             // Backdrop blur: composite the fill over the blurred scene behind the shape.
             if (backdropBlurAmount > 0.0) {

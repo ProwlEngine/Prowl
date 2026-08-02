@@ -156,7 +156,7 @@ public sealed class WheelCollider : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (GameObject?.Scene?.Physics != null)
+        if (GameObject.IsValid() && GameObject.Scene.IsValid() && GameObject.Scene.Physics != null)
         {
             GameObject.Scene.Physics.PreStep -= OnPreStep;
             GameObject.Scene.Physics.PreSubStep -= OnPreSubStep;
@@ -192,7 +192,7 @@ public sealed class WheelCollider : MonoBehaviour
 
     private void OnPreStep(float timeStep)
     {
-        if (rb?._body == null || timeStep <= 0.0f) return;
+        if (rb.IsNotValid() || rb._body == null || timeStep <= 0.0f) return;
 
         // Wheels enable one at a time; recount once on the first step so auto sprung-mass divides
         // by the full wheel count rather than however many existed when this wheel first enabled.
@@ -273,7 +273,7 @@ public sealed class WheelCollider : MonoBehaviour
     // against the body's re-integrated velocity.
     private void OnPreSubStep(float dt)
     {
-        if (rb?._body == null || dt <= 0.0f) return;
+        if (rb.IsNotValid() || rb._body == null || dt <= 0.0f) return;
 
         RigidBody car = rb._body;
         float inertia = 0.5f * wheelMass * radius * radius;
@@ -366,7 +366,7 @@ public sealed class WheelCollider : MonoBehaviour
     private bool SweepFilter(IDynamicTreeProxy proxy)
     {
         if (proxy is not RigidBodyShape rbs) return false;
-        if (rb?._body == null) return false;
+        if (rb.IsNotValid() || rb._body == null) return false;
         return rbs.RigidBody != rb._body; // ignore the vehicle's own body
     }
 

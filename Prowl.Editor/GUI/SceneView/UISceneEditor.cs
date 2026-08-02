@@ -586,7 +586,8 @@ public sealed class UISceneEditor : ISceneViewEditor
 
     private static Rect ResolveParentRect(RectTransform rt, Rect canvasRootRect)
     {
-        RectTransform? parent = rt.GameObject.Parent?.RectTransform;
+        GameObject? parentGo = rt.GameObject.Parent;
+        RectTransform? parent = parentGo.IsValid() ? parentGo.RectTransform : null;
         // A top-level element's parent is the canvas, which has no RectTransform. Anchor against the
         // canvas ROOT rect - never the element's own rect, which would move/resize with the element
         // and feed back into layout (the anchor reference shifting each frame = the drag jitter).
@@ -600,8 +601,8 @@ public sealed class UISceneEditor : ISceneViewEditor
 
         Guid id = go.Identifier;
         Undo.RegisterAction("Modify UI Rect",
-            () => { RectTransform? rt = Undo.FindGO(id)?.RectTransform; if (rt != null) before.ApplyTo(rt); },
-            () => { RectTransform? rt = Undo.FindGO(id)?.RectTransform; if (rt != null) after.ApplyTo(rt); });
+            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt != null) before.ApplyTo(rt); },
+            () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt != null) after.ApplyTo(rt); });
     }
 
     private static float Distance(Float2 a, Float2 b)

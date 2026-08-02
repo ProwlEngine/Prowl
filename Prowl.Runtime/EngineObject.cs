@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -76,16 +77,47 @@ public abstract class EngineObject : IDisposable
     /// being read regularly still counts as in-use and won't be idle-swept out from under it - only
     /// an asset nobody reads at all, via any path, goes idle.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     protected void EnsureNotDisposed(
         [System.Runtime.CompilerServices.CallerMemberName] string? member = null)
     {
         if (IsDisposed)
-            throw new ObjectDisposedException(Name,
-                $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
-                "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
-                ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
-                "for something that must survive being unused for a while.");
+            ThrowDisposed(member);
 
+        TouchAsset();
+    }
+
+    // Kept out of line so EnsureNotDisposed stays small enough for the JIT to inline into the
+    // hundreds of property getters that call it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ThrowDisposed(string? member)
+        => throw new ObjectDisposedException(Name,
+            $"'{Name}' ({GetType().Name}) was already disposed when '{member}' was accessed. " +
+            "If this asset should stay loaded, hold it via AssetRef<T> (read .Res, or call " +
+            ".Touch()) instead of a raw field, or use AssetDatabase.LockToScene/LockPermanent " +
+            "for something that must survive being unused for a while.");
+
+    private long _lastTouchTick;
+
+    // Reading one property a thousand times in a frame says nothing more about liveness than
+    // reading it once, so activity is reported at most this often per object. Three orders of
+    // magnitude finer than the idle timeout it feeds, so eviction behaviour is unchanged.
+    private const long TouchIntervalMs = 1000;
+
+    /// <summary>Report this object as in use, so the idle sweep won't evict it. Cheap enough to call
+    /// from any accessor - repeat calls within a second are dropped without reaching the database.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void TouchAsset()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastTouchTick >= TouchIntervalMs)
+            TouchAssetSlow(now);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void TouchAssetSlow(long now)
+    {
+        _lastTouchTick = now;
         if (AssetID != Guid.Empty)
             AssetDatabase.Touch(AssetID);
     }
@@ -102,7 +134,7 @@ public abstract class EngineObject : IDisposable
 
     protected void DeserializeHeader(EchoObject value)
     {
-        Name = value.Get("Name")?.StringValue ?? string.Empty;
+        Name = value.Get("Name")?.StringValue ?? Name;
         AssetPath = value.Get("AssetPath")?.StringValue ?? string.Empty;
         if (Guid.TryParse(value.Get("AssetID")?.StringValue, out Guid assetId))
             AssetID = assetId;
@@ -112,8 +144,8 @@ public abstract class EngineObject : IDisposable
 public static class EngineObjectExtensions
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsNotValid(this EngineObject obj) => obj is null || obj.IsDisposed;
+    public static bool IsNotValid([NotNullWhen(false)] this EngineObject? obj) => obj is null || obj.IsDisposed;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool IsValid(this EngineObject obj) => obj is not null && !obj.IsDisposed;
+    public static bool IsValid([NotNullWhen(true)] this EngineObject? obj) => obj is not null && !obj.IsDisposed;
 }

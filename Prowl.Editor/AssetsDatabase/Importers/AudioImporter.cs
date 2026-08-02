@@ -1,5 +1,3 @@
-using System.IO;
-
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
@@ -18,7 +16,8 @@ public class AudioImporter : AssetImporter
         try
         {
             var clip = new AudioClip(ctx.AbsolutePath, streamFromDisk: false);
-            clip.ClipName = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+            clip.ClipName = ctx.FileName;
+            clip.Name = ctx.FileName;
             ctx.SetMainAsset(clip);
         }
         catch (System.Exception ex)

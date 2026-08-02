@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
@@ -48,15 +47,6 @@ public sealed class TriggerVolume : MonoBehaviour
 
     public TriggerShape Shape { get => shape; set => shape = value; }
 
-    /// <summary>Raised once when a rigidbody first enters the volume.</summary>
-    public event Action<Rigidbody3D> Entered;
-
-    /// <summary>Raised every fixed step for each rigidbody currently inside the volume.</summary>
-    public event Action<Rigidbody3D> Staying;
-
-    /// <summary>Raised once when a rigidbody leaves the volume (or is destroyed while inside).</summary>
-    public event Action<Rigidbody3D> Exited;
-
     private readonly List<ShapeCastHit> _hits = new();
     private HashSet<Rigidbody3D> _current = new();
     private HashSet<Rigidbody3D> _previous = new();
@@ -66,7 +56,7 @@ public sealed class TriggerVolume : MonoBehaviour
 
     public override void FixedUpdate()
     {
-        PhysicsWorld physics = GameObject?.Scene?.Physics;
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
         if (physics == null) return;
 
         // Swap buffers: last step's occupants become the baseline we diff against.
@@ -85,18 +75,18 @@ public sealed class TriggerVolume : MonoBehaviour
 
         foreach (Rigidbody3D rb in _current)
         {
-            if (_previous.Contains(rb)) Staying?.Invoke(rb);
-            else Entered?.Invoke(rb);
+            if (_previous.Contains(rb)) SceneDispatcher.TriggerStay(GameObject, rb);
+            else SceneDispatcher.TriggerEnter(GameObject, rb);
         }
 
         foreach (Rigidbody3D rb in _previous)
-            if (!_current.Contains(rb)) Exited?.Invoke(rb);
+            if (!_current.Contains(rb)) SceneDispatcher.TriggerExit(GameObject, rb);
     }
 
     public override void OnDisable()
     {
         // Everything that was inside counts as having left when the volume turns off.
-        foreach (Rigidbody3D rb in _current) Exited?.Invoke(rb);
+        foreach (Rigidbody3D rb in _current) SceneDispatcher.TriggerExit(GameObject, rb);
         _current.Clear();
         _previous.Clear();
     }

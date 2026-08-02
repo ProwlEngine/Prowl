@@ -207,7 +207,7 @@ public class AnimationComponent : MonoBehaviour
                 smr = target?.GameObject.GetComponent<SkinnedMeshRenderer>();
                 _blendShapeTargets[track.Path] = smr;
             }
-            smr?.SetBlendShapeWeight(track.ShapeName, track.EvaluateAt(time));
+            if (smr.IsValid()) smr.SetBlendShapeWeight(track.ShapeName, track.EvaluateAt(time));
         }
     }
 
@@ -233,7 +233,7 @@ public class AnimationComponent : MonoBehaviour
         while (root.Parent != null) root = root.Parent;
 
         // If the clip has bones, verify the first bone path resolves from this root
-        var clip = CurrentClip ?? DefaultClip.Res;
+        var clip = CurrentClip.IsValid() ? CurrentClip : DefaultClip.Res;
         if (clip != null && clip.Bones.Count > 0)
         {
             string testPath = clip.Bones[0].BoneName;

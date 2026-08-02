@@ -190,7 +190,7 @@ public static class RenderCommandExtensions
 
     public static void SetTexture(this PropertySet set, PropertyID name, Texture2D? texture)
     {
-        if (texture?.Handle != null)
+        if (texture.IsValid() && texture.Handle != null)
             set.SetTexture(name, texture.Handle, texture.Sampler);
     }
 
@@ -289,13 +289,13 @@ public static class RenderCommandExtensions
 
         shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
 
-        Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
+        Framebuffer? destFb = destination.IsValid() ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
         if (clear)
             cmd.ClearRenderTarget(true, true, new Color(0f, 0f, 0f, 0f));
 
         PropertySet props = mat.BuildPropertySet();
-        if (source?.IsValid() == true && source.MainTexture?.Handle != null)
+        if (source.IsValid() && source.MainTexture.IsValid() && source.MainTexture.Handle != null)
             props.SetTexture("_MainTex", source.MainTexture.Handle, source.MainTexture.Sampler);
 
         cmd.EmitShaderBind(shaderPass, mat.Name);
@@ -323,7 +323,7 @@ public static class RenderCommandExtensions
 
         shaderPass.SetKeywords(Enumerable.ToArray(mat._localKeywords.Values));
 
-        Framebuffer? destFb = destination?.IsValid() == true ? destination.frameBuffer : null;
+        Framebuffer? destFb = destination.IsValid() ? destination.frameBuffer : null;
         cmd.SetRenderTarget(destFb);
         cmd.EmitShaderBind(shaderPass, mat.Name);
         cmd.SetShader(shaderPass);
@@ -381,10 +381,13 @@ public static class RenderCommandExtensions
     // ─────────────────────── Mesh draws ───────────────────────
 
     public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material)
-        => DrawMesh(cmd, mesh, material, material?.Shader?.GetPass(0), Float4x4.Identity, null);
+        => DrawMesh(cmd, mesh, material, GetPassOrNull(material, 0), Float4x4.Identity, null);
 
     public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material, int passIndex, Float4x4 model, PropertySet? properties)
-        => DrawMesh(cmd, mesh, material, material?.Shader?.GetPass(passIndex), model, properties);
+        => DrawMesh(cmd, mesh, material, GetPassOrNull(material, passIndex), model, properties);
+
+    private static ShaderPass? GetPassOrNull(Material material, int passIndex)
+        => material.IsValid() && material.Shader.IsValid() ? material.Shader.GetPass(passIndex) : null;
 
     public static void DrawMesh(this CommandBuffer cmd, Mesh mesh, Material material, ShaderPass? pass, Float4x4 model, PropertySet? properties)
     {

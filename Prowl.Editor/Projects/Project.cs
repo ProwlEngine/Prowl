@@ -46,7 +46,7 @@ public class Project
     public string EditorAssemblyPath => Path.Combine(ScriptAssemblyPath, $"{Name}.Editor.dll");
     public string GameCsprojPath => Path.Combine(RootPath, $"{Name}.Game.csproj");
     public string EditorCsprojPath => Path.Combine(RootPath, $"{Name}.Editor.csproj");
-    public string AutoSaveScenePath => Path.Combine(LibraryPath, "~autosave.scene");
+    public string ProjectSolutionPath => Path.Combine(RootPath, $"{Name}.slnx");
 
     /// <summary>
     /// True if a project-relative path lives under the read-only Defaults/ root.
@@ -109,7 +109,7 @@ public class Project
         if (!File.Exists(gitignore))
         {
             File.WriteAllText(gitignore,
-                "Library/\nTemp/\nLogs/\nDefaults/\n*.csproj\n*.sln\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
+                "Library/\nTemp/\nLogs/\nDefaults/\n*.csproj\n*.sln\n*.slnx\n.vs/\nbin/\nobj/\n# MacOS\n.DS_Store\n");
         }
 
         // Non-destructive MSBuild customization surface. The generated .csproj files are rewritten on

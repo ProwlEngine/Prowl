@@ -20,21 +20,13 @@ using Prowl.Editor.Utils;
 
 namespace Prowl.Editor.GUI.Panels;
 
-public class HierarchyPanel : DockPanel, IScriptReloadCleanup
+public class HierarchyPanel : DockPanel
 {
     [MenuItem("Window/General/Hierarchy", priority: 2)]
     static void Open() => EditorApplication.Instance?.OpenPanel(typeof(HierarchyPanel));
 
     public override string Title => Loc.Get("panel.hierarchy");
     public override string Icon => EditorIcons.Sitemap;
-
-    // The drag-hover targets are scene GameObjects; drop them before a hot-reload unload so they
-    // don't pin the script AssemblyLoadContext. (Normally null outside an active drag.)
-    public void OnScriptReloadCleanup()
-    {
-        _dragHoverTarget = null;
-        _dragHoverTargetNext = null;
-    }
 
     private string _searchText = "";
     private bool _sceneExpanded = true;
@@ -185,6 +177,27 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                     .TextColor(EditorTheme.Ink500)
                     .FontSize(EditorTheme.FontSizeSmall)
                     .Alignment(TextAlignment.MiddleLeft);
+
+                // Create menu without having to hunt for empty space to right-click. It fills the
+                // header row bar a pixel each side, so its hover fill sits inside the row instead of
+                // against the border, and the glyph is sized to the button so the plus reads at a
+                // glance. Stops propagation so clicking it doesn't also collapse the scene section.
+                float addSize = EditorTheme.RowHeight - 2f;
+                paper.Box("hier_scene_add")
+                    .Width(addSize).Height(addSize).Rounded(6)
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                    .Hovered.BackgroundColor(EditorTheme.Hover).End()
+                    .Text(EditorIcons.Plus, font)
+                    .TextColor(EditorTheme.Ink400)
+                    .Hovered.TextColor(EditorTheme.Ink500).End()
+                    .FontSize(addSize).Alignment(TextAlignment.MiddleCenter)
+                    .Tooltip(Loc.Get("hierarchy.create"))
+                    .StopEventPropagation()
+                    .OnClick(0, (_, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y, b =>
+                    {
+                        b.Header(Loc.Get("hierarchy.create"));
+                        BuildCreateMenuForSelection(b);
+                    }));
             }
 
             if (!_sceneExpanded)
@@ -227,6 +240,16 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         var first = Selection.GetSelected<GameObject>().FirstOrDefault();
                         if (first != null)
                             StartRenameGO(first, Selection.GetSelected<GameObject>());
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/CreateEmptyChild"))
+                    {
+                        // A shortcut has no menu behind it, so it acts on the selection directly.
+                        // With nothing selected the new object lands at the scene root.
+                        CreateGameObject("GameObject", Selection.GetSelected<GameObject>().FirstOrDefault());
+                    }
+                    else if (ShortcutManager.IsPressed("Hierarchy/CreateEmptyParent"))
+                    {
+                        CreateEmptyParent();
                     }
                 }
 
@@ -308,6 +331,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                     .OnRightClick(e =>
                     {
                         var go = (GameObject)e.Node.UserData!;
+                        // Select the object with Right click as well if we're not performing a multiple selection action
+                        if (!paper.IsKeyDown(PaperKey.LeftControl) && !paper.IsKeyDown(PaperKey.LeftShift))
+                            Selection.Select(go);
                         if (!Selection.IsSelected(go)) Selection.AddToSelection(go);
                     })
                     .OnDragStart(n =>
@@ -344,7 +370,13 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                         // Name or rename field
                         if (RenameOverlay.IsRenaming(goId))
                         {
-                            RenameOverlay.Draw(paper, $"hier_rename_{goId}");
+                            using (paper.Box($"hier_renamebox_{goId}")
+                                       .Width(UnitValue.StretchOne)
+                                       .Height(EditorTheme.RowHeight)
+                                       .Enter())
+                            {
+                                RenameOverlay.Draw(paper, $"hier_rename_{goId}");
+                            }
                         }
                         else
                         {
@@ -542,20 +574,16 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
                 continue;
 
             // Block moving a prefab child out of its parent
-            if (dragged.Parent != null && dragged.Parent.IsPrefabInstance && dragged.Parent.PrefabChildCount >= 0)
+            if (IsPrefabStructuralChild(dragged))
             {
-                int dragChildIdx = dragged.Parent.Children.IndexOf(dragged);
-                if (dragChildIdx >= 0 && dragChildIdx < dragged.Parent.PrefabChildCount)
-                {
-                    Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
-                    continue;
-                }
+                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
+                continue;
             }
 
             // Capture state for undo (BEFORE the move)
-            var oldParentId = dragged.Parent?.Identifier ?? Guid.Empty;
+            var oldParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var oldSiblingIdx = dragged.GetSiblingIndex() ?? -1;
-            var oldRootIdx = oldParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
+            var oldRootIdx = oldParentId == Guid.Empty ? (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(dragged) : -1) : -1;
             var draggedId = dragged.Identifier;
 
             switch (dropPos)
@@ -605,9 +633,9 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             }
 
             // Register undo for reparent/reorder
-            var newParentId = dragged.Parent?.Identifier ?? Guid.Empty;
+            var newParentId = dragged.Parent.IsValid() ? dragged.Parent.Identifier : Guid.Empty;
             var newSiblingIdx = dragged.GetSiblingIndex() ?? -1;
-            var newRootIdx = newParentId == Guid.Empty ? (Scene.Current?.GetRootIndex(dragged) ?? -1) : -1;
+            var newRootIdx = newParentId == Guid.Empty ? (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(dragged) : -1) : -1;
 
             bool changed = oldParentId != newParentId || oldSiblingIdx != newSiblingIdx
                 || (oldParentId == Guid.Empty && newParentId == Guid.Empty && oldRootIdx != newRootIdx);
@@ -701,8 +729,8 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     {
         Origami.RightClickMenu(paper, "hier_bg_ctx", builder =>
         {
-            builder.Header("Create");
-            BuildCreateMenu(builder, null);
+            builder.Header(Loc.Get("hierarchy.create"));
+            BuildCreateMenuFor(builder, null);
         });
     }
 
@@ -719,7 +747,7 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
             builder.Title(multiSelect ? Loc.Get("project.item_count", new { count = Selection.Count }) : firstSelected.Name, iconDraw: GetGoStyle(firstSelected).icon);
 
             // Create parent to first selected
-            builder.Submenu("Create", (b) => { BuildCreateMenu(b, firstSelected); }, EditorIcons.Plus);
+            builder.Submenu(Loc.Get("hierarchy.create"), (b) => { BuildCreateMenuFor(b, firstSelected); }, EditorIcons.Plus);
 
             builder.Separator();
 
@@ -777,19 +805,34 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
 
             builder.Separator();
 
-            // Move to View / Move View To
+            // Move to View / Align With View / Move View To
             var cam = SceneViewPanel.ActiveCamera;
             if (cam != null)
             {
+                // Pose writes go to the top-level selection only: a GameObject whose ancestor is
+                // also selected already travels with that ancestor, so writing its world pose
+                // separately would fight the parent's write (order-dependent) and bloat the undo step.
+                var poseTargets = ExcludeNestedSelections(selectedGOs);
+
+                // Position only, at the centre of the view - rotation is deliberately untouched.
                 builder.Item(Loc.Get("hierarchy.move_to_view"), () =>
                 {
-                    foreach (var go in selectedGOs)
-                    {
-                        go.Transform.Position = cam.Position;
-                        go.Transform.LocalEulerAngles = new Float3(cam.Pitch, cam.Yaw, 0);
-                    }
+                    Undo.ApplyGameObjectChanges(poseTargets, "Move to View",
+                        g => g.Transform.Position,
+                        (g, position) => g.Transform.Position = position,
+                        cam.ViewFocusPoint);
                     EditorSceneManager.MarkDirty();
                 }, icon: EditorIcons.ArrowRight);
+
+                // Position *and* rotation, so the object looks exactly where the view looks.
+                builder.Item(Loc.Get("hierarchy.align_with_view"), () =>
+                {
+                    Undo.ApplyGameObjectChanges<(Float3 Position, Quaternion Rotation)>(poseTargets, "Align With View",
+                        g => (g.Transform.Position, g.Transform.Rotation),
+                        (g, pose) => g.Transform.SetPositionAndRotation(pose.Position, pose.Rotation),
+                        (cam.Position, cam.Rotation));
+                    EditorSceneManager.MarkDirty();
+                }, icon: EditorIcons.ArrowsToEye);
 
                 builder.Item(Loc.Get("hierarchy.move_view_to"), () =>
                 {
@@ -850,9 +893,19 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     //  Create Menu
     // ================================================================
 
-    private void BuildCreateMenu(ContextBuilder builder, GameObject? parent)
+    /// <summary>Create menu for a menu that knows what it was opened over: <paramref name="parent"/>
+    /// for a GameObject row, null for empty space (meaning the scene root).</summary>
+    private static void BuildCreateMenuFor(ContextBuilder builder, GameObject? parent)
     {
         MenuContext.Set(parent);
+        MenuItemAttribute.BuildContextMenu(builder, "GameObject");
+    }
+
+    /// <summary>Create menu with no object of its own - new objects land under the active selection,
+    /// matching the main menu bar's GameObject menu.</summary>
+    private static void BuildCreateMenuForSelection(ContextBuilder builder)
+    {
+        MenuContext.Clear();
         MenuItemAttribute.BuildContextMenu(builder, "GameObject");
     }
 
@@ -878,22 +931,140 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
         Undo.RegisterCreatedObject(go, "Create GameObject");
 
         if (beginRename)
-        {
-            // Enter rename via global overlay
-            string goIdStr = go.Identifier.ToString();
-            var goGuid = go.Identifier;
-            RenameOverlay.Begin(goIdStr, go.Name, newName =>
-            {
-                var oldName = go.Name;
-                Undo.RegisterAction("Rename",
-                    () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
-                    () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
-                go.Name = newName;
-                EditorSceneManager.MarkDirty();
-            });
-        }
+            BeginRenameNewGameObject(go);
 
         return go;
+    }
+
+    /// <summary>Ping a freshly created GameObject and open the inline rename overlay on it, so the
+    /// user can type the name straight away.</summary>
+    private static void BeginRenameNewGameObject(GameObject go)
+    {
+        Selection.FastPing(go.Identifier);
+        // Enter rename via global overlay
+        string goIdStr = go.Identifier.ToString();
+        var goGuid = go.Identifier;
+        RenameOverlay.Begin(goIdStr, go.Name, newName =>
+        {
+            var oldName = go.Name;
+            Undo.RegisterAction("Rename",
+                () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = oldName; },
+                () => { var r = Undo.FindGO(goGuid); if (r != null) r.Name = newName; });
+            go.Name = newName;
+            EditorSceneManager.MarkDirty();
+        });
+    }
+
+    /// <summary>
+    /// Wraps the current selection in a new empty GameObject, Unity's "Create Empty Parent". The new
+    /// parent takes over the first selected object's slot - same parent, same sibling index - and
+    /// sits at the centre of the selection so the group's pivot lands among the objects rather than
+    /// at the world origin. Children keep their world transforms.
+    /// </summary>
+    internal static void CreateEmptyParent()
+    {
+        var scene = Scene.Current;
+        if (scene == null) return;
+
+        // Only the top-level selection moves: an object whose ancestor is also selected already
+        // travels with that ancestor, and reparenting it too would flatten it out of its own parent.
+        var targets = ExcludeNestedSelections(Selection.GetSelected<GameObject>().ToList());
+        if (targets.Count == 0) return;
+
+        foreach (var target in targets)
+        {
+            if (IsPrefabStructuralChild(target))
+            {
+                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_move"), ToastType.Warning, 3f);
+                return;
+            }
+        }
+
+        // The first selected object anchors the group: the new parent drops into its place in the
+        // hierarchy, so the wrapped objects stay where they were in the tree.
+        var anchor = targets[0];
+        var anchorParent = anchor.Parent.IsValid() ? anchor.Parent : null;
+        int anchorIndex = anchorParent != null ? (anchor.GetSiblingIndex() ?? -1) : scene.GetRootIndex(anchor);
+
+        Float3 centre = Float3.Zero;
+        foreach (var target in targets)
+            centre += target.Transform.Position;
+        centre /= targets.Count;
+
+        var newParent = new GameObject("GameObject");
+        scene.Add(newParent);
+        if (anchorParent != null)
+        {
+            newParent.SetParent(anchorParent);
+            if (anchorIndex >= 0) newParent.SetSiblingIndex(anchorIndex);
+        }
+        else if (anchorIndex >= 0)
+        {
+            scene.SetRootIndex(newParent, anchorIndex);
+        }
+        newParent.Transform.Position = centre;
+
+        // Capture the new parent while it is still empty, then move the selection into it. Undo runs
+        // the records in reverse, so the objects leave before the parent is destroyed instead of
+        // being deleted along with it.
+        var actions = new List<(Action undo, Action redo)> { Undo.CaptureCreatedObject(newParent) };
+        foreach (var target in targets)
+            actions.Add(ReparentWithUndo(target, newParent));
+        Undo.RegisterActionGroup("Create Empty Parent", actions);
+
+        Selection.Select(newParent);
+        BeginRenameNewGameObject(newParent);
+        EditorSceneManager.MarkDirty();
+    }
+
+    /// <summary>Move <paramref name="go"/> under <paramref name="newParent"/> and return the
+    /// undo/redo pair that replays the move, resolving both objects by identifier so the records
+    /// survive destroy/recreate cycles.</summary>
+    private static (Action undo, Action redo) ReparentWithUndo(GameObject go, GameObject newParent)
+    {
+        Guid goId = go.Identifier;
+        Guid newParentId = newParent.Identifier;
+        var oldParent = go.Parent.IsValid() ? go.Parent : null;
+        Guid oldParentId = oldParent.IsValid() ? oldParent.Identifier : Guid.Empty;
+        int oldIndex = oldParent != null ? (go.GetSiblingIndex() ?? -1) : (Scene.Current.IsValid() ? Scene.Current.GetRootIndex(go) : -1);
+
+        go.SetParent(newParent);
+
+        return (
+            undo: () =>
+            {
+                var scene = Scene.Current;
+                var g = Undo.FindGO(goId);
+                if (scene == null || g == null) return;
+                if (oldParentId == Guid.Empty)
+                {
+                    g.SetParent(default);
+                    if (oldIndex >= 0) scene.SetRootIndex(g, oldIndex);
+                }
+                else
+                {
+                    var p = Undo.FindGO(oldParentId);
+                    if (p == null) return;
+                    g.SetParent(p);
+                    if (oldIndex >= 0) g.SetSiblingIndex(oldIndex);
+                }
+            },
+            redo: () =>
+            {
+                var g = Undo.FindGO(goId);
+                var p = Undo.FindGO(newParentId);
+                if (g != null && p != null) g.SetParent(p);
+            });
+    }
+
+    /// <summary>True when the GameObject is part of its parent prefab instance's fixed structure.
+    /// Those children can't be deleted or reparented without breaking the link to the prefab.</summary>
+    private static bool IsPrefabStructuralChild(GameObject go)
+    {
+        var parent = go.Parent;
+        if (!parent.IsValid() || !parent!.IsPrefabInstance || parent.PrefabChildCount < 0) return false;
+        int index = parent.Children.IndexOf(go);
+        return index >= 0 && index < parent.PrefabChildCount;
     }
 
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)
@@ -918,14 +1089,10 @@ public class HierarchyPanel : DockPanel, IScriptReloadCleanup
     internal static void DeleteGameObject(GameObject go)
     {
         // Block deleting prefab children that are part of the prefab structure
-        if (go.Parent != null && go.Parent.IsPrefabInstance && go.Parent.PrefabChildCount >= 0)
+        if (IsPrefabStructuralChild(go))
         {
-            int childIdx = go.Parent.Children.IndexOf(go);
-            if (childIdx >= 0 && childIdx < go.Parent.PrefabChildCount)
-            {
-                Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_delete"), ToastType.Warning, 3f);
-                return;
-            }
+            Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_delete"), ToastType.Warning, 3f);
+            return;
         }
 
         var scene = Scene.Current;

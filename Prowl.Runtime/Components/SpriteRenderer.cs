@@ -49,7 +49,7 @@ public class SpriteRenderer : MonoBehaviour
 
     /// <summary>The shared built-in unlit, alpha-blended, tinted sprite material.</summary>
     public static Material DefaultSpriteMaterial =>
-        s_defaultMaterial ??= new Material(Shader.LoadDefault(DefaultShader.Sprite));
+        s_defaultMaterial.IsValid() ? s_defaultMaterial : (s_defaultMaterial = new Material(Shader.LoadDefault(DefaultShader.Sprite)));
 
     public override void OnRenderCollect(SceneCuller culler)
     {
@@ -63,7 +63,8 @@ public class SpriteRenderer : MonoBehaviour
         EnsureMesh(sprite, tex);
         if (_mesh == null) return;
 
-        Material mat = Material.Res ?? DefaultSpriteMaterial;
+        Material assignedMat = Material.Res;
+        Material mat = assignedMat.IsValid() ? assignedMat : DefaultSpriteMaterial;
 
         _props ??= new PropertySet();
         _props.Clear();
@@ -98,7 +99,7 @@ public class SpriteRenderer : MonoBehaviour
         if (n < 3 || srcIdx.Length < 3 || srcUV.Length != n)
             return; // nothing valid to draw; keep the previous mesh (if any)
 
-        _mesh ??= new Mesh();
+        if (_mesh.IsNotValid()) _mesh = new Mesh();
 
         // Flip mirrors the UVs within the sprite's atlas sub-rect.
         float u0 = sprite.Rect.X / (float)tex.Width, u1 = sprite.Rect.MaxX / (float)tex.Width;
@@ -177,7 +178,7 @@ public class SpriteRenderer : MonoBehaviour
 
     public override void OnDispose()
     {
-        _mesh?.Dispose();
+        if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;
     }
 }

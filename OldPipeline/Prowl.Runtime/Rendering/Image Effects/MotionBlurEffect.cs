@@ -36,7 +36,7 @@ public sealed class MotionBlurEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.MotionBlur));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.MotionBlur));
 
         _mat.SetVector("_Resolution", new Float2(context.Width, context.Height));
         _mat.SetFloat("_Intensity", Intensity);
@@ -58,7 +58,7 @@ public sealed class MotionBlurEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
     }
 }

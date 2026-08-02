@@ -1,9 +1,9 @@
 #!/usr/bin/env dotnet run
 
-#:package Prowl.Echo@2.6.3
-#:package Prowl.Graphite@2.6.3
-#:package Prowl.Graphite.ShaderDef@2.6.3
-#:package Prowl.Graphite.ShaderDef.Compiler@2.6.3
+#:package Prowl.Echo@3.0.0
+#:package Prowl.Graphite@3.0.0
+#:package Prowl.Graphite.ShaderDef@3.0.0
+#:package Prowl.Graphite.ShaderDef.Compiler@3.0.0
 
 #:sdk Microsoft.NET.Sdk
 
@@ -62,7 +62,7 @@ void Compile(string shaderFile, string outputPath)
     compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
     compiler.BeginSession([new DirectoryInfo(shaderDir)], FileLoader);
 
-    definition.Create(device, compiler, CompileMode.All);
+    definition.Create(device, compiler, new Variant(), CompileMode.All);
     ShaderSnapshot snapshot = definition.Snapshot();
 
     compiler.EndSession();

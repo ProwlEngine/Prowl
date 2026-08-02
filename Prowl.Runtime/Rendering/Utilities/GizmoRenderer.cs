@@ -29,7 +29,7 @@ public static class GizmoRenderer
         Shader? gizmoShader = Shader.LoadDefault(DefaultShader.Gizmos);
         if (gizmoShader.IsValid())
         {
-            s_gizmoMaterial ??= new Material(gizmoShader);
+            if (s_gizmoMaterial.IsNotValid()) s_gizmoMaterial = new Material(gizmoShader);
             s_gizmoMaterial.SetTexture("_CameraDepthTexture", depthCopy);
             ShaderPass pass = gizmoShader.GetPass(0);
             if (pass != null)
@@ -67,9 +67,9 @@ public static class GizmoRenderer
         if (!iconShader.IsValid())
             return;
 
-        s_iconMaterial ??= new Material(iconShader);
+        if (s_iconMaterial.IsNotValid()) s_iconMaterial = new Material(iconShader);
         s_iconMaterial.SetTexture("_CameraDepthTexture", depthCopy);
-        s_iconQuad ??= Mesh.GetFullscreenQuad();
+        if (s_iconQuad.IsNotValid()) s_iconQuad = Mesh.GetFullscreenQuad();
 
         foreach (GizmoBuilder.IconDrawCall icon in icons)
         {

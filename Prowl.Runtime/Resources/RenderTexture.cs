@@ -99,7 +99,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         InternalDepth = sharedDepth;
         frameBuffer = Graphics.Device.ResourceFactory.CreateFramebuffer(
-            new FramebufferDescription(sharedDepth?.Handle, colorTargets));
+            new FramebufferDescription(sharedDepth.IsValid() ? sharedDepth.Handle : null, colorTargets));
         frameBuffer.Name = $"{Name} Framebuffer";
     }
 
@@ -119,6 +119,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Width", new(Width));
         compoundTag.Add("Height", new(Height));
         compoundTag.Add("NumTextures", new(numTextures));
@@ -146,6 +147,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
         Type[] param = [typeof(int), typeof(int), typeof(bool), typeof(PixelFormat[])];
         object[] values = [Width, Height, hasDepthAttachment, textureFormats];
         typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
+
+        DeserializeHeader(value);
     }
 
 }

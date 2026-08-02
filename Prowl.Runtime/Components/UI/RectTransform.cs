@@ -140,7 +140,8 @@ public sealed class RectTransform : MonoBehaviour
     {
         foreach (UIBehaviour ui in GameObject.GetComponents<UIBehaviour>())
             ui.MarkDirty(UIDirtyFlags.Layout | UIDirtyFlags.Vertices);
-        GameObject.GetComponentInParent<GameCanvas>(includeSelf: true)?.MarkDirty(UIDirtyFlags.Layout);
+        var canvas = GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
+        if (canvas.IsValid()) canvas.MarkDirty(UIDirtyFlags.Layout);
     }
 
     /// <summary>

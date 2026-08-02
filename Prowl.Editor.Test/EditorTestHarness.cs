@@ -112,6 +112,77 @@ public abstract class EditorTestHarness : IDisposable
         File.WriteAllText(abs, content);
     }
 
+    /// <summary>
+    /// Write a script, compile, assert success, and load the fresh game assembly from bytes. Each call yields a
+    /// distinct <see cref="Assembly"/>, so overwriting the same file and calling again gives the "v2".
+    /// </summary>
+    protected Assembly CompileGameAssembly(string relativePath, string code)
+    {
+        WriteScript(relativePath, code);
+        return CompileGameAssembly();
+    }
+
+    private readonly Dictionary<Assembly, byte[]> _compiledBytes = new();
+
+    protected Func<Assembly, byte[]?> AssemblyBytesResolver => asm => _compiledBytes.TryGetValue(asm, out var bytes) ? bytes : null;
+
+    /// <summary>Compile whatever scripts are on disk, assert success, and load the fresh game assembly.</summary>
+    protected Assembly CompileGameAssembly()
+    {
+        var result = ScriptCompiler.CompileAll(Project);
+        Assert.True(result.Success, $"Compilation failed: {result.Errors}");
+        byte[] bytes = File.ReadAllBytes(Project.GameAssemblyPath);
+        var asm = Assembly.Load(bytes);
+        _compiledBytes[asm] = bytes;
+        return asm;
+    }
+
+    /// <summary>Enters play mode with a deterministic time source until the returned scope is disposed.</summary>
+    protected static PlayModeScope EnterPlayMode() => new();
+
+    /// <summary>Advances full frames: FixedUpdate then Update.</summary>
+    protected static void Tick(Scene scene, int steps = 1)
+    {
+        for (int i = 0; i < steps; i++)
+        {
+            scene.FixedUpdate();
+            scene.Update();
+        }
+    }
+
+    /// <summary>Runs Scene.Update the given number of frames (no physics step).</summary>
+    protected static void UpdateScene(Scene scene, int frames = 1)
+    {
+        for (int i = 0; i < frames; i++)
+            scene.Update();
+    }
+
+    protected sealed class PlayModeScope : IDisposable
+    {
+        private readonly bool _wasPlaying;
+        private readonly bool _wasEditor;
+        private readonly TimeData _time;
+
+        internal PlayModeScope()
+        {
+            _wasPlaying = Application.IsPlaying;
+            _wasEditor = Application.IsEditor;
+            Application.IsPlaying = true;
+            Application.IsEditor = false;
+
+            _time = new TimeData { DeltaTime = Time.FixedDeltaTime };
+            Time.TimeStack.Push(_time);
+        }
+
+        public void Dispose()
+        {
+            if (Time.TimeStack.Count > 0 && Time.TimeStack.Peek() == _time)
+                Time.TimeStack.Pop();
+            Application.IsPlaying = _wasPlaying;
+            Application.IsEditor = _wasEditor;
+        }
+    }
+
     /// <summary>Write an assembly definition (.asmdef) into a folder under Assets.</summary>
     protected void WriteAssemblyDefinition(string relativeFolder, AssemblyDefinition def)
     {

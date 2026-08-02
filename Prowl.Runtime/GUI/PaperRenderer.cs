@@ -337,11 +337,11 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
 
         CommandBuffer cmd = context.GetCommandBuffer("Paper");
 
-        bool hasGeometry = drawCalls.Count > 0 && canvas.Vertices.Count > 0 && canvas.Indices.Count > 0;
+        bool hasGeometry = drawCalls.Count > 0 && canvas.VertexCount > 0 && canvas.IndexCount > 0;
 
         int includedDrawCalls = drawCalls.Count;
-        int vertexCount = canvas.Vertices.Count;
-        int indexCount = canvas.Indices.Count;
+        int vertexCount = canvas.VertexCount;
+        int indexCount = canvas.IndexCount;
 
         if (hasGeometry)
         {
@@ -353,8 +353,8 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
                 includedDrawCalls = ClampToCapacity(canvas, drawCalls, out vertexCount, out indexCount);
 
                 Debug.LogWarning(
-                    $"PaperRenderer: canvas geometry ({canvas.Vertices.Count} vertices = {neededVertexBytes}B, " +
-                    $"{canvas.Indices.Count} indices = {neededIndexBytes}B) exceeds the configured buffer capacity " +
+                    $"PaperRenderer: canvas geometry ({canvas.VertexCount} vertices = {neededVertexBytes}B, " +
+                    $"{canvas.IndexCount} indices = {neededIndexBytes}B) exceeds the configured buffer capacity " +
                     $"({_vertexBufferBytes}B vertex / {_indexBufferBytes}B index) - drawing only the first " +
                     $"{includedDrawCalls}/{drawCalls.Count} draw calls this frame ({vertexCount} vertices, " +
                     $"{indexCount} indices). Construct this PaperRenderer with larger vertexBufferBytes/indexBufferBytes.");
@@ -376,7 +376,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
             for (int i = 0; i < includedDrawCalls; i++)
             {
                 DrawCall drawCall = drawCalls[i];
-                ProcessDrawCall(cmd, drawCall, indexOffset, (float)canvas.FramebufferScale, sceneRT, ResolveBlur, vbo, ebo);
+                ProcessDrawCall(cmd, canvas, drawCall, indexOffset, sceneRT, ResolveBlur, vbo, ebo);
                 indexOffset += drawCall.ElementCount;
             }
         }
@@ -444,22 +444,15 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
 
     private static void UploadGeometry(CommandBuffer cmd, Canvas canvas, int vertexCount, int indexCount, DeviceBuffer vbo, DeviceBuffer ebo)
     {
-        Vertex[] vertices = new Vertex[vertexCount];
-        for (int i = 0; i < vertexCount; i++)
-            vertices[i] = canvas.Vertices[i];
-
-        uint[] indices = new uint[indexCount];
-        for (int i = 0; i < indexCount; i++)
-            indices[i] = canvas.Indices[i];
-
-        cmd.UpdateBuffer(vbo, 0, vertices);
-        cmd.UpdateBuffer(ebo, 0, indices);
+        cmd.UpdateBuffer(vbo, 0, canvas.Vertices[..vertexCount]);
+        cmd.UpdateBuffer(ebo, 0, canvas.Indices[..indexCount]);
     }
 
     private void ProcessDrawCall(
-        CommandBuffer cmd, DrawCall drawCall, int indexOffset, float dpiScale,
+        CommandBuffer cmd, Canvas canvas, DrawCall drawCall, int indexOffset,
         RenderTexture sceneRT, Func<int, RenderTexture> resolveBlur, DeviceBuffer vbo, DeviceBuffer ebo)
     {
+        float fbScale = (float)canvas.FramebufferScale;
         Brush brush = drawCall.Brush;
         float blur = brush.BackdropBlur;
 
@@ -470,9 +463,11 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
             cmd.SetFramebuffer(sceneRT.Framebuffer);
         }
 
-        Texture2D texture = (drawCall.Texture as Texture2D) ?? _defaultTexture;
+        Texture2D? drawTex = drawCall.Texture as Texture2D;
+        Texture2D texture = drawTex.IsValid() ? drawTex : _defaultTexture;
         // Font atlas on its own sampler so text batches with shapes (text samples fontTexture).
-        Texture2D fontTex = (drawCall.FontAtlas as Texture2D) ?? _defaultTexture;
+        Texture2D? drawFontTex = drawCall.FontAtlas as Texture2D;
+        Texture2D fontTex = drawFontTex.IsValid() ? drawFontTex : _defaultTexture;
 
         if (drawCall.Texture != null && texture == _defaultTexture)
             Debug.LogWarning($"PaperRenderer: drawCall.Texture was a {drawCall.Texture.GetType()}, not a Texture2D - falling back to the 1x1 default texture.");
@@ -484,19 +479,27 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         // 1 / font atlas size, so the text shader's distance-field screen range is correct at any zoom.
         Int2 texSize = GetTextureSize(fontTex);
         _properties.SetFloat2("atlasTexelSize", new Float2(texSize.X > 0 ? 1f / texSize.X : 0f, texSize.Y > 0 ? 1f / texSize.Y : 0f));
+        _properties.SetFloat("sdfPxRange", canvas.Text.FontEngine.DistanceRange);
 
-        drawCall.GetScissor(out Float4x4 scissorMat, out Float2 scissorExt);
-        _properties.SetMatrix("scissorMat", scissorMat);
+        // Scissor and brush transforms are 2D affines with the framebuffer scale already folded in,
+        // so the shader needs neither a matrix nor a per-fragment dpi divide.
+        drawCall.GetScissor(fbScale, out Float4 scissorXf, out Float2 scissorT, out Float2 scissorExt);
+        _properties.SetFloat4("scissorTransform", scissorXf);
+        _properties.SetFloat2("scissorTranslation", scissorT);
         _properties.SetFloat2("scissorExt", scissorExt);
 
-        _properties.SetMatrix("brushMat", brush.BrushMatrix);
+        drawCall.GetBrushTransform(fbScale, out Float4 brushXf, out Float2 brushT);
+        _properties.SetFloat4("brushTransform", brushXf);
+        _properties.SetFloat2("brushTranslation", brushT);
         _properties.SetInt("brushType", (int)brush.Type);
         _properties.SetFloat4("brushColor1", ToFloat4(brush.Color1));
         _properties.SetFloat4("brushColor2", ToFloat4(brush.Color2));
         _properties.SetFloat4("brushParams", new Float4(brush.Point1.X, brush.Point1.Y, brush.Point2.X, brush.Point2.Y));
         _properties.SetFloat2("brushParams2", new Float2(brush.CornerRadii, brush.Feather));
-        _properties.SetMatrix("brushTextureMat", brush.TextureMatrix);
-        _properties.SetFloat("dpiScale", dpiScale);
+
+        drawCall.GetTextureTransform(fbScale, out Float4 texXf, out Float2 texT);
+        _properties.SetFloat4("textureTransform", texXf);
+        _properties.SetFloat2("textureTranslation", texT);
 
         _properties.SetFloat2("viewportSize", new Float2(_fbWidth, _fbHeight));
         _properties.SetFloat("backdropBlurAmount", blur);
@@ -527,7 +530,10 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
     /// </summary>
     private static void ComputeBlurParams(float radius, out int iterations, out float offset)
     {
-        float r = MathF.Max(radius, 2f);
+        // radius is in screen pixels, but the pyramid maths below works in base-level texels, and the
+        // base level (_blurHandles[0]) is half resolution. Converting here is what makes a 22 pixel
+        // blur actually mean 22 pixels rather than 44.
+        float r = MathF.Max(radius * 0.5f, 2f);
         iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }
@@ -578,7 +584,7 @@ public class PaperRenderer<TView> : ICanvasRenderer, IPass<TView> where TView : 
         _blurProgramOn?.Dispose();
         _compositeProgram?.Dispose();
 
-        _defaultTexture?.Dispose();
+        if (_defaultTexture.IsValid()) _defaultTexture.Dispose();
     }
 
     public void Dispose()

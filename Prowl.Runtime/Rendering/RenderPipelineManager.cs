@@ -17,5 +17,15 @@ public static class RenderPipelineManager
 
     public static AssetRef<RenderPipelineAsset> Asset;
 
-    public static RenderPipeline<CameraView> Current => Asset.Res?.Pipeline ?? (s_default ??= new DefaultRenderPipeline());
+    public static RenderPipeline<CameraView> Current
+    {
+        get
+        {
+            RenderPipelineAsset? asset = Asset.Res;
+            if (asset.IsValid() && asset.Pipeline != null)
+                return asset.Pipeline;
+
+            return s_default ??= new DefaultRenderPipeline();
+        }
+    }
 }

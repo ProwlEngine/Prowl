@@ -30,6 +30,13 @@ public interface IInputHandler
     bool GetKeyDown(KeyCode key);
     bool GetKeyUp(KeyCode key);
 
+    /// <summary>
+    /// Maps a window-space cursor position into the space this handler reports mouse positions in.
+    /// Identity by default. <see cref="Input.MousePosition"/> routes the cursor lock center through
+    /// this so a locked cursor reads in the same space as an unlocked one.
+    /// </summary>
+    Int2 MapWindowPosition(Int2 windowPos) => windowPos;
+
     // Mouse methods
     bool GetMouseButton(int button);
     bool GetMouseButtonDown(int button);

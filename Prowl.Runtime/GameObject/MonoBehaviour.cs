@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -10,6 +10,8 @@ using Prowl.PaperUI;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
+
+using Prowl.Ember;
 
 namespace Prowl.Runtime;
 
@@ -44,10 +46,25 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     [SerializeIgnore]
     private bool? _executeAlwaysCached;
 
-    /// <summary>Whether this component is currently in its scene's update registry. Guards against
-    /// double-registration and lets the registry skip already-tracked components.</summary>
-    [SerializeIgnore]
-    internal bool _updateRegistered;
+    // Dispatch state, owned by SceneDispatcher. All four are derived from this component's type or its place
+    // in the scene, so all four are opted out of hot reload and re-derived from the new type afterwards. Each
+    // one treats its default value as "not known yet", so arriving zeroed is always the safe outcome.
+
+    /// <summary>Which optional callbacks this component's type overrides. Resolved on first dispatch.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal SceneCallbacks _callbacks;
+
+    /// <summary>One past the index in the dispatcher's registration array. Zero means not registered.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal int _dispatchSlot;
+
+    /// <summary>Cached [ExecutionOrder], the primary sort key for every per-frame channel.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal int _dispatchOrder;
+
+    /// <summary>Registration counter, the tie-break that keeps equal execution orders in registration order.</summary>
+    [SerializeIgnore, ReloadIgnore]
+    internal int _dispatchSequence;
 
     /// <summary>
     /// Whether this component's gameplay methods should execute.
@@ -122,7 +139,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <see cref="Prowl.Runtime.MonoBehaviour"/> itself cannot be part of a <see cref="Prowl.Runtime.Resources.Scene"/> without a
     /// <see cref="GameObject"/>.
     /// </summary>
-    public Scene? Scene => GameObject?.Scene ?? null;
+    public Scene? Scene
+    {
+        get
+        {
+            if (GameObject.IsNotValid()) return null;
+            Scene? scene = GameObject.Scene;
+            return scene.IsValid() ? scene : null;
+        }
+    }
 
     public MonoBehaviour() : base() { }
 
@@ -334,6 +359,25 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <param name="paper"></param>
     public virtual void OnGui(Paper paper) { }
 
+    /// <summary>
+    /// Called when this GameObject's <see cref="Rigidbody3D"/> begins touching another. <paramref name="other"/>
+    /// is the body we hit. Override on a component sharing the GameObject with the Rigidbody3D; the engine
+    /// resolves it live at contact time, so no subscription is stored and it survives hot reload.
+    /// </summary>
+    public virtual void OnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact) { }
+
+    /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching <paramref name="other"/>. See <see cref="OnCollisionBegin"/>.</summary>
+    public virtual void OnCollisionEnd(Rigidbody3D other) { }
+
+    /// <summary>Called once when <paramref name="other"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnTriggerEnter(Rigidbody3D other) { }
+
+    /// <summary>Called each fixed step while <paramref name="other"/> stays inside a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnTriggerStay(Rigidbody3D other) { }
+
+    /// <summary>Called once when <paramref name="other"/> leaves a <see cref="TriggerVolume"/> on this GameObject.</summary>
+    public virtual void OnTriggerExit(Rigidbody3D other) { }
+
     /// <summary>Gated Start only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalStart()
     {
@@ -374,7 +418,12 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         _hasBeenEnabled = true;
         // Register for ticking whenever enabled in an active scene, regardless of play mode; the
         // per-tick gate (ShouldExecuteGameplay) decides whether the callbacks actually run.
-        GameObject?.Scene?.ComponentRegistry.Register(this);
+        if (GameObject.IsValid())
+        {
+            Scene? scene = GameObject.Scene;
+            if (scene.IsValid())
+                scene.Dispatcher.Register(this);
+        }
         if (!ShouldExecuteGameplay) return;
         try { OnEnable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnEnable() threw: {ex.Message}\n{ex.StackTrace}"); }
@@ -383,10 +432,52 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// <summary>Gated OnDisable only runs in play mode or with [ExecuteAlways].</summary>
     internal void InternalOnDisable()
     {
-        GameObject?.Scene?.ComponentRegistry.Unregister(this);
+        if (GameObject.IsValid())
+        {
+            Scene? scene = GameObject.Scene;
+            if (scene.IsValid())
+                scene.Dispatcher.Unregister(this);
+        }
         if (!ShouldExecuteGameplay) return;
         try { OnDisable(); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnDisable() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    // ---- Physics callbacks: gameplay-gated + exception-guarded, dispatched by SceneDispatcher ----
+
+    internal void InternalOnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCollisionBegin(other, contact); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnCollisionEnd(Rigidbody3D other)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnCollisionEnd(other); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionEnd() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnTriggerEnter(Rigidbody3D other)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnTriggerEnter(other); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerEnter() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnTriggerStay(Rigidbody3D other)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnTriggerStay(other); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerStay() threw: {ex.Message}\n{ex.StackTrace}"); }
+    }
+
+    internal void InternalOnTriggerExit(Rigidbody3D other)
+    {
+        if (!ShouldExecuteGameplay) return;
+        try { OnTriggerExit(other); }
+        catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
     public void OnBeforeSerialize() { }

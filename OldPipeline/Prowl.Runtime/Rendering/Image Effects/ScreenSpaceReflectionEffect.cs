@@ -77,8 +77,8 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.SSR));
-        _noise ??= Texture2D.LoadDefault(DefaultTexture.Noise);
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.SSR));
+        if (_noise.IsNotValid()) _noise = Texture2D.LoadDefault(DefaultTexture.Noise);
 
         if (!context.DepthNormals.IsValid())
             return;
@@ -93,8 +93,8 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
         // Invalidate persistent buffers on resize.
         if (_prevCombined != null && (_prevCombined.Width != w || _prevCombined.Height != h))
             ReleaseHistory();
-        _prevCombined ??= new RenderTexture(w, h, false, [format]);
-        _reflHistory ??= new RenderTexture(w, h, false, [format]);
+        if (_prevCombined.IsNotValid()) _prevCombined = new RenderTexture(w, h, false, [format]);
+        if (_reflHistory.IsNotValid()) _reflHistory = new RenderTexture(w, h, false, [format]);
 
         // Shared uniforms.
         _mat.SetTexture("_CameraDepthTexture", context.DepthNormals.InternalDepth);
@@ -233,14 +233,14 @@ public sealed class ScreenSpaceReflectionEffect : ImageEffect
 
     private void ReleaseHistory()
     {
-        _prevCombined?.Dispose(); _prevCombined = null;
-        _reflHistory?.Dispose(); _reflHistory = null;
+        if (_prevCombined.IsValid()) _prevCombined.Dispose(); _prevCombined = null;
+        if (_reflHistory.IsValid()) _reflHistory.Dispose(); _reflHistory = null;
         _historyValid = false;
     }
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
         ReleaseHistory();
         _frameIndex = 0;

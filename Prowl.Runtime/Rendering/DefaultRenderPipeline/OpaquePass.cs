@@ -106,7 +106,7 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
             Material material = renderable.GetMaterial();
             if (mesh.IsNotValid() || material.IsNotValid())
             {
-                EmitRenderable(cmd, renderable, material?.Name ?? "", "", culled: true, drawCallCount: 0);
+                EmitRenderable(cmd, renderable, material.IsValid() ? material.Name : "", "", culled: true, drawCallCount: 0);
                 continue;
             }
 

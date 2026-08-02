@@ -33,18 +33,26 @@ struct FragmentData
     Sampler2D<float4> texture0;
     Sampler2D<float4> fontTexture; // dedicated font-atlas unit, so text batches with shapes
     float2 atlasTexelSize;       // 1 / font atlas size, for the text distance-field screen range
-    float4x4 scissorMat;
-    float2 scissorExt;
+    float sdfPxRange;            // distance range in atlas texels, from Scribe
 
-    float4x4 brushMat;
+    // The three transforms below are 2D affines packed as (A, C, B, D) plus (E, F), with the
+    // framebuffer scale already folded into the linear part by Quill. Evaluating one is two dot
+    // products and an add rather than a mat4 multiply, and the pixel-to-logical divide that used
+    // to run three times per fragment is gone with it.
+    float4 scissorTransform;
+    float2 scissorTranslation;
+    float2 scissorExt;           // logical half-extent, half-pixel feather already added
+
+    float4 brushTransform;
+    float2 brushTranslation;
     BrushType brushType;       // 0=none, 1=linear, 2=radial, 3=box
     float4 brushColor1;
     float4 brushColor2;
     float4 brushParams;
     float2 brushParams2;
 
-    float4x4 brushTextureMat;
-    float dpiScale;
+    float4 textureTransform;
+    float2 textureTranslation;
 
     // Backdrop blur
     Sampler2D<float4> backdropTexture;  // blurred copy of the framebuffer behind the shape
@@ -66,10 +74,16 @@ VertexOutput Vertex(VertexInput input)
 }
 
 
+// Applies a packed 2D affine to a pixel-space point.
+float2 applyTransform(float4 xf, float2 t, float2 p)
+{
+    return float2(dot(xf.xy, p), dot(xf.zw, p)) + t;
+}
+
+
 float calculateBrushFactor(float2 fragPos, float2 fragTexCoord)
 {
-    float2 logicalPos = fragPos / DrawData.dpiScale;
-    float2 transformedPoint = (mul(DrawData.brushMat, float4(logicalPos, 0.0, 1.0))).xy;
+    float2 transformedPoint = applyTransform(DrawData.brushTransform, DrawData.brushTranslation, fragPos);
 
     switch (DrawData.brushType)
     {
@@ -111,24 +125,18 @@ float scissorMask(float2 p)
     if (DrawData.scissorExt.x < 0.0 || DrawData.scissorExt.y < 0.0) 
         return 1.0;
 
-    float2 logicalP = p / DrawData.dpiScale;
-    float2 transformedPoint = (mul(DrawData.scissorMat, float4(logicalP, 0.0, 1.0))).xy;
-    float2 logicalExt = DrawData.scissorExt / DrawData.dpiScale;
-    float2 distanceFromEdges = abs(transformedPoint) - logicalExt;
-    float halfPixelLogical = 0.5 / DrawData.dpiScale;
-    float2 smoothEdges = float2(halfPixelLogical) - distanceFromEdges;
-    
+    // scissorExt already carries the half-pixel feather, so this is a plain subtract.
+    float2 smoothEdges = DrawData.scissorExt
+        - abs(applyTransform(DrawData.scissorTransform, DrawData.scissorTranslation, p));
+
     return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
 }
 
 
-// Width of the signed-distance range in atlas texels. Must match Scribe's FontSystem.DistanceRange.
-static const float sdfPxRange = 4.0;
-
 // Screen-space width (in pixels) that one distance-field unit spans at this fragment.
 float sdfScreenPxRange(float2 uv)
 {
-    float2 unitRange = float2(sdfPxRange) * DrawData.atlasTexelSize;
+    float2 unitRange = float2(DrawData.sdfPxRange) * DrawData.atlasTexelSize;
     float2 screenTexSize = float2(1.0) / fwidth(uv);
     return max(0.5 * dot(unitRange, screenTexSize), 1.0);
 }
@@ -162,8 +170,8 @@ float4 Fragment(VertexOutput input) : SV_Target
     // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
     float edgeAlpha = clamp(input.fragTexCoord.x, 0.0, 1.0);
 
-    float2 logicalPos = input.fragPos / DrawData.dpiScale;
-    float4 fill = color * DrawData.texture0.Sample(mul(DrawData.brushTextureMat, float4(logicalPos, 0.0, 1.0)).xy);
+    float4 fill = color * DrawData.texture0.Sample(
+        applyTransform(DrawData.textureTransform, DrawData.textureTranslation, input.fragPos));
 
     // Backdrop blur: composite the fill over the blurred framebuffer behind the shape.
     if (DrawData.backdropBlurAmount > 0.0) 

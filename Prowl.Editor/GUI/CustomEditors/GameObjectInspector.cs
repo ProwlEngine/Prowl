@@ -890,7 +890,8 @@ public static class GameObjectInspector
 
                     var overridden = new HashSet<string>();
                     // Overrides are stored on the instance root with root-relative paths.
-                    var overrideHost = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+                    var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+                    var overrideHost = prefabRoot.IsValid() ? prefabRoot : go;
                     foreach (var ov in overrideHost.PrefabOverrides)
                     {
                         if (ov.Path.StartsWith(pathPrefix))
@@ -981,6 +982,22 @@ public static class GameObjectInspector
 
         builder.Separator();
 
+        builder.Item(Loc.Get("inspector.copy_component"), () => ComponentClipboard.Copy(comp),
+            icon: EditorIcons.Copy);
+
+        // Structure is fixed on prefab instances (Add Component is hidden for the same reason), so
+        // pasting a whole new component is only offered where adding one is.
+        bool canAddToGO = !go.IsPrefabInstance || Application.IsPlaying;
+        builder.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(go),
+            icon: EditorIcons.Paste, enabled: canAddToGO && ComponentClipboard.CanPasteAsNew());
+
+        // Values-only paste is fine on a prefab instance - DetectComponentOverrides picks the
+        // changed fields up as overrides on the next frame.
+        builder.Item(Loc.Get("inspector.paste_component_values"), () => ComponentClipboard.PasteValues(comp),
+            icon: EditorIcons.ClipboardCheck, enabled: ComponentClipboard.CanPasteValues(comp.GetType()));
+
+        builder.Separator();
+
         var moveCompId = comp.Identifier;
         builder.Item(Loc.Get("inspector.move_up"), () =>
         {
@@ -988,8 +1005,8 @@ public static class GameObjectInspector
             {
                 var oldIdx = index; var newIdx = index - 1;
                 Undo.RegisterAction("Move Component Up",
-                    () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(oldIdx); },
-                    () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(newIdx); });
+                    () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
+                    () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
                 comp.SetSiblingIndex(newIdx);
             }
         }, icon: EditorIcons.ArrowUp, enabled: index > 0);
@@ -998,8 +1015,8 @@ public static class GameObjectInspector
         {
             var oldIdx = index; var newIdx = index + 1;
             Undo.RegisterAction("Move Component Down",
-                () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(oldIdx); },
-                () => { var c = Undo.FindComponent(moveCompId); c?.SetSiblingIndex(newIdx); });
+                () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(oldIdx); },
+                () => { var c = Undo.FindComponent(moveCompId); if (c.IsValid()) c.SetSiblingIndex(newIdx); });
             comp.SetSiblingIndex(newIdx);
         }, icon: EditorIcons.ArrowDown);
 
@@ -1042,7 +1059,12 @@ public static class GameObjectInspector
                 .Height(28).Rounded(4)
                 .BackgroundColor(EditorTheme.Ink100)
                 .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                .OnClick(go, (g, _) => ToggleAddComponentPopup(g));
+                .OnClick(go, (g, _) => ToggleAddComponentPopup(g))
+                // A GameObject with no components has no component header to right-click, so this is
+                // the only place to reach "paste as new" on an empty object.
+                .OnRightClick(go, (g, _) => Origami.ContextMenu((float)paper.PointerPos.X, (float)paper.PointerPos.Y,
+                    b => b.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(g),
+                        icon: EditorIcons.Paste, enabled: ComponentClipboard.CanPasteAsNew())));
 
             using (trigger.Enter())
             {
@@ -1139,7 +1161,8 @@ public static class GameObjectInspector
     {
         float fs = EditorTheme.FontSize;
         // Overrides for the whole prefab instance are stored on its root.
-        go = PrefabUtility.GetPrefabInstanceRoot(go) ?? go;
+        var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
+        go = prefabRoot.IsValid() ? prefabRoot : go;
         var overrides = go.PrefabOverrides;
 
         using (paper.Column("gi_prefab_ov_list")
@@ -1252,11 +1275,11 @@ public static class GameObjectInspector
     {
         var canvas = rt.GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
         var parentGo = rt.GameObject.Parent;
-        var parentRt = parentGo?.RectTransform;
-        if (parentRt != null && parentGo != canvas?.GameObject &&
+        var parentRt = parentGo.IsValid() ? parentGo.RectTransform : null;
+        if (parentRt != null && parentGo != (canvas.IsValid() ? canvas.GameObject : null) &&
             parentRt.ComputedRect.Size.X > 0 && parentRt.ComputedRect.Size.Y > 0)
             return parentRt.ComputedRect;
-        return canvas?.RootRect ?? default;
+        return canvas.IsValid() ? canvas.RootRect : default;
     }
 
     // ================================================================
@@ -1286,7 +1309,6 @@ public static class GameObjectInspector
     /// Drop the cached component list (which holds every MonoBehaviour <see cref="Type"/>,
     /// including user ones) so the script AssemblyLoadContext can be collected.
     /// </summary>
-    [Runtime.OnAssemblyUnload]
     public static void ClearAddComponentCache() => _cachedComponents = null;
 
     private static void ToggleAddComponentPopup(GameObject target)

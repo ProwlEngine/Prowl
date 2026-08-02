@@ -24,9 +24,13 @@ public static class EditorUtils
     public static bool MatchesSearch(string text, string? search) =>
         string.IsNullOrEmpty(search) || text.Contains(search, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Every non framework type. Sourced from the live assembly set rather than the domain, so a hot reload's
+    /// superseded build cannot contribute a second, stale copy of every user type.
+    /// </summary>
     public static IEnumerable<Type> GetAllTypes()
     {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var assembly in RuntimeUtils.AssemblySource())
         {
             if (IsFrameworkAssembly(assembly)) continue;
             Type[] types;
@@ -89,6 +93,9 @@ public static class EditorUtils
     {
         try
         {
+            // Normalize separators to the platform's native form
+            absPath = Path.GetFullPath(absPath);
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 if (Directory.Exists(absPath))

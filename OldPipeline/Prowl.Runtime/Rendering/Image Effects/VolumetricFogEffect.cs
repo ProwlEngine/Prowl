@@ -87,7 +87,7 @@ public sealed class VolumetricFogEffect : ImageEffect
 
     public override void OnRenderEffect(RenderContext context)
     {
-        _mat ??= new Material(Shader.LoadDefault(DefaultShader.VolumetricFog));
+        if (_mat.IsNotValid()) _mat = new Material(Shader.LoadDefault(DefaultShader.VolumetricFog));
 
         if (context.DepthNormals == null || !context.DepthNormals.IsValid())
             return;
@@ -135,7 +135,7 @@ public sealed class VolumetricFogEffect : ImageEffect
         RenderTexture blendedLow;
         if (EnableTemporalReprojection)
         {
-            _history ??= new RenderTexture(lowW, lowH, false, [format]);
+            if (_history.IsNotValid()) _history = new RenderTexture(lowW, lowH, false, [format]);
 
             blendedLow = RenderTexture.GetTemporaryRT(lowW, lowH, false, [format]);
             _mat.SetTexture("_FogCurrentTex", currentLow.MainTexture);
@@ -168,9 +168,9 @@ public sealed class VolumetricFogEffect : ImageEffect
 
     public override void OnDisable()
     {
-        _mat?.Dispose();
+        if (_mat.IsValid()) _mat.Dispose();
         _mat = null;
-        _history?.Dispose();
+        if (_history.IsValid()) _history.Dispose();
         _history = null;
         _historyValid = false;
     }

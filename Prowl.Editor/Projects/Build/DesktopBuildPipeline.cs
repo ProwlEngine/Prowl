@@ -599,7 +599,7 @@ public class DesktopBuildPipeline : BuildPipeline
         sb.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
         sb.AppendLine("    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>");
         sb.AppendLine("    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>");
-        sb.AppendLine("    <Nullable>enable</Nullable>");
+        sb.AppendLine("    <Nullable>annotations</Nullable>");
         sb.AppendLine($"    <AssemblyName>{project.Name}</AssemblyName>");
         sb.AppendLine($"    <DefineConstants>PROWL;{versionDefine};{FinalizeDefineString(settings, this)}</DefineConstants>"); // NO PROWL_EDITOR
         sb.AppendLine($"    <RuntimeIdentifier>{desktopProfile.RuntimeIdentifier}</RuntimeIdentifier>");

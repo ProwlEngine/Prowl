@@ -70,6 +70,15 @@ public class GameViewInputHandler : IInputHandler
         return new Int2((int)MathF.Round(x), (int)MathF.Round(y));
     }
 
+    // Inverse of ToViewport, so warping the cursor takes coordinates in the same space reads report.
+    private static Int2 FromViewport(Int2 viewportPos)
+    {
+        if (!TryGetViewport(out GameViewport vp)) return viewportPos;
+        float x = viewportPos.X * (vp.DisplaySize.X / vp.RenderSize.X) + vp.DisplayOrigin.X;
+        float y = viewportPos.Y * (vp.DisplaySize.Y / vp.RenderSize.Y) + vp.DisplayOrigin.Y;
+        return new Int2((int)MathF.Round(x), (int)MathF.Round(y));
+    }
+
     public GameViewInputHandler(IInputHandler realHandler)
     {
         _real = realHandler;
@@ -90,12 +99,14 @@ public class GameViewInputHandler : IInputHandler
     public bool GetKeyDown(KeyCode key) => ShouldFilter ? false : _real.GetKeyDown(key);
     public bool GetKeyUp(KeyCode key) => ShouldFilter ? false : _real.GetKeyUp(key);
 
+    public Int2 MapWindowPosition(Int2 windowPos) => ToViewport(windowPos);
+
     // Mouse filtered only during gameplay execution outside game view
     public Int2 PrevMousePosition => ToViewport(_real.PrevMousePosition);
     public Int2 MousePosition
     {
         get => ToViewport(_real.MousePosition);
-        set => _real.MousePosition = value;
+        set => _real.MousePosition = FromViewport(value);
     }
     public Float2 MouseDelta
     {

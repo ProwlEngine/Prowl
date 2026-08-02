@@ -1,3 +1,6 @@
+using System.Linq;
+
+using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -18,6 +21,25 @@ internal static class DefaultGameObjectCreators
     {
         HierarchyPanel.CreateGameObject("GameObject", MenuContext.ActiveGameObject);
     }
+
+    [MenuItem("GameObject/Empty Child", priority: 1, Icon = EditorIcons.Sitemap)]
+    static void CreateEmptyChild()
+    {
+        var parent = MenuContext.ActiveGameObject;
+        if (parent == null) return;
+        HierarchyPanel.CreateGameObject("GameObject", parent);
+    }
+
+    // Nothing to parent to from the scene-root menu, or with an empty selection.
+    [MenuItem("GameObject/Empty Child", isValidate: true)]
+    static bool ValidateCreateEmptyChild() => MenuContext.ActiveGameObject != null;
+
+    [MenuItem("GameObject/Empty Parent", priority: 2, Icon = EditorIcons.ObjectGroup)]
+    static void CreateEmptyParent() => HierarchyPanel.CreateEmptyParent();
+
+    // Wrapping is defined by what's selected, not by where the menu was opened.
+    [MenuItem("GameObject/Empty Parent", isValidate: true)]
+    static bool ValidateCreateEmptyParent() => Selection.GetSelected<GameObject>().Any();
 
     [MenuItem("GameObject/3D Object/Cube", priority: 10, Icon = EditorIcons.Cube, Separator = true)]
     static void CreateCube() => CreatePrimitive("Cube", DefaultModel.Cube);
@@ -410,7 +432,7 @@ internal static class DefaultGameObjectCreators
 
     private static void EnsureEventSystem(Scene? scene)
     {
-        scene ??= Scene.Current;
+        if (scene.IsNotValid()) scene = Scene.Current;
         if (scene == null) return;
         foreach (EventSystem? es in scene.FindObjectsOfType<EventSystem>())
             if (es != null) return;
@@ -420,7 +442,7 @@ internal static class DefaultGameObjectCreators
 
     private static GameObject ResolveCanvasParent(GameObject? parent)
     {
-        GameCanvas? canvas = parent?.GetComponentInParent<GameCanvas>(includeSelf: true);
+        GameCanvas? canvas = parent.IsValid() ? parent.GetComponentInParent<GameCanvas>(includeSelf: true) : null;
         if (canvas != null) return parent!;
 
         var scene = Scene.Current;

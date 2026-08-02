@@ -48,7 +48,7 @@ public class SpriteAssetEditor : AssetImporterEditor
 
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.Image}  Sprite").Show();
 
-        InfoRow(paper, $"{id}_src", "Source Texture", tex?.Name ?? "None");
+        InfoRow(paper, $"{id}_src", "Source Texture", (tex.IsValid() ? tex.Name : null) ?? "None");
         InfoRow(paper, $"{id}_rect", "Rect", $"{sprite.Rect.X}, {sprite.Rect.Y}   {sprite.Rect.Width} x {sprite.Rect.Height}");
         InfoRow(paper, $"{id}_pivot", "Pivot", $"{sprite.Pivot.X:0.###}, {sprite.Pivot.Y:0.###}");
         InfoRow(paper, $"{id}_ppu", "Pixels Per Unit", $"{sprite.PixelsPerUnit:0.##}");

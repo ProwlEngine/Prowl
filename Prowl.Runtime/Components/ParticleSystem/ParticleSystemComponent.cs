@@ -153,7 +153,8 @@ public class ParticleSystemComponent : MonoBehaviour
         // Update collisions (bulk operation for efficiency)
         if (Collision.Enabled)
         {
-            Collision.UpdateCollisions(_particles, GameObject.Scene?.Physics, deltaTime, Transform, SimulationSpace);
+            Scene? scene = GameObject.Scene;
+            Collision.UpdateCollisions(_particles, scene.IsValid() ? scene.Physics : null, deltaTime, Transform, SimulationSpace);
         }
     }
 
@@ -290,7 +291,7 @@ public class ParticleSystemComponent : MonoBehaviour
         Stop();
 
         // Clean up resources
-        _quadMesh?.Dispose();
+        if (_quadMesh.IsValid()) _quadMesh.Dispose();
         _quadMesh = null;
     }
 
@@ -466,7 +467,8 @@ public class ParticleSystemComponent : MonoBehaviour
             // Update collisions during prewarm
             if (Collision.Enabled)
             {
-                Collision.UpdateCollisions(_particles, GameObject.Scene?.Physics, deltaTime, Transform, SimulationSpace);
+                Scene? scene = GameObject.Scene;
+                Collision.UpdateCollisions(_particles, scene.IsValid() ? scene.Physics : null, deltaTime, Transform, SimulationSpace);
             }
 
             elapsed += deltaTime;

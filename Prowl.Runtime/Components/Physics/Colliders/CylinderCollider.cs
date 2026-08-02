@@ -39,9 +39,8 @@ public sealed class CylinderCollider : Collider
 
     public override void DrawGizmos()
     {
-        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
-        Debug.PushMatrix(matrix);
-        Debug.DrawWireCylinder(Center, Quaternion.Identity, radius, height, Color.Green);
+        Debug.PushMatrix(GizmoMatrix);
+        Debug.DrawWireCylinder(Float3.Zero, Quaternion.Identity, radius, height, Color.Green);
         Debug.PopMatrix();
     }
 }

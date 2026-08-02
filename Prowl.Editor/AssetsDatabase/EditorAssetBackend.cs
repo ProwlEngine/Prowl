@@ -1077,42 +1077,6 @@ public class EditorAssetBackend : AssetBackendBase
     public DependencyGraph Dependencies => _dependencies;
     public string ThumbnailsPath => _project.ThumbnailsPath;
 
-    /// <summary>
-    /// Clear the cache for <see cref="_loadedAssets"/> on assembly reload so that scenes/prefabs that might hold
-    /// user-defined scripts won't stop the ALC from reloading
-    /// </summary>
-    [OnAssemblyUnload]
-    internal static void ClearScenesAndPrefabForReload()
-    {
-        var db = Instance;
-        if (db == null) return;
-
-        foreach (var kv in db._loadedAssets.ToArray())
-        {
-            var asset = kv.Value;
-            if (asset is null) continue;
-
-            bool sensitive = asset is Runtime.Resources.Scene
-                          || asset is Runtime.Resources.PrefabAsset
-                          || asset.GetType().Assembly.IsCollectible;
-
-            if (!sensitive) continue;
-
-            if (db._loadedAssets.TryRemove(kv.Key, out _))
-            {
-                AssetDatabase.Forget(kv.Key);
-                try
-                {
-                    asset.Dispose();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogException(e);
-                }
-            }
-        }
-    }
-
     /// <summary>Load a cached thumbnail for an asset. Returns (width, height, pixels) or null.</summary>
     public (int width, int height, byte[] pixels)? LoadThumbnail(Guid guid) => ThumbnailGenerator.LoadThumbnail(guid, _project.ThumbnailsPath);
 
@@ -1154,7 +1118,7 @@ public class EditorAssetBackend : AssetBackendBase
     {
         if (_thumbnailTextures.TryGetValue(guid, out var tex))
         {
-            tex?.Dispose();
+            if (tex.IsValid()) tex.Dispose();
             _thumbnailTextures.Remove(guid);
         }
     }
@@ -1163,7 +1127,7 @@ public class EditorAssetBackend : AssetBackendBase
     public void ClearThumbnailTextureCache()
     {
         foreach (var tex in _thumbnailTextures.Values)
-            tex?.Dispose();
+            if (tex.IsValid()) tex.Dispose();
         _thumbnailTextures.Clear();
     }
 

@@ -20,7 +20,7 @@ using Prowl.Editor.Theming;
 
 namespace Prowl.Editor.GUI.Panels;
 
-public class SceneViewPanel : DockPanel, IScriptReloadCleanup
+public class SceneViewPanel : DockPanel
 {
     [MenuItem("Window/General/Scene", priority: 5)]
     static void Open() => EditorApplication.Instance?.OpenPanel(typeof(SceneViewPanel));
@@ -29,10 +29,6 @@ public class SceneViewPanel : DockPanel, IScriptReloadCleanup
     public override string Icon => EditorIcons.Shapes;
 
     private EditorCamera? _editorCamera;
-
-    // The editor camera caches the scene camera + cloned image effects (possibly user types).
-    // Release them before a hot-reload so they don't pin the script AssemblyLoadContext.
-    public void OnScriptReloadCleanup() => _editorCamera?.ReleaseSceneReferences();
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;

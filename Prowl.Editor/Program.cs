@@ -18,9 +18,6 @@ public static class Program
     /// <summary>If set via --project arg, the editor opens this project directly (skips launcher).</summary>
     public static string? StartupProjectPath { get; private set; }
 
-    /// <summary>If set via --restore-scene arg, this scene is loaded instead of the last saved scene.</summary>
-    public static string? RestoreScenePath { get; private set; }
-
     /// <summary>If set via --buildmode arg, the editor runs a build directly and doesn't start any UI.</summary>
     public static bool BuildMode { get; private set; } = false;
 
@@ -47,9 +44,6 @@ public static class Program
 
         (["--project", "-project", "-p"], (args) => StartupProjectPath = args[0], 1,
             "Opens the provided source project path directly (skips launcher)"),
-
-        (["--restore-scene", "-restore", "-r"], (args) => RestoreScenePath = args[0], 1,
-            "Loads the provided scene as the default scene to open instead of the last saved scene"),
 
         (["--buildmode", "-build", "-b"], (args) => { BuildMode = true; StartupProjectPath = args[0]; }, 1,
             "Builds a project directly without opening the editor UI"),

@@ -50,6 +50,7 @@ public sealed class MeshSDF : EngineObject, IMeshFeature
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
+        SerializeHeader(compoundTag);
         compoundTag.Add("Bounds.Min.X", new(Bounds.Min.X));
         compoundTag.Add("Bounds.Min.Y", new(Bounds.Min.Y));
         compoundTag.Add("Bounds.Min.Z", new(Bounds.Min.Z));
@@ -67,6 +68,7 @@ public sealed class MeshSDF : EngineObject, IMeshFeature
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
+        DeserializeHeader(value);
         Bounds = new AABB(
             new Float3(value["Bounds.Min.X"].FloatValue, value["Bounds.Min.Y"].FloatValue, value["Bounds.Min.Z"].FloatValue),
             new Float3(value["Bounds.Max.X"].FloatValue, value["Bounds.Max.Y"].FloatValue, value["Bounds.Max.Z"].FloatValue));

@@ -288,7 +288,7 @@ public abstract class Game
             int count = 0;
             while (fixedTimeAccumulator >= Time.FixedDeltaTime && count++ < Time.MaxFixedIterations)
             {
-                currentScene?.FixedUpdate();
+                if (currentScene.IsValid()) currentScene.FixedUpdate();
                 fixedTimeAccumulator -= Time.FixedDeltaTime;
             }
 
@@ -327,21 +327,21 @@ public abstract class Game
     /// <summary>Called during update. Override to control scene update/gizmo behavior.</summary>
     public virtual void OnUpdate(Scene? scene)
     {
-        scene?.Update();
-        if (DrawGizmos)
-            scene?.DrawGizmos();
+        if (scene.IsValid()) scene.Update();
+        if (DrawGizmos && scene.IsValid())
+            scene.DrawGizmos();
     }
 
     /// <summary>Called during render. Override to control scene rendering.</summary>
     public virtual void OnRender(Scene? scene)
     {
-        scene?.Render();
+        if (scene.IsValid()) scene.Render();
     }
 
     /// <summary>Called during GUI phase. Override to control scene GUI rendering.</summary>
     public virtual void OnGui(Scene? scene, Paper paper)
     {
-        scene?.OnGui(paper);
+        if (scene.IsValid()) scene.OnGui(paper);
     }
 
     public virtual void Resize(int width, int height) { }
@@ -385,84 +385,7 @@ public abstract class Game
         return new Float2(p.X * csFbWin / cs, p.Y * csFbWin / cs);
     }
 
-    private void UpdatePaperInput()
-    {
-        // Mouse position in Paper-logical space.
-        Float2 mousePos = GetPaperMousePosition();
-        _paper.SetPointerState(PaperMouseBtn.Unknown, (float)mousePos.X, (float)mousePos.Y, false, true);
-
-        if (Input.GetMouseButtonDown(0))
-            _paper.SetPointerState(PaperMouseBtn.Left, (float)mousePos.X, (float)mousePos.Y, true, false);
-        if (Input.GetMouseButtonUp(0))
-            _paper.SetPointerState(PaperMouseBtn.Left, (float)mousePos.X, (float)mousePos.Y, false, false);
-
-        if (Input.GetMouseButtonDown(1))
-            _paper.SetPointerState(PaperMouseBtn.Right, (float)mousePos.X, (float)mousePos.Y, true, false);
-        if (Input.GetMouseButtonUp(1))
-            _paper.SetPointerState(PaperMouseBtn.Right, (float)mousePos.X, (float)mousePos.Y, false, false);
-
-        if (Input.GetMouseButtonDown(2))
-            _paper.SetPointerState(PaperMouseBtn.Middle, (float)mousePos.X, (float)mousePos.Y, true, false);
-        if (Input.GetMouseButtonUp(2))
-            _paper.SetPointerState(PaperMouseBtn.Middle, (float)mousePos.X, (float)mousePos.Y, false, false);
-
-        // Handle mouse wheel
-        float wheelDelta = Input.MouseWheelDelta;
-        if (wheelDelta != 0)
-            _paper.SetPointerWheel(wheelDelta);
-
-        // Handle keyboard input. InputString is read non-destructively, so the GameObject UI (and any
-        // user UI) still sees the same characters this frame.
-        foreach (char ch in Input.InputString)
-            _paper.AddInputCharacter(ch.ToString());
-
-        // Handle key states for keys
-        // Fortunately Papers key enums have almost all the same names
-        // So we only need to map a few keys manually, the rest we can use reflection
-        foreach (KeyCode k in Enum.GetValues<KeyCode>())
-            if (k != KeyCode.Unknown)
-                if (Enum.TryParse(k.ToString(), out PaperKey paperKey))
-                    HandleKey(k, paperKey);
-
-        // Handle the few keys that are not the same
-        HandleKey(KeyCode.Equal, PaperKey.Equals);
-        HandleKey(KeyCode.BackSlash, PaperKey.Backslash);
-        HandleKey(KeyCode.GraveAccent, PaperKey.Grave);
-        HandleKey(KeyCode.KeypadEqual, PaperKey.KeypadEquals);
-
-        HandleKey(KeyCode.Number0, PaperKey.Num0);
-        HandleKey(KeyCode.Number1, PaperKey.Num1);
-        HandleKey(KeyCode.Number2, PaperKey.Num2);
-        HandleKey(KeyCode.Number3, PaperKey.Num3);
-        HandleKey(KeyCode.Number4, PaperKey.Num4);
-        HandleKey(KeyCode.Number5, PaperKey.Num5);
-        HandleKey(KeyCode.Number6, PaperKey.Num6);
-        HandleKey(KeyCode.Number7, PaperKey.Num7);
-        HandleKey(KeyCode.Number8, PaperKey.Num8);
-        HandleKey(KeyCode.Number9, PaperKey.Num9);
-
-        HandleKey(KeyCode.KeypadSubtract, PaperKey.KeypadMinus);
-        HandleKey(KeyCode.KeypadAdd, PaperKey.KeypadPlus);
-
-        HandleKey(KeyCode.LeftBracket, PaperKey.LeftBracket);
-        HandleKey(KeyCode.RightBracket, PaperKey.RightBracket);
-        HandleKey(KeyCode.ShiftLeft, PaperKey.LeftShift);
-        HandleKey(KeyCode.ShiftRight, PaperKey.RightShift);
-        HandleKey(KeyCode.AltLeft, PaperKey.LeftAlt);
-        HandleKey(KeyCode.AltRight, PaperKey.RightAlt);
-        HandleKey(KeyCode.ControlLeft, PaperKey.LeftControl);
-        HandleKey(KeyCode.ControlRight, PaperKey.RightControl);
-        HandleKey(KeyCode.SuperLeft, PaperKey.LeftSuper);
-        HandleKey(KeyCode.SuperRight, PaperKey.RightSuper);
-    }
-
-    void HandleKey(KeyCode silkKey, PaperKey paperKey)
-    {
-        if (Input.GetKeyDown(silkKey))
-            _paper.SetKeyState(paperKey, true);
-        else if (Input.GetKeyUp(silkKey))
-            _paper.SetKeyState(paperKey, false);
-    }
+    private void UpdatePaperInput() => PaperInputBridge.Pump(_paper, GetPaperMousePosition());
 
     /// <summary>Reset the fixed-update accumulator. Call when entering play mode to prevent a burst.</summary>
     protected void ResetFixedTimeAccumulator() => fixedTimeAccumulator = 0f;

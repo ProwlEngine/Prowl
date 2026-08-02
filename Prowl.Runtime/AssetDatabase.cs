@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 using Prowl.Runtime.Resources;
 
@@ -43,14 +44,30 @@ public static class AssetDatabase
 
     #region Activity Tracking
 
+    /// <summary>Mutable timestamp cell. Storing a box rather than the value itself keeps the hot path
+    /// lock-free: ConcurrentDictionary's indexer setter takes the bucket's monitor on every write,
+    /// whereas TryGetValue never locks, so a repeat touch becomes a lookup plus a plain store.</summary>
+    private sealed class Stamp { public long Tick; }
+
     // A GUID is "idle" purely based on time since last touch - no GC involved. Touched by
     // AssetRef.Res/.Touch, AssetDatabase.Touch, and EngineObject.EnsureNotDisposed.
-    private static readonly ConcurrentDictionary<Guid, DateTime> _lastTouched = new();
+    // Timestamps are Environment.TickCount64 milliseconds, not DateTime: only elapsed time matters
+    // here, and reading the tick count is several times cheaper than DateTime.UtcNow.
+    private static readonly ConcurrentDictionary<Guid, Stamp> _lastTouched = new();
+
+    // Anchors tick counts to wall-clock for TryGetLastTouched, which reports an absolute time.
+    private static readonly DateTime _epochUtc = DateTime.UtcNow;
+    private static readonly long _epochTick = Environment.TickCount64;
+
+    private const long ForceIdleBackdateMs = 24L * 60 * 60 * 1000;
 
     // Opt-in per GUID (see the Asset Database panel's "Track" action) - capturing a stack trace on
     // every touch of every asset would be far too expensive to do unconditionally.
     private static readonly ConcurrentDictionary<Guid, byte> _stackTraceCaptureEnabled = new();
     private static readonly ConcurrentDictionary<Guid, string> _lastTouchStackTraces = new();
+    // Lets Touch skip the _stackTraceCaptureEnabled lookup entirely while nothing is being tracked,
+    // which is almost always. That lookup was a fifth of the cost of a touch.
+    private static int _stackTraceCaptureCount;
 
     /// <summary>Maps a GUID to the GUID whose lifecycle it's actually tied to (a sub-asset resolves
     /// to its parent). Set by EditorAssetDatabase.Initialize(); null elsewhere, where a GUID resolves
@@ -59,16 +76,23 @@ public static class AssetDatabase
 
     internal static Guid Resolve(Guid guid) => ResolveFamily != null ? ResolveFamily(guid) : guid;
 
-    /// <summary>Record that a GUID's family was just used. No-op for <see cref="Guid.Empty"/>.</summary>
+    /// <summary>Record that a GUID's family was just used. No-op for <see cref="Guid.Empty"/>.
+    /// <para>Callers that read an asset repeatedly should prefer <see cref="EngineObject.TouchAsset"/>,
+    /// which coalesces so a hot property getter doesn't reach this at all.</para></summary>
     public static void Touch(Guid guid)
     {
         if (guid == Guid.Empty) return;
         guid = Resolve(guid);
-        _lastTouched[guid] = DateTime.UtcNow;
+        GetOrAddStamp(guid).Tick = Environment.TickCount64;
 
-        if (_stackTraceCaptureEnabled.ContainsKey(guid))
+        if (Volatile.Read(ref _stackTraceCaptureCount) != 0 && _stackTraceCaptureEnabled.ContainsKey(guid))
             _lastTouchStackTraces[guid] = new System.Diagnostics.StackTrace(1, true).ToString();
     }
+
+    private static Stamp GetOrAddStamp(Guid guid)
+        => _lastTouched.TryGetValue(guid, out Stamp? stamp)
+            ? stamp
+            : _lastTouched.GetOrAdd(guid, static _ => new Stamp());
 
     /// <summary>Enable/disable capturing a stack trace on every future touch of a GUID's family.
     /// Disabling also drops any previously captured trace.</summary>
@@ -76,10 +100,14 @@ public static class AssetDatabase
     {
         guid = Resolve(guid);
         if (enabled)
-            _stackTraceCaptureEnabled[guid] = 0;
+        {
+            if (_stackTraceCaptureEnabled.TryAdd(guid, 0))
+                Interlocked.Increment(ref _stackTraceCaptureCount);
+        }
         else
         {
-            _stackTraceCaptureEnabled.TryRemove(guid, out _);
+            if (_stackTraceCaptureEnabled.TryRemove(guid, out _))
+                Interlocked.Decrement(ref _stackTraceCaptureCount);
             _lastTouchStackTraces.TryRemove(guid, out _);
         }
     }
@@ -92,18 +120,27 @@ public static class AssetDatabase
     /// <summary>True if a GUID's family has gone at least <paramref name="threshold"/> since its last touch.</summary>
     internal static bool IsIdle(Guid guid, TimeSpan threshold)
     {
-        guid = Resolve(guid);
-        return !_lastTouched.TryGetValue(guid, out var last) || DateTime.UtcNow - last >= threshold;
+        if (!_lastTouched.TryGetValue(Resolve(guid), out Stamp? stamp)) return true;
+        return Environment.TickCount64 - stamp.Tick >= (long)threshold.TotalMilliseconds;
     }
 
     internal static bool TryGetLastTouched(Guid guid, out DateTime lastTouched)
-        => _lastTouched.TryGetValue(Resolve(guid), out lastTouched);
+    {
+        if (!_lastTouched.TryGetValue(Resolve(guid), out Stamp? stamp))
+        {
+            lastTouched = default;
+            return false;
+        }
+        lastTouched = _epochUtc.AddMilliseconds(stamp.Tick - _epochTick);
+        return true;
+    }
 
     /// <summary>Drop tracking for a GUID's family once it's evicted/disposed.</summary>
     internal static void Forget(Guid guid) => _lastTouched.TryRemove(Resolve(guid), out _);
 
     /// <summary>Test-only: make a GUID's family appear idle regardless of real elapsed time.</summary>
-    internal static void ForceIdle(Guid guid) => _lastTouched[Resolve(guid)] = DateTime.MinValue;
+    internal static void ForceIdle(Guid guid)
+        => GetOrAddStamp(Resolve(guid)).Tick = Environment.TickCount64 - ForceIdleBackdateMs;
 
     #endregion
 
@@ -202,6 +239,7 @@ public static class AssetDatabase
         _lastTouched.Clear();
         _stackTraceCaptureEnabled.Clear();
         _lastTouchStackTraces.Clear();
+        Volatile.Write(ref _stackTraceCaptureCount, 0);
         lock (_lockGate)
         {
             _owners.Clear();

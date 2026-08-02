@@ -51,7 +51,6 @@ public static class MeshFeatureRegistry
     /// user <see cref="MeshFeatureSpec"/> types can be unloaded. Specs rebuild on the next
     /// <see cref="Initialize"/>/<see cref="Reinitialize"/> after the new assemblies are loaded.
     /// </summary>
-    [OnAssemblyUnload]
     public static void ClearCache()
     {
         _initialized = false;
@@ -68,7 +67,7 @@ public static class MeshFeatureRegistry
         if (_initialized) return;
         _initialized = true;
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        foreach (var assembly in RuntimeUtils.AssemblySource())
         {
             Type[] types;
             try { types = assembly.GetTypes(); }

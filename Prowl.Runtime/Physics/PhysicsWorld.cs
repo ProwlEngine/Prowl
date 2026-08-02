@@ -118,7 +118,7 @@ public class PhysicsWorld
     public void SyncTransforms()
     {
         foreach (var body in _syncBodies)
-            body?.SyncTransformToBody();
+            if (body.IsValid()) body.SyncTransformToBody();
     }
 
     /// <summary>
@@ -507,7 +507,7 @@ public class PhysicsWorld
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody?.GameObject?.Transform
+                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
                 };
                 hits.Add(castHit);
             }
@@ -1003,7 +1003,7 @@ public class PhysicsWorld
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody?.GameObject?.Transform
+                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
                 };
                 hits.Add(hit);
             }

@@ -178,7 +178,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         base.Update();
         if (!Application.IsPlaying || !_open) return;
 
-        if (Input.GetMouseButtonDown(0) && !IsWithinSubtree(EventSystem.Current?.Hovered))
+        if (Input.GetMouseButtonDown(0) && !IsWithinSubtree(EventSystem.Current.IsValid() ? EventSystem.Current.Hovered : null))
             Close();
     }
 

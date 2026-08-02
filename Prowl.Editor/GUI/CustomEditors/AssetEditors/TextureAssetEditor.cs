@@ -62,7 +62,7 @@ public class TextureAssetEditor : AssetImporterEditor
                     float drawY = (float)r.Min.Y + ((float)r.Size.Y - drawH) / 2f;
 
                     // Flip V (textures are stored Y-up), same idiom the scene view uses for its RT.
-                    canvas.SetBrushTexture(texture);
+                    canvas.SetBrushTexture(texture.Res);
                     canvas.SetBrushTextureTransform(
                         Transform2D.CreateTranslation(drawX, drawY + drawH) *
                         Transform2D.CreateScale(drawW, -drawH));

@@ -44,6 +44,7 @@ public class DirectoryBuildPropsTests : EditorTestHarness
         Assert.False(result.RequiresReload);
         Assert.True(File.Exists(Project.GameCsprojPath));     // generated so an IDE has something to open
         Assert.True(File.Exists(Project.EditorCsprojPath));
+        Assert.True(File.Exists(Project.ProjectSolutionPath));
         Assert.False(File.Exists(Project.GameAssemblyPath));  // nothing to compile
     }
 

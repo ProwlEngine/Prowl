@@ -82,7 +82,7 @@ public class UIImage : UIBehaviour
     private Sprite? Spr => _sprite.Res;
 
     /// <summary>The source texture bound for drawing: the sprite's texture, or null when no sprite is set.</summary>
-    private Texture2D? SourceTexture => Spr?.Texture.Res;
+    private Texture2D? SourceTexture { get { var s = Spr; return s.IsValid() ? s.Texture.Res : null; } }
 
     /// <summary>9-slice border in source pixels, taken from the sprite (zero when no sprite is set).</summary>
     private Float4 EffectiveBorder => Spr is Sprite s ? s.Border : Float4.Zero;
@@ -193,7 +193,11 @@ public class UIImage : UIBehaviour
         set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
     }
 
-    public override Material GetMaterial() => _material.Res ?? base.GetMaterial();
+    public override Material GetMaterial()
+    {
+        var m = _material.Res;
+        return m.IsValid() ? m : base.GetMaterial();
+    }
 
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
     {
@@ -325,7 +329,8 @@ public class UIImage : UIBehaviour
 
     public override void PopulateProperties(PropertySet p, in UIContext _)
     {
-        p.SetTexture("_MainTex", SourceTexture ?? defaultTexture);
+        var srcTex = SourceTexture;
+        p.SetTexture("_MainTex", srcTex.IsValid() ? srcTex : defaultTexture);
         // The tint (and CanvasGroup alpha) is already baked into the vertex color in GenerateMesh,
         // and the shader computes texture * vColor * _MainColor - so _MainColor must stay white or
         // the color/alpha would be applied twice (a 50% tint would render at 25%).

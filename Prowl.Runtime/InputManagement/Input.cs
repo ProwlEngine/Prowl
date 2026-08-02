@@ -50,12 +50,17 @@ public static class Input
     }
 
     // Mouse
-    public static Int2 PrevMousePosition => CursorLocked ? CursorLockCenter : Current.PrevMousePosition;
+    public static Int2 PrevMousePosition => CursorLocked ? LockedMousePosition : Current.PrevMousePosition;
     public static Int2 MousePosition
     {
-        get => CursorLocked ? CursorLockCenter : Current.MousePosition;
+        get => CursorLocked ? LockedMousePosition : Current.MousePosition;
         set => Current.MousePosition = value;
     }
+
+    // CursorLockCenter is window-space; the handler maps it into whatever space it reports positions
+    // in, so a locked cursor stays consistent with an unlocked one (render-target pixels in the editor's
+    // Game View, window pixels everywhere else).
+    private static Int2 LockedMousePosition => Current.MapWindowPosition(CursorLockCenter);
     public static Float2 MouseDelta => Current.MouseDelta;
     public static float MouseWheelDelta => Current.MouseWheelDelta;
 
@@ -208,7 +213,7 @@ public static class Input
     public static InputAction? FindAction(string mapName, string actionName)
     {
         InputActionMap? map = _actionMaps.FirstOrDefault(m => m.Name == mapName);
-        return map?.FindAction(actionName);
+        return map.IsValid() ? map.FindAction(actionName) : null;
     }
 
     /// <summary>

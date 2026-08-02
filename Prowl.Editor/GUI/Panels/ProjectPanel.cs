@@ -996,6 +996,10 @@ public class ProjectPanel : DockPanel
                     db.Reimport(e.Guid);
                 Runtime.Debug.Log("[AssetDatabase] Reimported all assets.");
             }, icon: EditorIcons.ArrowsRotate);
+
+            builder.Item(Loc.Get("menu.assets.reload_scripts"),
+                Prowl.Editor.Projects.Scripting.ScriptAssemblyManager.RequestRecompile,
+                icon: EditorIcons.ArrowsRotate);
         });
     }
 

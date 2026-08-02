@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.Editor.Core;
@@ -38,6 +39,9 @@ public class GameViewPanel : DockPanel
     // Separate Paper instance for in-game UI
     private PaperPipeline? _gamePaperPipeline;
     private Paper? _gamePaper;
+
+    private readonly PanelLockContext _lockContext = new();
+    private bool _lockContextPushed;
 
     private static readonly (string name, int w, int h)[] Resolutions =
     {
@@ -134,13 +138,34 @@ public class GameViewPanel : DockPanel
 
             // Render the scene's main camera into our own RT (game view shows no gizmos/grid).
             EnsureRT(rtW, rtH);
-            Camera? mainCam = FindSceneCamera(scene);
-            if (mainCam != null && _rt != null)
+            // Render every active camera into our own RT (game view shows no gizmos/grid).
+            List<Camera> cameras = scene.GatherActiveCameras();
+            cameras.RemoveAll(c => c.GameObject.HideFlags.HasFlag(HideFlags.HideAndDontSave));
+
+            if (_rt != null && cameras.Count > 0)
             {
-                var prevTarget = mainCam.Target;
-                mainCam.Target = _rt;
-                mainCam.Render(new RenderingData { DisplayGizmos = false, DisplayGrid = false });
-                mainCam.Target = prevTarget;
+                var previousTargets = new List<RenderTexture?>(cameras.Count);
+                foreach (Camera cam in cameras)
+                {
+                    previousTargets.Add(cam.Target);
+                    cam.Target = _rt;
+                }
+
+                try
+                {
+                    scene.CollectRenderables();
+                    var views = cameras
+                        .Select(cam => CameraView.From(cam, new RenderingData { DisplayGizmos = false, DisplayGrid = false }))
+                        .ToList();
+                    Graphics.Device.DispatchGraph(RenderPipelineManager.Current, views);
+                    foreach (CameraView view in views)
+                        view.Camera.SavePreviousViewProjectionMatrix();
+                }
+                finally
+                {
+                    for (int i = 0; i < cameras.Count; i++)
+                        cameras[i].Target = previousTargets[i];
+                }
             }
 
             var smokeRT = _rt;
@@ -201,7 +226,7 @@ public class GameViewPanel : DockPanel
                         _displayAbsRect = rect;
                         paper.Draw(ref handle, (canvas, r) =>
                     {
-                        if (capturedRT?.MainTexture == null) return;
+                        if (capturedRT.IsNotValid() || capturedRT.MainTexture == null) return;
                         float rx = (float)r.Min.X;
                         float ry = (float)r.Min.Y;
                         float rw = (float)r.Size.X;
@@ -243,6 +268,16 @@ public class GameViewPanel : DockPanel
                     Float2 inRT = new(local.X * (rtW / size.X), local.Y * (rtH / size.Y));
                     bool inside = local.X >= 0 && local.Y >= 0 && local.X <= size.X && local.Y <= size.Y;
 
+                    // Cursor lock resolves against this panel's rect, not the OS window, so a locked
+                    // cursor recentres inside the game view instead of the middle of the editor.
+                    _lockContext.PanelOrigin = origin;
+                    _lockContext.PanelSize = size;
+                    if (!_lockContextPushed)
+                    {
+                        Input.PushLockContext(_lockContext);
+                        _lockContextPushed = true;
+                    }
+
                     // Gameplay scripts read Input.MousePosition in render-target pixel space (matching
                     // Camera.PixelWidth/Height), so picking works from the editor like a standalone build.
                     // Published unconditionally (unlike the UI viewport below, which needs an EventSystem).
@@ -262,7 +297,12 @@ public class GameViewPanel : DockPanel
                     if (RuntimeEventSystem.Current is { } es)
                         es.Viewport = null;
                 }
-
+            }
+            else
+            {
+                paper.Box("gv_black")
+                    .Size(width, height)
+                    .BackgroundColor(Color.Black);
             }
         }
     }
@@ -273,7 +313,7 @@ public class GameViewPanel : DockPanel
         {
             _gamePaperPipeline = new PaperPipeline();
             _gamePaperPipeline.Initialize(w, h);
-            _gamePaperPipeline.PresentTarget = _rt?.frameBuffer;
+            _gamePaperPipeline.PresentTarget = _rt.IsValid() ? _rt.frameBuffer : null;
         }
 
         if (_gamePaper == null)
@@ -282,30 +322,10 @@ public class GameViewPanel : DockPanel
             _gamePaper.SetResolution(w, h);
     }
 
-    private static Camera? FindSceneCamera(Scene scene)
-    {
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
-            if (!go.CompareTag("Main Camera")) continue;
-            var cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
-        }
-
-        foreach (var go in scene.AllObjects)
-        {
-            if (go.HideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
-            var cam = go.GetComponent<Camera>();
-            if (cam != null) return cam;
-        }
-
-        return null;
-    }
-
     private void EnsureRT(int w, int h)
     {
         if (_rt != null && _rt.Width == w && _rt.Height == h) return;
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(w, h, true, new[] { PixelFormat.R8_G8_B8_A8_UNorm });
         if (_gamePaperPipeline != null)
             _gamePaperPipeline.PresentTarget = _rt.frameBuffer;
@@ -313,12 +333,18 @@ public class GameViewPanel : DockPanel
 
     private void InvalidateRT()
     {
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = null;
     }
 
     public override void OnClosed()
     {
+        if (_lockContextPushed)
+        {
+            Input.PopLockContext();
+            _lockContextPushed = false;
+        }
+
         InvalidateRT();
         _gamePaperPipeline?.Dispose();
         _gamePaperPipeline = null;

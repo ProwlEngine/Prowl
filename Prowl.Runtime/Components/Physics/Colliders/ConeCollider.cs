@@ -39,9 +39,8 @@ public sealed class ConeCollider : Collider
 
     public override void DrawGizmos()
     {
-        Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation * Quaternion.FromEuler(Rotation), Transform.LossyScale);
-        Debug.PushMatrix(matrix);
-        Debug.DrawWireCone(Center + new Float3(0, -height * 0.5f, 0), new Float3(0, height, 0), radius, Color.Green);
+        Debug.PushMatrix(GizmoMatrix);
+        Debug.DrawWireCone(new Float3(0, -height * 0.5f, 0), new Float3(0, height, 0), radius, Color.Green);
         Debug.PopMatrix();
     }
 }

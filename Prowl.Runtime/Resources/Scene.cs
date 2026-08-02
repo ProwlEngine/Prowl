@@ -103,10 +103,36 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public PhysicsWorld Physics { get { EnsureNotDisposed(); return _physics; } }
 
     [SerializeIgnore]
-    private readonly SceneComponentRegistry _componentRegistry = new();
+    private readonly SceneDispatcher _dispatcher = new();
 
-    /// <summary>Per-scene registry of components that implement per-frame callbacks. Drives Update.</summary>
-    internal SceneComponentRegistry ComponentRegistry => _componentRegistry;
+    /// <summary>The scene's dispatch point for per-frame component callbacks and physics events.</summary>
+    internal SceneDispatcher Dispatcher => _dispatcher;
+
+    /// <summary>
+    /// Called once after a hot reload has migrated the scene graph in place: each GameObject drops removed
+    /// components and rebuilds its lookup, then the dispatcher re-derives membership and ordering from the new
+    /// types. Ordered that way deliberately, since the dispatcher must not re-register a component that is
+    /// about to be dropped.
+    /// </summary>
+    internal void OnHotReload()
+    {
+        foreach (GameObject go in _allObj)
+            if (go is not null && !go.IsDisposed)
+                go.OnHotReload();
+
+        // Re-registering from the live scene rather than from what was registered before is what lets a
+        // component whose new type gained its first per-frame callback start dispatching at all.
+        _dispatcher.Reset();
+
+        foreach (GameObject go in _allObj)
+        {
+            if (go is null || go.IsDisposed) continue;
+
+            foreach (MonoBehaviour comp in go._components)
+                if (comp is not null && !comp.IsDisposed && comp.EnabledInHierarchy)
+                    _dispatcher.Register(comp);
+        }
+    }
 
     /// <summary>Registry every active IRenderable/IRenderableLight submits itself into during
     /// <see cref="CollectRenderables"/>. The render pipeline reads this directly.</summary>
@@ -602,6 +628,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             for (int i = 0; i < serializeObj.Length; i++)
             {
+                // A GameObject that failed to deserialize leaves a null slot; skip it rather than lose the rest.
+                if (serializeObj[i] == null) continue;
                 serializeObj[i].SetIdentifier(_goIdentifiers[i]);
 
                 if (_compIdentifiers != null && _compIdOffsets != null)
@@ -621,7 +649,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         _compIdOffsets = null;
 
         foreach (GameObject obj in serializeObj)
-            Add(obj);
+            if (obj != null) Add(obj);
     }
 
     /// <summary>
@@ -632,9 +660,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Update()
     {
         EnsureNotDisposed();
-        _componentRegistry.RunStart();
-        _componentRegistry.RunUpdate();
-        _componentRegistry.RunLateUpdate();
+        _dispatcher.RunStart();
+        _dispatcher.RunUpdate();
+        _dispatcher.RunLateUpdate();
 
         Flush();
     }
@@ -648,13 +676,13 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         EnsureNotDisposed();
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
-        _componentRegistry.RunStart();
+        _dispatcher.RunStart();
 
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
         catch (Exception ex) { Debug.LogError($"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
-        _componentRegistry.RunFixedUpdate();
+        _dispatcher.RunFixedUpdate();
 
         Flush();
     }
@@ -667,7 +695,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         EnsureNotDisposed();
         Culler.Clear();
-        _componentRegistry.RunRenderCollect(Culler);
+        _dispatcher.RunRenderCollect(Culler);
     }
 
     /// <summary>
@@ -676,7 +704,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void DrawGizmos()
     {
         EnsureNotDisposed();
-        _componentRegistry.RunDrawGizmos();
+        _dispatcher.RunDrawGizmos();
 
         Flush();
     }
@@ -688,9 +716,34 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void OnGui(Paper paper)
     {
         EnsureNotDisposed();
-        _componentRegistry.RunOnGui(paper);
+        _dispatcher.RunOnGui(paper);
 
         Flush();
+    }
+
+    /// <summary>
+    /// Collects every Camera on an enabled-in-hierarchy GameObject, sorted by Camera.Depth.
+    /// </summary>
+    internal List<Camera> GatherActiveCameras()
+    {
+        var cameras = new List<Camera>();
+
+        for (int i = 0; i < _allObj.Count; i++)
+        {
+            GameObject go = _allObj[i];
+            if (go.IsDisposed || !go.EnabledInHierarchy) continue;
+
+            foreach (MonoBehaviour component in go._components)
+            {
+                if (component is Camera camera)
+                {
+                    cameras.Add(camera);
+                }
+            }
+        }
+
+        cameras.Sort(static (a, b) => a.Depth.CompareTo(b.Depth));
+        return cameras;
     }
 
     /// <summary>
@@ -702,11 +755,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         EnsureNotDisposed();
 
-        // ActiveObjects is a flat list, so GetComponentsInChildren (which recurses) would collect a
-        // child camera once per active ancestor - Distinct() prevents rendering it multiple times.
-        var Cameras = ActiveObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).Distinct().ToList();
-
-        Cameras.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+        List<Camera> Cameras = GatherActiveCameras();
 
         if (Cameras.Count == 0)
             return false;
@@ -725,15 +774,25 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             }
         }
 
-        CollectRenderables();
+        try
+        {
+            CollectRenderables();
 
-        var views = Cameras.Select(cam => CameraView.From(cam, new RenderingData())).ToList();
-        Graphics.Device.DispatchGraph(RenderPipelineManager.Current, views);
-        foreach (CameraView view in views)
-            view.Camera.SavePreviousViewProjectionMatrix();
-
-        foreach (Camera cam in camerasUsingSharedTarget)
-            cam.Target = null;
+            var views = Cameras.Select(cam => CameraView.From(cam, new RenderingData())).ToList();
+            Graphics.Device.DispatchGraph(RenderPipelineManager.Current, views);
+            foreach (CameraView view in views)
+                view.Camera.SavePreviousViewProjectionMatrix();
+        }
+        catch (Exception ex)
+        {
+            // A bad effect, disposed RT or failed GPU alloc must not take down the whole frame.
+            Debug.LogError($"[Render] Scene render threw and was skipped: {ex.Message}\n{ex.StackTrace}");
+        }
+        finally
+        {
+            foreach (Camera cam in camerasUsingSharedTarget)
+                cam.Target = null;
+        }
 
         return true;
     }

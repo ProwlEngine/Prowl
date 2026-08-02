@@ -16,6 +16,12 @@ public abstract class Collider : MonoBehaviour
     public Float3 Center;
     public Float3 Rotation;
 
+    protected Float4x4 GizmoMatrix =>
+        Float4x4.CreateTRS(
+            Float4x4.TransformPoint(Center, Float4x4.CreateTRS(Transform.Position, Transform.Rotation, Transform.LossyScale)),
+            Transform.Rotation * Quaternion.FromEuler(Rotation),
+            Transform.LossyScale);
+
     /// <summary>
     /// The Jitter2 rigidbody this collider is currently attached to.
     /// This could be either a Rigidbody3D's body or the PhysicsWorld's static rigidbody.
@@ -78,7 +84,8 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private void AttachToStatic()
     {
-        if (GameObject?.Scene?.Physics == null)
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsNotValid() || scene.Physics == null)
             return;
 
         _attachedRigidbody3D = null;

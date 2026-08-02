@@ -29,13 +29,14 @@
   <ItemGroup>
     <PackageReference Include="Jitter2" Version="2.8.5" />
     <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
-    <PackageReference Include="Prowl.Clay" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Echo" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Paper" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Quill" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Graphite" Version="$(ProwlVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlVersion)" />
+    <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Quill" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />
+    <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing.Sdl" Version="2.23.0" />
@@ -45,6 +46,8 @@
     <PackageReference Include="Silk.NET.SDL" Version="2.23.0" />
     <PackageReference Include="Silk.NET.GLFW" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
+    <!-- EngineObject null-safety analyzer (?./??/??= on EngineObject). Analyzes this project's own source. -->
+    <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

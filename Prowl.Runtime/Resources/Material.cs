@@ -151,7 +151,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
     /// Use this when you need a mutable material seeded from <see cref="LoadDefault"/>
     /// or any other shared material so your mutations don't leak to other callers.
     /// </summary>
-    public Material(Material source) : base(source?.Name ?? "New Material")
+    public Material(Material source) : base(source.IsValid() ? source.Name : "New Material")
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -247,7 +247,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
                 case MaterialPropertyType.Texture2D:
                     {
                         Texture2D? tex = prop.Tex2D.Res;
-                        if (tex?.Handle != null)
+                        if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
                     }
@@ -255,7 +255,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
                 case MaterialPropertyType.Texture3D:
                     {
                         Texture3D? tex = prop.Tex3D.Res;
-                        if (tex?.Handle != null)
+                        if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
                     }
@@ -263,7 +263,7 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
                 case MaterialPropertyType.TextureCube:
                     {
                         Cubemap? tex = prop.TexCube.Res;
-                        if (tex?.Handle != null)
+                        if (tex.IsValid() && tex.Handle != null)
                             set.SetTexture(name, tex.Handle, tex.Sampler);
                         break;
                     }
@@ -306,12 +306,12 @@ public sealed class Material : EngineObject, ISerializationCallbackReceiver
                         break;
 
                     case ShaderPropertyType.Texture2D:
-                        if (prop.Texture2DValue?.Handle != null)
+                        if (prop.Texture2DValue.IsValid() && prop.Texture2DValue.Handle != null)
                             set.SetTexture(prop.Name, prop.Texture2DValue.Handle, prop.Texture2DValue.Sampler);
                         break;
 
                     case ShaderPropertyType.Texture3D:
-                        if (prop.Texture3DValue?.Handle != null)
+                        if (prop.Texture3DValue.IsValid() && prop.Texture3DValue.Handle != null)
                             set.SetTexture(prop.Name, prop.Texture3DValue.Handle, prop.Texture3DValue.Sampler);
                         break;
                 }

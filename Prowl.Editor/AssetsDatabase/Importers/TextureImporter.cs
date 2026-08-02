@@ -26,7 +26,7 @@ public class TextureImporter : AssetImporter
 
         // Allocate mip storage up front so GenerateMipmaps (inside FromFile) has somewhere to write
         var texture = Texture2D.FromFile(ctx.AbsolutePath, generateMipmaps);
-        texture.Name = Path.GetFileNameWithoutExtension(ctx.AbsolutePath);
+        texture.Name = ctx.FileName;
 
         // Read filter/wrap settings (defaults merged by RunImport)
         bool minLinear = ctx.Settings?.TryGet("minLinear", out EchoObject? minTag) != true || minTag.BoolValue;

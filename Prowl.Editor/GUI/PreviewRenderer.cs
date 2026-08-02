@@ -110,7 +110,7 @@ public class PreviewRenderer : IDisposable
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;
         var renderer = _subjectGo.AddComponent<MeshRenderer>();
         renderer.Mesh = mesh;
-        renderer.Material = material ?? new Material(Shader.LoadDefault(DefaultShader.Standard));
+        renderer.Material = material.IsValid() ? material : new Material(Shader.LoadDefault(DefaultShader.Standard));
 
         NormalizeSubjectToUnitCube(_subjectGo);
 
@@ -309,7 +309,7 @@ public class PreviewRenderer : IDisposable
 
     private void EnsureRT()
     {
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(Width, Height, true, new[] { PixelFormat.R8_G8_B8_A8_UNorm });
         _camera.Target = _rt;
     }
@@ -368,7 +368,7 @@ public class PreviewRenderer : IDisposable
     public void Dispose()
     {
         ClearSubject();
-        _rt?.Dispose();
+        if (_rt.IsValid()) _rt.Dispose();
         _rt = null;
 
         // Disposes every GameObject still in the scene (camera + light), not just disables it.

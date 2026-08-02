@@ -34,7 +34,14 @@ public class TextMeshComponent : MonoBehaviour
     public AssetRef<FontAsset> Font { get => _font; set => SetField(ref _font, value); }
 
     /// <summary>The assigned font, or the engine's embedded default font when none is set.</summary>
-    public FontAsset? ResolvedFont => _font.Res ?? FontAsset.LoadDefault();
+    public FontAsset? ResolvedFont
+    {
+        get
+        {
+            FontAsset? res = _font.Res;
+            return res.IsValid() ? res : FontAsset.LoadDefault();
+        }
+    }
 
     [SerializeField] private string _text = string.Empty;
     public string Text { get => _text; set => SetField(ref _text, value ?? string.Empty); }
@@ -79,9 +86,21 @@ public class TextMeshComponent : MonoBehaviour
     // pipeline draws it). Distinct from the canvas text material, which is UI-tagged and only drawn by
     // the canvas path. Lazy-allocated and reused across every TextMeshComponent that doesn't override it.
     private static Material? s_sharedMaterial;
-    private static Material SharedMaterial => s_sharedMaterial ??= new Material(Shader.LoadDefault(DefaultShader.DefaultTextMesh));
+    private static Material SharedMaterial
+    {
+        get
+        {
+            if (s_sharedMaterial.IsNotValid())
+                s_sharedMaterial = new Material(Shader.LoadDefault(DefaultShader.DefaultTextMesh));
+            return s_sharedMaterial;
+        }
+    }
 
-    private Material ResolveMaterial() => _material.Res ?? SharedMaterial;
+    private Material ResolveMaterial()
+    {
+        Material? res = _material.Res;
+        return res.IsValid() ? res : SharedMaterial;
+    }
 
     [SerializeIgnore] private Mesh? _mesh;
     [SerializeIgnore] private PropertySet? _props;
@@ -107,7 +126,7 @@ public class TextMeshComponent : MonoBehaviour
 
     public override void OnDisable()
     {
-        _mesh?.OnDispose();
+        if (_mesh.IsValid()) _mesh.OnDispose();
         _mesh = null;
         _hasGeometry = false;
         _dirty = true;
@@ -133,7 +152,8 @@ public class TextMeshComponent : MonoBehaviour
 
         _props ??= new PropertySet();
         _props.Clear();
-        Texture2D atlas = UIFontSystem.Default.Atlas ?? Texture2D.LoadDefault(DefaultTexture.White);
+        Texture2D atlasTex = UIFontSystem.Default.Atlas;
+        Texture2D atlas = atlasTex.IsValid() ? atlasTex : Texture2D.LoadDefault(DefaultTexture.White);
         _props.SetTexture("_MainTex", atlas);
         _props.SetColor("_MainColor", Color.White);
         _props.SetVector("_Tiling", new Float2(1, 1));
@@ -152,7 +172,7 @@ public class TextMeshComponent : MonoBehaviour
         _hasGeometry = false;
 
         FontAsset? font = ResolvedFont;
-        if (font?.FontFile is null || string.IsNullOrEmpty(_text)) return;
+        if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(_text)) return;
 
         UIFontSystem fs = UIFontSystem.Default;
         FontFile fontFile = font.FontFile;
@@ -224,7 +244,7 @@ public class TextMeshComponent : MonoBehaviour
 
             if (builder.IsEmpty) return;
 
-            _mesh ??= new Mesh();
+            if (_mesh.IsNotValid()) _mesh = new Mesh();
             builder.Bake(_mesh);
             _hasGeometry = true;
         }
