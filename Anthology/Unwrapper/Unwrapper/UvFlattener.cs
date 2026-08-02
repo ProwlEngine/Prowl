@@ -18,7 +18,7 @@ internal sealed class UvFlattener
 
     private readonly MeshRegion _region;
     private readonly HalfEdgeMesh _workMesh = new();
-    private int[] _vertexBackMap = System.Array.Empty<int>();
+    private readonly Dictionary<int, int> _vertexBackMap = new();
 
     // Angle system: one variable per triangle corner.
     private SparseMatrix _angleMatrix = new();
@@ -51,13 +51,8 @@ internal sealed class UvFlattener
     public void Setup()
     {
         var vertexList = new List<int>(3 * _region.Triangles.Length);
-        var vertexLookup = new Dictionary<int, int>(3 * _region.Triangles.Length);
-        _region.CollectVertices(vertexList, vertexLookup);
-        _workMesh.BuildFromRegion(_region, vertexList, vertexLookup);
-
-        _vertexBackMap = new int[_region.Mesh.Vertices.Count];
-        for (int i = 0; i < _vertexBackMap.Length; ++i) _vertexBackMap[i] = -1;
-        foreach (var kv in vertexLookup) _vertexBackMap[kv.Key] = kv.Value;
+        _region.CollectVertices(vertexList, _vertexBackMap);
+        _workMesh.BuildFromRegion(_region, vertexList, _vertexBackMap);
 
         int vCount = _workMesh.Vertices.Count;
         _origin3D = default;
@@ -322,7 +317,7 @@ internal sealed class UvFlattener
     {
         ExtractUvs(chart);
         chart.TightenAndOrient();
-        RescaleToSurfaceArea(chart);
+        chart.NormaliseToSurfaceArea();
     }
 
     /// <summary>Project geometry along its two longest extents; lock the extreme U vertices.</summary>
@@ -458,21 +453,6 @@ internal sealed class UvFlattener
         buf.Free.Clear();
         buf.Locked.Clear();
         buf.LockedValues.Clear();
-    }
-
-    /// <summary>Scale the UV layout so its area roughly matches the 3D area it came from.</summary>
-    private void RescaleToSurfaceArea(UvChart chart)
-    {
-        double scale = chart.UvArea < NumericHelpers.FloatTiny ? 1.0 : System.Math.Sqrt(chart.SurfaceArea / chart.UvArea);
-        for (int f = 0; f < chart.Region!.Triangles.Length; ++f)
-        {
-            chart.UVs[3 * f + 0] *= scale;
-            chart.UVs[3 * f + 1] *= scale;
-            chart.UVs[3 * f + 2] *= scale;
-        }
-        chart.UvMin *= scale;
-        chart.UvMax *= scale;
-        chart.RefreshUvArea();
     }
 
     private static double SumStarAngles(Vertex v)

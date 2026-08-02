@@ -35,22 +35,30 @@ uniform sampler2D texture0;
 
 uniform sampler2D backdropTexture;
 
-uniform mat4 scissorMat;
+uniform vec4 scissorTransform;
+uniform vec2 scissorTranslation;
 uniform vec2 scissorExt;
-uniform mat4 brushMat;
+uniform vec4 brushTransform;
+uniform vec2 brushTranslation;
 uniform int brushType;
 uniform vec4 brushColor1;
 uniform vec4 brushColor2;
 uniform vec4 brushParams;
 uniform vec2 brushParams2;
-uniform mat4 brushTextureMat;
-uniform float dpiScale;
+uniform vec4 textureTransform;
+uniform vec2 textureTranslation;
 uniform vec2 atlasTexelSize;
+uniform float sdfPxRange;
 uniform vec2 viewportSize;
 uniform float backdropBlurAmount;
 uniform int backdropFlipY;
 
-float scissorMask_0(vec2 p_0)
+vec2 applyTransform_0(vec4 transform_0, vec2 translation_0, vec2 p_0)
+{
+    return vec2(dot(transform_0.xy, p_0), dot(transform_0.zw, p_0)) + translation_0;
+}
+
+float scissorMask_0(vec2 p_1)
 {
 
     bool _S1;
@@ -74,15 +82,14 @@ float scissorMask_0(vec2 p_0)
         return 1.0;
     }
 
-    vec2 smoothEdges_0 = vec2(0.5 / dpiScale) - (abs((((vec4(p_0 / dpiScale, 0.0, 1.0)) * (scissorMat))).xy) - scissorExt / dpiScale);
+    vec2 smoothEdges_0 = scissorExt - abs(applyTransform_0(scissorTransform, scissorTranslation, p_1));
 
     return clamp(smoothEdges_0.x, 0.0, 1.0) * clamp(smoothEdges_0.y, 0.0, 1.0);
 }
 
 float calculateBrushFactor_0(vec2 fragPos_0)
 {
-
-    vec2 transformedPoint_0 = (((vec4(fragPos_0 / dpiScale, 0.0, 1.0)) * (brushMat))).xy;
+    vec2 transformedPoint_0 = applyTransform_0(brushTransform, brushTranslation, fragPos_0);
 
     if((brushType) == 1)
     {
@@ -139,7 +146,7 @@ float calculateBrushFactor_0(vec2 fragPos_0)
 float sdfScreenPxRange_0(vec2 uv_0)
 {
 
-    return max(0.5 * dot(vec2(4.0) * atlasTexelSize, vec2(1.0) / (fwidth((uv_0)))), 1.0);
+    return max(0.5 * dot(vec2(sdfPxRange) * atlasTexelSize, vec2(1.0) / (fwidth((uv_0)))), 1.0);
 }
 
 layout(location = 0)
@@ -181,7 +188,7 @@ void main()
 
     float edgeAlpha_0 = clamp(vary_fragTexCoord.x, 0.0, 1.0);
 
-    vec4 fill_0 = color_0 * (texture((texture0), ((((vec4(vary_fragPos / dpiScale, 0.0, 1.0)) * (brushTextureMat))).xy)));
+    vec4 fill_0 = color_0 * (texture((texture0), (applyTransform_0(textureTransform, textureTranslation, vary_fragPos))));
 
     if((backdropBlurAmount) > 0.0)
     {

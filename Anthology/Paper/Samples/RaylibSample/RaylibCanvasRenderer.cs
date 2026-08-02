@@ -17,17 +17,21 @@ public class RaylibCanvasRenderer : ICanvasRenderer
     // Generated from Quill/Shaders/Canvas.slang and Blur.slang; see Shaders/CanvasShaders.generated.cs
 
     Shader shader;
-    int scissorMatLoc;
+    int scissorTransformLoc;
+    int scissorTranslationLoc;
     int scissorExtLoc;
 
-    int _brushMatLoc;
+    int _brushTransformLoc;
+    int _brushTranslationLoc;
     int _brushTypeLoc;
     int _brushColor1Loc;
     int _brushColor2Loc;
     int _brushParamsLoc;
     int _brushParams2Loc;
-    int _brushTextureMatLoc;
-    int _dpiScaleLoc;
+    int _textureTransformLoc;
+    int _textureTranslationLoc;
+    int _sdfPxRangeLoc;
+    float _sdfPxRange = 4f;
     int _atlasTexelSizeLoc;
 
     // Backdrop blur
@@ -43,26 +47,36 @@ public class RaylibCanvasRenderer : ICanvasRenderer
     Shader _blurUp;
     int _downHalfpixelLoc, _downOffsetLoc;
     int _upHalfpixelLoc, _upOffsetLoc;
+    // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+    // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+    // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+    // eight pixel radius, since detail finer than the blur is destroyed anyway.
+    private const int BlurBaseShift = 2;
     const int MaxBlurLevels = 6;
     RenderTexture2D _sceneRT;
     RenderTexture2D[] _blurLevels = new RenderTexture2D[MaxBlurLevels];
     int _rtWidth, _rtHeight;
+    bool _backdropDirty = true;
+    float _lastBlurRadius = -1f;
 
     public RaylibCanvasRenderer()
     {
         // Load shader with scissoring support
         shader = LoadShaderFromMemory(CanvasShaders.Vertex, CanvasShaders.Fragment);
-        scissorMatLoc = GetShaderLocation(shader, "scissorMat");
+        scissorTransformLoc = GetShaderLocation(shader, "scissorTransform");
+        scissorTranslationLoc = GetShaderLocation(shader, "scissorTranslation");
         scissorExtLoc = GetShaderLocation(shader, "scissorExt");
 
-        _brushMatLoc = GetShaderLocation(shader, "brushMat");
+        _brushTransformLoc = GetShaderLocation(shader, "brushTransform");
+        _brushTranslationLoc = GetShaderLocation(shader, "brushTranslation");
         _brushTypeLoc = GetShaderLocation(shader, "brushType");
         _brushColor1Loc = GetShaderLocation(shader, "brushColor1");
         _brushColor2Loc = GetShaderLocation(shader, "brushColor2");
         _brushParamsLoc = GetShaderLocation(shader, "brushParams");
         _brushParams2Loc = GetShaderLocation(shader, "brushParams2");
-        _brushTextureMatLoc = GetShaderLocation(shader, "brushTextureMat");
-        _dpiScaleLoc = GetShaderLocation(shader, "dpiScale");
+        _textureTransformLoc = GetShaderLocation(shader, "textureTransform");
+        _textureTranslationLoc = GetShaderLocation(shader, "textureTranslation");
+        _sdfPxRangeLoc = GetShaderLocation(shader, "sdfPxRange");
 
         _fontTextureLoc = GetShaderLocation(shader, "fontTexture");
         _backdropTexLoc = GetShaderLocation(shader, "backdropTexture");
@@ -93,8 +107,8 @@ public class RaylibCanvasRenderer : ICanvasRenderer
         SetTextureFilter(_sceneRT.Texture, TextureFilter.Bilinear);
         for (int i = 0; i < MaxBlurLevels; i++)
         {
-            int lw = Math.Max(1, w >> (i + 1));
-            int lh = Math.Max(1, h >> (i + 1));
+            int lw = Math.Max(1, w >> (i + BlurBaseShift));
+            int lh = Math.Max(1, h >> (i + BlurBaseShift));
             _blurLevels[i] = LoadRenderTexture(lw, lh);
             SetTextureFilter(_blurLevels[i].Texture, TextureFilter.Bilinear);
         }
@@ -104,7 +118,13 @@ public class RaylibCanvasRenderer : ICanvasRenderer
 
     private static void ComputeBlurParams(float radius, out int iterations, out float offset)
     {
-        float r = MathF.Max(radius, 2f);
+        // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+        // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+        // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+        float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
         iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
         offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
     }
@@ -113,6 +133,11 @@ public class RaylibCanvasRenderer : ICanvasRenderer
     // source into the full destination so orientation stays consistent across the chain.
     private void RenderBackdropBlur(Texture2D sceneTex, float radius)
     {
+        // Two frosted shapes in a row see the same scene behind them.
+        if (!_backdropDirty && radius == _lastBlurRadius) return;
+        _backdropDirty = false;
+        _lastBlurRadius = radius;
+
         ComputeBlurParams(radius, out int iterations, out float offset);
 
         BlurPass(_blurDown, _downHalfpixelLoc, _downOffsetLoc, offset, sceneTex, _blurLevels[0]);
@@ -193,22 +218,28 @@ public class RaylibCanvasRenderer : ICanvasRenderer
 
         Rlgl.SetTexture(textureToUse);
 
-        // Set DPI scale for converting pixel coords to logical coords in shader
-        SetShaderValue(shader, _dpiScaleLoc, dpiScale, ShaderUniformDataType.Float);
+        // Scissor and brush transforms are 2D affines with the framebuffer scale already folded in,
+        // so no matrix, no transpose and no dpi divide in the shader.
+        drawCall.GetScissor(dpiScale, out var scissorXf, out var scissorT, out var extent);
 
-        // Set scissor rectangle
-        drawCall.GetScissor(out var scissor, out var extent);
 
-        // Every matrix goes up transposed: the generated shader comes from Slang, which emits
-        // mul(M, v) as v * M. Raylib has no transpose flag, so it is applied here.
-        SetShaderValueMatrix(shader, scissorMatLoc, Float4x4.Transpose((Float4x4)scissor));
-        SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
+        {
+
+            SetShaderValue(shader, scissorTransformLoc, new Float4((float)scissorXf.X, (float)scissorXf.Y, (float)scissorXf.Z, (float)scissorXf.W), ShaderUniformDataType.Vec4);
+
+            SetShaderValue(shader, scissorTranslationLoc, new Float2((float)scissorT.X, (float)scissorT.Y), ShaderUniformDataType.Vec2);
+
+            SetShaderValue(shader, scissorExtLoc, [(float)extent.X, (float)extent.Y], ShaderUniformDataType.Vec2);
+
+        }
 
         // Set gradient parameters
         SetShaderValue(shader, _brushTypeLoc, (int)drawCall.Brush.Type, ShaderUniformDataType.Int);
         if (drawCall.Brush.Type != BrushType.None)
         {
-            SetShaderValueMatrix(shader, _brushMatLoc, Float4x4.Transpose((Float4x4)drawCall.Brush.BrushMatrix));
+            drawCall.GetBrushTransform(dpiScale, out var brushXf, out var brushT);
+            SetShaderValue(shader, _brushTransformLoc, new Float4((float)brushXf.X, (float)brushXf.Y, (float)brushXf.Z, (float)brushXf.W), ShaderUniformDataType.Vec4);
+            SetShaderValue(shader, _brushTranslationLoc, new Float2((float)brushT.X, (float)brushT.Y), ShaderUniformDataType.Vec2);
             var brcol1 = (Prowl.Vector.Color)drawCall.Brush.Color1;
             var brcol2 = (Prowl.Vector.Color)drawCall.Brush.Color2;
             SetShaderValue(shader, _brushColor1Loc, brcol1, ShaderUniformDataType.Vec4);
@@ -218,7 +249,10 @@ public class RaylibCanvasRenderer : ICanvasRenderer
         }
 
         // Set texture transform parameters
-        SetShaderValueMatrix(shader, _brushTextureMatLoc, Float4x4.Transpose((Float4x4)drawCall.Brush.TextureMatrix));
+        drawCall.GetTextureTransform(dpiScale, out var texXf, out var texT);
+        SetShaderValue(shader, _textureTransformLoc, new Float4((float)texXf.X, (float)texXf.Y, (float)texXf.Z, (float)texXf.W), ShaderUniformDataType.Vec4);
+        SetShaderValue(shader, _textureTranslationLoc, new Float2((float)texT.X, (float)texT.Y), ShaderUniformDataType.Vec2);
+        SetShaderValue(shader, _sdfPxRangeLoc, _sdfPxRange, ShaderUniformDataType.Float);
 
         // Font atlas on its own sampler so text batches with shapes (text samples it).
         if (drawCall.FontAtlas is Texture2D fontTex)
@@ -274,6 +308,9 @@ public class RaylibCanvasRenderer : ICanvasRenderer
 
     public void RenderCalls(Canvas canvas, IReadOnlyList<Prowl.Quill.DrawCall> drawCalls)
     {
+        _sdfPxRange = canvas.Text.FontEngine.DistanceRange;
+        _backdropDirty = true;
+
         int w = GetRenderWidth();
         int h = GetRenderHeight();
 

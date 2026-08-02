@@ -27,7 +27,7 @@ internal static class UnwrapPipeline
     private const double FineIterBudget = 5.0;
 
     /// <summary>Run the full pipeline on a single connected mesh region.</summary>
-    public static void ProcessRegion(MeshRegion source, List<UvChart> chartOut, UnwrapOptions options, System.Action<string>? progress = null)
+    public static void ProcessRegion(MeshRegion source, List<UvChart> chartOut, UnwrapOptions options, OverlapChecker overlapChecker, System.Action<string>? progress = null)
     {
         var stagedRegions = new List<MeshRegion>();
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -39,7 +39,7 @@ internal static class UnwrapPipeline
         int flattened = 0;
         while (cursor < stagedRegions.Count)
         {
-            FlattenRegion(stagedRegions[cursor], chartOut, stagedRegions, options, progress);
+            FlattenRegion(stagedRegions[cursor], chartOut, stagedRegions, options, overlapChecker, progress);
             ++cursor; ++flattened;
         }
         progress?.Invoke($"  flatten: {flattened} regions -> {chartOut.Count} charts in {sw.ElapsedMilliseconds} ms");
@@ -65,7 +65,7 @@ internal static class UnwrapPipeline
         int attempts = 0, successes = 0;
         const double mergeAcceptanceThreshold = 2.9; // "180-45 degree" cutoff
         // Hard wall-clock budget so the merge phase can't dominate the unwrap on dirty input.
-        long mergeBudgetMs = options.MergeTimeBudgetMs;
+        long mergeBudgetMs = options.Conformal.MergeTimeBudgetMs;
         for (int bi = 0; bi < boundaries.Count; ++bi)
         {
             if (sw.ElapsedMilliseconds > mergeBudgetMs)
@@ -101,7 +101,7 @@ internal static class UnwrapPipeline
         builder.ClaimRemainingFaces(SeedThreshold, DiscardThreshold);
     }
 
-    private static void FlattenRegion(MeshRegion source, List<UvChart> chartOut, List<MeshRegion> queue, UnwrapOptions options, System.Action<string>? progress)
+    private static void FlattenRegion(MeshRegion source, List<UvChart> chartOut, List<MeshRegion> queue, UnwrapOptions options, OverlapChecker overlapChecker, System.Action<string>? progress)
     {
         var newChart = new UvChart(source);
         bool angleOk = TryFlatten(source, newChart, options, FineTolerance, FineIterBudget, finalPass: true, angleOnly: true);
@@ -114,7 +114,6 @@ internal static class UnwrapPipeline
         }
 
         // Now check for UV overlaps.
-        var overlapChecker = new OverlapChecker(OverlapRasterExtent);
         var toFlatten = new List<MeshRegion>();
         var toResegment = new List<MeshRegion>();
         bool chartClean = overlapChecker.Validate(newChart, toFlatten, toResegment);
@@ -158,7 +157,7 @@ internal static class UnwrapPipeline
         flattener.SolveAngleSystem(tolerance, iterBudget);
 
         flattener.EvaluateAngularDistortion(out var stats);
-        if (stats.MeanAngularDistortion >= options.AngleDistortionThreshold) return false;
+        if (stats.MeanAngularDistortion >= options.Conformal.AngleDistortionThreshold) return false;
 
         flattener.SolveConformalLayout(tolerance, iterBudget);
 
@@ -172,8 +171,8 @@ internal static class UnwrapPipeline
     private static bool MeetsDistortionLimits(UvChart chart, UnwrapOptions options)
     {
         DistortionMetrics.EvaluateFull(chart, out var stats);
-        return stats.MeanAngularDistortion < options.AngleDistortionThreshold
-            && stats.MeanAreaDistortion < options.AreaDistortionThreshold;
+        return stats.MeanAngularDistortion < options.Conformal.AngleDistortionThreshold
+            && stats.MeanAreaDistortion < options.Conformal.AreaDistortionThreshold;
     }
 
     /// <summary>
@@ -210,19 +209,24 @@ internal static class UnwrapPipeline
             lock (progressLock) progress(s);
         }
 
+        // The overlap checker owns megabyte-scale raster buffers; one per worker rather than one
+        // per region keeps them out of the large object heap.
         System.Threading.Tasks.Parallel.For(
             0, regions.Count,
             new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism },
-            rIdx =>
+            () => new OverlapChecker(OverlapRasterExtent),
+            (rIdx, _, overlapChecker) =>
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 perRegionWatches[rIdx] = watch;
                 var bucket = new List<UvChart>();
                 perRegionCharts[rIdx] = bucket;
-                ProcessRegion(regions[rIdx], bucket, options, progress is null ? null : EmitProgress);
+                ProcessRegion(regions[rIdx], bucket, options, overlapChecker, progress is null ? null : EmitProgress);
                 int done = System.Threading.Interlocked.Increment(ref completed);
                 EmitProgress($"[region {done}/{regions.Count}] tris={regions[rIdx].Triangles.Length}, charts={bucket.Count}, {watch.ElapsedMilliseconds} ms");
-            });
+                return overlapChecker;
+            },
+            _ => { });
 
         var charts = new List<UvChart>(regions.Count);
         for (int i = 0; i < regions.Count; ++i)

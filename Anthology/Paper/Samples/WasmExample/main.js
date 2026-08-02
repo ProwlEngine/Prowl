@@ -9,13 +9,18 @@ let ebo = null;
 let textures = new Map();
 let whiteTexture = null;
 
-let uProjectionLoc, uTextureLoc, uFontTextureLoc, uScissorMatLoc, uScissorExtLoc, uDpiScaleLoc;
-let uBrushMatLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
-let uBrushParamsLoc, uBrushParams2Loc, uBrushTextureMatLoc;
+let uProjectionLoc, uTextureLoc, uFontTextureLoc, uScissorTransformLoc, uScissorTranslationLoc, uScissorExtLoc;
+let uBrushTransformLoc, uBrushTranslationLoc, uBrushTypeLoc, uBrushColor1Loc, uBrushColor2Loc;
+let uBrushParamsLoc, uBrushParams2Loc, uTextureTransformLoc, uTextureTranslationLoc, uSdfPxRangeLoc;
 let uAtlasTexelSizeLoc, uViewportSizeLoc, uBackdropBlurAmountLoc, uBackdropFlipYLoc;
 
 const VERTEX_SIZE = 20; // 8 position + 8 uv + 4 color
 const DC_INFO_STRIDE = 3; // texId, fontTexId, elemCount
+const SCISSOR_STRIDE = 8;
+const BRUSH_STRIDE = 28;
+
+let _vboCapacity = 0, _eboCapacity = 0;
+
 const _mat32 = new Float32Array(16);
 const _proj32 = new Float32Array(16);
 
@@ -78,16 +83,19 @@ const webgl = {
         uBackdropFlipYLoc = gl.getUniformLocation(program, "backdropFlipY");
         uTextureLoc = gl.getUniformLocation(program, "texture0");
         uFontTextureLoc = gl.getUniformLocation(program, "fontTexture");
-        uScissorMatLoc = gl.getUniformLocation(program, "scissorMat");
+        uScissorTransformLoc = gl.getUniformLocation(program, "scissorTransform");
+        uScissorTranslationLoc = gl.getUniformLocation(program, "scissorTranslation");
         uScissorExtLoc = gl.getUniformLocation(program, "scissorExt");
-        uDpiScaleLoc = gl.getUniformLocation(program, "dpiScale");
-        uBrushMatLoc = gl.getUniformLocation(program, "brushMat");
+        uSdfPxRangeLoc = gl.getUniformLocation(program, "sdfPxRange");
+        uBrushTransformLoc = gl.getUniformLocation(program, "brushTransform");
+        uBrushTranslationLoc = gl.getUniformLocation(program, "brushTranslation");
         uBrushTypeLoc = gl.getUniformLocation(program, "brushType");
         uBrushColor1Loc = gl.getUniformLocation(program, "brushColor1");
         uBrushColor2Loc = gl.getUniformLocation(program, "brushColor2");
         uBrushParamsLoc = gl.getUniformLocation(program, "brushParams");
         uBrushParams2Loc = gl.getUniformLocation(program, "brushParams2");
-        uBrushTextureMatLoc = gl.getUniformLocation(program, "brushTextureMat");
+        uTextureTransformLoc = gl.getUniformLocation(program, "textureTransform");
+        uTextureTranslationLoc = gl.getUniformLocation(program, "textureTranslation");
 
         vao = gl.createVertexArray();
         gl.bindVertexArray(vao);
@@ -165,6 +173,8 @@ const webgl = {
         if (vertexBytes.length === 0 || indexDataI32.length === 0) return;
 
         gl.useProgram(program);
+
+
         // Framebuffer size, not CSS size, so the projection stays correct on HiDPI displays.
         setProjection(canvas.width, canvas.height);
         gl.uniformMatrix4fv(uProjectionLoc, MATRIX_TRANSPOSE, _proj32);
@@ -172,7 +182,6 @@ const webgl = {
         // This backend has no backdrop blur pass, so the composite branch stays off.
         gl.uniform1f(uBackdropBlurAmountLoc, 0);
         gl.uniform1i(uBackdropFlipYLoc, 0);
-        gl.uniform1f(uDpiScaleLoc, canvasScale || 1.0);
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
@@ -180,9 +189,16 @@ const webgl = {
 
         gl.bindVertexArray(vao);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.bufferData(gl.ARRAY_BUFFER, vertexBytes, gl.DYNAMIC_DRAW);
+        // Orphan then refill, so the driver hands back fresh memory instead of stalling on the
+        // previous frame still being read. Capacity doubles on growth to avoid resizing every frame.
+        if (vertexBytes.length > _vboCapacity) _vboCapacity = Math.max(vertexBytes.length, _vboCapacity * 2 || 65536);
+        gl.bufferData(gl.ARRAY_BUFFER, _vboCapacity, gl.DYNAMIC_DRAW);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertexBytes);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indexDataI32.buffer, indexDataI32.byteOffset, indexDataI32.length), gl.DYNAMIC_DRAW);
+        const indexView = new Uint32Array(indexDataI32.buffer, indexDataI32.byteOffset, indexDataI32.length);
+        if (indexView.byteLength > _eboCapacity) _eboCapacity = Math.max(indexView.byteLength, _eboCapacity * 2 || 65536);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, _eboCapacity, gl.DYNAMIC_DRAW);
+        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indexView);
 
         gl.uniform1i(uTextureLoc, 0);     // brush/shape texture on unit 0
         gl.uniform1i(uFontTextureLoc, 1); // font atlas on unit 1
@@ -213,24 +229,26 @@ const webgl = {
                 gl.bindTexture(gl.TEXTURE_2D, whiteTexture);
             }
 
-            // Scissor
-            const sb = i * 18;
-            for (let j = 0; j < 16; j++) _mat32[j] = scissorDataF64[sb + j];
-            gl.uniformMatrix4fv(uScissorMatLoc, MATRIX_TRANSPOSE, _mat32);
-            gl.uniform2f(uScissorExtLoc, scissorDataF64[sb + 16], scissorDataF64[sb + 17]);
+            // Scissor: a 2D affine plus the extent, framebuffer scale already folded in.
+            const sb = i * SCISSOR_STRIDE;
+            const sc = scissorDataF64.subarray(sb, sb + SCISSOR_STRIDE);
+            gl.uniform4f(uScissorTransformLoc, sc[0], sc[1], sc[2], sc[3]);
+            gl.uniform2f(uScissorTranslationLoc, sc[4], sc[5]);
+            gl.uniform2f(uScissorExtLoc, sc[6], sc[7]);
 
             // Brush
-            const bb = i * 47;
-            const brushType = brushDataF64[bb] | 0;
-            gl.uniform1i(uBrushTypeLoc, brushType);
-            for (let j = 0; j < 16; j++) _mat32[j] = brushDataF64[bb + 1 + j];
-            gl.uniformMatrix4fv(uBrushMatLoc, MATRIX_TRANSPOSE, _mat32);
-            gl.uniform4f(uBrushColor1Loc, brushDataF64[bb+17], brushDataF64[bb+18], brushDataF64[bb+19], brushDataF64[bb+20]);
-            gl.uniform4f(uBrushColor2Loc, brushDataF64[bb+21], brushDataF64[bb+22], brushDataF64[bb+23], brushDataF64[bb+24]);
-            gl.uniform4f(uBrushParamsLoc, brushDataF64[bb+25], brushDataF64[bb+26], brushDataF64[bb+27], brushDataF64[bb+28]);
-            gl.uniform2f(uBrushParams2Loc, brushDataF64[bb+29], brushDataF64[bb+30]);
-            for (let j = 0; j < 16; j++) _mat32[j] = brushDataF64[bb + 31 + j];
-            gl.uniformMatrix4fv(uBrushTextureMatLoc, MATRIX_TRANSPOSE, _mat32);
+            const bb = i * BRUSH_STRIDE;
+            const br = brushDataF64.subarray(bb, bb + BRUSH_STRIDE);
+            gl.uniform1i(uBrushTypeLoc, br[0] | 0);
+            gl.uniform4f(uBrushTransformLoc, br[1], br[2], br[3], br[4]);
+            gl.uniform2f(uBrushTranslationLoc, br[5], br[6]);
+            gl.uniform4f(uBrushColor1Loc, br[7], br[8], br[9], br[10]);
+            gl.uniform4f(uBrushColor2Loc, br[11], br[12], br[13], br[14]);
+            gl.uniform4f(uBrushParamsLoc, br[15], br[16], br[17], br[18]);
+            gl.uniform2f(uBrushParams2Loc, br[19], br[20]);
+            gl.uniform4f(uTextureTransformLoc, br[21], br[22], br[23], br[24]);
+            gl.uniform2f(uTextureTranslationLoc, br[25], br[26]);
+            gl.uniform1f(uSdfPxRangeLoc, br[27]);
 
             gl.drawElements(gl.TRIANGLES, elemCount, gl.UNSIGNED_INT, indexOffset * 4);
             indexOffset += elemCount;

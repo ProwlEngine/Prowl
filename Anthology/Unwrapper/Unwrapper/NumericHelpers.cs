@@ -28,4 +28,11 @@ internal static class NumericHelpers
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool ApproxLessOrEqual(double x, double y, double eps) => !ApproxGreater(x, y, eps);
+
+    /// <summary>
+    /// <see cref="System.Math.Pow"/> with the unit exponent short-circuited. The segmentation
+    /// tunables default to 1.0 and the growth loop calls this on a very hot path.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static double Pow(double x, double exponent) => exponent == 1.0 ? x : System.Math.Pow(x, exponent);
 }

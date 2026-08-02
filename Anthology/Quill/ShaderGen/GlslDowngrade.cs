@@ -25,7 +25,7 @@ internal static class GlslDowngrade
     {
         List<string> lines = [.. glsl.Replace("\r\n", "\n").Split('\n')];
 
-        lines = StripNoise(lines, stage);
+        lines = StripNoise(lines, stage, dialect);
         lines = RemoveStruct(lines, "GlobalParams_0");
         lines = UnpackUniformBlock(lines, uniforms, glsl, out bool hadBlock);
 
@@ -37,6 +37,10 @@ internal static class GlslDowngrade
         body = RewriteSamplerNames(body);
         body = RewriteVaryingNames(body, varyings);
         body = RewriteVertexBuiltins(body);
+
+        if (dialect.LegacyIO)
+            body = RewriteLegacyIO(body, stage);
+
         body = body.Replace("mat4x4", "mat4");
         body = CollapseBlankLines(body);
 
@@ -47,7 +51,7 @@ internal static class GlslDowngrade
         return result;
     }
 
-    private static List<string> StripNoise(List<string> lines, string stage)
+    private static List<string> StripNoise(List<string> lines, string stage, GlslDialect dialect)
     {
         // Which declarations a location qualifier is still legal on. GLSL 330 allows it on vertex
         // attributes and fragment outputs only; on varyings it needs GL 4.1 or
@@ -71,6 +75,10 @@ internal static class GlslDowngrade
 
             if (LocationQualifier.IsMatch(line))
             {
+                // Pre-130 GLSL has no location qualifiers at all.
+                if (dialect.LegacyIO)
+                    continue;
+
                 string declaration = NextCode(lines, i);
                 if (!declaration.StartsWith(keepLocationOn + " "))
                     continue;
@@ -109,6 +117,35 @@ internal static class GlslDowngrade
         body = Regex.Replace(body, @"\bgl_VertexIndex\s*-\s*gl_BaseVertex\b", "gl_VertexID");
         body = Regex.Replace(body, @"\bgl_VertexIndex\b", "gl_VertexID");
         return body;
+    }
+
+    /// <summary>
+    /// Converts the fragment stage to pre-GLSL-130 IO: varyings instead of in, and the built-in
+    /// gl_FragColor instead of a declared output.
+    /// </summary>
+    private static string RewriteLegacyIO(string body, string stage)
+    {
+        // texture() is GLSL 130 and up; the pre-130 spelling is texture2D. This does not touch an
+        // already-correct texture2D( because the word boundary requires the paren straight after.
+        body = Regex.Replace(body, @"\btexture\(", "texture2D(");
+
+        if (stage != "fragment")
+            return body;
+
+        List<string> kept = [];
+        foreach (string line in body.Split('\n'))
+        {
+            string t = line.TrimStart();
+
+            // The declared fragment output is replaced by the built-in.
+            if (t.StartsWith("out ") && t.Contains("finalColor"))
+                continue;
+
+            kept.Add(t.StartsWith("in ") ? line.Replace("in ", "varying ") : line);
+        }
+
+        body = string.Join("\n", kept);
+        return Regex.Replace(body, @"\bfinalColor\b", "gl_FragColor");
     }
 
     private static string RewriteVaryingNames(string body, IReadOnlyList<string> varyings)
@@ -226,13 +263,23 @@ internal static class GlslDowngrade
         if (glsl.Contains("layout(column_major) buffer"))
             problems.Add("a storage-buffer layout qualifier survived");
 
-        if (!glsl.StartsWith(dialect.VersionDirective))
+        if (dialect.VersionDirective.Length > 0 && !glsl.StartsWith(dialect.VersionDirective))
             problems.Add($"expected the source to start with '{dialect.VersionDirective}'");
 
-        // A location qualifier on a varying needs GL 4.1; only attributes and fragment outputs keep one.
-        string illegalOn = stage == "vertex" ? "out" : "in";
-        if (Regex.IsMatch(glsl, $@"layout\(location\s*=\s*\d+\)\s*\n\s*{illegalOn}\s"))
-            problems.Add($"a location qualifier survived on a {stage} varying, which needs GL 4.1");
+        if (dialect.LegacyIO && stage == "fragment")
+        {
+            if (Regex.IsMatch(glsl, @"^\s*in\s", RegexOptions.Multiline))
+                problems.Add("an 'in' declaration survived, which pre-130 GLSL does not accept");
+            if (glsl.Contains("finalColor"))
+                problems.Add("the declared fragment output survived instead of gl_FragColor");
+        }
+        else
+        {
+            // A location qualifier on a varying needs GL 4.1; only attributes and fragment outputs keep one.
+            string illegalOn = stage == "vertex" ? "out" : "in";
+            if (Regex.IsMatch(glsl, $@"layout\(location\s*=\s*\d+\)\s*\n\s*{illegalOn}\s"))
+                problems.Add($"a location qualifier survived on a {stage} varying, which needs GL 4.1");
+        }
 
         if (Regex.IsMatch(glsl, @"\bentryPointParam_\w+\b"))
             problems.Add("a varying kept its per-entry-point name, so the stages will not link");
@@ -255,10 +302,16 @@ internal static class GlslDowngrade
     }
 }
 
-internal sealed record GlslDialect(string Name, string VersionDirective, bool NeedsPrecision)
+internal sealed record GlslDialect(string Name, string VersionDirective, bool NeedsPrecision, bool LegacyIO = false)
 {
     public static readonly GlslDialect Gl330 = new("GLSL 330", "#version 330", false);
     public static readonly GlslDialect Es300 = new("GLSL ES 300", "#version 300 es", true);
+
+    /// <summary>
+    /// SFML binds shaders through its own fixed-function vertex pipeline, so its fragment stage has
+    /// to use varying/gl_FragColor and carry no version directive. Same shading maths, older IO.
+    /// </summary>
+    public static readonly GlslDialect Legacy = new("legacy GLSL", "", false, LegacyIO: true);
 }
 
 internal sealed record ShaderUniform(string Name, string GlslType, string HlslType);

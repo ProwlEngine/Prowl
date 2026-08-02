@@ -8,14 +8,14 @@ using Prowl.Vector;
 namespace Prowl.Unwrapper;
 
 /// <summary>
-/// Drives the chart atlas layout: each chart starts at a heuristic scale, gets sorted by extent,
-/// and is fed into a bin packer. On failure the scale is reduced and the attempt is retried.
+/// Drives the chart atlas layout: every chart is sorted by extent and fed into a bin packer at a
+/// shared scale, and the largest scale that still fits is found by bisection.
 /// Successful placements are baked back into each chart's UVs.
 /// </summary>
 internal static class AtlasPacker
 {
-    /// <summary>Shrink factor between failed pack attempts.</summary>
-    private const double ShrinkFactor = 0.99;
+    /// <summary>Bisection stops once the bracket is this close in relative terms.</summary>
+    private const double ScaleTolerance = 0.005;
 
     public static void Pack(IList<UvChart> charts, double border)
     {
@@ -28,6 +28,7 @@ internal static class AtlasPacker
         double totalArea = 0.0;
         for (int i = 0; i < slots.Length; ++i)
             totalArea += slots[i].Extent.X * slots[i].Extent.Y;
+        if (!(totalArea > 0.0)) totalArea = 1.0; // every chart collapsed to a point
 
         // Build the placement order: deterministic centroid sort first, then stable sort by extent
         // descending so the biggest charts go in first.
@@ -41,34 +42,43 @@ internal static class AtlasPacker
         for (int i = 0; i < ordering.Length; ++i) ordered[i] = slots[ordering[i]];
 
         var rects = new BinRect[slots.Length];
+        var bestRects = new BinRect[slots.Length];
         var tree = new BinPackTree(slots.Length);
 
-        bool packed = false;
-        double curScale = 1.0 / System.Math.Sqrt(totalArea);
-
-        while (!packed)
+        // The area-perfect scale is an upper bound no layout can beat, so halve from there until
+        // something fits and bisect the resulting bracket. Beats walking a fixed ladder downwards.
+        double high = 1.0 / System.Math.Sqrt(totalArea);
+        double low = high;
+        while (!TryPackAt(ordered, rects, tree, low, border))
         {
-            for (int i = 0; i < ordered.Length; ++i)
+            high = low;
+            low *= 0.5;
+            if (low < 1e-12) throw new UnwrapException("Chart atlas could not be packed at any scale.");
+        }
+
+        double bestScale = low;
+        System.Array.Copy(rects, bestRects, rects.Length);
+
+        while ((high - low) / low > ScaleTolerance)
+        {
+            double mid = 0.5 * (low + high);
+            if (TryPackAt(ordered, rects, tree, mid, border))
             {
-                ordered[i].Rescale(curScale);
-                rects[i] = new BinRect
-                {
-                    Origin = default,
-                    Extent = ordered[i].Extent + new Double2(border, border),
-                };
+                low = mid;
+                bestScale = mid;
+                System.Array.Copy(rects, bestRects, rects.Length);
             }
-
-            tree.StartPack(0.5 * new Double2(border, border));
-
-            packed = true;
-            for (int i = 0; i < ordered.Length; ++i)
-                packed &= tree.TryInsert(ref rects[i], border);
-
-            if (!packed) curScale *= ShrinkFactor;
+            else
+            {
+                high = mid;
+            }
         }
 
         for (int i = 0; i < ordered.Length; ++i)
-            ordered[i].Origin = rects[i].Origin + 0.5 * new Double2(border, border);
+        {
+            ordered[i].Rescale(bestScale);
+            ordered[i].Origin = bestRects[i].Origin + 0.5 * new Double2(border, border);
+        }
 
         for (int i = 0; i < ordered.Length; ++i)
         {
@@ -77,6 +87,27 @@ internal static class AtlasPacker
             for (int v = 0; v < chart.UVs.Length; ++v)
                 chart.UVs[v] = slot.Origin + slot.Scale * (chart.UVs[v] - slot.SourceOrigin);
         }
+    }
+
+    /// <summary>Lay every chart out at one shared scale; false if any of them ran out of room.</summary>
+    private static bool TryPackAt(AtlasSlot[] ordered, BinRect[] rects, BinPackTree tree, double scale, double border)
+    {
+        for (int i = 0; i < ordered.Length; ++i)
+        {
+            ordered[i].Rescale(scale);
+            rects[i] = new BinRect
+            {
+                Origin = default,
+                Extent = ordered[i].Extent + new Double2(border, border),
+            };
+        }
+
+        tree.StartPack(0.5 * new Double2(border, border));
+
+        for (int i = 0; i < ordered.Length; ++i)
+            if (!tree.TryInsert(ref rects[i], border)) return false;
+
+        return true;
     }
 
     /// <summary>

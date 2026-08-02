@@ -93,7 +93,12 @@ public sealed class UnwrapMesh
 
         int triangleCount = _triangles.Length / 3;
         var perCornerOut = new Double2[3 * triangleCount];
-        UnwrapPipeline.Run(cleaned, options, perCornerOut, _progressSink);
+
+        if (options.Method == UnwrapMethod.Projection)
+            ProjectionUnwrapper.Run(cleaned, options, perCornerOut, _progressSink);
+        else
+            UnwrapPipeline.Run(cleaned, options, perCornerOut, _progressSink);
+
         return new UnwrapResult(perCornerOut, cleaned.DegenerateTriangleIndices);
     }
 
@@ -114,8 +119,8 @@ public sealed class UnwrapMesh
                 throw new System.ArgumentOutOfRangeException(name, v, $"{name} must be a non-negative finite value.");
         }
 
-        Positive(o.AngleDistortionThreshold, nameof(o.AngleDistortionThreshold));
-        Positive(o.AreaDistortionThreshold, nameof(o.AreaDistortionThreshold));
+        if (o.Projection is null) throw new System.ArgumentNullException(nameof(o.Projection));
+        if (o.Conformal is null) throw new System.ArgumentNullException(nameof(o.Conformal));
 
         if (!(o.HardAngle > 0 && o.HardAngle <= 180))
             throw new System.ArgumentOutOfRangeException(nameof(o.HardAngle), o.HardAngle, "HardAngle must be in (0, 180].");
@@ -124,19 +129,26 @@ public sealed class UnwrapMesh
         if (o.PackMargin >= 0.5)
             throw new System.ArgumentOutOfRangeException(nameof(o.PackMargin), o.PackMargin, "PackMargin must be less than 0.5.");
 
-        NonNegative(o.ChartAreaThreshold, nameof(o.ChartAreaThreshold));
-        NonNegative(o.ChartFacetCountThreshold, nameof(o.ChartFacetCountThreshold));
-        NonNegative(o.CompactnessPower, nameof(o.CompactnessPower));
-        NonNegative(o.StraightnessPower, nameof(o.StraightnessPower));
-        NonNegative(o.LloydChangePrevThreshold, nameof(o.LloydChangePrevThreshold));
-        NonNegative(o.LloydChangePrev2Threshold, nameof(o.LloydChangePrev2Threshold));
-
         if (o.MaxDegreeOfParallelism == 0 || o.MaxDegreeOfParallelism < -1)
             throw new System.ArgumentOutOfRangeException(nameof(o.MaxDegreeOfParallelism), o.MaxDegreeOfParallelism,
                 "MaxDegreeOfParallelism must be -1 or a positive integer.");
 
-        if (o.MergeTimeBudgetMs < 0)
-            throw new System.ArgumentOutOfRangeException(nameof(o.MergeTimeBudgetMs), o.MergeTimeBudgetMs,
+        if (o.Projection.MinChartTriangles < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(o.Projection.MinChartTriangles), o.Projection.MinChartTriangles,
+                "MinChartTriangles must be non-negative.");
+
+        var c = o.Conformal;
+        Positive(c.AngleDistortionThreshold, nameof(c.AngleDistortionThreshold));
+        Positive(c.AreaDistortionThreshold, nameof(c.AreaDistortionThreshold));
+        NonNegative(c.ChartAreaThreshold, nameof(c.ChartAreaThreshold));
+        NonNegative(c.ChartFacetCountThreshold, nameof(c.ChartFacetCountThreshold));
+        NonNegative(c.CompactnessPower, nameof(c.CompactnessPower));
+        NonNegative(c.StraightnessPower, nameof(c.StraightnessPower));
+        NonNegative(c.LloydChangePrevThreshold, nameof(c.LloydChangePrevThreshold));
+        NonNegative(c.LloydChangePrev2Threshold, nameof(c.LloydChangePrev2Threshold));
+
+        if (c.MergeTimeBudgetMs < 0)
+            throw new System.ArgumentOutOfRangeException(nameof(c.MergeTimeBudgetMs), c.MergeTimeBudgetMs,
                 "MergeTimeBudgetMs must be non-negative.");
     }
 }

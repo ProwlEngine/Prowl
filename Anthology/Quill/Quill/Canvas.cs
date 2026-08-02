@@ -76,6 +76,12 @@ namespace Prowl.Quill
         internal int stateHash;
         internal object? fontAtlas;
 
+        // Inverses are what the shader actually wants, and they only change when the draw call is
+        // built, so they are computed once here rather than on every property read by the backend.
+        internal Transform2D scissorInverse;
+        internal Transform2D brushInverse;
+        internal Transform2D textureInverse;
+
         /// <summary>
         /// Gets the texture from the brush. Returns null if no texture is set.
         /// </summary>
@@ -98,21 +104,63 @@ namespace Prowl.Quill
         /// </summary>
         public ShaderUniforms? ShaderUniforms => Brush.Uniforms;
 
-        public void GetScissor(out Float4x4 matrix, out Float2 extent)
+        /// <summary>
+        /// Whether this draw call was built from the given state, so more geometry can be folded into
+        /// it. Ordered cheapest-discriminating-first so the common mismatch exits on the first test.
+        /// </summary>
+        internal bool MatchesState(in ProwlCanvasState state, object? currentFontAtlas)
+        {
+            return ReferenceEquals(fontAtlas, currentFontAtlas)
+                && scissorExtent.X == state.scissorExtent.X
+                && scissorExtent.Y == state.scissorExtent.Y
+                && Brush.Matches(in state.brush)
+                && SameTransform(in scissor, in state.scissor);
+        }
+
+        internal static bool SameTransform(in Transform2D a, in Transform2D b)
+            => a.A == b.A && a.B == b.B && a.C == b.C && a.D == b.D && a.E == b.E && a.F == b.F;
+
+        /// <summary>
+        /// The scissor transform as a 2D affine with the framebuffer scale folded in, plus the extent
+        /// the shader compares against. The extent already carries the half-pixel feather, so the
+        /// shader is a subtract and two clamps.
+        /// </summary>
+        /// <remarks>
+        /// A negative extent means no scissor, which the shader early-outs on.
+        /// </remarks>
+        public void GetScissor(float framebufferScale, out Float4 transform, out Float2 translation, out Float2 extent)
         {
             if (scissorExtent.X < -0.5f || scissorExtent.Y < -0.5f)
             {
-                // Invalid scissor - disable it
-                // Extent must be negative so the shader's early-out (scissorExt < 0) triggers
-                matrix = new Float4x4();
+                transform = default;
+                translation = default;
                 extent = new Float2(-1, -1);
+                return;
             }
-            else
-            {
-                // Set up scissor transform and dimensions
-                matrix = scissor.Inverse().ToMatrix();
-                extent = new Float2(scissorExtent.X, scissorExtent.Y);
-            }
+
+            ToAffine(in scissorInverse, framebufferScale, out transform, out translation);
+            float inv = 1f / framebufferScale;
+            extent = new Float2((scissorExtent.X + 0.5f) * inv, (scissorExtent.Y + 0.5f) * inv);
+        }
+
+        /// <summary>The brush gradient transform as a 2D affine with the framebuffer scale folded in.</summary>
+        public void GetBrushTransform(float framebufferScale, out Float4 transform, out Float2 translation)
+            => ToAffine(in brushInverse, framebufferScale, out transform, out translation);
+
+        /// <summary>The texture transform as a 2D affine with the framebuffer scale folded in.</summary>
+        public void GetTextureTransform(float framebufferScale, out Float4 transform, out Float2 translation)
+            => ToAffine(in textureInverse, framebufferScale, out transform, out translation);
+
+        /// <summary>
+        /// Packs a Transform2D as (A, C, B, D) plus (E, F), so the shader evaluates it as two dot
+        /// products and an add. Dividing the linear part by the framebuffer scale folds in the
+        /// pixel-to-logical conversion the shader used to do per fragment.
+        /// </summary>
+        private static void ToAffine(in Transform2D t, float framebufferScale, out Float4 transform, out Float2 translation)
+        {
+            float inv = 1f / framebufferScale;
+            transform = new Float4(t.A * inv, t.C * inv, t.B * inv, t.D * inv);
+            translation = new Float2(t.E, t.F);
         }
     }
 
@@ -177,13 +225,12 @@ namespace Prowl.Quill
 
             unchecked
             {
+                // Combined order-independently, so dictionary ordering cannot change the result and
+                // no sort (and no allocation) is needed.
                 int hash = 17;
-                // Sort keys for consistent hashing
-                foreach (var key in _uniforms.Keys.OrderBy(k => k))
-                {
-                    hash = hash * 31 + key.GetHashCode();
-                    hash = hash * 31 + (_uniforms[key]?.GetHashCode() ?? 0);
-                }
+                foreach (var kvp in _uniforms)
+                    hash ^= kvp.Key.GetHashCode() * 31 + (kvp.Value?.GetHashCode() ?? 0);
+
                 _cachedHash = hash;
             }
             _hashDirty = false;
@@ -326,6 +373,34 @@ namespace Prowl.Quill
         /// Custom uniforms to pass to the shader. Only used when Shader is not null.
         /// </summary>
         public ShaderUniforms? Uniforms;
+
+        /// <summary>
+        /// Exact comparison of everything the shader binds, used to confirm a batch merge rather than
+        /// trusting <see cref="ComputeHash"/> alone.
+        /// </summary>
+        internal bool Matches(in Brush other)
+        {
+            return Type == other.Type
+                && ReferenceEquals(Texture, other.Texture)
+                && ReferenceEquals(Shader, other.Shader)
+                && Color1.Equals(other.Color1)
+                && Color2.Equals(other.Color2)
+                && Point1.X == other.Point1.X && Point1.Y == other.Point1.Y
+                && Point2.X == other.Point2.X && Point2.Y == other.Point2.Y
+                && CornerRadii == other.CornerRadii
+                && Feather == other.Feather
+                && BackdropBlur == other.BackdropBlur
+                && DrawCall.SameTransform(in Transform, in other.Transform)
+                && DrawCall.SameTransform(in TextureTransform, in other.TextureTransform)
+                && (Shader == null || SameUniforms(Uniforms, other.Uniforms));
+        }
+
+        private static bool SameUniforms(ShaderUniforms? a, ShaderUniforms? b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            return a.ComputeHash() == b.ComputeHash();
+        }
 
         internal int ComputeHash()
         {
@@ -476,6 +551,10 @@ namespace Prowl.Quill
 
         private int _currentDrawStateHash;
         private bool _drawStateDirty = true;
+
+        // Index of the draw call last confirmed to carry the current state, or -1. Paired with
+        // _drawStateDirty this lets the common case merge without hashing or comparing anything.
+        private int _verifiedDrawCall = -1;
 
         // The font atlas texture bound to the dedicated font sampler unit. Persistent canvas state
         // (not per-save/restore) that only changes when the atlas is (re)allocated, so text batches
@@ -629,6 +708,7 @@ namespace Prowl.Quill
         internal void Clear()
         {
             _drawCalls.Clear();
+            _verifiedDrawCall = -1;
             _textureStack.Clear();
 
             _indices.Clear();
@@ -1290,6 +1370,17 @@ namespace Prowl.Quill
 
         private void AddTriangleCount(int count)
         {
+            // Fast path: the state has not been touched since it was last verified against the draw
+            // call still on the end of the list, so nothing can have changed and no hash or field
+            // comparison is needed. This is what the overwhelming majority of shapes hit.
+            if (!_drawStateDirty && !_isNewDrawCallRequested && _verifiedDrawCall == _drawCalls.Count - 1)
+            {
+                DrawCall current = _drawCalls[_verifiedDrawCall];
+                current.ElementCount += count * 3;
+                _drawCalls[_verifiedDrawCall] = current;
+                return;
+            }
+
             int currentHash = ComputeDrawStateHash();
 
             if (_drawCalls.Count == 0)
@@ -1299,7 +1390,10 @@ namespace Prowl.Quill
 
             DrawCall lastDrawCall = _drawCalls[_drawCalls.Count - 1];
 
-            bool isDrawStateSame = lastDrawCall.stateHash == currentHash;
+            // The hash is the cheap rejection; the field comparison is what makes the merge correct.
+            // On a collision the old code would silently fold two different brushes into one batch.
+            bool isDrawStateSame = lastDrawCall.stateHash == currentHash
+                                && lastDrawCall.MatchesState(in _state, _currentFontAtlas);
 
             if (!isDrawStateSame || _isNewDrawCallRequested)
             {
@@ -1312,6 +1406,11 @@ namespace Prowl.Quill
                 lastDrawCall.scissorExtent = _state.scissorExtent;
                 lastDrawCall.Brush = _state.brush;
                 lastDrawCall.fontAtlas = _currentFontAtlas;
+
+                // Invert once here rather than on every backend property read.
+                lastDrawCall.scissorInverse = _state.scissor.Inverse();
+                lastDrawCall.brushInverse = _state.brush.Transform.Inverse();
+                lastDrawCall.textureInverse = _state.brush.TextureTransform.Inverse();
                 // Clone uniforms to avoid reference sharing between draw calls
                 if (lastDrawCall.Brush.Uniforms != null)
                     lastDrawCall.Brush.Uniforms = lastDrawCall.Brush.Uniforms.Clone();
@@ -1322,6 +1421,10 @@ namespace Prowl.Quill
 
             lastDrawCall.ElementCount += count * 3;
             _drawCalls[_drawCalls.Count - 1] = lastDrawCall;
+
+            // This draw call now provably carries the current state, so the fast path above can take
+            // over until something invalidates it.
+            _verifiedDrawCall = _drawCalls.Count - 1;
         }
 
         /// <summary>

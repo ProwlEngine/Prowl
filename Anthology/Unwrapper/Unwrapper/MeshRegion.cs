@@ -28,27 +28,21 @@ internal sealed class MeshRegion
     public void CollectVertices(List<int> vertexList, Dictionary<int, int> vertexLookup)
     {
         vertexLookup.Clear();
+        vertexList.Clear();
         for (int i = 0; i < Triangles.Length; ++i)
         {
             HalfEdge h0 = Mesh.Triangles[Triangles[i]].FirstEdge!;
             HalfEdge h1 = h0.Next!;
             HalfEdge h2 = h1.Next!;
 
-            vertexLookup.TryAdd(Mesh.IndexOf(h0.Apex!), 1);
-            vertexLookup.TryAdd(Mesh.IndexOf(h1.Apex!), 1);
-            vertexLookup.TryAdd(Mesh.IndexOf(h2.Apex!), 1);
+            if (vertexLookup.TryAdd(Mesh.IndexOf(h0.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h0.Apex!));
+            if (vertexLookup.TryAdd(Mesh.IndexOf(h1.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h1.Apex!));
+            if (vertexLookup.TryAdd(Mesh.IndexOf(h2.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h2.Apex!));
         }
 
-        vertexList.Clear();
-        // Walk in vertex order so the resulting indexing is stable across runs.
-        for (int v = 0; v < Mesh.Vertices.Count; ++v)
-        {
-            if (vertexLookup.ContainsKey(v))
-            {
-                vertexLookup[v] = vertexList.Count;
-                vertexList.Add(v);
-            }
-        }
+        // Number in ascending vertex order so the resulting indexing is stable across runs.
+        vertexList.Sort();
+        for (int i = 0; i < vertexList.Count; ++i) vertexLookup[vertexList[i]] = i;
     }
 
     /// <summary>Map each triangle's source-mesh index to its slot within this region.</summary>

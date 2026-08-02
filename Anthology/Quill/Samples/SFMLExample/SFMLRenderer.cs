@@ -20,226 +20,25 @@ namespace SFMLExample
         private VertexBuffer _vertexBuffer;
         private View _projection;
 
-        // Shader sources directly corresponding to the OpenGL shaders
-        private const string FRAGMENT_SHADER = @"
-uniform sampler2D texture0;
-uniform sampler2D fontTexture; // dedicated font-atlas unit, so text batches with shapes
-uniform mat4 scissorMat;
-uniform vec2 scissorExt;
+        // Generated from Quill/Shaders/Canvas.slang and Blur.slang; see Shaders/CanvasShaders.generated.cs
 
-uniform mat4 brushMat;
-uniform int brushType;       // 0=none, 1=linear, 2=radial, 3=box
-uniform vec4 brushColor1;    // Start color
-uniform vec4 brushColor2;    // End color
-uniform vec4 brushParams;    // x,y = start point, z,w = end point (or center+radius for radial)
-uniform vec2 brushParams2;   // x = Box radius, y = Box Feather
-
-uniform mat4 brushTextureMat;     // Texture transform matrix (inverse)
-
-uniform float dpiScale;           // DPI scale factor (pixels / logical units)
-
-// Backdrop blur
-uniform sampler2D backdropTexture; // blurred copy of the scene behind the shape
-uniform vec2 viewportSize;         // window size in pixels
-uniform float backdropBlurAmount;  // > 0 when this fill is frosted glass
-uniform int backdropFlipY;         // 1 to flip the backdrop sample vertically
-
-varying vec2 v_position; // Add this
-
-const float sdfPxRange = 4.0;
-float sdfScreenPxRange(vec2 uv) {
-    vec2 unitRange = vec2(sdfPxRange) / vec2(textureSize(fontTexture, 0));
-    vec2 screenTexSize = vec2(1.0) / fwidth(uv);
-    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
-}
-
-float calculateBrushFactor(vec2 fragPos) {
-    // Convert fragPos from pixel coordinates to logical coordinates for brush calculations
-    vec2 logicalPos = fragPos / dpiScale;
-    vec2 transformedPoint = (brushMat * vec4(logicalPos, 0.0, 1.0)).xy;
-
-    // Linear brush - projects position onto the line between start and end
-    if (brushType == 1) {
-        vec2 startPoint = brushParams.xy;
-        vec2 endPoint = brushParams.zw;
-        vec2 line = endPoint - startPoint;
-        float lineLength = length(line);
-
-        if (lineLength < 0.001) return 0.0;
-
-        vec2 posToStart = transformedPoint - startPoint;
-        float projection = dot(posToStart, line) / (lineLength * lineLength);
-        return clamp(projection, 0.0, 1.0);
-    }
-
-    // Radial brush - based on distance from center
-    if (brushType == 2) {
-        vec2 center = brushParams.xy;
-        float innerRadius = brushParams.z;
-        float outerRadius = brushParams.w;
-
-        if (outerRadius < 0.001) return 0.0;
-
-        float distance = smoothstep(innerRadius, outerRadius, length(transformedPoint - center));
-        return clamp(distance, 0.0, 1.0);
-    }
-
-    // Box brush - like radial but uses max distance in x or y direction
-    if (brushType == 3) {
-        vec2 center = brushParams.xy;
-        vec2 halfSize = brushParams.zw;
-        float radius = brushParams2.x;
-        float feather = brushParams2.y;
-
-        if (halfSize.x < 0.001 || halfSize.y < 0.001) return 0.0;
-
-        // Calculate distance from center (normalized by half-size)
-        vec2 q = abs(transformedPoint - center) - (halfSize - vec2(radius));
-
-        // Distance field calculation for rounded rectangle
-        float dist = min(max(q.x,q.y),0.0) + length(max(q,0.0)) - radius;
-
-        return smoothstep(-feather * 0.5, feather * 0.5, dist);
-    }
-
-    return 0.0;
-}
-
-// Determines whether a point is within the scissor region and returns the appropriate mask value
-float scissorMask(vec2 p) {
-    // Early exit if scissoring is disabled (when any scissor dimension is negative)
-    if(scissorExt.x < 0.0 || scissorExt.y < 0.0) return 1.0;
-
-    // Convert from pixel to logical coordinates, then transform to scissor space
-    vec2 logicalP = p / dpiScale;
-    vec2 transformedPoint = (scissorMat * vec4(logicalP, 0.0, 1.0)).xy;
-
-    // Convert scissorExt from pixels to logical units to match transformedPoint
-    vec2 logicalExt = scissorExt / dpiScale;
-
-    // Calculate signed distance from scissor edges (negative inside, positive outside)
-    vec2 distanceFromEdges = abs(transformedPoint) - logicalExt;
-
-    // Apply offset for smooth edge transition (0.5 pixels converted to logical units)
-    float halfPixelLogical = 0.5 / dpiScale;
-    vec2 smoothEdges = vec2(halfPixelLogical) - distanceFromEdges;
-
-    // Clamp each component and multiply to get final mask value
-    return clamp(smoothEdges.x, 0.0, 1.0) * clamp(smoothEdges.y, 0.0, 1.0);
-}
-
-void main()
-{
-    // In SFML, gl_TexCoord[0].xy contains texture coordinates
-    vec2 fragTexCoord = gl_TexCoord[0].xy;
-    // We'll pass position in a custom vertex attribute
-    vec2 fragPos = v_position; // Use this instead of gl_TexCoord[0].zw
-    // Color comes from vertex color
-    vec4 fragColor = gl_Color;
-
-    float mask = scissorMask(fragPos);
-
-    vec4 color = fragColor;
-
-    // Apply brush if active
-    if (brushType > 0) {
-        float factor = calculateBrushFactor(fragPos);
-        color = mix(brushColor1, brushColor2, factor);
-    }
-    
-    // Text mode: UV >= 2.0 - sampled from the dedicated font atlas unit (not texture0).
-    if (fragTexCoord.x >= 2.0) {
-        vec2 uv = fragTexCoord - vec2(2.0, 2.0);
-        float sd = texture(fontTexture, uv).r;
-        float screenPxDistance = sdfScreenPxRange(uv) * (sd - 0.5);
-        float coverage = clamp(screenPxDistance + 0.5, 0.0, 1.0);
-        gl_FragColor = color * coverage * mask;
-        return;
-    }
-    
-    // Edge anti-aliasing: coverage is baked into the geometry (fringe vertices) and carried in
-    // fragTexCoord.x (1 = solid core, 0 = outer fringe edge).
-    float edgeAlpha = clamp(fragTexCoord.x, 0.0, 1.0);
-    
-    // Use world position transformed by texture matrix (convert to logical coords first)
-    // If Canvas texture was null, renderer should assign a default white texture, so any sample position is valid
-    vec2 logicalPos = fragPos / dpiScale;
-    vec4 fill = color * texture(texture0, (brushTextureMat * vec4(logicalPos, 0.0, 1.0)).xy);
-
-    // Backdrop blur: composite the fill over the blurred scene behind the shape.
-    if (backdropBlurAmount > 0.0) {
-        vec2 uv = fragPos / viewportSize;
-        if (backdropFlipY == 1) uv.y = 1.0 - uv.y;
-        vec3 blurred = texture(backdropTexture, uv).rgb;
-        vec3 outRgb = blurred * (1.0 - fill.a) + fill.rgb;  // fill is premultiplied
-        gl_FragColor = vec4(outRgb, 1.0) * edgeAlpha * mask;
-        return;
-    }
-
-    gl_FragColor = fill * edgeAlpha * mask;
-}";
-
-        private const string VERTEX_SHADER = @"
-uniform mat4 projection;
-varying vec2 v_position; // Make sure this is declared
-
-void main()
-{
-    // Pass color and texture coordinates to fragment shader
-    gl_FrontColor = gl_Color;
-    gl_TexCoord[0] = gl_MultiTexCoord0;
-    
-    // Pass position to fragment shader as varying variable
-    v_position = gl_Vertex.xy; // This correctly sets the varying variable
-    
-    // Apply projection matrix to position
-    gl_Position = projection * gl_Vertex;
-}";
-
-        // Dual Kawase blur passes (fragment-only; SFML's default vertex pipeline provides
-        // normalized gl_TexCoord[0]). 'texture' is the source being sampled.
-        private const string BLUR_DOWN_FS = @"
-uniform sampler2D texture;
-uniform vec2 halfpixel;
-uniform float offset;
-void main()
-{
-    vec2 uv = gl_TexCoord[0].xy;
-    vec4 sum = texture2D(texture, uv) * 4.0;
-    sum += texture2D(texture, uv - halfpixel.xy * offset);
-    sum += texture2D(texture, uv + halfpixel.xy * offset);
-    sum += texture2D(texture, uv + vec2(halfpixel.x, -halfpixel.y) * offset);
-    sum += texture2D(texture, uv - vec2(halfpixel.x, -halfpixel.y) * offset);
-    gl_FragColor = sum / 8.0;
-}";
-
-        private const string BLUR_UP_FS = @"
-uniform sampler2D texture;
-uniform vec2 halfpixel;
-uniform float offset;
-void main()
-{
-    vec2 uv = gl_TexCoord[0].xy;
-    vec4 sum = texture2D(texture, uv + vec2(-halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture2D(texture, uv + vec2(-halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture2D(texture, uv + vec2(0.0, halfpixel.y * 2.0) * offset);
-    sum += texture2D(texture, uv + vec2(halfpixel.x, halfpixel.y) * offset) * 2.0;
-    sum += texture2D(texture, uv + vec2(halfpixel.x * 2.0, 0.0) * offset);
-    sum += texture2D(texture, uv + vec2(halfpixel.x, -halfpixel.y) * offset) * 2.0;
-    sum += texture2D(texture, uv + vec2(0.0, -halfpixel.y * 2.0) * offset);
-    sum += texture2D(texture, uv + vec2(-halfpixel.x, -halfpixel.y) * offset) * 2.0;
-    gl_FragColor = sum / 12.0;
-}";
 
         // Backdrop blur
         public bool SupportsBackdropBlur => true;
         // If the frosted glass appears vertically mirrored, flip this to 0.
         private const int BackdropFlipY = 1;
+        // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+        // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+        // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+        // eight pixel radius, since detail finer than the blur is destroyed anyway.
+        private const int BlurBaseShift = 2;
         private const int MaxBlurLevels = 6;
         private Shader _blurDown;
         private Shader _blurUp;
         private Texture _captureTex;
         private RenderTexture[] _blurLevels = new RenderTexture[MaxBlurLevels];
+        private bool _backdropDirty = true;
+        private float _lastBlurRadius = -1f;
         private int _fbWidth;
         private int _fbHeight;
 
@@ -257,11 +56,11 @@ void main()
             // Initialize shader if SFML supports shaders
             if (Shader.IsAvailable)
             {
-                _shader = Shader.FromString(VERTEX_SHADER, null, FRAGMENT_SHADER);
+                _shader = Shader.FromString(CanvasShaders.Vertex, null, CanvasShaders.Fragment);
                 _shader.SetUniform("texture0", Shader.CurrentTexture);
 
-                _blurDown = Shader.FromString(null, null, BLUR_DOWN_FS);
-                _blurUp = Shader.FromString(null, null, BLUR_UP_FS);
+                _blurDown = Shader.FromString(null, null, CanvasShaders.BlurDownsample);
+                _blurUp = Shader.FromString(null, null, CanvasShaders.BlurUpsample);
             }
 
             UpdateProjection(width, height);
@@ -277,15 +76,21 @@ void main()
             _captureTex = new Texture((uint)w, (uint)h) { Smooth = true };
             for (int i = 0; i < MaxBlurLevels; i++)
             {
-                int lw = Math.Max(1, w >> (i + 1));
-                int lh = Math.Max(1, h >> (i + 1));
+                int lw = Math.Max(1, w >> (i + BlurBaseShift));
+                int lh = Math.Max(1, h >> (i + BlurBaseShift));
                 _blurLevels[i] = new RenderTexture((uint)lw, (uint)lh) { Smooth = true };
             }
         }
 
         private static void ComputeBlurParams(float radius, out int iterations, out float offset)
         {
-            float r = MathF.Max(radius, 2f);
+            // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+            // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+            // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+            float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
             iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
             offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
         }
@@ -442,6 +247,11 @@ void main()
                 BlendMode.Equation.Add // Alpha equation
             );
 
+            _backdropDirty = true;
+
+
+
+
             ReadOnlySpan<Prowl.Quill.Vertex> vertices = canvas.Vertices;
             ReadOnlySpan<uint> indices = canvas.Indices;
 
@@ -455,8 +265,16 @@ void main()
                 if (drawCall.Brush.BackdropBlur > 0f && Shader.IsAvailable)
                 {
                     EnsureBlurTargets(_fbWidth, _fbHeight);
-                    _captureTex.Update(_window);
-                    RenderBackdropBlur((float)drawCall.Brush.BackdropBlur);
+                    // Two frosted shapes in a row see the same window behind them, so both the capture and
+                    // the pyramid can be reused when nothing has been drawn since.
+                    float blurRadius = (float)drawCall.Brush.BackdropBlur;
+                    if (_backdropDirty || blurRadius != _lastBlurRadius)
+                    {
+                        _captureTex.Update(_window);
+                        RenderBackdropBlur(blurRadius);
+                        _backdropDirty = false;
+                        _lastBlurRadius = blurRadius;
+                    }
                 }
 
                 // Get texture to use
@@ -513,20 +331,21 @@ void main()
                     try
                     {
                         // Set DPI scale for converting pixel coords to logical coords in shader
-                        _shader.SetUniform("dpiScale", (float)canvas.FramebufferScale);
+                        _shader.SetUniform("sdfPxRange", canvas.Text.FontEngine.DistanceRange);
 
-                        // Get scissor parameters - this is crucial for the scissor to work
-                        drawCall.GetScissor(out var scissor, out var extent);
+                        // Scissor and brush transforms are 2D affines with the framebuffer scale
+                        // already folded in, so no matrix and no dpi divide in the shader.
+                        float fbScale = canvas.FramebufferScale;
 
-                        // Convert and set the scissor matrix
-                        Mat4 scissorMat = ToMat4(scissor);
-                        _shader.SetUniform("scissorMat", scissorMat);
-
-                        // Set the scissor extent
+                        drawCall.GetScissor(fbScale, out var scissorXf, out var scissorT, out var extent);
+                        _shader.SetUniform("scissorTransform", new Vec4((float)scissorXf.X, (float)scissorXf.Y, (float)scissorXf.Z, (float)scissorXf.W));
+                        _shader.SetUniform("scissorTranslation", new Vec2((float)scissorT.X, (float)scissorT.Y));
                         _shader.SetUniform("scissorExt", new Vec2((float)extent.X, (float)extent.Y));
 
                         // Set brush parameters
-                        _shader.SetUniform("brushMat", ToMat4(drawCall.Brush.BrushMatrix));
+                        drawCall.GetBrushTransform(fbScale, out var brushXf, out var brushT);
+                        _shader.SetUniform("brushTransform", new Vec4((float)brushXf.X, (float)brushXf.Y, (float)brushXf.Z, (float)brushXf.W));
+                        _shader.SetUniform("brushTranslation", new Vec2((float)brushT.X, (float)brushT.Y));
                         _shader.SetUniform("brushType", (int)drawCall.Brush.Type);
                         _shader.SetUniform("brushColor1", ToVec4(drawCall.Brush.Color1));
                         _shader.SetUniform("brushColor2", ToVec4(drawCall.Brush.Color2));
@@ -540,7 +359,9 @@ void main()
                         _shader.SetUniform("fontTexture", (drawCall.FontAtlas as TextureSFML)?.Handle ?? _defaultTexture);
 
                         // Set texture transform parameters
-                        _shader.SetUniform("brushTextureMat", ToMat4(drawCall.Brush.TextureMatrix));
+                        drawCall.GetTextureTransform(fbScale, out var texXf, out var texT);
+                        _shader.SetUniform("textureTransform", new Vec4((float)texXf.X, (float)texXf.Y, (float)texXf.Z, (float)texXf.W));
+                        _shader.SetUniform("textureTranslation", new Vec2((float)texT.X, (float)texT.Y));
 
                         // Backdrop blur uniforms
                         float blurAmount = (float)drawCall.Brush.BackdropBlur;
@@ -567,6 +388,8 @@ void main()
                 );
 
                 _window.Draw(_vertexArray, states);
+
+                _backdropDirty = true;
 
                 indexOffset += drawCall.ElementCount;
             }

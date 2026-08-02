@@ -24,17 +24,20 @@ namespace OpenTKExample
         private int _projectionLocation;
         private int _textureSamplerLocation;
         private int _fontTextureLoc;
-        private int _scissorMatLoc = 0;
         private int _scissorExtLoc = 0;
 
-        static int _brushMatLoc;
+        static int _scissorTransformLoc;
+        static int _scissorTranslationLoc;
+        static int _brushTransformLoc;
+        static int _brushTranslationLoc;
+        static int _brushTextureTransformLoc;
+        static int _brushTextureTranslationLoc;
+        static int _sdfPxRangeLoc;
         static int _brushTypeLoc;
         static int _brushColor1Loc;
         static int _brushColor2Loc;
         static int _brushParamsLoc;
         static int _brushParams2Loc;
-        static int _brushTextureMatLoc;
-        static int _dpiScaleLoc;
         static int _atlasTexelSizeLoc;
         static int _backdropFlipYLoc;
 
@@ -53,9 +56,29 @@ namespace OpenTKExample
         private int _upSrcLoc, _upHalfpixelLoc, _upOffsetLoc;
         private int _blurVao;          // empty VAO for fullscreen-triangle draws
         private int _blurFbo;          // reused framebuffer for the blur passes
+        // How far below the framebuffer the blur pyramid starts: 1 = half res, 2 = quarter. The canvas
+        // composites straight from level 0, so this also decides the resolution the backdrop is sampled
+        // at. Quarter is four times cheaper across every pass and is imperceptible above roughly an
+        // eight pixel radius, since detail finer than the blur is destroyed anyway.
+        private const int BlurBaseShift = 2;
         private const int MaxBlurLevels = 6;
         private int[] _blurTex = new int[MaxBlurLevels];   // mip pyramid, level 0 is half the viewport
         private Vector2i[] _blurSize = new Vector2i[MaxBlurLevels];
+        // Whether anything has been drawn since the blur pyramid was last built.
+        private bool _backdropDirty = true;
+        private float _lastBlurRadius = -1f;
+
+        private int _vertexBufferCapacity;
+        private int _indexBufferCapacity;
+
+        // Offscreen scene target, used only on frames that actually contain a frosted shape. Drawing
+        // through it lets the blur sample the scene as a texture instead of blitting the default
+        // framebuffer once per blurred draw call, and removes the mid-frame read-back stall.
+        private int _sceneFbo;
+        private int _sceneTex;
+        private int _sceneW, _sceneH;
+        private bool _renderingOffscreen;
+
         private int _blurBaseW;        // viewport size the pyramid was built for
         private int _blurBaseH;
 
@@ -117,6 +140,10 @@ namespace OpenTKExample
                 _blurTex[i] = 0;
             }
             _blurDownProgram = _blurUpProgram = _blurVao = _blurFbo = 0;
+            if (_sceneTex != 0) GL.DeleteTexture(_sceneTex);
+            if (_sceneFbo != 0) GL.DeleteFramebuffer(_sceneFbo);
+            _sceneTex = _sceneFbo = 0;
+            _sceneW = _sceneH = 0;
             _blurBaseW = _blurBaseH = 0;
         }
 
@@ -147,17 +174,20 @@ namespace OpenTKExample
             _projectionLocation = GL.GetUniformLocation(_shaderProgram, "projection");
             _textureSamplerLocation = GL.GetUniformLocation(_shaderProgram, "texture0");
             _fontTextureLoc = GL.GetUniformLocation(_shaderProgram, "fontTexture");
-            _scissorMatLoc = GL.GetUniformLocation(_shaderProgram, "scissorMat");
+            _scissorTransformLoc = GL.GetUniformLocation(_shaderProgram, "scissorTransform");
+            _scissorTranslationLoc = GL.GetUniformLocation(_shaderProgram, "scissorTranslation");
             _scissorExtLoc = GL.GetUniformLocation(_shaderProgram, "scissorExt");
 
-            _brushMatLoc = GL.GetUniformLocation(_shaderProgram, "brushMat");
+            _brushTransformLoc = GL.GetUniformLocation(_shaderProgram, "brushTransform");
+            _brushTranslationLoc = GL.GetUniformLocation(_shaderProgram, "brushTranslation");
             _brushTypeLoc = GL.GetUniformLocation(_shaderProgram, "brushType");
             _brushColor1Loc = GL.GetUniformLocation(_shaderProgram, "brushColor1");
             _brushColor2Loc = GL.GetUniformLocation(_shaderProgram, "brushColor2");
             _brushParamsLoc = GL.GetUniformLocation(_shaderProgram, "brushParams");
             _brushParams2Loc = GL.GetUniformLocation(_shaderProgram, "brushParams2");
-            _brushTextureMatLoc = GL.GetUniformLocation(_shaderProgram, "brushTextureMat");
-            _dpiScaleLoc = GL.GetUniformLocation(_shaderProgram, "dpiScale");
+            _brushTextureTransformLoc = GL.GetUniformLocation(_shaderProgram, "textureTransform");
+            _brushTextureTranslationLoc = GL.GetUniformLocation(_shaderProgram, "textureTranslation");
+            _sdfPxRangeLoc = GL.GetUniformLocation(_shaderProgram, "sdfPxRange");
             _atlasTexelSizeLoc = GL.GetUniformLocation(_shaderProgram, "atlasTexelSize");
             _backdropFlipYLoc = GL.GetUniformLocation(_shaderProgram, "backdropFlipY");
             _backdropTexLoc = GL.GetUniformLocation(_shaderProgram, "backdropTexture");
@@ -273,6 +303,31 @@ namespace OpenTKExample
             return tex;
         }
 
+        private void EnsureSceneTarget(int w, int h)
+        {
+            if (_sceneTex != 0 && _sceneW == w && _sceneH == h)
+                return;
+
+            if (_sceneTex != 0) GL.DeleteTexture(_sceneTex);
+            if (_sceneFbo == 0) _sceneFbo = GL.GenFramebuffer();
+
+            _sceneTex = GL.GenTexture();
+            GL.BindTexture(TextureTarget.Texture2D, _sceneTex);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, w, h, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.BindTexture(TextureTarget.Texture2D, 0);
+
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+            GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _sceneTex, 0);
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+
+            _sceneW = w;
+            _sceneH = h;
+        }
+
         private void EnsureBlurTargets(int baseW, int baseH)
         {
             if (_blurTex[0] != 0 && _blurBaseW == baseW && _blurBaseH == baseH)
@@ -283,8 +338,8 @@ namespace OpenTKExample
             // Level 0 is half the viewport; each subsequent level halves again.
             for (int i = 0; i < MaxBlurLevels; i++)
             {
-                int w = Math.Max(1, baseW >> (i + 1));
-                int h = Math.Max(1, baseH >> (i + 1));
+                int w = Math.Max(1, baseW >> (i + BlurBaseShift));
+                int h = Math.Max(1, baseH >> (i + BlurBaseShift));
                 _blurSize[i] = new Vector2i(w, h);
                 _blurTex[i] = CreateBlurTexture(w, h);
             }
@@ -302,9 +357,32 @@ namespace OpenTKExample
             // A dual Kawase pyramid of n iterations with sample offset o spreads light by roughly
             // o * 2^(n+1) source texels. We pick n from the radius and solve o so the product equals
             // the requested radius: that keeps the effective blur continuous even as n steps.
-            float r = MathF.Max(radius, 2f);
+            // radius is in screen pixels, but the pyramid maths below works in level-0 texels, and one of
+
+            // those spans 1 << BlurBaseShift pixels. Converting here is what makes SetBackdropBlur(22)
+
+            // actually mean 22 pixels regardless of what resolution the pyramid starts at.
+
+            float r = MathF.Max(radius / (1 << BlurBaseShift), 2f);
             iterations = Math.Clamp((int)MathF.Floor(MathF.Log2(r)) - 1, 1, MaxBlurLevels - 1);
             offset = Math.Clamp(r / (1 << (iterations + 1)), 0.5f, 6f);
+        }
+
+        /// <summary>
+        /// Streams a frame's geometry into a buffer. The store is reallocated only when it needs to
+        /// grow; otherwise it is orphaned and refilled, so the driver hands back fresh memory instead
+        /// of stalling on the previous frame's contents still being read.
+        /// </summary>
+        private static void UploadStream<T>(BufferTarget target, ref int capacity, int sizeInBytes, T[] data)
+            where T : struct
+        {
+            // Round up on growth so a steadily growing canvas does not resize every frame.
+            if (sizeInBytes > capacity)
+                capacity = Math.Max(sizeInBytes, capacity == 0 ? 64 * 1024 : capacity * 2);
+
+            // Same call either way: it allocates on the first pass and orphans on every later one.
+            GL.BufferData(target, capacity, IntPtr.Zero, BufferUsageHint.StreamDraw);
+            GL.BufferSubData(target, IntPtr.Zero, sizeInBytes, data);
         }
 
         /// <summary>
@@ -314,6 +392,20 @@ namespace OpenTKExample
         /// </summary>
         private void RenderBackdropBlur(float radius)
         {
+            // Two frosted shapes in a row see the same framebuffer behind them, so the pyramid only
+            // needs rebuilding when something has actually been drawn since the last one, or when the
+            // requested radius changed.
+            if (!_backdropDirty && radius == _lastBlurRadius && _blurTex[0] != 0)
+            {
+                GL.ActiveTexture(TextureUnit.Texture3);
+                GL.BindTexture(TextureTarget.Texture2D, _blurTex[0]);
+                GL.ActiveTexture(TextureUnit.Texture0);
+                return;
+            }
+
+            _backdropDirty = false;
+            _lastBlurRadius = radius;
+
             EnsureBlurTargets(_fbWidth, _fbHeight);
             ComputeBlurParams(radius, out int iterations, out float offset);
 
@@ -321,18 +413,15 @@ namespace OpenTKExample
             GL.BindVertexArray(_blurVao);
             GL.ActiveTexture(TextureUnit.Texture0);
 
-            // Capture the default framebuffer into level 0 (half res) via a linear blit.
-            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _blurFbo);
-            GL.FramebufferTexture2D(FramebufferTarget.DrawFramebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _blurTex[0], 0);
-            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-            GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _blurSize[0].X, _blurSize[0].Y, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
-
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, _blurFbo);
 
-            // Downsample chain: level 0 -> 1 -> ... -> iterations.
+            // Downsample chain. The first pass reads the scene texture straight into level 0, so the
+            // full-resolution blit the old capture needed is gone, and the scene is filtered by the
+            // five-tap kernel rather than a single bilinear step (which would alias at this ratio).
             GL.UseProgram(_blurDownProgram);
             GL.Uniform1(_downSrcLoc, 0);
             GL.Uniform1(_downOffsetLoc, offset);
+            BlurPass(_sceneTex, _blurTex[0], _blurSize[0], _downHalfpixelLoc, new Vector2i(_fbWidth, _fbHeight));
             for (int i = 0; i < iterations; i++)
                 BlurPass(_blurTex[i], _blurTex[i + 1], _blurSize[i + 1], _downHalfpixelLoc, _blurSize[i]);
 
@@ -343,8 +432,8 @@ namespace OpenTKExample
             for (int i = iterations; i > 0; i--)
                 BlurPass(_blurTex[i], _blurTex[i - 1], _blurSize[i - 1], _upHalfpixelLoc, _blurSize[i - 1]);
 
-            // Restore state for canvas drawing.
-            GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            // Restore state for canvas drawing, back into whichever target the frame is drawing to.
+            GL.BindFramebuffer(FramebufferTarget.Framebuffer, _renderingOffscreen ? _sceneFbo : 0);
             GL.Viewport(0, 0, _fbWidth, _fbHeight);
             GL.Enable(EnableCap.Blend);
             GL.BindVertexArray(_vertexArrayObject);
@@ -375,6 +464,29 @@ namespace OpenTKExample
             if (drawCalls.Count == 0)
                 return;
 
+            // Only frames that actually contain a frosted shape pay for the offscreen target; anything
+            // else draws straight to the default framebuffer exactly as before.
+            _renderingOffscreen = false;
+            for (int i = 0; i < drawCalls.Count; i++)
+            {
+                if (drawCalls[i].Brush.BackdropBlur > 0f) { _renderingOffscreen = true; break; }
+            }
+
+            if (_renderingOffscreen)
+            {
+                EnsureSceneTarget(_fbWidth, _fbHeight);
+
+                // Seed with what is already on screen, so a frosted shape blurs whatever the host
+                // drew underneath the canvas and not just the canvas's own content.
+                GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+                GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _sceneFbo);
+                GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+                    ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+
+                GL.BindFramebuffer(FramebufferTarget.Framebuffer, _sceneFbo);
+                GL.Viewport(0, 0, _fbWidth, _fbHeight);
+            }
+
             // Configure OpenGL state
             GL.Disable(EnableCap.DepthTest);
             GL.Enable(EnableCap.Blend);
@@ -389,7 +501,8 @@ namespace OpenTKExample
 
             // Upload vertex data (20 bytes per vertex) straight from the canvas backing store
             GL.BindBuffer(BufferTarget.ArrayBuffer, _vertexBufferObject);
-            GL.BufferData(BufferTarget.ArrayBuffer, canvas.VertexCount * Vertex.SizeInBytes, canvas.VertexBuffer, BufferUsageHint.StreamDraw);
+            UploadStream(BufferTarget.ArrayBuffer, ref _vertexBufferCapacity,
+                canvas.VertexCount * Vertex.SizeInBytes, canvas.VertexBuffer);
 
             int stride = Vertex.SizeInBytes; // 20
 
@@ -407,12 +520,23 @@ namespace OpenTKExample
 
             // Upload index data
             GL.BindBuffer(BufferTarget.ElementArrayBuffer, _elementBufferObject);
-            GL.BufferData(BufferTarget.ElementArrayBuffer, canvas.IndexCount * sizeof(uint), canvas.IndexBuffer, BufferUsageHint.StreamDraw);
+            UploadStream(BufferTarget.ElementArrayBuffer, ref _indexBufferCapacity,
+                canvas.IndexCount * sizeof(uint), canvas.IndexBuffer);
 
             // Active texture unit for sampling
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.Uniform1(_textureSamplerLocation, 0); // brush/shape texture on unit 0
             GL.Uniform1(_fontTextureLoc, 1);         // font atlas on unit 1 (persists on this program)
+
+            // A fresh frame means the framebuffer behind any frosted shape has changed.
+            _backdropDirty = true;
+
+            // These do not vary per draw call, so they go up once and are then left alone.
+            // The default framebuffer is bottom-left origin here, so the backdrop sample flips.
+            GL.Uniform2(_viewportSizeLoc, (float)_fbWidth, (float)_fbHeight);
+            GL.Uniform1(_backdropTexLoc, 3);
+            GL.Uniform1(_backdropFlipYLoc, 1);
+            GL.Uniform1(_sdfPxRangeLoc, canvas.Text.FontEngine.DistanceRange);
 
             // Draw all draw calls in the canvas
             int indexOffset = 0;
@@ -449,48 +573,59 @@ namespace OpenTKExample
                 }
                 else
                 {
-                    // Use default shader. Every matrix goes up transposed: the generated shader comes
-                    // from Slang, which emits mul(M, v) as v * M. See CanvasShaders.generated.cs.
+                    // Use default shader. The projection is the only matrix left, and it goes up
+                    // transposed because the generated shader comes from Slang, which emits
+                    // mul(M, v) as v * M. See CanvasShaders.generated.cs.
                     GL.UseProgram(_shaderProgram);
                     GL.UniformMatrix4(_projectionLocation, true, ref _projection);
 
-                    // Set DPI scale for converting pixel coords to logical coords in shader
-                    GL.Uniform1(_dpiScaleLoc, (float)canvas.FramebufferScale);
+                    float fbScale = canvas.FramebufferScale;
 
-                    // Set scissor rectangle
-                    drawCall.GetScissor(out var scissor, out var extent);
-                    var tkScissor = ToTK(scissor);
-                    GL.UniformMatrix4(_scissorMatLoc, true, ref tkScissor);
+
+                    // Scissor and brush transforms are 2D affines with the framebuffer scale already
+                    // folded in, so the shader needs neither a matrix nor a dpi divide.
+                    drawCall.GetScissor(fbScale, out var scissorXf, out var scissorT, out var extent);
+                    GL.Uniform4(_scissorTransformLoc, (float)scissorXf.X, (float)scissorXf.Y, (float)scissorXf.Z, (float)scissorXf.W);
+                    GL.Uniform2(_scissorTranslationLoc, (float)scissorT.X, (float)scissorT.Y);
                     GL.Uniform2(_scissorExtLoc, (float)extent.X, (float)extent.Y);
 
                     // Set brush parameters
-                    var brushMat = ToTK(drawCall.Brush.BrushMatrix);
-                    GL.UniformMatrix4(_brushMatLoc, true, ref brushMat);
+                    drawCall.GetBrushTransform(fbScale, out var brushXf, out var brushT);
+                    GL.Uniform4(_brushTransformLoc, (float)brushXf.X, (float)brushXf.Y, (float)brushXf.Z, (float)brushXf.W);
+                    GL.Uniform2(_brushTranslationLoc, (float)brushT.X, (float)brushT.Y);
                     GL.Uniform1(_brushTypeLoc, (int)drawCall.Brush.Type);
                     GL.Uniform4(_brushColor1Loc, ToTK(drawCall.Brush.Color1));
                     GL.Uniform4(_brushColor2Loc, ToTK(drawCall.Brush.Color2));
                     GL.Uniform4(_brushParamsLoc, (float)drawCall.Brush.Point1.X, (float)drawCall.Brush.Point1.Y, (float)drawCall.Brush.Point2.X, (float)drawCall.Brush.Point2.Y);
                     GL.Uniform2(_brushParams2Loc, (float)drawCall.Brush.CornerRadii, (float)drawCall.Brush.Feather);
+                    GL.Uniform1(_backdropBlurAmountLoc, (float)drawCall.Brush.BackdropBlur);
 
                     // Set texture transform parameters
-                    var textureMat = ToTK(drawCall.Brush.TextureMatrix);
-                    GL.UniformMatrix4(_brushTextureMatLoc, true, ref textureMat);
+                    drawCall.GetTextureTransform(fbScale, out var texXf, out var texT);
+                    GL.Uniform4(_brushTextureTransformLoc, (float)texXf.X, (float)texXf.Y, (float)texXf.Z, (float)texXf.W);
+                    GL.Uniform2(_brushTextureTranslationLoc, (float)texT.X, (float)texT.Y);
 
-                    // Font atlas texel size, so the text distance field resolves at any zoom. The
-                    // generated shader takes this as a uniform rather than calling textureSize.
+                    // Font atlas metrics, so the text distance field resolves at any zoom. The
+                    // generated shader takes these as uniforms rather than calling textureSize and
+                    // hardcoding the range.
                     var atlas = drawCall.FontAtlas as TextureTK ?? _defaultTexture;
                     GL.Uniform2(_atlasTexelSizeLoc, atlas.Width > 0 ? 1f / atlas.Width : 0f, atlas.Height > 0 ? 1f / atlas.Height : 0f);
-
-                    // Backdrop blur: viewport size for screen->uv, blurred texture on unit 3.
-                    // The default framebuffer is bottom-left origin here, so the sample flips.
-                    GL.Uniform2(_viewportSizeLoc, (float)_fbWidth, (float)_fbHeight);
-                    GL.Uniform1(_backdropTexLoc, 3);
-                    GL.Uniform1(_backdropBlurAmountLoc, (float)drawCall.Brush.BackdropBlur);
-                    GL.Uniform1(_backdropFlipYLoc, 1);
                 }
 
                 GL.DrawElements(PrimitiveType.Triangles, drawCall.ElementCount, DrawElementsType.UnsignedInt, indexOffset * sizeof(uint));
+                _backdropDirty = true;
                 indexOffset += drawCall.ElementCount;
+            }
+
+            // Present the offscreen scene to the window.
+            if (_renderingOffscreen)
+            {
+                GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _sceneFbo);
+                GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+                GL.BlitFramebuffer(0, 0, _fbWidth, _fbHeight, 0, 0, _fbWidth, _fbHeight,
+                    ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+                GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                _renderingOffscreen = false;
             }
 
             // Clean up

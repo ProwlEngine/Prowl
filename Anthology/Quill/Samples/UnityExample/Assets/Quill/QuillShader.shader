@@ -37,8 +37,8 @@ Shader "Quill/CanvasShader"
             #pragma warning(disable : 3557)
             #endif
 
-            #line 13674 "hlsl.meta.slang"
-            #line 13674
+            #line 9 "Canvas.slang"
+            #line 9
             float4x4 projection;
                 float2 fragTexCoord_0 : TEXCOORD0;
                 float4 fragColor_0 : COLOR0;
@@ -53,7 +53,7 @@ Shader "Quill/CanvasShader"
                 float4 aColor_0 : COLOR0;
             };
 
-            #line 56
+            #line 69
             VertexOutput_0 Vertex(VertexInput_0 input_0)
             {
                 VertexOutput_0 output_0;
@@ -90,59 +90,68 @@ Shader "Quill/CanvasShader"
             #line 1187
             SamplerState sampler_backdropTexture;
 
-            #line 11528
-            #line 11528
-            float4x4 scissorMat;
+            #line 11223
+            #line 11223
+            float4 scissorTransform;
+            float2 scissorTranslation;
             float2 scissorExt;
-            float4x4 brushMat;
+            float4 brushTransform;
+            float2 brushTranslation;
             int brushType;
             float4 brushColor1;
             float4 brushColor2;
             float4 brushParams;
             float2 brushParams2;
-            float4x4 brushTextureMat;
-            float dpiScale;
+            float4 textureTransform;
+            float2 textureTranslation;
             float2 atlasTexelSize;
+            float sdfPxRange;
             float2 viewportSize;
             float backdropBlurAmount;
             int backdropFlipY;
+            }
+
+            #line 114
+            float scissorMask_0(float2 p_1)
+            {
+
+            #line 114
+                bool _S1;
 
                 if((scissorExt.x) < 0.0f)
                 {
 
-            #line 104
+            #line 116
                     _S1 = true;
 
-            #line 104
+            #line 116
                 }
                 else
                 {
 
-            #line 104
+            #line 116
                     _S1 = (scissorExt.y) < 0.0f;
 
-            #line 104
+            #line 116
                 }
 
-            #line 104
+            #line 116
                 if(_S1)
                 {
 
-            #line 105
+            #line 117
                     return 1.0f;
                 }
 
-            #line 112
-                float2 smoothEdges_0 = (float2)(0.5f / dpiScale) - (abs(mul(scissorMat, float4(p_0 / dpiScale, 0.0f, 1.0f)).xy) - scissorExt / dpiScale);
+                float2 smoothEdges_0 = scissorExt - abs(applyTransform_0(scissorTransform, scissorTranslation, p_1));
 
                 return clamp(smoothEdges_0.x, 0.0f, 1.0f) * clamp(smoothEdges_0.y, 0.0f, 1.0f);
             }
 
-            #line 67
+            #line 80
             float calculateBrushFactor_0(float2 fragPos_0)
             {
-
-                float2 transformedPoint_0 = mul(brushMat, float4(fragPos_0 / dpiScale, 0.0f, 1.0f)).xy;
+                float2 transformedPoint_0 = applyTransform_0(brushTransform, brushTranslation, fragPos_0);
 
                 if((brushType) == int(1))
                 {
@@ -153,11 +162,11 @@ Shader "Quill/CanvasShader"
                     if(lineLength_0 < 0.00100000004749745f)
                     {
 
-            #line 78
+            #line 90
                         return 0.0f;
                     }
 
-            #line 79
+            #line 91
                     return clamp(dot(transformedPoint_0 - startPoint_0, line_0) / (lineLength_0 * lineLength_0), 0.0f, 1.0f);
                 }
                 if((brushType) == int(2))
@@ -172,30 +181,30 @@ Shader "Quill/CanvasShader"
                     float radius_0 = brushParams2.x;
                     float feather_0 = brushParams2.y;
 
-            #line 91
+            #line 103
                     bool _S2;
                     if((halfSize_0.x) < 0.00100000004749745f)
                     {
 
-            #line 92
+            #line 104
                         _S2 = true;
 
-            #line 92
+            #line 104
                     }
                     else
                     {
 
-            #line 92
+            #line 104
                         _S2 = (halfSize_0.y) < 0.00100000004749745f;
 
-            #line 92
+            #line 104
                     }
 
-            #line 92
+            #line 104
                     if(_S2)
                     {
 
-            #line 92
+            #line 104
                         return 0.0f;
                     }
                     float2 q_0 = abs(transformedPoint_0 - center_0) - (halfSize_0 - (float2)radius_0);
@@ -205,11 +214,11 @@ Shader "Quill/CanvasShader"
                 return 0.0f;
             }
 
-            #line 120
+            #line 128
             float sdfScreenPxRange_0(float2 uv_0)
             {
 
-                return max(0.5f * dot((float2)4.0f * atlasTexelSize, (float2)1.0f / (fwidth((uv_0)))), 1.0f);
+                return max(0.5f * dot((float2)sdfPxRange * atlasTexelSize, (float2)1.0f / (fwidth((uv_0)))), 1.0f);
             }
 
             #line 16
@@ -221,35 +230,35 @@ Shader "Quill/CanvasShader"
                 float2 fragPos_1 : TEXCOORD1;
             };
 
-            #line 129
+            #line 137
             float4 Fragment(VertexOutput_0 input_0) : SV_TARGET
             {
                 float mask_0 = scissorMask_0(input_0.fragPos_1);
 
-            #line 131
+            #line 139
                 float4 _S3 = input_0.fragColor_0;
 
-            #line 131
+            #line 139
                 float4 color_0;
 
                 if((brushType) > int(0))
                 {
 
-            #line 135
+            #line 143
                     color_0 = lerp(brushColor1, brushColor2, (float4)calculateBrushFactor_0(input_0.fragPos_1));
 
-            #line 135
+            #line 143
                 }
                 else
                 {
 
-            #line 135
+            #line 143
                     color_0 = _S3;
 
-            #line 135
+            #line 143
                 }
 
-            #line 143
+            #line 151
                 if((input_0.fragTexCoord_0.x) >= 2.0f)
                 {
                     float2 uv_1 = input_0.fragTexCoord_0 - (float2)2.0f;
@@ -260,12 +269,12 @@ Shader "Quill/CanvasShader"
 
                 float edgeAlpha_0 = clamp(input_0.fragTexCoord_0.x, 0.0f, 1.0f);
 
-                float2 _S4 = mul(brushTextureMat, float4(input_0.fragPos_1 / dpiScale, 0.0f, 1.0f)).xy;
+                float2 _S4 = applyTransform_0(textureTransform, textureTranslation, input_0.fragPos_1);
 
-            #line 157
+            #line 164
                 ;
 
-            #line 157
+            #line 164
                 float4 fill_0 = color_0 * texture0.Sample(sampler_texture0, _S4);
 
                 if((backdropBlurAmount) > 0.0f)
@@ -274,15 +283,15 @@ Shader "Quill/CanvasShader"
                     if((backdropFlipY) == int(1))
                     {
 
-            #line 164
+            #line 171
                         uv_2[int(1)] = 1.0f - uv_2.y;
 
-            #line 163
+            #line 170
                     }
 
                     float2 _S5 = uv_2;
 
-            #line 165
+            #line 172
                     ;
 
                     return float4(backdropTexture.Sample(sampler_backdropTexture, _S5).xyz * (1.0f - fill_0.w) + fill_0.xyz, 1.0f) * edgeAlpha_0 * mask_0;
