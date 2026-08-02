@@ -29,13 +29,11 @@ public abstract class AssetBackendBase
         if (_loadedAssets.TryGetValue(guid, out var found) && found != null && !found.IsDisposed)
         {
             obj = found;
-            // Coalesced through the instance where its ID matches the key, so a cache hit on every
-            // draw call doesn't reach the database. Falls back for anything stored under a
-            // different GUID than it carries, which must still be tracked under the key.
-            if (found.AssetID == guid)
-                found.TouchAsset();
-            else
-                AssetDatabase.Touch(guid);
+            // Deliberately NOT coalesced through EngineObject.TouchAsset. A resolve is the caller
+            // saying "I am using this now", and it has to land even when the object was touched a
+            // moment ago - ForceIdle backdates the database entry behind the object's back, so a
+            // suppressed touch here would let a freshly-resolved asset be swept out from under it.
+            AssetDatabase.Touch(guid);
             return true;
         }
         obj = null!;
