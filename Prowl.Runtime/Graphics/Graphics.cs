@@ -132,9 +132,28 @@ public static unsafe class Graphics
         LastFrameWaitMs = (float)(elapsed * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
     }
 
+    // On a hybrid machine OpenGL silently picks an adapter for us, and picking the integrated one
+    // costs far more performance than anything in the renderer. Worth a line in the log.
+    private static unsafe void LogAdapter()
+    {
+        try
+        {
+            string vendor = GL.GetStringS(Silk.NET.OpenGL.StringName.Vendor);
+            string renderer = GL.GetStringS(Silk.NET.OpenGL.StringName.Renderer);
+            string version = GL.GetStringS(Silk.NET.OpenGL.StringName.Version);
+            Debug.Log($"GPU: {renderer} ({vendor}) - OpenGL {version}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"Could not query GL adapter strings: {ex.Message}");
+        }
+    }
+
     public static void Initialize(bool debug)
     {
         GL = GL.GetApi(Window.InternalWindow);
+
+        LogAdapter();
 
         if (debug)
         {
