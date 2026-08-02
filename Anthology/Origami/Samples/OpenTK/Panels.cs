@@ -1221,6 +1221,7 @@ public sealed class ChartsPanel : DockPanel
     private readonly record struct ScatterPoint(double X, double Y);
     private readonly record struct BubblePoint(double X, double Y, float Size);
     private readonly record struct Candle(double Index, double Open, double High, double Low, double Close);
+    private sealed record BuildNode(string Name, double Ms, BuildNode[] Kids);
 
     private static readonly string[] Months =
     {
@@ -1276,6 +1277,7 @@ public sealed class ChartsPanel : DockPanel
     private readonly List<ScatterPoint> _scatter = new();
     private readonly List<BubblePoint> _bubbles = new();
     private readonly List<Candle> _candles = new();
+    private readonly BuildNode[] _buildTree;
 
     private readonly double[] _frameBaseline = new double[400];
     private readonly double[] _frameOptimized = new double[400];
@@ -1398,6 +1400,40 @@ public sealed class ChartsPanel : DockPanel
         _latencyEU[11] = 156;
         _latencyEU[47] = 4;
         _latencyAPAC[22] = 198;
+
+        _buildTree = MakeBuildTree(rng);
+    }
+
+    private static BuildNode[] MakeBuildTree(Random rng)
+    {
+        string[] roots = { "Engine", "Editor", "Runtime", "Tools" };
+        string[][] modules =
+        {
+            new[] { "Core", "Render", "Physics" },
+            new[] { "Panels", "Inspector", "Assets" },
+            new[] { "Scripting", "Audio", "Net" },
+            new[] { "Builder", "Profiler", "Packager" },
+        };
+        string[] stages = { "parse", "codegen", "link" };
+
+        var forest = new BuildNode[roots.Length];
+        for (int r = 0; r < roots.Length; r++)
+        {
+            var mids = new BuildNode[modules[r].Length];
+            for (int m = 0; m < mids.Length; m++)
+            {
+                int leafCount = 2 + ((r + m) % 2);
+                var leaves = new BuildNode[leafCount];
+                for (int l = 0; l < leafCount; l++)
+                    leaves[l] = new BuildNode($"{modules[r][m]}.{stages[l]}", 40 + rng.NextDouble() * 320, Array.Empty<BuildNode>());
+
+                mids[m] = new BuildNode(modules[r][m], 0, leaves);
+            }
+
+            forest[r] = new BuildNode(roots[r], 0, mids);
+        }
+
+        return forest;
     }
 
     private static double Gaussian(Random rng, double mean, double deviation)
@@ -1438,6 +1474,8 @@ public sealed class ChartsPanel : DockPanel
                 Row(P, "chartsrow4", () => { OHLCChart(P); PieChart(P); });
                 Row(P, "chartsrow5", () => { DonutChart(P); RadarChart(P); });
                 Row(P, "chartsrow6", () => { HistogramChart(P); BoxPlotChart(P); });
+                Row(P, "chartsrow7", () => { TreemapChart(P); SunburstChart(P); });
+                Row(P, "chartsrow8", () => { FlameGraphChart(P); });
             });
         }
     }
@@ -1716,6 +1754,61 @@ public sealed class ChartsPanel : DockPanel
             .Series("NA", Palette.C(96, 165, 250), _latencyNA)
             .Series("EU", Palette.C(167, 139, 250), _latencyEU)
             .Series("APAC", Palette.C(250, 204, 21), _latencyAPAC)
+            .Padding(6)
+            .Show();
+    }
+
+    private void TreemapChart(Paper P)
+    {
+        Origami.Chart.Treemap(P, "chart_treemap", _buildTree)
+            .Title("Build Time by Module - Treemap")
+            .Height(ChartHeight)
+            .Legend().LegendInteractive(true)
+            .Name(n => n.Name)
+            .Value(n => n.Ms)
+            .Children(n => n.Kids)
+            .Labels(_labels)
+            .ShowValues(true)
+            .SortBy(n => n.Ms, true)
+            .ValueFormatter(v => $"{v:0.#}ms")
+            .Padding(6)
+            .Show();
+    }
+
+    private void SunburstChart(Paper P)
+    {
+        Origami.Chart.Sunburst(P, "chart_sunburst", _buildTree)
+            .Title("Build Time by Module - Sunburst")
+            .Height(ChartHeight)
+            .Legend().LegendInteractive(true)
+            .Name(n => n.Name)
+            .Value(n => n.Ms)
+            .Children(n => n.Kids)
+            .Labels(_labels)
+            .ShowPercent(true)
+            .InnerRadius(0.3f)
+            .Success()
+            .ValueFormatter(v => $"{v:0.#}ms")
+            .Padding(6)
+            .Show();
+    }
+
+    private void FlameGraphChart(Paper P)
+    {
+        Origami.Chart.FlameGraph(P, "chart_flamegraph", _buildTree)
+            .Title("Build Time by Module - Flame Graph")
+            .Height(ChartHeight)
+            .Legend().LegendInteractive(true)
+            .Name(n => n.Name)
+            .Value(n => n.Ms)
+            .Children(n => n.Kids)
+            .Labels(_labels)
+            .RowHeight(22f)
+            .MergeDuplicates(true)
+            .Zoomable(true)
+            .Pannable(true)
+            .Info()
+            .ValueFormatter(v => $"{v:0.#}ms")
             .Padding(6)
             .Show();
     }

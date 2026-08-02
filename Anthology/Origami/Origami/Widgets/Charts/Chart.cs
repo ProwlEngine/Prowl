@@ -54,5 +54,14 @@ public static partial class Origami
 
         public static RadarChart<T> Radar<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
             => new(paper, id, Current, data);
+
+        public static TreemapChart<T> Treemap<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+            => new(paper, id, Current, data);
+
+        public static SunburstChart<T> Sunburst<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+            => new(paper, id, Current, data);
+
+        public static FlameGraphChart<T> FlameGraph<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+            => new(paper, id, Current, data);
     }
 }
