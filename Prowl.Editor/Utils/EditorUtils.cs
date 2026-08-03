@@ -25,6 +25,21 @@ public static class EditorUtils
         string.IsNullOrEmpty(search) || text.Contains(search, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Turns arbitrary text into something safe to use as a single path segment.
+    /// </summary>
+    /// <remarks>
+    /// Anywhere a name the user typed becomes a folder or a file. Dropping the invalid characters is not
+    /// enough on its own: "." and ".." survive that filter and still walk up a directory, and a name that
+    /// is rooted or carries a separator makes <see cref="Path.Combine"/> return somewhere else entirely
+    /// rather than a child of the folder that was meant.
+    /// </remarks>
+    public static string SafeFileName(string name, string fallback)
+    {
+        string safe = string.Join('_', name.Split(Path.GetInvalidFileNameChars())).Trim();
+        return safe.TrimStart('.').Length == 0 ? fallback : safe;
+    }
+
+    /// <summary>
     /// Every non framework type. Sourced from the live assembly set rather than the domain, so a hot reload's
     /// superseded build cannot contribute a second, stale copy of every user type.
     /// </summary>
