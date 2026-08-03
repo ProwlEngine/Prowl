@@ -57,7 +57,7 @@ internal class VkResourceFactory : ResourceFactory
             _gd,
             description.Width, description.Height,
             description.MipLevels, description.ArrayLayers,
-            VkFormats.VdToVkPixelFormat(description.Format, (description.Usage & TextureUsage.DepthStencil) != 0),
+            VkFormats.ToVkPixelFormat(description.Format, (description.Usage & TextureUsage.DepthStencil) != 0),
             description.Usage,
             description.SampleCount,
             new Image(nativeTexture));

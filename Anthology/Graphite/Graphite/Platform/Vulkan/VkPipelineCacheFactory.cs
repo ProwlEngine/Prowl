@@ -27,13 +27,13 @@ internal static unsafe class VkPipelineCacheFactory
         {
             BlendAttachmentDescription vdDesc = programBlendState.AttachmentStates[i];
             PipelineColorBlendAttachmentState attachmentState = new();
-            attachmentState.SrcColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.SourceColorFactor);
-            attachmentState.DstColorBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.DestinationColorFactor);
-            attachmentState.ColorBlendOp = VkFormats.VdToVkBlendOp(vdDesc.ColorFunction);
-            attachmentState.SrcAlphaBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.SourceAlphaFactor);
-            attachmentState.DstAlphaBlendFactor = VkFormats.VdToVkBlendFactor(vdDesc.DestinationAlphaFactor);
-            attachmentState.AlphaBlendOp = VkFormats.VdToVkBlendOp(vdDesc.AlphaFunction);
-            attachmentState.ColorWriteMask = VkFormats.VdToVkColorWriteMask(vdDesc.ColorWriteMask ?? ColorWriteMask.All);
+            attachmentState.SrcColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceColorFactor);
+            attachmentState.DstColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationColorFactor);
+            attachmentState.ColorBlendOp = VkFormats.ToVkBlendOp(vdDesc.ColorFunction);
+            attachmentState.SrcAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceAlphaFactor);
+            attachmentState.DstAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationAlphaFactor);
+            attachmentState.AlphaBlendOp = VkFormats.ToVkBlendOp(vdDesc.AlphaFunction);
+            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask ?? ColorWriteMask.All);
             attachmentState.BlendEnable = vdDesc.BlendEnabled;
             attachmentsPtr[i] = attachmentState;
         }
@@ -51,7 +51,7 @@ internal static unsafe class VkPipelineCacheFactory
         // Rasterizer State
         RasterizerStateDescription rsDesc = program.RasterizerState;
         PipelineRasterizationStateCreateInfo rsCI = new() { SType = StructureType.PipelineRasterizationStateCreateInfo };
-        rsCI.CullMode = VkFormats.VdToVkCullMode(rsDesc.CullMode);
+        rsCI.CullMode = VkFormats.ToVkCullMode(rsDesc.CullMode);
         rsCI.PolygonMode = PolygonMode.Fill;
         rsCI.DepthClampEnable = !rsDesc.DepthClipEnabled;
         rsCI.FrontFace = rsDesc.FrontFace == FrontFace.Clockwise ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
@@ -74,21 +74,21 @@ internal static unsafe class VkPipelineCacheFactory
         PipelineDepthStencilStateCreateInfo dssCI = new() { SType = StructureType.PipelineDepthStencilStateCreateInfo };
         dssCI.DepthWriteEnable = vdDssDesc.DepthWriteEnabled;
         dssCI.DepthTestEnable = vdDssDesc.DepthTestEnabled;
-        dssCI.DepthCompareOp = VkFormats.VdToVkCompareOp(vdDssDesc.DepthComparison);
+        dssCI.DepthCompareOp = VkFormats.ToVkCompareOp(vdDssDesc.DepthComparison);
         dssCI.StencilTestEnable = vdDssDesc.StencilTestEnabled;
 
-        dssCI.Front.FailOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilFront.Fail);
-        dssCI.Front.PassOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilFront.Pass);
-        dssCI.Front.DepthFailOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilFront.DepthFail);
-        dssCI.Front.CompareOp = VkFormats.VdToVkCompareOp(vdDssDesc.StencilFront.Comparison);
+        dssCI.Front.FailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilFront.Fail);
+        dssCI.Front.PassOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilFront.Pass);
+        dssCI.Front.DepthFailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilFront.DepthFail);
+        dssCI.Front.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilFront.Comparison);
         dssCI.Front.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Front.WriteMask = vdDssDesc.StencilWriteMask;
         dssCI.Front.Reference = vdDssDesc.StencilReference;
 
-        dssCI.Back.FailOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilBack.Fail);
-        dssCI.Back.PassOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilBack.Pass);
-        dssCI.Back.DepthFailOp = VkFormats.VdToVkStencilOp(vdDssDesc.StencilBack.DepthFail);
-        dssCI.Back.CompareOp = VkFormats.VdToVkCompareOp(vdDssDesc.StencilBack.Comparison);
+        dssCI.Back.FailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Fail);
+        dssCI.Back.PassOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.Pass);
+        dssCI.Back.DepthFailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilBack.DepthFail);
+        dssCI.Back.CompareOp = VkFormats.ToVkCompareOp(vdDssDesc.StencilBack.Comparison);
         dssCI.Back.CompareMask = vdDssDesc.StencilReadMask;
         dssCI.Back.WriteMask = vdDssDesc.StencilWriteMask;
         dssCI.Back.Reference = vdDssDesc.StencilReference;
@@ -97,7 +97,7 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Multisample
         PipelineMultisampleStateCreateInfo multisampleCI = new() { SType = StructureType.PipelineMultisampleStateCreateInfo };
-        SampleCountFlags vkSampleCount = VkFormats.VdToVkSampleCount(outputDesc.SampleCount);
+        SampleCountFlags vkSampleCount = VkFormats.ToVkSampleCount(outputDesc.SampleCount);
         multisampleCI.RasterizationSamples = vkSampleCount;
         multisampleCI.AlphaToCoverageEnable = programBlendState.AlphaToCoverageEnabled;
 
@@ -105,7 +105,7 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Input Assembly
         PipelineInputAssemblyStateCreateInfo inputAssemblyCI = new() { SType = StructureType.PipelineInputAssemblyStateCreateInfo };
-        inputAssemblyCI.Topology = VkFormats.VdToVkPrimitiveTopology(key.Topology);
+        inputAssemblyCI.Topology = VkFormats.ToVkPrimitiveTopology(key.Topology);
 
         pipelineCI.PInputAssemblyState = &inputAssemblyCI;
 
@@ -140,7 +140,7 @@ internal static unsafe class VkPipelineCacheFactory
 
                 attributeDescs[targetIndex] = new VertexInputAttributeDescription()
                 {
-                    Format = VkFormats.VdToVkVertexElementFormat(inputElement.Format),
+                    Format = VkFormats.ToVkVertexElementFormat(inputElement.Format),
                     Binding = (uint)binding,
                     Location = inputDesc.Location + (uint)location,
                     Offset = inputElement.Offset != 0 ? inputElement.Offset : currentOffset
@@ -165,7 +165,7 @@ internal static unsafe class VkPipelineCacheFactory
         {
             PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
             stageCI.Module = kvp.Value;
-            stageCI.Stage = VkFormats.VdToVkShaderStages(kvp.Key);
+            stageCI.Stage = VkFormats.ToVkShaderStages(kvp.Key);
             stageCI.PName = new FixedUtf8String(program.GetEntryPoint(kvp.Key)); // TODO: DONT ALLOCATE HERE
             stages[stageCount++] = stageCI;
         }
@@ -193,7 +193,7 @@ internal static unsafe class VkPipelineCacheFactory
         AttachmentReference* colorAttachmentRefs = stackalloc AttachmentReference[outputDesc.ColorAttachments.Length];
         for (uint i = 0; i < outputDesc.ColorAttachments.Length; i++)
         {
-            colorAttachmentDescs[i].Format = VkFormats.VdToVkPixelFormat(outputDesc.ColorAttachments[i].Format);
+            colorAttachmentDescs[i].Format = VkFormats.ToVkPixelFormat(outputDesc.ColorAttachments[i].Format);
             colorAttachmentDescs[i].Samples = vkSampleCount;
             colorAttachmentDescs[i].LoadOp = AttachmentLoadOp.DontCare;
             colorAttachmentDescs[i].StoreOp = AttachmentStoreOp.Store;
@@ -213,7 +213,7 @@ internal static unsafe class VkPipelineCacheFactory
         {
             PixelFormat depthFormat = outputDesc.DepthAttachment.Value.Format;
             bool hasStencil = FormatHelpers.IsStencilFormat(depthFormat);
-            depthAttachmentDesc.Format = VkFormats.VdToVkPixelFormat(outputDesc.DepthAttachment.Value.Format, toDepthFormat: true);
+            depthAttachmentDesc.Format = VkFormats.ToVkPixelFormat(outputDesc.DepthAttachment.Value.Format, toDepthFormat: true);
             depthAttachmentDesc.Samples = vkSampleCount;
             depthAttachmentDesc.LoadOp = AttachmentLoadOp.DontCare;
             depthAttachmentDesc.StoreOp = AttachmentStoreOp.Store;

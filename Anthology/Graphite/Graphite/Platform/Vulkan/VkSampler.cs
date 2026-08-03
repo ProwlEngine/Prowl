@@ -25,22 +25,22 @@ internal unsafe partial class VkSampler : Sampler
         SamplerCreateInfo samplerCI = new()
         {
             SType = StructureType.SamplerCreateInfo,
-            AddressModeU = VkFormats.VdToVkSamplerAddressMode(description.AddressModeU),
-            AddressModeV = VkFormats.VdToVkSamplerAddressMode(description.AddressModeV),
-            AddressModeW = VkFormats.VdToVkSamplerAddressMode(description.AddressModeW),
+            AddressModeU = VkFormats.ToVkSamplerAddressMode(description.AddressModeU),
+            AddressModeV = VkFormats.ToVkSamplerAddressMode(description.AddressModeV),
+            AddressModeW = VkFormats.ToVkSamplerAddressMode(description.AddressModeW),
             MinFilter = minFilter,
             MagFilter = magFilter,
             MipmapMode = mipmapMode,
             CompareEnable = description.ComparisonKind != null,
             CompareOp = description.ComparisonKind != null
-                ? VkFormats.VdToVkCompareOp(description.ComparisonKind.Value)
+                ? VkFormats.ToVkCompareOp(description.ComparisonKind.Value)
                 : CompareOp.Never,
             AnisotropyEnable = description.Filter == SamplerFilter.Anisotropic,
             MaxAnisotropy = description.MaximumAnisotropy,
             MinLod = description.MinimumLod,
             MaxLod = description.MaximumLod,
             MipLodBias = description.LodBias,
-            BorderColor = VkFormats.VdToVkSamplerBorderColor(description.BorderColor)
+            BorderColor = VkFormats.ToVkSamplerBorderColor(description.BorderColor)
         };
 
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);

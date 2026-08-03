@@ -28,7 +28,7 @@ internal unsafe partial class VkTextureView : TextureView
         };
         VkTexture tex = Util.AssertSubtype<Texture, VkTexture>(description.Target);
         imageViewCI.Image = tex.OptimalDeviceImage;
-        imageViewCI.Format = VkFormats.VdToVkPixelFormat(Format, (Target.Usage & TextureUsage.DepthStencil) != 0);
+        imageViewCI.Format = VkFormats.ToVkPixelFormat(Format, (Target.Usage & TextureUsage.DepthStencil) != 0);
 
         ImageAspectFlags aspectFlags;
         if ((description.Target.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil)

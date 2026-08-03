@@ -71,8 +71,8 @@ internal unsafe partial class VkTexture : Texture
         Usage = description.Usage;
         Type = description.Type;
         SampleCount = description.SampleCount;
-        VkSampleCount = VkFormats.VdToVkSampleCount(SampleCount);
-        VkFormat = VkFormats.VdToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil);
+        VkSampleCount = VkFormats.ToVkSampleCount(SampleCount);
+        VkFormat = VkFormats.ToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil);
 
         bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
 
@@ -82,12 +82,12 @@ internal unsafe partial class VkTexture : Texture
             ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
             imageCI.MipLevels = MipLevels;
             imageCI.ArrayLayers = _actualImageArrayLayers;
-            imageCI.ImageType = VkFormats.VdToVkTextureType(Type);
+            imageCI.ImageType = VkFormats.ToVkTextureType(Type);
             imageCI.Extent.Width = Width;
             imageCI.Extent.Height = Height;
             imageCI.Extent.Depth = Depth;
             imageCI.InitialLayout = ImageLayout.Preinitialized;
-            imageCI.Usage = VkFormats.VdToVkTextureUsage(Usage);
+            imageCI.Usage = VkFormats.ToVkTextureUsage(Usage);
             imageCI.Tiling = isStaging ? ImageTiling.Linear : ImageTiling.Optimal;
             imageCI.Format = VkFormat;
             imageCI.Flags = ImageCreateFlags.CreateMutableFormatBit;
@@ -231,12 +231,12 @@ internal unsafe partial class VkTexture : Texture
         _height = height;
         _depth = 1;
         VkFormat = vkFormat;
-        _format = VkFormats.VkToVdPixelFormat(VkFormat);
+        _format = VkFormats.ToPixelFormat(VkFormat);
         ArrayLayers = arrayLayers;
         Usage = usage;
         Type = TextureType.Texture2D;
         SampleCount = sampleCount;
-        VkSampleCount = VkFormats.VdToVkSampleCount(sampleCount);
+        VkSampleCount = VkFormats.ToVkSampleCount(sampleCount);
         _optimalImage = existingImage;
         _imageLayouts = [ImageLayout.Undefined];
         _isSwapchainTexture = true;

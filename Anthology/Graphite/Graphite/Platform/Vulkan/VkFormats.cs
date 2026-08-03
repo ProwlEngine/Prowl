@@ -11,7 +11,7 @@ namespace Prowl.Graphite.Vk;
 
 internal static partial class VkFormats
 {
-    internal static VkSamplerAddressMode VdToVkSamplerAddressMode(SamplerAddressMode mode)
+    internal static VkSamplerAddressMode ToVkSamplerAddressMode(SamplerAddressMode mode)
     {
         switch (mode)
         {
@@ -86,7 +86,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static ImageUsageFlags VdToVkTextureUsage(TextureUsage vdUsage)
+    internal static ImageUsageFlags ToVkTextureUsage(TextureUsage vdUsage)
     {
         ImageUsageFlags vkUsage = 0;
 
@@ -112,7 +112,7 @@ internal static partial class VkFormats
         return vkUsage;
     }
 
-    internal static ImageType VdToVkTextureType(TextureType type)
+    internal static ImageType ToVkTextureType(TextureType type)
     {
         switch (type)
         {
@@ -127,7 +127,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static DescriptorType VdToVkDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options)
+    internal static DescriptorType ToVkDescriptorType(ResourceKind kind, ResourceLayoutElementOptions options)
     {
         bool dynamicBinding = (options & ResourceLayoutElementOptions.DynamicBinding) != 0;
         switch (kind)
@@ -150,7 +150,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static SampleCountFlags VdToVkSampleCount(TextureSampleCount sampleCount)
+    internal static SampleCountFlags ToVkSampleCount(TextureSampleCount sampleCount)
     {
         switch (sampleCount)
         {
@@ -171,7 +171,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static StencilOp VdToVkStencilOp(StencilOperation op)
+    internal static StencilOp ToVkStencilOp(StencilOperation op)
     {
         switch (op)
         {
@@ -196,7 +196,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static CullModeFlags VdToVkCullMode(FaceCullMode cullMode)
+    internal static CullModeFlags ToVkCullMode(FaceCullMode cullMode)
     {
         switch (cullMode)
         {
@@ -211,7 +211,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static BlendOp VdToVkBlendOp(BlendFunction func)
+    internal static BlendOp ToVkBlendOp(BlendFunction func)
     {
         switch (func)
         {
@@ -230,7 +230,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static ColorComponentFlags VdToVkColorWriteMask(ColorWriteMask mask)
+    internal static ColorComponentFlags ToVkColorWriteMask(ColorWriteMask mask)
     {
         ColorComponentFlags flags = 0;
 
@@ -246,7 +246,7 @@ internal static partial class VkFormats
         return flags;
     }
 
-    internal static VkPrimitiveTopology VdToVkPrimitiveTopology(PrimitiveTopology topology)
+    internal static VkPrimitiveTopology ToVkPrimitiveTopology(PrimitiveTopology topology)
     {
         switch (topology)
         {
@@ -265,7 +265,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static VkBlendFactor VdToVkBlendFactor(BlendFactor factor)
+    internal static VkBlendFactor ToVkBlendFactor(BlendFactor factor)
     {
         switch (factor)
         {
@@ -298,7 +298,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static Format VdToVkVertexElementFormat(VertexElementFormat format)
+    internal static Format ToVkVertexElementFormat(VertexElementFormat format)
     {
         switch (format)
         {
@@ -369,7 +369,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static ShaderStageFlags VdToVkShaderStages(ShaderStages stage)
+    internal static ShaderStageFlags ToVkShaderStages(ShaderStages stage)
     {
         ShaderStageFlags ret = 0;
 
@@ -394,7 +394,7 @@ internal static partial class VkFormats
         return ret;
     }
 
-    internal static BorderColor VdToVkSamplerBorderColor(SamplerBorderColor borderColor)
+    internal static BorderColor ToVkSamplerBorderColor(SamplerBorderColor borderColor)
     {
         switch (borderColor)
         {
@@ -409,7 +409,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static IndexType VdToVkIndexFormat(IndexFormat format)
+    internal static IndexType ToVkIndexFormat(IndexFormat format)
     {
         switch (format)
         {
@@ -422,7 +422,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static CompareOp VdToVkCompareOp(ComparisonKind comparisonKind)
+    internal static CompareOp ToVkCompareOp(ComparisonKind comparisonKind)
     {
         switch (comparisonKind)
         {
@@ -447,7 +447,7 @@ internal static partial class VkFormats
         }
     }
 
-    internal static PixelFormat VkToVdPixelFormat(Format vkFormat)
+    internal static PixelFormat ToPixelFormat(Format vkFormat)
     {
         switch (vkFormat)
         {

@@ -703,7 +703,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 
         _vk.GetPhysicalDeviceImageFormatProperties(
             _physicalDevice,
-            VkFormats.VdToVkPixelFormat(format),
+            VkFormats.ToVkPixelFormat(format),
             ImageType.Type2D,
             ImageTiling.Optimal,
             usageFlags,
@@ -741,10 +741,10 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         TextureUsage usage,
         out PixelFormatProperties properties)
     {
-        Format vkFormat = VkFormats.VdToVkPixelFormat(format, (usage & TextureUsage.DepthStencil) != 0);
-        ImageType vkType = VkFormats.VdToVkTextureType(type);
+        Format vkFormat = VkFormats.ToVkPixelFormat(format, (usage & TextureUsage.DepthStencil) != 0);
+        ImageType vkType = VkFormats.ToVkTextureType(type);
         ImageTiling tiling = usage == TextureUsage.Staging ? ImageTiling.Linear : ImageTiling.Optimal;
-        ImageUsageFlags vkUsage = VkFormats.VdToVkTextureUsage(usage);
+        ImageUsageFlags vkUsage = VkFormats.ToVkTextureUsage(usage);
 
         Result result = _vk.GetPhysicalDeviceImageFormatProperties(
             _physicalDevice,

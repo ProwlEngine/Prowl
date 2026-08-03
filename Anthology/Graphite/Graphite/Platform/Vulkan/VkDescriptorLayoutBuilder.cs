@@ -102,7 +102,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                 Binding = (uint)elem.BindingIndex,
                 DescriptorType = descType,
                 DescriptorCount = 1,
-                StageFlags = VkFormats.VdToVkShaderStages(elem.Stages),
+                StageFlags = VkFormats.ToVkShaderStages(elem.Stages),
             };
             switch (descType)
             {

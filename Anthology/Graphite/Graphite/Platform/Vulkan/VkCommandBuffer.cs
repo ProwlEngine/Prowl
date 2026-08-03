@@ -215,7 +215,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
-        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.VdToVkIndexFormat(fmt));
+        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.ToVkIndexFormat(fmt));
         AddStagingResource(vkBuffer.RefCount);
     }
 

@@ -8,7 +8,7 @@ namespace Prowl.Graphite.Vk;
 
 internal static partial class VkFormats
 {
-    internal static Format VdToVkPixelFormat(PixelFormat format, bool toDepthFormat = false)
+    internal static Format ToVkPixelFormat(PixelFormat format, bool toDepthFormat = false)
     {
         switch (format)
         {
