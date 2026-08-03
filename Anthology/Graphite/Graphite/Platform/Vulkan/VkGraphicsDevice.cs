@@ -269,9 +269,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         {
             VkFence slotWrapper = new(this, false);
 
-            VkBuffer primary = new(this, _transientInitialSize,
-                BufferUsage.Dynamic | BufferUsage.UniformBuffer);
-            primary.SetTransientWrites(true);
+            VkBuffer primary = new(this, new BufferDescription(_transientInitialSize,
+                BufferUsage.Dynamic | BufferUsage.UniformBuffer) { TransientWrites = true });
             primary.Name = $"TransientPrimary[{i}]";
             byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
 
@@ -386,8 +385,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             }
         }
 
-        VkBuffer overflow = new(this, sizeInBytes, BufferUsage.Dynamic | BufferUsage.UniformBuffer);
-        overflow.SetTransientWrites(true);
+        VkBuffer overflow = new(this, new BufferDescription(sizeInBytes,
+            BufferUsage.Dynamic | BufferUsage.UniformBuffer) { TransientWrites = true });
         overflow.Name = "TransientOverflow";
         return overflow;
     }
@@ -459,7 +458,7 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         }
     }
 
-    internal void SetResourceName(DeviceResource resource, string name)
+    internal void SetResourceName(GraphicsResource resource, string name)
     {
         if (_debugMarkerEnabled)
         {

@@ -153,6 +153,9 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     public override CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description)
         => Track(_inner.CreateCommandBuffer(ref description));
 
+    public override TransferCommandBuffer CreateTransferCommandBuffer()
+        => Track(_inner.CreateTransferCommandBuffer());
+
     public override Framebuffer CreateFramebuffer(ref FramebufferDescription description)
         => Track(_inner.CreateFramebuffer(ref description));
 
@@ -171,7 +174,7 @@ internal sealed class TrackingResourceFactory : ResourceFactory
     protected override Texture CreateTextureCore(ref TextureDescription description)
         => Track(_inner.CreateTexture(ref description));
 
-    protected override Texture CreateTextureCore(ulong nativeTexture, ref TextureDescription description)
+    public override Texture CreateTexture(ulong nativeTexture, ref TextureDescription description)
         => Track(_inner.CreateTexture(nativeTexture, ref description));
 
     protected override TextureView CreateTextureViewCore(ref TextureViewDescription description)

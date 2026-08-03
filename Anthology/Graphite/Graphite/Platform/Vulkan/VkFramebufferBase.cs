@@ -13,12 +13,12 @@ internal abstract class VkFramebufferBase : Framebuffer
         IReadOnlyList<FramebufferAttachmentDescription> colorTextures)
         : base(depthTexture, colorTextures)
     {
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     public VkFramebufferBase()
     {
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     public ResourceRefCount RefCount { get; }
@@ -26,12 +26,12 @@ internal abstract class VkFramebufferBase : Framebuffer
     public abstract uint RenderableWidth { get; }
     public abstract uint RenderableHeight { get; }
 
-    public override void Dispose()
+    private protected sealed override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    protected abstract void DisposeCore();
+    protected abstract void DestroyNative();
 
     public abstract VkFramebufferHandle CurrentFramebuffer { get; }
     public abstract RenderPass RenderPassNoClear_Init { get; }

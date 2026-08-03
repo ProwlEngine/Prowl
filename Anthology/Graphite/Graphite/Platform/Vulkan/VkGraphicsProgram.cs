@@ -50,10 +50,6 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
     private readonly object _pipelineCacheLock = new();
 
     private readonly DescriptorSetLayout _emptyDescriptorSetLayout;
-    private bool _disposed;
-    private string _name;
-
-    public override bool IsDisposed => _disposed;
 
     internal IReadOnlyDictionary<ShaderStages, ShaderModule> Modules => _modules;
 
@@ -87,7 +83,7 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         : base(ref description)
     {
         _gd = gd;
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
 
         ShaderStageDescription[] stages = description.Stages;
         for (int i = 0; i < stages.Length; i++)
@@ -115,19 +111,12 @@ internal unsafe partial class VkGraphicsProgram : GraphicsProgram, IVkDescriptor
         Constructor_RecordShaderAllocation(stages);
     }
 
-    public override string Name
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
+
+    private protected override void DisposeCore() => RefCount.Decrement();
+
+    private void DestroyNative()
     {
-        get => _name;
-        set { _name = value; _gd.SetResourceName(this, value); }
-    }
-
-    public override void Dispose() => RefCount.Decrement();
-
-    private void DisposeCore()
-    {
-        if (_disposed) return;
-        _disposed = true;
-
         int pipelineCount = _pipelineCache.Count;
         foreach (VkPipelineCacheEntry entry in _pipelineCache.Values)
         {

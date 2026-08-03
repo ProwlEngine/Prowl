@@ -5,37 +5,31 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Device resource storing graphics data. Fixed size, no resizing.
 /// </summary>
-public abstract partial class DeviceBuffer : DeviceResource, BindableResource, MappableResource, IDisposable
+public abstract partial class DeviceBuffer : GraphicsResource, BindableResource, MappableResource
 {
+    /// <summary>
+    /// Properties this buffer was created with.
+    /// </summary>
+    private protected BufferDescription _description;
+
+    private protected DeviceBuffer(in BufferDescription description)
+    {
+        _description = description;
+    }
+
     /// <summary>
     /// Capacity in bytes. Fixed at creation.
     /// </summary>
-    public abstract uint SizeInBytes { get; }
+    public uint SizeInBytes => _description.SizeInBytes;
 
     /// <summary>
     /// Allowed uses bitmask.
     /// </summary>
-    public abstract BufferUsage Usage { get; }
-
-    /// <summary>
-    /// Debug name.
-    /// </summary>
-    public abstract string Name { get; set; }
-
-    /// <summary>
-    /// Disposed?
-    /// </summary>
-    public abstract bool IsDisposed { get; }
-
-    /// <summary>
-    /// Frees unmanaged resources.
-    /// </summary>
-    public abstract void Dispose();
+    public BufferUsage Usage => _description.Usage;
 
     private GraphicsDevice _inFlightDevice;
     private ulong _inFlightExecutionId;
     private ulong _lastOrphanExecutionId;
-    private bool _transientWrites;
 
     /// <summary>
     /// Warn if reallocated again within this many executions.
@@ -59,7 +53,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
 
     internal void SetTransientWrites(bool transientWrites)
     {
-        _transientWrites = transientWrites;
+        _description.TransientWrites = transientWrites;
     }
 
     /// <summary>
@@ -67,7 +61,7 @@ public abstract partial class DeviceBuffer : DeviceResource, BindableResource, M
     /// </summary>
     internal void MarkInFlight(GraphicsDevice device, ulong executionId)
     {
-        if (_transientWrites)
+        if (_description.TransientWrites)
             return;
 
         _inFlightDevice = device;

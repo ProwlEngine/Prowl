@@ -101,7 +101,7 @@ internal unsafe partial class VkCommandBuffer
             if (staging == null)
             {
                 staging = (VkBuffer)_gd.ResourceFactory.CreateBuffer(new BufferDescription(size, BufferUsage.Staging));
-                staging.Name = $"Staging Buffer (CommandBuffer {_name})";
+                staging.Name = $"Staging Buffer (CommandBuffer {Name})";
             }
 
             _currentStagingInfo.BuffersUsed.Add(staging);

@@ -345,10 +345,7 @@ public abstract partial class GraphicsDevice : IDisposable
         Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
     }
 
-    private protected virtual void SubmitAndWaitCore(TransferCommandBuffer commandBuffer)
-    {
-        throw new RenderException($"{GetType().Name} does not support {nameof(SubmitAndWait)}.");
-    }
+    private protected abstract void SubmitAndWaitCore(TransferCommandBuffer commandBuffer);
 
     /// <summary>
     /// Submits a recorded transfer command buffer without blocking the calling thread. Not tied to the execution ring or fences.
@@ -362,10 +359,7 @@ public abstract partial class GraphicsDevice : IDisposable
         Profiler?.RecordSubmit(commandBuffer.ProfilerInfo, isTransfer: true);
     }
 
-    private protected virtual void SubmitTransferCore(TransferCommandBuffer commandBuffer)
-    {
-        throw new RenderException($"{GetType().Name} does not support {nameof(SubmitTransfer)}.");
-    }
+    private protected abstract void SubmitTransferCore(TransferCommandBuffer commandBuffer);
 
     private protected abstract ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot);
     private protected abstract void CompleteExecutionCore(ExecutionTask task);

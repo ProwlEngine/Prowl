@@ -67,7 +67,7 @@ public abstract partial class ResourceFactory
     }
 
     /// <summary>
-    /// Wraps an existing native texture.
+    /// Wraps an existing native texture. No validation runs, so there is no Core counterpart.
     /// </summary>
     /// <param name="nativeTexture">Backend-specific handle. See remarks.</param>
     /// <param name="description">Properties of the existing texture.</param>
@@ -75,26 +75,7 @@ public abstract partial class ResourceFactory
     /// <remarks>
     /// Format depends on backend. Vulkan needs a valid VkImage handle. Description must match the real properties.
     /// </remarks>
-    public Texture CreateTexture(ulong nativeTexture, TextureDescription description)
-        => CreateTextureCore(nativeTexture, ref description);
-
-    /// <summary>
-    /// Wraps an existing native texture.
-    /// </summary>
-    /// <param name="nativeTexture">Backend-specific handle. See remarks.</param>
-    /// <param name="description">Properties of the existing texture.</param>
-    /// <returns>New texture wrapping the native one.</returns>
-    /// <remarks>
-    /// Format depends on backend. Vulkan needs a valid VkImage handle. Description must match the real properties.
-    /// </remarks>
-    public Texture CreateTexture(ulong nativeTexture, ref TextureDescription description)
-        => CreateTextureCore(nativeTexture, ref description);
-
-    /// <summary></summary>
-    /// <param name="nativeTexture"></param>
-    /// <param name="description"></param>
-    /// <returns></returns>
-    protected abstract Texture CreateTextureCore(ulong nativeTexture, ref TextureDescription description);
+    public abstract Texture CreateTexture(ulong nativeTexture, ref TextureDescription description);
 
     /// <summary>
     /// </summary>
@@ -146,9 +127,7 @@ public abstract partial class ResourceFactory
     public DeviceBuffer CreateBuffer(ref BufferDescription description)
     {
         CreateBuffer_CheckDescription(ref description);
-        DeviceBuffer buffer = CreateBufferCore(ref description);
-        buffer.SetTransientWrites(description.TransientWrites);
-        return buffer;
+        return CreateBufferCore(ref description);
     }
 
     /// <summary>
@@ -245,13 +224,10 @@ public abstract partial class ResourceFactory
     public abstract CommandBuffer CreateCommandBuffer(ref CommandBufferDescription description);
 
     /// <summary>
-    /// Creates a transfer command buffer for buffer/texture transfers outside the frame system. Throws if the backend doesn't support it.
+    /// Creates a transfer command buffer for buffer/texture transfers outside the frame system.
     /// </summary>
     /// <returns>New transfer command buffer.</returns>
-    public virtual TransferCommandBuffer CreateTransferCommandBuffer()
-    {
-        throw new RenderException($"{GetType().Name} does not support {nameof(CreateTransferCommandBuffer)}.");
-    }
+    public abstract TransferCommandBuffer CreateTransferCommandBuffer();
 
     /// <summary>
     /// Creates a fence.

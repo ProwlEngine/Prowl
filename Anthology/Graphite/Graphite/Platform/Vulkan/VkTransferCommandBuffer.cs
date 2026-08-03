@@ -12,20 +12,11 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
     private readonly VkGraphicsDevice _gd;
     private readonly CommandPool _pool;
     private Silk.NET.Vulkan.CommandBuffer _cb;
-    private bool _destroyed;
-    private string _name;
     private QueryPool? _pendingTimingPool;
 
     public override GraphicsDevice Device => _gd;
-    public override bool IsDisposed => _destroyed;
 
     internal Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
-
-    public override string Name
-    {
-        get => _name;
-        set => _name = value;
-    }
 
     public VkTransferCommandBuffer(VkGraphicsDevice gd)
     {
@@ -78,7 +69,7 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
 
     internal void SubmitAndWait()
     {
-        _gd.SubmitAndWaitTransfer(_cb, TakePendingTimingPool(), _name, Id);
+        _gd.SubmitAndWaitTransfer(_cb, TakePendingTimingPool(), Name, Id);
     }
 
     private protected override void UpdateBufferCore(DeviceBuffer buffer, uint bufferOffsetInBytes, IntPtr source, uint sizeInBytes)
@@ -159,12 +150,8 @@ internal sealed unsafe class VkTransferCommandBuffer : TransferCommandBuffer
         VkCommandBuffer.GenerateMipmapsCore_VkCommandBuffer(_gd, _cb, vkTex);
     }
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
-        if (_destroyed)
-            return;
-
-        _destroyed = true;
         _gd.Vk.DestroyCommandPool(_gd.Device, _pool, null);
     }
 }

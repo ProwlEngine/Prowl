@@ -1,11 +1,9 @@
-﻿using System;
-
 namespace Prowl.Graphite;
 
 /// <summary>
 /// Bindable resource giving a shader sampled access to a texture.
 /// </summary>
-public abstract class TextureView : BindableResource, DeviceResource, IDisposable
+public abstract class TextureView : GraphicsResource, BindableResource
 {
     /// <summary>
     /// The texture being sampled.
@@ -41,19 +39,4 @@ public abstract class TextureView : BindableResource, DeviceResource, IDisposabl
         ArrayLayers = description.ArrayLayers;
         Format = description.Format ?? description.Target.Format;
     }
-
-    /// <summary>
-    /// Debug name, shows up in graphics debuggers.
-    /// </summary>
-    public abstract string Name { get; set; }
-
-    /// <summary>
-    /// True if disposed.
-    /// </summary>
-    public abstract bool IsDisposed { get; }
-
-    /// <summary>
-    /// Frees the underlying device resources.
-    /// </summary>
-    public abstract void Dispose();
 }

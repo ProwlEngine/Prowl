@@ -16,8 +16,6 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     private readonly RenderPass _renderPassNoClear;
     private readonly RenderPass _renderPassClear;
     private readonly List<ImageView> _attachmentViews = [];
-    private bool _destroyed;
-    private string _name;
 
     public override VkFramebufferHandle CurrentFramebuffer => _deviceFramebuffer;
     public override RenderPass RenderPassNoClear_Init => _renderPassNoClear;
@@ -29,12 +27,9 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 
     public override uint AttachmentCount { get; }
 
-    public override bool IsDisposed => _destroyed;
-
     public VkFramebuffer(VkGraphicsDevice gd, ref FramebufferDescription description, bool isPresented)
         : base(description.DepthTarget, description.ColorTargets)
     {
-        _name = "";
         _gd = gd;
 
         RenderPassCreateInfo renderPassCI = new()
@@ -307,31 +302,19 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         }
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    protected override void DisposeCore()
+    protected override void DestroyNative()
     {
-        if (!_destroyed)
+        _gd.Vk.DestroyFramebuffer(_gd.Device, _deviceFramebuffer, null);
+        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClear, null);
+        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClearLoad, null);
+        _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassClear, null);
+        foreach (ImageView view in _attachmentViews)
         {
-            _gd.Vk.DestroyFramebuffer(_gd.Device, _deviceFramebuffer, null);
-            _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClear, null);
-            _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassNoClearLoad, null);
-            _gd.Vk.DestroyRenderPass(_gd.Device, _renderPassClear, null);
-            foreach (ImageView view in _attachmentViews)
-            {
-                _gd.Vk.DestroyImageView(_gd.Device, view, null);
-            }
-
-            _destroyed = true;
-            _gd.Profiler?.Free(AllocBin.Framebuffer, 0);
+            _gd.Vk.DestroyImageView(_gd.Device, view, null);
         }
+
+        _gd.Profiler?.Free(AllocBin.Framebuffer, 0);
     }
 }

@@ -7,16 +7,12 @@ internal unsafe partial class VkTextureView : TextureView
 {
     private readonly VkGraphicsDevice _gd;
     private readonly ImageView _imageView;
-    private bool _destroyed;
-    private string _name;
 
     public ImageView ImageView => _imageView;
 
     public new VkTexture Target => (VkTexture)base.Target;
 
     public ResourceRefCount RefCount { get; }
-
-    public override bool IsDisposed => _destroyed;
 
     public VkTextureView(VkGraphicsDevice gd, ref TextureViewDescription description)
         : base(ref description)
@@ -73,33 +69,21 @@ internal unsafe partial class VkTextureView : TextureView
         }
 
         _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, out _imageView);
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
 
         _gd.Profiler?.Allocate(AllocBin.TextureView, 0);
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
-        if (!_destroyed)
-        {
-            _destroyed = true;
-            _gd.Vk.DestroyImageView(_gd.Device, ImageView, null);
-            _gd.Profiler?.Free(AllocBin.TextureView, 0);
-        }
+        _gd.Vk.DestroyImageView(_gd.Device, ImageView, null);
+        _gd.Profiler?.Free(AllocBin.TextureView, 0);
     }
 }

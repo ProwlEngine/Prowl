@@ -35,16 +35,12 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
     internal readonly VkDescriptorSetCache DescriptorCache;
 
     private readonly DescriptorSetLayout _emptyDescriptorSetLayout;
-    private bool _disposed;
-    private string _name;
-
-    public override bool IsDisposed => _disposed;
 
     public VkComputeProgram(VkGraphicsDevice gd, ref ComputeDescription description)
         : base(ref description)
     {
         _gd = gd;
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
 
         ShaderStageDescription stage = description.Stage;
         ShaderModuleCreateInfo shaderModuleCI = new() { SType = StructureType.ShaderModuleCreateInfo };
@@ -75,18 +71,12 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         Constructor_RecordAllocations(stage);
     }
 
-    public override string Name
-    {
-        get => _name;
-        set { _name = value; _gd.SetResourceName(this, value); }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    public override void Dispose() => RefCount.Decrement();
+    private protected override void DisposeCore() => RefCount.Decrement();
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
-        if (_disposed) return;
-        _disposed = true;
         _gd.Vk.DestroyPipeline(_gd.Device, DevicePipeline, null);
         _gd.Vk.DestroyShaderModule(_gd.Device, _module, null);
         VkDescriptorLayoutBuilder.Destroy(_gd, DescriptorSetLayouts, _emptyDescriptorSetLayout, PipelineLayout);

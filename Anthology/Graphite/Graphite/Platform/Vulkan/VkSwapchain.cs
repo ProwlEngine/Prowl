@@ -24,10 +24,9 @@ internal unsafe partial class VkSwapchain : Swapchain
     private readonly bool _colorSrgb;
     private bool? _newSyncToVBlank;
     private uint _currentImageIndex;
-    private string _name;
-    private bool _disposed;
 
-    public override string Name { get => _name; set { _name = value; _gd.SetResourceName(this, value); } }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
+
     public override Framebuffer Framebuffer => _framebuffer;
     public override bool SyncToVerticalBlank
     {
@@ -40,8 +39,6 @@ internal unsafe partial class VkSwapchain : Swapchain
             }
         }
     }
-
-    public override bool IsDisposed => _disposed;
 
     public SwapchainKHR DeviceSwapchain => _deviceSwapchain;
     public uint ImageIndex => _currentImageIndex;
@@ -91,7 +88,7 @@ internal unsafe partial class VkSwapchain : Swapchain
         _gd.Vk.WaitForFences(_gd.Device, 1, &iaf, true, ulong.MaxValue);
         _gd.Vk.ResetFences(_gd.Device, 1, &iaf);
 
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     public override void Resize(uint width, uint height)
@@ -317,18 +314,16 @@ internal unsafe partial class VkSwapchain : Swapchain
         return supported;
     }
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
         _gd.Vk.DestroyFence(_gd.Device, _imageAvailableFence, null);
         _framebuffer.Dispose();
         _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
         _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);
-
-        _disposed = true;
     }
 }

@@ -8,14 +8,10 @@ internal unsafe partial class VkSampler : Sampler
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkSamplerHandle _sampler;
-    private bool _disposed;
-    private string _name;
 
     public VkSamplerHandle DeviceSampler => _sampler;
 
     public ResourceRefCount RefCount { get; }
-
-    public override bool IsDisposed => _disposed;
 
     public VkSampler(VkGraphicsDevice gd, ref SamplerDescription description)
     {
@@ -44,33 +40,21 @@ internal unsafe partial class VkSampler : Sampler
         };
 
         _gd.Vk.CreateSampler(_gd.Device, in samplerCI, null, out _sampler);
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
 
         _gd.Profiler?.Allocate(AllocBin.Sampler, 0);
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
-        if (!_disposed)
-        {
-            _gd.Vk.DestroySampler(_gd.Device, _sampler, null);
-            _disposed = true;
-            _gd.Profiler?.Free(AllocBin.Sampler, 0);
-        }
+        _gd.Vk.DestroySampler(_gd.Device, _sampler, null);
+        _gd.Profiler?.Free(AllocBin.Sampler, 0);
     }
 }

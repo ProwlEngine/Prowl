@@ -22,12 +22,11 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
     private readonly VkGraphicsDevice _gd;
     private CommandPool _pool;
     private Silk.NET.Vulkan.CommandBuffer _cb;
-    private bool _destroyed;
 
     /// <summary>
     /// True if not mid-recording, safe to reset and reuse. Begun-but-not-ended must dispose instead.
     /// </summary>
-    internal bool CanRecycle => !_commandBufferBegun && !_destroyed;
+    internal bool CanRecycle => !_commandBufferBegun && !IsDisposed;
 
     private bool _commandBufferBegun;
     private bool _commandBufferEnded;
@@ -56,14 +55,10 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
 
     private bool _newFramebuffer; // Render pass cycle state
 
-    private string _name;
-
     public CommandPool CommandPool => _pool;
     public Silk.NET.Vulkan.CommandBuffer CommandBuffer => _cb;
 
     public ResourceRefCount RefCount { get; }
-
-    public override bool IsDisposed => _destroyed;
 
     public VkCommandBuffer(VkGraphicsDevice gd, ref CommandBufferDescription description)
         : base(gd.Features, gd.UniformBufferMinOffsetAlignment, gd.StructuredBufferMinOffsetAlignment)
@@ -78,7 +73,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         _gd.Vk.CreateCommandPool(_gd.Device, in poolCI, null, out _pool).CheckResult();
 
         _cb = GetNextCommandBuffer();
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
         _descriptorBinder = new VkDescriptorBinder(this, gd);
 
         Constructor_RecordAllocation();
@@ -519,15 +514,7 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
             0, null);
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     private protected override void PushDebugGroupCore(string name)
     {
@@ -567,26 +554,22 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         func(_cb, &markerInfo);
     }
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
-        if (!_destroyed)
+        _gd.Vk.DestroyCommandPool(_gd.Device, _pool, null);
+
+        Debug.Assert(_submittedStagingInfos.Count == 0);
+
+        foreach (VkBuffer buffer in _availableStagingBuffers)
         {
-            _destroyed = true;
-            _gd.Vk.DestroyCommandPool(_gd.Device, _pool, null);
-
-            Debug.Assert(_submittedStagingInfos.Count == 0);
-
-            foreach (VkBuffer buffer in _availableStagingBuffers)
-            {
-                buffer.Dispose();
-            }
-
-            DisposeCore_RecordFree();
+            buffer.Dispose();
         }
+
+        DisposeCore_RecordFree();
     }
 }

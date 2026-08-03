@@ -6,7 +6,7 @@ namespace Prowl.Graphite;
 /// <summary>
 /// Base for all shader program kinds. Holds resource layouts plus shared disposal/identity contract.
 /// </summary>
-public abstract class ShaderProgram : DeviceResource, IDisposable
+public abstract class ShaderProgram : GraphicsResource
 {
     private readonly ResourceLayoutDescription[] _resourceLayouts;
     private readonly SetBindingMetadata[] _bindingMetadata;
@@ -49,19 +49,4 @@ public abstract class ShaderProgram : DeviceResource, IDisposable
             layouts[i].Elements = clonedElements;
         }
     }
-
-    /// <summary>
-    /// Debug name, for graphics debuggers.
-    /// </summary>
-    public abstract string Name { get; set; }
-
-    /// <summary>
-    /// Whether this instance is disposed.
-    /// </summary>
-    public abstract bool IsDisposed { get; }
-
-    /// <summary>
-    /// Frees unmanaged device resources.
-    /// </summary>
-    public abstract void Dispose();
 }

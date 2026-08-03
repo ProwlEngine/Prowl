@@ -23,8 +23,6 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     private FramebufferAttachment[][] _scColorTextures = [];
 
     private FramebufferAttachment? _depthAttachment;
-    private bool _destroyed;
-    private string _name;
     private OutputDescription _outputDescription;
 
     public override VkFramebufferHandle CurrentFramebuffer => _scFramebuffers[(int)_currentImageIndex].CurrentFramebuffer;
@@ -52,8 +50,6 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
     public override uint AttachmentCount { get; }
 
     public VkSwapchain Swapchain => _swapchain;
-
-    public override bool IsDisposed => _destroyed;
 
     public VkSwapchainFramebuffer(
         VkGraphicsDevice gd,
@@ -173,23 +169,11 @@ internal unsafe class VkSwapchainFramebuffer : VkFramebufferBase
         }
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    protected override void DisposeCore()
+    protected override void DestroyNative()
     {
-        if (!_destroyed)
-        {
-            _destroyed = true;
-            _depthAttachment?.Target.Dispose();
-            DestroySwapchainFramebuffers();
-        }
+        _depthAttachment?.Target.Dispose();
+        DestroySwapchainFramebuffers();
     }
 }
