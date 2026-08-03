@@ -352,8 +352,6 @@ public static class Undo
                 if (Selection.IsSelected(target))
                     Selection.Clear();
 
-                foreach (var child in target.GetChildrenDeep().ToList())
-                    scene.Remove(child);
                 scene.Remove(target);
                 target.Dispose();
             },
@@ -433,8 +431,6 @@ public static class Undo
                 if (Selection.IsSelected(target))
                     Selection.Clear();
 
-                foreach (var child in target.GetChildrenDeep().ToList())
-                    scene.Remove(child);
                 scene.Remove(target);
                 target.Dispose();
                 EditorSceneManager.MarkDirty();

@@ -1103,9 +1103,6 @@ public class HierarchyPanel : DockPanel
         if (Selection.IsSelected(go))
             Selection.RemoveFromSelection(go);
 
-        foreach (var child in go.GetChildrenDeep().ToList())
-            scene.Remove(child);
-
         scene.Remove(go);
         go.Dispose();
     }
