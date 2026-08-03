@@ -56,11 +56,6 @@ public struct ViewerData
 /// </summary>
 public class DefaultRenderPipeline : RenderPipeline
 {
-
-    // Scratch collections for the per-frame renderable/light gather, kept alive so the gather
-    // does not allocate and grow two scene-sized reference lists on every camera of every frame.
-    private readonly List<IRenderable> _renderables = new();
-    private readonly List<IRenderableLight> _lights = new();
     #region Static Resources
 
     private static Mesh s_quadMesh;
@@ -199,11 +194,7 @@ public class DefaultRenderPipeline : RenderPipeline
 
         // =======================================================
         // 3. Collect and Cull Renderables
-        // Reused across frames - see the non-allocating CollectRenderables overload. Safe to keep on
-        // the pipeline because cameras are collected and rendered one at a time.
-        List<IRenderable> renderables = _renderables;
-        List<IRenderableLight> lights = _lights;
-        CollectRenderables(camera.GameObject.Scene, camera, renderables, lights);
+        var (renderables, lights) = CollectRenderables(camera.GameObject.Scene, camera);
         //lights.Clear();
 
         // Inject editor grid
