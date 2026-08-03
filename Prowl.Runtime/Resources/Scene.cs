@@ -429,12 +429,36 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Unregisters a GameObject and all of its children
+    /// Unregisters a GameObject and all of its children.
     /// </summary>
+    /// <remarks>
+    /// Asking to remove something this scene does not hold is reported rather than ignored. It leaves the
+    /// object ticking in whichever scene does hold it, which reads as the engine having ignored the call.
+    /// </remarks>
     public void Remove(GameObject obj)
     {
         EnsureNotDisposed();
-        if (obj.Scene != this) return;
+
+        if (object.ReferenceEquals(obj, null))
+        {
+            Debug.LogWarning("[Scene] Remove(null) does nothing.");
+            return;
+        }
+
+        if (obj.IsNotValid())
+        {
+            Debug.LogWarning("[Scene] Cannot remove a Disposed or Null GameObject.");
+            return;
+        }
+
+        if (obj.Scene != this)
+        {
+            Debug.LogWarning(obj.Scene.IsValid()
+                ? $"[Scene] '{obj.Name}' belongs to another scene, so this one cannot remove it."
+                : $"[Scene] '{obj.Name}' is not in any scene, so there is nothing to remove.");
+            return;
+        }
+
         if (obj.Parent.IsValid() && obj.Parent.Scene == this)
         {
             obj.SetParent(null);
