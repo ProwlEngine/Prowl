@@ -91,9 +91,21 @@ public class PlayerAssetBackend : AssetBackendBase
     //  Raw asset loading
     // ================================================================
 
+    /// <summary>
+    /// The bytes for one asset, named by the manifest.
+    /// </summary>
+    /// <remarks>
+    /// An asset the manifest does not list was not shipped, and saying so is worth more than letting the
+    /// lookup fail as a missing file. The name still falls back to the convention, so an asset the engine
+    /// itself provides outside the manifest keeps loading.
+    /// </remarks>
     private byte[]? LoadRawAsset(Guid guid)
     {
-        string fileName = $"{guid}.asset";
+        if (!_guidToPath.TryGetValue(guid, out string? fileName))
+        {
+            Debug.LogWarning($"[PlayerAssetBackend] {guid} is not in the asset manifest. It may not have shipped.");
+            fileName = $"{guid}.asset";
+        }
 
         return _mode switch
         {
