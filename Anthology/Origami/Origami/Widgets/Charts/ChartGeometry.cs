@@ -9,10 +9,7 @@ using Prowl.Vector;
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Canvas primitives shared by every chart family that paints radial geometry. These live outside
-/// <see cref="CircularCore{TSelf, T}"/> because the hierarchical family's sunburst draws the same
-/// wedges without being a circular chart, and neither core should have to inherit from the other to
-/// get at them.
+/// Canvas primitives shared by every chart family that paints radial geometry.
 /// </summary>
 internal static class ChartGeometry
 {
@@ -50,20 +47,6 @@ internal static class ChartGeometry
 
         canvas.SetFillColor(fill);
         canvas.FillComplexAA();
-    }
-
-    /// <summary>Strokes the arc between <paramref name="a0"/> and <paramref name="a1"/> at
-    /// <paramref name="width"/> pixels, which is how a track or ring segment is drawn.</summary>
-    internal static void PaintRing(Canvas canvas, float cx, float cy, float radius,
-        float a0, float a1, float width, Color32 stroke)
-    {
-        if (radius <= 0f || width <= 0f || MathF.Abs(a1 - a0) < 1e-5f) return;
-
-        canvas.BeginPath();
-        canvas.Arc(cx, cy, radius, a0, a1);
-        canvas.SetStrokeColor(stroke);
-        canvas.SetStrokeWidth(width);
-        canvas.Stroke();
     }
 
     /// <summary>How many straight segments an arc of this radius and sweep is flattened into. Scales

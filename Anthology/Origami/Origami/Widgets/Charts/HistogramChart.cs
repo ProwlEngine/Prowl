@@ -70,7 +70,7 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
         return visible;
     }
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext ctx)
+    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
     {
         if (ctx.MaxN <= 0) return;
 
@@ -120,7 +120,7 @@ public sealed class HistogramChart<T> : DistributionCore<HistogramChart<T>, T>
 
     /// <summary>Highlights the sampled bin. The popup header names the bin's value range rather than
     /// its index, since a histogram band is a range of values.</summary>
-    protected override void DrawSampler(Paper paper, in SampleContext ctx)
+    protected override void DrawSampler(Paper paper, in SampleContext<T> ctx)
     {
         List<CartesianSeries<T>> visible = VisibleGroups(ctx.Series);
         if (visible.Count == 0) return;

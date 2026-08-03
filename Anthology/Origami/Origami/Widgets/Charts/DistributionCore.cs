@@ -11,7 +11,7 @@ using Color = System.Drawing.Color;
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Shared implementation for the distribution chart types (Histogram, BoxPlot). Unlike the rest of
+/// Shared implementation for the distribution chart types (Histogram). Unlike the rest of
 /// the Cartesian family these do not plot their input values: they plot geometry derived from them,
 /// so every group's raw values are collected before layout, handed to <see cref="DeriveGroup"/>, and
 /// replaced in place by whatever that produces. Everything else - axes, grid, ticks, legend, sampler,
@@ -29,7 +29,6 @@ public abstract class DistributionCore<TSelf, T> : CartesianCore<TSelf, T>
     private Color? _pendingFill;
 
     private const int MaxBins = 512;
-    private const double FenceFactor = 1.5d;
 
     private TSelf Self => (TSelf)this;
 
@@ -63,11 +62,6 @@ public abstract class DistributionCore<TSelf, T> : CartesianCore<TSelf, T>
     /// <paramref name="group"/>, in input order.</summary>
     protected abstract void DeriveGroup(CartesianSeries<T> group, IReadOnlyList<double> values, List<double> derived);
 
-    /// <summary>Called once per frame after every group has been derived. Chart types whose marks span
-    /// past the derived point y - box plot whiskers and outliers - widen the axis here with
-    /// <c>DeriveYRange</c>, guarded by <c>HasExplicitYRange</c>.</summary>
-    protected virtual void OnDeriveEnd() { }
-
     protected override void OnBeforeShow()
     {
         ProjectValueGroup();
@@ -92,8 +86,6 @@ public abstract class DistributionCore<TSelf, T> : CartesianCore<TSelf, T>
             for (int k = 0; k < derived.Count; k++)
                 points.Add((k, derived[k], default));
         }
-
-        OnDeriveEnd();
     }
 
     private void ProjectValueGroup()
@@ -209,110 +201,4 @@ public abstract class DistributionCore<TSelf, T> : CartesianCore<TSelf, T>
         return counts;
     }
 
-    /// <summary>A group's five-number summary plus the extras a box plot draws: its mean, the
-    /// 1.5*IQR fences, the whisker ends and the outliers past them.</summary>
-    protected readonly struct DistributionSummary
-    {
-        /// <summary>Number of finite values the summary was built from. Zero means every other field is
-        /// meaningless and nothing should be drawn.</summary>
-        public readonly int Count;
-
-        public readonly double Min;
-        public readonly double Q1;
-        public readonly double Median;
-        public readonly double Q3;
-        public readonly double Max;
-        public readonly double Mean;
-
-        /// <summary>Lower and upper 1.5*IQR fences. Values beyond them are the outliers.</summary>
-        public readonly double LowerFence;
-        public readonly double UpperFence;
-
-        /// <summary>The most extreme values still inside the fences: where the whiskers end.</summary>
-        public readonly double LowerWhisker;
-        public readonly double UpperWhisker;
-
-        public readonly IReadOnlyList<double> Outliers;
-
-        internal DistributionSummary(int count, double min, double q1, double median, double q3, double max,
-            double mean, double lowerFence, double upperFence, double lowerWhisker, double upperWhisker,
-            IReadOnlyList<double> outliers)
-        {
-            Count = count;
-            Min = min; Q1 = q1; Median = median; Q3 = q3; Max = max;
-            Mean = mean;
-            LowerFence = lowerFence; UpperFence = upperFence;
-            LowerWhisker = lowerWhisker; UpperWhisker = upperWhisker;
-            Outliers = outliers;
-        }
-
-        public double Iqr => Q3 - Q1;
-    }
-
-    /// <summary>Summarises a group's values. Quartiles use the linear-interpolation convention: the
-    /// values are sorted and quantile p is read at the fractional position <c>p * (n - 1)</c>,
-    /// interpolating between its neighbours. This is the inclusive convention, matching NumPy's default
-    /// and Excel's PERCENTILE.INC, so Q2 is the ordinary median.</summary>
-    protected static DistributionSummary ComputeSummary(IReadOnlyList<double> values)
-    {
-        var sorted = new List<double>(values.Count);
-        double sum = 0d;
-
-        foreach (double v in values)
-        {
-            if (!IsFinite(v)) continue;
-            sorted.Add(v);
-            sum += v;
-        }
-
-        if (sorted.Count == 0)
-            return new DistributionSummary(0, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, 0d, Array.Empty<double>());
-
-        sorted.Sort();
-
-        double min = sorted[0];
-        double max = sorted[^1];
-        double q1 = Quantile(sorted, 0.25d);
-        double median = Quantile(sorted, 0.5d);
-        double q3 = Quantile(sorted, 0.75d);
-
-        double fence = (q3 - q1) * FenceFactor;
-        double lowerFence = q1 - fence;
-        double upperFence = q3 + fence;
-
-        double lowerWhisker = max;
-        double upperWhisker = min;
-        List<double>? outliers = null;
-
-        foreach (double v in sorted)
-        {
-            if (v < lowerFence || v > upperFence)
-            {
-                (outliers ??= new List<double>()).Add(v);
-                continue;
-            }
-
-            if (v < lowerWhisker) lowerWhisker = v;
-            if (v > upperWhisker) upperWhisker = v;
-        }
-
-        if (upperWhisker < lowerWhisker) { lowerWhisker = median; upperWhisker = median; }
-
-        return new DistributionSummary(sorted.Count, min, q1, median, q3, max, sum / sorted.Count,
-            lowerFence, upperFence, lowerWhisker, upperWhisker,
-            (IReadOnlyList<double>?)outliers ?? Array.Empty<double>());
-    }
-
-    private static double Quantile(List<double> sorted, double p)
-    {
-        int n = sorted.Count;
-        if (n == 1) return sorted[0];
-
-        double pos = p * (n - 1);
-        int lo = (int)Math.Floor(pos);
-        int hi = Math.Min(lo + 1, n - 1);
-        double frac = pos - lo;
-
-        return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
-    }
 }

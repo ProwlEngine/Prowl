@@ -41,30 +41,8 @@ public sealed class HierarchicalNode<T>
     public bool Visible => !LegendHidden && Value > 0d;
 }
 
-/// <summary>One row of a hierarchical chart's legend. <c>Key</c> is the element-storage key the hide
-/// toggle writes, and is always a node's <see cref="HierarchicalNode{T}.Index"/>.</summary>
-public readonly struct HierarchicalLegendEntry
-{
-    public readonly string Label;
-    public readonly Color Color;
-    public readonly double Value;
-    public readonly bool HasValue;
-    public readonly int Key;
-    public readonly bool Hidden;
-
-    public HierarchicalLegendEntry(string label, Color color, double value, bool hasValue, int key, bool hidden)
-    {
-        Label = label ?? "";
-        Color = color;
-        Value = value;
-        HasValue = hasValue;
-        Key = key;
-        Hidden = hidden;
-    }
-}
-
 /// <summary>
-/// Shared implementation for every hierarchical chart type (Treemap, Sunburst, FlameGraph). Resolves the
+/// Shared implementation for every hierarchical chart type (FlameGraph). Resolves the
 /// caller's item tree into a forest of aggregated, coloured, ordered nodes, and owns the title, legend,
 /// cell chrome, hover tooltip and zoom/pan view state around the geometry each type lays out for itself.
 /// </summary>
@@ -106,8 +84,6 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private Func<T, bool>? _highlight;
     private bool _showValues;
     private bool _showPercent;
-    private bool _mergeDuplicates;
-    private bool _invert;
 
     private Action<T>? _onNodeClick;
     private T? _selected;
@@ -181,7 +157,8 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     /// it out of the forest total. Also gated globally by <see cref="Origami.LegendSelectionEnabled"/>.</summary>
     public TSelf LegendInteractive(bool interactive) { _legendInteractive = interactive; return Self; }
 
-    private bool LegendInteractiveActive => _legendInteractive && Origami.LegendSelectionEnabled;
+    /// <summary>Whether legend interaction is both requested on this instance and not killed globally.</summary>
+    protected bool LegendInteractiveActive => _legendInteractive && Origami.LegendSelectionEnabled;
 
     // --- Tooltip / formatting ---
 
@@ -217,15 +194,6 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     public TSelf ShowValues(bool show = true) { _showValues = show; return Self; }
     public TSelf ShowPercent(bool show = true) { _showPercent = show; return Self; }
 
-    /// <summary>Fold siblings that share a label into one node before layout, summing their values and
-    /// concatenating their children, recursively. This is what turns a call tree sampled many times over
-    /// into one readable flame or ring.</summary>
-    public TSelf MergeDuplicates(bool merge = true) { _mergeDuplicates = merge; return Self; }
-
-    /// <summary>Draw the tree outward-in rather than inward-out. Only the radial type reads this; the
-    /// rectangular types have no equivalent reversal.</summary>
-    public TSelf Invert(bool invert = true) { _invert = invert; return Self; }
-
     // --- Events ---
 
     /// <summary>Called with the source item when a node's cell is clicked.</summary>
@@ -245,12 +213,8 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     /// emitting them reads this to decide whether to reserve room for text.</summary>
     protected bool LabelsEnabled => _labels;
 
-    /// <summary>Pixels of gap left between sibling cells, ring segments and bars. Same value as
-    /// <see cref="Padding"/>.</summary>
+    /// <summary>Pixels of gap left between sibling bars. Same value as <see cref="Padding"/>.</summary>
     protected float CellGap => _padding;
-
-    /// <summary>Whether <see cref="Invert"/> was set. Only the radial type acts on it.</summary>
-    protected bool Inverted => _invert;
 
     /// <summary>Ordinal into the flattened forest of the node under the pointer, or -1. Written by
     /// <see cref="NodeCell"/> and by <see cref="HitTest"/>, and read back on the following frame.</summary>
@@ -297,6 +261,26 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
             _ => ramp.C700,
         };
     }
+
+    /// <summary>Label of <paramref name="item"/> under the caller's <see cref="Name"/> selector, or the
+    /// empty string without one. For a core that resolves its own forest rather than through
+    /// <see cref="BuildTree"/>'s default tree walk.</summary>
+    protected string NodeLabel(T item) => _nameSelector != null ? (_nameSelector(item) ?? "") : "";
+
+    /// <summary>Colour of <paramref name="item"/>: the caller's <see cref="ColorFunction"/> passed
+    /// <paramref name="colorArg"/>, or the ramp colour <paramref name="ordinal"/> and
+    /// <paramref name="depth"/> pick out. Which number a core hands to the colour function is its own
+    /// choice - the tree walk passes depth, a lane-based core passes its category index.</summary>
+    protected Color NodeColor(T item, int colorArg, int ordinal, int depth)
+        => _colorFunction != null ? _colorFunction(item, colorArg) : DefaultNodeColor(ordinal, depth);
+
+    /// <summary>Whether <paramref name="item"/> fails the caller's <see cref="Highlight"/> predicate and
+    /// should therefore draw dimmed. False when no predicate is set.</summary>
+    protected bool IsDimmed(T item) => _highlight != null && !_highlight(item);
+
+    /// <summary>Whether <paramref name="item"/> is the one passed to <see cref="Selected"/>.</summary>
+    protected bool IsSelectedItem(T item)
+        => _hasSelection && item is not null && EqualityComparer<T>.Default.Equals(item, _selected);
 
     /// <summary>Formats a value the way this chart's legend, cells and tooltip do, honouring
     /// <see cref="ValueFormatter"/>.</summary>
@@ -400,7 +384,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     /// prune, index, apply legend hiding, then lay out each node's span. The order matters - indices are
     /// handed out only once the draw order is final, and spans are assigned only once hiding has settled
     /// which nodes still weigh anything.</summary>
-    private List<HierarchicalNode<T>> BuildTree(ElementHandle el, out List<HierarchicalNode<T>> flat,
+    protected virtual List<HierarchicalNode<T>> BuildTree(ElementHandle el, out List<HierarchicalNode<T>> flat,
         out double total, out int maxDepth)
     {
         flat = new List<HierarchicalNode<T>>();
@@ -415,8 +399,6 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
             HierarchicalNode<T>? node = BuildNode(item, 0, null);
             if (node != null) roots.Add(node);
         }
-
-        if (_mergeDuplicates) roots = MergeSiblings(roots, null);
 
         SortLevel(roots);
         roots = Prune(roots);
@@ -492,38 +474,6 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
         node.Value = own > 0d ? Math.Max(own, childSum) : childSum;
 
         return node;
-    }
-
-    /// <summary>Folds same-labelled siblings into one node, recursively. Values add up and children are
-    /// concatenated then merged in turn; the surviving node keeps the first duplicate's payload so a
-    /// colour function or click handler still gets a real item back.</summary>
-    private List<HierarchicalNode<T>> MergeSiblings(List<HierarchicalNode<T>> siblings, HierarchicalNode<T>? parent)
-    {
-        var merged = new List<HierarchicalNode<T>>(siblings.Count);
-        var byLabel = new Dictionary<string, HierarchicalNode<T>>(siblings.Count);
-
-        foreach (HierarchicalNode<T> node in siblings)
-        {
-            if (byLabel.TryGetValue(node.Label, out HierarchicalNode<T>? target))
-            {
-                target.Value += node.Value;
-                target.Children.AddRange(node.Children);
-                continue;
-            }
-
-            node.Parent = parent;
-            byLabel[node.Label] = node;
-            merged.Add(node);
-        }
-
-        foreach (HierarchicalNode<T> node in merged)
-        {
-            List<HierarchicalNode<T>> kids = MergeSiblings(new List<HierarchicalNode<T>>(node.Children), node);
-            node.Children.Clear();
-            node.Children.AddRange(kids);
-        }
-
-        return merged;
     }
 
     /// <summary>Applies <see cref="SortBy"/> to one level and every level under it.</summary>
@@ -659,7 +609,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
                 List<HierarchicalNode<T>> roots = BuildTree(_containerEl, out List<HierarchicalNode<T>> flat,
                     out double total, out int maxDepth);
 
-                IReadOnlyList<HierarchicalLegendEntry> entries = BuildLegend(roots);
+                IReadOnlyList<LegendEntry> entries = BuildLegend(roots);
 
                 if (_legend && entries.Count > 0)
                     DrawLegend(entries);
@@ -672,50 +622,32 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     }
 
     /// <summary>The legend rows for the current forest, one per node the legend lists.</summary>
-    protected virtual IReadOnlyList<HierarchicalLegendEntry> BuildLegend(List<HierarchicalNode<T>> roots)
+    protected virtual IReadOnlyList<LegendEntry> BuildLegend(List<HierarchicalNode<T>> roots)
     {
         IReadOnlyList<HierarchicalNode<T>> nodes = LegendNodes(roots);
 
-        var entries = new List<HierarchicalLegendEntry>(nodes.Count);
+        var entries = new List<LegendEntry>(nodes.Count);
         foreach (HierarchicalNode<T> node in nodes)
-            entries.Add(new HierarchicalLegendEntry(
+            entries.Add(new LegendEntry(
                 node.Label.Length > 0 ? node.Label : "Node " + node.Index,
-                node.Color, node.Value, true, node.Index, node.LegendHidden));
+                node.Color, node.Index, FormatValue(node.Value), node.LegendHidden));
 
         return entries;
     }
 
-    private void DrawLegend(IReadOnlyList<HierarchicalLegendEntry> entries)
+    private void DrawLegend(IReadOnlyList<LegendEntry> entries)
     {
-        ElementBuilder legendCol = _paper.Column(_id + "_legend")
+        LegendBuilder legend = Origami.Legend(_paper, _id + "_legend", entries)
             .Width(125f)
-            .PaddingTop(_padding)
-            .ColBetween(_padding);
+            .SwatchSize(SwatchSize)
+            .Padding(_padding)
+            .RowGap(_padding)
+            .Interactive(_legendInteractive)
+            .OnToggle(Toggle);
 
-        using (legendCol.Enter())
-        {
-            for (int i = 0; i < entries.Count; i++)
-            {
-                HierarchicalLegendEntry entry = entries[i];
-                int key = entry.Key;
+        if (_legendFontSize.HasValue) legend.FontSize(_legendFontSize.Value);
 
-                string text = entry.HasValue ? entry.Label + "  " + FormatValue(entry.Value) : entry.Label;
-                Color swatchColor = entry.Hidden ? Color.FromArgb(entry.Color.A / 3, entry.Color) : entry.Color;
-
-                using (_paper.Row($"{_id}_legend_row_{i}").Height(SwatchSize).RowBetween(2f).Enter())
-                {
-                    ElementBuilder swatch = _paper.Box($"{_id}_legend_sw_{i}").Size(SwatchSize).BackgroundColor(swatchColor).Rounded(2f);
-
-                    if (LegendInteractiveActive)
-                        swatch.OnClick(_ => Toggle(key));
-
-                    LabelBuilder label = Origami.Label(_paper, $"{_id}_legend_txt_{i}", text);
-                    if (_legendFontSize.HasValue) label.FontSize(_legendFontSize.Value); else label.XS();
-
-                    label.AlignCenter().AlignLeft().Height(SwatchSize).Show();
-                }
-            }
-        }
+        legend.Show();
     }
 
     private void Toggle(int key)
@@ -727,7 +659,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
 
     /// <summary>The plot element itself: a clipped box that owns the view state, the pointer wiring and
     /// the type's marks. Its size comes from the previous frame's layout rather than from a paint
-    /// callback, because the rectangular types build their cells out of Paper nodes and so must know the
+    /// callback, because a hierarchical type builds its cells out of Paper nodes and so must know the
     /// box before it is drawn.</summary>
     private void DrawChartBox(List<HierarchicalNode<T>> roots, List<HierarchicalNode<T>> flat,
         double total, int maxDepth)
@@ -1021,7 +953,10 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
         public float Width, Height;
     }
 
-    private const string HiddenKeyPrefix = "hier_hidden_";
+    /// <summary>Element-storage key prefix the legend's hidden flags are stored under, one entry per
+    /// legend key. A core that supplies its own <see cref="BuildTree"/> and <see cref="BuildLegend"/>
+    /// reads the same prefix back so both halves agree on what a key means.</summary>
+    protected const string HiddenKeyPrefix = "hier_hidden_";
     private const string PlotKey = "hier_plot";
     private const string HoverPosKey = "hier_hover_pos";
     private const string HoverOnKey = "hier_hover_on";

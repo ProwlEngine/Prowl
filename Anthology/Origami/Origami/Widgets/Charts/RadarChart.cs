@@ -95,16 +95,16 @@ public sealed class RadarChart<T> : CircularCore<RadarChart<T>, T>
 
     protected override bool LegendListsSlices => _series.Count == 0;
 
-    protected override IReadOnlyList<CircularLegendEntry> BuildLegend(IReadOnlyList<CircularSlice<T>> slices)
+    protected override IReadOnlyList<LegendEntry> BuildLegend(IReadOnlyList<CircularSlice<T>> slices)
     {
         if (_series.Count == 0) return base.BuildLegend(slices);
 
-        var entries = new List<CircularLegendEntry>(_series.Count);
+        var entries = new List<LegendEntry>(_series.Count);
         for (int i = 0; i < _series.Count; i++)
         {
             RadarSeries s = _series[i];
-            entries.Add(new CircularLegendEntry(
-                s.Label.Length > 0 ? s.Label : "Series " + i, s.Tint, 0d, false, i, IsHidden(i)));
+            entries.Add(new LegendEntry(
+                s.Label.Length > 0 ? s.Label : "Series " + i, s.Tint, i, null, IsHidden(i)));
         }
         return entries;
     }

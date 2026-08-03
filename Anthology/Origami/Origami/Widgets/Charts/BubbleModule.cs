@@ -13,14 +13,14 @@ using Color = System.Drawing.Color;
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Cartesian bubble chart. Like a scatter chart, but each marker's diameter comes from a selector
-/// run against the source item behind the point, so a third value can be encoded as bubble area.
-/// Bubbles are filled at partial alpha with a solid outline so overlaps stay readable.
+/// Bubble module for a <see cref="CartesianChart{T}"/>. Like a scatter, but each marker's diameter comes
+/// from a selector run against the source item behind the point, so a third value can be encoded as
+/// bubble area. Bubbles are filled at partial alpha with a solid outline so overlaps stay readable. Added
+/// with <c>.AddBubbleChart()</c>.
 /// </summary>
-public sealed class BubbleChart<T> : CartesianCore<BubbleChart<T>, T>
+public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
 {
-    internal BubbleChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
-        : base(paper, id, theme, data) { }
+    internal BubbleModule(CartesianChart<T> chart) : base(chart) { }
 
     private const float DefaultDiameter = 12f;
 
@@ -28,33 +28,20 @@ public sealed class BubbleChart<T> : CartesianCore<BubbleChart<T>, T>
     private MarkerShape _markerShape = MarkerShape.Circle;
 
     /// <summary>Per-item marker diameter, in pixels. Points whose source item is unavailable (series
-    /// added as pre-sampled values rather than through the <c>.X</c>/<c>.Y</c> selectors) fall back to
-    /// a fixed diameter.</summary>
-    public BubbleChart<T> MarkerSize(Func<T, float> selector) { _sizeSelector = selector; return this; }
+    /// added as pre-sampled values rather than through <c>.Y(...)</c>) fall back to a fixed diameter.</summary>
+    public BubbleModule<T> MarkerSize(Func<T, float> selector) { _sizeSelector = selector; return this; }
 
     /// <summary>Shape drawn at each point. Defaults to <see cref="MarkerShape.Circle"/>.</summary>
-    public BubbleChart<T> Marker(MarkerShape shape) { _markerShape = shape; return this; }
+    public BubbleModule<T> Marker(MarkerShape shape) { _markerShape = shape; return this; }
 
     protected override bool SampleNearest2D => true;
 
-    protected override bool DefaultPanY => true;
+    protected override bool PanY => true;
 
-    /// <summary>Crosshairs through the sampled bubble on both axes with a ring around it, and a readout
-    /// of its position plus the size value driving its diameter.</summary>
-    protected override void DrawSampler(Paper paper, in SampleContext ctx)
+    /// <summary>Ring around the sampled bubble on both axes, and a readout of its position plus the size
+    /// value driving its diameter.</summary>
+    protected override void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows)
     {
-        CartesianSeries<T>? longest = LongestVisible(ctx.Series);
-        if (longest == null || ctx.Index >= longest.Points.Count) return;
-
-        (double ax, double ay, T? _) = longest.Points[ctx.Index];
-        float lx = ctx.XPos(ax);
-        float ly = Math.Clamp(ctx.YPos(ay), ctx.PlotT, ctx.PlotB);
-
-        SampleLine(paper, in ctx, lx);
-        SampleLineH(paper, in ctx, ly);
-
-        var rows = new List<(Color Color, string Text)>();
-
         for (int i = 0; i < ctx.Series.Count; i++)
         {
             CartesianSeries<T> s = ctx.Series[i];
@@ -67,7 +54,7 @@ public sealed class BubbleChart<T> : CartesianCore<BubbleChart<T>, T>
             Color color = s.Color ?? System.Drawing.Color.Gray;
             float diameter = DiameterOf(payload);
 
-            SampleRing(paper, i.ToString(), ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), diameter, color);
+            SampleRing(paper, $"bubble_{i}", ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), diameter, color);
 
             string text = $"{s.Label}: ({FormatValue(x)}, {FormatValue(y)})";
             if (_sizeSelector != null && payload is T item)
@@ -75,11 +62,9 @@ public sealed class BubbleChart<T> : CartesianCore<BubbleChart<T>, T>
 
             rows.Add((color, text));
         }
-
-        SamplePopup(paper, in ctx, lx, SampleHeader(ctx.Index), rows);
     }
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext ctx)
+    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
     {
         foreach (var s in ctx.Series)
         {

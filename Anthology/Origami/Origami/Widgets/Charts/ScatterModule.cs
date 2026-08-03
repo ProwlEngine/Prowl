@@ -13,44 +13,32 @@ using Color = System.Drawing.Color;
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Cartesian scatter chart. Plots one marker per point of every visible series at its mapped
-/// (x, y) position, with no connecting stroke between points.
+/// Scatter module for a <see cref="CartesianChart{T}"/>. Plots one marker per point of every visible
+/// series at its mapped (x, y) position, with no connecting stroke between points. Added with
+/// <c>.AddScatterPlot()</c>.
 /// </summary>
-public sealed class ScatterChart<T> : CartesianCore<ScatterChart<T>, T>
+public sealed class ScatterModule<T> : CartesianModuleBase<ScatterModule<T>, T>
 {
-    internal ScatterChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
-        : base(paper, id, theme, data) { }
+    internal ScatterModule(CartesianChart<T> chart) : base(chart) { }
 
     private float _markerSize = 6f;
     private MarkerShape _markerShape = MarkerShape.Circle;
 
     /// <summary>Marker diameter in pixels. Defaults to 6.</summary>
-    public ScatterChart<T> MarkerSize(float size) { _markerSize = MathF.Max(1f, size); return this; }
+    public ScatterModule<T> MarkerSize(float size) { _markerSize = MathF.Max(1f, size); return this; }
 
     /// <summary>Shape drawn at each point. Defaults to <see cref="MarkerShape.Circle"/>.</summary>
-    public ScatterChart<T> Marker(MarkerShape shape) { _markerShape = shape; return this; }
+    public ScatterModule<T> Marker(MarkerShape shape) { _markerShape = shape; return this; }
 
     protected override bool SampleNearest2D => true;
 
-    protected override bool DefaultPanY => true;
+    protected override bool PanY => true;
 
-    /// <summary>Crosshairs through the sampled marker on both axes with a ring around it, and a readout
-    /// of each visible series' point there. A scatter point carries an x of its own, so the readout
-    /// reports the pair rather than a value against a shared x.</summary>
-    protected override void DrawSampler(Paper paper, in SampleContext ctx)
+    /// <summary>Ring around the sampled marker on both axes, and a readout of each visible series'
+    /// point there. A scatter point carries an x of its own, so the readout reports the pair rather than
+    /// a value against a shared x.</summary>
+    protected override void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows)
     {
-        CartesianSeries<T>? longest = LongestVisible(ctx.Series);
-        if (longest == null || ctx.Index >= longest.Points.Count) return;
-
-        (double ax, double ay, T? _) = longest.Points[ctx.Index];
-        float lx = ctx.XPos(ax);
-        float ly = Math.Clamp(ctx.YPos(ay), ctx.PlotT, ctx.PlotB);
-
-        SampleLine(paper, in ctx, lx);
-        SampleLineH(paper, in ctx, ly);
-
-        var rows = new List<(Color Color, string Text)>();
-
         for (int i = 0; i < ctx.Series.Count; i++)
         {
             CartesianSeries<T> s = ctx.Series[i];
@@ -62,14 +50,12 @@ public sealed class ScatterChart<T> : CartesianCore<ScatterChart<T>, T>
 
             Color color = s.Color ?? System.Drawing.Color.Gray;
 
-            SampleRing(paper, i.ToString(), ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), _markerSize, color);
+            SampleRing(paper, $"scatter_{i}", ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), _markerSize, color);
             rows.Add((color, $"{s.Label}: ({FormatValue(x)}, {FormatValue(y)})"));
         }
-
-        SamplePopup(paper, in ctx, lx, SampleHeader(ctx.Index), rows);
     }
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext ctx)
+    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
     {
         foreach (var s in ctx.Series)
         {

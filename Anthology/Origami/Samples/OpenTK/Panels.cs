@@ -1220,8 +1220,8 @@ public sealed class ChartsPanel : DockPanel
 {
     private readonly record struct ScatterPoint(double X, double Y);
     private readonly record struct BubblePoint(double X, double Y, float Size);
-    private readonly record struct Candle(double Index, double Open, double High, double Low, double Close);
     private sealed record BuildNode(string Name, double Ms, BuildNode[] Kids);
+    private sealed record TraceSpan(string Name, double Start, double End, string Thread, string Track, string Category);
 
     private static readonly string[] Months =
     {
@@ -1230,32 +1230,18 @@ public sealed class ChartsPanel : DockPanel
     };
 
     private static readonly string[] Quarters = { "Q1", "Q2", "Q3", "Q4", "Q1", "Q2", "Q3", "Q4" };
-    private static readonly string[] Regions = { "NA", "EU", "APAC", "LATAM", "MEA" };
     private static readonly string[] Sources = { "Direct", "Search", "Social", "Referral", "Email" };
     private static readonly string[] Axes = { "Speed", "Memory", "Draw Calls", "Latency", "Bandwidth", "Power" };
-    private static readonly StepAlign[] StepAligns = { StepAlign.After, StepAlign.Before, StepAlign.Middle };
     private static readonly MarkerShape[] Markers = { MarkerShape.Circle, MarkerShape.Square, MarkerShape.Triangle, MarkerShape.Diamond, MarkerShape.Cross };
 
     private readonly double[] _revenueBase = new double[24];
     private readonly double[] _costBase = new double[24];
-    private readonly double[] _sessionsBase = new double[24];
-    private readonly double[] _signupsBase = new double[24];
-    private readonly double[] _cpuBase = new double[18];
-    private readonly double[] _gpuBase = new double[18];
     private readonly double[] _northBase = new double[8];
     private readonly double[] _southBase = new double[8];
     private readonly double[] _westBase = new double[8];
-    private readonly double[] _desktopBase = new double[5];
-    private readonly double[] _mobileBase = new double[5];
-    private readonly double[] _tabletBase = new double[5];
-    private readonly double[] _churnBase = new double[5];
 
     private readonly double[] _revenue = new double[24];
     private readonly double[] _cost = new double[24];
-    private readonly double[] _sessions = new double[24];
-    private readonly double[] _signups = new double[24];
-    private readonly double[] _cpu = new double[18];
-    private readonly double[] _gpu = new double[18];
     private readonly double[] _north = new double[8];
     private readonly double[] _south = new double[8];
     private readonly double[] _west = new double[8];
@@ -1276,21 +1262,17 @@ public sealed class ChartsPanel : DockPanel
 
     private readonly List<ScatterPoint> _scatter = new();
     private readonly List<BubblePoint> _bubbles = new();
-    private readonly List<Candle> _candles = new();
     private readonly BuildNode[] _buildTree;
+    private readonly TraceSpan[] _trace;
 
     private readonly double[] _frameBaseline = new double[400];
     private readonly double[] _frameOptimized = new double[400];
-    private readonly double[] _latencyNA = new double[120];
-    private readonly double[] _latencyEU = new double[120];
-    private readonly double[] _latencyAPAC = new double[120];
 
     private bool _smooth = true;
     private bool _fill = true;
     private bool _sampleable = true;
     private bool _legendSelect = true;
     private bool _labels = true;
-    private int _stepAlign;
     private int _marker;
 
     private const float ChartHeight = 260f;
@@ -1301,23 +1283,13 @@ public sealed class ChartsPanel : DockPanel
     {
         var rng = new Random(7);
 
-        double rev = 40, cost = 30, sessions = 120, signups = 45;
+        double rev = 40, cost = 30;
         for (int i = 0; i < _revenueBase.Length; i++)
         {
             rev += (rng.NextDouble() - 0.35) * 8;
             cost += (rng.NextDouble() - 0.5) * 5;
-            sessions += (rng.NextDouble() - 0.4) * 22;
-            signups += (rng.NextDouble() - 0.45) * 12;
             _revenueBase[i] = Math.Max(5, rev);
             _costBase[i] = Math.Max(5, cost);
-            _sessionsBase[i] = Math.Max(10, sessions);
-            _signupsBase[i] = Math.Max(5, signups);
-        }
-
-        for (int i = 0; i < _cpuBase.Length; i++)
-        {
-            _cpuBase[i] = 20 + rng.NextDouble() * 60;
-            _gpuBase[i] = 15 + rng.NextDouble() * 70;
         }
 
         for (int i = 0; i < _northBase.Length; i++)
@@ -1325,14 +1297,6 @@ public sealed class ChartsPanel : DockPanel
             _northBase[i] = 20 + rng.NextDouble() * 45;
             _southBase[i] = 15 + rng.NextDouble() * 35;
             _westBase[i] = 10 + rng.NextDouble() * 30;
-        }
-
-        for (int i = 0; i < _desktopBase.Length; i++)
-        {
-            _desktopBase[i] = 25 + rng.NextDouble() * 30;
-            _mobileBase[i] = 18 + rng.NextDouble() * 34;
-            _tabletBase[i] = 6 + rng.NextDouble() * 14;
-            _churnBase[i] = -(4 + rng.NextDouble() * 12);
         }
 
         for (int i = 0; i < _sourceBase.Length; i++)
@@ -1350,10 +1314,6 @@ public sealed class ChartsPanel : DockPanel
 
         Array.Copy(_revenueBase, _revenue, _revenueBase.Length);
         Array.Copy(_costBase, _cost, _costBase.Length);
-        Array.Copy(_sessionsBase, _sessions, _sessionsBase.Length);
-        Array.Copy(_signupsBase, _signups, _signupsBase.Length);
-        Array.Copy(_cpuBase, _cpu, _cpuBase.Length);
-        Array.Copy(_gpuBase, _gpu, _gpuBase.Length);
         Array.Copy(_northBase, _north, _northBase.Length);
         Array.Copy(_southBase, _south, _southBase.Length);
         Array.Copy(_westBase, _west, _westBase.Length);
@@ -1372,36 +1332,48 @@ public sealed class ChartsPanel : DockPanel
             _bubbles.Add(new BubblePoint(x, y, 6f + (float)rng.NextDouble() * 26f));
         }
 
-        double price = 120;
-        for (int i = 0; i < 32; i++)
-        {
-            double open = price;
-            double close = Math.Max(20, open + (rng.NextDouble() - 0.48) * 12);
-            double high = Math.Max(open, close) + rng.NextDouble() * 5;
-            double low = Math.Min(open, close) - rng.NextDouble() * 5;
-            _candles.Add(new Candle(i, open, high, low, close));
-            price = close;
-        }
-
         for (int i = 0; i < _frameBaseline.Length; i++)
         {
             _frameBaseline[i] = Gaussian(rng, 16.6, 3.2);
             _frameOptimized[i] = Gaussian(rng, 11.4, 2.1);
         }
 
-        for (int i = 0; i < _latencyNA.Length; i++)
+        _buildTree = MakeBuildTree(rng);
+        _trace = MakeTrace(rng);
+    }
+
+    private static TraceSpan[] MakeTrace(Random rng)
+    {
+        (string Thread, string Track, string[] Work)[] lanes =
         {
-            _latencyNA[i] = Math.Max(1, Gaussian(rng, 38, 9));
-            _latencyEU[i] = Math.Max(1, Gaussian(rng, 52, 14));
-            _latencyAPAC[i] = Math.Max(1, Gaussian(rng, 74, 21));
+            ("Main", "Simulation", new[] { "Input", "Physics", "Animation", "Scripts" }),
+            ("Main", "Render", new[] { "Cull", "Shadows", "Opaque", "Present" }),
+            ("Worker 1", "Jobs", new[] { "Skinning", "Particles", "Culling" }),
+            ("Worker 2", "Jobs", new[] { "Streaming", "Decompress", "Upload" }),
+            ("Worker 2", "IO", new[] { "ReadAsset", "ParseAsset" }),
+        };
+
+        string[] categories = { "CPU", "GPU", "IO", "Wait" };
+
+        var spans = new List<TraceSpan>();
+        foreach ((string thread, string track, string[] work) in lanes)
+        {
+            double t = rng.NextDouble() * 1.5;
+            for (int i = 0; i < 14; i++)
+            {
+                string name = work[i % work.Length];
+                double duration = 0.4 + rng.NextDouble() * 2.6;
+                spans.Add(new TraceSpan(name, t, t + duration, thread, track, categories[(i + name.Length) % categories.Length]));
+
+                if (rng.NextDouble() < 0.35)
+                    spans.Add(new TraceSpan(name + " (nested)", t + duration * 0.2, t + duration * 0.9,
+                        thread, track, categories[(i + 2) % categories.Length]));
+
+                t += duration + rng.NextDouble() * 1.2;
+            }
         }
 
-        _latencyNA[3] = 128;
-        _latencyEU[11] = 156;
-        _latencyEU[47] = 4;
-        _latencyAPAC[22] = 198;
-
-        _buildTree = MakeBuildTree(rng);
+        return spans.ToArray();
     }
 
     private static BuildNode[] MakeBuildTree(Random rng)
@@ -1448,10 +1420,6 @@ public sealed class ChartsPanel : DockPanel
         _animTime += P.DeltaTime;
         Animate(_revenueBase, _revenue, 4.5f, 3.5);
         Animate(_costBase, _cost, 5.4f, 2.5);
-        Animate(_sessionsBase, _sessions, 3.6f, 8.0);
-        Animate(_signupsBase, _signups, 6.0f, 4.0);
-        Animate(_cpuBase, _cpu, 7.5f, 6.0);
-        Animate(_gpuBase, _gpu, 6.6f, 6.5);
         Animate(_northBase, _north, 4.8f, 3.0);
         Animate(_southBase, _south, 5.7f, 2.6);
         Animate(_westBase, _west, 6.3f, 2.2);
@@ -1467,15 +1435,12 @@ public sealed class ChartsPanel : DockPanel
 
             Origami.ScrollView(P, "chartsscroll", w, MathF.Max(64f, h - 42f)).ColSpacing(12f).Padding(16, 16, 8, 16).Body(() =>
             {
-                Row(P, "chartsrow0", () => { LineChart(P); AreaChart(P); });
-                Row(P, "chartsrow1", () => { StepChart(P); BarChart(P); });
-                Row(P, "chartsrow2", () => { StackedBarChart(P); ScatterChart(P); });
-                Row(P, "chartsrow3", () => { BubbleChart(P); CandlestickChart(P); });
-                Row(P, "chartsrow4", () => { OHLCChart(P); PieChart(P); });
-                Row(P, "chartsrow5", () => { DonutChart(P); RadarChart(P); });
-                Row(P, "chartsrow6", () => { HistogramChart(P); BoxPlotChart(P); });
-                Row(P, "chartsrow7", () => { TreemapChart(P); SunburstChart(P); });
-                Row(P, "chartsrow8", () => { FlameGraphChart(P); });
+                Row(P, "chartsrow0", () => { LineChart(P); BarChart(P); });
+                Row(P, "chartsrow1", () => { ScatterChart(P); BubbleChart(P); });
+                Row(P, "chartsrow2", () => { PieChart(P); DonutChart(P); });
+                Row(P, "chartsrow3", () => { RadarChart(P); HistogramChart(P); });
+                Row(P, "chartsrow4", () => { FlameGraphChart(P); });
+                Row(P, "chartsrow5", () => { TimelineChart(P); });
             });
         }
     }
@@ -1498,172 +1463,87 @@ public sealed class ChartsPanel : DockPanel
 
     private void LineChart(Paper P)
     {
-        Origami.Chart.Line<object>(P, "chart_line")
+        Origami.Chart.CreateCartesian<object>(P, "chart_line")
             .Title("Revenue vs. Cost - Last 24 Months")
             .Height(ChartHeight)
             .YLabel("Dollars (K)").XLabel("Month")
             .Legend().LegendShowValue().LegendInteractive(true)
             .GridTickLines(1)
             .Sampleable(_sampleable)
-            .Interpolation(_smooth ? CartesianInterpolation.Smooth : CartesianInterpolation.Linear)
             .ValueFormatter(v => $"{v:0.#}K")
             .XTickFormatter(i => Months[i % Months.Length])
-            .Series("Revenue", Palette.C(96, 165, 250), _revenue).Fill(_fill)
-            .Series("Cost", Palette.C(251, 113, 133), _cost).Dashed()
-            .Padding(6)
             .Zoomable(true)
             .Pannable(true)
-            .Show();
-    }
-
-    private void AreaChart(Paper P)
-    {
-        Origami.Chart.Area<object>(P, "chart_area")
-            .Title("Sessions vs. Signups")
-            .Height(ChartHeight)
-            .YLabel("Count").XLabel("Month")
-            .Legend().LegendShowValue().LegendInteractive(true)
-            .GridTickLines(1)
-            .Sampleable(_sampleable)
-            .Interpolation(_smooth ? CartesianInterpolation.Smooth : CartesianInterpolation.Linear)
-            .Opacity(_fill ? 0.28f : 0.05f)
-            .ValueFormatter(v => $"{v:0}")
-            .XTickFormatter(i => Months[i % Months.Length])
-            .Series("Sessions", Palette.C(52, 211, 153), _sessions)
-            .Series("Signups", Palette.C(167, 139, 250), _signups)
-            .Padding(6)
-            .Show();
-    }
-
-    private void StepChart(Paper P)
-    {
-        Origami.Chart.Step<object>(P, "chart_step")
-            .Title($"Load - Step {StepAligns[_stepAlign]}")
-            .Height(ChartHeight)
-            .YLabel("Percent").XLabel("Sample")
-            .Legend().LegendShowValue().LegendInteractive(true)
-            .GridTickLines(1)
-            .Sampleable(_sampleable)
-            .Interpolation(StepAligns[_stepAlign])
-            .YRange(0, 100)
-            .ValueFormatter(v => $"{v:0}%")
-            .Series("CPU", Palette.C(250, 204, 21), _cpu).Fill(_fill)
-            .Series("GPU", Palette.C(56, 189, 248), _gpu)
+            .AddLineChart()
+                .Interpolation(_smooth ? CartesianInterpolation.Smooth : CartesianInterpolation.Linear)
+                .Series("Revenue", Palette.C(96, 165, 250), _revenue).Fill(_fill)
+                .Series("Cost", Palette.C(251, 113, 133), _cost).Dashed()
+                .Cartesian
             .Padding(6)
             .Show();
     }
 
     private void BarChart(Paper P)
     {
-        Origami.Chart.Bar<object>(P, "chart_bar")
+        Origami.Chart.CreateCartesian<object>(P, "chart_bar")
             .Title("Quarterly Sales by Region")
             .Height(ChartHeight)
             .YLabel("Units (K)").XLabel("Quarter")
             .Legend().LegendShowValue().LegendInteractive(true)
             .GridLines(0, 4)
             .Sampleable(_sampleable)
-            .BarWidth(0.78f).BarGap(0.15f)
             .ValueFormatter(v => $"{v:0.#}K")
             .XTickFormatter(i => Quarters[i % Quarters.Length])
-            .Series("North", Palette.C(96, 165, 250), _north)
-            .Series("South", Palette.C(251, 146, 60), _south)
-            .Series("West", Palette.C(52, 211, 153), _west)
-            .Padding(6)
-            .Show();
-    }
-
-    private void StackedBarChart(Paper P)
-    {
-        Origami.Chart.StackedBar<object>(P, "chart_stacked")
-            .Title("Traffic Mix vs. Churn")
-            .Height(ChartHeight)
-            .YLabel("Users (K)").XLabel("Region")
-            .Legend().LegendShowValue().LegendInteractive(true)
-            .GridLines(0, 4)
-            .Sampleable(_sampleable)
-            .BarWidth(0.7f)
-            .ValueFormatter(v => $"{v:0.#}K")
-            .XTickFormatter(i => Regions[i % Regions.Length])
-            .Series("Desktop", Palette.C(96, 165, 250), _desktopBase).Stack("traffic")
-            .Series("Mobile", Palette.C(167, 139, 250), _mobileBase).Stack("traffic")
-            .Series("Tablet", Palette.C(45, 212, 191), _tabletBase).Stack("traffic")
-            .Series("Churn", Palette.C(251, 113, 133), _churnBase).Stack("churn")
+            .AddBarChart()
+                .BarWidth(0.78f).BarGap(0.15f)
+                .Series("North", Palette.C(96, 165, 250), _north)
+                .Series("South", Palette.C(251, 146, 60), _south)
+                .Series("West", Palette.C(52, 211, 153), _west)
+                .Cartesian
             .Padding(6)
             .Show();
     }
 
     private void ScatterChart(Paper P)
     {
-        Origami.Chart.Scatter(P, "chart_scatter", _scatter)
+        Origami.Chart.CreateCartesian<ScatterPoint>(P, "chart_scatter", _scatter)
             .Title("Spend vs. Conversion")
             .Height(ChartHeight)
             .YLabel("Conversion").XLabel("Spend")
-            .Name("Campaigns")
             .Legend().LegendInteractive(true)
             .GridLines(4, 4)
             .Sampleable(_sampleable)
-            .Info()
-            .MarkerSize(7f)
-            .Marker(Markers[_marker])
-            .X(p => p.X).Y(p => p.Y)
+            .X(p => p.X)
             .ValueFormatter(v => $"{v:0.#}")
             .XTickFormatter(i => $"{i}")
+            .AddScatterPlot()
+                .MarkerSize(7f)
+                .Marker(Markers[_marker])
+                .Y(p => p.Y).Name("Campaigns")
+                .Color(Palette.C(96, 165, 250))
+                .Cartesian
             .Padding(6)
             .Show();
     }
 
     private void BubbleChart(Paper P)
     {
-        Origami.Chart.Bubble(P, "chart_bubble", _bubbles)
+        Origami.Chart.CreateCartesian<BubblePoint>(P, "chart_bubble", _bubbles)
             .Title("Accounts - Reach by Seat Count")
             .Height(ChartHeight)
             .YLabel("Reach").XLabel("Tenure")
-            .Name("Accounts")
             .Legend().LegendInteractive(true)
             .GridLines(4, 4)
             .Sampleable(_sampleable)
-            .Success()
-            .MarkerSize(b => b.Size)
-            .Marker(Markers[_marker])
-            .X(b => b.X).Y(b => b.Y)
+            .X(b => b.X)
             .ValueFormatter(v => $"{v:0.#}")
             .XTickFormatter(i => $"{i}")
-            .Padding(6)
-            .Show();
-    }
-
-    private void CandlestickChart(Paper P)
-    {
-        Origami.Chart.Candlestick(P, "chart_candles", _candles)
-            .Title("PRWL - Daily Candles")
-            .Height(ChartHeight)
-            .YLabel("Price").XLabel("Day")
-            .Name("PRWL")
-            .Legend().LegendShowValue()
-            .GridLines(0, 4)
-            .Sampleable(_sampleable)
-            .X(c => c.Index)
-            .Open(c => c.Open).High(c => c.High).Low(c => c.Low).Close(c => c.Close)
-            .ValueFormatter(v => $"${v:0.00}")
-            .XTickFormatter(i => $"D{i + 1}")
-            .Padding(6)
-            .Show();
-    }
-
-    private void OHLCChart(Paper P)
-    {
-        Origami.Chart.OHLC(P, "chart_ohlc", _candles)
-            .Title("PRWL - Daily OHLC Bars")
-            .Height(ChartHeight)
-            .YLabel("Price").XLabel("Day")
-            .Name("PRWL")
-            .Legend().LegendShowValue()
-            .GridLines(0, 4)
-            .Sampleable(_sampleable)
-            .X(c => c.Index)
-            .Open(c => c.Open).High(c => c.High).Low(c => c.Low).Close(c => c.Close)
-            .ValueFormatter(v => $"${v:0.00}")
-            .XTickFormatter(i => $"D{i + 1}")
+            .AddBubbleChart()
+                .MarkerSize(b => b.Size)
+                .Marker(Markers[_marker])
+                .Y(b => b.Y).Name("Accounts")
+                .Color(Palette.C(52, 211, 153))
+                .Cartesian
             .Padding(6)
             .Show();
     }
@@ -1738,61 +1618,6 @@ public sealed class ChartsPanel : DockPanel
             .Show();
     }
 
-    private void BoxPlotChart(Paper P)
-    {
-        Origami.Chart.BoxPlot<object>(P, "chart_boxplot")
-            .Title("Request Latency by Region")
-            .Height(ChartHeight)
-            .YLabel("Latency (ms)").XLabel("Region")
-            .Legend().LegendInteractive(true)
-            .GridLines(0, 4)
-            .Sampleable(_sampleable)
-            .ShowMean(true)
-            .ShowMedian(true)
-            .ShowOutliers(true)
-            .ValueFormatter(v => $"{v:0.#}ms")
-            .Series("NA", Palette.C(96, 165, 250), _latencyNA)
-            .Series("EU", Palette.C(167, 139, 250), _latencyEU)
-            .Series("APAC", Palette.C(250, 204, 21), _latencyAPAC)
-            .Padding(6)
-            .Show();
-    }
-
-    private void TreemapChart(Paper P)
-    {
-        Origami.Chart.Treemap(P, "chart_treemap", _buildTree)
-            .Title("Build Time by Module - Treemap")
-            .Height(ChartHeight)
-            .Legend().LegendInteractive(true)
-            .Name(n => n.Name)
-            .Value(n => n.Ms)
-            .Children(n => n.Kids)
-            .Labels(_labels)
-            .ShowValues(true)
-            .SortBy(n => n.Ms, true)
-            .ValueFormatter(v => $"{v:0.#}ms")
-            .Padding(6)
-            .Show();
-    }
-
-    private void SunburstChart(Paper P)
-    {
-        Origami.Chart.Sunburst(P, "chart_sunburst", _buildTree)
-            .Title("Build Time by Module - Sunburst")
-            .Height(ChartHeight)
-            .Legend().LegendInteractive(true)
-            .Name(n => n.Name)
-            .Value(n => n.Ms)
-            .Children(n => n.Kids)
-            .Labels(_labels)
-            .ShowPercent(true)
-            .InnerRadius(0.3f)
-            .Success()
-            .ValueFormatter(v => $"{v:0.#}ms")
-            .Padding(6)
-            .Show();
-    }
-
     private void FlameGraphChart(Paper P)
     {
         Origami.Chart.FlameGraph(P, "chart_flamegraph", _buildTree)
@@ -1804,11 +1629,29 @@ public sealed class ChartsPanel : DockPanel
             .Children(n => n.Kids)
             .Labels(_labels)
             .RowHeight(22f)
-            .MergeDuplicates(true)
             .Zoomable(true)
             .Pannable(true)
             .Info()
             .ValueFormatter(v => $"{v:0.#}ms")
+            .Padding(6)
+            .Show();
+    }
+
+    private void TimelineChart(Paper P)
+    {
+        Origami.Chart.Timeline(P, "chart_timeline", _trace)
+            .Title("Frame Trace - Timeline")
+            .Height(ChartHeight)
+            .Legend().LegendInteractive(true)
+            .Name(s => s.Name)
+            .Start(s => s.Start)
+            .End(s => s.End)
+            .Thread(s => s.Thread)
+            .Track(s => s.Track)
+            .Category(s => s.Category)
+            .ValueFormatter(v => $"{v:0.##}ms")
+            .Zoomable(true)
+            .Pannable(true)
             .Padding(6)
             .Show();
     }
@@ -1822,8 +1665,6 @@ public sealed class ChartsPanel : DockPanel
             ToggleButton(P, "chartsSample", "Sampleable", _sampleable, v => _sampleable = v);
             ToggleButton(P, "chartsLegendSelect", "Legend Select", _legendSelect, v => { _legendSelect = v; Origami.LegendSelectionEnabled = v; });
             ToggleButton(P, "chartsLabels", "Labels", _labels, v => _labels = v);
-            Origami.Button(P, "chartsStepAlign", $"Step: {StepAligns[_stepAlign]}",
-                () => _stepAlign = (_stepAlign + 1) % StepAligns.Length).Small().Subtle().Show();
             Origami.Button(P, "chartsMarker", $"Marker: {Markers[_marker]}",
                 () => _marker = (_marker + 1) % Markers.Length).Small().Subtle().Show();
             P.Box("chartstbsp").Width(P.Stretch());

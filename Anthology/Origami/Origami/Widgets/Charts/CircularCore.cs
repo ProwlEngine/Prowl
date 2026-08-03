@@ -31,58 +31,17 @@ public sealed class CircularSlice<T>
     public bool Visible => !LegendHidden;
 }
 
-/// <summary>One row of a circular chart's legend. <c>Key</c> is the element-storage key the hide toggle
-/// writes, and is a source data index for slice legends or a series index for the types whose legend
-/// lists series instead.</summary>
-public readonly struct CircularLegendEntry
-{
-    public readonly string Label;
-    public readonly Color Color;
-    public readonly double Value;
-    public readonly bool HasValue;
-    public readonly int Key;
-    public readonly bool Hidden;
-
-    public CircularLegendEntry(string label, Color color, double value, bool hasValue, int key, bool hidden)
-    {
-        Label = label ?? "";
-        Color = color;
-        Value = value;
-        HasValue = hasValue;
-        Key = key;
-        Hidden = hidden;
-    }
-}
-
 /// <summary>
-/// Shared implementation for every circular chart type (Pie, Donut, Radar, Gauge). Resolves the data set
-/// into slices, and draws the title, legend, per-slice labels and hover tooltip around the geometry each
-/// type paints for itself.
+/// Shared implementation for every circular chart type (Pie, Donut, Radar). Resolves the data set
+/// into slices and draws the per-slice labels and hover tooltip around the geometry each type paints for
+/// itself; the outer box, title, legend and data visibility all come from <see cref="ChartCore{TSelf, T}"/>.
 /// </summary>
-public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T>
+public abstract class CircularCore<TSelf, T> : ChartCore<TSelf, T> where TSelf : CircularCore<TSelf, T>
 {
-    protected readonly Paper _paper;
-    protected readonly string _id;
-    protected readonly OrigamiTheme _theme;
-    protected readonly IReadOnlyList<T>? _data;
-
-    private string _title = "";
-
-    private UnitValue _width = UnitValue.Stretch();
-    private float _height = 220f;
-    private float _padding = 0f;
-
-    private OrigamiVariant _variant = OrigamiVariant.Primary;
-    private Color? _backgroundColor;
-    private string _emptyLabel = "No data";
+    private List<CircularSlice<T>>? _resolvedSlices;
 
     private Func<T, string>? _nameSelector;
     private Func<T, double>? _valueSelector;
-
-    private bool _legend = true;
-    private bool _legendShowValue = true;
-    private float? _legendFontSize;
-    private bool _legendInteractive;
 
     private bool _tooltip = true;
     private Func<double, string>? _valueFormatter;
@@ -95,37 +54,10 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
     private bool _showPercent;
     private bool _showValues;
 
-    private ElementHandle _containerEl;
-
     protected CircularCore(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data = null)
-    {
-        _paper = paper ?? throw new ArgumentNullException(nameof(paper));
-        _id = id ?? throw new ArgumentNullException(nameof(id));
-        _theme = theme ?? throw new ArgumentNullException(nameof(theme));
-        _data = data;
-    }
+        : base(paper, id, theme, data) { }
 
     private TSelf Self => (TSelf)this;
-
-    // --- Chrome ---
-
-    public TSelf Title(string text) { _title = text ?? ""; return Self; }
-
-    public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
-    public TSelf Width(UnitValue width) { _width = width; return Self; }
-    public TSelf Height(float height) { _height = MathF.Max(32f, height); return Self; }
-    public TSelf Size(float width, float height) { _width = MathF.Max(32f, width); _height = MathF.Max(32f, height); return Self; }
-    public TSelf Padding(float padding) { _padding = MathF.Max(0f, padding); return Self; }
-
-    public TSelf Variant(OrigamiVariant v) { _variant = v; return Self; }
-    public TSelf Primary() => Variant(OrigamiVariant.Primary);
-    public TSelf Success() => Variant(OrigamiVariant.Success);
-    public TSelf Warning() => Variant(OrigamiVariant.Warning);
-    public TSelf Danger() => Variant(OrigamiVariant.Danger);
-    public TSelf Info() => Variant(OrigamiVariant.Info);
-
-    public TSelf BackgroundColor(Color color) { _backgroundColor = color; return Self; }
-    public TSelf EmptyLabel(string text) { _emptyLabel = text ?? "No data"; return Self; }
 
     // --- Data ---
 
@@ -140,21 +72,6 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
     /// <summary>Colour selector, taking the item and its index in the source data set. Overrides the
     /// colour the chart would otherwise cycle out of the active variant's ramp.</summary>
     public TSelf ColorFunction(Func<T, int, Color> selector) { _colorFunction = selector; return Self; }
-
-    // --- Legend ---
-
-    public TSelf Legend(bool show = true) { _legend = show; return Self; }
-    public TSelf LegendShowValue(bool show = true) { _legendShowValue = show; return Self; }
-
-    /// <summary>Font size, in pixels, of the legend's labels. Unset uses the same XS size the rest of the
-    /// chart chrome does.</summary>
-    public TSelf LegendFontSize(float size) { _legendFontSize = MathF.Max(1f, size); return Self; }
-
-    /// <summary>Let a click on a legend swatch hide and show that entry. Also gated globally by
-    /// <see cref="Origami.LegendSelectionEnabled"/>.</summary>
-    public TSelf LegendInteractive(bool interactive) { _legendInteractive = interactive; return Self; }
-
-    private bool LegendInteractiveActive => _legendInteractive && Origami.LegendSelectionEnabled;
 
     // --- Tooltip / formatting ---
 
@@ -177,7 +94,7 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
 
     // --- Slice resolution ---
 
-    private List<CircularSlice<T>> ResolveSlices(ElementHandle el)
+    private List<CircularSlice<T>> ResolveSlices()
     {
         var slices = new List<CircularSlice<T>>();
         if (_data == null || _data.Count == 0) return slices;
@@ -202,14 +119,12 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
                 ? slices.OrderByDescending(s => _sortKey(s.Payload!)).ToList()
                 : slices.OrderBy(s => _sortKey(s.Payload!)).ToList();
 
-        bool interactiveSlices = LegendInteractiveActive && LegendListsSlices;
-
         for (int ordinal = 0; ordinal < slices.Count; ordinal++)
         {
             CircularSlice<T> slice = slices[ordinal];
             slice.Color = _colorFunction != null ? _colorFunction(slice.Payload!, slice.Index) : DefaultSliceColor(ordinal);
-            if (interactiveSlices)
-                slice.LegendHidden = _paper.GetElementStorage(el, HiddenKeyPrefix + slice.Index, false);
+            if (LegendListsSlices)
+                slice.LegendHidden = IsLegendHidden(slice.Index);
         }
 
         double magnitude = 0d;
@@ -239,10 +154,6 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
         };
     }
 
-    /// <summary>The active variant's colour ramp, which is where slice colours and a chart type's own
-    /// accent colour come from.</summary>
-    protected OrigamiRamp Ramp => _theme.Get(_variant);
-
     private static double VisibleTotal(IReadOnlyList<CircularSlice<T>> slices)
     {
         double total = 0d;
@@ -267,23 +178,23 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
 
     /// <summary>The legend rows for the current data. The default is one row per slice, labelled by the
     /// slice and keyed on its source index.</summary>
-    protected virtual IReadOnlyList<CircularLegendEntry> BuildLegend(IReadOnlyList<CircularSlice<T>> slices)
+    protected virtual IReadOnlyList<LegendEntry> BuildLegend(IReadOnlyList<CircularSlice<T>> slices)
     {
-        var entries = new List<CircularLegendEntry>(slices.Count);
+        var entries = new List<LegendEntry>(slices.Count);
         foreach (CircularSlice<T> slice in slices)
-            entries.Add(new CircularLegendEntry(
+        {
+            string? valueText = LegendShowValueEnabled ? Format(slice.Value) : null;
+            entries.Add(new LegendEntry(
                 slice.Label.Length > 0 ? slice.Label : "Slice " + slice.Index,
-                slice.Color, slice.Value, _legendShowValue, slice.Index, slice.LegendHidden));
+                slice.Color, slice.Index, valueText, slice.LegendHidden));
+        }
         return entries;
     }
 
     /// <summary>Whether the legend entry with this key is currently toggled off. Always false while the
-    /// legend is not interactive.</summary>
-    protected bool IsHidden(int key)
-    {
-        if (!LegendInteractiveActive || !_containerEl.IsValid) return false;
-        return _paper.GetElementStorage(_containerEl, HiddenKeyPrefix + key, false);
-    }
+    /// legend is not interactive. Exposed under this name for chart types (Radar) whose keys refer to
+    /// something other than a slice.</summary>
+    protected bool IsHidden(int key) => IsLegendHidden(key);
 
     /// <summary>Formats a value the way this chart's legend, labels and tooltip do, honouring
     /// <see cref="ValueFormatter"/>.</summary>
@@ -362,8 +273,8 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
     /// centre; every type that draws labels overrides this.</summary>
     protected virtual Float2 LabelAnchor(in CircularContext ctx, int ordinal) => new Float2(ctx.CenterX, ctx.CenterY);
 
-    /// <summary>Whether per-slice labels mean anything on this chart type. Gauge turns them off; its
-    /// readout is a single number rather than one label per slice.</summary>
+    /// <summary>Whether per-slice labels mean anything on this chart type. Radar turns them off in favour
+    /// of its own spoke labels.</summary>
     protected virtual bool LabelsEnabledForType => true;
 
     /// <summary>Pixels trimmed off the radius to leave room for whatever this chart type draws outside
@@ -374,86 +285,21 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
     /// the slices themselves clear this so they still draw with zero-valued slices.</summary>
     protected virtual bool RequiresPositiveTotal => true;
 
-    /// <summary>Called once at the top of <see cref="Show"/>, before any data is resolved.</summary>
-    protected virtual void OnBeforeShow() { }
-
     // --- Show ---
 
-    public void Show()
+    /// <summary>This chart's slices, resolved and legend-filtered, built once per <c>Show()</c> by
+    /// <see cref="BuildLegend"/> and consumed by <see cref="DrawPlot"/>.</summary>
+    protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
     {
-        OnBeforeShow();
-
-        ElementBuilder container = _paper.Column(_id)
-            .Size(_width, _height)
-            .Rounded(_theme.Metrics.ContainerRounding)
-            .BorderColor(_theme.BorderSoft).BorderWidth(1f)
-            .Padding(_padding);
-
-        if (_backgroundColor.HasValue)
-            container.BackgroundColor(_backgroundColor.Value);
-
-        using (container.Enter())
-        {
-            _containerEl = _paper.CurrentParent;
-
-            using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
-                Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
-
-            _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
-
-            using (_paper.Row(_id + "_chart_col_split").Enter())
-            {
-                List<CircularSlice<T>> slices = ResolveSlices(_containerEl);
-                IReadOnlyList<CircularLegendEntry> entries = BuildLegend(slices);
-
-                if (_legend && entries.Count > 0)
-                    DrawLegend(entries);
-
-                _paper.Box(_id + "_chart_split_div").Width(1).BackgroundColor(_theme.BorderStrong);
-
-                DrawChartBox(slices);
-            }
-        }
+        List<CircularSlice<T>> slices = ResolveSlices();
+        _resolvedSlices = slices;
+        return BuildLegend(slices);
     }
 
-    private void DrawLegend(IReadOnlyList<CircularLegendEntry> entries)
+    protected override void DrawPlot()
     {
-        ElementBuilder legendCol = _paper.Column(_id + "_legend")
-            .Width(125f)
-            .PaddingTop(_padding)
-            .ColBetween(_padding);
-
-        using (legendCol.Enter())
-        {
-            for (int i = 0; i < entries.Count; i++)
-            {
-                CircularLegendEntry entry = entries[i];
-                int key = entry.Key;
-
-                string text = entry.HasValue ? entry.Label + "  " + Format(entry.Value) : entry.Label;
-                Color swatchColor = entry.Hidden ? Color.FromArgb(entry.Color.A / 3, entry.Color) : entry.Color;
-
-                using (_paper.Row($"{_id}_legend_row_{i}").Height(SwatchSize).RowBetween(2f).Enter())
-                {
-                    ElementBuilder swatch = _paper.Box($"{_id}_legend_sw_{i}").Size(SwatchSize).BackgroundColor(swatchColor).Rounded(2f);
-
-                    if (LegendInteractiveActive)
-                        swatch.OnClick(_ => Toggle(key));
-
-                    LabelBuilder label = Origami.Label(_paper, $"{_id}_legend_txt_{i}", text);
-                    if (_legendFontSize.HasValue) label.FontSize(_legendFontSize.Value); else label.XS();
-
-                    label.AlignCenter().AlignLeft().Height(SwatchSize).Show();
-                }
-            }
-        }
-    }
-
-    private void Toggle(int key)
-    {
-        if (!_containerEl.IsValid) return;
-        bool hidden = !_paper.GetElementStorage(_containerEl, HiddenKeyPrefix + key, false);
-        _paper.SetElementStorage(_containerEl, HiddenKeyPrefix + key, hidden);
+        List<CircularSlice<T>> slices = _resolvedSlices ?? ResolveSlices();
+        DrawChartBox(slices);
     }
 
     private void DrawChartBox(List<CircularSlice<T>> slices)
@@ -461,7 +307,7 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
         if (slices.Count == 0 || (RequiresPositiveTotal && VisibleMagnitude(slices) <= 0d))
         {
             using (_paper.Row(_id + "_chart_empty_wrap").Enter())
-                Origami.Label(_paper, _id + "_chart_empty", _emptyLabel).LG().Show();
+                Origami.Label(_paper, _id + "_chart_empty", EmptyLabelText).LG().Show();
 
             return;
         }
@@ -625,9 +471,6 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
 
     protected const float DegToRad = MathF.PI / 180f;
 
-    protected static Color32 ToC32(Color c) => new Color32(c.R, c.G, c.B, c.A);
-    protected static Color32 ToC32(Color c, float alpha) => new Color32(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
-
     /// <summary>Fills the sector between <paramref name="a0"/> and <paramref name="a1"/>. An
     /// <paramref name="innerR"/> of zero or less gives a solid pie wedge; anything larger cuts the
     /// wedge's inner end out for a donut segment.</summary>
@@ -635,18 +478,11 @@ public abstract class CircularCore<TSelf, T> where TSelf : CircularCore<TSelf, T
         float a0, float a1, Color32 fill)
         => ChartGeometry.PaintWedge(canvas, cx, cy, innerR, outerR, a0, a1, fill);
 
-    /// <summary>Strokes the arc between <paramref name="a0"/> and <paramref name="a1"/> at
-    /// <paramref name="width"/> pixels, which is how a track or ring segment is drawn.</summary>
-    protected static void PaintRing(Canvas canvas, float cx, float cy, float radius,
-        float a0, float a1, float width, Color32 stroke)
-        => ChartGeometry.PaintRing(canvas, cx, cy, radius, a0, a1, width, stroke);
-
     private struct PlotInfo
     {
         public float Width, Height;
     }
 
-    private const string HiddenKeyPrefix = "circular_hidden_";
     private const string PlotKey = "circular_plot";
     private const string HoverPosKey = "circular_hover_pos";
     private const string HoverOnKey = "circular_hover_on";

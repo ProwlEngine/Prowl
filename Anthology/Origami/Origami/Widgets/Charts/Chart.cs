@@ -13,37 +13,14 @@ public static partial class Origami
     /// pass the full current data set on every call and finish with <c>.Show()</c>.</summary>
     public static class Chart
     {
-        public static LineChart<T> Line<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static AreaChart<T> Area<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static StepChart<T> Step<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static BarChart<T> Bar<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static StackedBarChart<T> StackedBar<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static ScatterChart<T> Scatter<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static BubbleChart<T> Bubble<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+        /// <summary>A Cartesian chart whose marks come from the modules plugged into it -
+        /// <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c>, <c>.AddBubbleChart()</c>
+        /// - so a line can be overlaid on a bar, a scatter share one plot with a bubble, and so on. Every
+        /// module reads the same x, set once with <c>.X(...)</c>.</summary>
+        public static CartesianChart<T> CreateCartesian<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
             => new(paper, id, Current, data);
 
         public static HistogramChart<T> Histogram<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static BoxPlotChart<T> BoxPlot<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static CandlestickChart<T> Candlestick<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static OHLCChart<T> OHLC<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
             => new(paper, id, Current, data);
 
         public static PieChart<T> Pie<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
@@ -55,13 +32,10 @@ public static partial class Origami
         public static RadarChart<T> Radar<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
             => new(paper, id, Current, data);
 
-        public static TreemapChart<T> Treemap<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
-        public static SunburstChart<T> Sunburst<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-            => new(paper, id, Current, data);
-
         public static FlameGraphChart<T> FlameGraph<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
+            => new(paper, id, Current, data);
+
+        public static TimelineChart<T> Timeline<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
             => new(paper, id, Current, data);
     }
 }

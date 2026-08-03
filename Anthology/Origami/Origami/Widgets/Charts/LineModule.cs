@@ -13,23 +13,23 @@ using Color = System.Drawing.Color;
 namespace Prowl.OrigamiUI;
 
 /// <summary>
-/// Cartesian step chart. Plots one or more <see cref="CartesianSeries{T}"/> as a polyline that moves
-/// in axis-aligned steps between consecutive points, optionally filled down to the zero baseline.
+/// Line module for a <see cref="CartesianChart{T}"/>. Plots one or more series as a stroked polyline.
+/// Can be smoothed and filled. Added with <c>.AddLineChart()</c>.
 /// </summary>
-public sealed class StepChart<T> : CartesianCore<StepChart<T>, T>
+public sealed class LineModule<T> : CartesianModuleBase<LineModule<T>, T>
 {
-    internal StepChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
-        : base(paper, id, theme, data) { }
+    internal LineModule(CartesianChart<T> chart) : base(chart) { }
 
-    private StepAlign _align = StepAlign.After;
+    private CartesianInterpolation _interpolation = CartesianInterpolation.Linear;
 
-    /// <summary>Where the riser between two consecutive points sits: at the second point's x
-    /// (<see cref="StepAlign.After"/>), the first point's x (<see cref="StepAlign.Before"/>), or
-    /// halfway between them (<see cref="StepAlign.Middle"/>).</summary>
-    public StepChart<T> Interpolation(StepAlign align) { _align = align; return this; }
+    public LineModule<T> Smooth() => Interpolation(CartesianInterpolation.Smooth);
+
+    public LineModule<T> Interpolation(CartesianInterpolation interpolation) { _interpolation = interpolation; return this; }
+
+    private const int SmoothStepsPerSegment = 12;
 
 
-    protected override void PaintMarks(Canvas canvas, in PlotContext ctx)
+    protected override void PaintMarks(Canvas canvas, in PlotContext<T> ctx)
     {
         foreach (var s in ctx.Series)
         {
@@ -58,17 +58,14 @@ public sealed class StepChart<T> : CartesianCore<StepChart<T>, T>
     }
 
 
-    /// <summary>Crosshair through the sampled point's x, and a readout of the value each visible
-    /// series holds there.</summary>
-    protected override void DrawSampler(Paper paper, in SampleContext ctx)
+    /// <summary>Dot where every visible series' line crosses the sampled x, and a readout of each
+    /// series' value there. The shared crosshair itself is drawn once by the owning chart.</summary>
+    protected override void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows)
     {
         CartesianSeries<T>? longest = LongestVisible(ctx.Series);
         if (longest == null || ctx.Index >= longest.Points.Count) return;
 
         float lx = ctx.XPos(longest.Points[ctx.Index].X);
-        SampleLine(paper, in ctx, lx);
-
-        var rows = new List<(Color Color, string Text)>();
 
         for (int i = 0; i < ctx.Series.Count; i++)
         {
@@ -78,50 +75,50 @@ public sealed class StepChart<T> : CartesianCore<StepChart<T>, T>
             double value = s.Points[ctx.Index].Y;
             Color color = s.Color ?? System.Drawing.Color.Gray;
 
+            SampleDot(paper, $"line_{i}", lx, Math.Clamp(ctx.YPos(value), ctx.PlotT, ctx.PlotB), color);
             rows.Add((color, $"{s.Label}: {FormatValue(value)}"));
         }
-
-        SamplePopup(paper, in ctx, lx, SampleHeader(ctx.Index), rows);
     }
 
 
-    private List<Float2> BuildPathPoints(CartesianSeries<T> s, in PlotContext ctx)
+    private List<Float2> BuildPathPoints(CartesianSeries<T> s, in PlotContext<T> ctx)
     {
         var raw = new List<Float2>(s.Points.Count);
         foreach ((double x, double y, T? _) in s.Points)
             raw.Add(new Float2(ctx.XPos(x), ctx.YPos(y)));
 
-        if (raw.Count < 2) return raw;
+        if (_interpolation != CartesianInterpolation.Smooth || raw.Count < 3)
+            return raw;
 
-        var stepped = new List<Float2>(raw.Count * 3) { raw[0] };
+        var smooth = new List<Float2>((raw.Count - 1) * SmoothStepsPerSegment + 1) { raw[0] };
         for (int i = 0; i < raw.Count - 1; i++)
         {
-            Float2 a = raw[i], b = raw[i + 1];
+            Float2 p0 = raw[Math.Max(0, i - 1)];
+            Float2 p1 = raw[i];
+            Float2 p2 = raw[i + 1];
+            Float2 p3 = raw[Math.Min(raw.Count - 1, i + 2)];
 
-            switch (_align)
-            {
-                case StepAlign.Before:
-                    stepped.Add(new Float2(a.X, b.Y));
-                    break;
+            Float2 c1 = new Float2(p1.X + (p2.X - p0.X) / 6f, p1.Y + (p2.Y - p0.Y) / 6f);
+            Float2 c2 = new Float2(p2.X - (p3.X - p1.X) / 6f, p2.Y - (p3.Y - p1.Y) / 6f);
 
-                case StepAlign.Middle:
-                    float mid = (a.X + b.X) * 0.5f;
-                    stepped.Add(new Float2(mid, a.Y));
-                    stepped.Add(new Float2(mid, b.Y));
-                    break;
-
-                default:
-                    stepped.Add(new Float2(b.X, a.Y));
-                    break;
-            }
-
-            stepped.Add(b);
+            for (int t = 1; t <= SmoothStepsPerSegment; t++)
+                smooth.Add(CubicBezier(p1, c1, c2, p2, t / (float)SmoothStepsPerSegment));
         }
-        return stepped;
+        return smooth;
     }
 
 
-    private static void PaintFill(Canvas canvas, in PlotContext ctx, CartesianSeries<T> s, List<Float2> pts, Color strokeColor)
+    private static Float2 CubicBezier(Float2 p0, Float2 c1, Float2 c2, Float2 p1, float t)
+    {
+        float mt = 1f - t;
+        float a = mt * mt * mt, b = 3f * mt * mt * t, c = 3f * mt * t * t, d = t * t * t;
+        return new Float2(
+            a * p0.X + b * c1.X + c * c2.X + d * p1.X,
+            a * p0.Y + b * c1.Y + c * c2.Y + d * p1.Y);
+    }
+
+
+    private static void PaintFill(Canvas canvas, in PlotContext<T> ctx, CartesianSeries<T> s, List<Float2> pts, Color strokeColor)
     {
         float baseline = Math.Clamp(ctx.YPos(0d), ctx.PlotT, ctx.PlotB);
         Color32 fillCol = ToC32(s.Color ?? strokeColor, 0.18f);

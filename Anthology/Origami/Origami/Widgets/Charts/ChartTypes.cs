@@ -32,16 +32,3 @@ public enum CartesianInterpolation
     /// <summary>Curved segments through consecutive points.</summary>
     Smooth,
 }
-
-/// <summary>Where a Step chart's vertical riser sits relative to a pair of points.</summary>
-public enum StepAlign
-{
-    /// <summary>Rise before the point (step ends at the point's x).</summary>
-    Before,
-
-    /// <summary>Rise after the point (step begins at the point's x).</summary>
-    After,
-
-    /// <summary>Rise halfway between the two points.</summary>
-    Middle,
-}

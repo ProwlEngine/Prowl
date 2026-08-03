@@ -27,8 +27,8 @@ public enum CartesianDash
 /// <summary>One series plotted on a <see cref="CartesianCore{TSelf, T}"/> chart. Points are stored as
 /// resolved (x, y) pairs regardless of whether they came from <c>.Series(...)</c> (x = array index) or
 /// from <c>.X/.Y</c> selectors over a data set (x = <c>X(item)</c>). <c>Payload</c> carries the source
-/// item for selector-driven series so chart types that need more than one value per x (OHLC, bubble
-/// radius) can read it back; it is <c>default</c> for pre-sampled <c>.Series(...)</c> data.</summary>
+/// item for selector-driven series so chart types that need more than one value per x (bubble radius)
+/// can read it back; it is <c>default</c> for pre-sampled <c>.Series(...)</c> data.</summary>
 public sealed class CartesianSeries<T>
 {
     public string Label = "";
@@ -40,6 +40,11 @@ public sealed class CartesianSeries<T>
     public bool Visible = true;
     public bool LegendHidden;
     public readonly List<(double X, double Y, T? Payload)> Points = new();
+
+    /// <summary>The <see cref="CartesianModuleBase{T}"/> that owns this series on a <see cref="CartesianChart{T}"/>.
+    /// Null for a series that belongs directly to a single-type Cartesian chart (Line/Bar/Scatter/Bubble
+    /// used standalone rather than through <see cref="Origami.Chart.CreateCartesian{T}"/>).</summary>
+    public object? Owner;
 
     public bool EffectiveVisible => Visible && !LegendHidden;
 }
@@ -60,26 +65,183 @@ internal readonly struct AxisTick
     }
 }
 
-/// <summary>
-/// Shared implementation for every Cartesian chart type (Line, Area, Step, Bar, StackedBar, Scatter,
-/// Bubble). Draws legend, background, grid, etc.
-/// </summary>
-public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf, T>
+/// <summary>Geometry and resolved data handed to a mark-painting step, whether that is
+/// <see cref="CartesianCore{TSelf, T}"/>'s own <c>PaintMarks</c> override or a <see cref="CartesianModuleBase{T}"/>
+/// plugged into a <see cref="CartesianChart{T}"/>. Not tied to any one chart type so a module (which does not
+/// inherit <see cref="CartesianCore{TSelf, T}"/>) can still be handed one.</summary>
+public readonly struct PlotContext<T>
 {
-    protected readonly Paper _paper;
-    protected readonly string _id;
-    protected readonly OrigamiTheme _theme;
-    protected readonly IReadOnlyList<T>? _data;
+    public readonly float PlotL, PlotT, PlotR, PlotB;
+    public readonly double XMin, XMax;
+    public readonly double YMin, YMax;
+    public readonly IReadOnlyList<CartesianSeries<T>> Series;
 
-    private string _title = "";
+    /// <summary>Point count of the longest visible series; the number of categorical bands
+    /// across the plot when <see cref="CartesianCore{TSelf, T}.BandedX"/> is set.</summary>
+    public readonly int MaxN;
 
-    private UnitValue _width = UnitValue.Stretch();
-    private float _height = 220f;
-    private float _padding = 0f;
+    internal readonly IReadOnlyList<AxisTick> XTicks;
+    internal readonly IReadOnlyList<AxisTick> YTicks;
 
-    private OrigamiVariant _variant = OrigamiVariant.Primary;
+    private readonly float _bandFirst;
+    private readonly float _bandSpan;
+
+    internal PlotContext(float plotL, float plotT, float plotR, float plotB,
+        double xMin, double xMax, double yMin, double yMax,
+        IReadOnlyList<CartesianSeries<T>> series, int maxN,
+        IReadOnlyList<AxisTick> xTicks, IReadOnlyList<AxisTick> yTicks,
+        double bandFirst, double bandSpan)
+    {
+        PlotL = plotL; PlotT = plotT; PlotR = plotR; PlotB = plotB;
+        XMin = xMin; XMax = xMax; YMin = yMin; YMax = yMax;
+        Series = series; MaxN = maxN;
+        XTicks = xTicks; YTicks = yTicks;
+        _bandFirst = bandSpan > 0d ? (float)bandFirst : 0f;
+        _bandSpan = bandSpan > 0d ? (float)bandSpan : maxN;
+    }
+
+    /// <summary>Returns this context with <see cref="Series"/> replaced, keeping every other field (axis
+    /// range, ticks, band window) the same. This is how a <see cref="CartesianChart{T}"/> hands each of its
+    /// modules a view scoped to just that module's own series while sharing one axis/tick pass.</summary>
+    internal PlotContext<T> WithSeries(IReadOnlyList<CartesianSeries<T>> series)
+        => new(PlotL, PlotT, PlotR, PlotB, XMin, XMax, YMin, YMax, series, MaxN, XTicks, YTicks, _bandFirst, _bandSpan);
+
+    /// <summary>Width in pixels of one categorical band. Narrows with the zoom viewport, so a
+    /// zoomed-in banded chart draws fewer, wider bands.</summary>
+    public float BandWidth => _bandSpan <= 0f ? 0f : (PlotR - PlotL) / _bandSpan;
+
+    /// <summary>Left edge in pixels of the band owned by point <paramref name="index"/>.</summary>
+    public float BandLeft(int index) => PlotL + BandWidth * (index - _bandFirst);
+
+    /// <summary>Centre in pixels of the band owned by point <paramref name="index"/>. This is where
+    /// a banded chart's mark for that point is anchored, and where its x tick is drawn.</summary>
+    public float BandCenter(int index) => PlotL + BandWidth * (index + 0.5f - _bandFirst);
+
+    /// <summary>Width in pixels of one x unit in the continuous (non-banded) coordinate space. A module
+    /// that draws index-centred marks alongside continuous series (e.g. a bar overlaid with a line) uses
+    /// this instead of <see cref="BandWidth"/> so its marks are centred exactly on <see cref="XPos"/> rather
+    /// than offset by half a band.</summary>
+    public float UnitWidth
+    {
+        get
+        {
+            double span = XMax - XMin;
+            return span <= 0d ? 0f : (float)((PlotR - PlotL) / span);
+        }
+    }
+
+    public float XPos(double x)
+    {
+        double span = XMax - XMin;
+        if (span <= 0d) return (PlotL + PlotR) * 0.5f;
+        return AxisPos(x, XMin, span, PlotL, PlotR);
+    }
+
+    public float YPos(double y)
+    {
+        double span = YMax - YMin;
+        if (span <= 0d) return (PlotT + PlotB) * 0.5f;
+        return AxisPos(y, YMin, span, PlotB, PlotT);
+    }
+
+    private static float AxisPos(double v, double min, double span, float pxA, float pxB)
+        => pxA + (float)((v - min) / span) * (pxB - pxA);
+}
+
+/// <summary>The current sample selection handed to a sampler-drawing step, along with the same
+/// geometry <c>PaintMarks</c> gets. Unlike the paint pass, the pixel coordinates here are relative to the
+/// plot element's own top-left corner, because a sampler is built out of self-directed child nodes of that
+/// element rather than painted onto the canvas.</summary>
+public readonly struct SampleContext<T>
+{
+    /// <summary>Plot geometry and resolved series, in plot-element-local pixels.</summary>
+    public readonly PlotContext<T> Plot;
+
+    /// <summary>Index of the sampled point within each series.</summary>
+    public readonly int Index;
+
+    /// <summary>Pointer position that produced <see cref="Index"/>, in the same space as
+    /// <see cref="Plot"/>.</summary>
+    public readonly Float2 Pointer;
+
+    internal SampleContext(in PlotContext<T> plot, int index, Float2 pointer)
+    {
+        Plot = plot;
+        Index = index;
+        Pointer = pointer;
+    }
+
+    internal SampleContext<T> WithSeries(IReadOnlyList<CartesianSeries<T>> series) => new(Plot.WithSeries(series), Index, Pointer);
+
+    public IReadOnlyList<CartesianSeries<T>> Series => Plot.Series;
+    public int MaxN => Plot.MaxN;
+    public float PlotL => Plot.PlotL;
+    public float PlotT => Plot.PlotT;
+    public float PlotR => Plot.PlotR;
+    public float PlotB => Plot.PlotB;
+
+    public float XPos(double x) => Plot.XPos(x);
+    public float YPos(double y) => Plot.YPos(y);
+    public float BandWidth => Plot.BandWidth;
+    public float UnitWidth => Plot.UnitWidth;
+    public float BandLeft(int index) => Plot.BandLeft(index);
+    public float BandCenter(int index) => Plot.BandCenter(index);
+}
+
+/// <summary>Divides one categorical band into a side-by-side slot per visible series, which is how
+/// every banded type that draws more than one mark per band places them. <paramref name="widthFraction"/>
+/// is the share of the band the whole group occupies, and <paramref name="gapFraction"/> the share of
+/// each slot left empty as spacing between neighbouring marks.</summary>
+public readonly struct BandSlots
+{
+    public readonly float GroupInset;
+    public readonly float SlotWidth;
+    public readonly float MarkInset;
+    public readonly float MarkWidth;
+
+    public BandSlots(float bandWidth, float widthFraction, float gapFraction, int seriesCount)
+    {
+        float groupWidth = bandWidth * widthFraction;
+        GroupInset = (bandWidth - groupWidth) * 0.5f;
+        SlotWidth = groupWidth / Math.Max(1, seriesCount);
+        MarkInset = SlotWidth * gapFraction * 0.5f;
+        MarkWidth = MathF.Max(1f, SlotWidth - MarkInset * 2f);
+    }
+
+    /// <summary>Left edge in pixels of the mark drawn in <paramref name="seriesSlot"/>, given the left
+    /// edge in pixels of the band as a whole.</summary>
+    public float Left(float bandLeft, int seriesSlot) => bandLeft + GroupInset + SlotWidth * seriesSlot + MarkInset;
+
+    /// <summary>Centre in pixels of the mark drawn in <paramref name="seriesSlot"/>.</summary>
+    public float Center(float bandLeft, int seriesSlot) => Left(bandLeft, seriesSlot) + MarkWidth * 0.5f;
+
+    /// <summary>Inverse of <see cref="Left"/>: the slot the pixel <paramref name="x"/> falls in,
+    /// clamped to the occupied range. Samplers use this to resolve which series the pointer is over
+    /// within a band.</summary>
+    public int SlotAt(float bandLeft, float x, int seriesCount)
+    {
+        if (seriesCount <= 1 || SlotWidth <= 0f) return 0;
+        return Math.Clamp((int)((x - bandLeft - GroupInset) / SlotWidth), 0, seriesCount - 1);
+    }
+}
+
+/// <summary>
+/// Shared implementation for every Cartesian chart type (Line, Bar, Scatter, Bubble), and indirectly,
+/// via <see cref="DistributionCore{TSelf, T}"/>, for Histogram. Owns the axes, gutters, ticks, grid,
+/// sampler, zoom/pan and mark-painting plumbing; everything about the outer box, title, legend and data
+/// visibility is <see cref="ChartCore{TSelf, T}"/>'s.
+///
+/// A subtype normally supplies its own <see cref="PaintMarks"/>/<see cref="DrawSampler"/> directly (Line,
+/// Bar, Scatter, Bubble used standalone). <see cref="CartesianChart{T}"/> is the one exception: it supplies
+/// no geometry of its own and instead fans both hooks out across a list of <see cref="CartesianModuleBase{T}"/>
+/// instances, which is what lets several chart types share one set of axes via <c>.AddLineChart()</c>,
+/// <c>.AddBarChart()</c>, etc.
+/// </summary>
+public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf : CartesianCore<TSelf, T>
+{
     private Color? _backgroundColor;
-    private string _emptyLabel = "No data";
+
+    private List<CartesianSeries<T>>? _resolvedCache;
 
     private readonly List<CartesianSeries<T>> _series = new();
     private CartesianSeries<T>? _lastSeries;
@@ -107,10 +269,6 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     private int _gridRatioX = -1, _gridRatioY = 1;
     private Color? _gridLineColor;
 
-    private bool _legend = true;
-    private bool _legendShowValue = true;
-    private bool _legendInteractive;
-
     private bool _sampleable;
     private Color? _sampleLineColor;
 
@@ -118,38 +276,20 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     private bool _zoomable;
     private bool _pannable;
-    private bool? _panXOverride;
-    private bool? _panYOverride;
 
     protected CartesianCore(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data = null)
-    {
-        _paper = paper ?? throw new ArgumentNullException(nameof(paper));
-        _id = id ?? throw new ArgumentNullException(nameof(id));
-        _theme = theme ?? throw new ArgumentNullException(nameof(theme));
-        _data = data;
-    }
+        : base(paper, id, theme, data) { }
 
     private TSelf Self => (TSelf)this;
 
     // ── Chrome ──────────────────────────────────────────────────
 
-    public TSelf Title(string text) { _title = text ?? ""; return Self; }
-
-    public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
-    public TSelf Width(UnitValue width) { _width = width; return Self; }
-    public TSelf Height(float height) { _height = MathF.Max(32f, height); return Self; }
-    public TSelf Size(float width, float height) { _width = MathF.Max(32f, width); _height = MathF.Max(32f, height); return Self; }
-    public TSelf Padding(float padding) { _padding = MathF.Max(0f, padding); return Self; }
-
-    public TSelf Variant(OrigamiVariant v) { _variant = v; return Self; }
-    public TSelf Primary() => Variant(OrigamiVariant.Primary);
-    public TSelf Success() => Variant(OrigamiVariant.Success);
-    public TSelf Warning() => Variant(OrigamiVariant.Warning);
-    public TSelf Danger() => Variant(OrigamiVariant.Danger);
-    public TSelf Info() => Variant(OrigamiVariant.Info);
-
     public TSelf BackgroundColor(Color color) { _backgroundColor = color; return Self; }
-    public TSelf EmptyLabel(string text) { _emptyLabel = text ?? "No data"; return Self; }
+
+    protected override void DecorateContainer(ElementBuilder container)
+    {
+        if (_backgroundColor.HasValue) container.BackgroundColor(_backgroundColor.Value);
+    }
 
     // ── Data ────────────────────────────────────────────────────
 
@@ -176,6 +316,10 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// <summary>Y selector for the data set passed at construction. Used together with <see cref="X"/>
     /// instead of <see cref="Series(string, Color, IReadOnlyList{double})"/>.</summary>
     public TSelf Y(Func<T, double> selector) { _ySelector = selector; return Self; }
+
+    /// <summary>The x selector set via <see cref="X"/>, if any. Exposed so <see cref="CartesianChart{T}"/>
+    /// can share it with every module plugged into it - modules only ever supply their own <c>Y</c>.</summary>
+    protected Func<T, double>? XSelector => _xSelector;
 
     /// <summary>Show/hide the most recently added series.</summary>
     public TSelf Visible(bool visible) { if (_lastSeries != null) _lastSeries.Visible = visible; return Self; }
@@ -227,10 +371,18 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     /// <summary>The series added via <see cref="Series(string, Color, IReadOnlyList{double})"/>, in call
     /// order. Exposed for <see cref="OnBeforeShow"/> overrides whose marks span a value the per-point y
-    /// does not reach, such as StackedBar summing a band's segments into a stack total. Does not include
-    /// the implicit series built from the <see cref="X"/>/<see cref="Y"/> selectors, which is resolved
-    /// later.</summary>
+    /// does not reach, such as a distribution chart type deriving points from a group's raw values rather
+    /// than plotting them directly. Does not include the implicit series built from the <see cref="X"/>/
+    /// <see cref="Y"/> selectors, which is resolved later.</summary>
     protected IReadOnlyList<CartesianSeries<T>> SeriesList => _series;
+
+    /// <summary>Additional series to fold into every axis/tick/legend/sampler pass alongside
+    /// <see cref="SeriesList"/> and the implicit <see cref="X"/>/<see cref="Y"/> series, without those
+    /// series living in this type's own <see cref="Series(string, Color, IReadOnlyList{double})"/> list.
+    /// <see cref="CartesianChart{T}"/> is the only override: it has no marks of its own, so every series
+    /// on it comes from its modules instead.</summary>
+    protected virtual List<CartesianSeries<T>>? ExternalSeries => null;
+
     public TSelf MinSpan(double span) { _minSpan = Math.Max(0d, span); return Self; }
     public TSelf IncludeZero(bool include = true) { _includeZero = include; return Self; }
     public TSelf Scale(AxisScale scale) { _scale = scale; return Self; }
@@ -279,14 +431,6 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     public TSelf GridLineColor(Color color) { _gridLineColor = color; return Self; }
 
-    // ── Legend ──────────────────────────────────────────────────
-
-    public TSelf Legend(bool show = true) { _legend = show; return Self; }
-    public TSelf LegendShowValue(bool show = true) { _legendShowValue = show; return Self; }
-    public TSelf LegendInteractive(bool interactive) { _legendInteractive = interactive; return Self; }
-
-    private bool LegendInteractiveActive => _legendInteractive && Origami.LegendSelectionEnabled;
-
     // ── Sample / crosshair ─────────────────────────────────────
 
     public TSelf Sampleable(bool enable = true) { _sampleable = enable; return Self; }
@@ -299,11 +443,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     /// <summary>Enable middle-mouse drag panning over the plot, on this chart type's default axes.
     /// Left drag stays bound to the sampler.</summary>
-    public TSelf Pannable(bool enable = true) { _pannable = enable; _panXOverride = null; _panYOverride = null; return Self; }
-
-    /// <summary>Enable middle-mouse drag panning over the plot on the given axes, overriding this chart
-    /// type's defaults. <see cref="Zoomable"/> obeys the same axis mask.</summary>
-    public TSelf Pannable(bool panX, bool panY) { _pannable = panX || panY; _panXOverride = panX; _panYOverride = panY; return Self; }
+    public TSelf Pannable(bool enable = true) { _pannable = enable; return Self; }
 
     /// <summary>Whether the x axis takes part in zoom and pan when no explicit axis mask was given.
     /// True everywhere: x is the sequence axis on every Cartesian type.</summary>
@@ -313,8 +453,8 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// False except on chart types whose points are scattered freely in both axes.</summary>
     protected virtual bool DefaultPanY => false;
 
-    private bool ViewAxisX => _panXOverride ?? DefaultPanX;
-    private bool ViewAxisY => _panYOverride ?? DefaultPanY;
+    private bool ViewAxisX => DefaultPanX;
+    private bool ViewAxisY => DefaultPanY;
 
     // ── Tick layout ─────────────────────────────────────────────
 
@@ -420,19 +560,21 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     /// <summary>Paint this chart type's marks (line stroke, bar rects, scatter dots, ...) into the
     /// already-clipped plot area described by <paramref name="ctx"/>.</summary>
-    protected abstract void PaintMarks(Canvas canvas, in PlotContext ctx);
+    protected abstract void PaintMarks(Canvas canvas, in PlotContext<T> ctx);
 
     /// <summary>When true the x axis is treated as a sequence of equal-width categorical bands rather
     /// than a continuous value range: point i owns the band <c>[BandLeft(i), BandLeft(i) + BandWidth)</c>
-    /// and x-axis ticks are placed at band centres instead of at their data x. Bar, StackedBar,
-    /// Candlestick and OHLC override this; point/line types leave it false.</summary>
+    /// and x-axis ticks are placed at band centres instead of at their data x. Bar and Histogram override
+    /// this; point/line types leave it false. <see cref="CartesianChart{T}"/> also leaves this false even
+    /// when it holds a bar module: combo charts centre bars on the shared continuous x instead (see
+    /// <see cref="PlotContext{T}.UnitWidth"/>), so every module - banded or not - reads the same axis.</summary>
     protected virtual bool BandedX => false;
 
     /// <summary>When true, a <see cref="BandedX"/> chart with no explicit <see cref="XTicks"/> gets one
     /// x tick per band rather than a capped, evenly spread subset. Set on the categorical types whose
-    /// bands each carry a name worth reading (Bar, StackedBar, BoxPlot, Histogram); left false on the
-    /// types whose bands are a long numeric sequence (Candlestick, OHLC) where one label per band would
-    /// be unreadable. Ignored when <see cref="BandedX"/> is false.</summary>
+    /// bands each carry a name worth reading (Bar, Histogram); left false on types whose bands are a
+    /// long numeric sequence where one label per band would be unreadable. Ignored when
+    /// <see cref="BandedX"/> is false.</summary>
     protected virtual bool TickPerBand => false;
 
     /// <summary>Label for band <paramref name="index"/> when the caller set no <see cref="XTickFormatter"/>.
@@ -445,155 +587,17 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// freely rather than laid out along a shared x sequence; ignored when <see cref="BandedX"/> is set.</summary>
     protected virtual bool SampleNearest2D => false;
 
-    /// <summary>Geometry and resolved data handed to <see cref="PaintMarks"/>.</summary>
-    protected readonly struct PlotContext
-    {
-        public readonly float PlotL, PlotT, PlotR, PlotB;
-        public readonly double XMin, XMax;
-        public readonly double YMin, YMax;
-        public readonly IReadOnlyList<CartesianSeries<T>> Series;
-
-        /// <summary>Point count of the longest visible series; the number of categorical bands
-        /// across the plot when <see cref="CartesianCore{TSelf, T}.BandedX"/> is set.</summary>
-        public readonly int MaxN;
-
-        internal readonly IReadOnlyList<AxisTick> XTicks;
-        internal readonly IReadOnlyList<AxisTick> YTicks;
-
-        private readonly float _bandFirst;
-        private readonly float _bandSpan;
-
-        internal PlotContext(float plotL, float plotT, float plotR, float plotB,
-            double xMin, double xMax, double yMin, double yMax,
-            IReadOnlyList<CartesianSeries<T>> series, int maxN,
-            IReadOnlyList<AxisTick> xTicks, IReadOnlyList<AxisTick> yTicks,
-            double bandFirst, double bandSpan)
-        {
-            PlotL = plotL; PlotT = plotT; PlotR = plotR; PlotB = plotB;
-            XMin = xMin; XMax = xMax; YMin = yMin; YMax = yMax;
-            Series = series; MaxN = maxN;
-            XTicks = xTicks; YTicks = yTicks;
-            _bandFirst = bandSpan > 0d ? (float)bandFirst : 0f;
-            _bandSpan = bandSpan > 0d ? (float)bandSpan : maxN;
-        }
-
-        /// <summary>Width in pixels of one categorical band. Narrows with the zoom viewport, so a
-        /// zoomed-in banded chart draws fewer, wider bands.</summary>
-        public float BandWidth => _bandSpan <= 0f ? 0f : (PlotR - PlotL) / _bandSpan;
-
-        /// <summary>Left edge in pixels of the band owned by point <paramref name="index"/>.</summary>
-        public float BandLeft(int index) => PlotL + BandWidth * (index - _bandFirst);
-
-        /// <summary>Centre in pixels of the band owned by point <paramref name="index"/>. This is where
-        /// a banded chart's mark for that point is anchored, and where its x tick is drawn.</summary>
-        public float BandCenter(int index) => PlotL + BandWidth * (index + 0.5f - _bandFirst);
-
-        public float XPos(double x)
-        {
-            double span = XMax - XMin;
-            if (span <= 0d) return (PlotL + PlotR) * 0.5f;
-            return AxisPos(x, XMin, span, PlotL, PlotR);
-        }
-
-        public float YPos(double y)
-        {
-            double span = YMax - YMin;
-            if (span <= 0d) return (PlotT + PlotB) * 0.5f;
-            return AxisPos(y, YMin, span, PlotB, PlotT);
-        }
-    }
-
-    /// <summary>The current sample selection handed to <see cref="DrawSampler"/>, along with the same
-    /// geometry <see cref="PaintMarks"/> gets. Unlike the paint pass, the pixel coordinates here are
-    /// relative to the plot element's own top-left corner, because a sampler is built out of
-    /// self-directed child nodes of that element rather than painted onto the canvas.</summary>
-    protected readonly struct SampleContext
-    {
-        /// <summary>Plot geometry and resolved series, in plot-element-local pixels.</summary>
-        public readonly PlotContext Plot;
-
-        /// <summary>Index of the sampled point within each series.</summary>
-        public readonly int Index;
-
-        /// <summary>Pointer position that produced <see cref="Index"/>, in the same space as
-        /// <see cref="Plot"/>.</summary>
-        public readonly Float2 Pointer;
-
-        internal SampleContext(in PlotContext plot, int index, Float2 pointer)
-        {
-            Plot = plot;
-            Index = index;
-            Pointer = pointer;
-        }
-
-        public IReadOnlyList<CartesianSeries<T>> Series => Plot.Series;
-        public int MaxN => Plot.MaxN;
-        public float PlotL => Plot.PlotL;
-        public float PlotT => Plot.PlotT;
-        public float PlotR => Plot.PlotR;
-        public float PlotB => Plot.PlotB;
-
-        public float XPos(double x) => Plot.XPos(x);
-        public float YPos(double y) => Plot.YPos(y);
-        public float BandWidth => Plot.BandWidth;
-        public float BandLeft(int index) => Plot.BandLeft(index);
-        public float BandCenter(int index) => Plot.BandCenter(index);
-    }
-
-    /// <summary>Divides one categorical band into a side-by-side slot per visible series, which is how
-    /// every banded type that draws more than one mark per band places them. <paramref name="widthFraction"/>
-    /// is the share of the band the whole group occupies, and <paramref name="gapFraction"/> the share of
-    /// each slot left empty as spacing between neighbouring marks.</summary>
-    protected readonly struct BandSlots
-    {
-        public readonly float GroupInset;
-        public readonly float SlotWidth;
-        public readonly float MarkInset;
-        public readonly float MarkWidth;
-
-        public BandSlots(float bandWidth, float widthFraction, float gapFraction, int seriesCount)
-        {
-            float groupWidth = bandWidth * widthFraction;
-            GroupInset = (bandWidth - groupWidth) * 0.5f;
-            SlotWidth = groupWidth / Math.Max(1, seriesCount);
-            MarkInset = SlotWidth * gapFraction * 0.5f;
-            MarkWidth = MathF.Max(1f, SlotWidth - MarkInset * 2f);
-        }
-
-        /// <summary>Left edge in pixels of the mark drawn in <paramref name="seriesSlot"/>.</summary>
-        public float Left(float bandLeft, int seriesSlot) => bandLeft + GroupInset + SlotWidth * seriesSlot + MarkInset;
-
-        /// <summary>Centre in pixels of the mark drawn in <paramref name="seriesSlot"/>.</summary>
-        public float Center(float bandLeft, int seriesSlot) => Left(bandLeft, seriesSlot) + MarkWidth * 0.5f;
-
-        /// <summary>Inverse of <see cref="Left"/>: the slot the pixel <paramref name="x"/> falls in,
-        /// clamped to the occupied range. Samplers use this to resolve which series the pointer is over
-        /// within a band.</summary>
-        public int SlotAt(float bandLeft, float x, int seriesCount)
-        {
-            if (seriesCount <= 1 || SlotWidth <= 0f) return 0;
-            return Math.Clamp((int)((x - bandLeft - GroupInset) / SlotWidth), 0, seriesCount - 1);
-        }
-    }
-
     /// <summary>Build this chart type's sample readout for the point selected in
     /// <paramref name="ctx"/>. Called only while a sample is active, from inside the plot element, so
     /// everything laid out here must be self-directed. Selection itself is the core's job; this only
     /// draws it. Use <see cref="SampleLine"/>, <see cref="SampleBand"/>, <see cref="SampleDot"/> and
     /// <see cref="SamplePopup"/> to build the readout out of Paper nodes.</summary>
-    protected abstract void DrawSampler(Paper paper, in SampleContext ctx);
-
-    /// <summary>Maps a data value in [min, min+span] to a pixel coordinate in [pxA, pxB]. Passing
-    /// (plotB, plotT) instead of (plotT, plotB) flips the mapping, which is how this doubles as
-    /// both the X and Y axis mapping.</summary>
-    private static float AxisPos(double v, double min, double span, float pxA, float pxB)
-        => pxA + (float)((v - min) / span) * (pxB - pxA);
+    protected abstract void DrawSampler(Paper paper, in SampleContext<T> ctx);
 
     private static float SwatchSize = 12f;
 
     private const string SampleIdxKey = "cartesian_sample";
     private const string SamplePosKey = "cartesian_sample_pos";
-    private const string HiddenSeriesKeyPrefix = "cartesian_hidden_";
     private const string ViewRectKey = "cartesian_view";
 
     private const float MinViewSpan = 0.005f;
@@ -622,99 +626,38 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     }
 
 
-    /// <summary>Called once at the top of <see cref="Show"/>, before any data is resolved. Chart types
-    /// whose marks span more than their series' y value (Candlestick and OHLC, whose wicks reach past
-    /// close to low/high) use this to widen the axis via <see cref="YRange"/>.</summary>
-    protected virtual void OnBeforeShow() { }
-
-    public void Show()
+    /// <summary>This chart's series, resolved and legend-filtered, built once per <c>Show()</c> by
+    /// <see cref="BuildLegendEntries"/> and consumed by <see cref="DrawPlot"/>.</summary>
+    protected override IReadOnlyList<LegendEntry> BuildLegendEntries()
     {
-        OnBeforeShow();
+        List<CartesianSeries<T>> resolved = ResolveSeries();
+        for (int i = 0; i < resolved.Count; i++)
+            resolved[i].LegendHidden = IsLegendHidden(i);
 
-        ElementBuilder container = _paper.Column(_id)
-            .Size(_width, _height)
-            .Rounded(_theme.Metrics.ContainerRounding)
-            .BorderColor(_theme.BorderSoft).BorderWidth(1f)
-            .Padding(_padding);
+        _resolvedCache = resolved;
 
-        if (_backgroundColor.HasValue)
-            container.BackgroundColor(_backgroundColor.Value);
-
-        using (container.Enter())
+        var entries = new List<LegendEntry>(resolved.Count);
+        for (int i = 0; i < resolved.Count; i++)
         {
-            ElementHandle el = _paper.CurrentParent;
-
-            for (int i = 0; i < _series.Count; i++)
-            {
-                CartesianSeries<T> s = _series[i];
-                if (LegendInteractiveActive)
-                    s.LegendHidden = _paper.GetElementStorage(el, HiddenSeriesKeyPrefix + i, false);
-            }
-
-            using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
-                Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
-
-            _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
-
-            using (_paper.Row(_id + "_chart_col_split").Enter())
-            {
-                List<CartesianSeries<T>> resolved = ResolveSeries();
-                if (_legend && resolved.Count > 0)
-                    DrawLegend(resolved, el);
-
-                _paper.Box(_id + "_chart_header_div").Width(1).BackgroundColor(_theme.BorderStrong);
-
-                DrawChartBox(resolved, el);
-            }
+            CartesianSeries<T> s = resolved[i];
+            string? valueText = LegendShowValueEnabled && s.Points.Count > 0 ? Format(s.Points[^1].Y) : null;
+            entries.Add(new LegendEntry(s.Label, s.Color ?? System.Drawing.Color.Gray, i, valueText, s.LegendHidden));
         }
+        return entries;
     }
 
-
-    private void DrawLegend(List<CartesianSeries<T>> resolved, ElementHandle el)
+    protected override void DrawPlot()
     {
-        ElementBuilder legendCol = _paper.Column(_id + "_legend")
-            .Width(125f)
-            .PaddingTop(_padding)
-            .ColBetween(_padding);
-
-        using (legendCol.Enter())
-        {
-            for (int i = 0; i < resolved.Count; i++)
-            {
-                CartesianSeries<T> s = resolved[i];
-                int idx = i;
-
-                string latest = (_legendShowValue && s.Points.Count > 0) ? Format(s.Points[^1].Y) : "";
-                string text = latest.Length > 0 ? s.Label + "  " + latest : s.Label;
-
-                Color baseColor = s.Color ?? System.Drawing.Color.Gray;
-                Color swatchColor = s.LegendHidden ? System.Drawing.Color.FromArgb(baseColor.A / 3, baseColor) : baseColor;
-
-                using (_paper.Row($"{_id}_legend_row_{i}").Height(SwatchSize).RowBetween(2f).Enter())
-                {
-                    ElementBuilder swatch = _paper.Box($"{_id}_legend_sw_{i}").Size(SwatchSize).BackgroundColor(swatchColor).Rounded(2f);
-
-                    if (LegendInteractiveActive)
-                        swatch.OnClick((x) => ToggleSeries(el, idx));
-
-                    Origami.Label(_paper, $"{_id}_legend_txt_{i}", text)
-                        .XS()
-                        .AlignCenter()
-                        .AlignLeft()
-                        .Height(SwatchSize)
-                        .Show();
-                }
-            }
-        }
+        List<CartesianSeries<T>> series = _resolvedCache ?? ResolveSeries();
+        DrawChartBox(series, ContainerEl);
     }
-
 
     private void DrawChartBox(List<CartesianSeries<T>> series, ElementHandle el)
     {
         if (series.Count == 0 || !series.Any(x => x.Points.Count != 0))
         {
             using (_paper.Row(_id + "_chart_empty_wrap").Enter())
-                Origami.Label(_paper, _id + "_chart_empty", _emptyLabel).LG().Show();
+                Origami.Label(_paper, _id + "_chart_empty", EmptyLabelText).LG().Show();
 
             return;
         }
@@ -855,7 +798,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
                 float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
                 float w = (float)rect.Size.X, h = (float)rect.Size.Y;
 
-                var ctx = new PlotContext(ox, oy, ox + w, oy + h, xMin, xMax, yMin, yMax, series, maxN, xTicks, yTicks,
+                var ctx = new PlotContext<T>(ox, oy, ox + w, oy + h, xMin, xMax, yMin, yMax, series, maxN, xTicks, yTicks,
                     bandFirst, bandSpan);
                 PaintChart(canvas, rect, in ctx, maxN);
 
@@ -874,11 +817,11 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
                 int sampleIdx = _paper.GetElementStorage(chartEl, SampleIdxKey, -1);
                 if (sampleIdx >= 0 && sampleIdx < maxN)
                 {
-                    var plot = new PlotContext(lastInfo.PlotL, lastInfo.PlotT, lastInfo.PlotR, lastInfo.PlotB,
+                    var plot = new PlotContext<T>(lastInfo.PlotL, lastInfo.PlotT, lastInfo.PlotR, lastInfo.PlotB,
                         xMin, xMax, yMin, yMax, series, maxN, xTicks, yTicks, bandFirst, bandSpan);
                     Float2 pointer = _paper.GetElementStorage(chartEl, SamplePosKey, new Float2(0f, 0f));
 
-                    DrawSampler(_paper, new SampleContext(in plot, sampleIdx, pointer));
+                    DrawSampler(_paper, new SampleContext<T>(in plot, sampleIdx, pointer));
                 }
             }
         }
@@ -974,13 +917,6 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     }
 
 
-    private void ToggleSeries(ElementHandle el, int index)
-    {
-        bool hidden = !_paper.GetElementStorage(el, HiddenSeriesKeyPrefix + index, false);
-        _paper.SetElementStorage(el, HiddenSeriesKeyPrefix + index, hidden);
-    }
-
-
     private List<CartesianSeries<T>> ResolveSeries()
     {
         var list = new List<CartesianSeries<T>>(_series);
@@ -994,7 +930,10 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
             list.Add(s);
         }
 
-        Color defaultColor = _theme.Get(_variant).C500;
+        List<CartesianSeries<T>>? external = ExternalSeries;
+        if (external != null) list.AddRange(external);
+
+        Color defaultColor = Ramp.C500;
         foreach (CartesianSeries<T> s in list)
             if (s.Color == null) s.Color = defaultColor;
 
@@ -1097,8 +1036,11 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
         public int MaxN;
     }
 
-    protected static Color32 ToC32(Color c) => new Color32(c.R, c.G, c.B, c.A);
-    protected static Color32 ToC32(Color c, float alpha) => new Color32(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
+    /// <summary>Maps a data value in [min, min+span] to a pixel coordinate in [pxA, pxB]. Passing
+    /// (plotB, plotT) instead of (plotT, plotB) flips the mapping, which is how this doubles as
+    /// both the X and Y axis mapping.</summary>
+    private static float AxisPos(double v, double min, double span, float pxA, float pxB)
+        => pxA + (float)((v - min) / span) * (pxB - pxA);
 
     private void ComputeXRange(IReadOnlyList<CartesianSeries<T>> series, out double xMin, out double xMax)
     {
@@ -1202,7 +1144,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
 
     private string Format(double v) => _valueFormatter != null ? _valueFormatter(v) : v.ToString("0.###");
 
-    private void PaintChart(Canvas canvas, Rect rect, in PlotContext ctx, int maxN)
+    private void PaintChart(Canvas canvas, Rect rect, in PlotContext<T> ctx, int maxN)
     {
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
         float width = (float)rect.Size.X, height = (float)rect.Size.Y;
@@ -1225,7 +1167,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     }
 
     private void DrawGrid(Canvas canvas, float plotL, float plotT, float plotR, float plotB,
-        float plotW, float plotH, in PlotContext ctx, int maxN)
+        float plotW, float plotH, in PlotContext<T> ctx, int maxN)
     {
         if (_gridMode != GridMode.None)
         {
@@ -1342,7 +1284,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     protected string SampleHeader(int index) => _xTickFormatter != null ? (_xTickFormatter(index) ?? "") : $"Index {index}";
 
     /// <summary>Vertical crosshair spanning the plot at pixel <paramref name="x"/>.</summary>
-    protected void SampleLine(Paper paper, in SampleContext ctx, float x)
+    protected void SampleLine(Paper paper, in SampleContext<T> ctx, float x)
     {
         paper.Box(_id + "_sampler_vline")
             .PositionType(PositionType.SelfDirected)
@@ -1352,7 +1294,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     }
 
     /// <summary>Horizontal crosshair spanning the plot at pixel <paramref name="y"/>.</summary>
-    protected void SampleLineH(Paper paper, in SampleContext ctx, float y)
+    protected void SampleLineH(Paper paper, in SampleContext<T> ctx, float y)
     {
         paper.Box(_id + "_sampler_hline")
             .PositionType(PositionType.SelfDirected)
@@ -1364,7 +1306,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// <summary>Translucent full-height highlight over a horizontal slice of the plot. Banded chart
     /// types use this in place of a crosshair, since the sample covers a whole band rather than a
     /// single x.</summary>
-    protected void SampleBand(Paper paper, in SampleContext ctx, float left, float width)
+    protected void SampleBand(Paper paper, in SampleContext<T> ctx, float left, float width)
     {
         if (width <= 0f) return;
 
@@ -1408,7 +1350,7 @@ public abstract class CartesianCore<TSelf, T> where TSelf : CartesianCore<TSelf,
     /// <summary>Readout panel listing the sampled values, anchored beside <paramref name="anchorX"/>.
     /// It flips to the other side of the anchor when it would overhang the plot's right edge, using the
     /// width it laid out at on the previous frame.</summary>
-    protected void SamplePopup(Paper paper, in SampleContext ctx, float anchorX, string header, IReadOnlyList<(Color Color, string Text)> rows)
+    protected void SamplePopup(Paper paper, in SampleContext<T> ctx, float anchorX, string header, IReadOnlyList<(Color Color, string Text)> rows)
     {
         if (header.Length == 0 && rows.Count == 0) return;
 
