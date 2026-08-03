@@ -636,16 +636,20 @@ public static class ProjectLauncher
             return;
         }
 
-        string targetPath = Path.Combine(_newProjectPath, _newProjectName);
+        // The name becomes a folder, and Path.Combine hands back somewhere else entirely for one that is
+        // rooted or carries a separator, so the project would be created outside the chosen directory.
+        string name = EditorUtils.SafeFileName(_newProjectName, "New Project");
+
+        string targetPath = Path.Combine(_newProjectPath, name);
         if (Directory.Exists(targetPath) && Directory.GetFileSystemEntries(targetPath).Length > 0)
         {
-            Toasts.Show(Loc.Get("launcher.folder_exists"), Loc.Get("launcher.folder_exists_msg", new { name = _newProjectName }), ToastType.Error, 5f);
+            Toasts.Show(Loc.Get("launcher.folder_exists"), Loc.Get("launcher.folder_exists_msg", new { name }), ToastType.Error, 5f);
             return;
         }
 
         try
         {
-            var project = Project.Create(_newProjectPath, _newProjectName);
+            var project = Project.Create(_newProjectPath, name);
             project.SetActive();
             Close();
         }

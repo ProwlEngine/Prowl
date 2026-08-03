@@ -1084,8 +1084,11 @@ public class ProjectPanel : DockPanel
         RenameOverlay.Begin(id, editName, newText =>
         {
             string ext = item.IsFolder ? "" : Path.GetExtension(item.Name);
-            string newName = newText + ext;
-            if (newName == item.Name || string.IsNullOrWhiteSpace(newText))
+
+            // Typed text becoming a path segment. A separator in it would move the asset rather than
+            // rename it, and the characters the filesystem refuses would surface as an IO exception.
+            string newName = EditorUtils.SafeFileName(newText, "") + ext;
+            if (newName == item.Name || string.IsNullOrWhiteSpace(newText) || newName == ext)
                 return;
 
             string parentFolder = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? "";
