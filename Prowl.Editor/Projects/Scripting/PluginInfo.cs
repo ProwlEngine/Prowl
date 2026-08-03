@@ -54,18 +54,43 @@ public sealed class PluginInfo
     public bool IsManaged => !IsNative;
 
     /// <summary>Whether this plugin should be shipped when building for the given player platform.</summary>
+    /// <remarks>
+    /// "Any platform" is taken literally for a managed assembly and not for a native one, because a
+    /// native library's extension already states which platform it is for. Without that, a .dll left at
+    /// the default ships inside every Linux and macOS build.
+    /// </remarks>
     public bool AppliesToBuild(string platform)
-        => !EditorOnly && (AnyPlatform || Platforms.Contains(platform));
+    {
+        if (EditorOnly) return false;
+        if (!AnyPlatform) return Platforms.Contains(platform);
+
+        return ImpliedPlatform() is not { } implied
+            || implied.Equals(platform, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The platform this file's extension implies, or null when it implies nothing.</summary>
+    public string? ImpliedPlatform()
+    {
+        if (!IsNative) return null;
+
+        return Path.GetExtension(AbsolutePath).ToLowerInvariant() switch
+        {
+            ".dll" => BuildPlatforms.Windows,
+            ".so" => BuildPlatforms.Linux,
+            ".dylib" => BuildPlatforms.MacOS,
+            _ => null,
+        };
+    }
 
     /// <summary>Runtime identifier this native plugin maps to for a given player platform.</summary>
     public string RuntimeIdentifierFor(string platform)
     {
-        string prefix = platform switch
-        {
-            BuildPlatforms.Linux => "linux",
-            BuildPlatforms.MacOS => "osx",
-            _ => "win",
-        };
+        // Case insensitive because platform names travel through target metadata and project files, and
+        // a mismatch here silently files a macOS plugin under runtimes/win-x64 where nothing looks.
+        string prefix =
+            platform.Equals(BuildPlatforms.Linux, StringComparison.OrdinalIgnoreCase) ? "linux" :
+            platform.Equals(BuildPlatforms.MacOS, StringComparison.OrdinalIgnoreCase) ? "osx" :
+            "win";
         string arch = Cpu.Equals("arm64", StringComparison.OrdinalIgnoreCase) ? "arm64" : "x64";
         return $"{prefix}-{arch}";
     }

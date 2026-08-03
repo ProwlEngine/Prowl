@@ -12,6 +12,9 @@ using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.Theming;
 
 using Prowl.Editor.GUI;
+
+using Prowl.Editor.Build;
+
 namespace Prowl.Editor.Projects.Settings;
 
 public enum BuildTarget { Windows, Linux, MacOS }
@@ -37,6 +40,9 @@ public sealed class BuildSettings : ProjectSettingsBase
     public AssetPackagingMode PackagingMode = AssetPackagingMode.ProwlPak;
     public AssetExportMode AssetMode = AssetExportMode.DependenciesOnly;
     public int MaxPakSizeMB = 2048;
+
+    /// <summary>Full name of the <see cref="BuildPipeline"/> to build with. Empty means desktop.</summary>
+    public string SelectedPipeline = "";
 
     /// <summary>
     /// Per-platform profiles.  Missing entries will be created with

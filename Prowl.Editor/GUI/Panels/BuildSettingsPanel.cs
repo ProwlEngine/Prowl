@@ -7,6 +7,7 @@ using System.Drawing;
 using System.Linq;
 
 using Prowl.Editor.Build;
+using Prowl.Editor.GUI.Popups;
 using Prowl.Editor.GUI.SceneView;
 using Prowl.Editor.GUI;
 using static Prowl.Editor.GUI.EditorGUI;
@@ -21,6 +22,7 @@ using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
 
 using TextAlignment = Prowl.PaperUI.TextAlignment;
+
 
 namespace Prowl.Editor.GUI.Panels;
 
@@ -78,30 +80,28 @@ public class BuildSettingsPanel : DockPanel
         if (font == null) return;
 
         _buildSettings ??= EditorRegistries.GetSettings<BuildSettings>();
-        _buildPlatforms ??= GetBuildPlatforms();
+        if (_buildPlatforms == null)
+        {
+            _buildPlatforms = GetBuildPlatforms();
+
+            int stored = _buildPlatforms.FindIndex(p => p.BuildPipelineType.FullName == _buildSettings.SelectedPipeline);
+            _selectedIndex = Math.Max(0, stored);
+
+            // A stored pipeline that no longer resolves would otherwise leave the window showing one
+            // platform while the build starts another, or fails saying it cannot find it.
+            if (stored < 0 && !string.IsNullOrEmpty(_buildSettings.SelectedPipeline) && _buildPlatforms.Count > 0)
+            {
+                Runtime.Debug.LogWarning(
+                    $"[Build] Build pipeline '{_buildSettings.SelectedPipeline}' is gone, selecting {_buildPlatforms[0].Name}.");
+                SelectPlatform(0);
+            }
+        }
         Instance ??= this;
 
-        if (_activeProgress != null)
-        {
-            BuildProgress = _activeProgress.ProgressValue;
-            var state = _activeProgress.GetState();
-            if (state != null)
-            {
-                BuildState = state.Message.Contains("\n") ? state.Message.Split('\n')[0] : state.Message;
-                BuildState = BuildState.Trim();
-            }
-
-            // Build finished: drop the reference so the footer returns to the idle summary
-            // instead of being stuck on the last progress line forever, and so IsBuildRunning
-            // (and thus a second Build click) sees the build as no longer running.
-            if (_activeProgress.IsComplete)
-                _activeProgress = null;
-        }
-        else
-        {
-            BuildProgress = 0f;
-            BuildState = Loc.Get("editor.status_ready");
-        }
+        // Dropped once finished so nothing holds on to the last build's log for the rest of the
+        // session. Progress itself is the modal's business now, not this window's.
+        if (_activeProgress is { IsComplete: true })
+            _activeProgress = null;
 
         float bodyH = height - FooterH;
         float scenesW = Math.Max(width - PlatformW - 1, 200);
@@ -285,7 +285,25 @@ public class BuildSettingsPanel : DockPanel
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(_buildSettings.OutputDirectory))
+        {
+            Toasts.Warning(Loc.Get("build.toast_no_output"), Loc.Get("build.toast_no_output_msg"));
+            return;
+        }
+
         _activeProgress = ProjectBuilder.StartBuildAsync(andRun, _buildSettings.OutputDirectory);
+
+        // Every other reason to return null is logged where it happens, so this only has to stop the
+        // click looking like it did nothing.
+        if (_activeProgress == null)
+        {
+            Toasts.Warning(Loc.Get("build.toast_start_failed"), Loc.Get("build.toast_start_failed_msg"));
+            return;
+        }
+
+        // Locks the editor for the duration. A build reads the asset database from another thread, so
+        // importing or deleting something underneath it is a corrupted output at best.
+        BuildProgressModal.Show(_activeProgress);
     }
 
     // ---------------------------------------------------------------------
@@ -309,7 +327,7 @@ public class BuildSettingsPanel : DockPanel
                     if (profile != null)
                     {
                         EditorGUI.SectionHeader(paper, "bp_prof_h", _buildPlatforms[_selectedIndex].Name, first: true);
-                        profile.OnGUI(paper);
+                        Prowl.Editor.Build.BuildProfileDrawers.Draw(paper, profile);
                     }
                 }
 
@@ -343,6 +361,13 @@ public class BuildSettingsPanel : DockPanel
     }
 
     private const float CardGap = 6f;
+
+    private void SelectPlatform(int index)
+    {
+        _selectedIndex = index;
+        _buildSettings.SelectedPipeline = _buildPlatforms[index].BuildPipelineType.FullName ?? "";
+        EditorRegistries.SaveSettings();
+    }
 
     private void DrawPlatformGrid(Paper paper, FontFile font)
     {
@@ -378,7 +403,7 @@ public class BuildSettingsPanel : DockPanel
 
         if (selectable)
             card.Hovered.BorderColor(sel ? EditorTheme.Accent : EditorTheme.BorderStrong).End()
-                .OnClick(slot.realIndex, (id, _) => _selectedIndex = id);
+                .OnClick(slot.realIndex, (id, _) => SelectPlatform(id));
         else
             card.IsNotInteractable();
 
@@ -404,37 +429,39 @@ public class BuildSettingsPanel : DockPanel
     }
 
     // ---------------------------------------------------------------------
-    //  FOOTER summary + build actions / progress
+    //  FOOTER summary + build actions
     // ---------------------------------------------------------------------
 
+    /// <summary>
+    /// Summary and the two build actions. Progress and cancelling live in
+    /// <see cref="BuildProgressModal"/>, which covers the whole editor while a build runs, so this
+    /// footer has nothing to say about one in flight.
+    /// </summary>
     private void DrawFooter(Paper paper, FontFile font, float width)
     {
         paper.Box("bp_ftr_top").Width(width).Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
 
         var mono = EditorTheme.FontMono ?? font;
-        bool running = IsBuildRunning;
 
         int enabled = _buildSettings.Scenes.Count(s => s.Enabled);
         string platName = _selectedIndex >= 0 && _selectedIndex < _buildPlatforms.Count
             ? _buildPlatforms[_selectedIndex].Name : "-";
-        string leftText = running
-            ? BuildState
-            : Loc.Get("build.scene_count", new { count = enabled }) + $"  ·  {platName}  ·  {_buildSettings.Config}";
+        string leftText = Loc.Get("build.scene_count", new { count = enabled })
+            + $"  ·  {platName}  ·  {_buildSettings.Config}";
 
         using (paper.Row("bp_footer").Width(width).Height(FooterH - 1).Padding(16, 16, 0, 0).Enter())
         {
             paper.Box("bp_ftr_ic").Width(20).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
-                .Text(EditorIcons.Hammer, font)
-                .TextColor(running ? EditorTheme.Accent : EditorTheme.Ink400)
+                .Text(EditorIcons.Hammer, font).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSize).Alignment(TextAlignment.MiddleCenter);
 
-            paper.Box("bp_ftr_sum").Width(running ? UnitValue.Pixels(180) : UnitValue.Auto)                .Margin(10, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+            paper.Box("bp_ftr_sum").Width(UnitValue.Auto)
+                .Margin(10, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
                 .Text(leftText, mono).TextColor(EditorTheme.Ink400)
                 .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft).TextTruncate();
 
-            // Progress bar fills the middle, between the summary and the action buttons.
-            using (paper.Row("bp_ftr_progw").Height(UnitValue.Auto).Margin(14, 14, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
-                Origami.ProgressBar(paper, "bp_ftr_bar", BuildProgress).Thickness(8).ShowPercent("F0").Show();
+            paper.Box("bp_ftr_spacer").Height(1).Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
+                .Width(UnitValue.Stretch()).IsNotInteractable();
 
             EditorGUI.Chip(paper, "bp_ftr_build", $"{EditorIcons.Hammer}  {Loc.Get("build.build")}", () => TryStartBuild(false));
 
@@ -463,30 +490,14 @@ public class BuildSettingsPanel : DockPanel
         paper.Box($"{id}_d").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
     }
 
+    /// <summary>A card per pipeline, from the same discovery the build itself uses.</summary>
     public List<BuildPipelineInfo> GetBuildPlatforms()
-    {
-        List<BuildPipelineInfo> pipelines = new List<BuildPipelineInfo>();
-
-        foreach (var type in ScriptAssemblyManager.GetAllTypes())
-        {
-            if (!type.IsSubclassOf(typeof(BuildPipeline)) || type.IsAbstract)
-                continue;
-
-            string name = type.Name;
-            string icon = EditorIcons.Desktop;
-            try
+        => ProjectBuilder.DiscoverPipelines()
+            .Select(p => new BuildPipelineInfo
             {
-                if (Activator.CreateInstance(type) is BuildPipeline bp)
-                {
-                    name = bp.DisplayName;
-                    icon = bp.Icon;
-                }
-            }
-            catch { }
-
-            pipelines.Add(new BuildPipelineInfo { BuildPipelineType = type, Name = name, Icon = icon });
-        }
-
-        return pipelines;
-    }
+                BuildPipelineType = p.GetType(),
+                Name = p.DisplayName,
+                Icon = p.Icon,
+            })
+            .ToList();
 }

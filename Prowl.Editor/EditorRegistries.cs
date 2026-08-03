@@ -132,6 +132,7 @@ public static class EditorRegistries
         _dropHandlers.Clear();
 
         _settingsEntries.Clear();
+        Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
         _scriptTemplates.Clear();
@@ -175,6 +176,7 @@ public static class EditorRegistries
                 ScanSceneDropHandler(type);
                 ScanProjectSettings(type);
                 ScanAssetMenuEntry(type);
+                ScanBuildTargetProvider(type);
 
                 foreach (var method in type.GetMethods(methodFlags))
                 {
@@ -303,6 +305,27 @@ public static class EditorRegistries
             ExportToBuild = attr.ExportToBuild,
             Instance = (ProjectSettingsBase)Activator.CreateInstance(type)!,
         });
+    }
+
+    /// <summary>
+    /// Adds the targets of any <see cref="Build.IBuildTargetProvider"/> to the shared registry.
+    /// </summary>
+    /// <remarks>
+    /// The hook is only worth having if something calls it. Without this scan a platform shipped from a
+    /// private assembly implements the interface and its targets never reach the registry.
+    /// </remarks>
+    private static void ScanBuildTargetProvider(Type type)
+    {
+        if (type.IsAbstract || type.IsInterface || !typeof(Build.IBuildTargetProvider).IsAssignableFrom(type)) return;
+
+        try
+        {
+            Build.TargetRegistry.Shared.RegisterFrom((Build.IBuildTargetProvider)Activator.CreateInstance(type)!);
+        }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogWarning($"[Build] Target provider '{type.Name}' was skipped: {e.Message}");
+        }
     }
 
     private static void ScanAssetMenuEntry(Type type)

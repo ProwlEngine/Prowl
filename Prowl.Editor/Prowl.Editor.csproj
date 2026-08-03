@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -53,6 +53,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Players\Desktop\Prowl.Player.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

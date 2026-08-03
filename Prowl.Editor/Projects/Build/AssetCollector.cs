@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 namespace Prowl.Editor.Build;
@@ -20,14 +19,16 @@ public static class AssetCollector
     /// Collect all assets needed for a set of scenes.
     /// Walks dependencies transitively and includes all Resources/ folder assets.
     /// </summary>
-    public static CollectionResult Collect(List<Guid> sceneGuids, bool dependenciesOnly)
+    public static CollectionResult Collect(EditorAssetBackend db, List<Guid> sceneGuids, bool dependenciesOnly)
     {
-        var db = EditorAssetBackend.Instance;
-        if (db == null)
-            return new CollectionResult { AllAssets = new(), ResourcesMap = new() };
+        ArgumentNullException.ThrowIfNull(db);
 
         var allAssets = new HashSet<Guid>();
         var resourcesMap = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+
+        // Enumerated once: the walk below revisits the set repeatedly, and re-reading the database each
+        // pass is the difference between a linear collection and a quadratic one on a large project.
+        var entries = db.GetAllEntries().ToList();
 
         if (dependenciesOnly)
         {
@@ -38,35 +39,32 @@ public static class AssetCollector
         else
         {
             // All assets
-            foreach (var entry in db.GetAllEntries())
+            foreach (var entry in entries)
             {
                 allAssets.Add(entry.Guid);
-                if (entry.SubAssets != null)
-                    foreach (var sub in entry.SubAssets)
-                        allAssets.Add(sub.Guid);
+                foreach (var sub in entry.SubAssets)
+                    allAssets.Add(sub.Guid);
             }
         }
 
         // Always include Resources/ folder assets regardless of dependency mode
         var resourceGuids = new List<Guid>();
-        foreach (var entry in db.GetAllEntries())
+        foreach (var entry in entries)
         {
-            if (IsResourcesAsset(entry.Path))
-            {
-                allAssets.Add(entry.Guid);
-                resourceGuids.Add(entry.Guid);
-                if (entry.SubAssets != null)
-                    foreach (var sub in entry.SubAssets)
-                        allAssets.Add(sub.Guid);
+            if (!IsResourcesAsset(entry.Path)) continue;
 
-                // Build the load path: everything after the last "Resources/" segment, no extension
-                string loadPath = GetResourceLoadPath(entry.Path);
-                if (!string.IsNullOrEmpty(loadPath))
-                {
-                    if (resourcesMap.ContainsKey(loadPath))
-                        Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
-                    resourcesMap[loadPath] = entry.Guid;
-                }
+            allAssets.Add(entry.Guid);
+            resourceGuids.Add(entry.Guid);
+            foreach (var sub in entry.SubAssets)
+                allAssets.Add(sub.Guid);
+
+            // Build the load path: everything after the last "Resources/" segment, no extension
+            string loadPath = GetResourceLoadPath(entry.Path);
+            if (!string.IsNullOrEmpty(loadPath))
+            {
+                if (resourcesMap.ContainsKey(loadPath))
+                    Runtime.Debug.LogWarning($"[Build] Duplicate Resources load path '{loadPath}': '{entry.Path}' overrides another asset.");
+                resourcesMap[loadPath] = entry.Guid;
             }
         }
 
@@ -84,9 +82,9 @@ public static class AssetCollector
             previousCount = allAssets.Count;
 
             var newSubAssetGuids = new List<Guid>();
-            foreach (var entry in db.GetAllEntries())
+            foreach (var entry in entries)
             {
-                if (!allAssets.Contains(entry.Guid) || entry.SubAssets == null) continue;
+                if (!allAssets.Contains(entry.Guid)) continue;
                 foreach (var sub in entry.SubAssets)
                     if (allAssets.Add(sub.Guid))
                         newSubAssetGuids.Add(sub.Guid);
@@ -105,13 +103,12 @@ public static class AssetCollector
         // neither should ship unless something outside Editor/ needs the chain).
         var editorOnlyImporters = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var editorOnly = new HashSet<Guid>();
-        foreach (var entry in db.GetAllEntries())
+        foreach (var entry in entries)
         {
             if (!IsEditorOnly(entry, editorOnlyImporters)) continue;
             editorOnly.Add(entry.Guid);
-            if (entry.SubAssets != null)
-                foreach (var sub in entry.SubAssets)
-                    editorOnly.Add(sub.Guid);
+            foreach (var sub in entry.SubAssets)
+                editorOnly.Add(sub.Guid);
         }
 
         var neededEditorOnly = new HashSet<Guid>();
@@ -146,7 +143,6 @@ public static class AssetCollector
     /// its importer declares <see cref="Importers.AssetImporter.IsEditorOnlyAsset"/> (scripts, plugins,
     /// assembly definitions - things that aren't real runtime data assets).
     /// </summary>
-    /// <param name="importerCache">Per-collection cache of importer-type-name -> editor-only.</param>
     public static bool IsEditorOnly(AssetEntry entry, Dictionary<string, bool> importerCache)
     {
         var segments = entry.Path.Split('/', '\\');
@@ -156,11 +152,13 @@ public static class AssetCollector
         if (string.IsNullOrEmpty(entry.ImporterType))
             return false;
 
+        // Constructing an importer is not free and the same type answers for every asset it handles.
         if (!importerCache.TryGetValue(entry.ImporterType, out bool editorOnly))
         {
             editorOnly = EditorRegistries.CreateImporterByName(entry.ImporterType)?.IsEditorOnlyAsset ?? false;
             importerCache[entry.ImporterType] = editorOnly;
         }
+
         return editorOnly;
     }
 

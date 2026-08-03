@@ -29,7 +29,6 @@ public static class PlayerSettingsLoader
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
-        ApplyGeneral(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
@@ -49,7 +48,7 @@ public static class PlayerSettingsLoader
     /// </summary>
     public static void ApplyAssetConfig(string dir)
     {
-        var settings = Read(dir, "Assets");
+        var settings = Read(dir, PlayerSettingsFiles.Assets);
         if (settings == null) return;
 
         try
@@ -64,7 +63,7 @@ public static class PlayerSettingsLoader
 
     private static void ApplyPhysics(string dir)
     {
-        var settings = Read(dir, "Physics");
+        var settings = Read(dir, PlayerSettingsFiles.Physics);
         if (settings == null) return;
 
         try
@@ -126,7 +125,7 @@ public static class PlayerSettingsLoader
 
     private static void ApplyAudio(string dir)
     {
-        var settings = Read(dir, "Audio");
+        var settings = Read(dir, PlayerSettingsFiles.Audio);
         if (settings == null) return;
 
         try
@@ -140,7 +139,7 @@ public static class PlayerSettingsLoader
 
     private static void ApplyTime(string dir)
     {
-        var settings = Read(dir, "Time");
+        var settings = Read(dir, PlayerSettingsFiles.Time);
         if (settings == null) return;
 
         try
@@ -159,7 +158,7 @@ public static class PlayerSettingsLoader
 
     private static void ApplyTagsAndLayers(string dir)
     {
-        var settings = Read(dir, "Tags & Layers");
+        var settings = Read(dir, PlayerSettingsFiles.TagsAndLayers);
         if (settings == null) return;
 
         try
@@ -189,11 +188,11 @@ public static class PlayerSettingsLoader
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
     }
 
-    private static void ApplyGeneral(string dir)
-    {
-        // Informational only for now
-    }
-
+    /// <summary>
+    /// Reads one settings file, or null when there is nothing usable to read. A file that exists but
+    /// cannot be parsed is reported, since falling back to defaults silently is how a shipped game ends
+    /// up running with physics nobody configured.
+    /// </summary>
     private static EchoObject? Read(string dir, string name)
     {
         string path = Path.Combine(dir, $"{name}.yaml");
@@ -203,8 +202,9 @@ public static class PlayerSettingsLoader
         {
             return EchoObject.ReadFromYaml(File.ReadAllText(path));
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.LogWarning($"[PlayerSettings] Could not read '{name}.yaml', using defaults: {ex.Message}");
             return null;
         }
     }
