@@ -29,5 +29,6 @@
     </Folder>
     <Folder Name="/Tools/">
         <Project Path="Tools/SlangQuickCompile/SlangQuickCompile.csproj" />
+        <Project Path="Tools/GraphiteBench/GraphiteBench.csproj" />
     </Folder>
 </Solution>
