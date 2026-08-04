@@ -836,6 +836,7 @@ public class SceneViewPanel : DockPanel
 
         // Create gizmo if needed
         _transformGizmo ??= new Gizmo.TransformGizmo(SceneTools.GizmoMode);
+        _transformGizmo.GizmoSize = 100f;
 
         // Pivot mode picks what the handle sits on: the selection's centre, or the active object.
         Float3 center;
