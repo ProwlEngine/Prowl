@@ -28,6 +28,11 @@ internal unsafe sealed partial class VkDescriptorBinder
         public DescriptorSet Set;
         public uint[] DynOffsets = new uint[16];
         public int DynOffsetCount;
+
+        public DescriptorSet BoundSet;
+        public uint[] BoundDynOffsets = new uint[16];
+        public int BoundDynOffsetCount;
+        public bool Bound;
     }
 
     private readonly VkCommandBuffer _cbOwner;
@@ -47,9 +52,10 @@ internal unsafe sealed partial class VkDescriptorBinder
     private ShaderProgram _lastPreparedProgram;
     private uint _lastPreparedEpoch;
 
-    // Set count from the most recent Prepare() call that returned true; EmitBind() reads it back so
-    // callers don't have to re-derive it from the program.
+    // Set count and first-changed-set index from the most recent Prepare() call that returned true;
+    // EmitBind() reads them back so callers don't have to re-derive them from the program.
     private uint _preparedSetCount;
+    private uint _preparedFirstSet;
 
     public VkDescriptorBinder(VkCommandBuffer owner, VkGraphicsDevice gd)
     {
@@ -65,7 +71,10 @@ internal unsafe sealed partial class VkDescriptorBinder
         _lastPreparedProgram = null;
         _lastPreparedEpoch = 0;
         for (int i = 0; i < _setBindStates.Length; i++)
+        {
             _setBindStates[i].IdentityLen = -1;
+            _setBindStates[i].Bound = false;
+        }
     }
 
     // Resolves sets, transitions textures, and prepares descriptors for binding. Returns true if binding needed, false otherwise
@@ -93,6 +102,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         EnsureBindCacheFor(program, (int)setCount);
         ulong executionId = _cbOwner.ExecutionId;
 
+        int firstChanged = -1;
         for (int setIdx = 0; setIdx < (int)setCount; setIdx++)
         {
             ResourceLayoutElementDescription[] elements = resourceLayouts[setIdx].Elements ?? Array.Empty<ResourceLayoutElementDescription>();
@@ -103,36 +113,71 @@ internal unsafe sealed partial class VkDescriptorBinder
             TransitionResolvedTextures(elements);
             SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
             GatherDynOffsets(meta, state);
+
+            if (firstChanged < 0 && SetDiffersFromBound(state))
+                firstChanged = setIdx;
         }
 
         _lastPreparedProgram = isGraphics ? program : null;
         _lastPreparedEpoch = _cbOwner.ActivePropertiesEpoch;
         _preparedSetCount = setCount;
+
+        if (firstChanged < 0) return false;
+
+        _preparedFirstSet = (uint)firstChanged;
         return true;
+    }
+
+    private static bool SetDiffersFromBound(SetBindState state)
+    {
+        if (!state.Bound) return true;
+        if (state.Set.Handle != state.BoundSet.Handle) return true;
+        if (state.DynOffsetCount != state.BoundDynOffsetCount) return true;
+
+        for (int i = 0; i < state.DynOffsetCount; i++)
+        {
+            if (state.DynOffsets[i] != state.BoundDynOffsets[i])
+                return true;
+        }
+
+        return false;
     }
 
     internal void EmitBind(PipelineLayout pipelineLayout, PipelineBindPoint bindPoint)
     {
+        uint firstSet = _preparedFirstSet;
         uint setCount = _preparedSetCount;
+        uint count = setCount - firstSet;
         Silk.NET.Vulkan.CommandBuffer cb = _cbOwner.CommandBuffer;
 
-        DescriptorSet* sets = stackalloc DescriptorSet[(int)setCount];
+        DescriptorSet* sets = stackalloc DescriptorSet[(int)count];
         int totalDyn = 0;
-        for (int i = 0; i < (int)setCount; i++)
+        for (int i = (int)firstSet; i < (int)setCount; i++)
             totalDyn += _setBindStates[i].DynOffsetCount;
 
         uint* dynOffsets = stackalloc uint[totalDyn > 0 ? totalDyn : 1];
         int d = 0;
-        for (int i = 0; i < (int)setCount; i++)
+        for (int i = (int)firstSet; i < (int)setCount; i++)
         {
             SetBindState st = _setBindStates[i];
-            sets[i] = st.Set;
+            sets[i - firstSet] = st.Set;
             for (int k = 0; k < st.DynOffsetCount; k++)
                 dynOffsets[d++] = st.DynOffsets[k];
         }
 
-        _gd.Vk.CmdBindDescriptorSets(cb, bindPoint, pipelineLayout, 0, setCount, sets, (uint)d, dynOffsets);
-        _cbOwner.RecordResourceSetBind(setCount);
+        _gd.Vk.CmdBindDescriptorSets(cb, bindPoint, pipelineLayout, firstSet, count, sets, (uint)d, dynOffsets);
+        _cbOwner.RecordResourceSetBind(count);
+
+        for (int i = (int)firstSet; i < (int)setCount; i++)
+        {
+            SetBindState st = _setBindStates[i];
+            st.BoundSet = st.Set;
+            if (st.BoundDynOffsets.Length < st.DynOffsetCount)
+                st.BoundDynOffsets = new uint[st.DynOffsetCount];
+            Array.Copy(st.DynOffsets, st.BoundDynOffsets, st.DynOffsetCount);
+            st.BoundDynOffsetCount = st.DynOffsetCount;
+            st.Bound = true;
+        }
     }
 
     private void EnsureBindCacheFor(ShaderProgram program, int setCount)
@@ -148,7 +193,10 @@ internal unsafe sealed partial class VkDescriptorBinder
         if (!ReferenceEquals(program, _bindCacheProgram))
         {
             for (int i = 0; i < _setBindStates.Length; i++)
+            {
                 _setBindStates[i].IdentityLen = -1;
+                _setBindStates[i].Bound = false;
+            }
             _bindCacheProgram = program;
         }
     }
