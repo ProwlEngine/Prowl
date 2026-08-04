@@ -355,7 +355,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Enable()
     {
         EnsureNotDisposed();
-        if (_isActive) throw new Exception("Scene is already enabled!");
+        if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
 
@@ -388,7 +388,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Disable()
     {
         EnsureNotDisposed();
-        if (!_isActive) throw new Exception("Scene is not enabled!");
+        if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
         List<GameObject> allObjectsCopy = [.. AllObjects];
@@ -633,7 +633,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     public void Flush()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
         {
@@ -742,7 +742,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Update()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunStart();
         _dispatcher.RunUpdate();
         _dispatcher.RunLateUpdate();
@@ -756,7 +756,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void FixedUpdate()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
@@ -776,7 +776,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void CollectRenderables(Camera camera, List<IRenderable> renderables, List<IRenderableLight> lights)
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunRenderCollect(camera, renderables, lights);
     }
 
@@ -785,7 +785,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunDrawGizmos();
 
         Flush();
@@ -797,7 +797,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void OnGui(Paper paper)
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunOnGui(paper);
 
         Flush();
@@ -835,7 +835,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <returns>True if any cameras were rendered, false otherwise</returns>
     public bool Render(RenderTexture? target = null)
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return false;
         // Renderables are now collected per-camera inside pipeline.Render()
 
         List<Camera> Cameras = GatherActiveCameras();
