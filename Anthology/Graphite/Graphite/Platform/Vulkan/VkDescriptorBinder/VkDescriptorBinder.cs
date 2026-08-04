@@ -16,14 +16,11 @@ internal interface IVkDescriptorProgram
     VkDescriptorSetCache DescriptorCache { get; }
 }
 
-// Owns the per-command-buffer descriptor resolve/cache/bind pipeline: resolving a shader program's
-// resource layout against the active property set, caching descriptor sets by content, and emitting the
-// vkCmdBindDescriptorSets call. Lives in the hot draw/dispatch path, so it is deliberately decoupled from
-// render-pass and pooling state: it only touches the owning command buffer, the device, the active
-// property set, and its own scratch/cache fields.
+// Owns the per-command-buffer descriptor resolve/cache/bind pipeline. 
+// Each command buffer has one, and it is cleared at the start of every new execution/ring.
 internal unsafe sealed partial class VkDescriptorBinder
 {
-    internal const int MaxSetElements = 64;
+    internal const int MaxSetElements = ResourceLayoutDescription.MaxElementsPerSet;
 
     private sealed class SetBindState
     {
@@ -44,13 +41,8 @@ internal unsafe sealed partial class VkDescriptorBinder
     // Scratch identity built each draw, compared against the per-set cached identity below.
     private readonly ulong[] _identityScratch = new ulong[1 + MaxSetElements * 3];
 
-    // Persistent per-(set,binding) transient implicit-UBO cache, reused across draws while the
-    // contributing uniform field versions are unchanged. Cleared each Begin (new execution/ring).
     private readonly Dictionary<(int set, int binding), ImplicitUboCacheEntry> _implicitUboCache = [];
 
-    // Per-set-index bind cache: the last-built identity, the resolved descriptor set, and the dynamic
-    // offsets. Lets an unchanged set skip the hash + cache probe + descriptor write, and lets a whole
-    // draw whose properties are unchanged skip the bind entirely. Cleared each Begin.
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
 
@@ -80,20 +72,14 @@ internal unsafe sealed partial class VkDescriptorBinder
             _setBindStates[i].IdentityLen = -1;
     }
 
-    // Resolves every set once, transitions property textures (before any render pass), and prepares the
-    // descriptor sets into the per-set bind cache. Returns whether EmitBind must run: false only when a
-    // graphics draw's properties are unchanged since the last draw and the sets are still bound.
-    // reportProgram is the shader passed to the missing-property callback; it always mirrors the current
-    // graphics shader even for a compute dispatch, matching prior behavior.
+    // Resolves sets, transitions textures, and prepares descriptors for binding. Returns true if binding needed, false otherwise
     internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isGraphics, bool renderPassActive)
     {
         IVkDescriptorProgram descProgram = (IVkDescriptorProgram)program;
         uint setCount = descProgram.ResourceSetCount;
         if (setCount == 0) return false;
 
-        // Whole-draw fast path: an active render pass means no copy/dispatch has moved a texture or
-        // ended the pass since the last draw, so an unchanged epoch under the same program guarantees
-        // every set is identical and still bound.
+        // No bind needed, everything is the same as last draw
         if (isGraphics
             && renderPassActive
             && ReferenceEquals(program, _lastPreparedProgram)

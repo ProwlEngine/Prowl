@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -7,8 +8,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-// Resolve phase: turns one set's layout elements into concrete buffers, views and samplers taken from
-// the active property set, substituting null resources for anything unbound.
+
 internal unsafe sealed partial class VkDescriptorBinder
 {
     internal struct ResolvedBinding
@@ -34,6 +34,8 @@ internal unsafe sealed partial class VkDescriptorBinder
     private void ResolveSet(
         int setIdx, ResourceLayoutElementDescription[] elements, SetBindingMetadata meta, ShaderProgram reportProgram)
     {
+        Debug.Assert(elements.Length <= MaxSetElements, "Resource layout exceeds MaxSetElements; program creation should have rejected it.");
+
         ulong executionId = _cbOwner.ExecutionId;
 
         for (int i = 0; i < elements.Length; i++)
@@ -187,10 +189,7 @@ internal unsafe sealed partial class VkDescriptorBinder
         return target;
     }
 
-    // Builds this draw's uniform bytes and reuses the previously allocated range when they are
-    // byte-identical to the last upload. An unchanged UBO then neither reallocates a transient nor
-    // re-uploads, and keeps a stable descriptor identity across draws. Comparing the bytes (rather than
-    // entry versions) stays correct when a merge swaps in a fresh entry object.
+
     private DeviceBufferRange GetOrBuildTransientUbo(int setIdx, int bindingIndex, UniformBlockField[] fields)
     {
         (int, int) key = (setIdx, bindingIndex);
