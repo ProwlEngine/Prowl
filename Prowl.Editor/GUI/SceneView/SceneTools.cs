@@ -44,7 +44,7 @@ public enum PivotOrientation
 /// </summary>
 public static class SceneTools
 {
-    private static SceneTool _current = SceneTool.Translate;
+    private static TransformTool _current = TransformTool.Translate;
     private static PivotMode _pivot = PivotMode.Center;
     private static PivotOrientation _orientation = PivotOrientation.Local;
     private static bool _snapEnabled;
@@ -52,7 +52,7 @@ public static class SceneTools
     /// <summary>Fires whenever any tool state changes, so panels can rebuild cached gizmo state.</summary>
     public static event Action? Changed;
 
-    public static SceneTool Current
+    public static TransformTool Transform
     {
         get => _current;
         set => Set(ref _current, value);
@@ -99,12 +99,12 @@ public static class SceneTools
     /// </summary>
     public static bool SuppressTransformGizmo { get; internal set; }
 
-    /// <summary>The Origami gizmo mode matching <see cref="Current"/>.</summary>
-    public static Gizmo.TransformGizmoMode GizmoMode => Current switch
+    /// <summary>The Origami gizmo mode matching <see cref="Transform"/>.</summary>
+    public static Gizmo.TransformGizmoMode GizmoMode => Transform switch
     {
-        SceneTool.Rotate => Gizmo.TransformGizmoMode.Rotate,
-        SceneTool.Scale => Gizmo.TransformGizmoMode.ScaleAll,
-        SceneTool.Universal => Gizmo.TransformGizmoMode.Universal,
+        TransformTool.Rotate => Gizmo.TransformGizmoMode.Rotate,
+        TransformTool.Scale => Gizmo.TransformGizmoMode.ScaleAll,
+        TransformTool.Universal => Gizmo.TransformGizmoMode.Universal,
         _ => Gizmo.TransformGizmoMode.Translate,
     };
 

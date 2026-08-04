@@ -161,10 +161,10 @@ public class SceneViewPanel : DockPanel
 
     private void DrawDefaultToolbar(Paper paper, Scribe.FontFile font)
     {
-        bool isTranslate = SceneTools.Current == SceneTool.Translate;
-        bool isRotate = SceneTools.Current == SceneTool.Rotate;
-        bool isScale = SceneTools.Current == SceneTool.Scale;
-        bool isUniversal = SceneTools.Current == SceneTool.Universal;
+        bool isTranslate = SceneTools.Transform == TransformTool.Translate;
+        bool isRotate = SceneTools.Transform == TransformTool.Rotate;
+        bool isScale = SceneTools.Transform == TransformTool.Scale;
+        bool isUniversal = SceneTools.Transform == TransformTool.Universal;
 
         paper.Box("sv_move_btn")
             .Width(24).Height(24).Rounded(6)
@@ -172,7 +172,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Translate));
+            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Translate));
 
         paper.Box("sv_rotate_btn")
             .Width(24).Height(24).Rounded(6)
@@ -180,7 +180,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Rotate));
+            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Rotate));
 
         paper.Box("sv_scale_btn")
             .Width(24).Height(24).Rounded(6)
@@ -188,7 +188,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Scale));
+            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Scale));
 
         paper.Box("sv_universal_btn")
             .Width(24).Height(24).Rounded(6)
@@ -196,7 +196,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Universal));
+            .OnClick(0, (_, _) => SetGizmoMode(TransformTool.Universal));
     }
 
     private void DrawViewport(Paper paper, Scribe.FontFile font, float width, float height)
@@ -389,13 +389,13 @@ public class SceneViewPanel : DockPanel
 
                 // Gizmo tool switching
                 if (ShortcutManager.IsPressed("Scene/ToolTranslate"))
-                    SetGizmoMode(SceneTool.Translate);
+                    SetGizmoMode(TransformTool.Translate);
                 else if (ShortcutManager.IsPressed("Scene/ToolRotate"))
-                    SetGizmoMode(SceneTool.Rotate);
+                    SetGizmoMode(TransformTool.Rotate);
                 else if (ShortcutManager.IsPressed("Scene/ToolScale"))
-                    SetGizmoMode(SceneTool.Scale);
+                    SetGizmoMode(TransformTool.Scale);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
-                    SetGizmoMode(SceneTool.Universal);
+                    SetGizmoMode(TransformTool.Universal);
             }
 
             // Accept asset drops via registry-discovered handlers
@@ -729,9 +729,9 @@ public class SceneViewPanel : DockPanel
     //  Transform Gizmo
     // ================================================================
 
-    private void SetGizmoMode(SceneTool tool)
+    private void SetGizmoMode(TransformTool tool)
     {
-        SceneTools.Current = tool;
+        SceneTools.Transform = tool;
         _transformGizmo?.SetMode(SceneTools.GizmoMode);
     }
 
