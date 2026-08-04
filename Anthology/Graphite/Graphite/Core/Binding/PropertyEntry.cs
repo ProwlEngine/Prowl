@@ -24,7 +24,7 @@ internal sealed class PropertyEntry
 
     public unsafe struct UniformPayload
     {
-        // inline 128 bytes (a double4x4) to dodge a heap alloc per entry; you aren't binding a million of these.
+        // inline 128 bytes (a double4x4) to dodge a heap alloc per entry. you aren't binding a million of these.
         public fixed byte _e0[128];
 
         public ref T As<T>() where T : unmanaged
