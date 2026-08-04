@@ -18,6 +18,12 @@ internal unsafe sealed class VkUniformArena
         public byte[] Packed;
         public byte[] Scratch;
 
+        public DeviceBuffer? ExplicitBuffer;
+        public uint ExplicitOffset;
+        public uint ExplicitContentVersion;
+        public readonly PropertyEntry?[] ExplicitSources;
+        public readonly uint[] ExplicitVersions;
+
         public Block(UniformBlockField[] fields, uint size)
         {
             Fields = fields;
@@ -25,6 +31,8 @@ internal unsafe sealed class VkUniformArena
             Versions = new uint[fields.Length];
             Packed = new byte[size];
             Scratch = new byte[size];
+            ExplicitSources = new PropertyEntry?[fields.Length];
+            ExplicitVersions = new uint[fields.Length];
         }
 
         public void CommitScratch() => (Packed, Scratch) = (Scratch, Packed);
