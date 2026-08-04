@@ -261,8 +261,11 @@ public class SceneViewPanel : DockPanel
                 // Depth 0: the view cube is a screen-space overlay drawn on top of the scene, so it
                 // wins every overlap rather than competing on scene depth.
                 if (_viewCubeRadius > 0f)
-                    _handles.AddControl(_handles.GetControlID(ViewCubeControl),
-                        _handles.DistanceToScreenPoint(_viewCubeCenter, _viewCubeRadius), 0f);
+                {
+                    ControlID viewCube = _handles.GetControlID(ViewCubeControl);
+                    _handles.AddControl(viewCube, _handles.DistanceToScreenPoint(_viewCubeCenter, _viewCubeRadius), 0f);
+                    _handles.RequestCursor(viewCube, PaperCursor.Pointer);
+                }
                 UpdatePickControl(scene, new Float2(width, height));
 
                 _handles.EndFrame();
@@ -286,6 +289,9 @@ public class SceneViewPanel : DockPanel
         {
             paper.Box("sv_viewport")
                 .Size(width, height)
+                // Handles ask for a shape while they own the cursor; Paper resolves it from the
+                // hovered element exactly as it does for any UI widget.
+                .Cursor(_handles.Cursor)
                 .OnPostLayout((handle, rect) =>
                 {
                     // Cache absolute rect for gizmo coordinate space
@@ -893,6 +899,7 @@ public class SceneViewPanel : DockPanel
         // and the gizmo's own depth decides overlaps against handles stacked on top of it.
         bool gizmoHovered = _transformGizmo.IsOver && !_handles.Blocked;
         _handles.AddControl(control, gizmoHovered ? 0f : float.MaxValue, _handles.DepthOf(center));
+        _handles.RequestCursor(control, PaperCursor.ResizeAll);
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
 
