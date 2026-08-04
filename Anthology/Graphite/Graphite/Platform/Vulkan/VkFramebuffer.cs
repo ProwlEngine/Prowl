@@ -32,12 +32,39 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
     {
         _gd = gd;
 
+        uint colorAttachmentCount = (uint)ColorTargets.Count;
+
+        CreateRenderPasses(
+            ref description,
+            isPresented,
+            colorAttachmentCount,
+            out _renderPassNoClear,
+            out _renderPassNoClearLoad,
+            out _renderPassClear);
+
+        CreateDeviceFramebuffer(ref description, colorAttachmentCount, out _deviceFramebuffer);
+
+        if (DepthTarget != null)
+        {
+            AttachmentCount += 1;
+        }
+        AttachmentCount += (uint)ColorTargets.Count;
+
+        _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
+    }
+
+    private void CreateRenderPasses(
+        ref FramebufferDescription description,
+        bool isPresented,
+        uint colorAttachmentCount,
+        out RenderPass renderPassNoClear,
+        out RenderPass renderPassNoClearLoad,
+        out RenderPass renderPassClear)
+    {
         RenderPassCreateInfo renderPassCI = new()
         {
             SType = StructureType.RenderPassCreateInfo
         };
-
-        uint colorAttachmentCount = (uint)ColorTargets.Count;
 
         AttachmentDescription* attachments = stackalloc AttachmentDescription[(int)colorAttachmentCount + 1];
         uint attachmentCount = 0;
@@ -116,7 +143,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         renderPassCI.DependencyCount = 1;
         renderPassCI.PDependencies = &subpassDependency;
 
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClear).CheckResult();
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassNoClear).CheckResult();
 
         for (int i = 0; i < colorAttachmentCount; i++)
         {
@@ -134,7 +161,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             }
 
         }
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassNoClearLoad).CheckResult();
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassNoClearLoad).CheckResult();
 
 
         // Load version
@@ -156,8 +183,11 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
             attachments[i].InitialLayout = ImageLayout.Undefined;
         }
 
-        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out _renderPassClear).CheckResult();
+        _gd.Vk.CreateRenderPass(_gd.Device, in renderPassCI, null, out renderPassClear).CheckResult();
+    }
 
+    private void CreateDeviceFramebuffer(ref FramebufferDescription description, uint colorAttachmentCount, out VkFramebufferHandle deviceFramebuffer)
+    {
         FramebufferCreateInfo fbCI = new()
         {
             SType = StructureType.FramebufferCreateInfo
@@ -244,15 +274,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
         fbCI.Layers = 1;
         fbCI.RenderPass = _renderPassNoClear;
 
-        _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out _deviceFramebuffer).CheckResult();
-
-        if (DepthTarget != null)
-        {
-            AttachmentCount += 1;
-        }
-        AttachmentCount += (uint)ColorTargets.Count;
-
-        _gd.Profiler?.Allocate(AllocBin.Framebuffer, 0);
+        _gd.Vk.CreateFramebuffer(_gd.Device, in fbCI, null, out deviceFramebuffer).CheckResult();
     }
 
     public override void TransitionToIntermediateLayout(Silk.NET.Vulkan.CommandBuffer cb)
