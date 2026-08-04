@@ -110,6 +110,7 @@ internal unsafe partial class VkCommandBuffer
         _newFramebuffer = true;
         _hasResolvedPipeline = false;
         Util.EnsureArrayMinimumSize(ref _scissorRects, Math.Max(1, (uint)vkFB.ColorTargets.Count));
+        Util.EnsureArrayMinimumSize(ref _viewports, Math.Max(1, (uint)vkFB.ColorTargets.Count));
         uint clearValueCount = (uint)vkFB.ColorTargets.Count;
         Util.EnsureArrayMinimumSize(ref _clearValues, clearValueCount + 1); // Leave an extra space for the depth value (tracked separately).
         Util.ClearArray(_validColorClearValues);
