@@ -71,76 +71,6 @@ public struct GraphicsDeviceOptions
     public GraphicsDeviceOptions(bool debug)
     {
         Debug = debug;
-        HasMainSwapchain = false;
-        SwapchainDepthFormat = null;
-        SyncToVerticalBlank = false;
-        PreferDepthRangeZeroToOne = false;
-        PreferStandardClipSpaceYDirection = false;
-        SwapchainSrgbFormat = false;
-    }
-
-    /// <summary>
-    /// Options for a device with a main Swapchain.
-    /// </summary>
-    /// <param name="debug">Enable debug features if host supports them.</param>
-    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
-    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
-    public GraphicsDeviceOptions(bool debug, PixelFormat? swapchainDepthFormat, bool syncToVerticalBlank)
-    {
-        Debug = debug;
-        HasMainSwapchain = true;
-        SwapchainDepthFormat = swapchainDepthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        PreferDepthRangeZeroToOne = false;
-        PreferStandardClipSpaceYDirection = false;
-        SwapchainSrgbFormat = false;
-    }
-
-    /// <summary>
-    /// Options for a device with a main Swapchain.
-    /// </summary>
-    /// <param name="debug">Enable debug features if host supports them.</param>
-    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
-    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
-    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
-    public GraphicsDeviceOptions(
-        bool debug,
-        PixelFormat? swapchainDepthFormat,
-        bool syncToVerticalBlank,
-        bool preferDepthRangeZeroToOne)
-    {
-        Debug = debug;
-        HasMainSwapchain = true;
-        SwapchainDepthFormat = swapchainDepthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        PreferDepthRangeZeroToOne = preferDepthRangeZeroToOne;
-        PreferStandardClipSpaceYDirection = false;
-        SwapchainSrgbFormat = false;
-    }
-
-    /// <summary>
-    /// Options for a device with a main Swapchain.
-    /// </summary>
-    /// <param name="debug">Enable debug features if host supports them.</param>
-    /// <param name="swapchainDepthFormat">Depth buffer format for the swapchain. Null = no depth buffer.</param>
-    /// <param name="syncToVerticalBlank">Sync main Swapchain to vblank.</param>
-    /// <param name="preferDepthRangeZeroToOne">Prefer 0-to-1 depth range.</param>
-    /// <param name="preferStandardClipSpaceYDirection">Prefer bottom-to-top clip space Y. Not default on Vulkan, not always
-    /// available.</param>
-    public GraphicsDeviceOptions(
-        bool debug,
-        PixelFormat? swapchainDepthFormat,
-        bool syncToVerticalBlank,
-        bool preferDepthRangeZeroToOne,
-        bool preferStandardClipSpaceYDirection)
-    {
-        Debug = debug;
-        HasMainSwapchain = true;
-        SwapchainDepthFormat = swapchainDepthFormat;
-        SyncToVerticalBlank = syncToVerticalBlank;
-        PreferDepthRangeZeroToOne = preferDepthRangeZeroToOne;
-        PreferStandardClipSpaceYDirection = preferStandardClipSpaceYDirection;
-        SwapchainSrgbFormat = false;
     }
 
     /// <summary>
@@ -157,10 +87,10 @@ public struct GraphicsDeviceOptions
     public GraphicsDeviceOptions(
         bool debug,
         PixelFormat? swapchainDepthFormat,
-        bool syncToVerticalBlank,
-        bool preferDepthRangeZeroToOne,
-        bool preferStandardClipSpaceYDirection,
-        bool swapchainSrgbFormat)
+        bool syncToVerticalBlank = false,
+        bool preferDepthRangeZeroToOne = false,
+        bool preferStandardClipSpaceYDirection = false,
+        bool swapchainSrgbFormat = false)
     {
         Debug = debug;
         HasMainSwapchain = true;
