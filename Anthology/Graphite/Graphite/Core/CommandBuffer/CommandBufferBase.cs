@@ -14,7 +14,7 @@ public abstract class CommandBufferBase : GraphicsResource
     /// <summary>True if End was called since last Begin.</summary>
     internal bool HasEnded { get; private protected set; }
 
-    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <summary>Updates buffer region with a single value. T must be blittable.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
     /// <param name="bufferOffsetInBytes">Byte offset.</param>
@@ -22,78 +22,15 @@ public abstract class CommandBufferBase : GraphicsResource
     public unsafe void UpdateBuffer<T>(
         DeviceBuffer buffer,
         uint bufferOffsetInBytes,
-        T source) where T : unmanaged
+        in T source) where T : unmanaged
     {
-        ref byte sourceByteRef = ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref source));
-        fixed (byte* ptr = &sourceByteRef)
+        fixed (byte* ptr = &Unsafe.As<T, byte>(ref Unsafe.AsRef(in source)))
         {
             UpdateBuffer(buffer, bufferOffsetInBytes, (IntPtr)ptr, (uint)sizeof(T));
         }
     }
 
-    /// <summary>Updates buffer region. T must be blittable.</summary>
-    /// <typeparam name="T">Upload type.</typeparam>
-    /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset.</param>
-    /// <param name="source">Ref to value to upload.</param>
-    public unsafe void UpdateBuffer<T>(
-        DeviceBuffer buffer,
-        uint bufferOffsetInBytes,
-        ref T source) where T : unmanaged
-    {
-        ref byte sourceByteRef = ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref source));
-        fixed (byte* ptr = &sourceByteRef)
-        {
-            UpdateBuffer(buffer, bufferOffsetInBytes, (IntPtr)ptr, Util.USizeOf<T>());
-        }
-    }
-
-    /// <summary>Updates buffer region. T must be blittable.</summary>
-    /// <typeparam name="T">Upload type.</typeparam>
-    /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset.</param>
-    /// <param name="source">Ref to first value in series.</param>
-    /// <param name="sizeInBytes">Total upload bytes.</param>
-    public unsafe void UpdateBuffer<T>(
-        DeviceBuffer buffer,
-        uint bufferOffsetInBytes,
-        ref T source,
-        uint sizeInBytes) where T : unmanaged
-    {
-        ref byte sourceByteRef = ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref source));
-        fixed (byte* ptr = &sourceByteRef)
-        {
-            UpdateBuffer(buffer, bufferOffsetInBytes, (IntPtr)ptr, sizeInBytes);
-        }
-    }
-
-    /// <summary>Updates buffer region. T must be blittable.</summary>
-    /// <typeparam name="T">Upload type.</typeparam>
-    /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset.</param>
-    /// <param name="source">Array to upload.</param>
-    public void UpdateBuffer<T>(
-        DeviceBuffer buffer,
-        uint bufferOffsetInBytes,
-        T[] source) where T : unmanaged
-    {
-        UpdateBuffer(buffer, bufferOffsetInBytes, (ReadOnlySpan<T>)source);
-    }
-
-    /// <summary>Updates buffer region. T must be blittable.</summary>
-    /// <typeparam name="T">Upload type.</typeparam>
-    /// <param name="buffer">Buffer to update.</param>
-    /// <param name="bufferOffsetInBytes">Byte offset.</param>
-    /// <param name="source">Span to upload.</param>
-    public void UpdateBuffer<T>(
-        DeviceBuffer buffer,
-        uint bufferOffsetInBytes,
-        Span<T> source) where T : unmanaged
-    {
-        UpdateBuffer(buffer, bufferOffsetInBytes, (ReadOnlySpan<T>)source);
-    }
-
-    /// <summary>Updates buffer region. T must be blittable.</summary>
+    /// <summary>Updates buffer region with new data. T must be blittable. Arrays and Span convert implicitly.</summary>
     /// <typeparam name="T">Upload type.</typeparam>
     /// <param name="buffer">Buffer to update.</param>
     /// <param name="bufferOffsetInBytes">Byte offset.</param>
