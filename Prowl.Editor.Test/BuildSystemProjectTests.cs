@@ -551,24 +551,41 @@ public class BuildSystemProjectTests : EditorTestHarness
             public class AsyncVoidComponent : MonoBehaviour
             {
                 private static volatile bool s_finished;
+                private static bool s_reported;
+                private static int s_frames;
 
                 public override void Start()
                 {
-                    try
-                    {
-                        Fire();
-
-                        // Waited for rather than assumed, so the result does not depend on whether the
-                        // headless loop happens to outlive the continuation.
-                        for (int i = 0; i < 500 && !s_finished; i++)
-                            System.Threading.Thread.Sleep(10);
-
-                        System.Console.WriteLine(s_finished ? "PROWL_ASYNC_OK" : "PROWL_ASYNC_TIMEOUT");
-                    }
+                    try { Fire(); }
                     catch (System.Exception e)
                     {
                         System.Console.WriteLine("PROWL_ASYNC_FAIL|" + e.GetType().Name + "|" + e.Message);
                     }
+                }
+
+                // Waited for across frames rather than by blocking. The engine resumes continuations on
+                // the main thread, so sleeping here waiting for one would wait for work only this thread
+                // can run.
+                public override void Update()
+                {
+                    if (s_reported) return;
+
+                    if (s_finished)
+                    {
+                        s_reported = true;
+                        System.Console.WriteLine("PROWL_ASYNC_OK");
+                        return;
+                    }
+
+                    if (++s_frames > 400)
+                    {
+                        s_reported = true;
+                        System.Console.WriteLine("PROWL_ASYNC_TIMEOUT");
+                        return;
+                    }
+
+                    // Lets real time pass between pumps so the delay can actually elapse.
+                    System.Threading.Thread.Sleep(1);
                 }
 
                 public async void Fire()
