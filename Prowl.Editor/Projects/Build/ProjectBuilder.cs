@@ -198,6 +198,10 @@ public static class ProjectBuilder
             return null;
         }
 
+        // The build reads the Library caches straight off disk, so reconcile them against the actual
+        // files first. Waiting on the watcher would ship whatever the assets were before the last save.
+        EditorAssetBackend.Instance?.Refresh();
+
         Runtime.Debug.Log($"[Build] Starting {pipeline.DisplayName} build to {outputPath}...", LogSeverity.Normal);
 
         var progress = new BuildProgress();
