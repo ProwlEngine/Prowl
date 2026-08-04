@@ -405,12 +405,17 @@ public class DesktopBuildPipeline : BuildPipeline
         {
             ct.ThrowIfCancellationRequested();
 
-            if (File.Exists(Path.Combine(context.Request.AssetCachePath, $"{guid}.asset"))) continue;
-            db?.Reimport(guid);
-            reimported++;
+            if (db != null)
+            {
+                if (db.EnsureCacheUpToDate(guid)) reimported++;
+            }
+            else if (!File.Exists(Path.Combine(context.Request.AssetCachePath, $"{guid}.asset")))
+            {
+                reimported++;
+            }
         }
         if (reimported > 0)
-            context.Log($"Reimported {reimported} assets with missing caches.");
+            context.Log($"Reimported {reimported} assets with missing or stale caches.");
 
         ResolveVariants(context, plan, collection, ct);
 

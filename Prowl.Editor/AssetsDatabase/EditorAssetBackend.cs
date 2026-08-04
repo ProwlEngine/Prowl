@@ -1672,6 +1672,41 @@ public class EditorAssetBackend : AssetBackendBase
     private string GetCachePath(Guid guid)
         => Path.Combine(_project.CachePath, $"{guid}.asset");
 
+    /// <summary>True when the source file has been written since the entry was last imported, i.e. the
+    /// cached import no longer represents what's on disk.</summary>
+    private bool IsSourceNewerThanImport(AssetEntry entry)
+    {
+        string absolutePath = Path.Combine(_project.AssetsPath, entry.Path);
+        if (!File.Exists(absolutePath)) return false;
+        return File.GetLastWriteTimeUtc(absolutePath).Ticks != entry.LastModifiedTicks;
+    }
+
+    /// <summary>
+    /// Reimport <paramref name="guid"/> if its cache file is missing or its source file has changed since
+    /// the last import, and report whether it did. Sub-asset GUIDs resolve to their parent, since only the
+    /// parent can be imported.
+    /// <para>
+    /// The file watcher normally keeps caches current, but it debounces and can miss changes outright
+    /// (buffer overflow, a save immediately before the work that reads the cache), and until now nothing
+    /// but a full editor restart reconciled that. Anything that reads caches straight off disk rather than
+    /// through <see cref="LoadFresh"/> - a build, above all - has to check first or it ships whatever the
+    /// asset used to be.
+    /// </para>
+    /// </summary>
+    public bool EnsureCacheUpToDate(Guid guid)
+    {
+        Guid parentGuid = _subAssetIndex.TryGetValue(guid, out var subInfo) ? subInfo.parentGuid : guid;
+
+        var entry = GetEntry(parentGuid);
+        if (entry == null) return false;
+
+        bool cacheMissing = !File.Exists(GetCachePath(guid)) || !File.Exists(GetCachePath(parentGuid));
+        if (!cacheMissing && !IsSourceNewerThanImport(entry)) return false;
+
+        Reimport(parentGuid);
+        return true;
+    }
+
     private void RemoveSubAsset(Guid subGuid, bool includeThumbnails)
     {
         DisposeAndRemove(subGuid);
