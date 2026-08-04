@@ -295,6 +295,92 @@ public class ComponentTests : RuntimeTestBase
         Assert.NotNull(go.GetComponent<PlainComponent>());
     }
 
+    // ---- Enumeration safety ----
+
+    // GetComponents used to yield straight off the live list, so adding one while walking the
+    // result threw "Collection was modified".
+    [Fact]
+    public void GetComponents_TolerartesAddDuringEnumeration()
+    {
+        var go = CreateGameObject();
+        go.AddComponent<PlainComponent>();
+        go.AddComponent<PlainComponent>();
+
+        int seen = 0;
+        foreach (var _ in go.GetComponents<PlainComponent>())
+        {
+            seen++;
+            go.AddComponent<PlainComponent>();
+        }
+
+        Assert.Equal(2, seen); // the snapshot taken when enumeration started
+        Assert.Equal(4, go.GetComponents<PlainComponent>().Count());
+    }
+
+    [Fact]
+    public void GetComponents_TolerartesRemoveDuringEnumeration()
+    {
+        var go = CreateGameObject();
+        var a = go.AddComponent<PlainComponent>();
+        go.AddComponent<PlainComponent>();
+
+        foreach (var _ in go.GetComponents<PlainComponent>())
+            go.RemoveComponent(a);
+
+        Assert.Single(go.GetComponents<PlainComponent>());
+    }
+
+    // ---- Ownership ----
+
+    [Fact]
+    public void RemoveComponent_FromWrongGameObject_DoesNothing()
+    {
+        var scene = CreateScene(enable: true);
+        var owner = CreateGameObject("Owner");
+        var other = CreateGameObject("Other");
+        var comp = owner.AddComponent<PlainComponent>();
+        scene.Add(owner); scene.Add(other);
+
+        other.RemoveComponent(comp);       // non-generic overload
+        other.RemoveComponent<PlainComponent>(comp); // generic overload
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(comp.IsValid(), "A GameObject that does not own the component must not destroy it.");
+        Assert.Same(comp, owner.GetComponent<PlainComponent>());
+        Assert.Same(owner, comp.GameObject);
+    }
+
+    [Fact]
+    public void AddComponent_Instance_MovesItOffItsPreviousGameObject()
+    {
+        var a = CreateGameObject("A");
+        var b = CreateGameObject("B");
+        var comp = a.AddComponent<PlainComponent>();
+
+        b.AddComponent(comp);
+
+        Assert.Same(b, comp.GameObject);
+        Assert.Empty(a.GetComponents<PlainComponent>());
+        Assert.Same(comp, b.GetComponent<PlainComponent>());
+    }
+
+    [Fact]
+    public void AddComponent_Instance_SurvivesDisposalOfThePreviousGameObject()
+    {
+        var scene = CreateScene(enable: true);
+        var a = CreateGameObject("A");
+        var b = CreateGameObject("B");
+        var comp = a.AddComponent<PlainComponent>();
+        scene.Add(a); scene.Add(b);
+
+        b.AddComponent(comp);
+        a.Dispose();
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(comp.IsValid(), "Disposing the old GameObject must not destroy a component that moved away.");
+        Assert.Same(comp, b.GetComponent<PlainComponent>());
+    }
+
     // ---- ExecutionOrder ----
 
     [Fact]

@@ -342,11 +342,13 @@ public class LifecycleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Test 11b: Disposing GameObject that was never enabled
-    /// Expected: No OnDisable or OnDispose (component was never enabled)
+    /// Test 11b: Disposing a GameObject whose component was never enabled.
+    /// Expected: no OnDisable (it was never enabled), but OnDispose still runs. A component can
+    /// acquire resources from its constructor or from a method called before it was ever enabled,
+    /// so disposal is not conditional on OnEnable having happened.
     /// </summary>
     [Fact]
-    public void DisposingGameObject_NeverEnabled_NoOnDispose()
+    public void DisposingGameObject_NeverEnabled_StillDisposes()
     {
         var scene = CreateScene();
         // Scene is NOT enabled
@@ -358,9 +360,9 @@ public class LifecycleTests : RuntimeTestBase
 
         go.Dispose();
 
-        // Neither OnDisable nor OnDispose should be called
         Assert.DoesNotContain("OnDisable", comp.Events);
-        Assert.DoesNotContain("OnDispose", comp.Events);
+        Assert.Contains("OnDispose", comp.Events);
+        Assert.True(comp.IsDisposed);
     }
 
     /// <summary>
@@ -387,11 +389,12 @@ public class LifecycleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Test 12b: Removing Component that was never enabled
-    /// Expected: No OnDisable or OnDispose
+    /// Test 12b: Removing a component that was never enabled.
+    /// Expected: no OnDisable, but it is still disposed. See
+    /// <see cref="DisposingGameObject_NeverEnabled_StillDisposes"/>.
     /// </summary>
     [Fact]
-    public void RemovingComponent_NeverEnabled_NoOnDispose()
+    public void RemovingComponent_NeverEnabled_StillDisposes()
     {
         var scene = CreateScene();
         // Scene is NOT enabled
@@ -402,9 +405,65 @@ public class LifecycleTests : RuntimeTestBase
         comp.ClearEvents();
 
         go.RemoveComponent(comp);
+        EngineObject.ProcessDestroyed();
 
         Assert.DoesNotContain("OnDisable", comp.Events);
-        Assert.DoesNotContain("OnDispose", comp.Events);
+        Assert.Contains("OnDispose", comp.Events);
+        Assert.True(comp.IsDisposed);
+    }
+
+    // ---- Reentrancy from lifecycle callbacks ----
+
+    private sealed class AddsComponentOnEnable : MonoBehaviour
+    {
+        public override void OnEnable() => GameObject.AddComponent<PlainComponent>();
+    }
+
+    private sealed class RemovesComponentOnDisable : MonoBehaviour
+    {
+        public MonoBehaviour? Victim;
+        public override void OnDisable() => GameObject.RemoveComponent(Victim!);
+    }
+
+    // The hierarchy state walk used to enumerate the live component list, so a callback that
+    // touched the list threw "Collection was modified".
+    [Fact]
+    public void OnEnable_CanAddAComponent()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        go.Enabled = false;
+        go.AddComponent<AddsComponentOnEnable>();
+        scene.Add(go);
+
+        go.Enabled = true;
+
+        Assert.Single(go.GetComponents<PlainComponent>());
+    }
+
+    [Fact]
+    public void OnDisable_CanRemoveAComponent()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        var driver = go.AddComponent<RemovesComponentOnDisable>();
+        driver.Victim = go.AddComponent<PlainComponent>();
+        scene.Add(go);
+
+        go.Enabled = false;
+
+        Assert.Empty(go.GetComponents<PlainComponent>());
+    }
+
+    [Fact]
+    public void Enabled_OnAComponentWithNoGameObject_DoesNotThrow()
+    {
+        var comp = new PlainComponent();
+
+        comp.Enabled = false;
+
+        Assert.False(comp.Enabled);
+        Assert.False(comp.EnabledInHierarchy);
     }
 
     /// <summary>
@@ -519,11 +578,11 @@ public class LifecycleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Test 15b: Scene Cleanup when components were never enabled
-    /// Expected: No OnDisable or OnDispose
+    /// Test 15b: Scene cleanup when components were never enabled.
+    /// Expected: no OnDisable, but they are still disposed.
     /// </summary>
     [Fact]
-    public void SceneCleanup_NeverEnabled_NoOnDispose()
+    public void SceneCleanup_NeverEnabled_StillDisposes()
     {
         var scene = CreateScene();
         // Scene is NOT enabled
@@ -536,7 +595,7 @@ public class LifecycleTests : RuntimeTestBase
         scene.Dispose();
 
         Assert.DoesNotContain("OnDisable", comp.Events);
-        Assert.DoesNotContain("OnDispose", comp.Events);
+        Assert.Contains("OnDispose", comp.Events);
     }
 
     /// <summary>
@@ -633,28 +692,42 @@ public class LifecycleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Additional test: Scene not double-enabled
-    /// Expected: Throws exception when enabling already enabled scene
+    /// Additional test: enabling an already enabled scene delivers nothing a second time.
+    /// Enable/Disable are idempotent, since Load has no way to know whether a scene handed to it
+    /// was enabled already.
     /// </summary>
     [Fact]
-    public void EnablingAlreadyEnabledScene_ThrowsException()
+    public void EnablingAlreadyEnabledScene_DoesNotRepeatOnEnable()
     {
         var scene = CreateScene();
+        var go = CreateGameObject();
+        var comp = go.AddComponent<TestLifecycleComponent>();
+        scene.Add(go);
+        scene.Enable();
+        comp.ClearEvents();
+
         scene.Enable();
 
-        Assert.Throws<Exception>(() => scene.Enable());
+        Assert.True(scene.IsActive);
+        Assert.DoesNotContain("OnEnable", comp.Events);
     }
 
     /// <summary>
-    /// Additional test: Scene not double-disabled
-    /// Expected: Throws exception when disabling already disabled scene
+    /// Additional test: disabling an already disabled scene delivers nothing.
     /// </summary>
     [Fact]
-    public void DisablingAlreadyDisabledScene_ThrowsException()
+    public void DisablingAlreadyDisabledScene_DoesNotRepeatOnDisable()
     {
         var scene = CreateScene();
+        var go = CreateGameObject();
+        var comp = go.AddComponent<TestLifecycleComponent>();
+        scene.Add(go);
+        comp.ClearEvents();
 
-        Assert.Throws<Exception>(() => scene.Disable());
+        scene.Disable();
+
+        Assert.False(scene.IsActive);
+        Assert.DoesNotContain("OnDisable", comp.Events);
     }
 
     /// <summary>

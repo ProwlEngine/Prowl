@@ -363,6 +363,74 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.False(first.IsActive);
     }
 
+    // Loading the scene that is already current used to dispose it and then enable the corpse.
+    [Fact]
+    public void Load_TheCurrentScene_IsANoOp()
+    {
+        Scene current = Scene.Current;
+
+        Scene.Load(current);
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(current, Scene.Current);
+        Assert.False(current.IsDisposed);
+        Assert.True(current.IsActive);
+    }
+
+    [Fact]
+    public void Load_AnAlreadyEnabledScene_DoesNotThrow()
+    {
+        var scene = CreateScene(enable: true);
+
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(scene, Scene.Current);
+        Assert.True(scene.IsActive);
+    }
+
+    [Fact]
+    public void EnableAndDisable_AreIdempotent()
+    {
+        var scene = CreateScene();
+
+        scene.Enable();
+        scene.Enable();
+        Assert.True(scene.IsActive);
+
+        scene.Disable();
+        scene.Disable();
+        Assert.False(scene.IsActive);
+    }
+
+    // A component disposing its own scene mid-callback used to blow up on the trailing Flush().
+    [Fact]
+    public void FrameCallbacks_OnASceneDisposedMidCallback_DoNotThrow()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject();
+        var driver = go.AddComponent<UpdateActionComponent>();
+        driver.Action = () => scene.Dispose();
+        scene.Add(go);
+
+        scene.Update(); // must not throw
+
+        Assert.True(scene.IsDisposed);
+    }
+
+    [Fact]
+    public void FrameCallbacks_OnADisposedScene_AreNoOps()
+    {
+        var scene = CreateScene(enable: true);
+        scene.Dispose();
+
+        scene.Update();
+        scene.FixedUpdate();
+        scene.DrawGizmos();
+        scene.Flush();
+        Assert.False(scene.Render());
+    }
+
     [Fact]
     public void Load_SkipsASceneDisposedBeforeItApplied()
     {
