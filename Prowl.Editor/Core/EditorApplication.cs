@@ -39,6 +39,7 @@ public class EditorApplication : Game
     private const double IntroDuration = 5.0;      // total
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
+    private bool _wasFocused = true;
     private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
@@ -430,8 +431,16 @@ public class EditorApplication : Game
             }
         }
 
+        // Regaining focus is when external edits (a DCC app, a text editor, a branch switch) have most
+        // likely landed, and the watcher can miss those outright. Reconcile once on the rising edge
+        // rather than trusting whatever it happened to catch.
+        bool focused = Window.IsFocused;
+        if (focused && !_wasFocused)
+            EditorAssetBackend.Instance?.Refresh();
+        _wasFocused = focused;
+
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || Window.IsFocused;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
