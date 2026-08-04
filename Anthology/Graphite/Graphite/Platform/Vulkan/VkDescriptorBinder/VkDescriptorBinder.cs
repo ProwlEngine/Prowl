@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
 
@@ -16,8 +15,8 @@ internal interface IVkDescriptorProgram
     VkDescriptorSetCache DescriptorCache { get; }
 }
 
-// Owns the per-command-buffer descriptor resolve/cache/bind pipeline. 
-// Each command buffer has one, and it is cleared at the start of every new execution/ring.
+// Owns the per-command-buffer descriptor resolve/cache/bind pipeline.
+// Each command buffer has one, and its bind state is cleared at the start of every recording.
 internal unsafe sealed partial class VkDescriptorBinder
 {
     internal const int MaxSetElements = ResourceLayoutDescription.MaxElementsPerSet;
@@ -41,8 +40,6 @@ internal unsafe sealed partial class VkDescriptorBinder
     // Scratch identity built each draw, compared against the per-set cached identity below.
     private readonly ulong[] _identityScratch = new ulong[1 + MaxSetElements * 3];
 
-    private readonly Dictionary<(int set, int binding), ImplicitUboCacheEntry> _implicitUboCache = [];
-
     private SetBindState[] _setBindStates = Array.Empty<SetBindState>();
     private ShaderProgram _bindCacheProgram;
 
@@ -60,11 +57,10 @@ internal unsafe sealed partial class VkDescriptorBinder
         _gd = gd;
     }
 
-    // A fresh recording binds into a fresh execution: previously-resolved descriptor sets and transient
-    // UBO ranges belong to the prior execution and must not be reused.
+    // Bind state does not survive a command buffer boundary. Packed uniform blocks do - they live on the
+    // execution's arena, which is what keeps them shared across the passes of one execution.
     internal void ClearForNewRecording()
     {
-        _implicitUboCache.Clear();
         _bindCacheProgram = null;
         _lastPreparedProgram = null;
         _lastPreparedEpoch = 0;
