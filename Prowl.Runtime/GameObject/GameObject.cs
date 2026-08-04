@@ -640,7 +640,7 @@ public class GameObject : EngineObject, ISerializable
             foreach (MonoBehaviour c in componentList)
             {
                 if (c.HasBeenEnabled) // OnDispose is only called if OnEnable was previously called
-                    c.Dispose();
+                    c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
 
                 _components.Remove(c);
             }
@@ -665,7 +665,7 @@ public class GameObject : EngineObject, ISerializable
         if (component.HasBeenEnabled)
         {
             if (component.EnabledInHierarchy) component.InternalOnDisable();
-            component.Dispose();
+            component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
         }
     }
 
@@ -685,7 +685,7 @@ public class GameObject : EngineObject, ISerializable
             if (component.HasBeenEnabled)
             {
                 if (component.EnabledInHierarchy) component.InternalOnDisable();
-                component.Dispose();
+                component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
             }
         }
     }

@@ -46,7 +46,7 @@ public abstract class Game
     public virtual void InitializeWindow(string title, int width, int height)
     {
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, false);
-    }
+    } 
 
     public void Run(string title, int width, int height)
     {
@@ -173,6 +173,23 @@ public abstract class Game
 
                 _paper.EndFrame();
 
+                // === End Graphics ===
+
+                RenderTexture.UpdatePool();
+                // Dispose any GPU resources that were replaced mid-frame (e.g.
+                // grown instance buffers). This only ENQUEUES delete CBs; the render
+                // thread is still draining this frame's queue. Because the deletes are
+                // submitted after every draw that referenced the old handle, submit
+                // order guarantees they execute last on the render thread.
+                Graphics.FlushDeferredDisposes();
+
+                // === End of End Graphics ===
+
+                Debug.ClearGizmos();
+
+                // Last thing in the frame: everything Destroy()ed stayed usable right through
+                // update, render and GUI, and is torn down here where nothing is mid-callback.
+                EngineObject.ProcessDestroyed();
             }
             catch (Exception e)
             {
@@ -182,27 +199,6 @@ public abstract class Game
             }
         };
 
-        Window.PostRender += (delta) =>
-        {
-            // === End Graphics ===
-
-            RenderTexture.UpdatePool();
-            // Dispose any GPU resources that were replaced mid-frame (e.g.
-            // grown instance buffers). This only ENQUEUES delete CBs; the render
-            // thread is still draining this frame's queue. Because the deletes are
-            // submitted after every draw that referenced the old handle, submit
-            // order guarantees they execute last on the render thread.
-            Graphics.FlushDeferredDisposes();
-
-            Debug.ClearGizmos();
-
-            // === End of End Graphics ===
-
-            // Last thing in the frame: everything Destroy()ed stayed usable right through
-            // update, render and GUI, and is torn down here where nothing is mid-callback.
-            EngineObject.ProcessDestroyed();
-        };
-        
         Window.Resize += (size) =>
         {
             // Paper's resolution is resynced from PreparePaperFrame each render frame.

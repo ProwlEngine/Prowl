@@ -506,7 +506,7 @@ public sealed class PhysicsDemo : Game
 
         if (Input.GetKeyDown(KeyCode.X) && lastShot.IsValid())
         {
-            lastShot.Dispose();
+            lastShot.Destroy();
         }
 
         // Weight selection with number keys

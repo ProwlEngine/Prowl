@@ -41,7 +41,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (Current.IsActive)
                 Current.Disable();
-            Current.Dispose();
+            Current.Destroy(); // Will call Dispose at end of frame not immediately so the scene technically is still usable
         }
 
         Current = scene;
@@ -67,7 +67,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         {
             if (Current.IsActive)
                 Current.Disable();
-            Current.Dispose();
+            Current.Destroy(); // Will call Dispose at end of frame not immediately so the scene technically is still usable
             Current = null;
         }
     }

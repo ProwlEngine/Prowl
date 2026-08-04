@@ -1104,7 +1104,7 @@ public class HierarchyPanel : DockPanel
             Selection.RemoveFromSelection(go);
 
         scene.Remove(go);
-        go.Dispose();
+        go.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
     }
 
     // ================================================================

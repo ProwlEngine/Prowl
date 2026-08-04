@@ -65,7 +65,7 @@ public abstract class EngineObject : IDisposable
     /// Queues this object to be disposed at the end of the frame, once every callback has finished.
     /// It stays fully usable until then, so anything still holding it this frame keeps working, and
     /// teardown never lands in the middle of an Update, a render or a physics callback.
-    ///
+    /// <para/>
     /// A destroyed GameObject still ticks and still collides for the rest of the frame. Set
     /// <c>Enabled = false</c> alongside this if that matters, or call <see cref="Dispose"/> to tear
     /// down right now and deal with the consequences.
@@ -76,7 +76,11 @@ public abstract class EngineObject : IDisposable
         lock (s_destroyQueue) s_destroyQueue.Add(this);
     }
 
-    internal static void ProcessDestroyed()
+    /// <summary>
+    /// Disposes everything <see cref="Destroy"/> queued. Driven once per frame by the game loop,
+    /// after rendering. Anything queued while this runs waits for the next frame.
+    /// </summary>
+    public static void ProcessDestroyed()
     {
         EngineObject[] queued;
         lock (s_destroyQueue)

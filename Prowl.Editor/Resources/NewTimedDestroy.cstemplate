@@ -12,7 +12,7 @@ public class {[className]} : MonoBehaviour
         if (_elapsed >= Lifetime)
         {
             Scene?.Remove(GameObject);
-            GameObject.Dispose();
+            GameObject.Destroy();
         }
     }
 }
