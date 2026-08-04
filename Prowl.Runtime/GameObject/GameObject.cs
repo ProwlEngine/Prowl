@@ -664,6 +664,7 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
