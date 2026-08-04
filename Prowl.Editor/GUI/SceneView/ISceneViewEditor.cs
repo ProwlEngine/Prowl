@@ -21,6 +21,14 @@ public interface ISceneViewEditor
     int Priority => 0;
 
     /// <summary>
+    /// Hide the object transform gizmo entirely while this editor is active. This is a display
+    /// choice, not an arbitration one: use it only when moving the GameObject's Transform is
+    /// meaningless for the thing being edited (a RectTransform, say). Editors that simply want their
+    /// own handles to win the cursor should leave this alone and let arbitration do the work.
+    /// </summary>
+    bool SuppressTransformGizmo => false;
+
+    /// <summary>
     /// Draw custom toolbar buttons in the scene view.
     /// Return true to suppress the default transform gizmo toolbar.
     /// </summary>
@@ -28,15 +36,13 @@ public interface ISceneViewEditor
 
     /// <summary>
     /// Handle scene input (mouse, keyboard). Called each frame when this editor is active.
-    /// Return true to consume the input (suppresses object picking and transform gizmo).
+    /// Register interactive elements with <see cref="HandleContext.AddControl"/> and act on the ones
+    /// that win; there is no return value, because consumption is expressed by winning arbitration
+    /// rather than by suppressing the whole viewport.
     /// </summary>
-    /// <param name="camera">The editor camera</param>
+    /// <param name="ctx">Handle arbitration context - camera, cursor, ray and viewport all live here.</param>
     /// <param name="scene">The active scene</param>
-    /// <param name="viewport">Viewport rect in viewport-local pixels (Min at 0,0). Pass to <c>Handles</c>.</param>
-    /// <param name="mouseRay">Ray from mouse position into the scene</param>
-    /// <param name="mousePos">Mouse position in viewport-local pixels</param>
-    /// <param name="viewportHovered">Whether the mouse is over the viewport</param>
-    bool OnSceneInput(Camera camera, Scene scene, Rect viewport, Ray mouseRay, Float2 mousePos, bool viewportHovered);
+    void OnSceneInput(HandleContext ctx, Scene scene);
 
     /// <summary>
     /// Draw 2D overlays in the scene viewport foreground (e.g. brush indicators, handles).

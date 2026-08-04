@@ -27,10 +27,23 @@ public class SceneViewPanel : DockPanel
     public override string Title => Loc.Get("panel.scene");
     public override string Icon => EditorIcons.Shapes;
 
+    private const string TransformControl = "sceneview_transform";
+    private const string PickControl = "sceneview_pick";
+    private const string ViewCubeControl = "sceneview_viewcube";
+
+    private readonly HandleContext _handles = new();
     private EditorCamera? _editorCamera;
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
     private Gizmo.ViewManipulatorGizmo? _viewManipulator;
+
+    // Screen rect of the view manipulator, cached from layout so its control can register during the
+    // input pass even though the widget itself updates inside the draw callback.
+    private Float2 _viewCubeCenter;
+    private float _viewCubeRadius;
+
+    /// <summary>Handle arbitration context for this viewport.</summary>
+    public HandleContext Handles => _handles;
 
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
@@ -225,32 +238,32 @@ public class SceneViewPanel : DockPanel
         // + GameObject transform) regardless of its RenderMode, so screen-space UI can be manipulated
         // like any other GameObject. This wraps input, gizmos AND the render so the canvas wireframe,
         // the element handles and the drawn mesh all agree on the same rect.
-        bool sceneEditorConsumedInput = false;
         bool prevWorldSpace = GameCanvas.EditorWorldSpaceOverride;
         GameCanvas.EditorWorldSpaceOverride = true;
         try
         {
-            // Let active scene editor handle input before gizmo
-            var activeSceneEditor = ActiveSceneViewEditor;
-            if (activeSceneEditor != null && _editorCamera != null)
+            // Everything interactive in the viewport registers a control with the same context, so
+            // the nearest one to the cursor wins rather than an editor claiming the whole frame.
+            var cam = _editorCamera.Camera;
+            if (cam != null)
             {
-                var cam = _editorCamera.Camera;
-                if (cam != null)
-                {
-                    // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
-                    Float2 mouseLocal = paper.PointerPos - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-                    Float2 viewSize = new Float2(width, height);
-                    Ray mouseRay = cam.ScreenPointToRay(mouseLocal, viewSize);
-                    // Use Paper's hover state which respects overlays/popups, not just bounds
-                    bool hovered = paper.IsParentHovered;
-                    Rect viewport = new Rect(0, 0, (float)viewSize.X, (float)viewSize.Y);
-                    sceneEditorConsumedInput = activeSceneEditor.OnSceneInput(cam, scene, viewport, mouseRay, mouseLocal, hovered);
-                }
-            }
+                // Both paper.PointerPos and _viewportAbsoluteRect are in Paper-logical space.
+                Float2 origin = new((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
+                Float2 mouseLocal = paper.PointerPos - origin;
+                // Use Paper's hover state which respects overlays/popups, not just bounds
+                _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, paper.IsParentHovered);
 
-            // Update transform gizmo for selected objects (skip if scene editor consumed input)
-            if (!sceneEditorConsumedInput)
-                UpdateTransformGizmo(paper, scene, width, height);
+                ActiveSceneViewEditor?.OnSceneInput(_handles, scene);
+                UpdateTransformGizmo();
+                // Depth 0: the view cube is a screen-space overlay drawn on top of the scene, so it
+                // wins every overlap rather than competing on scene depth.
+                if (_viewCubeRadius > 0f)
+                    _handles.AddControl(_handles.GetControlID(ViewCubeControl),
+                        _handles.DistanceToScreenPoint(_viewCubeCenter, _viewCubeRadius), 0f);
+                UpdatePickControl(scene, new Float2(width, height));
+
+                _handles.EndFrame();
+            }
 
             // Render scene (gizmos drawn via Debug.DrawLine render into the RT)
             DrawSelectionGizmos();
@@ -303,8 +316,8 @@ public class SceneViewPanel : DockPanel
                         canvas.Stroke();
                     });
 
-                    // Draw transform gizmo as 2D overlay (hidden when scene editor consumes input)
-                    if (_transformGizmo != null && _gizmoActive && !sceneEditorConsumedInput)
+                    // Draw transform gizmo as 2D overlay
+                    if (_transformGizmo != null && _gizmoActive)
                     {
                         paper.DrawForeground(ref handle, (canvas2, r2) =>
                         {
@@ -320,15 +333,6 @@ public class SceneViewPanel : DockPanel
                         {
                             sceneEditorOverlay.DrawOverlay(canvas2, r2);
                         });
-                    }
-                })
-                .OnClick(0, (_, e) =>
-                {
-                    if (!Input.IsAltPressed && !sceneEditorConsumedInput)
-                    {
-                        Float2 localPos = new Float2((float)e.RelativePosition.X, (float)e.RelativePosition.Y);
-                        Float2 panelSize = new Float2(width, height);
-                        PickObject(scene, localPos, panelSize);
                     }
                 });
 
@@ -469,6 +473,26 @@ public class SceneViewPanel : DockPanel
         }
 
         return bestHit;
+    }
+
+    /// <summary>
+    /// Object picking is just another control: it registers as the default, so it wins only when no
+    /// handle anywhere in the viewport claimed the cursor. This replaces the frame-wide "did an
+    /// editor consume input" flag, which suppressed picking across the whole viewport even far away
+    /// from the editor's handles.
+    /// </summary>
+    private void UpdatePickControl(Scene scene, Float2 panelSize)
+    {
+        ControlID pick = _handles.GetControlID(PickControl);
+        _handles.AddDefaultControl(pick);
+
+        // Released first, unconditionally: a press that starts in the viewport and releases outside
+        // it would otherwise hold the drag and block every other handle until the next frame.
+        _handles.TryEndDrag(pick);
+
+        if (!_handles.ViewportHovered || _handles.Blocked) return;
+        if (_handles.TryBeginDrag(pick))
+            PickObject(scene, _handles.MouseLocal, panelSize);
     }
 
     private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)
@@ -696,10 +720,11 @@ public class SceneViewPanel : DockPanel
         _transformGizmo?.SetMode(mode);
     }
 
-    private void UpdateTransformGizmo(Paper paper, Scene scene, float width, float height)
+    private void UpdateTransformGizmo()
     {
         _gizmoActive = false;
         if (_editorCamera == null) return;
+        if (ActiveSceneViewEditor?.SuppressTransformGizmo == true) return;
 
         // Only show gizmo when GameObjects are selected
         var selectedGOs = Selection.GetSelected<GameObject>().GetEnumerator();
@@ -734,39 +759,43 @@ public class SceneViewPanel : DockPanel
         var cam = _editorCamera.Camera;
         var camGo = cam.GameObject;
 
-        _transformGizmo.UpdateCamera(_viewportAbsoluteRect, cam.ViewMatrix, cam.ProjectionMatrix,
+        _transformGizmo.UpdateCamera(_handles.Viewport, cam.ViewMatrix, cam.ProjectionMatrix,
             camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right, camGo.Transform.Position);
         _transformGizmo.SetTransform(center, rotation, scale);
 
-        // Mouse in Paper-logical space, matching _viewportAbsoluteRect (also Paper-logical).
-        Float2 mouseAbs = paper.PointerPos;
-        Float2 mouseLocal = mouseAbs - new Float2((float)_viewportAbsoluteRect.Min.X, (float)_viewportAbsoluteRect.Min.Y);
-        var ray = _editorCamera.ScreenPointToRay(mouseLocal, new Float2(width, height));
+        ControlID control = _handles.GetControlID(TransformControl);
 
-        // Alt is the camera orbit modifier, so the gizmo must not capture the mouse while it is held.
-        // Otherwise Alt+LMB drags the selected object instead of orbiting the view.
-        bool cameraNav = Input.IsAltPressed;
-        bool blockPicking = Input.GetMouseButton(1) || Input.GetMouseButton(2) || cameraNav; // Don't pick while camera moving
+        _transformGizmo.Snapping = _handles.Ctrl;
+        _transformGizmo.IsShiftDown = _handles.Shift;
+        // The grab decision comes from arbitration, so a handle nearer the cursor wins instead of the
+        // gizmo taking every press it happens to be over.
+        _transformGizmo.IsMouseDown = _handles.TryBeginDrag(control);
+        _transformGizmo.IsMouseUp = _handles.PrimaryUp;
 
-        // Input state for the gizmo (Origami gizmo has no Runtime dependency)
-        _transformGizmo.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
-        _transformGizmo.IsShiftDown = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
-        _transformGizmo.IsMouseDown = Input.GetMouseButtonDown(0) && !cameraNav;
-        _transformGizmo.IsMouseUp = Input.GetMouseButtonUp(0);
+        var result = _transformGizmo.Update(_handles.MouseRay, _handles.MousePosition, _handles.Blocked);
 
-        var result = _transformGizmo.Update(ray, mouseAbs, blockPicking);
+        // IsOver is fresh from the Update above. Guarded on Blocked because the gizmo only clears its
+        // hover inside the un-blocked branch, so a blocked frame would leave IsOver latched on.
+        // Origami exposes only a bool, not a per-axis screen distance, so a hover registers at zero
+        // and the gizmo's own depth decides overlaps against handles stacked on top of it.
+        bool gizmoHovered = _transformGizmo.IsOver && !_handles.Blocked;
+        _handles.AddControl(control, gizmoHovered ? 0f : float.MaxValue, _handles.DepthOf(center));
 
         // Gizmo drawing happens in the viewport's DrawForeground callback (needs canvas)
 
-        // Continuous undo: track gizmo drag start/end
-        bool gizmoActive = result.HasValue;
-        if (gizmoActive && !_wasGizmoActive)
+        // Continuous undo spans the whole drag. Keyed off control ownership rather than whether the
+        // gizmo produced a delta this frame - a sub-gizmo returns no result at degenerate view
+        // angles, which would otherwise split one drag into two undo steps.
+        bool dragging = _handles.IsHot(control);
+        if (dragging && !_wasGizmoActive)
             Undo.BeginContinuous(Selection.GetSelected<GameObject>().ToArray(), "Transform");
-        if (!gizmoActive && _wasGizmoActive)
+        if (!dragging && _wasGizmoActive)
             Undo.EndContinuous();
-        _wasGizmoActive = gizmoActive;
+        _wasGizmoActive = dragging;
 
-        if (result.HasValue)
+        _handles.TryEndDrag(control);
+
+        if (result.HasValue && dragging)
         {
             var r = result.Value;
 
@@ -848,11 +877,20 @@ public class SceneViewPanel : DockPanel
                 // Use the absolute rect from layout for the view manipulator
                 _viewManipulator.SetRect(r);
 
-                bool blockPicking = _transformGizmo?.IsOver ?? false;
+                // Cache the rect so the control can register from next frame's input pass; the widget
+                // fuses hover, click and drawing into one call that needs a canvas, so it can only
+                // run here.
+                _viewCubeCenter = new Float2((float)(r.Min.X + r.Size.X / 2), (float)(r.Min.Y + r.Size.Y / 2));
+                _viewCubeRadius = (float)(r.Size.X / 2);
+
+                // Arbitration decides whether the cube may take the click; its own IsOver cannot be
+                // used for this, since it reports true whenever the cursor is inside the background
+                // circle even while the camera is being driven.
+                bool mayClick = _handles.IsNearest(_handles.GetControlID(ViewCubeControl)) && !_handles.Blocked;
                 bool clicked = Input.GetMouseButtonDown(0);
                 Float2 mousePos = paper.PointerPos;
 
-                if (_viewManipulator.Update(canvas, mousePos, clicked, blockPicking, out var newForward))
+                if (_viewManipulator.Update(canvas, mousePos, clicked && mayClick, !mayClick, out var newForward))
                 {
                     // Snap camera to face direction
                     // Calculate yaw/pitch from the new forward vector

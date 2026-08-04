@@ -16,10 +16,12 @@ namespace Prowl.Editor.GUI.SceneView;
 /// <see cref="Gizmo.TransformGizmo"/> so an editor can manipulate an arbitrary world point/transform
 /// (not just a GameObject): e.g. a light probe, a spline knot, a bounds corner.
 ///
-/// Call a handle method from <see cref="ISceneViewEditor.OnSceneInput"/> each frame (it reads mouse +
-/// modifier state from <see cref="Input"/> internally and applies the drag to the <c>ref</c> values),
-/// then call <see cref="Draw"/> from <see cref="ISceneViewEditor.DrawOverlay"/> to render the handles
-/// touched this frame. Each distinct <paramref name="id"/> keeps its own drag state across frames.
+/// Each handle owns a <see cref="ControlID"/>, so it arbitrates against every other handle in the
+/// viewport instead of unilaterally consuming input. Call a handle method from
+/// <see cref="ISceneViewEditor.OnSceneInput"/> each frame (it applies the drag to the <c>ref</c>
+/// values), then call <see cref="Draw"/> from <see cref="ISceneViewEditor.DrawOverlay"/> to render
+/// the handles touched this frame. Each distinct <paramref name="id"/> keeps its own drag state
+/// across frames.
 /// </summary>
 public static class Handles
 {
@@ -30,29 +32,24 @@ public static class Handles
     /// <summary>A 3-axis translation handle at <paramref name="position"/>. Returns true if it moved the
     /// point this frame; <paramref name="hot"/> is true while the handle is hovered or being dragged
     /// (callers should treat input as consumed and skip their own picking when hot).</summary>
-    public static bool PositionHandle(string id, Camera camera, Rect viewport, Ray mouseRay, Float2 mousePos,
-                                      ref Float3 position, out bool hot)
+    public static bool PositionHandle(HandleContext ctx, string id, ref Float3 position, out bool hot)
     {
         Quaternion rot = Quaternion.Identity;
         Float3 scale = Float3.One;
-        return DoTransform(id, Gizmo.TransformGizmoMode.Translate, camera, viewport, mouseRay, mousePos,
-                           ref position, ref rot, ref scale, out hot);
+        return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Translate, ref position, ref rot, ref scale, out hot);
     }
 
     /// <summary>A rotation handle pivoted at <paramref name="pivot"/>. Returns true if it rotated this frame.</summary>
-    public static bool RotationHandle(string id, Camera camera, Rect viewport, Ray mouseRay, Float2 mousePos,
-                                      Float3 pivot, ref Quaternion rotation, out bool hot)
+    public static bool RotationHandle(HandleContext ctx, string id, Float3 pivot, ref Quaternion rotation, out bool hot)
     {
         Float3 scale = Float3.One;
-        return DoTransform(id, Gizmo.TransformGizmoMode.Rotate, camera, viewport, mouseRay, mousePos,
-                           ref pivot, ref rotation, ref scale, out hot);
+        return DoTransform(ctx, id, Gizmo.TransformGizmoMode.Rotate, ref pivot, ref rotation, ref scale, out hot);
     }
 
     /// <summary>A full translate/rotate/scale handle. <paramref name="mode"/> selects which axes/planes show.</summary>
-    public static bool TransformHandle(string id, Gizmo.TransformGizmoMode mode, Camera camera, Rect viewport,
-                                       Ray mouseRay, Float2 mousePos,
+    public static bool TransformHandle(HandleContext ctx, string id, Gizmo.TransformGizmoMode mode,
                                        ref Float3 position, ref Quaternion rotation, ref Float3 scale, out bool hot)
-        => DoTransform(id, mode, camera, viewport, mouseRay, mousePos, ref position, ref rotation, ref scale, out hot);
+        => DoTransform(ctx, id, mode, ref position, ref rotation, ref scale, out hot);
 
     /// <summary>Draw every handle driven this frame, then clear the pending set. Call from <c>DrawOverlay</c>.</summary>
     public static void Draw(Canvas canvas)
@@ -68,11 +65,11 @@ public static class Handles
         _modes.Remove(id);
     }
 
-    private static bool DoTransform(string id, Gizmo.TransformGizmoMode mode, Camera camera, Rect viewport,
-                                    Ray mouseRay, Float2 mousePos,
+    private static bool DoTransform(HandleContext ctx, string id, Gizmo.TransformGizmoMode mode,
                                     ref Float3 position, ref Quaternion rotation, ref Float3 scale, out bool hot)
     {
         hot = false;
+        Camera camera = ctx.Camera;
         var camGo = camera.IsValid() ? camera.GameObject : null;
         if (camGo == null) return false;
 
@@ -89,21 +86,29 @@ public static class Handles
             _modes[id] = mode;
         }
 
-        g.UpdateCamera(viewport, camera.ViewMatrix, camera.ProjectionMatrix,
+        g.UpdateCamera(ctx.Viewport, camera.ViewMatrix, camera.ProjectionMatrix,
             camGo.Transform.Up, camGo.Transform.Forward, camGo.Transform.Right, camGo.Transform.Position);
         g.SetTransform(position, rotation, scale);
 
-        g.Snapping = Input.GetKey(KeyCode.ControlLeft) || Input.GetKey(KeyCode.ControlRight);
-        g.IsShiftDown = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
-        g.IsMouseDown = Input.GetMouseButtonDown(0);
-        g.IsMouseUp = Input.GetMouseButtonUp(0);
-        bool block = Input.GetMouseButton(1) || Input.GetMouseButton(2); // don't pick while flying the camera
+        ControlID control = ctx.GetControlID(id);
 
-        var result = g.Update(mouseRay, mousePos, block);
+        g.Snapping = ctx.Ctrl;
+        g.IsShiftDown = ctx.Shift;
+        // The grab decision comes from arbitration, never from the gizmo's own hover.
+        g.IsMouseDown = ctx.TryBeginDrag(control);
+        g.IsMouseUp = ctx.PrimaryUp;
+
+        var result = g.Update(ctx.MouseRay, ctx.MousePosition, ctx.Blocked);
         _pending.Add(g);
-        hot = g.IsOver;
 
-        if (!result.HasValue) return false;
+        // IsOver is fresh from the Update above. Guarded on Blocked because TransformGizmo only clears
+        // its hover inside the un-blocked branch, so a blocked frame leaves IsOver latched.
+        ctx.AddControl(control, g.IsOver && !ctx.Blocked ? 0f : float.MaxValue, ctx.DepthOf(position));
+        ctx.TryEndDrag(control);
+
+        hot = ctx.IsActive(control);
+
+        if (!result.HasValue || !ctx.IsHot(control)) return false;
         var r = result.Value;
         bool changed = false;
         if (r.TranslationDelta.HasValue) { position += r.TranslationDelta.Value; changed = true; }
