@@ -146,11 +146,12 @@ public sealed class UISceneEditor : SceneTool
             return;
         }
 
-        Camera camera = ctx.Camera;
-        RenderTexture? sceneRT = camera.Target;
+        // The scene view renders at viewport size, so that IS the screen size a canvas should lay out
+        // against here - and it's the viewport's own business, not something to read back off the camera.
+        Float2 viewport = ctx.ViewportSize;
         Float2? prevScreenOverride = GameCanvas.ScreenSizeOverride;
-        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
-            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
+        if (viewport.X > 0 && viewport.Y > 0)
+            GameCanvas.ScreenSizeOverride = viewport;
 
         try
         {
@@ -186,7 +187,7 @@ public sealed class UISceneEditor : SceneTool
 
             Rect parentRect = ResolveParentRect(rt, canvas.RootRect);
 
-            Float3 camPos = camera.GameObject.Transform.Position;
+            Float3 camPos = ctx.Camera.GameObject.Transform.Position;
             Float3 centerW = Float4x4.TransformPoint(
                 new Float3(cr.Min.X + cr.Size.X * 0.5f - pivotCanvasPos.X, cr.Min.Y + cr.Size.Y * 0.5f - pivotCanvasPos.Y, 0), frameToWorld);
             float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);

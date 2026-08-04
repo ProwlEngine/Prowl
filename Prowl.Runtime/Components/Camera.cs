@@ -81,7 +81,13 @@ public class Camera : MonoBehaviour
     public int Depth = -1;
 
     public RenderPipeline? Pipeline;
-    public RenderTexture? Target;
+
+    /// <summary>
+    /// The render texture asset this camera draws into. None means it draws wherever the render it takes
+    /// part in is going - the backbuffer in a player, the Game View or scene view texture in the editor
+    /// (see <see cref="RenderingData.FallbackTarget"/>).
+    /// </summary>
+    public AssetRef<RenderTexture> Target;
     public bool HDR = false;
     public float RenderScale = 1.0f;
 
@@ -255,13 +261,13 @@ public class Camera : MonoBehaviour
         pipeline.Render(this, data ?? new());
     }
 
-    public RenderTexture? UpdateRenderData()
+    /// <param name="fallbackTarget">Where this render goes when the camera has no <see cref="Target"/>
+    /// asset of its own. Null means the backbuffer.</param>
+    public RenderTexture? UpdateRenderData(RenderTexture? fallbackTarget = null)
     {
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
-        RenderTexture? camTarget = null;
-
-        if (Target.IsValid())
-            camTarget = Target;
+        RenderTexture? camTarget = Target.Res;
+        if (camTarget.IsNotValid()) camTarget = fallbackTarget;
 
         int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;
         int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow.FramebufferSize.Y;

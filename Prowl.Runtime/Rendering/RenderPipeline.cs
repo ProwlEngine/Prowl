@@ -23,6 +23,18 @@ public struct RenderingData
     public bool IsSceneView;
 
     public bool SkipUI;
+
+    /// <summary>
+    /// Where this render goes when the camera has no <see cref="Camera.Target"/> asset of its own.
+    /// Null means the backbuffer. Set by whoever is presenting the camera - the Game View, the scene
+    /// view, an asset preview.
+    /// <para>
+    /// It lives on the call rather than on the Camera on purpose. A per-render destination held as
+    /// component state is reachable by anything that serializes the scene, and a camera saved pointing
+    /// at a viewer's texture renders every frame into something nobody presents.
+    /// </para>
+    /// </summary>
+    public RenderTexture? FallbackTarget;
 }
 
 /// <summary>

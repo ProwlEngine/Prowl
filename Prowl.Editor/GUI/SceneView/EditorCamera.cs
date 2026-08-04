@@ -103,8 +103,6 @@ public class EditorCamera
             _renderTarget = new RenderTexture(
                 (int)width, (int)height, true,
                 new[] { TextureImageFormat.Color4b });
-
-            _camera.Target = _renderTarget;
         }
     }
 
@@ -127,7 +125,7 @@ public class EditorCamera
             _camera.Effects.Clear();
 
         // Update camera pixel dimensions
-        _camera.UpdateRenderData();
+        _camera.UpdateRenderData(_renderTarget);
 
         // Add camera object to scene temporarily if needed
         bool wasInScene = _cameraObject.Scene != null;
@@ -140,7 +138,8 @@ public class EditorCamera
             DisplayGizmos = ShowGizmos,
             DisplayGrid = ShowGrid,
             IsSceneView = true,
-            SkipUI = !drawUI
+            SkipUI = !drawUI,
+            FallbackTarget = _renderTarget
         };
 
         // Render

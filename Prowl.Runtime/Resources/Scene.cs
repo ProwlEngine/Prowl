@@ -815,17 +815,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
                 var camPipeline = cam.Pipeline;
                 RenderPipeline pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
 
-                // If we have a target and the Camera doesnt, draw into the target
-                if (target.IsValid() && cam.Target.IsNotValid())
-                {
-                    try { cam.Target = target; pipeline.Render(cam, new()); }
-                    finally { cam.Target = null; }
-                }
-                else
-                {
-                    // Have no target or the camera has its own target
-                    pipeline.Render(cam, new());
-                }
+                // A camera with its own Target asset draws there; everything else draws into `target`
+                // (null for the backbuffer). Nothing on the camera is touched, so there is nothing to
+                // restore and nothing a scene save could catch mid-render.
+                pipeline.Render(cam, new RenderingData { FallbackTarget = target });
             }
             catch (Exception ex)
             {

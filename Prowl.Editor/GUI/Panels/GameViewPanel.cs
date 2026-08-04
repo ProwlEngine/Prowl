@@ -145,15 +145,16 @@ public class GameViewPanel : DockPanel
             RenderStats.BeginFrame();
             foreach (var cam in cameras)
             {
-                var origTarget = cam.Target;
-                cam.Target = _rt;
-                cam.UpdateRenderData();
-
-                var camPipeline = cam.Pipeline;
-                var pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
-                pipeline.Render(cam, new RenderingData());
-
-                cam.Target = origTarget;
+                try
+                {
+                    var camPipeline = cam.Pipeline;
+                    var pipeline = camPipeline.IsValid() ? camPipeline : DefaultRenderPipeline.Default;
+                    pipeline.Render(cam, new RenderingData { FallbackTarget = _rt });
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[GameView] Camera '{cam.GameObject.Name}' render threw and was skipped: {ex.Message}");
+                }
             }
             RenderStats.EndFrame();
             _gameStats = RenderStats.Last; // snapshot for stats overlay (persists when paused/stepped)

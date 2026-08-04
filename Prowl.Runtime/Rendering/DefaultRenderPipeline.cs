@@ -179,7 +179,7 @@ public class DefaultRenderPipeline : RenderPipeline
         // (user disabled them, removed them from Camera.Effects, or hot-swapped).
         camera.UpdateImageEffectLifecycle(allEffects);
 
-        RenderTexture target = camera.UpdateRenderData();
+        RenderTexture? target = camera.UpdateRenderData(data.FallbackTarget);
 
         // =======================================================
         // 1. Pre Cull

@@ -150,10 +150,10 @@ public class PreviewRenderer : IDisposable
     {
         if (_rt == null) return;
 
-        _camera.UpdateRenderData();
+        _camera.UpdateRenderData(_rt);
 
         var pipeline = _camera.Pipeline.IsValid() ? _camera.Pipeline : DefaultRenderPipeline.Default;
-        pipeline.Render(_camera, new RenderingData { DisplayGrid = ShowGrid });
+        pipeline.Render(_camera, new RenderingData { DisplayGrid = ShowGrid, FallbackTarget = _rt });
     }
 
     /// <summary>Resize the preview render target.</summary>
@@ -290,7 +290,6 @@ public class PreviewRenderer : IDisposable
     {
         if (_rt.IsValid()) _rt.Dispose();
         _rt = new RenderTexture(Width, Height, true, new[] { TextureImageFormat.Color4b });
-        _camera.Target = _rt;
     }
 
     /// <summary>
