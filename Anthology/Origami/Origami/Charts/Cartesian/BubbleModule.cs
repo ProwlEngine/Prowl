@@ -15,10 +15,8 @@ using Prowl.OrigamiUI;
 namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
-/// Bubble module for a <see cref="CartesianChart{T}"/>. Like a scatter, but each marker's diameter comes
-/// from a selector run against the source item behind the point, so a third value can be encoded as
-/// bubble area. Bubbles are filled at partial alpha with a solid outline so overlaps stay readable. Added
-/// with <c>.AddBubbleChart()</c>.
+/// Bubble module for a <see cref="CartesianChart{T}"/>. Like scatter plot but with a radius.
+/// Create with <c>.AddBubbleChart()</c>.
 /// </summary>
 public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
 {
@@ -29,8 +27,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
     private Func<T, float>? _sizeSelector;
     private MarkerShape _markerShape = MarkerShape.Circle;
 
-    /// <summary>Per-item marker diameter, in pixels. Points whose source item is unavailable (series
-    /// added as pre-sampled values rather than through <c>.Y(...)</c>) fall back to a fixed diameter.</summary>
+    /// <summary>Per-item marker diameter, in pixels. Defaults to 12f if no selector.</summary>
     public BubbleModule<T> MarkerSize(Func<T, float> selector) { _sizeSelector = selector; return this; }
 
     /// <summary>Shape drawn at each point. Defaults to <see cref="MarkerShape.Circle"/>.</summary>
@@ -40,8 +37,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
 
     protected override bool PanY => true;
 
-    /// <summary>Ring around the sampled bubble on both axes, and a readout of its position plus the size
-    /// value driving its diameter.</summary>
+    /// <summary>Ring around the sampled bubble on both axes.</summary>
     protected override void AppendSample(Paper paper, in SampleContext<T> ctx, List<(Color Color, string Text)> rows)
     {
         for (int i = 0; i < ctx.Series.Count; i++)
@@ -53,7 +49,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
             if (double.IsNaN(x) || double.IsInfinity(x)) continue;
             if (double.IsNaN(y) || double.IsInfinity(y)) continue;
 
-            Color color = s.Color ?? System.Drawing.Color.Gray;
+            Color color = s.Color ?? Color.Gray;
             float diameter = DiameterOf(payload);
 
             SampleRing(paper, $"bubble_{i}", ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), diameter, color);
@@ -72,7 +68,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
         {
             if (!s.EffectiveVisible || s.Points.Count == 0) continue;
 
-            Color baseColor = s.Color ?? System.Drawing.Color.Gray;
+            Color baseColor = s.Color ?? Color.Gray;
             Color32 fillCol = ToC32(baseColor, 0.45f);
             Color32 outlineCol = ToC32(s.StrokeColor ?? baseColor);
 

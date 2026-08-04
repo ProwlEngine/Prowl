@@ -16,10 +16,7 @@ using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>One slice of a <see cref="CircularCore{TSelf, T}"/> chart: a single item of the source data
-/// set resolved into the label, value and colour the chart draws it with. <c>Index</c> stays the item's
-/// position in the source list even after sorting, so colour functions and legend toggles keep pointing
-/// at the same item; <c>Fraction</c> is the share of the visible total this slice sweeps.</summary>
+
 public sealed class CircularSlice<T>
 {
     public string Label = "";

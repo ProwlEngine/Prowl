@@ -18,7 +18,9 @@ using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
-/// <summary>Dash pattern for a Cartesian series' stroke. Set via <c>.Dashed()</c>/<c>.Dotted()</c>.</summary>
+/// <summary>
+/// Dash pattern for a Cartesian series' stroke. Set via <c>.Dashed()</c>/<c>.Dotted()</c>.
+/// </summary>
 public enum CartesianDash
 {
     Solid,
@@ -26,11 +28,9 @@ public enum CartesianDash
     Dotted,
 }
 
-/// <summary>One series plotted on a <see cref="CartesianCore{TSelf, T}"/> chart. Points are stored as
-/// resolved (x, y) pairs regardless of whether they came from <c>.Series(...)</c> (x = array index) or
-/// from <c>.X/.Y</c> selectors over a data set (x = <c>X(item)</c>). <c>Payload</c> carries the source
-/// item for selector-driven series so chart types that need more than one value per x (bubble radius)
-/// can read it back; it is <c>default</c> for pre-sampled <c>.Series(...)</c> data.</summary>
+/// <summary>
+/// One series plotted on a <see cref="CartesianCore{TSelf, T}"/> chart.
+/// </summary>
 public sealed class CartesianSeries<T>
 {
     public string Label = "";
@@ -43,16 +43,10 @@ public sealed class CartesianSeries<T>
     public bool LegendHidden;
     public readonly List<(double X, double Y, T? Payload)> Points = new();
 
-    /// <summary>The <see cref="CartesianModuleBase{T}"/> that owns this series on a <see cref="CartesianChart{T}"/>.
-    /// Null for a series that belongs directly to a single-type Cartesian chart (Line/Bar/Scatter/Bubble
-    /// used standalone rather than through <see cref="Chart.CreateCartesian{T}"/>).</summary>
-    public object? Owner;
-
     public bool EffectiveVisible => Visible && !LegendHidden;
 }
 
-/// <summary>One tick on a <see cref="CartesianCore{TSelf, T}"/> axis: its position mapped into
-/// [0, 1] across the axis' value range, the underlying data value, and its formatted label.</summary>
+
 internal readonly struct AxisTick
 {
     public readonly double Position;
@@ -67,10 +61,7 @@ internal readonly struct AxisTick
     }
 }
 
-/// <summary>Geometry and resolved data handed to a mark-painting step, whether that is
-/// <see cref="CartesianCore{TSelf, T}"/>'s own <c>PaintMarks</c> override or a <see cref="CartesianModuleBase{T}"/>
-/// plugged into a <see cref="CartesianChart{T}"/>. Not tied to any one chart type so a module (which does not
-/// inherit <see cref="CartesianCore{TSelf, T}"/>) can still be handed one.</summary>
+
 public readonly struct PlotContext<T>
 {
     public readonly float PlotL, PlotT, PlotR, PlotB;
@@ -78,8 +69,6 @@ public readonly struct PlotContext<T>
     public readonly double YMin, YMax;
     public readonly IReadOnlyList<CartesianSeries<T>> Series;
 
-    /// <summary>Point count of the longest visible series; the number of categorical bands
-    /// across the plot when <see cref="CartesianCore{TSelf, T}.BandedX"/> is set.</summary>
     public readonly int MaxN;
 
     internal readonly IReadOnlyList<AxisTick> XTicks;
@@ -108,21 +97,17 @@ public readonly struct PlotContext<T>
     internal PlotContext<T> WithSeries(IReadOnlyList<CartesianSeries<T>> series)
         => new(PlotL, PlotT, PlotR, PlotB, XMin, XMax, YMin, YMax, series, MaxN, XTicks, YTicks, _bandFirst, _bandSpan);
 
-    /// <summary>Width in pixels of one categorical band. Narrows with the zoom viewport, so a
-    /// zoomed-in banded chart draws fewer, wider bands.</summary>
     public float BandWidth => _bandSpan <= 0f ? 0f : (PlotR - PlotL) / _bandSpan;
 
     /// <summary>Left edge in pixels of the band owned by point <paramref name="index"/>.</summary>
     public float BandLeft(int index) => PlotL + BandWidth * (index - _bandFirst);
 
-    /// <summary>Centre in pixels of the band owned by point <paramref name="index"/>. This is where
-    /// a banded chart's mark for that point is anchored, and where its x tick is drawn.</summary>
+    /// <summary>Centre in pixels of the band owned by point <paramref name="index"/>.</summary>
     public float BandCenter(int index) => PlotL + BandWidth * (index + 0.5f - _bandFirst);
 
-    /// <summary>Width in pixels of one x unit in the continuous (non-banded) coordinate space. A module
-    /// that draws index-centred marks alongside continuous series (e.g. a bar overlaid with a line) uses
-    /// this instead of <see cref="BandWidth"/> so its marks are centred exactly on <see cref="XPos"/> rather
-    /// than offset by half a band.</summary>
+    /// <summary>
+    /// Width in pixels of one x unit in the continuous coordinate space.
+    /// </summary>
     public float UnitWidth
     {
         get
@@ -149,6 +134,7 @@ public readonly struct PlotContext<T>
     private static float AxisPos(double v, double min, double span, float pxA, float pxB)
         => pxA + (float)((v - min) / span) * (pxB - pxA);
 }
+
 
 /// <summary>The current sample selection handed to a sampler-drawing step, along with the same
 /// geometry <c>PaintMarks</c> gets. Unlike the paint pass, the pixel coordinates here are relative to the
