@@ -353,7 +353,7 @@ public static class Undo
                     Selection.Clear();
 
                 scene.Remove(target);
-                target.Dispose();
+                target.Destroy(); // TODO: Should this be Dispose... or Destroy? Destroy defers it to end of frame?
             },
             redo: () =>
             {
@@ -432,7 +432,7 @@ public static class Undo
                     Selection.Clear();
 
                 scene.Remove(target);
-                target.Dispose();
+                target.Destroy(); // TODO: Should this be Dispose... or Destroy? Destroy defers it to end of frame?
                 EditorSceneManager.MarkDirty();
             });
     }

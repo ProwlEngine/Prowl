@@ -134,4 +134,68 @@ public class EngineObjectTests
         Assert.Equal(Guid.Empty, obj.AssetID);
         Assert.Equal(string.Empty, obj.AssetPath);
     }
+
+    // ---- Destroy ----
+
+    [Fact]
+    public void Destroy_KeepsObjectUsableUntilProcessed()
+    {
+        var obj = new TestEngineObject();
+
+        obj.Destroy();
+
+        Assert.False(obj.IsDisposed);
+        Assert.True(obj.IsValid());
+
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(obj.IsDisposed);
+        Assert.Equal(1, obj.DisposeCount);
+    }
+
+    [Fact]
+    public void Destroy_TwiceDisposesOnce()
+    {
+        var obj = new TestEngineObject();
+
+        obj.Destroy();
+        obj.Destroy();
+        EngineObject.ProcessDestroyed();
+
+        Assert.Equal(1, obj.DisposeCount);
+    }
+
+    [Fact]
+    public void Destroy_SkipsAnObjectAlreadyDisposedByHand()
+    {
+        var obj = new TestEngineObject();
+
+        obj.Destroy();
+        obj.Dispose();
+        EngineObject.ProcessDestroyed();
+
+        Assert.Equal(1, obj.DisposeCount);
+    }
+
+    [Fact]
+    public void Destroy_FromWithinDisposeWaitsForTheNextProcess()
+    {
+        var second = new TestEngineObject();
+        var first = new DestroyOnDispose(second);
+
+        first.Destroy();
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(first.IsDisposed);
+        Assert.False(second.IsDisposed); // queued during the drain, so it goes to the next frame
+
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(second.IsDisposed);
+    }
+
+    private sealed class DestroyOnDispose(EngineObject other) : EngineObject
+    {
+        protected override void OnDispose() => other.Destroy();
+    }
 }

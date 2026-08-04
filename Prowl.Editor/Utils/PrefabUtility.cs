@@ -216,7 +216,7 @@ public static class PrefabUtility
         if (scene != null)
         {
             scene.Remove(instanceRoot);
-            instanceRoot.Dispose();
+            instanceRoot.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
             scene.Add(fresh);
             if (parent != null)
             {
@@ -245,7 +245,7 @@ public static class PrefabUtility
 
                 var p = current.Parent;
                 s.Remove(current);
-                current.Dispose();
+                current.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
                 s.Add(restored);
                 if (p != null) restored.SetParent(p);
                 Selection.Select(restored);
@@ -270,7 +270,7 @@ public static class PrefabUtility
                 f2.Name = oldGo.Name;
                 var p2 = oldGo.Parent;
                 s.Remove(oldGo);
-                oldGo.Dispose();
+                oldGo.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
                 s.Add(f2);
                 if (p2 != null) f2.SetParent(p2);
                 Selection.Select(f2);
@@ -527,7 +527,7 @@ public static class PrefabUtility
             fresh.Transform.LocalScale = scale;
 
             scene.Remove(root);
-            root.Dispose();
+            root.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
             scene.Add(fresh);
             if (parent != null)
             {
