@@ -35,6 +35,7 @@ public class UndoTests : EditorTestHarness
         var comp = go.AddComponent<UndoComp>();
         scene.Add(go);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         return (scene, go, comp);
     }
 
@@ -155,6 +156,7 @@ public class UndoTests : EditorTestHarness
     {
         var scene = new Scene();
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         Undo.Clear();
 
         var go = new GameObject("Created");
@@ -204,6 +206,7 @@ public class UndoTests : EditorTestHarness
     {
         var scene = new Scene();
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         Undo.Clear();
 
         var parent = new GameObject("Parent");
@@ -469,6 +472,7 @@ public class UndoTests : EditorTestHarness
         var b = new GameObject("B");
         scene.Add(a); scene.Add(b);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         Undo.Clear();
 
         Undo.ApplyGameObjectChanges(new[] { a, b }, "Rename", g => g.Name, (g, v) => g.Name = v, "Renamed");
@@ -511,6 +515,7 @@ public class UndoTests : EditorTestHarness
         var b = new GameObject("B");
         scene.Add(a); scene.Add(b);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         Undo.Clear();
         a.Transform.LocalPosition = Float3.Zero;
         b.Transform.LocalPosition = Float3.Zero;

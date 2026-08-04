@@ -17,59 +17,92 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager
 
+    private static Scene? _current;
+
     /// <summary>
-    /// The currently active scene managed by the built-in Scene Manager.
-    /// For simple games, use Scene.Load() and Scene.Current for automatic scene management.
-    /// For advanced use cases (e.g., multiplayer servers with multiple scenes),
-    /// create and manage your own Scene instances directly.
+    /// The currently active scene. There is always one: reading this before anything has been loaded
+    /// creates an empty scene, so the engine is never in a no-scene state and callers never have to
+    /// handle null. Use <see cref="Load"/> to replace it.
     /// </summary>
-    public static Scene? Current { get; private set; }
+    public static Scene Current
+    {
+        get
+        {
+            if (_current is null || _current.IsDisposed)
+            {
+                _current = new Scene { Name = "Untitled" };
+                _current.Enable();
+            }
+            return _current;
+        }
+    }
 
     /// <summary>Fires after a scene is loaded via Load().</summary>
     public static event Action? OnSceneLoaded;
 
+    private static Scene? _pendingScene;
+
     /// <summary>
-    /// Loads a scene as the current active scene, replacing any previously loaded scene.
-    /// The previous scene will be disabled and disposed.
+    /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
+    /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
+    /// usable for everything still running this frame.
     /// </summary>
     public static void Load(Scene scene)
     {
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
-        if (Current != null)
+        _pendingScene = scene;
+    }
+
+    /// <summary>
+    /// Applies a queued <see cref="Load"/>. Driven once per frame by the game loop, right after the
+    /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
+    /// outright rather than queued for another frame.
+    /// </summary>
+    public static void ProcessPendingLoad()
+    {
+        if (_pendingScene is null) return;
+
+        Scene next = _pendingScene;
+        _pendingScene = null;
+
+        if (next.IsDisposed)
         {
-            if (Current.IsActive)
-                Current.Disable();
-            Current.Destroy(); // Will call Dispose at end of frame not immediately so the scene technically is still usable
+            Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
+            return;
         }
 
-        Current = scene;
-        Current.Enable();
+        if (_current is not null && !_current.IsDisposed)
+        {
+            if (_current.IsActive)
+                _current.Disable();
+            _current.Dispose();
+        }
+
+        _current = next;
+        _current.Enable();
         OnSceneLoaded?.Invoke();
     }
 
     /// <summary>
-    /// Unloads the current scene, disabling and disposing it.
-    /// After calling this, Scene.Current will be null.
+    /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
+    /// game loop on the way out. Reading <see cref="Current"/> afterwards creates a fresh empty scene.
     /// </summary>
-    /// <summary>
-    /// Loads a scene as Current without calling Enable().
-    /// Kept for backward compatibility now just calls Load() since lifecycle gating
-    /// is handled per-component via ShouldExecuteGameplay.
-    /// </summary>
-    [Obsolete("Use Scene.Load() instead. Lifecycle gating is now per-component via [ExecuteAlways].")]
-    public static void LoadWithoutEnable(Scene scene) => Load(scene);
-
-    public static void Unload()
+    internal static void Shutdown()
     {
-        if (Current != null)
+        _pendingScene = null;
+
+        if (_current is null || _current.IsDisposed)
         {
-            if (Current.IsActive)
-                Current.Disable();
-            Current.Destroy(); // Will call Dispose at end of frame not immediately so the scene technically is still usable
-            Current = null;
+            _current = null;
+            return;
         }
+
+        if (_current.IsActive)
+            _current.Disable();
+        _current.Dispose();
+        _current = null;
     }
 
     #endregion
@@ -623,9 +656,10 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     {
         base.OnDispose();
 
-        // Clear the current scene reference if this is the current scene
-        if (Current == this)
-            Current = null;
+        // Drop the current-scene reference without going through the property, which would build a
+        // replacement scene in the middle of this one's teardown.
+        if (ReferenceEquals(_current, this))
+            _current = null;
 
         // Scene-scoped locks auto-expire with the scene rather than leaking forever.
         AssetDatabase.ReleaseSceneLocks(this);

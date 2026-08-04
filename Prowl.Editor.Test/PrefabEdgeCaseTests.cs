@@ -37,6 +37,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var scene = new Scene();
         foreach (var i in instances) scene.Add(i);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
     }
 
     private void RewritePrefab(string path, GameObject newSource)

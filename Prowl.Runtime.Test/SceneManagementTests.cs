@@ -267,6 +267,28 @@ public class SceneManagementTests : RuntimeTestBase
     }
 
     // ---- Static scene manager ----
+    //
+    // Load only queues. The swap lands at the end of the frame, which the game loop drives and these
+    // tests drive by hand. There is no unload: there is always a current scene.
+
+    [Fact]
+    public void Current_IsNeverNull()
+    {
+        Assert.NotNull(Scene.Current);
+        Assert.False(Scene.Current.IsDisposed);
+    }
+
+    [Fact]
+    public void Current_RebuildsAfterTheCurrentSceneIsDisposed()
+    {
+        Scene first = Scene.Current;
+        first.Dispose();
+
+        Scene second = Scene.Current;
+
+        Assert.NotSame(first, second);
+        Assert.False(second.IsDisposed);
+    }
 
     [Fact]
     public void Load_SetsCurrent_EnablesScene_FiresEvent()
@@ -278,6 +300,7 @@ public class SceneManagementTests : RuntimeTestBase
         try
         {
             Scene.Load(scene);
+            Scene.ProcessPendingLoad();
 
             Assert.Same(scene, Scene.Current);
             Assert.True(scene.IsActive);
@@ -286,8 +309,23 @@ public class SceneManagementTests : RuntimeTestBase
         finally
         {
             Scene.OnSceneLoaded -= handler;
-            Scene.Unload();
         }
+    }
+
+    [Fact]
+    public void Load_QueuedUntilProcessed()
+    {
+        Scene before = Scene.Current;
+        var scene = CreateScene();
+
+        Scene.Load(scene);
+
+        Assert.Same(before, Scene.Current);
+        Assert.False(scene.IsActive);
+
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(scene, Scene.Current);
     }
 
     [Fact]
@@ -295,29 +333,50 @@ public class SceneManagementTests : RuntimeTestBase
     {
         var first = CreateScene();
         var second = CreateScene();
-        try
-        {
-            Scene.Load(first);
-            Scene.Load(second);
 
-            Assert.Same(second, Scene.Current);
-            Assert.True(first.IsDisposed);
-        }
-        finally
-        {
-            Scene.Unload();
-        }
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        Scene.Load(second);
+
+        // The outgoing scene stays usable until the swap actually applies.
+        Assert.Same(first, Scene.Current);
+        Assert.False(first.IsDisposed);
+
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(second, Scene.Current);
+        Assert.True(first.IsDisposed);
     }
 
     [Fact]
-    public void Unload_DisposesAndClearsCurrent()
+    public void Load_LastRequestOfTheFrameWins()
     {
-        var scene = CreateScene();
-        Scene.Load(scene);
+        var first = CreateScene();
+        var second = CreateScene();
 
-        Scene.Unload();
+        Scene.Load(first);
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
 
-        Assert.Null(Scene.Current);
-        Assert.True(scene.IsDisposed);
+        Assert.Same(second, Scene.Current);
+        Assert.False(first.IsActive);
+    }
+
+    [Fact]
+    public void Load_SkipsASceneDisposedBeforeItApplied()
+    {
+        var current = CreateScene();
+        var queued = CreateScene();
+
+        Scene.Load(current);
+        Scene.ProcessPendingLoad();
+
+        Scene.Load(queued);
+        queued.Dispose();
+        Scene.ProcessPendingLoad();
+
+        Assert.Same(current, Scene.Current);
+        Assert.False(current.IsDisposed);
     }
 }

@@ -80,6 +80,7 @@ public abstract class RuntimeTestBase : IDisposable
         {
             scene.FixedUpdate();
             scene.Update();
+            EngineObject.ProcessDestroyed();
         }
     }
 
@@ -87,14 +88,20 @@ public abstract class RuntimeTestBase : IDisposable
     protected void Update(Scene scene, int frames = 1)
     {
         for (int i = 0; i < frames; i++)
+        {
             scene.Update();
+            EngineObject.ProcessDestroyed();
+        }
     }
 
     /// <summary> Steps physics via <see cref="Scene.FixedUpdate"/> the given number of times. </summary>
     protected void StepPhysics(Scene scene, int steps = 1)
     {
         for (int i = 0; i < steps; i++)
+        {
             scene.FixedUpdate();
+            EngineObject.ProcessDestroyed();
+        }
     }
 
     /// <summary> Coarse voxels and small tiles, so navmesh bakes in tests stay fast. </summary>

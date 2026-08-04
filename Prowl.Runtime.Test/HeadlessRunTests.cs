@@ -43,7 +43,7 @@ public class HeadlessRunTests
 
             Assert.Equal(10, game.UpdateCount);
             Assert.False(Application.IsHeadless); // reset on exit
-            Assert.Null(Scene.Current);           // scene unloaded on exit
+            Assert.True(scene.IsDisposed);        // the loaded scene is torn down on exit
         }
         finally
         {
