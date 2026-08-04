@@ -61,6 +61,7 @@ public static class AssetTypeStyles
         [".hdr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
         [".exr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
         [".psd"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+        [".rendertexture"] = new() { Icon = EditorIcons.Image_I, Color = Cyan },
         // Materials.
         [".mat"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
         [".material"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },

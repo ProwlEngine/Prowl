@@ -9,108 +9,149 @@ using Prowl.Echo;
 
 namespace Prowl.Runtime.Resources;
 
+/// <summary>
+/// An off-screen render target. Also a project asset (<c>.rendertexture</c>): the file stores the
+/// description below, and the GPU resources behind it are allocated on first use, so an asset can be
+/// created and inspected without a graphics context.
+/// </summary>
+[CreateAssetMenu("Render Texture", Extension = ".rendertexture", Order = 1200)]
 public sealed class RenderTexture : EngineObject, ISerializable
 {
-    private GraphicsFrameBuffer _frameBuffer;
-    public GraphicsFrameBuffer frameBuffer { get { EnsureNotDisposed(); return _frameBuffer; } private set => _frameBuffer = value; }
-    public Texture2D MainTexture { get { EnsureNotDisposed(); return InternalTextures[0]; } }
-    private Texture2D[] _internalTextures;
-    public Texture2D[] InternalTextures { get { EnsureNotDisposed(); return _internalTextures; } private set => _internalTextures = value; }
-    private Texture2D _internalDepth;
-    public Texture2D InternalDepth { get { EnsureNotDisposed(); return _internalDepth; } private set => _internalDepth = value; }
+    public const int DefaultWidth = 1920;
+    public const int DefaultHeight = 1080;
 
+    // ─── Description (what the asset file stores) ───
     private int _width;
     private int _height;
-    public int Width { get { EnsureNotDisposed(); return _width; } private set => _width = value; }
-    public int Height { get { EnsureNotDisposed(); return _height; } private set => _height = value; }
-    private int numTextures;
-    private bool hasDepthAttachment;
-    private TextureImageFormat[] textureFormats;
+    private bool _hasDepthAttachment;
+    private TextureImageFormat[] _textureFormats;
+
+    // ─── GPU resources (allocated lazily from the description) ───
+    private GraphicsFrameBuffer? _frameBuffer;
+    private Texture2D[]? _internalTextures;
+    private Texture2D? _internalDepth;
+
+    public GraphicsFrameBuffer frameBuffer { get { EnsureCreated(); return _frameBuffer!; } }
+    public Texture2D MainTexture { get { EnsureCreated(); return _internalTextures![0]; } }
+    public Texture2D[] InternalTextures { get { EnsureCreated(); return _internalTextures!; } }
+    public Texture2D? InternalDepth { get { EnsureCreated(); return _internalDepth; } }
+
+    public int Width { get { EnsureNotDisposed(); return _width; } }
+    public int Height { get { EnsureNotDisposed(); return _height; } }
+    public bool HasDepthAttachment { get { EnsureNotDisposed(); return _hasDepthAttachment; } }
+    public TextureImageFormat[] TextureFormats { get { EnsureNotDisposed(); return _textureFormats; } }
 
     public RenderTexture() : base("RenderTexture")
     {
-        Width = 0;
-        Height = 0;
-        numTextures = 0;
-        hasDepthAttachment = false;
-        textureFormats = [];
+        _width = DefaultWidth;
+        _height = DefaultHeight;
+        _hasDepthAttachment = true;
+        _textureFormats = [TextureImageFormat.Color4b];
     }
 
-    public RenderTexture(int Width, int Height, bool hasDepthAttachment, TextureImageFormat[] formats) : base("RenderTexture")
+    public RenderTexture(int width, int height, bool hasDepthAttachment, TextureImageFormat[] formats) : base("RenderTexture")
     {
-        this.Width = Width;
-        this.Height = Height;
-        numTextures = formats?.Length ?? throw new ArgumentNullException(nameof(formats), "Texture formats cannot be null.");
-        this.hasDepthAttachment = hasDepthAttachment;
+        ArgumentNullException.ThrowIfNull(formats);
+        _textureFormats = [];
+        Configure(width, height, hasDepthAttachment, formats);
+    }
 
-        if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
-            throw new Exception("Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
+    /// <summary>
+    /// Change what this target describes, releasing anything already allocated. The new resources are
+    /// created on next use, so this is safe to call from an inspector or off the render thread.
+    /// </summary>
+    public void Configure(int width, int height, bool hasDepthAttachment, TextureImageFormat[] formats)
+    {
+        EnsureNotDisposed();
+        ArgumentNullException.ThrowIfNull(formats);
 
-        textureFormats = formats;
+        if (formats.Length < 0 || formats.Length > Graphics.MaxFramebufferColorAttachments)
+            throw new ArgumentException(
+                $"A render texture supports 0-{Graphics.MaxFramebufferColorAttachments} color attachments, got {formats.Length}.",
+                nameof(formats));
 
-        GraphicsFrameBuffer.Attachment[] attachments = new GraphicsFrameBuffer.Attachment[numTextures + (hasDepthAttachment ? 1 : 0)];
-        InternalTextures = new Texture2D[numTextures];
+        _width = Math.Max(1, width);
+        _height = Math.Max(1, height);
+        _hasDepthAttachment = hasDepthAttachment;
+        _textureFormats = (TextureImageFormat[])formats.Clone();
+
+        ReleaseResources();
+    }
+
+    /// <summary>Allocates the framebuffer and its attachments if they aren't already.</summary>
+    private void EnsureCreated()
+    {
+        EnsureNotDisposed();
+        if (_frameBuffer != null) return;
+
+        int numTextures = _textureFormats.Length;
+        var attachments = new GraphicsFrameBuffer.Attachment[numTextures + (_hasDepthAttachment ? 1 : 0)];
+        _internalTextures = new Texture2D[numTextures];
         for (int i = 0; i < numTextures; i++)
         {
-            InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, textureFormats[i]);
-            InternalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-            InternalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-            attachments[i] = new GraphicsFrameBuffer.Attachment { Texture = InternalTextures[i].Handle, IsDepth = false };
+            _internalTextures[i] = new Texture2D((uint)_width, (uint)_height, false, _textureFormats[i]);
+            _internalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
+            _internalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
+            attachments[i] = new GraphicsFrameBuffer.Attachment { Texture = _internalTextures[i].Handle, IsDepth = false };
         }
 
-        if (hasDepthAttachment)
+        if (_hasDepthAttachment)
         {
-            InternalDepth = new Texture2D((uint)Width, (uint)Height, false, TextureImageFormat.Depth24f);
-            attachments[numTextures] = new GraphicsFrameBuffer.Attachment { Texture = InternalDepth.Handle, IsDepth = true };
+            _internalDepth = new Texture2D((uint)_width, (uint)_height, false, TextureImageFormat.Depth24f);
+            attachments[numTextures] = new GraphicsFrameBuffer.Attachment { Texture = _internalDepth.Handle, IsDepth = true };
         }
 
-        frameBuffer = Graphics.CreateFramebuffer(attachments, (uint)Width, (uint)Height);
+        _frameBuffer = Graphics.CreateFramebuffer(attachments, (uint)_width, (uint)_height);
     }
 
-    public override void OnDispose()
+    private void ReleaseResources()
     {
-        if (_frameBuffer == null) return;
-        foreach (Texture2D texture in _internalTextures)
-            texture.Dispose();
+        if (_internalTextures != null)
+            foreach (Texture2D texture in _internalTextures)
+                if (texture.IsValid()) texture.Dispose();
+        _internalTextures = null;
 
-        // Dispose depth texture if present
-        if (hasDepthAttachment && _internalDepth != null)
-            _internalDepth.Dispose();
+        if (_internalDepth.IsValid()) _internalDepth.Dispose();
+        _internalDepth = null;
 
-        _frameBuffer.Dispose();
+        _frameBuffer?.Dispose();
+        _frameBuffer = null;
     }
+
+    public override void OnDispose() => ReleaseResources();
 
     ~RenderTexture() => Dispose();
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {
         SerializeHeader(compoundTag);
-        compoundTag.Add("Width", new(Width));
-        compoundTag.Add("Height", new(Height));
-        compoundTag.Add("NumTextures", new(numTextures));
-        compoundTag.Add("HasDepthAttachment", new((byte)(hasDepthAttachment ? 1 : 0)));
+        compoundTag.Add("Width", new(_width));
+        compoundTag.Add("Height", new(_height));
+        compoundTag.Add("HasDepthAttachment", new((byte)(_hasDepthAttachment ? 1 : 0)));
         EchoObject textureFormatsTag = EchoObject.NewList();
-        foreach (TextureImageFormat format in textureFormats)
+        foreach (TextureImageFormat format in _textureFormats)
             textureFormatsTag.ListAdd(new((byte)format));
         compoundTag.Add("TextureFormats", textureFormatsTag);
     }
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Width = value["Width"].IntValue;
-        Height = value["Height"].IntValue;
-        numTextures = value["NumTextures"].IntValue;
-        hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
-        textureFormats = new TextureImageFormat[numTextures];
-        EchoObject? textureFormatsTag = value.Get("TextureFormats");
-        for (int i = 0; i < numTextures; i++)
-            textureFormats[i] = (TextureImageFormat)textureFormatsTag[i].ByteValue;
+        int width = value.Get("Width")?.IntValue ?? DefaultWidth;
+        int height = value.Get("Height")?.IntValue ?? DefaultHeight;
+        bool hasDepth = (value.Get("HasDepthAttachment")?.ByteValue ?? 1) == 1;
 
+        // NumTextures used to be written alongside the list; the list is the only source now, but an
+        // older file's count still bounds it so a truncated list can't read past the end.
+        EchoObject? formatsTag = value.Get("TextureFormats");
+        int count = formatsTag?.Count ?? 0;
+        if (value.TryGet("NumTextures", out EchoObject? numTag))
+            count = Math.Min(count, numTag.IntValue);
 
-        Type[] param = new[] { typeof(int), typeof(int), typeof(bool), typeof(TextureImageFormat[]) };
-        object[] values = new object[] { Width, Height, hasDepthAttachment, textureFormats };
-        typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
+        var formats = new TextureImageFormat[count];
+        for (int i = 0; i < count; i++)
+            formats[i] = (TextureImageFormat)formatsTag![i].ByteValue;
 
+        Configure(width, height, hasDepth, formats);
         DeserializeHeader(value);
     }
 
@@ -185,7 +226,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public static void ReleaseTemporaryRT(RenderTexture renderTexture)
     {
-        var key = new RenderTextureKey(renderTexture.Width, renderTexture.Height, renderTexture.hasDepthAttachment, [.. renderTexture.InternalTextures.Select(t => t.ImageFormat)]);
+        // Keyed off the description, not the live attachments - reading those would allocate the very
+        // GPU resources a release is meant to hand back.
+        var key = new RenderTextureKey(renderTexture._width, renderTexture._height,
+                                       renderTexture._hasDepthAttachment, renderTexture._textureFormats);
 
         // Remove from active pool
         if (active.TryGetValue(key, out List<(RenderTexture, long frameAcquired)>? activeList))
