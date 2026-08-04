@@ -82,6 +82,9 @@ public class UIImage : UIBehaviour
     /// <summary>The source texture bound for drawing: the sprite's texture, or null when no sprite is set.</summary>
     private Texture2D? SourceTexture { get { var s = Spr; return s.IsValid() ? s.Texture.Res : null; } }
 
+    /// <summary>A sprite is assigned but it (or its texture) is still loading, so this image drew nothing.</summary>
+    public override bool IsContentPending => !_sprite.IsExplicitNull && SourceTexture is null;
+
     /// <summary>9-slice border in source pixels, taken from the sprite (zero when no sprite is set).</summary>
     private Float4 EffectiveBorder => Spr is Sprite s ? s.Border : Float4.Zero;
 

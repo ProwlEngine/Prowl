@@ -43,6 +43,10 @@ public class TextComponent : UIBehaviour
         }
     }
 
+    /// <summary>A font is assigned but hasn't loaded, so this text is currently laid out with the
+    /// built-in fallback and has to be rebuilt once the real one arrives.</summary>
+    public override bool IsContentPending => !_font.IsExplicitNull && _font.Res.IsNotValid();
+
     [SerializeField] private Color _textColor = Color.White;
     public Color TextColor
     {

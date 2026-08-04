@@ -131,6 +131,10 @@ public class GameCanvas : MonoBehaviour
     [SerializeIgnore] private bool _isDirty = true;
     [SerializeIgnore] private UIDirtyFlags _aggregateDirty = UIDirtyFlags.All;
 
+    /// <summary>Set during a rebuild when some element was still waiting on an asset. Keeps the canvas
+    /// dirty so it rebuilds again, since nothing else re-triggers one once it goes clean.</summary>
+    [SerializeIgnore] private bool _contentPending;
+
     /// <summary>
     /// Size of the surface this canvas was last built against (in real pixels).
     /// Tracked so that a resolution change - typical when the editor's game viewport resizes
@@ -258,10 +262,12 @@ public class GameCanvas : MonoBehaviour
         _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
 
         int dfs = 0;
+        _contentPending = false;
         BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
         Tree.SortHierarchical();
 
-        _isDirty = false;
+        // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset.
+        _isDirty = _contentPending;
         _aggregateDirty = UIDirtyFlags.None;
     }
 
@@ -345,6 +351,7 @@ public class GameCanvas : MonoBehaviour
                 if (!ui.EnabledInHierarchy) continue;
 
                 EnsureBaked(ui, childCtx);
+                if (ui.IsContentPending) _contentPending = true;
                 if (ui.CachedMesh is { } mesh)
                     EmitItem(ui, mesh, dfsIndex++, childClip);
             }
