@@ -67,7 +67,7 @@ public abstract class EngineObject : IDisposable
     public override bool Equals(object? obj) => this == (obj as EngineObject);
     public override int GetHashCode() => _instanceID;
 
-    public virtual void OnDispose() { }
+    protected virtual void OnDispose() { }
 
     /// <summary>
     /// Call at the top of any accessor a caller might reasonably use every frame (a texture's Width,

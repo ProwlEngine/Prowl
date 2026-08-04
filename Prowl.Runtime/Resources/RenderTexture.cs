@@ -118,7 +118,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         _frameBuffer = null;
     }
 
-    public override void OnDispose() => ReleaseResources();
+    protected override void OnDispose() => ReleaseResources();
 
     ~RenderTexture() => Dispose();
 

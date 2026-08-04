@@ -493,7 +493,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Called when the MonoBehaviour will be destroyed.
     /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
     /// </summary>
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         if (GameObject.IsValid())
             GameObject.RemoveComponent(this);

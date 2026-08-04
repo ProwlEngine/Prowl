@@ -172,7 +172,7 @@ public sealed class Cubemap : Texture, ISerializable
         return fb;
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         foreach (var fb in _faceTargets.Values)
             fb?.Dispose();

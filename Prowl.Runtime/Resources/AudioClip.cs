@@ -146,7 +146,7 @@ public sealed class AudioClip : EngineObject, ISerializable
         }
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         AudioContext.Remove(this);
     }

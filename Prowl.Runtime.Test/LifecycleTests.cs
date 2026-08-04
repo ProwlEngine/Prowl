@@ -41,7 +41,7 @@ public class TestLifecycleComponent : MonoBehaviour
         Events.Add("Start");
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         Events.Add("OnDispose");
         base.OnDispose();

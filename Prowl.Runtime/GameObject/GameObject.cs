@@ -993,7 +993,7 @@ public class GameObject : EngineObject, ISerializable
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();

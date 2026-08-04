@@ -16,7 +16,7 @@ public class EngineObjectTests
         public int DisposeCount;
         public TestEngineObject() : base() { }
         public TestEngineObject(string name) : base(name) { }
-        public override void OnDispose() => DisposeCount++;
+        protected override void OnDispose() => DisposeCount++;
     }
 
     [Fact]

@@ -402,7 +402,7 @@ public class GameCanvas : MonoBehaviour
             {
                 // Element produced no geometry (e.g. empty text): drop the old mesh, disposing its
                 // GPU buffers rather than orphaning them.
-                if (ui.CachedMesh.IsValid()) ui.CachedMesh.OnDispose();
+                if (ui.CachedMesh.IsValid()) ui.CachedMesh.Dispose();
                 ui.CachedMesh = null;
             }
             else
