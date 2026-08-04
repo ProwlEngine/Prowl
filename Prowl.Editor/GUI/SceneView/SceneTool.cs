@@ -88,6 +88,65 @@ public abstract class SceneTool
     /// the drop; returning false falls through to the registered <see cref="ISceneDropHandler"/>.
     /// </summary>
     public virtual bool OnAssetDropped(SceneToolContext ctx, AssetDragPayload payload) => false;
+
+    // ================================================================
+    //  Drawing and query helpers
+    // ================================================================
+    //  Forwards onto the current viewport's context so a tool can just call DrawWorldLabel(...)
+    //  without threading ctx through its own helpers. Valid inside any of the callbacks above.
+
+    /// <summary>The viewport context for the callback currently running.</summary>
+    protected SceneToolContext Context => _context
+        ?? throw new InvalidOperationException($"{GetType().Name}: scene-tool helpers are only valid inside a tool callback.");
+
+    private SceneToolContext? _context;
+
+    internal void BindContext(SceneToolContext? ctx) => _context = ctx;
+
+    protected HandleContext Handles => Context.Handles;
+    protected SceneDrawList Draw => Context.Draw;
+    protected Camera Camera => Context.Camera;
+    protected GameObject? ActiveObject => Context.ActiveObject;
+
+    /// <summary>Text anchored to a world position - dimensions, counts, axis names.</summary>
+    protected void DrawWorldLabel(Float3 world, string text, Color32 color) => Draw.Label(world, text, color);
+
+    /// <summary>The length of a segment, drawn at its midpoint.</summary>
+    protected void DrawLengthLabel(Float3 a, Float3 b, Color32 color, string format = "0.###")
+        => Draw.LengthLabel(a, b, color, format);
+
+    protected void DrawLine(Float3 a, Float3 b, Color32 color, float thickness = 0f)
+        => Draw.Line(a, b, color, thickness);
+
+    protected void DrawPolyline(ReadOnlySpan<Float3> points, Color32 color, float thickness = 0f, bool closed = false)
+        => Draw.Polyline(points, color, thickness, closed);
+
+    protected void DrawPolygon(ReadOnlySpan<Float3> points, Color32 color) => Draw.Polygon(points, color);
+
+    protected void DrawCircle(Float3 center, Float3 normal, float radius, Color32 color, float thickness = 0f)
+        => Draw.Circle(center, normal, radius, color, thickness);
+
+    protected void DrawArrow(Float3 from, Float3 to, Color32 color, float thickness = 0f)
+        => Draw.Arrow(from, to, color, thickness);
+
+    protected void DrawWireCube(Float3 center, Float3 halfExtents, Color32 color, float thickness = 0f)
+        => Draw.WireCube(center, halfExtents, color, thickness);
+
+    /// <summary>A screen-constant grab point.</summary>
+    protected void DrawHandleDot(Float3 center, Color32 color, float sizePixels = 7f, HandleCap cap = HandleCap.Square)
+        => Draw.Dot(center, color, sizePixels, cap);
+
+    /// <summary>Project a world point to viewport pixels; null when behind the camera.</summary>
+    protected Float2? WorldToScreen(Float3 world) => Handles.WorldToScreen(world);
+
+    /// <summary>How far in front of the camera a point sits, for depth-aware control registration.</summary>
+    protected float DepthOf(Float3 world) => Handles.DepthOf(world);
+
+    /// <summary>Stable control id scoped to this tool, so two tools cannot collide on a name.</summary>
+    protected ControlID ControlId(string name) => Handles.GetControlID($"{GetType().FullName}/{name}");
+
+    /// <summary>Indexed variant, for per-item handle loops.</summary>
+    protected ControlID ControlId(string name, int index) => Handles.GetControlID($"{GetType().FullName}/{name}", index);
 }
 
 /// <summary>

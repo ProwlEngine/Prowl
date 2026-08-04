@@ -28,6 +28,9 @@ public sealed class SceneToolContext
     /// <summary>Handle arbitration, cursor, ray, camera and keyboard-safe key queries.</summary>
     public HandleContext Handles { get; }
 
+    /// <summary>Deferred 3D drawing onto the viewport overlay.</summary>
+    public SceneDrawList Draw => Handles.Draw;
+
     public Scene Scene { get; private set; } = null!;
 
     public Camera Camera => Handles.Camera;

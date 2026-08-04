@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -127,6 +127,7 @@ public sealed class HandleContext
         _camPosition = camTransform.Position;
         _camForward = camTransform.Forward;
         MouseRay = camera.ScreenPointToRay(mouseLocal, ViewportSize);
+        Draw.Begin(this);
 
         PrimaryDown = Input.GetMouseButtonDown(0);
         PrimaryHeld = Input.GetMouseButton(0);
@@ -255,6 +256,12 @@ public sealed class HandleContext
     // ================================================================
     //  Projection and distance
     // ================================================================
+
+    /// <summary>Combined projection * view for this frame, for callers that project themselves.</summary>
+    public Float4x4 ViewProjection => _viewProjection;
+
+    /// <summary>Deferred 3D drawing, replayed onto the viewport overlay after the input pass.</summary>
+    public SceneDrawList Draw { get; } = new();
 
     /// <summary>Project a world point into viewport-local pixels. Null when behind the camera.</summary>
     public Float2? WorldToScreen(Float3 world) => GizmoUtils.WorldToScreen(Viewport, _viewProjection, world);
