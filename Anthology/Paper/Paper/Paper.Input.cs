@@ -13,6 +13,19 @@ namespace Prowl.PaperUI
         /// <summary> Gets whether a UI element is currently requesting keyboard capture. </summary>
         public bool WantsCaptureKeyboard { get; private set; }
 
+        private bool _wrapPointer = false;      // Whether an element is mid-drag and wants unbounded motion
+        private Float2 _pointerWrap = Float2.Zero;
+
+        /// <summary>
+        /// Gets whether a UI element is mid-drag and wants unbounded pointer motion. Hosts honour this
+        /// by wrapping the pointer to the opposite edge when it leaves the window, and reporting the
+        /// jump through <see cref="NotifyPointerWrapped"/>.
+        /// <para>Unrelated to <c>WantsCapturePointer</c> (which merely says the UI is under the
+        /// cursor) and to cursor locking (which pins the pointer and discards its position). Wrapping
+        /// keeps the pointer real and on-screen; only its travel becomes unbounded.</para>
+        /// </summary>
+        public bool WantsPointerWrap { get; private set; }
+
         // Enums
         public readonly PaperKey[] KeyValues = Enum.GetValues(typeof(PaperKey)).Cast<PaperKey>().ToArray();
         /// <summary> All defined PaperMouseBtn values, cached for iteration. </summary>
@@ -96,8 +109,19 @@ namespace Prowl.PaperUI
         public float PointerWheel { get; private set; } = 0;
 
         // Derived properties
-        /// <summary> The change in pointer position since the last update, equal to PointerPos minus PreviousPointerPos. </summary>
-        public Float2 PointerDelta => PointerPos - PreviousPointerPos;
+        /// <summary>
+        /// The change in pointer position since the last update. Continuous across any wrap the host
+        /// performed for <see cref="WrapPointer"/>, so a wrapping drag keeps reporting real motion
+        /// instead of a full-screen jump when the pointer crosses an edge.
+        /// <para>Identical to <see cref="PointerDeltaRaw"/> whenever nothing is wrapping, which is the
+        /// normal case.</para>
+        /// </summary>
+        public Float2 PointerDelta => (PointerPos - PreviousPointerPos) - _pointerWrap;
+
+        /// <summary> The literal difference between this frame's and last frame's pointer position,
+        /// including any wrap. Use only when you specifically want the un-corrected value. </summary>
+        public Float2 PointerDeltaRaw => PointerPos - PreviousPointerPos;
+
         public bool IsPointerMoving => Float2.LengthSquared(PointerDelta) > 0;
 
         // Double-click tracking
@@ -217,6 +241,57 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
+        /// Marks the currently active element as wanting unbounded pointer motion for this frame - a
+        /// drag that must not stop at the screen edge. Call it every frame the drag continues.
+        /// <para>The host wraps the pointer to the opposite edge when it leaves the window and reports
+        /// the jump via <see cref="NotifyPointerWrapped"/>, so <see cref="PointerDelta"/> stays
+        /// continuous. A widget does nothing beyond calling this and reading the delta as usual.</para>
+        /// </summary>
+        public void WrapPointer()
+        {
+            _wrapPointer = true;
+        }
+
+        /// <summary>
+        /// Told by the host that it teleported the pointer by <paramref name="warpDelta"/> this frame
+        /// to wrap it back into the window. <see cref="PointerDelta"/> subtracts it so the motion reads
+        /// as continuous; <see cref="PointerDeltaRaw"/> keeps the jump.
+        /// </summary>
+        public void NotifyPointerWrapped(Float2 warpDelta) => _pointerWrap += warpDelta;
+
+        /// <summary>
+        /// Work out where the pointer should be teleported to keep a <see cref="WrapPointer"/> drag
+        /// going, and record the jump. Hosts call this each frame and, when it returns true, move the
+        /// real cursor to <paramref name="wrapped"/>.
+        /// <para>Centralised here so every backend wraps identically; a host only has to know how to
+        /// set the OS cursor position.</para>
+        /// </summary>
+        /// <param name="pos">Current pointer position, in the same space fed to Paper.</param>
+        /// <param name="width">Window width in that space.</param>
+        /// <param name="height">Window height in that space.</param>
+        /// <param name="wrapped">Position to teleport to; equals <paramref name="pos"/> when false.</param>
+        /// <param name="margin">How far inside the edge to land, so the pointer does not immediately
+        /// re-wrap on the following frame.</param>
+        public bool TryWrapPointer(Float2 pos, float width, float height, out Float2 wrapped, float margin = 4f)
+        {
+            wrapped = pos;
+            if (!WantsPointerWrap || width <= margin * 4 || height <= margin * 4)
+                return false;
+
+            if (pos.X <= margin) wrapped.X = width - margin * 2;
+            else if (pos.X >= width - margin) wrapped.X = margin * 2;
+
+            if (pos.Y <= margin) wrapped.Y = height - margin * 2;
+            else if (pos.Y >= height - margin) wrapped.Y = margin * 2;
+
+            if (wrapped.X == pos.X && wrapped.Y == pos.Y)
+                return false;
+
+            NotifyPointerWrapped(wrapped - pos);
+            return true;
+        }
+
+        /// <summary>
         /// Adds a character to the input queue.
         /// </summary>
         /// <param name="character">The character to add</param>
@@ -274,6 +349,8 @@ namespace Prowl.PaperUI
                     _pointerPressedTime[i] += _deltaTime;
 
             _capturedKeyboard = false;
+            _wrapPointer = false;
+            _pointerWrap = Float2.Zero;
 
         }
 
@@ -339,6 +416,7 @@ namespace Prowl.PaperUI
             InputString.Clear();
 
             WantsCaptureKeyboard = _capturedKeyboard;
+            WantsPointerWrap = _wrapPointer;
         }
 
         /// <summary>

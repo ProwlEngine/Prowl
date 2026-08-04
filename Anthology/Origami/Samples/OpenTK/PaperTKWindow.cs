@@ -9,6 +9,7 @@ using OpenTK.Windowing.Desktop;
 using OpenTKSample;
 
 using Prowl.PaperUI;
+using Prowl.Vector;
 
 namespace OrigamiSample;
 
@@ -185,7 +186,19 @@ public class PaperTKWindow : GameWindow
     protected override void OnMouseMove(MouseMoveEventArgs e)
     {
         base.OnMouseMove(e);
-        _paper.SetPointerState(PaperMouseBtn.Unknown, MouseState.X, MouseState.Y, false, true);
+
+        float mx = MouseState.X, my = MouseState.Y;
+
+        // Infinite drag: a widget calling WrapPointer wants motion that never stops at an edge, so
+        // teleport the cursor to the opposite side and let Paper discount the jump.
+        if (_paper.TryWrapPointer(new Float2(mx, my), ClientSize.X, ClientSize.Y, out Float2 wrapped))
+        {
+            MousePosition = new global::OpenTK.Mathematics.Vector2((float)wrapped.X, (float)wrapped.Y);
+            mx = (float)wrapped.X;
+            my = (float)wrapped.Y;
+        }
+
+        _paper.SetPointerState(PaperMouseBtn.Unknown, mx, my, false, true);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)

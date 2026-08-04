@@ -70,6 +70,15 @@ internal class Program
     {
         // Handle mouse position and movement
         Vector2 mousePos = GetMousePosition();
+
+        // Infinite drag: a widget calling WrapPointer wants motion that never stops at an edge,
+        // so teleport the cursor to the opposite side and let Paper discount the jump.
+        if (P.TryWrapPointer(new Prowl.Vector.Float2(mousePos.X, mousePos.Y), GetScreenWidth(), GetScreenHeight(), out var wrapped))
+        {
+            SetMousePosition((int)wrapped.X, (int)wrapped.Y);
+            mousePos = new Vector2((float)wrapped.X, (float)wrapped.Y);
+        }
+
         P.SetPointerState(PaperMouseBtn.Unknown, mousePos.X, mousePos.Y, false, true);
 
         if (IsMouseButtonPressed(MouseButton.Left))
