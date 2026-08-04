@@ -242,14 +242,20 @@ public class EditorAssetBackend : AssetBackendBase
         string cachePath = GetCachePath(assetId);
         var entry = GetEntry(assetId);
 
-        // Validate cache check importer version matches current importer
-        if (onMainThread && entry != null && !string.IsNullOrEmpty(entry.ImporterType))
+        // Validate the cache against both the importer and the source file before trusting it.
+        if (onMainThread && entry != null)
         {
-            var importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
-            if (importer != null && importer.Version != entry.ImporterVersion)
+            var importer = !string.IsNullOrEmpty(entry.ImporterType)
+                ? EditorRegistries.CreateImporterByName(entry.ImporterType) : null;
+            bool importerChanged = importer != null && importer.Version != entry.ImporterVersion;
+            bool sourceChanged = IsSourceNewerThanImport(entry);
+
+            if (importerChanged || sourceChanged)
             {
-                // Cache is stale importer was updated since last import
-                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} -> v{importer.Version}. Reimporting.");
+                string why = sourceChanged
+                    ? "source file changed"
+                    : $"importer v{entry.ImporterVersion} -> v{importer!.Version}";
+                Runtime.Debug.Log($"Cache stale for '{entry.Path}': {why}. Reimporting.");
                 entry.NeedsReimport = true;
                 RunImport(entry);
                 return TryGetLoaded(assetId, out var reimported) ? reimported : null;
