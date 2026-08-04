@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Raster anzeigen",
   "scene.show_gizmos": "Gizmos anzeigen",
+  "scene.tool_handles": "Werkzeuggriffe",
+  "scene.pivot_center": "Drehpunkt: Mitte",
+  "scene.orientation_local": "Ausrichtung: Lokal",
+  "scene.snap_enabled": "Raster",
 
   "game.resolution": "Aufloesung",
   "game.show_stats": "Statistiken anzeigen",

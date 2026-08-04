@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Izgarayi Goster",
   "scene.show_gizmos": "Gizmolari Goster",
+  "scene.tool_handles": "Tutamaclar",
+  "scene.pivot_center": "Pivot: Merkez",
+  "scene.orientation_local": "Yonelim: Yerel",
+  "scene.snap_enabled": "Yapisma",
 
   "game.resolution": "Cozunurluk",
   "game.show_stats": "Istatistikleri Goster",

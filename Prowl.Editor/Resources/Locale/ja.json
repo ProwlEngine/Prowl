@@ -23,6 +23,10 @@
 
   "scene.show_grid": "グリッドを表示",
   "scene.show_gizmos": "ギズモを表示",
+  "scene.tool_handles": "Tool Handles",
+  "scene.pivot_center": "Pivot: Center",
+  "scene.orientation_local": "Orientation: Local",
+  "scene.snap_enabled": "Snap",
 
   "game.resolution": "解像度",
   "game.show_stats": "統計を表示",

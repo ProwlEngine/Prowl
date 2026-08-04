@@ -304,6 +304,22 @@ public class HandleContextTests
         Assert.True(ctx.IsNearest(overlay));
     }
 
+    /// <summary>
+    /// Scene shortcuts must yield while a text field is being typed into. Headless there is no Paper
+    /// instance, so capture reads false - this pins that the guarded accessors exist and route
+    /// through it rather than calling <see cref="Input"/> directly.
+    /// </summary>
+    [Fact]
+    public void GuardedKeyAccessors_TrackKeyboardCapture()
+    {
+        var (ctx, cam) = MakeContext();
+        ctx.BeginFrame(cam, Viewport, Float2.Zero, true);
+
+        Assert.False(ctx.KeyboardCaptured);
+        Assert.Equal(Input.GetKeyDown(KeyCode.D), ctx.GetKeyDown(KeyCode.D));
+        Assert.Equal(Input.GetKey(KeyCode.D), ctx.GetKey(KeyCode.D));
+    }
+
     [Fact]
     public void ControlIDs_AreStableAcrossFrames()
     {

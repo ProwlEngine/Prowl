@@ -23,6 +23,10 @@
 
   "scene.show_grid": "显示网格",
   "scene.show_gizmos": "显示 Gizmo",
+  "scene.tool_handles": "Tool Handles",
+  "scene.pivot_center": "Pivot: Center",
+  "scene.orientation_local": "Orientation: Local",
+  "scene.snap_enabled": "Snap",
 
   "game.resolution": "分辨率",
   "game.show_stats": "显示统计信息",

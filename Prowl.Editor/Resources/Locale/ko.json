@@ -23,6 +23,10 @@
 
   "scene.show_grid": "격자 표시",
   "scene.show_gizmos": "기즈모 표시",
+  "scene.tool_handles": "Tool Handles",
+  "scene.pivot_center": "Pivot: Center",
+  "scene.orientation_local": "Orientation: Local",
+  "scene.snap_enabled": "Snap",
 
   "game.resolution": "해상도",
   "game.show_stats": "통계 표시",

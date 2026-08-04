@@ -57,11 +57,11 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
         if (_group == null) return;
         _cam = ctx.Camera;
 
-        // --- Keyboard shortcuts ---
-        if (_selection.Count > 0 && (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace)))
+        // --- Keyboard shortcuts (ctx.GetKeyDown yields while a text field is being typed into) ---
+        if (_selection.Count > 0 && (ctx.GetKeyDown(KeyCode.Delete) || ctx.GetKeyDown(KeyCode.Backspace)))
         { DeleteSelected(); DrawProbes(); return; }
-        if (ctx.Ctrl && Input.GetKeyDown(KeyCode.D) && _selection.Count > 0) { DuplicateSelected(); DrawProbes(); return; }
-        if (ctx.Ctrl && Input.GetKeyDown(KeyCode.A)) { SelectAll(); DrawProbes(); return; }
+        if (ctx.Ctrl && ctx.GetKeyDown(KeyCode.D) && _selection.Count > 0) { DuplicateSelected(); DrawProbes(); return; }
+        if (ctx.Ctrl && ctx.GetKeyDown(KeyCode.A)) { SelectAll(); DrawProbes(); return; }
 
         // --- Move handle for the current selection ---
         bool handleHot = false;

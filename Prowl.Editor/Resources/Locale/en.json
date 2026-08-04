@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Show Grid",
   "scene.show_gizmos": "Show Gizmos",
+  "scene.tool_handles": "Tool Handles",
+  "scene.pivot_center": "Pivot: Center",
+  "scene.orientation_local": "Orientation: Local",
+  "scene.snap_enabled": "Snap",
 
   "game.resolution": "Resolution",
   "game.show_stats": "Show Stats",

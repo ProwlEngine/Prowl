@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Pokaz siatke",
   "scene.show_gizmos": "Pokaz gizmo",
+  "scene.tool_handles": "Uchwyty",
+  "scene.pivot_center": "Os: Srodek",
+  "scene.orientation_local": "Orientacja: Lokalna",
+  "scene.snap_enabled": "Przyciaganie",
 
   "game.resolution": "Rozdzielczosc",
   "game.show_stats": "Pokaz statystyki",

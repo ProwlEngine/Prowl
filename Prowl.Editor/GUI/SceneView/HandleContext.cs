@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.Editor.Core;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -87,6 +88,20 @@ public sealed class HandleContext
     /// <summary>Camera navigation is in progress: nothing may pick or start a drag.</summary>
     public bool Blocked { get; private set; }
 
+    /// <summary>
+    /// A UI widget is consuming typing this frame (a text field is being edited). Scene-view
+    /// keyboard shortcuts must stand down, or typing "d" into an inspector field also duplicates
+    /// whatever the scene editor has selected.
+    /// </summary>
+    public bool KeyboardCaptured { get; private set; }
+
+    /// <summary>Key-down that yields to text editing. Use this instead of <see cref="Input"/>
+    /// directly for any scene-view shortcut.</summary>
+    public bool GetKeyDown(KeyCode key) => !KeyboardCaptured && Input.GetKeyDown(key);
+
+    /// <summary>Key-held that yields to text editing. See <see cref="GetKeyDown"/>.</summary>
+    public bool GetKey(KeyCode key) => !KeyboardCaptured && Input.GetKey(key);
+
     // ================================================================
     //  Lifecycle
     // ================================================================
@@ -120,6 +135,7 @@ public sealed class HandleContext
         Ctrl = Input.IsCtrlPressed;
         Alt = Input.IsAltPressed;
         Blocked = Input.IsAltPressed || Input.GetMouseButton(1) || Input.GetMouseButton(2);
+        KeyboardCaptured = EditorApplication.Instance?.PaperInstance?.WantsCaptureKeyboard == true;
 
         // A drag whose owner never saw the release (viewport lost focus mid-drag) would otherwise
         // hold Hot forever.

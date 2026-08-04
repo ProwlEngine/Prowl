@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Mostrar cuadricula",
   "scene.show_gizmos": "Mostrar gizmos",
+  "scene.tool_handles": "Manejadores",
+  "scene.pivot_center": "Pivote: Centro",
+  "scene.orientation_local": "Orientacion: Local",
+  "scene.snap_enabled": "Ajuste",
 
   "game.resolution": "Resolucion",
   "game.show_stats": "Mostrar estadisticas",

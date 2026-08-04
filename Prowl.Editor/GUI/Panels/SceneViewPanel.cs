@@ -78,7 +78,6 @@ public class SceneViewPanel : DockPanel
         ActiveSceneViewEditor = null;
         ActiveSceneViewTarget = null;
     }
-    private Gizmo.TransformGizmoMode _gizmoMode = Gizmo.TransformGizmoMode.Translate;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
@@ -126,6 +125,17 @@ public class SceneViewPanel : DockPanel
                 b.Toggle(Loc.Get("scene.show_gizmos"),
                     () => { if (_editorCamera != null) _editorCamera.ShowGizmos = !_editorCamera.ShowGizmos; },
                     () => _editorCamera?.ShowGizmos ?? true);
+
+                b.Header(Loc.Get("scene.tool_handles"));
+                b.Toggle(Loc.Get("scene.pivot_center"),
+                    () => SceneTools.Pivot = SceneTools.Pivot == PivotMode.Center ? PivotMode.Pivot : PivotMode.Center,
+                    () => SceneTools.Pivot == PivotMode.Center);
+                b.Toggle(Loc.Get("scene.orientation_local"),
+                    () => SceneTools.Orientation = SceneTools.Orientation == PivotOrientation.Local ? PivotOrientation.Global : PivotOrientation.Local,
+                    () => SceneTools.Orientation == PivotOrientation.Local);
+                b.Toggle(Loc.Get("scene.snap_enabled"),
+                    () => SceneTools.SnapEnabled = !SceneTools.SnapEnabled,
+                    () => SceneTools.SnapEnabled);
             }));
     }
 
@@ -151,10 +161,10 @@ public class SceneViewPanel : DockPanel
 
     private void DrawDefaultToolbar(Paper paper, Scribe.FontFile font)
     {
-        bool isTranslate = _gizmoMode == Gizmo.TransformGizmoMode.Translate;
-        bool isRotate = _gizmoMode == Gizmo.TransformGizmoMode.Rotate;
-        bool isScale = _gizmoMode == Gizmo.TransformGizmoMode.ScaleAll;
-        bool isUniversal = _gizmoMode == Gizmo.TransformGizmoMode.Universal;
+        bool isTranslate = SceneTools.Current == SceneTool.Translate;
+        bool isRotate = SceneTools.Current == SceneTool.Rotate;
+        bool isScale = SceneTools.Current == SceneTool.Scale;
+        bool isUniversal = SceneTools.Current == SceneTool.Universal;
 
         paper.Box("sv_move_btn")
             .Width(24).Height(24).Rounded(6)
@@ -162,7 +172,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsUpDownLeftRight, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Translate));
+            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Translate));
 
         paper.Box("sv_rotate_btn")
             .Width(24).Height(24).Rounded(6)
@@ -170,7 +180,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.ArrowsRotate, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Rotate));
+            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Rotate));
 
         paper.Box("sv_scale_btn")
             .Width(24).Height(24).Rounded(6)
@@ -178,7 +188,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Maximize, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll));
+            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Scale));
 
         paper.Box("sv_universal_btn")
             .Width(24).Height(24).Rounded(6)
@@ -186,7 +196,7 @@ public class SceneViewPanel : DockPanel
             .Hovered.BackgroundColor(EditorTheme.Hover).End()
             .Text(EditorIcons.Expand, font).TextColor(EditorTheme.Ink500)
             .FontSize(11f).Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) => SetGizmoMode(Gizmo.TransformGizmoMode.Universal));
+            .OnClick(0, (_, _) => SetGizmoMode(SceneTool.Universal));
     }
 
     private void DrawViewport(Paper paper, Scribe.FontFile font, float width, float height)
@@ -252,6 +262,11 @@ public class SceneViewPanel : DockPanel
                 Float2 mouseLocal = paper.PointerPos - origin;
                 // Use Paper's hover state which respects overlays/popups, not just bounds
                 _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, paper.IsParentHovered);
+
+                // Republished each frame so a tool that reads them without a context or a panel
+                // reference still sees the current state.
+                SceneTools.ViewToolActive = _handles.Blocked;
+                SceneTools.SuppressTransformGizmo = ActiveSceneViewEditor?.SuppressTransformGizmo == true;
 
                 ActiveSceneViewEditor?.OnSceneInput(_handles, scene);
                 UpdateTransformGizmo();
@@ -374,13 +389,13 @@ public class SceneViewPanel : DockPanel
 
                 // Gizmo tool switching
                 if (ShortcutManager.IsPressed("Scene/ToolTranslate"))
-                    SetGizmoMode(Gizmo.TransformGizmoMode.Translate);
+                    SetGizmoMode(SceneTool.Translate);
                 else if (ShortcutManager.IsPressed("Scene/ToolRotate"))
-                    SetGizmoMode(Gizmo.TransformGizmoMode.Rotate);
+                    SetGizmoMode(SceneTool.Rotate);
                 else if (ShortcutManager.IsPressed("Scene/ToolScale"))
-                    SetGizmoMode(Gizmo.TransformGizmoMode.ScaleAll);
+                    SetGizmoMode(SceneTool.Scale);
                 else if (ShortcutManager.IsPressed("Scene/ToolUniversal"))
-                    SetGizmoMode(Gizmo.TransformGizmoMode.Universal);
+                    SetGizmoMode(SceneTool.Universal);
             }
 
             // Accept asset drops via registry-discovered handlers
@@ -714,17 +729,17 @@ public class SceneViewPanel : DockPanel
     //  Transform Gizmo
     // ================================================================
 
-    private void SetGizmoMode(Gizmo.TransformGizmoMode mode)
+    private void SetGizmoMode(SceneTool tool)
     {
-        _gizmoMode = mode;
-        _transformGizmo?.SetMode(mode);
+        SceneTools.Current = tool;
+        _transformGizmo?.SetMode(SceneTools.GizmoMode);
     }
 
     private void UpdateTransformGizmo()
     {
         _gizmoActive = false;
         if (_editorCamera == null) return;
-        if (ActiveSceneViewEditor?.SuppressTransformGizmo == true) return;
+        if (SceneTools.SuppressTransformGizmo) return;
 
         // Only show gizmo when GameObjects are selected
         var selectedGOs = Selection.GetSelected<GameObject>().GetEnumerator();
@@ -736,24 +751,34 @@ public class SceneViewPanel : DockPanel
         if (firstGO == null) return;
 
         // Create gizmo if needed
-        _transformGizmo ??= new Gizmo.TransformGizmo(_gizmoMode);
+        _transformGizmo ??= new Gizmo.TransformGizmo(SceneTools.GizmoMode);
 
-        // Compute the center of all selected objects
-        Float3 center = Float3.Zero;
-        Quaternion rotation = Quaternion.Identity;
-        Float3 scale = Float3.One;
-        int count = 0;
-
-        foreach (var go in Selection.GetSelected<GameObject>())
+        // Pivot mode picks what the handle sits on: the selection's centre, or the active object.
+        Float3 center;
+        if (SceneTools.Pivot == PivotMode.Pivot)
         {
-            center += go.Transform.Position;
-            count++;
+            center = firstGO.Transform.Position;
         }
-        if (count > 0) center /= count;
+        else
+        {
+            center = Float3.Zero;
+            int count = 0;
+            foreach (var go in Selection.GetSelected<GameObject>())
+            {
+                center += go.Transform.Position;
+                count++;
+            }
+            if (count > 0) center /= count;
+        }
 
-        // Use the first object's rotation/scale for the gizmo orientation
-        rotation = firstGO.Transform.Rotation;
-        scale = firstGO.Transform.LossyScale;
+        Quaternion rotation = firstGO.Transform.Rotation;
+        Float3 scale = firstGO.Transform.LossyScale;
+
+        // The gizmo derives its axis directions from this, so drive the widget's own orientation
+        // rather than flattening the rotation, which would also flatten the drawn axes.
+        _transformGizmo.Orientation = SceneTools.Orientation == PivotOrientation.Local
+            ? Gizmo.TransformGizmo.GizmoOrientation.Local
+            : Gizmo.TransformGizmo.GizmoOrientation.Global;
 
         // Update gizmo use absolute screen rect so coordinates match DrawForeground
         var cam = _editorCamera.Camera;
@@ -765,7 +790,10 @@ public class SceneViewPanel : DockPanel
 
         ControlID control = _handles.GetControlID(TransformControl);
 
-        _transformGizmo.Snapping = _handles.Ctrl;
+        // Ctrl always snaps; SceneTools.SnapEnabled makes it sticky.
+        _transformGizmo.Snapping = SceneTools.SnapEnabled || _handles.Ctrl;
+        _transformGizmo.SnapDistance = SceneTools.MoveSnap;
+        _transformGizmo.SnapAngle = SceneTools.RotateSnap;
         _transformGizmo.IsShiftDown = _handles.Shift;
         // The grab decision comes from arbitration, so a handle nearer the cursor wins instead of the
         // gizmo taking every press it happens to be over.

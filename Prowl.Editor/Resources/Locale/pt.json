@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Mostrar grade",
   "scene.show_gizmos": "Mostrar gizmos",
+  "scene.tool_handles": "Manipuladores",
+  "scene.pivot_center": "Pivo: Centro",
+  "scene.orientation_local": "Orientacao: Local",
+  "scene.snap_enabled": "Ajuste",
 
   "game.resolution": "Resolucao",
   "game.show_stats": "Mostrar estatisticas",

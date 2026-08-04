@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Mostra griglia",
   "scene.show_gizmos": "Mostra gizmo",
+  "scene.tool_handles": "Maniglie",
+  "scene.pivot_center": "Perno: Centro",
+  "scene.orientation_local": "Orientamento: Locale",
+  "scene.snap_enabled": "Aggancio",
 
   "game.resolution": "Risoluzione",
   "game.show_stats": "Mostra statistiche",

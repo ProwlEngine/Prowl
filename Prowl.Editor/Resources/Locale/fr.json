@@ -23,6 +23,10 @@
 
   "scene.show_grid": "Afficher la grille",
   "scene.show_gizmos": "Afficher les gizmos",
+  "scene.tool_handles": "Poignees",
+  "scene.pivot_center": "Pivot: Centre",
+  "scene.orientation_local": "Orientation: Locale",
+  "scene.snap_enabled": "Magnetisme",
 
   "game.resolution": "Resolution",
   "game.show_stats": "Afficher les statistiques",
