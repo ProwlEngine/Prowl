@@ -195,8 +195,7 @@ public sealed class EventSystem : MonoBehaviour
         GameObject? first = null;
         while (node != null)
         {
-            System.Collections.Generic.List<MonoBehaviour> components = [..node.GetComponents<MonoBehaviour>()];
-            foreach (MonoBehaviour comp in components)
+            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
             {
                 if (comp is TInterface handler && comp.IsValid() && comp.EnabledInHierarchy)
                 {
