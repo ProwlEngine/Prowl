@@ -642,6 +642,7 @@ public class GameObject : EngineObject, ISerializable
                 if (c.HasBeenEnabled) // OnDispose is only called if OnEnable was previously called
                     c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
 
+                c.DetachFromGameObject();
                 _components.Remove(c);
             }
             _componentCache.Remove(typeof(T));
@@ -667,6 +668,8 @@ public class GameObject : EngineObject, ISerializable
             if (component.EnabledInHierarchy) component.InternalOnDisable();
             component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
         }
+
+        component.DetachFromGameObject();
     }
 
     /// <summary>
@@ -687,6 +690,8 @@ public class GameObject : EngineObject, ISerializable
                 if (component.EnabledInHierarchy) component.InternalOnDisable();
                 component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
             }
+
+            component.DetachFromGameObject();
         }
     }
 

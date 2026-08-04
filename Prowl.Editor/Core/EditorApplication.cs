@@ -489,10 +489,6 @@ public class EditorApplication : Game
             }
         }
 
-        // Ensure a scene always exists
-        if (Project.Current != null && Runtime.Resources.Scene.Current == null)
-            EditorSceneManager.EnsureSceneLoaded();
-
         // Editor backdrop (behind the translucent glass panels) shared with the launcher.
         _nebula ??= new GUI.NebulaBackground(paper);
         GUI.NebulaBackground.DrawEditorBackground(paper, _nebula, "nebula_bg", w, h, (float)Time.UnscaledDeltaTime);
@@ -1553,10 +1549,8 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-        // Unload the editor scene
-        Runtime.Resources.Scene.Unload();
-
-        // Deserialize a fresh play copy
+        // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
+        // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         var playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
         var playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
         if (playScene == null)
@@ -1604,10 +1598,7 @@ public class EditorApplication : Game
         // Clear selection (play scene references)
         Selection.Clear();
 
-        // Unload the play scene
-        Runtime.Resources.Scene.Unload();
-
-        // Restore the editor scene WITHOUT lifecycle callbacks
+        // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);

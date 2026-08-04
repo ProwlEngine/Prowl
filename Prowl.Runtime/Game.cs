@@ -190,6 +190,10 @@ public abstract class Game
                 // Last thing in the frame: everything Destroy()ed stayed usable right through
                 // update, render and GUI, and is torn down here where nothing is mid-callback.
                 EngineObject.ProcessDestroyed();
+
+                // Then the scene swap, so a load requested this frame tears the outgoing scene down
+                // here rather than under whatever was still running.
+                Scene.ProcessPendingLoad();
             }
             catch (Exception e)
             {
@@ -214,8 +218,8 @@ public abstract class Game
         {
             Closing();
 
-            // Unload the current scene
-            Scene.Unload();
+            // Dispose the current scene so everything in it runs its teardown callbacks.
+            Scene.Shutdown();
 
             AudioContext.Deinitialize();
 
@@ -279,6 +283,10 @@ public abstract class Game
                 // No render phase here, so the end of the simulation step is the end of the frame.
                 EngineObject.ProcessDestroyed();
 
+                // Then the scene swap, so a load requested this frame tears the outgoing scene down
+                // here rather than under whatever was still running.
+                Scene.ProcessPendingLoad();
+
                 frame++;
                 if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
                 if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
@@ -296,7 +304,7 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
-            Scene.Unload();
+            Scene.Shutdown();
             Application.IsHeadless = false;
         }
     }

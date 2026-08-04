@@ -248,6 +248,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
+    /// Marks this component as no longer part of its GameObject. Disposal waits for the end of the
+    /// frame, so without this a removed component keeps ticking off the already-built dispatch list
+    /// while nothing can find it on the GameObject any more.
+    /// </summary>
+    internal void DetachFromGameObject() => _enabledInHierarchy = false;
+
+    /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
     /// OnEnable/OnDisable are only called if the GameObject is in an active Scene.
     /// </summary>

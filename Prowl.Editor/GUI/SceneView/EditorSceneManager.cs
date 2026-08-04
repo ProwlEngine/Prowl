@@ -116,13 +116,11 @@ public static class EditorSceneManager
     }
 
     /// <summary>
-    /// Ensure a scene is loaded. If Scene.Current is null, restore the last scene or create a default.
-    /// Called after project open.
+    /// Opens the project's last scene, or creates a default one. Called after project open, where the
+    /// engine's own scene is the empty placeholder nobody has edited yet.
     /// </summary>
     public static void EnsureSceneLoaded()
     {
-        if (Scene.Current != null) return;
-
         // Try to restore last scene
         if (EditorRegistries.SettingsEntries.Count > 0)
         {

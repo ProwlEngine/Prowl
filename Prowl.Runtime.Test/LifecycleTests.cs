@@ -379,8 +379,10 @@ public class LifecycleTests : RuntimeTestBase
         comp.ClearEvents();
 
         go.RemoveComponent(comp);
-
         Assert.Contains("OnDisable", comp.Events);
+
+        // The component is only disposed once the frame's destroy queue is drained.
+        EngineObject.ProcessDestroyed();
         Assert.Contains("OnDispose", comp.Events);
     }
 
