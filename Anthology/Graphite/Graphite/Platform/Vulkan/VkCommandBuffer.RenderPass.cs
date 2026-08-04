@@ -144,21 +144,8 @@ internal unsafe partial class VkCommandBuffer
         Debug.Assert(_currentFramebuffer != null);
         _currentFramebufferEverActive = true;
 
-        uint attachmentCount = _currentFramebuffer.AttachmentCount;
         bool haveAnyAttachments = _currentFramebuffer.ColorTargets.Count > 0 || _currentFramebuffer.DepthTarget != null;
-        bool haveAllClearValues = _depthClearValue.HasValue || _currentFramebuffer.DepthTarget == null;
-        bool haveAnyClearValues = _depthClearValue.HasValue;
-        for (int i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
-        {
-            if (!_validColorClearValues[i])
-            {
-                haveAllClearValues = false;
-            }
-            else
-            {
-                haveAnyClearValues = true;
-            }
-        }
+        SurveyQueuedClearValues(out bool haveAllClearValues, out bool haveAnyClearValues);
 
         RenderPassBeginInfo renderPassBI = new()
         {
@@ -169,56 +156,80 @@ internal unsafe partial class VkCommandBuffer
 
         if (!haveAnyAttachments || !haveAllClearValues)
         {
-            renderPassBI.RenderPass = _newFramebuffer
-                ? _currentFramebuffer.RenderPassNoClear_Init
-                : _currentFramebuffer.RenderPassNoClear_Load;
-            _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
-            _activeRenderPass = renderPassBI.RenderPass;
-
-            if (haveAnyClearValues)
-            {
-                if (_depthClearValue.HasValue)
-                {
-                    ClearDepthStencilCore(_depthClearValue.Value.DepthStencil.Depth, (byte)_depthClearValue.Value.DepthStencil.Stencil);
-                    _depthClearValue = null;
-                }
-
-                for (uint i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
-                {
-                    if (_validColorClearValues[i])
-                    {
-                        _validColorClearValues[i] = false;
-                        ClearValue vkClearValue = _clearValues[i];
-                        Color clearColor = new(
-                            vkClearValue.Color.Float32_0,
-                            vkClearValue.Color.Float32_1,
-                            vkClearValue.Color.Float32_2,
-                            vkClearValue.Color.Float32_3);
-                        ClearColorTarget(i, clearColor);
-                    }
-                }
-            }
+            BeginRenderPassLoading(ref renderPassBI, haveAnyClearValues);
         }
         else
         {
-            // We have clear values for every attachment.
-            renderPassBI.RenderPass = _currentFramebuffer.RenderPassClear;
-            fixed (ClearValue* clearValuesPtr = &_clearValues[0])
-            {
-                renderPassBI.ClearValueCount = attachmentCount;
-                renderPassBI.PClearValues = clearValuesPtr;
-                if (_depthClearValue.HasValue)
-                {
-                    _clearValues[_currentFramebuffer.ColorTargets.Count] = _depthClearValue.Value;
-                    _depthClearValue = null;
-                }
-                _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
-                _activeRenderPass = _currentFramebuffer.RenderPassClear;
-                Util.ClearArray(_validColorClearValues);
-            }
+            BeginRenderPassClearing(ref renderPassBI);
         }
 
         _newFramebuffer = false;
+    }
+
+    private void SurveyQueuedClearValues(out bool haveAll, out bool haveAny)
+    {
+        haveAll = _depthClearValue.HasValue || _currentFramebuffer.DepthTarget == null;
+        haveAny = _depthClearValue.HasValue;
+
+        for (int i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
+        {
+            if (_validColorClearValues[i])
+                haveAny = true;
+            else
+                haveAll = false;
+        }
+    }
+
+    // Not every attachment has a queued clear, so the pass loads instead and any clears that were
+    // queued are replayed as CmdClearAttachments once it is open.
+    private void BeginRenderPassLoading(ref RenderPassBeginInfo renderPassBI, bool haveAnyClearValues)
+    {
+        renderPassBI.RenderPass = _newFramebuffer
+            ? _currentFramebuffer.RenderPassNoClear_Init
+            : _currentFramebuffer.RenderPassNoClear_Load;
+        _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
+        _activeRenderPass = renderPassBI.RenderPass;
+
+        if (!haveAnyClearValues) return;
+
+        if (_depthClearValue.HasValue)
+        {
+            ClearDepthStencilCore(_depthClearValue.Value.DepthStencil.Depth, (byte)_depthClearValue.Value.DepthStencil.Stencil);
+            _depthClearValue = null;
+        }
+
+        for (uint i = 0; i < _currentFramebuffer.ColorTargets.Count; i++)
+        {
+            if (!_validColorClearValues[i]) continue;
+
+            _validColorClearValues[i] = false;
+            ClearColorValue vkClearColor = _clearValues[i].Color;
+            ClearColorTarget(i, new Color(
+                vkClearColor.Float32_0,
+                vkClearColor.Float32_1,
+                vkClearColor.Float32_2,
+                vkClearColor.Float32_3));
+        }
+    }
+
+    // Every attachment has a queued clear value, so the render pass itself can do the clearing.
+    private void BeginRenderPassClearing(ref RenderPassBeginInfo renderPassBI)
+    {
+        renderPassBI.RenderPass = _currentFramebuffer.RenderPassClear;
+
+        fixed (ClearValue* clearValuesPtr = &_clearValues[0])
+        {
+            renderPassBI.ClearValueCount = _currentFramebuffer.AttachmentCount;
+            renderPassBI.PClearValues = clearValuesPtr;
+            if (_depthClearValue.HasValue)
+            {
+                _clearValues[_currentFramebuffer.ColorTargets.Count] = _depthClearValue.Value;
+                _depthClearValue = null;
+            }
+            _gd.Vk.CmdBeginRenderPass(_cb, in renderPassBI, SubpassContents.Inline);
+            _activeRenderPass = _currentFramebuffer.RenderPassClear;
+            Util.ClearArray(_validColorClearValues);
+        }
     }
 
     private void EndCurrentRenderPass()
