@@ -9,8 +9,10 @@ namespace Prowl.Graphite.Bench;
 
 public sealed class BenchScene : IDisposable
 {
-    public const uint TargetWidth = 256;
-    public const uint TargetHeight = 256;
+    // Deliberately tiny. The harness measures CPU recording cost, so the GPU must never be the
+    // thing the frame is waiting on.
+    public const uint TargetWidth = 64;
+    public const uint TargetHeight = 64;
 
     private readonly Texture _colorTarget;
 

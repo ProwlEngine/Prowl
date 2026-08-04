@@ -1,16 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 using Prowl.Graphite;
 using Prowl.Graphite.Bench;
-
-using Prowl.Vector;
 
 internal static class Program
 {
     private static int Main(string[] args)
     {
-        bool validation = Array.IndexOf(args, "--validation") >= 0;
+        bool validation = HasFlag(args, "--validation");
+        string? only = GetOption(args, "--scenario");
+        int? passes = GetInt(args, "--passes");
+        int? draws = GetInt(args, "--draws");
+        int? frames = GetInt(args, "--frames");
+        int? warmup = GetInt(args, "--warmup");
+        int? reps = GetInt(args, "--reps");
+
+        string[] selected = only != null ? [only] : Scenarios.Names;
 
         BenchProfiler profiler = new();
         GraphicsDevice gd;
@@ -27,10 +34,36 @@ internal static class Program
         try
         {
             Console.WriteLine(BenchDevice.Describe(gd));
+            Console.WriteLine($"validation={(validation ? "on" : "off")}");
+            Console.WriteLine();
 
             using BenchScene scene = new(gd);
-            SmokeRun(gd, scene, profiler, passes: 4, drawsPerPass: 64, frames: 8);
+
+            List<BenchResult> results = new();
+            foreach (string name in selected)
+            {
+                ScenarioConfig config = Scenarios.DefaultConfig(name);
+                config = config with
+                {
+                    Passes = passes ?? config.Passes,
+                    DrawsPerPass = draws ?? config.DrawsPerPass,
+                    Frames = frames ?? config.Frames,
+                    WarmupFrames = warmup ?? config.WarmupFrames,
+                    Repetitions = reps ?? config.Repetitions
+                };
+
+                results.Add(Scenarios.Run(gd, scene, profiler, name, config));
+            }
+
+            PrintTimings(results);
+            Console.WriteLine();
+            PrintCounters(results);
             return 0;
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
         }
         finally
         {
@@ -39,38 +72,38 @@ internal static class Program
         }
     }
 
-    // Proves the graph, program, mesh and property paths all line up end to end. Replaced by the
-    // real scenario set once measurement lands.
-    private static void SmokeRun(GraphicsDevice gd, BenchScene scene, BenchProfiler profiler, int passes, int drawsPerPass, int frames)
+    private static void PrintTimings(List<BenchResult> results)
     {
-        PropertySet[] models = new PropertySet[drawsPerPass];
-        for (int i = 0; i < drawsPerPass; i++)
-            models[i] = scene.CreateModelProperties(new Float4(i / (float)drawsPerPass, 0.5f, 1f, 1f));
+        Console.WriteLine("| Scenario | Passes | Draws/pass | Frames x reps | Record ns/draw | Best ns/draw | Record us/frame | Submit us/frame | Other us/frame | Alloc B/frame |");
+        Console.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
-        using BenchPipeline pipeline = new(scene, passes, (cmd, passIndex) =>
+        foreach (BenchResult r in results)
         {
-            cmd.SetShader(scene.Program);
-            cmd.SetProperties(scene.ViewProperties);
-
-            for (int i = 0; i < drawsPerPass; i++)
-            {
-                cmd.SetVertexSource(scene.VertexSource);
-                cmd.SetProperties(models[i]);
-                cmd.DrawIndexed();
-            }
-        });
-
-        BenchView[] views = [new BenchView()];
-
-        profiler.Reset();
-        for (int frame = 0; frame < frames; frame++)
-            gd.DispatchGraph(pipeline, views);
-
-        gd.WaitForIdle();
-
-        Console.WriteLine(
-            $"smoke: {frames} frames x {passes} passes x {drawsPerPass} draws -> " +
-            $"draws={profiler.Draws} setBinds={profiler.SetBinds} boundSets={profiler.BoundSets} " +
-            $"pipelineSwitches={profiler.PipelineSwitches} submits={profiler.Submits}");
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"| {r.Name} | {r.Passes} | {r.DrawsPerPass} | {r.Frames}x{r.Repetitions} | {r.RecordNsPerDraw:F1} | {r.BestRecordNsPerDraw:F1} | {r.RecordUsPerFrame:F1} | {r.SubmitUsPerFrame:F1} | {r.OtherUsPerFrame:F1} | {r.AllocBytesPerFrame:F0} |"));
+        }
     }
+
+    private static void PrintCounters(List<BenchResult> results)
+    {
+        Console.WriteLine("| Scenario | Draws/frame | Set binds/frame | Bound sets/frame | Pipeline switches/frame | Submits/frame |");
+        Console.WriteLine("|---|---:|---:|---:|---:|---:|");
+
+        foreach (BenchResult r in results)
+        {
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"| {r.Name} | {r.DrawsPerFrame:F0} | {r.SetBindsPerFrame:F0} | {r.BoundSetsPerFrame:F0} | {r.PipelineSwitchesPerFrame:F0} | {r.SubmitsPerFrame:F0} |"));
+        }
+    }
+
+    private static bool HasFlag(string[] args, string name) => Array.IndexOf(args, name) >= 0;
+
+    private static string? GetOption(string[] args, string name)
+    {
+        int index = Array.IndexOf(args, name);
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    private static int? GetInt(string[] args, string name)
+        => GetOption(args, name) is string value && int.TryParse(value, CultureInfo.InvariantCulture, out int parsed) ? parsed : null;
 }
