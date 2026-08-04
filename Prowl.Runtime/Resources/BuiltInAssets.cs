@@ -75,6 +75,11 @@ public static class BuiltInAssets
             };
             if (fileName == null) continue;
 
+            // The model itself, so the ID Model.LoadDefault stamps on it actually resolves. Only its
+            // mesh was registered before, leaving every default Model carrying a dangling AssetID.
+            Register($"$Default:Model/{model}", model.ToString(), typeof(Model),
+                () => Model.LoadDefault(model));
+
             Register($"$Default:Model/{model}/Mesh/0", model.ToString(), typeof(Mesh),
                 () =>
                 {
@@ -193,7 +198,8 @@ public static class BuiltInAssets
     public static Guid GuidFor(DefaultShader shader) => DeterministicGuid($"$Default:Shader/{shader}");
 
     /// <summary>
-    /// Get the deterministic GUID for a specific default model.
+    /// Get the deterministic GUID for a specific default model. Its mesh is a separate
+    /// sub-asset - see <see cref="GuidForMesh"/>.
     /// </summary>
     public static Guid GuidFor(DefaultModel model) => DeterministicGuid($"$Default:Model/{model}");
 
