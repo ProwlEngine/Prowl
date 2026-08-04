@@ -44,14 +44,16 @@ public class EditorModelImporter : AssetImporter
             var data = importer.Import(new FileInfo(ctx.AbsolutePath), importSettings);
 
             // 2. Register sub-assets assigns deterministic GUIDs immediately
+            // Order: the model file has no stable per-mesh key of its own, and it is read front to back.
+            var meshIdentities = new string[data.Meshes.Count];
             for (int i = 0; i < data.Meshes.Count; i++)
-                ctx.AddSubAsset(data.Meshes[i].Name ?? $"Mesh_{i}", data.Meshes[i]);
+                meshIdentities[i] = ctx.AddSubAsset(data.Meshes[i].Name ?? $"Mesh_{i}", data.Meshes[i], SubAssetIdentity.Order);
 
             for (int i = 0; i < data.Materials.Count; i++)
-                ctx.AddSubAsset(data.Materials[i].Name ?? $"Material_{i}", data.Materials[i]);
+                ctx.AddSubAsset(data.Materials[i].Name ?? $"Material_{i}", data.Materials[i], SubAssetIdentity.Order);
 
             for (int i = 0; i < data.Animations.Count; i++)
-                ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i]);
+                ctx.AddSubAsset(data.Animations[i].Name ?? $"Animation_{i}", data.Animations[i], SubAssetIdentity.Order);
 
             // Note: model-referenced textures (both external and embedded) are already fully
             // resolved by this point - materials carry AssetRefs, and any embedded texture is
@@ -60,7 +62,7 @@ public class EditorModelImporter : AssetImporter
 
             // 2b. Generate mesh features (SDF, BVH, Prism, ...) per mesh, registered as sub-assets.
             for (int i = 0; i < data.Meshes.Count; i++)
-                MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx);
+                MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx, meshIdentities[i]);
 
             // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
             //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
@@ -159,7 +161,7 @@ internal sealed class EditorModelTextureResolver : IModelTextureResolver
             using var ms = new MemoryStream(encodedBytes);
             var tex = Texture2D.LoadFromStream(ms, generateMipmaps: true);
             tex.Name = string.IsNullOrEmpty(name) ? "EmbeddedTexture" : name;
-            _ctx.AddSubAsset(tex.Name, tex); // assigns tex.AssetID
+            _ctx.AddSubAsset(tex.Name, tex, SubAssetIdentity.Order); // assigns tex.AssetID
             return new AssetRef<Texture2D>(tex);
         }
         catch (Exception ex)

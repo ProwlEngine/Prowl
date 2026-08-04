@@ -41,7 +41,7 @@ public class MeshImporter : AssetImporter
             foreach (var dep in dependencies)
                 ctx.AddDependency(dep);
 
-            MeshFeatureImporter.GenerateAll(mesh, ctx.Settings, ctx);
+            MeshFeatureImporter.GenerateAll(mesh, ctx.Settings, ctx, "main");
         }
         catch (Exception ex)
         {
