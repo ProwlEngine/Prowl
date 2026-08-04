@@ -8,8 +8,7 @@ namespace Prowl.Graphite;
 public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
 {
     /// <summary>
-    /// Shader attribute index of the first element; rest increment by 1 (Vulkan location). Not the buffer binding
-    /// slot - that's the layout's index in VertexLayouts, passed as layoutSlot to ResolveSlot.
+    /// Shader attribute index; rest increment by 1 (Vulkan location).
     /// </summary>
     public uint Location;
     /// <summary>
@@ -29,11 +28,8 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     /// Makes a VertexLayoutDescription.
     /// </summary>
     public VertexLayoutDescription(uint location, uint stride, params VertexElementDescription[] elements)
+        : this(location, stride, 0, elements)
     {
-        Location = location;
-        Stride = stride;
-        Elements = elements;
-        InstanceStepRate = 0;
     }
 
     /// <summary>
@@ -48,12 +44,15 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
     }
 
     /// <summary>
-    /// Makes a VertexLayoutDescription. Stride is computed as the sum of element sizes.
+    /// Makes a VertexLayoutDescription; stride computed from element sizes.
     /// </summary>
     public VertexLayoutDescription(uint location, params VertexElementDescription[] elements)
+        : this(location, ComputeStride(elements), 0, elements)
     {
-        Location = location;
-        Elements = elements;
+    }
+
+    private static uint ComputeStride(VertexElementDescription[] elements)
+    {
         uint computedStride = 0;
         for (int i = 0; i < elements.Length; i++)
         {
@@ -68,8 +67,7 @@ public struct VertexLayoutDescription : IEquatable<VertexLayoutDescription>
             }
         }
 
-        Stride = computedStride;
-        InstanceStepRate = 0;
+        return computedStride;
     }
 
     /// <summary>

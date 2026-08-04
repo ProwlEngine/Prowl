@@ -1,32 +1,32 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Bindable resource giving a shader sampled access to a texture.
+/// Shader-bindable sampled view into a texture.
 /// </summary>
 public abstract class TextureView : GraphicsResource, BindableResource
 {
     /// <summary>
-    /// The texture being sampled.
+    /// Texture being sampled.
     /// </summary>
     public Texture Target { get; }
     /// <summary>
-    /// First visible mip level.
+    /// First visible mip.
     /// </summary>
     public uint BaseMipLevel { get; }
     /// <summary>
-    /// Visible mip level count.
+    /// Visible mip count.
     /// </summary>
     public uint MipLevels { get; }
     /// <summary>
-    /// First visible array layer.
+    /// First visible layer.
     /// </summary>
     public uint BaseArrayLayer { get; }
     /// <summary>
-    /// Visible array layer count.
+    /// Visible layer count.
     /// </summary>
     public uint ArrayLayers { get; }
     /// <summary>
-    /// Format to read the target texture as. Can differ from the texture's real format, same size only.
+    /// Read format. Can differ from texture's real format, same size only.
     /// </summary>
     public PixelFormat Format { get; }
 

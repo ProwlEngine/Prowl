@@ -1,39 +1,39 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Kind of a bindable resource.
+/// Bindable resource kind.
 /// </summary>
 public enum ResourceKind : byte
 {
     /// <summary>
-    /// Buffer bound as a uniform buffer. Can bind a subset via a buffer range.
+    /// Uniform buffer; subset via buffer range.
     /// </summary>
     UniformBuffer,
 
     /// <summary>
-    /// Buffer bound as a read-only storage buffer. Can bind a subset via a buffer range.
+    /// Read-only storage buffer; subset via buffer range.
     /// </summary>
     StructuredBufferReadOnly,
 
     /// <summary>
-    /// Buffer bound as a read-write storage buffer. Can bind a subset via a buffer range.
+    /// Read-write storage buffer; subset via buffer range.
     /// </summary>
     StructuredBufferReadWrite,
 
     /// <summary>
-    /// Read-only texture, via a Texture or TextureView.
-    /// <remarks>Binding a Texture to a ReadWrite slot is same as binding a full-range TextureView in the same format.</remarks>
+    /// Read-only texture (Texture or TextureView).
+    /// <remarks>Binding Texture to ReadWrite slot = full-range TextureView.</remarks>
     /// </summary>
     TextureReadOnly,
 
     /// <summary>
-    /// Read-write texture, via a Texture or TextureView.
+    /// Read-write texture (Texture or TextureView).
     /// </summary>
-    /// <remarks>Binding a Texture to a ReadWrite slot is same as binding a full-range TextureView in the same format.</remarks>
+    /// <remarks>Binding Texture to ReadWrite slot = full-range TextureView.</remarks>
     TextureReadWrite,
 
     /// <summary>
-    /// A sampler.
+    /// Sampler.
     /// </summary>
     Sampler,
 }

@@ -3,34 +3,22 @@ using System.Diagnostics;
 
 namespace Prowl.Graphite;
 
-/// <summary>
-/// Device resource controlling which color and depth textures get rendered to.
-/// </summary>
+/// <summary>Render target for color and depth textures.</summary>
 public abstract class Framebuffer : GraphicsResource
 {
-    /// <summary>
-    /// Depth attachment. Null if no depth texture.
-    /// </summary>
+    /// <summary>Depth attachment, null if none.</summary>
     public virtual FramebufferAttachment? DepthTarget { get; }
 
-    /// <summary>
-    /// Color attachments. May be empty.
-    /// </summary>
+    /// <summary>Color attachments, may be empty.</summary>
     public virtual IReadOnlyList<FramebufferAttachment> ColorTargets { get; }
 
-    /// <summary>
-    /// Number and formats of the depth and color targets.
-    /// </summary>
+    /// <summary>Describes depth and color target formats.</summary>
     public virtual OutputDescription OutputDescription { get; }
 
-    /// <summary>
-    /// Width.
-    /// </summary>
+    /// <summary>Width.</summary>
     public virtual uint Width { get; }
 
-    /// <summary>
-    /// Height.
-    /// </summary>
+    /// <summary>Height.</summary>
     public virtual uint Height { get; }
 
 

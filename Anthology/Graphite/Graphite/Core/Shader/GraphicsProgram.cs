@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Full graphics shader program: all stages plus pipeline state (blend, depth, rasterizer, vertex/resource layouts).
+/// Full graphics shader program with all stages and pipeline state.
 /// </summary>
 public abstract class GraphicsProgram : ShaderProgram
 {
@@ -14,10 +14,6 @@ public abstract class GraphicsProgram : ShaderProgram
     private readonly RasterizerStateDescription _rasterizerState;
     private readonly VertexLayoutDescription[] _vertexLayouts;
 
-    /// <summary>
-    /// Builds a program from a description.
-    /// </summary>
-    /// <param name="description">Drives creation.</param>
     internal GraphicsProgram(ref ShaderDescription description)
         : base(description.ResourceLayouts)
     {
@@ -39,22 +35,22 @@ public abstract class GraphicsProgram : ShaderProgram
     public IReadOnlyList<ShaderStages> Stages => _stages;
 
     /// <summary>
-    /// This program's blend state.
+    /// Blend state.
     /// </summary>
     public BlendStateDescription BlendState => _blendState;
 
     /// <summary>
-    /// This program's depth/stencil state.
+    /// Depth/stencil state.
     /// </summary>
     public DepthStencilStateDescription DepthStencilState => _depthStencilState;
 
     /// <summary>
-    /// This program's rasterizer state.
+    /// Rasterizer state.
     /// </summary>
     public RasterizerStateDescription RasterizerState => _rasterizerState;
 
     /// <summary>
-    /// Vertex input layouts declared by this program.
+    /// Vertex input layouts.
     /// </summary>
     public IReadOnlyList<VertexLayoutDescription> VertexLayouts => _vertexLayouts;
 

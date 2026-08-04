@@ -3,17 +3,17 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Bitmask of allowed uses for a buffer.
+/// Bitmask of buffer uses.
 /// </summary>
 [Flags]
 public enum BufferUsage : byte
 {
     /// <summary>
-    /// Usable as vertex data source for draws. Enables returning it as a vertex buffer from ResolveSlot.
+    /// Usable as vertex data source.
     /// </summary>
     VertexBuffer = 1 << 0,
     /// <summary>
-    /// Usable as index data source for draws. Enables returning it as an index buffer from TryGetIndexBuffer.
+    /// Usable as index data source.
     /// </summary>
     IndexBuffer = 1 << 1,
     /// <summary>
@@ -21,23 +21,23 @@ public enum BufferUsage : byte
     /// </summary>
     UniformBuffer = 1 << 2,
     /// <summary>
-    /// Combinable with VertexBuffer, IndexBuffer, or IndirectBuffer so a compute shader can fill it. Requires UseTypedHlslBinding false (default).
+    /// Compute shader writable; requires UseTypedHlslBinding false.
     /// </summary>
     StructuredBufferReadOnly = 1 << 3,
     /// <summary>
-    /// Combinable with VertexBuffer, IndexBuffer, or IndirectBuffer so a compute shader can fill it. Requires UseTypedHlslBinding false (default).
+    /// Compute shader writable; requires UseTypedHlslBinding false.
     /// </summary>
     StructuredBufferReadWrite = 1 << 4,
     /// <summary>
-    /// Usable as indirect draw source for the *Indirect command methods. Cannot combine with Dynamic.
+    /// Indirect draw source; cannot combine with Dynamic.
     /// </summary>
     IndirectBuffer = 1 << 5,
     /// <summary>
-    /// Updated very frequently; can be mapped with MapMode.Write. Cannot combine with StructuredBufferReadWrite or IndirectBuffer.
+    /// Frequently updated; cannot combine with StructuredBufferReadWrite or IndirectBuffer.
     /// </summary>
     Dynamic = 1 << 6,
     /// <summary>
-    /// Staging buffer for CPU transfer via GraphicsDevice.Map. Supports all MapMode values. Cannot combine with any other flag.
+    /// Staging buffer for CPU transfers; cannot combine with other flags.
     /// </summary>
     Staging = 1 << 7,
 }

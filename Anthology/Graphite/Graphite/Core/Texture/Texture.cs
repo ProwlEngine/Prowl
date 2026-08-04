@@ -1,16 +1,13 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Device resource holding image data in some format.
+/// Image data holder.
 /// </summary>
 public abstract class Texture : GraphicsResource, MappableResource, BindableResource
 {
     private readonly object _fullTextureViewLock = new();
     private TextureView _fullTextureView;
 
-    /// <summary>
-    /// Properties this texture was created with. Only staging textures mutate it, via SetStagingDimensions.
-    /// </summary>
     private protected TextureDescription _description;
 
     private protected Texture(in TextureDescription description)
@@ -43,7 +40,7 @@ public abstract class Texture : GraphicsResource, MappableResource, BindableReso
     /// </summary>
     public uint ArrayLayers => _description.ArrayLayers;
     /// <summary>
-    /// Usage flags from creation. Using outside these contexts is an error.
+    /// Usage flags from creation.
     /// </summary>
     public TextureUsage Usage => _description.Usage;
     /// <summary>
@@ -51,15 +48,15 @@ public abstract class Texture : GraphicsResource, MappableResource, BindableReso
     /// </summary>
     public TextureType Type => _description.Type;
     /// <summary>
-    /// Sample count. Anything other than 1 means multisample.
+    /// Sample count (>1 for multisample).
     /// </summary>
     public TextureSampleCount SampleCount => _description.SampleCount;
 
     /// <summary>
-    /// Gets subresource index from mip level and array layer.
+    /// Get subresource index from mip and layer.
     /// </summary>
-    /// <param name="mipLevel">Mip level, must be less than MipLevels.</param>
-    /// <param name="arrayLayer">Array layer, must be less than ArrayLayers.</param>
+    /// <param name="mipLevel">Mip level.</param>
+    /// <param name="arrayLayer">Array layer.</param>
     /// <returns>Subresource index.</returns>
     public uint CalculateSubresource(uint mipLevel, uint arrayLayer)
     {

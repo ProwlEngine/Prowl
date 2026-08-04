@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Depth stencil state for a GraphicsProgram.
+/// Depth stencil state for a program.
 /// </summary>
 public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescription>
 {
@@ -12,11 +12,11 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     /// </summary>
     public bool DepthTestEnabled;
     /// <summary>
-    /// Write new depth values to buffer.
+    /// Write depth to buffer.
     /// </summary>
     public bool DepthWriteEnabled;
     /// <summary>
-    /// Comparison used for depth values.
+    /// Depth compare op.
     /// </summary>
     public ComparisonKind DepthComparison;
 
@@ -25,32 +25,32 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     /// </summary>
     public bool StencilTestEnabled;
     /// <summary>
-    /// Stencil behavior for front-facing pixels.
+    /// Front-face stencil behavior.
     /// </summary>
     public StencilBehaviorDescription StencilFront;
     /// <summary>
-    /// Stencil behavior for back-facing pixels.
+    /// Back-face stencil behavior.
     /// </summary>
     public StencilBehaviorDescription StencilBack;
     /// <summary>
-    /// Stencil buffer read mask.
+    /// Stencil read mask.
     /// </summary>
     public byte StencilReadMask;
     /// <summary>
-    /// Stencil buffer write mask.
+    /// Stencil write mask.
     /// </summary>
     public byte StencilWriteMask;
     /// <summary>
-    /// Reference value for stencil test.
+    /// Stencil ref value.
     /// </summary>
     public uint StencilReference;
 
     /// <summary>
-    /// New depth-stencil state, stencil testing disabled.
+    /// No stencil, just depth.
     /// </summary>
     /// <param name="depthTestEnabled">Depth test on/off.</param>
-    /// <param name="depthWriteEnabled">Write new depth values to buffer.</param>
-    /// <param name="comparisonKind">Comparison used for depth values.</param>
+    /// <param name="depthWriteEnabled">Write depth to buffer.</param>
+    /// <param name="comparisonKind">Depth compare op.</param>
     public DepthStencilStateDescription(bool depthTestEnabled, bool depthWriteEnabled, ComparisonKind comparisonKind)
     {
         DepthTestEnabled = depthTestEnabled;
@@ -66,17 +66,17 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     }
 
     /// <summary>
-    /// New depth-stencil state with full stencil config.
+    /// Full depth + stencil config.
     /// </summary>
     /// <param name="depthTestEnabled">Depth test on/off.</param>
-    /// <param name="depthWriteEnabled">Write new depth values to buffer.</param>
-    /// <param name="comparisonKind">Comparison used for depth values.</param>
+    /// <param name="depthWriteEnabled">Write depth to buffer.</param>
+    /// <param name="comparisonKind">Depth compare op.</param>
     /// <param name="stencilTestEnabled">Stencil test on/off.</param>
-    /// <param name="stencilFront">Stencil behavior for front-facing pixels.</param>
-    /// <param name="stencilBack">Stencil behavior for back-facing pixels.</param>
-    /// <param name="stencilReadMask">Stencil buffer read mask.</param>
-    /// <param name="stencilWriteMask">Stencil buffer write mask.</param>
-    /// <param name="stencilReference">Reference value for stencil test.</param>
+    /// <param name="stencilFront">Front-face stencil behavior.</param>
+    /// <param name="stencilBack">Back-face stencil behavior.</param>
+    /// <param name="stencilReadMask">Stencil read mask.</param>
+    /// <param name="stencilWriteMask">Stencil write mask.</param>
+    /// <param name="stencilReference">Stencil ref value.</param>
     public DepthStencilStateDescription(
         bool depthTestEnabled,
         bool depthWriteEnabled,
@@ -101,7 +101,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     }
 
     /// <summary>
-    /// Depth-only, LessEqual, write on. No stencil.
+    /// Depth-only, LessEqual, write on.
     /// </summary>
     public static readonly DepthStencilStateDescription DepthOnlyLessEqual = new()
     {
@@ -111,7 +111,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     };
 
     /// <summary>
-    /// Depth-only, LessEqual, write off (read-only). No stencil.
+    /// Depth-only, LessEqual, read-only.
     /// </summary>
     public static readonly DepthStencilStateDescription DepthOnlyLessEqualRead = new()
     {
@@ -121,7 +121,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     };
 
     /// <summary>
-    /// Depth-only, GreaterEqual, write on. No stencil.
+    /// Depth-only, GreaterEqual, write on.
     /// </summary>
     public static readonly DepthStencilStateDescription DepthOnlyGreaterEqual = new()
     {
@@ -131,7 +131,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     };
 
     /// <summary>
-    /// Depth-only, GreaterEqual, write off (read-only). No stencil.
+    /// Depth-only, GreaterEqual, read-only.
     /// </summary>
     public static readonly DepthStencilStateDescription DepthOnlyGreaterEqualRead = new()
     {
@@ -141,7 +141,7 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     };
 
     /// <summary>
-    /// Depth test and write off. No stencil.
+    /// Everything off.
     /// </summary>
     public static readonly DepthStencilStateDescription Disabled = new()
     {
@@ -151,9 +151,9 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     };
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality check.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
+    /// <param name="other">Other instance.</param>
     /// <returns>True if all fields match.</returns>
     public bool Equals(DepthStencilStateDescription other)
     {
@@ -169,9 +169,9 @@ public struct DepthStencilStateDescription : IEquatable<DepthStencilStateDescrip
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash of all fields.
     /// </summary>
-    /// <returns>32-bit hash.</returns>
+    /// <returns>Hash code.</returns>
     public override int GetHashCode()
     {
         return HashCode.Combine(

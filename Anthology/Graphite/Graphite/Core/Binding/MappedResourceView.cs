@@ -4,30 +4,30 @@ using System.Runtime.CompilerServices;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Typed by-ref view over a mapped resource.
+/// By-ref view over a mapped resource.
 /// </summary>
-/// <typeparam name="T">Blittable type mapped data is viewed as.</typeparam>
+/// <typeparam name="T">Type of mapped data.</typeparam>
 public readonly unsafe struct MappedResourceView<T> where T : struct
 {
     private static readonly int s_sizeofT = Unsafe.SizeOf<T>();
 
     /// <summary>
-    /// The wrapped mapped resource.
+    /// Wrapped resource.
     /// </summary>
     public readonly MappedResource MappedResource;
     /// <summary>
-    /// Total size in bytes.
+    /// Size in bytes.
     /// </summary>
     public readonly uint SizeInBytes;
     /// <summary>
-    /// Number of structs in the resource, i.e. bytes / struct size.
+    /// Struct count.
     /// </summary>
     public readonly int Count;
 
     /// <summary>
     /// Wraps a mapped resource.
     /// </summary>
-    /// <param name="rawResource">Raw mapped resource.</param>
+    /// <param name="rawResource">Resource to wrap.</param>
     public MappedResourceView(MappedResource rawResource)
     {
         MappedResource = rawResource;
@@ -36,10 +36,10 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at index.
+    /// Value at index.
     /// </summary>
     /// <param name="index">Index.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[int index]
     {
         get
@@ -56,10 +56,10 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at index.
+    /// Value at index.
     /// </summary>
     /// <param name="index">Index.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[uint index]
     {
         get
@@ -76,11 +76,11 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at 2D texture coords.
+    /// Value at 2D coords.
     /// </summary>
     /// <param name="x">X coord.</param>
     /// <param name="y">Y coord.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[int x, int y]
     {
         get
@@ -91,11 +91,11 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at 2D texture coords.
+    /// Value at 2D coords.
     /// </summary>
     /// <param name="x">X coord.</param>
     /// <param name="y">Y coord.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[uint x, uint y]
     {
         get
@@ -106,12 +106,12 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at 3D texture coords.
+    /// Value at 3D coords.
     /// </summary>
     /// <param name="x">X coord.</param>
     /// <param name="y">Y coord.</param>
     /// <param name="z">Z coord.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[int x, int y, int z]
     {
         get
@@ -125,12 +125,12 @@ public readonly unsafe struct MappedResourceView<T> where T : struct
     }
 
     /// <summary>
-    /// Ref to value at 3D texture coords.
+    /// Value at 3D coords.
     /// </summary>
     /// <param name="x">X coord.</param>
     /// <param name="y">Y coord.</param>
     /// <param name="z">Z coord.</param>
-    /// <returns>Ref to value.</returns>
+    /// <returns>Ref.</returns>
     public readonly ref T this[uint x, uint y, uint z]
     {
         get

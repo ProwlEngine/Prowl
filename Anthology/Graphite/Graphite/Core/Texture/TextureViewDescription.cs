@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a TextureView for creation via ResourceFactory.
+/// TextureView creation params.
 /// </summary>
 public struct TextureViewDescription : IEquatable<TextureViewDescription>
 {
@@ -12,98 +12,49 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     /// </summary>
     public Texture Target;
     /// <summary>
-    /// Base mip level in the view. Must be less than target's MipLevels.
+    /// Base mip level. Must be under target's MipLevels.
     /// </summary>
     public uint BaseMipLevel;
     /// <summary>
-    /// Mip levels visible in the view.
+    /// Visible mip levels.
     /// </summary>
     public uint MipLevels;
     /// <summary>
-    /// Base array layer in the view.
+    /// Base array layer.
     /// </summary>
     public uint BaseArrayLayer;
     /// <summary>
-    /// Array layers visible in the view.
+    /// Visible array layers.
     /// </summary>
     public uint ArrayLayers;
     /// <summary>
-    /// Optional format override for the view. Null means use the target's format. If set, must be
-    /// compatible with the target's format: same size/component count for uncompressed, same or
-    /// sRGB-counterpart for compressed.
+    /// Format override. Null = use target's format. Must stay compatible if set.
     /// </summary>
     public PixelFormat? Format;
 
     /// <summary>
-    /// Constructs a new TextureViewDescription.
+    /// New TextureViewDescription. Unset fields default from target.
     /// </summary>
-    /// <param name="target">Target texture. Must have been created with the Sampled usage flag.</param>
-    public TextureViewDescription(Texture target)
-    {
-        Target = target;
-        BaseMipLevel = 0;
-        MipLevels = target.MipLevels;
-        BaseArrayLayer = 0;
-        ArrayLayers = target.ArrayLayers;
-        Format = target.Format;
-    }
-
-    /// <summary>
-    /// Constructs a new TextureViewDescription.
-    /// </summary>
-    /// <param name="target">Target texture. Must have been created with the Sampled usage flag.</param>
-    /// <param name="format">Format override. Must be compatible with the target's format.</param>
-    public TextureViewDescription(Texture target, PixelFormat format)
-    {
-        Target = target;
-        BaseMipLevel = 0;
-        MipLevels = target.MipLevels;
-        BaseArrayLayer = 0;
-        ArrayLayers = target.ArrayLayers;
-        Format = format;
-    }
-
-    /// <summary>
-    /// Constructs a new TextureViewDescription.
-    /// </summary>
-    /// <param name="target">Target texture.</param>
-    /// <param name="baseMipLevel">Base mip level. Must be less than target's MipLevels.</param>
-    /// <param name="mipLevels">Mip levels visible in the view.</param>
+    /// <param name="target">Target texture. Needs Sampled usage flag.</param>
+    /// <param name="baseMipLevel">Base mip level. Must be under target's MipLevels.</param>
+    /// <param name="mipLevels">Visible mip levels.</param>
     /// <param name="baseArrayLayer">Base array layer.</param>
-    /// <param name="arrayLayers">Array layers visible in the view.</param>
-    public TextureViewDescription(Texture target, uint baseMipLevel, uint mipLevels, uint baseArrayLayer, uint arrayLayers)
+    /// <param name="arrayLayers">Visible array layers.</param>
+    /// <param name="format">Format override, must be compatible.</param>
+    public TextureViewDescription(Texture target, uint? baseMipLevel = null, uint? mipLevels = null, uint? baseArrayLayer = null, uint? arrayLayers = null, PixelFormat? format = null)
     {
         Target = target;
-        BaseMipLevel = baseMipLevel;
-        MipLevels = mipLevels;
-        BaseArrayLayer = baseArrayLayer;
-        ArrayLayers = arrayLayers;
-        Format = target.Format;
+        BaseMipLevel = baseMipLevel ?? 0;
+        MipLevels = mipLevels ?? target.MipLevels;
+        BaseArrayLayer = baseArrayLayer ?? 0;
+        ArrayLayers = arrayLayers ?? target.ArrayLayers;
+        Format = format ?? target.Format;
     }
 
     /// <summary>
-    /// Constructs a new TextureViewDescription.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="target">Target texture.</param>
-    /// <param name="format">Format override. Must be compatible with the target's format.</param>
-    /// <param name="baseMipLevel">Base mip level. Must be less than target's MipLevels.</param>
-    /// <param name="mipLevels">Mip levels visible in the view.</param>
-    /// <param name="baseArrayLayer">Base array layer.</param>
-    /// <param name="arrayLayers">Array layers visible in the view.</param>
-    public TextureViewDescription(Texture target, PixelFormat format, uint baseMipLevel, uint mipLevels, uint baseArrayLayer, uint arrayLayers)
-    {
-        Target = target;
-        BaseMipLevel = baseMipLevel;
-        MipLevels = mipLevels;
-        BaseArrayLayer = baseArrayLayer;
-        ArrayLayers = arrayLayers;
-        Format = format;
-    }
-
-    /// <summary>
-    /// Element-wise equality.
-    /// </summary>
-    /// <param name="other">Instance to compare to.</param>
+    /// <param name="other">Other instance.</param>
     /// <returns>True if all fields match.</returns>
     public readonly bool Equals(TextureViewDescription other)
     {
@@ -116,7 +67,7 @@ public struct TextureViewDescription : IEquatable<TextureViewDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()

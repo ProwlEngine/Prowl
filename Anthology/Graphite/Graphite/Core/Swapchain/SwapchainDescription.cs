@@ -3,44 +3,44 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a Swapchain for creation via a ResourceFactory.
+/// Swapchain creation params for ResourceFactory.
 /// </summary>
 public struct SwapchainDescription : IEquatable<SwapchainDescription>
 {
     /// <summary>
-    /// Rendering target, platform-specific window handle.
+    /// Platform-specific window handle target.
     /// </summary>
     public SwapchainSource Source;
 
     /// <summary>
-    /// Initial surface width.
+    /// Initial width.
     /// </summary>
     public uint Width;
     /// <summary>
-    /// Initial surface height.
+    /// Initial height.
     /// </summary>
     public uint Height;
     /// <summary>
-    /// Optional depth target format. Null means no depth target.
+    /// Depth target format, null = none.
     /// </summary>
     public PixelFormat? DepthFormat;
     /// <summary>
-    /// Whether presentation syncs to vblank.
+    /// Sync presentation to vblank.
     /// </summary>
     public bool SyncToVerticalBlank;
     /// <summary>
-    /// Whether the color target uses an sRGB format.
+    /// Color target uses sRGB.
     /// </summary>
     public bool ColorSrgb;
 
     /// <summary>
-    /// Makes a SwapchainDescription.
+    /// Makes a swapchain desc.
     /// </summary>
-    /// <param name="source">Rendering target, platform-specific window handle.</param>
-    /// <param name="width">Initial surface width.</param>
-    /// <param name="height">Initial surface height.</param>
-    /// <param name="depthFormat">Optional depth target format. Null means no depth target.</param>
-    /// <param name="syncToVerticalBlank">Whether presentation syncs to vblank.</param>
+    /// <param name="source">Window handle target.</param>
+    /// <param name="width">Initial width.</param>
+    /// <param name="height">Initial height.</param>
+    /// <param name="depthFormat">Depth format, null = none.</param>
+    /// <param name="syncToVerticalBlank">Sync to vblank.</param>
     public SwapchainDescription(
         SwapchainSource source,
         uint width,
@@ -57,14 +57,14 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     }
 
     /// <summary>
-    /// Makes a SwapchainDescription.
+    /// Makes a swapchain desc.
     /// </summary>
-    /// <param name="source">Rendering target, platform-specific window handle.</param>
-    /// <param name="width">Initial surface width.</param>
-    /// <param name="height">Initial surface height.</param>
-    /// <param name="depthFormat">Optional depth target format. Null means no depth target.</param>
-    /// <param name="syncToVerticalBlank">Whether presentation syncs to vblank.</param>
-    /// <param name="colorSrgb">Whether the color target uses an sRGB format.</param>
+    /// <param name="source">Window handle target.</param>
+    /// <param name="width">Initial width.</param>
+    /// <param name="height">Initial height.</param>
+    /// <param name="depthFormat">Depth format, null = none.</param>
+    /// <param name="syncToVerticalBlank">Sync to vblank.</param>
+    /// <param name="colorSrgb">Color target uses sRGB.</param>
     public SwapchainDescription(
         SwapchainSource source,
         uint width,
@@ -82,9 +82,9 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
+    /// <param name="other">Instance to compare.</param>
     /// <returns>True if equal.</returns>
     public readonly bool Equals(SwapchainDescription other)
     {
@@ -97,7 +97,7 @@ public struct SwapchainDescription : IEquatable<SwapchainDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash of this instance.
     /// </summary>
     /// <returns>32-bit hash.</returns>
     public override int GetHashCode()

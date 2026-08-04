@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Base for all shader program kinds. Holds resource layouts plus shared disposal/identity contract.
+/// Base for shader programs; holds resource layouts and disposal contract.
 /// </summary>
 public abstract class ShaderProgram : GraphicsResource
 {
@@ -25,9 +25,6 @@ public abstract class ShaderProgram : GraphicsResource
 
     internal ResourceLayoutDescription[] ResourceLayoutsArray => _resourceLayouts;
 
-    /// <summary>
-    /// Precomputed per-set binding metadata, parallel to ResourceLayoutsArray. Built once at construction.
-    /// </summary>
     internal SetBindingMetadata[] BindingMetadata => _bindingMetadata;
 
     private protected static void DeepCloneUniformFields(ResourceLayoutDescription[] layouts)

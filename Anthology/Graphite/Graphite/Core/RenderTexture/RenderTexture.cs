@@ -2,29 +2,21 @@ using System;
 
 namespace Prowl.Graphite;
 
-/// <summary>
-/// Color/depth attachments plus framebuffer, sized from a RenderTextureDescription.
-/// <para>
-/// Bind Framebuffer to render into it, or bind ColorTextures/DepthTexture to sample from it later.
-/// </para>
-/// <para>
-/// Create via ResourceFactory.CreateRenderTexture.
-/// </para>
-/// </summary>
+/// <summary>Color/depth attachments and framebuffer from RenderTextureDescription. Use Framebuffer to render or ColorTextures/DepthTexture to sample.</summary>
 public sealed class RenderTexture : IDisposable
 {
     private const PixelFormat DepthFormat = PixelFormat.D24_UNorm_S8_UInt;
 
-    /// <summary>Desc this was built from.</summary>
+    /// <summary>Description this was built from.</summary>
     public RenderTextureDescription Desc { get; }
 
-    /// <summary>Color attachments in order. Empty means depth-only.</summary>
+    /// <summary>Color attachments in order, empty means depth-only.</summary>
     public Texture[] ColorTextures { get; }
 
-    /// <summary>Depth attachment, null if none.</summary>
+    /// <summary>Depth attachment or null.</summary>
     public Texture? DepthTexture { get; }
 
-    /// <summary>Framebuffer wrapping the attachments.</summary>
+    /// <summary>Framebuffer for these attachments.</summary>
     public Framebuffer Framebuffer { get; }
 
     internal RenderTexture(GraphicsDevice device, in RenderTextureDescription desc)
@@ -58,7 +50,7 @@ public sealed class RenderTexture : IDisposable
         Framebuffer = factory.CreateFramebuffer(new FramebufferDescription(DepthTexture, ColorTextures));
     }
 
-    /// <summary>Sets debug name on framebuffer and all textures.</summary>
+    /// <summary>Sets debug name on framebuffer and textures.</summary>
     public string Name
     {
         set
@@ -71,7 +63,7 @@ public sealed class RenderTexture : IDisposable
         }
     }
 
-    /// <summary>Disposes framebuffer and all textures.</summary>
+    /// <summary>Disposes framebuffer and textures.</summary>
     public void Dispose()
     {
         Framebuffer.Dispose();

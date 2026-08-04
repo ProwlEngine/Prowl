@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a Texture for creation via ResourceFactory.
+/// Texture creation params for ResourceFactory.
 /// </summary>
 public struct TextureDescription : IEquatable<TextureDescription>
 {
@@ -20,7 +20,7 @@ public struct TextureDescription : IEquatable<TextureDescription>
     /// </summary>
     public uint Depth;
     /// <summary>
-    /// Mipmap level count.
+    /// Mip level count.
     /// </summary>
     public uint MipLevels;
     /// <summary>
@@ -28,34 +28,33 @@ public struct TextureDescription : IEquatable<TextureDescription>
     /// </summary>
     public uint ArrayLayers;
     /// <summary>
-    /// Format of each texel.
+    /// Texel format.
     /// </summary>
     public PixelFormat Format;
     /// <summary>
-    /// Allowed usages. Set Sampled if sampled in a shader, DepthStencil if used as a depth target,
-    /// RenderTarget if used as a color target, Cubemap if it's a 2D cubemap.
+    /// Allowed usages: sampled, depth, render target, cubemap.
     /// </summary>
     public TextureUsage Usage;
     /// <summary>
-    /// Texture type to create.
+    /// Texture type.
     /// </summary>
     public TextureType Type;
     /// <summary>
-    /// Sample count. Count1 means not multisampled.
+    /// Sample count. Count1 = not multisampled.
     /// </summary>
     public TextureSampleCount SampleCount;
 
     /// <summary>
-    /// Makes a non-multisampled TextureDescription.
+    /// Non-multisampled texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="height">Height in texels.</param>
-    /// <param name="depth">Depth in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="depth">Depth.</param>
+    /// <param name="mipLevels">Mip count.</param>
     /// <param name="arrayLayers">Array layer count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget/Cubemap as needed.</param>
-    /// <param name="type">Texture type to create.</param>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <param name="type">Texture type.</param>
     public TextureDescription(
         uint width,
         uint height,
@@ -78,17 +77,17 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Makes a new TextureDescription.
+    /// Makes a texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="height">Height in texels.</param>
-    /// <param name="depth">Depth in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="depth">Depth.</param>
+    /// <param name="mipLevels">Mip count.</param>
     /// <param name="arrayLayers">Array layer count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget/Cubemap as needed.</param>
-    /// <param name="type">Texture type to create.</param>
-    /// <param name="sampleCount">Sample count. Anything but Count1 makes this multisampled.</param>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <param name="type">Texture type.</param>
+    /// <param name="sampleCount">Sample count, non-Count1 = multisampled.</param>
     public TextureDescription(
         uint width,
         uint height,
@@ -112,14 +111,14 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Description for a non-multisampled 1D Texture.
+    /// Non-multisampled 1D texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="mipLevels">Mip count.</param>
     /// <param name="arrayLayers">Array layer count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget as needed.</param>
-    /// <returns>A TextureDescription for a non-multisampled 1D Texture.</returns>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <returns>1D texture desc.</returns>
     public static TextureDescription Texture1D(
         uint width,
         uint mipLevels,
@@ -140,15 +139,15 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Description for a non-multisampled 2D Texture.
+    /// Non-multisampled 2D texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="height">Height in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="mipLevels">Mip count.</param>
     /// <param name="arrayLayers">Array layer count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget/Cubemap as needed.</param>
-    /// <returns>A TextureDescription for a non-multisampled 2D Texture.</returns>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <returns>2D texture desc.</returns>
     public static TextureDescription Texture2D(
         uint width,
         uint height,
@@ -170,16 +169,16 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Description for a 2D Texture.
+    /// 2D texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="height">Height in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="mipLevels">Mip count.</param>
     /// <param name="arrayLayers">Array layer count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget/Cubemap as needed.</param>
-    /// <param name="sampleCount">Sample count. Anything but Count1 makes this multisampled.</param>
-    /// <returns>A TextureDescription for a 2D Texture.</returns>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <param name="sampleCount">Sample count, non-Count1 = multisampled.</param>
+    /// <returns>2D texture desc.</returns>
     public static TextureDescription Texture2D(
         uint width,
         uint height,
@@ -202,15 +201,15 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Description for a 3D Texture.
+    /// 3D texture desc.
     /// </summary>
-    /// <param name="width">Width in texels.</param>
-    /// <param name="height">Height in texels.</param>
-    /// <param name="depth">Depth in texels.</param>
-    /// <param name="mipLevels">Mipmap level count.</param>
-    /// <param name="format">Format of each texel.</param>
-    /// <param name="usage">Allowed usages. Sampled/DepthStencil/RenderTarget as needed.</param>
-    /// <returns>A TextureDescription for a 3D Texture.</returns>
+    /// <param name="width">Width.</param>
+    /// <param name="height">Height.</param>
+    /// <param name="depth">Depth.</param>
+    /// <param name="mipLevels">Mip count.</param>
+    /// <param name="format">Texel format.</param>
+    /// <param name="usage">Allowed usages.</param>
+    /// <returns>3D texture desc.</returns>
     public static TextureDescription Texture3D(
         uint width,
         uint height,
@@ -232,10 +231,10 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Element-wise equality check.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if every field matches.</returns>
+    /// <param name="other">Instance to compare.</param>
+    /// <returns>True if all fields match.</returns>
     public readonly bool Equals(TextureDescription other)
     {
         return Width.Equals(other.Width)
@@ -250,7 +249,7 @@ public struct TextureDescription : IEquatable<TextureDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash of this instance.
     /// </summary>
     /// <returns>Hash code.</returns>
     public override readonly int GetHashCode()

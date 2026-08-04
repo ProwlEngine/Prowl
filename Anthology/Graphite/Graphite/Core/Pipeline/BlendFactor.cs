@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// How components get weighted in a blend op.
+/// Component weighting in blend operations.
 /// </summary>
 public enum BlendFactor : byte
 {
@@ -30,27 +30,27 @@ public enum BlendFactor : byte
     /// </summary>
     InverseDestinationAlpha,
     /// <summary>
-    /// Multiply by matching source color component.
+    /// Source color.
     /// </summary>
     SourceColor,
     /// <summary>
-    /// Multiply by 1 - matching source color component.
+    /// 1 - source color.
     /// </summary>
     InverseSourceColor,
     /// <summary>
-    /// Multiply by matching destination color component.
+    /// Destination color.
     /// </summary>
     DestinationColor,
     /// <summary>
-    /// Multiply by 1 - matching destination color component.
+    /// 1 - destination color.
     /// </summary>
     InverseDestinationColor,
     /// <summary>
-    /// Multiply by matching component of the blend constant.
+    /// Blend constant.
     /// </summary>
     BlendFactor,
     /// <summary>
-    /// Multiply by 1 - matching component of the blend constant.
+    /// 1 - blend constant.
     /// </summary>
     InverseBlendFactor,
 }

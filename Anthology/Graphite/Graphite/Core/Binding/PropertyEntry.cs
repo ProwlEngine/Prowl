@@ -15,9 +15,6 @@ internal enum PropertyEntryKind : byte
 }
 
 
-/// <summary>
-/// One PropertySet entry. Holds either a uniform scalar/vector/matrix payload or a ref to a GPU resource.
-/// </summary>
 internal sealed class PropertyEntry
 {
     public PropertyEntryKind Kind;

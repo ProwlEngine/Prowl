@@ -1,12 +1,12 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Action taken on samples that pass or fail the stencil test.
+/// Stencil operation for pass/fail samples.
 /// </summary>
 public enum StencilOperation : byte
 {
     /// <summary>
-    /// Keep existing value.
+    /// Keep value.
     /// </summary>
     Keep,
     /// <summary>
@@ -18,11 +18,11 @@ public enum StencilOperation : byte
     /// </summary>
     Replace,
     /// <summary>
-    /// Increment, clamp to max unsigned value.
+    /// Increment and clamp to max.
     /// </summary>
     IncrementAndClamp,
     /// <summary>
-    /// Decrement, clamp to 0.
+    /// Decrement and clamp to 0.
     /// </summary>
     DecrementAndClamp,
     /// <summary>
@@ -30,11 +30,11 @@ public enum StencilOperation : byte
     /// </summary>
     Invert,
     /// <summary>
-    /// Increment, wrap to 0 past max unsigned value.
+    /// Increment and wrap.
     /// </summary>
     IncrementAndWrap,
     /// <summary>
-    /// Decrement, wrap to max unsigned value if it'd go below 0.
+    /// Decrement and wrap.
     /// </summary>
     DecrementAndWrap,
 }

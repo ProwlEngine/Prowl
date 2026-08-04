@@ -1,12 +1,11 @@
 namespace Prowl.Graphite;
 
-/// <summary>Per-set binding metadata, precomputed once at program build so the per-draw binder skips redundant layout work.</summary>
 internal sealed class SetBindingMetadata
 {
-    /// <summary>UBO element indices, sorted by binding index. Vulkan needs dynamic offsets in this order.</summary>
+    /// <summary>UBO element indices sorted by binding; needed for Vulkan dynamic offsets.</summary>
     public readonly int[] SortedUboElementIndices;
 
-    /// <summary>Per element: true if some texture element in the set shares its name. Speeds up sampler lookup.</summary>
+    /// <summary>True if texture shares name in set; optimizes sampler lookup.</summary>
     public readonly bool[] HasSameNamedTexture;
 
     private SetBindingMetadata(int[] sortedUboElementIndices, bool[] hasSameNamedTexture)
@@ -15,7 +14,7 @@ internal sealed class SetBindingMetadata
         HasSameNamedTexture = hasSameNamedTexture;
     }
 
-    /// <summary>Builds metadata, one entry per set, parallel to layouts.</summary>
+    /// <summary>Build metadata one per set, parallel to layouts.</summary>
     public static SetBindingMetadata[] Build(ResourceLayoutDescription[] layouts)
     {
         SetBindingMetadata[] result = new SetBindingMetadata[layouts.Length];

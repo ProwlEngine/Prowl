@@ -14,11 +14,11 @@ public enum SamplerAddressMode : byte
     /// </summary>
     Mirror,
     /// <summary>
-    /// Clamps to min/max on overflow.
+    /// Clamps on overflow.
     /// </summary>
     Clamp,
     /// <summary>
-    /// Returns the sampler's border color on overflow.
+    /// Border color on overflow.
     /// </summary>
     Border,
 }

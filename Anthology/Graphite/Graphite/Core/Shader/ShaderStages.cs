@@ -21,15 +21,15 @@ public enum ShaderStages : byte
     /// </summary>
     Geometry = 1 << 1,
     /// <summary>
-    /// Tessellation control (hull) stage.
+    /// Tessellation control stage.
     /// </summary>
     TessellationControl = 1 << 2,
     /// <summary>
-    /// Tessellation evaluation (domain) stage.
+    /// Tessellation evaluation stage.
     /// </summary>
     TessellationEvaluation = 1 << 3,
     /// <summary>
-    /// Fragment (pixel) stage.
+    /// Fragment stage.
     /// </summary>
     Fragment = 1 << 4,
     /// <summary>

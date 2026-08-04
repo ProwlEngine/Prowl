@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// One framebuffer output. Color or depth.
+/// Framebuffer output (color or depth).
 /// </summary>
 public readonly struct FramebufferAttachment
 {
@@ -19,7 +19,7 @@ public readonly struct FramebufferAttachment
     public uint MipLevel { get; }
 
     /// <summary>
-    /// New attachment, mip 0.
+    /// New attachment at mip 0.
     /// </summary>
     /// <param name="target">Texture to render to.</param>
     /// <param name="arrayLayer">Target array layer.</param>

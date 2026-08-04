@@ -5,20 +5,20 @@ using Prowl.Vector;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// How values blend into each color target for a GraphicsProgram.
+/// Blend settings for each target.
 /// </summary>
 public struct BlendStateDescription : IEquatable<BlendStateDescription>
 {
     /// <summary>
-    /// Constant blend color for BlendFactor/InverseBlendFactor modes. Ignored otherwise.
+    /// Constant blend color.
     /// </summary>
     public Color BlendFactor;
     /// <summary>
-    /// Blend attachment states, one per color target.
+    /// Per-target blend states.
     /// </summary>
     public BlendAttachmentDescription[] AttachmentStates;
     /// <summary>
-    /// Alpha-to-coverage: use fragment alpha for multi-sample coverage.
+    /// MSAA coverage via fragment alpha.
     /// </summary>
     public bool AlphaToCoverageEnabled;
 
@@ -94,7 +94,7 @@ public struct BlendStateDescription : IEquatable<BlendStateDescription>
     /// Element-wise equality.
     /// </summary>
     /// <param name="other">Instance to compare to.</param>
-    /// <returns>True if all fields and array elements match.</returns>
+    /// <returns>True if equal.</returns>
     public bool Equals(BlendStateDescription other)
     {
         return BlendFactor.Equals(other.BlendFactor)

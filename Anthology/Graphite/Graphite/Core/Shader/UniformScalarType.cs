@@ -32,8 +32,8 @@ public enum UniformScalarType : byte
     /// <summary>4 doubles.</summary>
     Double4,
 
-    /// <summary>4x4 float matrix, column-major.</summary>
+    /// <summary>4x4 float matrix (column-major).</summary>
     Float4x4,
-    /// <summary>4x4 double matrix, column-major.</summary>
+    /// <summary>4x4 double matrix (column-major).</summary>
     Double4x4,
 }

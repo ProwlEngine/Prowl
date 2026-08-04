@@ -1,7 +1,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// How new values compare against existing values in a depth/stencil test.
+/// Depth/stencil comparison function.
 /// </summary>
 public enum ComparisonKind : byte
 {
@@ -10,27 +10,27 @@ public enum ComparisonKind : byte
     /// </summary>
     Never,
     /// <summary>
-    /// Succeeds if new &lt; existing.
+    /// New &lt; existing.
     /// </summary>
     Less,
     /// <summary>
-    /// Succeeds if new == existing.
+    /// New == existing.
     /// </summary>
     Equal,
     /// <summary>
-    /// Succeeds if new &lt;= existing.
+    /// New &lt;= existing.
     /// </summary>
     LessEqual,
     /// <summary>
-    /// Succeeds if new &gt; existing.
+    /// New &gt; existing.
     /// </summary>
     Greater,
     /// <summary>
-    /// Succeeds if new != existing.
+    /// New != existing.
     /// </summary>
     NotEqual,
     /// <summary>
-    /// Succeeds if new &gt;= existing.
+    /// New &gt;= existing.
     /// </summary>
     GreaterEqual,
     /// <summary>

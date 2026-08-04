@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A slice of a buffer. Bind it via PropertySet instead of the whole buffer to expose only part of it to shaders.
+/// Slice of a buffer; bind via PropertySet to expose part to shaders.
 /// </summary>
 public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange>
 {
@@ -42,7 +42,7 @@ public struct DeviceBufferRange : BindableResource, IEquatable<DeviceBufferRange
     /// Element-wise equality.
     /// </summary>
     /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if everything matches.</returns>
+    /// <returns>True if equal.</returns>
     public readonly bool Equals(DeviceBufferRange other)
     {
         return Buffer == other.Buffer && Offset.Equals(other.Offset) && SizeInBytes.Equals(other.SizeInBytes);

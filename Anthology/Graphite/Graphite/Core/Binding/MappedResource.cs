@@ -18,7 +18,7 @@ public readonly struct MappedResource
     public readonly MapMode Mode;
 
     /// <summary>
-    /// Pointer to start of mapped data.
+    /// Pointer to mapped data start.
     /// </summary>
     public readonly IntPtr Data;
 
@@ -28,17 +28,17 @@ public readonly struct MappedResource
     public readonly uint SizeInBytes;
 
     /// <summary>
-    /// Mapped subresource for textures. Meaningless for buffers.
+    /// Subresource for textures (buffers: N/A).
     /// </summary>
     public readonly uint Subresource;
 
     /// <summary>
-    /// Bytes between texel rows for textures. Meaningless for buffers.
+    /// Pitch between texel rows (buffers: N/A).
     /// </summary>
     public readonly uint RowPitch;
 
     /// <summary>
-    /// Bytes between depth slices for 3D textures. Meaningless for buffers or 2D textures.
+    /// Pitch between depth slices (3D only).
     /// </summary>
     public readonly uint DepthPitch;
 
