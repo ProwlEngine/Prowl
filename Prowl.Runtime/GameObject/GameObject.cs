@@ -563,6 +563,8 @@ public class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
 
+        if (ReferenceEquals(comp.GameObject, this)) return;
+
         Type type = comp.GetType();
         RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
