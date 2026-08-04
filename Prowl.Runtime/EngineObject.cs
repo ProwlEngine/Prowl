@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -56,6 +57,42 @@ public abstract class EngineObject : IDisposable
         // Explicit disposal means a finalizer (if this type has one) has nothing left to do.
         GC.SuppressFinalize(this);
         OnDispose();
+    }
+
+    private static readonly List<EngineObject> s_destroyQueue = [];
+
+    /// <summary>
+    /// Queues this object to be disposed at the end of the frame, once every callback has finished.
+    /// It stays fully usable until then, so anything still holding it this frame keeps working, and
+    /// teardown never lands in the middle of an Update, a render or a physics callback.
+    ///
+    /// A destroyed GameObject still ticks and still collides for the rest of the frame. Set
+    /// <c>Enabled = false</c> alongside this if that matters, or call <see cref="Dispose"/> to tear
+    /// down right now and deal with the consequences.
+    /// </summary>
+    public void Destroy()
+    {
+        if (IsDisposed) return;
+        lock (s_destroyQueue) s_destroyQueue.Add(this);
+    }
+
+    internal static void ProcessDestroyed()
+    {
+        EngineObject[] queued;
+        lock (s_destroyQueue)
+        {
+            if (s_destroyQueue.Count == 0) return;
+            queued = [.. s_destroyQueue];
+            s_destroyQueue.Clear();
+        }
+
+        foreach (EngineObject obj in queued)
+        {
+            if (obj.IsDisposed) continue; // disposed by hand, or by an owner that went first
+
+            try { obj.Dispose(); }
+            catch (Exception ex) { Debug.LogError($"[{obj.Name}/{obj.GetType().Name}] Dispose() threw while being destroyed: {ex.Message}\n{ex.StackTrace}"); }
+        }
     }
 
 
