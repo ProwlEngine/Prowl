@@ -120,7 +120,17 @@ public class GraphiteWindow : IDisposable
         var mouse = _input.Mice[0];
         mouse.MouseDown += (m, button) => _paper.SetPointerState(TranslateMouseButton(button), m.Position.X, m.Position.Y, true, false);
         mouse.MouseUp += (m, button) => _paper.SetPointerState(TranslateMouseButton(button), m.Position.X, m.Position.Y, false, false);
-        mouse.MouseMove += (_, position) => _paper.SetPointerState(PaperMouseBtn.Unknown, position.X, position.Y, false, true);
+        mouse.MouseMove += (m, position) =>
+        {
+            // Infinite drag: a widget calling WrapPointer wants motion that never stops at an edge,
+            // so teleport the cursor to the opposite side and let Paper discount the jump.
+            if (_paper.TryWrapPointer(new Float2(position.X, position.Y), _window.Size.X, _window.Size.Y, out Float2 wrapped))
+            {
+                m.Position = new System.Numerics.Vector2((float)wrapped.X, (float)wrapped.Y);
+                position = m.Position;
+            }
+            _paper.SetPointerState(PaperMouseBtn.Unknown, position.X, position.Y, false, true);
+        };
         mouse.Scroll += (_, wheel) => _paper.SetPointerWheel(wheel.Y);
     }
 

@@ -3,6 +3,7 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Common.Input;
 using OpenTK.Windowing.Desktop;
 using Prowl.PaperUI;
+using Prowl.Vector;
 
 namespace OpenTKSample
 {
@@ -92,7 +93,19 @@ namespace OpenTKSample
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
             base.OnMouseMove(e);
-            P.SetPointerState(PaperMouseBtn.Unknown, MouseState.X, MouseState.Y, false, true);
+
+            float x = MouseState.X, y = MouseState.Y;
+
+            // Infinite drag: a widget calling WrapPointer wants motion that never stops at an edge,
+            // so teleport the cursor to the opposite side and let Paper discount the jump.
+            if (P.TryWrapPointer(new Float2(x, y), ClientSize.X, ClientSize.Y, out Float2 wrapped))
+            {
+                MousePosition = new OpenTK.Mathematics.Vector2((float)wrapped.X, (float)wrapped.Y);
+                x = (float)wrapped.X;
+                y = (float)wrapped.Y;
+            }
+
+            P.SetPointerState(PaperMouseBtn.Unknown, x, y, false, true);
         }
 
         protected override void OnKeyDown(KeyboardKeyEventArgs e)

@@ -65,6 +65,8 @@ public partial class App
     [JSExport]
     internal static void OnMouseMove(double x, double y)
     {
+        // No pointer wrapping here: the browser will not let a page move the cursor outside the
+        // Pointer Lock API, so Paper.WrapPointer drags still stop at the window edge on the web.
         P.SetPointerState(PaperMouseBtn.Unknown, (float)x, (float)y, false, true);
     }
 

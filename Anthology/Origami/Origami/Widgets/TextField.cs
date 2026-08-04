@@ -324,7 +324,13 @@ public sealed class TextFieldBuilder
                     if (_prefixDrag != null)
                     {
                         var d = _prefixDrag;
-                        pfx.OnDragging(_ => d((float)_paper.PointerDelta.X))
+                        // Wrap the pointer so scrubbing never runs out of screen; PointerDelta stays
+                        // continuous across the wrap, so the maths here is unchanged.
+                        pfx.OnDragging(_ =>
+                           {
+                               _paper.WrapPointer();
+                               d((float)_paper.PointerDelta.X);
+                           })
                            .Cursor(PaperCursor.ResizeHorizontal);
                     }
                     else pfx.IsNotInteractable();
