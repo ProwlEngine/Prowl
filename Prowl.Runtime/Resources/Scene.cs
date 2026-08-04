@@ -369,8 +369,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                // Create a copy of components to avoid modification during enumeration
-                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                var components = go.GetComponents<MonoBehaviour>();
                 foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
@@ -400,8 +399,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                // Create a copy of components to avoid modification during enumeration
-                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                var components = go.GetComponents<MonoBehaviour>();
                 foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
@@ -509,8 +507,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             _allObj.Add(obj);
             obj.Scene = this;
 
-            // Create a copy of components to avoid modification during enumeration
-            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+            var components = obj.GetComponents<MonoBehaviour>();
 
             // Call OnAddedToScene for all components
             foreach (MonoBehaviour component in components)
@@ -548,8 +545,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (_allObjSet.Remove(obj))
         {
             _allObj.Remove(obj);
-            // Create a copy of components to avoid modification during enumeration
-            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+            var components = obj.GetComponents<MonoBehaviour>();
 
             // Call OnDisable for currently enabled components (only if scene is active)
             if (IsActive && obj.EnabledInHierarchy)
