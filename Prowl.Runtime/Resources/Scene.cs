@@ -73,6 +73,9 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             return;
         }
 
+        // Loading the scene that is already current would dispose it and then enable the corpse.
+        if (ReferenceEquals(next, _current)) return;
+
         if (_current is not null && !_current.IsDisposed)
         {
             if (_current.IsActive)
