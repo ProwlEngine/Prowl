@@ -1640,6 +1640,31 @@ public class EditorAssetBackend : AssetBackendBase
         }
     }
 
+    /// <summary>
+    /// Reconcile the whole database against what is actually on disk: pending watcher events first, then a
+    /// full scan that picks up anything added, removed, or modified since the last import.
+    /// <para>
+    /// The watcher is best-effort - it debounces, it can drop events on buffer overflow, and it is gated
+    /// behind window focus by default - so anything that must not act on stale state calls this first.
+    /// Main-thread only, since it imports.
+    /// </para>
+    /// </summary>
+    public void Refresh()
+    {
+        if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
+        {
+            Runtime.Debug.LogWarning("AssetDatabase.Refresh must run on the main thread; ignoring.");
+            return;
+        }
+
+        ProcessFileChanges(force: true);
+        ScanAssets();
+        ImportDirty();
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        RefreshResourcesMap();
+        _folderIndexDirty = true;
+    }
+
     // ================================================================
     //  Helpers
     // ================================================================
