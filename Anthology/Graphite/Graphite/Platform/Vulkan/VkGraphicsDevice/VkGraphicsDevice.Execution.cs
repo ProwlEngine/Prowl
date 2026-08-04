@@ -13,9 +13,7 @@ internal unsafe partial class VkGraphicsDevice
     {
         public VkFenceHandle Fence;
         public VkFence FenceWrapper;
-        public VkBuffer TransientPrimary;
-        public byte* TransientMapped;
-        public List<VkBuffer> TransientOverflow;
+        public VkUniformArena UniformArena;
         public List<VkCommandBuffer> RentedCommandBuffers;
         public ulong CurrentExecutionId;
     }
@@ -34,15 +32,12 @@ internal unsafe partial class VkGraphicsDevice
             VkBuffer primary = new(this, new BufferDescription(_transientInitialSize,
                 BufferUsage.Dynamic | BufferUsage.UniformBuffer) { TransientWrites = true });
             primary.Name = $"TransientPrimary[{i}]";
-            byte* mapped = (byte*)primary.Memory.BlockMappedPointer;
 
             _slots[i] = new SlotState
             {
                 Fence = slotWrapper.DeviceFence,
                 FenceWrapper = slotWrapper,
-                TransientPrimary = primary,
-                TransientMapped = mapped,
-                TransientOverflow = [],
+                UniformArena = new VkUniformArena(this, primary),
                 RentedCommandBuffers = [],
                 CurrentExecutionId = 0,
             };
@@ -60,14 +55,16 @@ internal unsafe partial class VkGraphicsDevice
         slot.FenceWrapper.Reset();
 
         // Return overflow buffers to the free pool and reset transient head
-        if (slot.TransientOverflow.Count > 0)
+        List<VkBuffer> overflow = slot.UniformArena.OverflowBuffers;
+        if (overflow.Count > 0)
         {
             lock (_transientFreePoolLock)
             {
-                _transientFreePool.AddRange(slot.TransientOverflow);
+                _transientFreePool.AddRange(overflow);
             }
-            slot.TransientOverflow.Clear();
+            overflow.Clear();
         }
+        slot.UniformArena.BeginExecution();
 
         // The slot's previous execution is complete, so its rented command buffers can be reclaimed.
         if (slot.RentedCommandBuffers.Count > 0)
@@ -82,7 +79,7 @@ internal unsafe partial class VkGraphicsDevice
         slot.CurrentExecutionId = executionId;
 
         return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
-            slot.TransientPrimary, slot.TransientOverflow, slot.RentedCommandBuffers);
+            slot.UniformArena, slot.RentedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)
@@ -151,8 +148,8 @@ internal unsafe partial class VkGraphicsDevice
         {
             foreach (ref SlotState slot in _slots.AsSpan())
             {
-                slot.TransientPrimary?.Dispose();
-                foreach (VkBuffer overflow in slot.TransientOverflow)
+                slot.UniformArena?.PrimaryBuffer.Dispose();
+                foreach (VkBuffer overflow in slot.UniformArena?.OverflowBuffers ?? [])
                     overflow.Dispose();
                 slot.FenceWrapper?.Dispose();
             }

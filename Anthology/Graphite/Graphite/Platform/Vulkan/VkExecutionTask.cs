@@ -10,12 +10,8 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly uint _ringSlot;
 
     private readonly VkFence _slotFenceWrapper;
-    private readonly VkBuffer _transientPrimary;
-    private readonly List<VkBuffer> _transientOverflow;
+    private readonly VkUniformArena _uniformArena;
     private readonly List<VkCommandBuffer> _rentedCommandBuffers;
-    private uint _transientHead;
-    private uint _activeTransientSize;
-    private VkBuffer _activeTransientBuffer;
 
     public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
@@ -27,21 +23,18 @@ internal sealed class VkExecutionTask : ExecutionTask
         ulong id,
         uint ringSlot,
         VkFence slotFenceWrapper,
-        VkBuffer transientPrimary,
-        List<VkBuffer> transientOverflow,
+        VkUniformArena uniformArena,
         List<VkCommandBuffer> rentedCommandBuffers)
     {
         _gd = gd;
         _id = id;
         _ringSlot = ringSlot;
         _slotFenceWrapper = slotFenceWrapper;
-        _transientPrimary = transientPrimary;
-        _transientOverflow = transientOverflow;
+        _uniformArena = uniformArena;
         _rentedCommandBuffers = rentedCommandBuffers;
-
-        _activeTransientBuffer = transientPrimary;
-        _activeTransientSize = transientPrimary.SizeInBytes;
     }
+
+    internal VkUniformArena UniformArena => _uniformArena;
 
 
     /// <inheritdoc/>
@@ -64,43 +57,24 @@ internal sealed class VkExecutionTask : ExecutionTask
     /// <inheritdoc/>
     internal override DeviceBufferRange AllocateTransientInternal(uint sizeInBytes)
     {
-        uint alignment = _gd.UniformBufferMinOffsetAlignment;
-        uint alignedHead = (_transientHead + alignment - 1) & ~(alignment - 1);
-
-        if (alignedHead + sizeInBytes <= _activeTransientSize)
-        {
-            uint offset = alignedHead;
-            _transientHead = alignedHead + sizeInBytes;
-            return new DeviceBufferRange(_activeTransientBuffer, offset, sizeInBytes);
-        }
-
-        return AllocateFromOverflow(sizeInBytes);
+        AllocateTransientMapped(sizeInBytes, out DeviceBufferRange range);
+        return range;
     }
 
 
-    private DeviceBufferRange AllocateFromOverflow(uint sizeInBytes)
+    /// <summary>Allocates transient uniform space and returns a span over its mapped memory.</summary>
+    internal Span<byte> AllocateTransientMapped(uint sizeInBytes, out DeviceBufferRange range)
     {
-        uint requiredSize = Math.Max(sizeInBytes, _transientPrimary.SizeInBytes * 2);
-        VkBuffer overflowBuffer = _gd.CreateTransientBuffer(requiredSize);
-        _transientOverflow.Add(overflowBuffer);
-
-        _activeTransientBuffer = overflowBuffer;
-        _activeTransientSize = overflowBuffer.SizeInBytes;
-        _transientHead = 0;
-
-        CheckCumulativeCaps();
-
-        uint offset = 0;
-        _transientHead = sizeInBytes;
-        return new DeviceBufferRange(overflowBuffer, offset, sizeInBytes);
+        Span<byte> dst = _uniformArena.Allocate(sizeInBytes, out range, out bool grew);
+        if (grew)
+            CheckCumulativeCaps();
+        return dst;
     }
 
 
     private void CheckCumulativeCaps()
     {
-        ulong cumulative = _transientPrimary.SizeInBytes;
-        foreach (VkBuffer buf in _transientOverflow)
-            cumulative += buf.SizeInBytes;
+        ulong cumulative = _uniformArena.CumulativeBytes;
 
         CheckCumulativeCaps_CheckHardCap(cumulative, _gd._transientHardCapBytes);
 
