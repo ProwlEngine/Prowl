@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -10,7 +10,7 @@ namespace Prowl.Vector.Geometry;
 /// Provides static methods for generating procedural geometry primitives.
 /// All generators return GeometryData which can be further manipulated with GeometryOperators.
 /// </summary>
-public static class GeometryGenerator
+public static partial class GeometryGenerator
 {
     #region Box
 
