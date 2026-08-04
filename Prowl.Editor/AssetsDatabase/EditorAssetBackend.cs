@@ -687,6 +687,9 @@ public class EditorAssetBackend : AssetBackendBase
 
             if (!success || ctx.MainAsset == null)
             {
+                // Clearing the list alone would strand the sub-assets in the index and their caches on
+                // disk, leaving GUIDs that resolve to a parent claiming it has no sub-assets.
+                RemoveSubAssets(entry, includeThumbnails: true);
                 entry.SubAssets = Array.Empty<SubAssetEntry>();
                 entry.NeedsReimport = false;
                 return false;
