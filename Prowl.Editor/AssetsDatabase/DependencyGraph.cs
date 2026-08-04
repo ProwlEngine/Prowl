@@ -37,21 +37,24 @@ public class DependencyGraph
         }
     }
 
+    // Drop what this asset depends on. What depends on IT is left alone: those assets really do still
+    // reference this GUID, and only re-importing them (via <see cref="SetDependencies"/>) can say
+    // otherwise. Erasing their edge here silently unlinked anything whose sub-asset went away and came
+    // back with the same GUID - a re-sliced sprite, or a file an external tool rewrote as delete+create -
+    // leaving the graph disagreeing with the dependencies persisted on the entry until the next restart.
     public void RemoveAsset(Guid asset)
     {
-        if (_forward.TryGetValue(asset, out var deps))
+        if (_forward.Remove(asset, out var deps))
         {
             foreach (var dep in deps)
-                _reverse.GetValueOrDefault(dep)?.Remove(asset);
-            _forward.Remove(asset);
+            {
+                if (_reverse.TryGetValue(dep, out var dependents) && dependents.Remove(asset) && dependents.Count == 0)
+                    _reverse.Remove(dep);
+            }
         }
 
-        if (_reverse.TryGetValue(asset, out var dependents))
-        {
-            foreach (var dep in dependents)
-                _forward.GetValueOrDefault(dep)?.Remove(asset);
+        if (_reverse.TryGetValue(asset, out var stillReferencing) && stillReferencing.Count == 0)
             _reverse.Remove(asset);
-        }
     }
 
     /// <summary>What does this asset depend on?</summary>
