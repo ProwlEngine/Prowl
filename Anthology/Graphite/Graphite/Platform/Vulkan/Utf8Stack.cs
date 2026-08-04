@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 
 namespace Prowl.Graphite.Vk;
@@ -10,11 +11,7 @@ internal static unsafe class Utf8Stack
 
     internal static void Write(string value, byte* destination)
     {
-        int byteCount;
-        fixed (char* namePtr = value)
-        {
-            byteCount = Encoding.UTF8.GetBytes(namePtr, value.Length, destination, Encoding.UTF8.GetByteCount(value));
-        }
-        destination[byteCount] = 0;
+        int written = Encoding.UTF8.GetBytes(value, new Span<byte>(destination, ByteCount(value)));
+        destination[written] = 0;
     }
 }

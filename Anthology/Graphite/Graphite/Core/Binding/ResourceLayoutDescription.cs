@@ -3,22 +3,22 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Layout of bindable resources for a GraphicsProgram.
+/// Resource layout for a GraphicsProgram.
 /// </summary>
 public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 {
     /// <summary>
-    /// Descriptor set index (Vulkan set / DX12 register space). Ignored on backends without sets.
+    /// Descriptor set index. Ignored on backends without sets.
     /// </summary>
     public uint Set;
 
     /// <summary>
-    /// Per-element layout descriptions for the resources in this set.
+    /// Per-element layout descriptions.
     /// </summary>
     public ResourceLayoutElementDescription[] Elements;
 
     /// <summary>
-    /// New ResourceLayoutDescription, set index 0.
+    /// New ResourceLayoutDescription with set index 0.
     /// </summary>
     /// <param name="elements">Per-element layout descriptions.</param>
     public ResourceLayoutDescription(params ResourceLayoutElementDescription[] elements)
@@ -39,10 +39,10 @@ public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Element-wise equality check.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if everything matches.</returns>
+    /// <param name="other">Instance to compare.</param>
+    /// <returns>True if all match.</returns>
     public readonly bool Equals(ResourceLayoutDescription other)
         => Set == other.Set && Util.ArrayEqualsEquatable(Elements, other.Elements);
 

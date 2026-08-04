@@ -3,25 +3,25 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a framebuffer for creation via ResourceFactory.
+/// Framebuffer descriptor for ResourceFactory.
 /// </summary>
 public struct FramebufferDescription : IEquatable<FramebufferDescription>
 {
     /// <summary>
-    /// Depth texture, needs DepthStencil usage flag. Null allowed.
+    /// Depth texture, needs DepthStencil flag. Null ok.
     /// </summary>
     public FramebufferAttachmentDescription? DepthTarget;
 
     /// <summary>
-    /// Color textures, need RenderTarget usage flag. Null or empty allowed.
+    /// Color textures, need RenderTarget flag. Null or empty ok.
     /// </summary>
     public FramebufferAttachmentDescription[] ColorTargets;
 
     /// <summary>
-    /// Makes a new FramebufferDescription.
+    /// Creates new FramebufferDescription.
     /// </summary>
-    /// <param name="depthTarget">Depth texture, needs DepthStencil usage flag. Null allowed.</param>
-    /// <param name="colorTargets">Color textures, need RenderTarget usage flag. Null or empty allowed.</param>
+    /// <param name="depthTarget">Depth texture, needs DepthStencil flag. Null ok.</param>
+    /// <param name="colorTargets">Color textures, need RenderTarget flag. Null or empty ok.</param>
     public FramebufferDescription(Texture? depthTarget, params Texture[] colorTargets)
     {
         if (depthTarget != null)
@@ -40,10 +40,10 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     }
 
     /// <summary>
-    /// Makes a new FramebufferDescription.
+    /// Creates new FramebufferDescription.
     /// </summary>
-    /// <param name="depthTarget">Depth attachment. Null if none.</param>
-    /// <param name="colorTargets">Color attachments. Empty if none.</param>
+    /// <param name="depthTarget">Depth attachment; null if none.</param>
+    /// <param name="colorTargets">Color attachments; empty if none.</param>
     public FramebufferDescription(
         FramebufferAttachmentDescription? depthTarget,
         FramebufferAttachmentDescription[] colorTargets)
@@ -53,17 +53,17 @@ public struct FramebufferDescription : IEquatable<FramebufferDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Element-wise equality check.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if everything matches.</returns>
+    /// <param name="other">Instance to compare.</param>
+    /// <returns>True if all match.</returns>
     public readonly bool Equals(FramebufferDescription other)
     {
         return Util.NullableEquals(DepthTarget, other.DepthTarget) && Util.ArrayEqualsEquatable(ColorTargets, other.ColorTargets);
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     /// <returns>32-bit hash.</returns>
     public override int GetHashCode()

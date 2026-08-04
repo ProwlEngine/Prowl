@@ -3,7 +3,7 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// One compiled shader stage, part of a ShaderDescription.
+/// Compiled shader stage.
 /// </summary>
 public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
 {
@@ -13,7 +13,7 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     public ShaderStages Stage;
 
     /// <summary>
-    /// Raw shader bytes. Vulkan needs SPIR-V.
+    /// Raw shader bytes (Vulkan SPIR-V).
     /// </summary>
     public byte[] ShaderBytes;
 
@@ -23,12 +23,12 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     public string EntryPoint;
 
     /// <summary>
-    /// Debuggable shader. Only matters if ShaderBytes gets compiled.
+    /// Debug flag.
     /// </summary>
     public bool Debug;
 
     /// <summary>
-    /// New stage description.
+    /// New stage.
     /// </summary>
     /// <param name="stage">The stage.</param>
     /// <param name="shaderBytes">Raw shader bytes.</param>
@@ -42,12 +42,12 @@ public struct ShaderStageDescription : IEquatable<ShaderStageDescription>
     }
 
     /// <summary>
-    /// New stage description.
+    /// New stage.
     /// </summary>
     /// <param name="stage">The stage.</param>
     /// <param name="shaderBytes">Raw shader bytes.</param>
     /// <param name="entryPoint">Entry point function name.</param>
-    /// <param name="debug">Debuggable shader.</param>
+    /// <param name="debug">Debug flag.</param>
     public ShaderStageDescription(ShaderStages stage, byte[] shaderBytes, string entryPoint, bool debug)
     {
         Stage = stage;

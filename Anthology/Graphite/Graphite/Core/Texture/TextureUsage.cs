@@ -3,7 +3,7 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Bitmask for how a texture can be used.
+/// Texture usage bitmask.
 /// </summary>
 [Flags]
 public enum TextureUsage : byte
@@ -13,7 +13,7 @@ public enum TextureUsage : byte
     /// </summary>
     Sampled = 1 << 0,
     /// <summary>
-    /// Readable/writable in shaders via read-write view.
+    /// Readable/writable in shaders.
     /// </summary>
     Storage = 1 << 1,
     /// <summary>
@@ -25,15 +25,15 @@ public enum TextureUsage : byte
     /// </summary>
     DepthStencil = 1 << 3,
     /// <summary>
-    /// Is a 2D cubemap.
+    /// 2D cubemap.
     /// </summary>
     Cubemap = 1 << 4,
     /// <summary>
-    /// Read-write staging resource for uploads. Required to use Map.
+    /// Staging for uploads; required for Map.
     /// </summary>
     Staging = 1 << 5,
     /// <summary>
-    /// Supports auto mipmap generation via GenerateMipmaps.
+    /// Supports auto mipmap generation.
     /// </summary>
     GenerateMipmaps = 1 << 6,
 }

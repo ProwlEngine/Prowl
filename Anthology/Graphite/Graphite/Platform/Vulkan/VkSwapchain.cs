@@ -24,10 +24,9 @@ internal unsafe partial class VkSwapchain : Swapchain
     private readonly bool _colorSrgb;
     private bool? _newSyncToVBlank;
     private uint _currentImageIndex;
-    private string _name;
-    private bool _disposed;
 
-    public override string Name { get => _name; set { _name = value; _gd.SetResourceName(this, value); } }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
+
     public override Framebuffer Framebuffer => _framebuffer;
     public override bool SyncToVerticalBlank
     {
@@ -40,8 +39,6 @@ internal unsafe partial class VkSwapchain : Swapchain
             }
         }
     }
-
-    public override bool IsDisposed => _disposed;
 
     public SwapchainKHR DeviceSwapchain => _deviceSwapchain;
     public uint ImageIndex => _currentImageIndex;
@@ -91,7 +88,7 @@ internal unsafe partial class VkSwapchain : Swapchain
         _gd.Vk.WaitForFences(_gd.Device, 1, &iaf, true, ulong.MaxValue);
         _gd.Vk.ResetFences(_gd.Device, 1, &iaf);
 
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     public override void Resize(uint width, uint height)
@@ -168,66 +165,8 @@ internal unsafe partial class VkSwapchain : Swapchain
         }
 
         _currentImageIndex = 0;
-        uint surfaceFormatCount = 0;
-        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, null).CheckResult();
-        SurfaceFormatKHR[] formats = new SurfaceFormatKHR[surfaceFormatCount];
-        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, out formats[0]).CheckResult();
-
-        Format desiredFormat = _colorSrgb
-            ? Format.B8G8R8A8Srgb
-            : Format.B8G8R8A8Unorm;
-
-        SurfaceFormatKHR surfaceFormat = new();
-        if (formats.Length == 1 && formats[0].Format == Format.Undefined)
-        {
-            surfaceFormat = new SurfaceFormatKHR { ColorSpace = ColorSpaceKHR.SpaceSrgbNonlinearKhr, Format = desiredFormat };
-        }
-        else
-        {
-            foreach (SurfaceFormatKHR format in formats)
-            {
-                if (format.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr && format.Format == desiredFormat)
-                {
-                    surfaceFormat = format;
-                    break;
-                }
-            }
-            if (surfaceFormat.Format == Format.Undefined)
-            {
-                if (_colorSrgb && surfaceFormat.Format != Format.R8G8B8A8Srgb)
-                {
-                    throw new RenderException($"Unable to create an sRGB Swapchain for this surface.");
-                }
-
-                surfaceFormat = formats[0];
-            }
-        }
-
-        uint presentModeCount = 0;
-        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, null).CheckResult();
-        PresentModeKHR[] presentModes = new PresentModeKHR[presentModeCount];
-        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, out presentModes[0]).CheckResult();
-
-        PresentModeKHR presentMode = PresentModeKHR.FifoKhr;
-
-        if (_syncToVBlank)
-        {
-            if (presentModes.Contains(PresentModeKHR.FifoRelaxedKhr))
-            {
-                presentMode = PresentModeKHR.FifoRelaxedKhr;
-            }
-        }
-        else
-        {
-            if (presentModes.Contains(PresentModeKHR.MailboxKhr))
-            {
-                presentMode = PresentModeKHR.MailboxKhr;
-            }
-            else if (presentModes.Contains(PresentModeKHR.ImmediateKhr))
-            {
-                presentMode = PresentModeKHR.ImmediateKhr;
-            }
-        }
+        SurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat();
+        PresentModeKHR presentMode = ChoosePresentMode();
 
         uint maxImageCount = surfaceCapabilities.MaxImageCount == 0 ? uint.MaxValue : surfaceCapabilities.MaxImageCount;
         uint imageCount = Math.Min(maxImageCount, surfaceCapabilities.MinImageCount + 1);
@@ -256,13 +195,13 @@ internal unsafe partial class VkSwapchain : Swapchain
             ImageUsage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferDstBit
         };
 
-        FixedArray2<uint> queueFamilyIndices = new(_gd.GraphicsQueueIndex, _gd.PresentQueueIndex);
+        uint* queueFamilyIndices = stackalloc uint[2] { _gd.GraphicsQueueIndex, _gd.PresentQueueIndex };
 
         if (_gd.GraphicsQueueIndex != _gd.PresentQueueIndex)
         {
             swapchainCI.ImageSharingMode = SharingMode.Concurrent;
             swapchainCI.QueueFamilyIndexCount = 2;
-            swapchainCI.PQueueFamilyIndices = &queueFamilyIndices.First;
+            swapchainCI.PQueueFamilyIndices = queueFamilyIndices;
         }
         else
         {
@@ -285,6 +224,64 @@ internal unsafe partial class VkSwapchain : Swapchain
 
         _framebuffer.SetNewSwapchain(_deviceSwapchain, surfaceFormat, swapchainCI.ImageExtent);
         return true;
+    }
+
+    private SurfaceFormatKHR ChooseSurfaceFormat()
+    {
+        uint surfaceFormatCount = 0;
+        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, null).CheckResult();
+        SurfaceFormatKHR[] formats = new SurfaceFormatKHR[surfaceFormatCount];
+        _gd.KhrSurface.GetPhysicalDeviceSurfaceFormats(_gd.PhysicalDevice, _surface, ref surfaceFormatCount, out formats[0]).CheckResult();
+
+        Format desiredFormat = _colorSrgb
+            ? Format.B8G8R8A8Srgb
+            : Format.B8G8R8A8Unorm;
+
+        if (formats.Length == 1 && formats[0].Format == Format.Undefined)
+        {
+            return new SurfaceFormatKHR { ColorSpace = ColorSpaceKHR.SpaceSrgbNonlinearKhr, Format = desiredFormat };
+        }
+
+        foreach (SurfaceFormatKHR format in formats)
+        {
+            if (format.ColorSpace == ColorSpaceKHR.SpaceSrgbNonlinearKhr && format.Format == desiredFormat)
+            {
+                return format;
+            }
+        }
+
+        if (_colorSrgb)
+        {
+            throw new RenderException($"Unable to create an sRGB Swapchain for this surface.");
+        }
+
+        return formats[0];
+    }
+
+    private PresentModeKHR ChoosePresentMode()
+    {
+        uint presentModeCount = 0;
+        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, null).CheckResult();
+        PresentModeKHR[] presentModes = new PresentModeKHR[presentModeCount];
+        _gd.KhrSurface.GetPhysicalDeviceSurfacePresentModes(_gd.PhysicalDevice, _surface, ref presentModeCount, out presentModes[0]).CheckResult();
+
+        if (_syncToVBlank)
+        {
+            return presentModes.Contains(PresentModeKHR.FifoRelaxedKhr)
+                ? PresentModeKHR.FifoRelaxedKhr
+                : PresentModeKHR.FifoKhr;
+        }
+
+        if (presentModes.Contains(PresentModeKHR.MailboxKhr))
+        {
+            return PresentModeKHR.MailboxKhr;
+        }
+        if (presentModes.Contains(PresentModeKHR.ImmediateKhr))
+        {
+            return PresentModeKHR.ImmediateKhr;
+        }
+
+        return PresentModeKHR.FifoKhr;
     }
 
     private bool GetPresentQueueIndex(out uint queueFamilyIndex)
@@ -317,18 +314,16 @@ internal unsafe partial class VkSwapchain : Swapchain
         return supported;
     }
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
         _gd.Vk.DestroyFence(_gd.Device, _imageAvailableFence, null);
         _framebuffer.Dispose();
         _gd.KhrSwapchain.DestroySwapchain(_gd.Device, _deviceSwapchain, null);
         _gd.KhrSurface.DestroySurface(_gd.Instance, _surface, null);
-
-        _disposed = true;
     }
 }

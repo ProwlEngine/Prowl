@@ -8,9 +8,9 @@ namespace Prowl.Graphite;
 public static class FormatSizeHelpers
 {
     /// <summary>
-    /// Bytes per pixel. Uncompressed formats only, compressed sizes vary.
+    /// Bytes per uncompressed pixel.
     /// </summary>
-    /// <param name="format">Uncompressed pixel format.</param>
+    /// <param name="format">Pixel format.</param>
     /// <returns>Bytes per pixel.</returns>
     public static uint GetSizeInBytes(this PixelFormat format)
     {
@@ -96,7 +96,7 @@ public static class FormatSizeHelpers
     }
 
     /// <summary>
-    /// Bytes per vertex element in this format.
+    /// Bytes per vertex element.
     /// </summary>
     /// <param name="format">Vertex element format.</param>
     /// <returns>Bytes per element.</returns>

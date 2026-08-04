@@ -5,7 +5,7 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Interned vertex attribute name (HLSL semantic on D3D, attribute name on GL). Cheap int wrapper.
+/// Interned vertex attribute name; cheap int wrapper.
 /// </summary>
 [DebuggerDisplay("{ToString(),nq}")]
 public readonly struct VertexAttributeID : IEquatable<VertexAttributeID>, IFormattable
@@ -35,7 +35,7 @@ public readonly struct VertexAttributeID : IEquatable<VertexAttributeID>, IForma
         => s_interner.TryGetKey(id, out string? key) ? key : null;
 
     /// <summary>
-    /// Implicit string-to-ID conversion. Same as Intern.
+    /// String-to-ID conversion via Intern.
     /// </summary>
     public static implicit operator VertexAttributeID(string name)
         => Intern(name);
@@ -61,13 +61,13 @@ public readonly struct VertexAttributeID : IEquatable<VertexAttributeID>, IForma
         => a.Value != b.Value;
 
     /// <summary>
-    /// Hot-path safe, doesn't touch interner. Use the static ToString overload for the real string.
+    /// Hot-path safe; use static ToString for the name.
     /// </summary>
     public override string ToString()
         => $"VertexAttributeID({Value})";
 
     /// <summary>
-    /// IFormattable conformance, ignores format and provider.
+    /// Implements IFormattable; ignores format/provider.
     /// </summary>
     public string ToString(string? format, IFormatProvider? formatProvider)
         => ToString();

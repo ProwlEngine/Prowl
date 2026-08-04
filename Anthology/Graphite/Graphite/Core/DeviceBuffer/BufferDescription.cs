@@ -3,41 +3,37 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a buffer for creation via ResourceFactory.
+/// Buffer creation params.
 /// </summary>
 public struct BufferDescription : IEquatable<BufferDescription>
 {
     /// <summary>
-    /// Buffer capacity in bytes.
+    /// Size in bytes.
     /// </summary>
     public uint SizeInBytes;
     /// <summary>
-    /// How the buffer will be used.
+    /// Buffer usage.
     /// </summary>
     public BufferUsage Usage;
     /// <summary>
-    /// Structured buffers: element size in bytes, must be nonzero. Other buffers: must be zero.
+    /// Element size for structured buffers, else zero.
     /// </summary>
     public uint StructureByteStride;
     /// <summary>
-    /// HLSL-only. Only matters for structured buffer usage. True binds as typed (RW)StructuredBuffer&lt;T&gt;
-    /// for hand-written HLSL. False (default) binds as raw (RW)ByteAddressBuffer. No effect elsewhere.
+    /// HLSL structured buffers only. True = typed binding, false = raw ByteAddressBuffer.
     /// </summary>
     public bool UseTypedHlslBinding;
 
     /// <summary>
-    /// True skips write-hazard tracking for this buffer. Writing while a previous frame might still be
-    /// reading won't error. Trades a possible one-frame tear for in-place updates. Use for buffers updated
-    /// occasionally where flicker's fine; use a transient buffer per execution if tearing's not acceptable.
-    /// No effect without usage validation builds.
+    /// Skips write-hazard tracking. Risks a torn frame for cheap in-place updates.
     /// </summary>
     public bool TransientWrites;
 
     /// <summary>
-    /// Makes a non-dynamic buffer description.
+    /// Non-dynamic buffer description.
     /// </summary>
-    /// <param name="sizeInBytes">Capacity in bytes.</param>
-    /// <param name="usage">Buffer usage.</param>
+    /// <param name="sizeInBytes">Size in bytes.</param>
+    /// <param name="usage">Usage.</param>
     public BufferDescription(uint sizeInBytes, BufferUsage usage)
     {
         SizeInBytes = sizeInBytes;
@@ -48,11 +44,11 @@ public struct BufferDescription : IEquatable<BufferDescription>
     }
 
     /// <summary>
-    /// Makes a buffer description.
+    /// Buffer description.
     /// </summary>
-    /// <param name="sizeInBytes">Capacity in bytes.</param>
-    /// <param name="usage">Buffer usage.</param>
-    /// <param name="structureByteStride">Structured buffers: element size in bytes, must be nonzero. Otherwise zero.</param>
+    /// <param name="sizeInBytes">Size in bytes.</param>
+    /// <param name="usage">Usage.</param>
+    /// <param name="structureByteStride">Element size for structured buffers, else zero.</param>
     public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride)
     {
         SizeInBytes = sizeInBytes;
@@ -63,13 +59,12 @@ public struct BufferDescription : IEquatable<BufferDescription>
     }
 
     /// <summary>
-    /// Makes a buffer description.
+    /// Buffer description.
     /// </summary>
-    /// <param name="sizeInBytes">Capacity in bytes.</param>
-    /// <param name="usage">Buffer usage.</param>
-    /// <param name="structureByteStride">Structured buffers: element size in bytes, must be nonzero. Otherwise zero.</param>
-    /// <param name="useTypedHlslBinding">HLSL only, structured buffer usage only. True binds typed
-    /// (RW)StructuredBuffer&lt;T&gt; for hand-written HLSL. False binds raw (RW)ByteAddressBuffer.</param>
+    /// <param name="sizeInBytes">Size in bytes.</param>
+    /// <param name="usage">Usage.</param>
+    /// <param name="structureByteStride">Element size for structured buffers, else zero.</param>
+    /// <param name="useTypedHlslBinding">HLSL structured buffers only. True = typed binding, false = raw.</param>
     public BufferDescription(uint sizeInBytes, BufferUsage usage, uint structureByteStride, bool useTypedHlslBinding)
     {
         SizeInBytes = sizeInBytes;
@@ -80,9 +75,9 @@ public struct BufferDescription : IEquatable<BufferDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
+    /// <param name="other">Other instance.</param>
     /// <returns>True if all fields match.</returns>
     public readonly bool Equals(BufferDescription other)
     {
@@ -94,9 +89,9 @@ public struct BufferDescription : IEquatable<BufferDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
-    /// <returns>32-bit hash.</returns>
+    /// <returns>Hash.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(

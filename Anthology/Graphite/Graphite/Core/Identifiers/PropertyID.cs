@@ -5,7 +5,7 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Interned ID for a shader binding name or uniform field. Cheap wrapper around a process-wide int.
+/// Interned shader binding or uniform field ID; cheap int wrapper.
 /// </summary>
 [DebuggerDisplay("{ToString(),nq}")]
 public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
@@ -15,7 +15,7 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
     internal PropertyID(int value) { Value = value; }
 
     /// <summary>
-    /// True if interned. False for default.
+    /// True if interned, false if default.
     /// </summary>
     public bool IsValid => Value != 0;
 
@@ -29,13 +29,13 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
     public static PropertyID Intern(string name) => s_interner.Intern(name);
 
     /// <summary>
-    /// Slow reverse lookup. Original string for id, or null if never interned.
+    /// Reverse lookup; null if not interned.
     /// </summary>
     public static string? ToString(PropertyID id)
         => s_interner.TryGetKey(id, out string? key) ? key : null;
 
     /// <summary>
-    /// Implicit string-to-ID conversion. Same as Intern.
+    /// String-to-ID conversion via Intern.
     /// </summary>
     public static implicit operator PropertyID(string name) => Intern(name);
 
@@ -60,13 +60,13 @@ public readonly struct PropertyID : IEquatable<PropertyID>, IFormattable
         => a.Value != b.Value;
 
     /// <summary>
-    /// Hot-path safe, doesn't touch the interner. Use static ToString(id) for the original string.
+    /// Hot-path safe; use static ToString for the name.
     /// </summary>
     public override string ToString()
         => $"ResourceID({Value})";
 
     /// <summary>
-    /// IFormattable conformance. Format and provider ignored.
+    /// Implements IFormattable; ignores format/provider.
     /// </summary>
     public string ToString(string? format, IFormatProvider? formatProvider)
         => ToString();

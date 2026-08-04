@@ -5,13 +5,11 @@ namespace Prowl.Graphite.Vk;
 internal class VkResourceFactory : ResourceFactory
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly Device _device;
 
     public VkResourceFactory(VkGraphicsDevice vkGraphicsDevice)
         : base(vkGraphicsDevice, vkGraphicsDevice.Features)
     {
         _gd = vkGraphicsDevice;
-        _device = vkGraphicsDevice.Device;
     }
 
     public override GraphicsBackend BackendType => GraphicsBackend.Vulkan;
@@ -51,7 +49,7 @@ internal class VkResourceFactory : ResourceFactory
         return new VkTexture(_gd, ref description);
     }
 
-    protected override Texture CreateTextureCore(ulong nativeTexture, ref TextureDescription description)
+    public override Texture CreateTexture(ulong nativeTexture, ref TextureDescription description)
     {
         return new VkTexture(
             _gd,
@@ -70,7 +68,7 @@ internal class VkResourceFactory : ResourceFactory
 
     protected override DeviceBuffer CreateBufferCore(ref BufferDescription description)
     {
-        return new VkBuffer(_gd, description.SizeInBytes, description.Usage);
+        return new VkBuffer(_gd, description);
     }
 
     public override Fence CreateFence(bool signaled)

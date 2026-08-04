@@ -38,7 +38,7 @@ public enum SamplerFilter : byte
     /// </summary>
     MinLinear_MagLinear_MipLinear,
     /// <summary>
-    /// Anisotropic filtering. Max anisotropy set via SamplerDescription.MaximumAnisotropy.
+    /// Anisotropic filtering; max anisotropy via SamplerDescription.MaximumAnisotropy.
     /// </summary>
     Anisotropic,
 }

@@ -8,8 +8,7 @@ namespace Prowl.Graphite;
 public struct VertexElementDescription : IEquatable<VertexElementDescription>
 {
     /// <summary>
-    /// Interned name, stable across backends. For reflected attributes this is semantic name + index
-    /// (e.g. UV0). HLSL backends bind via HlslSemanticName + location instead. Implicit string conversion works.
+    /// Interned stable name; for reflected attributes this is semantic name + index (e.g. UV0).
     /// </summary>
     public VertexAttributeID Name;
 
@@ -24,7 +23,7 @@ public struct VertexElementDescription : IEquatable<VertexElementDescription>
     public uint Offset;
 
     /// <summary>
-    /// Raw HLSL semantic name, no index (e.g. UV). Index comes from location. Defaults to the ctor name.
+    /// Raw HLSL semantic name without index (e.g. UV); index from location, defaults to name.
     /// </summary>
     public string HlslSemanticName;
 

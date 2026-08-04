@@ -4,16 +4,16 @@ using System.Diagnostics;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// A set of output attachments and their formats.
+/// Output attachments and formats.
 /// </summary>
 public struct OutputDescription : IEquatable<OutputDescription>
 {
     /// <summary>
-    /// Depth attachment, or null if none.
+    /// Depth attachment or null.
     /// </summary>
     public OutputAttachmentDescription? DepthAttachment;
     /// <summary>
-    /// Color attachment descriptions, one per color attachment. Can be empty.
+    /// Color attachment descriptions (can be empty).
     /// </summary>
     public OutputAttachmentDescription[] ColorAttachments;
     /// <summary>

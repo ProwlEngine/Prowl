@@ -3,32 +3,32 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a sampler for creation via ResourceFactory.
+/// Sampler creation params.
 /// </summary>
 public struct SamplerDescription : IEquatable<SamplerDescription>
 {
     /// <summary>
-    /// Address mode for U (S) coordinate.
+    /// U address mode.
     /// </summary>
     public SamplerAddressMode AddressModeU;
     /// <summary>
-    /// Address mode for V (T) coordinate.
+    /// V address mode.
     /// </summary>
     public SamplerAddressMode AddressModeV;
     /// <summary>
-    /// Address mode for W (R) coordinate.
+    /// W address mode.
     /// </summary>
     public SamplerAddressMode AddressModeW;
     /// <summary>
-    /// Filter used when sampling.
+    /// Sample filter.
     /// </summary>
     public SamplerFilter Filter;
     /// <summary>
-    /// Comparison kind for comparison sampling. Null = off.
+    /// Comparison kind. Null = off.
     /// </summary>
     public ComparisonKind? ComparisonKind;
     /// <summary>
-    /// Max anisotropy. Only matters with anisotropic filtering, ignored otherwise.
+    /// Max anisotropy. Ignored unless anisotropic filtering.
     /// </summary>
     public uint MaximumAnisotropy;
     /// <summary>
@@ -44,23 +44,23 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     /// </summary>
     public int LodBias;
     /// <summary>
-    /// Border color, only used with Border address mode.
+    /// Border color, Border mode only.
     /// </summary>
     public SamplerBorderColor BorderColor;
 
     /// <summary>
-    /// Makes a new SamplerDescription.
+    /// New sampler description.
     /// </summary>
-    /// <param name="addressModeU">Address mode for U (R) coordinate.</param>
-    /// <param name="addressModeV">Address mode for V (S) coordinate.</param>
-    /// <param name="addressModeW">Address mode for W (T) coordinate.</param>
-    /// <param name="filter">Filter used when sampling.</param>
-    /// <param name="comparisonKind">Comparison kind for comparison sampling. Null = off.</param>
-    /// <param name="maximumAnisotropy">Max anisotropy. Only matters with anisotropic filtering.</param>
+    /// <param name="addressModeU">U address mode.</param>
+    /// <param name="addressModeV">V address mode.</param>
+    /// <param name="addressModeW">W address mode.</param>
+    /// <param name="filter">Sample filter.</param>
+    /// <param name="comparisonKind">Comparison kind. Null = off.</param>
+    /// <param name="maximumAnisotropy">Max anisotropy.</param>
     /// <param name="minimumLod">Min LOD.</param>
     /// <param name="maximumLod">Max LOD.</param>
     /// <param name="lodBias">LOD bias.</param>
-    /// <param name="borderColor">Border color, only used with Border address mode.</param>
+    /// <param name="borderColor">Border color, Border mode only.</param>
     public SamplerDescription(
         SamplerAddressMode addressModeU,
         SamplerAddressMode addressModeV,
@@ -86,7 +86,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     }
 
     /// <summary>
-    /// Point-filter, wrapping sampler.
+    /// Point-filter wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -110,7 +110,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     };
 
     /// <summary>
-    /// Linear-filter, wrapping sampler.
+    /// Linear-filter wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -134,7 +134,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     };
 
     /// <summary>
-    /// 4x-anisotropic, wrapping sampler.
+    /// 4x-anisotropic wrapping sampler.
     /// Settings:
     ///     AddressModeU = SamplerAddressMode.Wrap
     ///     AddressModeV = SamplerAddressMode.Wrap
@@ -158,9 +158,9 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     };
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
+    /// <param name="other">Other instance.</param>
     /// <returns>True if all fields match.</returns>
     public readonly bool Equals(SamplerDescription other)
     {
@@ -177,7 +177,7 @@ public struct SamplerDescription : IEquatable<SamplerDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     /// <returns>Hash code.</returns>
     public override int GetHashCode()

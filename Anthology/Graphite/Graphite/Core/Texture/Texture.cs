@@ -1,100 +1,82 @@
-﻿using System;
-
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Device resource holding image data in some format.
+/// Image data holder.
 /// </summary>
-public abstract class Texture : DeviceResource, MappableResource, IDisposable, BindableResource
+public abstract class Texture : GraphicsResource, MappableResource, BindableResource
 {
     private readonly object _fullTextureViewLock = new();
     private TextureView _fullTextureView;
 
+    private protected TextureDescription _description;
+
+    private protected Texture(in TextureDescription description)
+    {
+        _description = description;
+    }
+
     /// <summary>
-    /// Gets subresource index from mip level and array layer.
+    /// Pixel format of texture elements.
     /// </summary>
-    /// <param name="mipLevel">Mip level, must be less than MipLevels.</param>
-    /// <param name="arrayLayer">Array layer, must be less than ArrayLayers.</param>
+    public PixelFormat Format => _description.Format;
+    /// <summary>
+    /// Width in texels.
+    /// </summary>
+    public uint Width => _description.Width;
+    /// <summary>
+    /// Height in texels.
+    /// </summary>
+    public uint Height => _description.Height;
+    /// <summary>
+    /// Depth in texels.
+    /// </summary>
+    public uint Depth => _description.Depth;
+    /// <summary>
+    /// Mipmap level count.
+    /// </summary>
+    public uint MipLevels => _description.MipLevels;
+    /// <summary>
+    /// Array layer count.
+    /// </summary>
+    public uint ArrayLayers => _description.ArrayLayers;
+    /// <summary>
+    /// Usage flags from creation.
+    /// </summary>
+    public TextureUsage Usage => _description.Usage;
+    /// <summary>
+    /// Texture type.
+    /// </summary>
+    public TextureType Type => _description.Type;
+    /// <summary>
+    /// Sample count (>1 for multisample).
+    /// </summary>
+    public TextureSampleCount SampleCount => _description.SampleCount;
+
+    /// <summary>
+    /// Get subresource index from mip and layer.
+    /// </summary>
+    /// <param name="mipLevel">Mip level.</param>
+    /// <param name="arrayLayer">Array layer.</param>
     /// <returns>Subresource index.</returns>
     public uint CalculateSubresource(uint mipLevel, uint arrayLayer)
     {
         return arrayLayer * MipLevels + mipLevel;
     }
 
-    /// <summary>
-    /// Pixel format of texture elements.
-    /// </summary>
-    public abstract PixelFormat Format { get; }
-    /// <summary>
-    /// Width in texels.
-    /// </summary>
-    public abstract uint Width { get; }
-    /// <summary>
-    /// Height in texels.
-    /// </summary>
-    public abstract uint Height { get; }
-    /// <summary>
-    /// Depth in texels.
-    /// </summary>
-    public abstract uint Depth { get; }
-    /// <summary>
-    /// Mipmap level count.
-    /// </summary>
-    public abstract uint MipLevels { get; }
-    /// <summary>
-    /// Array layer count.
-    /// </summary>
-    public abstract uint ArrayLayers { get; }
-    /// <summary>
-    /// Usage flags from creation. Using outside these contexts is an error.
-    /// </summary>
-    public abstract TextureUsage Usage { get; }
-    /// <summary>
-    /// Texture type.
-    /// </summary>
-    public abstract TextureType Type { get; }
-    /// <summary>
-    /// Sample count. Anything other than 1 means multisample.
-    /// </summary>
-    public abstract TextureSampleCount SampleCount { get; }
-    /// <summary>
-    /// Debug name, shows up in graphics debuggers.
-    /// </summary>
-    public abstract string Name { get; set; }
-    /// <summary>
-    /// Whether this has been disposed.
-    /// </summary>
-    public abstract bool IsDisposed { get; }
-
     internal TextureView GetFullTextureView(GraphicsDevice gd)
     {
         lock (_fullTextureViewLock)
         {
-            if (_fullTextureView == null)
-            {
-                _fullTextureView = CreateFullTextureView(gd);
-            }
-
+            _fullTextureView ??= gd.ResourceFactory.CreateTextureView(this);
             return _fullTextureView;
         }
     }
 
-    private protected virtual TextureView CreateFullTextureView(GraphicsDevice gd)
-    {
-        return gd.ResourceFactory.CreateTextureView(this);
-    }
-
-    /// <summary>
-    /// Frees unmanaged device resources.
-    /// </summary>
-    public virtual void Dispose()
+    private protected override void OnDisposing()
     {
         lock (_fullTextureViewLock)
         {
             _fullTextureView?.Dispose();
-            DisposeCore();
         }
     }
-
-    private protected abstract void DisposeCore();
 }

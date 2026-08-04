@@ -3,44 +3,44 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a full graphics program: all shader stages plus the pipeline state it owns (blend, depth, rasterizer, vertex layouts, resource layouts).
+/// Full graphics program: shader stages plus its pipeline state.
 /// </summary>
 public struct ShaderDescription : IEquatable<ShaderDescription>
 {
     /// <summary>
-    /// Per-stage descriptions. Each needs a unique stage value.
+    /// Per-stage descs, unique stage each.
     /// </summary>
     public ShaderStageDescription[] Stages;
 
     /// <summary>
-    /// Blend state, controls how colors blend into targets.
+    /// Blend state.
     /// </summary>
     public BlendStateDescription BlendState;
 
     /// <summary>
-    /// Depth/stencil state, controls depth test/write/compare.
+    /// Depth/stencil state.
     /// </summary>
     public DepthStencilStateDescription DepthStencilState;
 
     /// <summary>
-    /// Rasterizer state, controls culling/clip/scissor/fill.
+    /// Rasterizer state.
     /// </summary>
     public RasterizerStateDescription RasterizerState;
 
     /// <summary>
-    /// Vertex input layouts, one per vertex buffer bound at draw time.
+    /// Vertex input layouts, one per buffer.
     /// </summary>
     public VertexLayoutDescription[] VertexLayouts;
 
     /// <summary>
-    /// Resource layouts declared by this program.
+    /// Resource layouts for this program.
     /// </summary>
     public ResourceLayoutDescription[] ResourceLayouts;
 
     /// <summary>
-    /// Makes a new ShaderDescription with default state and given stages.
+    /// New ShaderDescription, default state.
     /// </summary>
-    /// <param name="stages">Per-stage descriptions.</param>
+    /// <param name="stages">Per-stage descs.</param>
     public ShaderDescription(params ShaderStageDescription[] stages)
     {
         Stages = stages;
@@ -52,13 +52,13 @@ public struct ShaderDescription : IEquatable<ShaderDescription>
     }
 
     /// <summary>
-    /// Makes a new ShaderDescription.
+    /// New ShaderDescription.
     /// </summary>
-    /// <param name="stages">Per-stage descriptions.</param>
+    /// <param name="stages">Per-stage descs.</param>
     /// <param name="blendState">Blend state.</param>
     /// <param name="depthStencilState">Depth/stencil state.</param>
     /// <param name="rasterizerState">Rasterizer state.</param>
-    /// <param name="vertexLayouts">Vertex input layouts.</param>
+    /// <param name="vertexLayouts">Vertex layouts.</param>
     /// <param name="resourceLayouts">Resource layouts.</param>
     public ShaderDescription(
         ShaderStageDescription[] stages,
@@ -77,7 +77,7 @@ public struct ShaderDescription : IEquatable<ShaderDescription>
     }
 
     /// <summary>
-    /// Element-wise equality.
+    /// Elementwise equality.
     /// </summary>
     public bool Equals(ShaderDescription other)
     {
@@ -90,7 +90,7 @@ public struct ShaderDescription : IEquatable<ShaderDescription>
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     public override readonly int GetHashCode()
     {

@@ -50,7 +50,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
                     emptyDsl = CreateEmptyDescriptorSetLayout(gd);
                 dsls[i] = emptyDsl;
             }
-            dynamicTotal += (int)counts[i].UniformBufferDynamicCount;
+            dynamicTotal += (int)counts[i].UniformBufferDynamic;
         }
 
         PipelineLayout pipelineLayout = BuildPipelineLayout(gd, dsls, setCount);
@@ -124,7 +124,7 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         gd.Vk.CreateDescriptorSetLayout(gd.Device, in dslCI, null, out DescriptorSetLayout dsl).CheckResult();
         gd.Profiler?.Allocate(AllocBin.ResourceLayout, 0);
 
-        return (dsl, new DescriptorResourceCounts(0, uniformBufferDynamic, sampledImage, sampler, storageBuffer, 0, storageImage, combinedImageSampler));
+        return (dsl, new DescriptorResourceCounts(uniformBufferDynamic, sampledImage, sampler, storageBuffer, storageImage, combinedImageSampler));
     }
 
     /// <summary>

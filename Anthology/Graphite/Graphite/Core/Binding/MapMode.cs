@@ -1,22 +1,14 @@
 ﻿namespace Prowl.Graphite;
 
-/// <summary>
-/// How a resource gets mapped into CPU address space.
-/// </summary>
+/// <summary>Resource CPU mapping mode.</summary>
 public enum MapMode : byte
 {
-    /// <summary>
-    /// Read-only. Not writable, no transfer back. Staging resources only.
-    /// </summary>
+    /// <summary>Read-only, staging resources only.</summary>
     Read,
 
-    /// <summary>
-    /// Write-only. Transferred back on Unmap. Erases prior contents, full replace only.
-    /// </summary>
+    /// <summary>Write-only, transferred back on Unmap, full replace only.</summary>
     Write,
 
-    /// <summary>
-    /// Read and write. Staging resources only.
-    /// </summary>
+    /// <summary>Read and write, staging resources only.</summary>
     ReadWrite,
 }

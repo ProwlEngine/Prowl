@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -6,241 +5,134 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-internal partial class VkDescriptorPoolManager
+/// <summary>Pool manager for long-lived descriptor sets, supports per-set free.</summary>
+internal unsafe partial class VkDescriptorPoolManager
 {
+    private const uint SetsPerPool = 1000;
+    private const uint DescriptorsPerPool = 100;
+
+    private static readonly DescriptorType[] s_poolTypes =
+    [
+        DescriptorType.UniformBufferDynamic,
+        DescriptorType.SampledImage,
+        DescriptorType.Sampler,
+        DescriptorType.StorageBuffer,
+        DescriptorType.StorageImage,
+        DescriptorType.CombinedImageSampler,
+    ];
+
     private readonly VkGraphicsDevice _gd;
     private readonly List<PoolInfo> _pools = [];
     private readonly object _lock = new();
-    private readonly bool _freeDescriptorSets;
 
-    /// <summary>Pool manager for long-lived descriptor sets, supports per-set free.</summary>
     public VkDescriptorPoolManager(VkGraphicsDevice gd)
     {
         _gd = gd;
-        _freeDescriptorSets = true;
         _pools.Add(CreateNewPool());
     }
 
-    /// <summary>Per-frame pool manager, sets reclaimed wholesale by ResetAll.</summary>
-    public VkDescriptorPoolManager(VkGraphicsDevice gd, bool freeDescriptorSets)
-    {
-        _gd = gd;
-        _freeDescriptorSets = freeDescriptorSets;
-        _pools.Add(CreateNewPool());
-    }
-
-    /// <summary>
-    /// Resets all pools, invalidating all allocated sets. Call at frame-begin to reclaim last frame's ring slot.
-    /// </summary>
-    public void ResetAll()
-    {
-        lock (_lock)
-        {
-            ResetAll_RecordFrees();
-            foreach (PoolInfo poolInfo in _pools)
-            {
-                _gd.Vk.ResetDescriptorPool(_gd.Device, poolInfo.Pool, 0);
-                poolInfo.ResetCounters();
-            }
-        }
-    }
-
-    public unsafe DescriptorAllocationToken Allocate(DescriptorResourceCounts counts, DescriptorSetLayout setLayout)
+    public DescriptorAllocationToken Allocate(in DescriptorResourceCounts counts, DescriptorSetLayout setLayout)
     {
         lock (_lock)
         {
             DescriptorPool pool = GetPool(counts);
             DescriptorSetAllocateInfo dsAI = new()
             {
-                SType = StructureType.DescriptorSetAllocateInfo
+                SType = StructureType.DescriptorSetAllocateInfo,
+                DescriptorSetCount = 1,
+                PSetLayouts = &setLayout,
+                DescriptorPool = pool,
             };
-            dsAI.DescriptorSetCount = 1;
-            dsAI.PSetLayouts = &setLayout;
-            dsAI.DescriptorPool = pool;
             _gd.Vk.AllocateDescriptorSets(_gd.Device, in dsAI, out DescriptorSet set).CheckResult();
-            Allocate_RecordAllocation();
+            RecordAllocation();
 
             return new DescriptorAllocationToken(set, pool);
         }
     }
 
-    public void Free(DescriptorAllocationToken token, DescriptorResourceCounts counts)
+    public void Free(DescriptorAllocationToken token, in DescriptorResourceCounts counts)
     {
         lock (_lock)
         {
             foreach (PoolInfo poolInfo in _pools)
             {
-                if (poolInfo.Pool.Handle == token.Pool.Handle)
-                {
-                    poolInfo.Free(_gd, token, counts);
-                    Free_RecordFree();
-                }
+                if (poolInfo.Pool.Handle != token.Pool.Handle)
+                    continue;
+
+                poolInfo.Free(_gd, token, counts);
+                RecordFree();
             }
         }
     }
 
-    private DescriptorPool GetPool(DescriptorResourceCounts counts)
+    internal void DestroyAll()
     {
-        lock (_lock)
-        {
-            foreach (PoolInfo poolInfo in _pools)
-            {
-                if (poolInfo.Allocate(counts))
-                {
-                    return poolInfo.Pool;
-                }
-            }
-
-            PoolInfo newPool = CreateNewPool();
-            _pools.Add(newPool);
-            bool result = newPool.Allocate(counts);
-            Debug.Assert(result);
-            return newPool.Pool;
-        }
+        foreach (PoolInfo poolInfo in _pools)
+            _gd.Vk.DestroyDescriptorPool(_gd.Device, poolInfo.Pool, null);
     }
 
-    private unsafe PoolInfo CreateNewPool()
-    {
-        uint totalSets = 1000;
-        uint descriptorCount = 100;
-        uint poolSizeCount = 8;
-        DescriptorPoolSize* sizes = stackalloc DescriptorPoolSize[(int)poolSizeCount];
-        sizes[0].Type = DescriptorType.UniformBuffer;
-        sizes[0].DescriptorCount = descriptorCount;
-        sizes[1].Type = DescriptorType.SampledImage;
-        sizes[1].DescriptorCount = descriptorCount;
-        sizes[2].Type = DescriptorType.Sampler;
-        sizes[2].DescriptorCount = descriptorCount;
-        sizes[3].Type = DescriptorType.StorageBuffer;
-        sizes[3].DescriptorCount = descriptorCount;
-        sizes[4].Type = DescriptorType.StorageImage;
-        sizes[4].DescriptorCount = descriptorCount;
-        sizes[5].Type = DescriptorType.UniformBufferDynamic;
-        sizes[5].DescriptorCount = descriptorCount;
-        sizes[6].Type = DescriptorType.StorageBufferDynamic;
-        sizes[6].DescriptorCount = descriptorCount;
-        sizes[7].Type = DescriptorType.CombinedImageSampler;
-        sizes[7].DescriptorCount = descriptorCount;
-
-        DescriptorPoolCreateInfo poolCI = new()
-        {
-            SType = StructureType.DescriptorPoolCreateInfo
-        };
-        poolCI.Flags = _freeDescriptorSets ? DescriptorPoolCreateFlags.FreeDescriptorSetBit : 0;
-        poolCI.MaxSets = totalSets;
-        poolCI.PPoolSizes = sizes;
-        poolCI.PoolSizeCount = poolSizeCount;
-
-        _gd.Vk.CreateDescriptorPool(_gd.Device, in poolCI, null, out DescriptorPool descriptorPool).CheckResult();
-
-        return new PoolInfo(descriptorPool, totalSets, descriptorCount);
-    }
-
-    internal unsafe void DestroyAll()
+    // Caller holds _lock.
+    private DescriptorPool GetPool(in DescriptorResourceCounts counts)
     {
         foreach (PoolInfo poolInfo in _pools)
         {
-            _gd.Vk.DestroyDescriptorPool(_gd.Device, poolInfo.Pool, null);
+            if (poolInfo.Allocate(counts))
+                return poolInfo.Pool;
         }
+
+        PoolInfo newPool = CreateNewPool();
+        _pools.Add(newPool);
+        bool result = newPool.Allocate(counts);
+        Debug.Assert(result);
+        return newPool.Pool;
     }
 
-    private class PoolInfo
+    private PoolInfo CreateNewPool()
     {
-        public readonly DescriptorPool Pool;
+        DescriptorPoolSize* sizes = stackalloc DescriptorPoolSize[s_poolTypes.Length];
+        for (int i = 0; i < s_poolTypes.Length; i++)
+            sizes[i] = new DescriptorPoolSize { Type = s_poolTypes[i], DescriptorCount = DescriptorsPerPool };
 
-        public uint RemainingSets;
-
-        public uint UniformBufferCount;
-        public uint UniformBufferDynamicCount;
-        public uint SampledImageCount;
-        public uint SamplerCount;
-        public uint StorageBufferCount;
-        public uint StorageBufferDynamicCount;
-        public uint StorageImageCount;
-        public uint CombinedImageSamplerCount;
-
-        public PoolInfo(DescriptorPool pool, uint totalSets, uint descriptorCount)
+        DescriptorPoolCreateInfo poolCI = new()
         {
-            Pool = pool;
-            RemainingSets = totalSets;
-            UniformBufferCount = descriptorCount;
-            UniformBufferDynamicCount = descriptorCount;
-            SampledImageCount = descriptorCount;
-            SamplerCount = descriptorCount;
-            StorageBufferCount = descriptorCount;
-            StorageBufferDynamicCount = descriptorCount;
-            StorageImageCount = descriptorCount;
-            CombinedImageSamplerCount = descriptorCount;
-        }
+            SType = StructureType.DescriptorPoolCreateInfo,
+            Flags = DescriptorPoolCreateFlags.FreeDescriptorSetBit,
+            MaxSets = SetsPerPool,
+            PPoolSizes = sizes,
+            PoolSizeCount = (uint)s_poolTypes.Length,
+        };
 
-        internal bool Allocate(DescriptorResourceCounts counts)
+        _gd.Vk.CreateDescriptorPool(_gd.Device, in poolCI, null, out DescriptorPool descriptorPool).CheckResult();
+
+        return new PoolInfo(descriptorPool);
+    }
+
+    private sealed class PoolInfo(DescriptorPool pool)
+    {
+        public readonly DescriptorPool Pool = pool;
+
+        private uint _remainingSets = SetsPerPool;
+        private DescriptorResourceCounts _remaining = DescriptorResourceCounts.All(DescriptorsPerPool);
+
+        internal bool Allocate(in DescriptorResourceCounts counts)
         {
-            if (RemainingSets > 0
-                && UniformBufferCount >= counts.UniformBufferCount
-                && UniformBufferDynamicCount >= counts.UniformBufferDynamicCount
-                && SampledImageCount >= counts.SampledImageCount
-                && SamplerCount >= counts.SamplerCount
-                && StorageBufferCount >= counts.StorageBufferCount
-                && StorageBufferDynamicCount >= counts.StorageBufferDynamicCount
-                && StorageImageCount >= counts.StorageImageCount
-                && CombinedImageSamplerCount >= counts.CombinedImageSamplerCount)
-            {
-                RemainingSets -= 1;
-                UniformBufferCount -= counts.UniformBufferCount;
-                UniformBufferDynamicCount -= counts.UniformBufferDynamicCount;
-                SampledImageCount -= counts.SampledImageCount;
-                SamplerCount -= counts.SamplerCount;
-                StorageBufferCount -= counts.StorageBufferCount;
-                StorageBufferDynamicCount -= counts.StorageBufferDynamicCount;
-                StorageImageCount -= counts.StorageImageCount;
-                CombinedImageSamplerCount -= counts.CombinedImageSamplerCount;
-                return true;
-            }
-            else
-            {
+            if (_remainingSets == 0 || !_remaining.Covers(counts))
                 return false;
-            }
+
+            _remainingSets--;
+            _remaining -= counts;
+            return true;
         }
 
-        internal void Free(VkGraphicsDevice gd, DescriptorAllocationToken token, DescriptorResourceCounts counts)
+        internal void Free(VkGraphicsDevice gd, DescriptorAllocationToken token, in DescriptorResourceCounts counts)
         {
             DescriptorSet set = token.Set;
             gd.Vk.FreeDescriptorSets(gd.Device, Pool, 1, in set);
 
-            RemainingSets += 1;
-            UniformBufferCount += counts.UniformBufferCount;
-            UniformBufferDynamicCount += counts.UniformBufferDynamicCount;
-            SampledImageCount += counts.SampledImageCount;
-            SamplerCount += counts.SamplerCount;
-            StorageBufferCount += counts.StorageBufferCount;
-            StorageBufferDynamicCount += counts.StorageBufferDynamicCount;
-            StorageImageCount += counts.StorageImageCount;
-            CombinedImageSamplerCount += counts.CombinedImageSamplerCount;
-        }
-
-        internal void ResetCounters()
-        {
-            RemainingSets = 1000;
-            UniformBufferCount = 100;
-            UniformBufferDynamicCount = 100;
-            SampledImageCount = 100;
-            SamplerCount = 100;
-            StorageBufferCount = 100;
-            StorageBufferDynamicCount = 100;
-            StorageImageCount = 100;
-            CombinedImageSamplerCount = 100;
+            _remainingSets++;
+            _remaining += counts;
         }
     }
 }
 
-internal readonly struct DescriptorAllocationToken
-{
-    public readonly DescriptorSet Set;
-    public readonly DescriptorPool Pool;
-
-    public DescriptorAllocationToken(DescriptorSet set, DescriptorPool pool)
-    {
-        Set = set;
-        Pool = pool;
-    }
-}
+internal readonly record struct DescriptorAllocationToken(DescriptorSet Set, DescriptorPool Pool);

@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Marker interface for device resources mappable into CPU-visible memory via GraphicsDevice.Map.
+/// Marker for resources mappable to CPU-visible memory.
 /// </summary>
 public interface MappableResource
 {

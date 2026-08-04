@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Winding order that defines front face.
+/// Front face winding order.
 /// </summary>
 public enum FrontFace : byte
 {

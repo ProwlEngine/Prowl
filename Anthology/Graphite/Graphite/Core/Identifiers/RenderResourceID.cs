@@ -5,7 +5,7 @@ using System.Threading;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Interned render graph resource name (declared texture handle). Cheap int wrapper.
+/// Interned render resource name; cheap int wrapper.
 /// </summary>
 [DebuggerDisplay("{ToString(),nq}")]
 public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormattable
@@ -36,7 +36,7 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
         => s_interner.TryGetKey(id, out string? key) ? key : null;
 
     /// <summary>
-    /// Implicit string-to-ID conversion. Same as Intern.
+    /// String-to-ID conversion via Intern.
     /// </summary>
     public static implicit operator RenderResourceID(string name)
         => Intern(name);
@@ -62,13 +62,13 @@ public readonly struct RenderResourceID : IEquatable<RenderResourceID>, IFormatt
         => a.Value != b.Value;
 
     /// <summary>
-    /// Hot-path safe, doesn't touch interner. Use the static ToString overload for the real string.
+    /// Hot-path safe; use static ToString for the name.
     /// </summary>
     public override string ToString()
         => $"RenderResourceID({Value})";
 
     /// <summary>
-    /// IFormattable conformance, ignores format and provider.
+    /// Implements IFormattable; ignores format/provider.
     /// </summary>
     public string ToString(string? format, IFormatProvider? formatProvider)
         => ToString();

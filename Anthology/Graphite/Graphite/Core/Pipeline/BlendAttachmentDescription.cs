@@ -3,16 +3,16 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Blend behavior for one color attachment.
+/// One attachment's blend behavior.
 /// </summary>
 public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription>
 {
     /// <summary>
-    /// Blending on/off for this attachment.
+    /// Blend on/off.
     /// </summary>
     public bool BlendEnabled;
     /// <summary>
-    /// Which color channels get written. Null means All.
+    /// Which channels write. Null = all.
     /// </summary>
     public ColorWriteMask? ColorWriteMask;
 
@@ -21,11 +21,11 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     /// </summary>
     public BlendFactor SourceColorFactor;
     /// <summary>
-    /// Destination color weight.
+    /// Dest color weight.
     /// </summary>
     public BlendFactor DestinationColorFactor;
     /// <summary>
-    /// How source/dest color factors combine.
+    /// Color combine op.
     /// </summary>
     public BlendFunction ColorFunction;
     /// <summary>
@@ -33,24 +33,24 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     /// </summary>
     public BlendFactor SourceAlphaFactor;
     /// <summary>
-    /// Destination alpha weight.
+    /// Dest alpha weight.
     /// </summary>
     public BlendFactor DestinationAlphaFactor;
     /// <summary>
-    /// How source/dest alpha factors combine.
+    /// Alpha combine op.
     /// </summary>
     public BlendFunction AlphaFunction;
 
     /// <summary>
-    /// New blend attachment description.
+    /// New blend attachment desc.
     /// </summary>
-    /// <param name="blendEnabled">Blending on/off.</param>
+    /// <param name="blendEnabled">On/off.</param>
     /// <param name="sourceColorFactor">Source color weight.</param>
-    /// <param name="destinationColorFactor">Destination color weight.</param>
-    /// <param name="colorFunction">How color factors combine.</param>
+    /// <param name="destinationColorFactor">Dest color weight.</param>
+    /// <param name="colorFunction">Color combine op.</param>
     /// <param name="sourceAlphaFactor">Source alpha weight.</param>
-    /// <param name="destinationAlphaFactor">Destination alpha weight.</param>
-    /// <param name="alphaFunction">How alpha factors combine.</param>
+    /// <param name="destinationAlphaFactor">Dest alpha weight.</param>
+    /// <param name="alphaFunction">Alpha combine op.</param>
     public BlendAttachmentDescription(
         bool blendEnabled,
         BlendFactor sourceColorFactor,
@@ -71,16 +71,16 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     }
 
     /// <summary>
-    /// New blend attachment description.
+    /// New blend attachment desc.
     /// </summary>
-    /// <param name="blendEnabled">Blending on/off.</param>
-    /// <param name="colorWriteMask">Which color channels get written.</param>
+    /// <param name="blendEnabled">On/off.</param>
+    /// <param name="colorWriteMask">Which channels write.</param>
     /// <param name="sourceColorFactor">Source color weight.</param>
-    /// <param name="destinationColorFactor">Destination color weight.</param>
-    /// <param name="colorFunction">How color factors combine.</param>
+    /// <param name="destinationColorFactor">Dest color weight.</param>
+    /// <param name="colorFunction">Color combine op.</param>
     /// <param name="sourceAlphaFactor">Source alpha weight.</param>
-    /// <param name="destinationAlphaFactor">Destination alpha weight.</param>
-    /// <param name="alphaFunction">How alpha factors combine.</param>
+    /// <param name="destinationAlphaFactor">Dest alpha weight.</param>
+    /// <param name="alphaFunction">Alpha combine op.</param>
     public BlendAttachmentDescription(
         bool blendEnabled,
         ColorWriteMask colorWriteMask,
@@ -102,16 +102,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     }
 
     /// <summary>
-    /// Source fully overwrites dest.
-    /// Settings:
-    ///     BlendEnabled = true
-    ///     ColorWriteMask = null
-    ///     SourceColorFactor = BlendFactor.One
-    ///     DestinationColorFactor = BlendFactor.Zero
-    ///     ColorFunction = BlendFunction.Add
-    ///     SourceAlphaFactor = BlendFactor.One
-    ///     DestinationAlphaFactor = BlendFactor.Zero
-    ///     AlphaFunction = BlendFunction.Add
+    /// Source overwrites dest entirely.
     /// </summary>
     public static readonly BlendAttachmentDescription OverrideBlend = new()
     {
@@ -125,16 +116,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     };
 
     /// <summary>
-    /// Standard alpha blend, source and dest mix inversely by alpha.
-    /// Settings:
-    ///     BlendEnabled = true
-    ///     ColorWriteMask = null
-    ///     SourceColorFactor = BlendFactor.SourceAlpha
-    ///     DestinationColorFactor = BlendFactor.InverseSourceAlpha
-    ///     ColorFunction = BlendFunction.Add
-    ///     SourceAlphaFactor = BlendFactor.SourceAlpha
-    ///     DestinationAlphaFactor = BlendFactor.InverseSourceAlpha
-    ///     AlphaFunction = BlendFunction.Add
+    /// Standard alpha blend.
     /// </summary>
     public static readonly BlendAttachmentDescription AlphaBlend = new()
     {
@@ -148,16 +130,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     };
 
     /// <summary>
-    /// Additive blend, source adds to dest weighted by its alpha.
-    /// Settings:
-    ///     BlendEnabled = true
-    ///     ColorWriteMask = null
-    ///     SourceColorFactor = BlendFactor.SourceAlpha
-    ///     DestinationColorFactor = BlendFactor.One
-    ///     ColorFunction = BlendFunction.Add
-    ///     SourceAlphaFactor = BlendFactor.SourceAlpha
-    ///     DestinationAlphaFactor = BlendFactor.One
-    ///     AlphaFunction = BlendFunction.Add
+    /// Additive blend.
     /// </summary>
     public static readonly BlendAttachmentDescription AdditiveBlend = new()
     {
@@ -172,15 +145,6 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
 
     /// <summary>
     /// No blending.
-    /// Settings:
-    ///     BlendEnabled = false
-    ///     ColorWriteMask = null
-    ///     SourceColorFactor = BlendFactor.One
-    ///     DestinationColorFactor = BlendFactor.Zero
-    ///     ColorFunction = BlendFunction.Add
-    ///     SourceAlphaFactor = BlendFactor.One
-    ///     DestinationAlphaFactor = BlendFactor.Zero
-    ///     AlphaFunction = BlendFunction.Add
     /// </summary>
     public static readonly BlendAttachmentDescription Disabled = new()
     {
@@ -194,10 +158,10 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     };
 
     /// <summary>
-    /// Field-by-field equality.
+    /// Field equality.
     /// </summary>
-    /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if all fields match.</returns>
+    /// <param name="other">To compare against.</param>
+    /// <returns>True if fields match.</returns>
     public bool Equals(BlendAttachmentDescription other)
     {
         return BlendEnabled.Equals(other.BlendEnabled)
@@ -209,7 +173,7 @@ public struct BlendAttachmentDescription : IEquatable<BlendAttachmentDescription
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
     /// <returns>32-bit hash.</returns>
     public override int GetHashCode()

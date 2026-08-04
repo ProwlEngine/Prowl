@@ -1,12 +1,12 @@
 ﻿namespace Prowl.Graphite;
 
-/// <summary>Texture dimensionality.</summary>
+/// <summary>Texture dims.</summary>
 public enum TextureType
 {
-    /// <summary>2D texture.</summary>
+    /// <summary>2D.</summary>
     Texture2D,
-    /// <summary>1D texture.</summary>
+    /// <summary>1D.</summary>
     Texture1D,
-    /// <summary>3D texture.</summary>
+    /// <summary>3D.</summary>
     Texture3D,
 }

@@ -3,20 +3,20 @@
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Rasterizer state for a graphics program.
+/// Rasterizer state.
 /// </summary>
 public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription>
 {
     /// <summary>
-    /// Which face gets culled.
+    /// Face to cull.
     /// </summary>
     public FaceCullMode CullMode;
     /// <summary>
-    /// Winding order for front face.
+    /// Front face winding.
     /// </summary>
     public FrontFace FrontFace;
     /// <summary>
-    /// Depth clipping on/off.
+    /// Depth clip on/off.
     /// </summary>
     public bool DepthClipEnabled;
     /// <summary>
@@ -25,11 +25,11 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     public bool ScissorTestEnabled;
 
     /// <summary>
-    /// Makes a new RasterizerStateDescription.
+    /// New rasterizer state description.
     /// </summary>
-    /// <param name="cullMode">Which face gets culled.</param>
-    /// <param name="frontFace">Winding order for front face.</param>
-    /// <param name="depthClipEnabled">Depth clipping on/off.</param>
+    /// <param name="cullMode">Face to cull.</param>
+    /// <param name="frontFace">Front face winding.</param>
+    /// <param name="depthClipEnabled">Depth clip on/off.</param>
     /// <param name="scissorTestEnabled">Scissor test on/off.</param>
     public RasterizerStateDescription(
         FaceCullMode cullMode,
@@ -44,12 +44,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     }
 
     /// <summary>
-    /// Default: clockwise backface culling, solid fill, depth clip and scissor test both on.
-    /// Settings:
-    ///     CullMode = FaceCullMode.Back
-    ///     FrontFace = FrontFace.Clockwise
-    ///     DepthClipEnabled = true
-    ///     ScissorTestEnabled = false
+    /// Default: backface culling, clockwise front, depth clip on, scissor off.
     /// </summary>
     public static readonly RasterizerStateDescription Default = new()
     {
@@ -60,12 +55,7 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     };
 
     /// <summary>
-    /// No culling, solid fill, depth clip and scissor test both on.
-    /// Settings:
-    ///     CullMode = FaceCullMode.None
-    ///     FrontFace = FrontFace.Clockwise
-    ///     DepthClipEnabled = true
-    ///     ScissorTestEnabled = false
+    /// No culling, clockwise front, depth clip on, scissor off.
     /// </summary>
     public static readonly RasterizerStateDescription CullNone = new()
     {
@@ -76,9 +66,9 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     };
 
     /// <summary>
-    /// Element-wise equality.
+    /// Field-by-field equality.
     /// </summary>
-    /// <param name="other">Instance to compare to.</param>
+    /// <param name="other">Other instance.</param>
     /// <returns>True if all fields match.</returns>
     public readonly bool Equals(RasterizerStateDescription other)
     {
@@ -89,9 +79,9 @@ public struct RasterizerStateDescription : IEquatable<RasterizerStateDescription
     }
 
     /// <summary>
-    /// Hash code for this instance.
+    /// Hash code.
     /// </summary>
-    /// <returns>Hash code.</returns>
+    /// <returns>Hash.</returns>
     public override readonly int GetHashCode()
     {
         return HashCode.Combine(

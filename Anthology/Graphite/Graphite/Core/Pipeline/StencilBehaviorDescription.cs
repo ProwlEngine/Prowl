@@ -47,7 +47,7 @@ public struct StencilBehaviorDescription : IEquatable<StencilBehaviorDescription
     /// Element-wise equality.
     /// </summary>
     /// <param name="other">Instance to compare against.</param>
-    /// <returns>True if all fields match.</returns>
+    /// <returns>True if equal.</returns>
     public readonly bool Equals(StencilBehaviorDescription other)
     {
         return Fail == other.Fail && Pass == other.Pass && DepthFail == other.DepthFail && Comparison == other.Comparison;

@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Supported properties for a pixel format + texture type + usage combo on a device.
+/// Format properties for pixel format/texture/usage combo.
 /// </summary>
 public readonly struct PixelFormatProperties
 {
@@ -29,7 +29,7 @@ public readonly struct PixelFormatProperties
     private readonly uint _sampleCounts;
 
     /// <summary>
-    /// Whether the sample count is supported.
+    /// Check if sample count is supported.
     /// </summary>
     /// <param name="count">Sample count to check.</param>
     /// <returns>True if supported.</returns>

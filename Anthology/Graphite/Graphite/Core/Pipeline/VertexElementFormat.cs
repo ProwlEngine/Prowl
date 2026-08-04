@@ -1,7 +1,7 @@
 ﻿namespace Prowl.Graphite;
 
 /// <summary>
-/// Vertex element data format.
+/// Vertex element format.
 /// </summary>
 public enum VertexElementFormat : byte
 {
@@ -22,7 +22,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     Float4,
     /// <summary>
-    /// 2x uint8, normalized.
+    /// 2x uint8, norm.
     /// </summary>
     Byte2_Norm,
     /// <summary>
@@ -30,7 +30,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     Byte2,
     /// <summary>
-    /// 4x uint8, normalized.
+    /// 4x uint8, norm.
     /// </summary>
     Byte4_Norm,
     /// <summary>
@@ -38,7 +38,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     Byte4,
     /// <summary>
-    /// 2x int8, normalized.
+    /// 2x int8, norm.
     /// </summary>
     SByte2_Norm,
     /// <summary>
@@ -46,7 +46,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     SByte2,
     /// <summary>
-    /// 4x int8, normalized.
+    /// 4x int8, norm.
     /// </summary>
     SByte4_Norm,
     /// <summary>
@@ -54,7 +54,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     SByte4,
     /// <summary>
-    /// 2x uint16, normalized.
+    /// 2x uint16, norm.
     /// </summary>
     UShort2_Norm,
     /// <summary>
@@ -62,7 +62,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     UShort2,
     /// <summary>
-    /// 4x uint16, normalized.
+    /// 4x uint16, norm.
     /// </summary>
     UShort4_Norm,
     /// <summary>
@@ -70,7 +70,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     UShort4,
     /// <summary>
-    /// 2x int16, normalized.
+    /// 2x int16, norm.
     /// </summary>
     Short2_Norm,
     /// <summary>
@@ -78,7 +78,7 @@ public enum VertexElementFormat : byte
     /// </summary>
     Short2,
     /// <summary>
-    /// 4x int16, normalized.
+    /// 4x int16, norm.
     /// </summary>
     Short4_Norm,
     /// <summary>

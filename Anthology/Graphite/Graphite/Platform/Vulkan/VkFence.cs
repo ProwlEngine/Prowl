@@ -8,8 +8,6 @@ internal unsafe class VkFence : Fence
 {
     private readonly VkGraphicsDevice _gd;
     private VkFenceHandle _fence;
-    private string _name;
-    private bool _destroyed;
 
     public VkFenceHandle DeviceFence => _fence;
 
@@ -30,23 +28,11 @@ internal unsafe class VkFence : Fence
     }
 
     public override bool Signaled => _gd.Vk.GetFenceStatus(_gd.Device, _fence) == Result.Success;
-    public override bool IsDisposed => _destroyed;
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value; _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
-        if (!_destroyed)
-        {
-            _gd.Vk.DestroyFence(_gd.Device, _fence, null);
-            _destroyed = true;
-        }
+        _gd.Vk.DestroyFence(_gd.Device, _fence, null);
     }
 }

@@ -11,35 +11,9 @@ internal unsafe partial class VkTexture : Texture
     private readonly Image _optimalImage;
     private readonly VkMemoryBlock _memoryBlock;
     private readonly Silk.NET.Vulkan.Buffer _stagingBuffer;
-    private PixelFormat _format; // Static for regular images -- may change for shared staging images
     private readonly uint _actualImageArrayLayers;
-    private bool _destroyed;
 
-    // Immutable except for shared staging Textures.
-    private uint _width;
-    private uint _height;
-    private uint _depth;
-
-    public override uint Width => _width;
-
-    public override uint Height => _height;
-
-    public override uint Depth => _depth;
-
-    public override PixelFormat Format => _format;
-
-    public override uint MipLevels { get; }
-
-    public override uint ArrayLayers { get; }
     public uint ActualArrayLayers => _actualImageArrayLayers;
-
-    public override TextureUsage Usage { get; }
-
-    public override TextureType Type { get; }
-
-    public override TextureSampleCount SampleCount { get; }
-
-    public override bool IsDisposed => _destroyed;
 
     public Image OptimalDeviceImage => _optimalImage;
     public Silk.NET.Vulkan.Buffer StagingBuffer => _stagingBuffer;
@@ -49,28 +23,19 @@ internal unsafe partial class VkTexture : Texture
     public SampleCountFlags VkSampleCount { get; }
 
     private ImageLayout[] _imageLayouts;
-    private bool _isSwapchainTexture;
-    private string _name;
+    private readonly bool _isSwapchainTexture;
 
     public ResourceRefCount RefCount { get; }
     public bool IsSwapchainTexture => _isSwapchainTexture;
 
     internal VkTexture(VkGraphicsDevice gd, ref TextureDescription description)
+        : base(description)
     {
         _gd = gd;
-        _width = description.Width;
-        _height = description.Height;
-        _depth = description.Depth;
-        MipLevels = description.MipLevels;
-        ArrayLayers = description.ArrayLayers;
         bool isCubemap = ((description.Usage) & TextureUsage.Cubemap) == TextureUsage.Cubemap;
         _actualImageArrayLayers = isCubemap
             ? 6 * ArrayLayers
             : ArrayLayers;
-        _format = description.Format;
-        Usage = description.Usage;
-        Type = description.Type;
-        SampleCount = description.SampleCount;
         VkSampleCount = VkFormats.ToVkSampleCount(SampleCount);
         VkFormat = VkFormats.ToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil);
 
@@ -207,7 +172,7 @@ internal unsafe partial class VkTexture : Texture
 
         ClearIfRenderTarget();
         TransitionIfSampled();
-        RefCount = new ResourceRefCount(RefCountedDispose);
+        RefCount = new ResourceRefCount(DestroyNative);
 
         Constructor_RecordAllocation((long)allocatedSize);
     }
@@ -223,26 +188,20 @@ internal unsafe partial class VkTexture : Texture
         TextureUsage usage,
         TextureSampleCount sampleCount,
         Image existingImage)
+        : base(new TextureDescription(
+            width, height, 1, mipLevels, arrayLayers,
+            VkFormats.ToPixelFormat(vkFormat), usage, TextureType.Texture2D, sampleCount))
     {
         Debug.Assert(width > 0 && height > 0);
         _gd = gd;
-        MipLevels = mipLevels;
-        _width = width;
-        _height = height;
-        _depth = 1;
         VkFormat = vkFormat;
-        _format = VkFormats.ToPixelFormat(VkFormat);
-        ArrayLayers = arrayLayers;
-        Usage = usage;
-        Type = TextureType.Texture2D;
-        SampleCount = sampleCount;
         VkSampleCount = VkFormats.ToVkSampleCount(sampleCount);
         _optimalImage = existingImage;
         _imageLayouts = [ImageLayout.Undefined];
         _isSwapchainTexture = true;
 
         ClearIfRenderTarget();
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     private void ClearIfRenderTarget()
@@ -333,17 +292,7 @@ internal unsafe partial class VkTexture : Texture
 #endif
         if (oldLayout != newLayout)
         {
-            ImageAspectFlags aspectMask;
-            if ((Usage & TextureUsage.DepthStencil) != 0)
-            {
-                aspectMask = FormatHelpers.IsStencilFormat(Format)
-                    ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-                    : ImageAspectFlags.DepthBit;
-            }
-            else
-            {
-                aspectMask = ImageAspectFlags.ColorBit;
-            }
+            ImageAspectFlags aspectMask = GetAspectMask();
             _gd.Vk.TransitionImageLayout(
                 cb,
                 OptimalDeviceImage,
@@ -388,17 +337,7 @@ internal unsafe partial class VkTexture : Texture
 
                 if (oldLayout != newLayout)
                 {
-                    ImageAspectFlags aspectMask;
-                    if ((Usage & TextureUsage.DepthStencil) != 0)
-                    {
-                        aspectMask = FormatHelpers.IsStencilFormat(Format)
-                            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-                            : ImageAspectFlags.DepthBit;
-                    }
-                    else
-                    {
-                        aspectMask = ImageAspectFlags.ColorBit;
-                    }
+                    ImageAspectFlags aspectMask = GetAspectMask();
                     _gd.Vk.TransitionImageLayout(
                         cb,
                         OptimalDeviceImage,
@@ -417,29 +356,33 @@ internal unsafe partial class VkTexture : Texture
         }
     }
 
+    private ImageAspectFlags GetAspectMask()
+    {
+        if ((Usage & TextureUsage.DepthStencil) == 0)
+        {
+            return ImageAspectFlags.ColorBit;
+        }
+
+        return FormatHelpers.IsStencilFormat(Format)
+            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
+            : ImageAspectFlags.DepthBit;
+    }
+
     internal ImageLayout GetImageLayout(uint mipLevel, uint arrayLayer)
     {
         return _imageLayouts[CalculateSubresource(mipLevel, arrayLayer)];
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
     internal void SetStagingDimensions(uint width, uint height, uint depth, PixelFormat format)
     {
         Debug.Assert(_stagingBuffer.Handle != 0);
         Debug.Assert(Usage == TextureUsage.Staging);
-        _width = width;
-        _height = height;
-        _depth = depth;
-        _format = format;
+        _description.Width = width;
+        _description.Height = height;
+        _description.Depth = depth;
+        _description.Format = format;
     }
 
     private protected override void DisposeCore()
@@ -447,31 +390,30 @@ internal unsafe partial class VkTexture : Texture
         RefCount.Decrement();
     }
 
-    private void RefCountedDispose()
+    private void DestroyNative()
     {
-        if (!_destroyed)
+        // Swapchain images belong to the swapchain, not to this wrapper.
+        if (_isSwapchainTexture)
         {
-            base.Dispose();
-
-            _destroyed = true;
-
-            bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
-            if (isStaging)
-            {
-                _gd.Vk.DestroyBuffer(_gd.Device, _stagingBuffer, null);
-            }
-            else
-            {
-                _gd.Vk.DestroyImage(_gd.Device, _optimalImage, null);
-            }
-
-            if (_memoryBlock.DeviceMemory.Handle != 0)
-            {
-                _gd.MemoryManager.Free(_memoryBlock);
-            }
-
-            DisposeCore_RecordFree();
+            return;
         }
+
+        bool isStaging = (Usage & TextureUsage.Staging) == TextureUsage.Staging;
+        if (isStaging)
+        {
+            _gd.Vk.DestroyBuffer(_gd.Device, _stagingBuffer, null);
+        }
+        else
+        {
+            _gd.Vk.DestroyImage(_gd.Device, _optimalImage, null);
+        }
+
+        if (_memoryBlock.DeviceMemory.Handle != 0)
+        {
+            _gd.MemoryManager.Free(_memoryBlock);
+        }
+
+        DisposeCore_RecordFree();
     }
 
     internal void SetImageLayout(uint mipLevel, uint arrayLayer, ImageLayout layout)

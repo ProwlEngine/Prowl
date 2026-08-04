@@ -12,29 +12,19 @@ internal unsafe partial class VkBuffer : DeviceBuffer
     private readonly VkGraphicsDevice _gd;
     private VkBufferHandle _deviceBuffer;
     private VkMemoryBlock _memory;
-    private MemoryRequirements _bufferMemoryRequirements;
     public ResourceRefCount RefCount { get; }
-    private bool _destroyed;
-    private string _name;
-    public override bool IsDisposed => _destroyed;
-
-    public override uint SizeInBytes { get; }
-    public override BufferUsage Usage { get; }
 
     public VkBufferHandle DeviceBuffer => _deviceBuffer;
     public VkMemoryBlock Memory => _memory;
 
-    public MemoryRequirements BufferMemoryRequirements => _bufferMemoryRequirements;
-
-    public VkBuffer(VkGraphicsDevice gd, uint sizeInBytes, BufferUsage usage, string? callerMember = null)
+    public VkBuffer(VkGraphicsDevice gd, in BufferDescription description)
+        : base(description)
     {
         _gd = gd;
-        SizeInBytes = sizeInBytes;
-        Usage = usage;
 
         CreateNativeBuffer();
 
-        RefCount = new ResourceRefCount(DisposeCore);
+        RefCount = new ResourceRefCount(DestroyNative);
     }
 
     private void CreateNativeBuffer()
@@ -70,6 +60,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         };
         _gd.Vk.CreateBuffer(_gd.Device, in bufferCI, null, out _deviceBuffer).CheckResult();
 
+        MemoryRequirements bufferMemReqs;
         bool prefersDedicatedAllocation;
         if (_gd.GetBufferMemoryRequirements2 != null)
         {
@@ -88,12 +79,12 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             };
             memReqs2.PNext = &dedicatedReqs;
             _gd.GetBufferMemoryRequirements2(_gd.Device, &memReqInfo2, &memReqs2);
-            _bufferMemoryRequirements = memReqs2.MemoryRequirements;
+            bufferMemReqs = memReqs2.MemoryRequirements;
             prefersDedicatedAllocation = dedicatedReqs.PrefersDedicatedAllocation || dedicatedReqs.RequiresDedicatedAllocation;
         }
         else
         {
-            _gd.Vk.GetBufferMemoryRequirements(_gd.Device, _deviceBuffer, out _bufferMemoryRequirements);
+            _gd.Vk.GetBufferMemoryRequirements(_gd.Device, _deviceBuffer, out bufferMemReqs);
             prefersDedicatedAllocation = false;
         }
 
@@ -109,7 +100,7 @@ internal unsafe partial class VkBuffer : DeviceBuffer
             // Use "host cached" memory for staging when available, for better performance of GPU -> CPU transfers
             bool hostCachedAvailable = _gd.Vk.TryFindMemoryType(
                 _gd.PhysicalDeviceMemProperties,
-                _bufferMemoryRequirements.MemoryTypeBits,
+                bufferMemReqs.MemoryTypeBits,
                 memoryPropertyFlags | MemoryPropertyFlags.HostCachedBit,
                 out _);
             if (hostCachedAvailable)
@@ -120,11 +111,11 @@ internal unsafe partial class VkBuffer : DeviceBuffer
 
         VkMemoryBlock memoryToken = _gd.MemoryManager.Allocate(
             _gd.PhysicalDeviceMemProperties,
-            _bufferMemoryRequirements.MemoryTypeBits,
+            bufferMemReqs.MemoryTypeBits,
             memoryPropertyFlags,
             hostVisible,
-            _bufferMemoryRequirements.Size,
-            _bufferMemoryRequirements.Alignment,
+            bufferMemReqs.Size,
+            bufferMemReqs.Alignment,
             prefersDedicatedAllocation,
             default,
             _deviceBuffer);
@@ -171,29 +162,17 @@ internal unsafe partial class VkBuffer : DeviceBuffer
         }
     }
 
-    public override string Name
-    {
-        get => _name;
-        set
-        {
-            _name = value;
-            _gd.SetResourceName(this, value);
-        }
-    }
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
 
-    public override void Dispose()
+    private protected override void DisposeCore()
     {
         RefCount.Decrement();
     }
 
-    private void DisposeCore()
+    private void DestroyNative()
     {
-        if (!_destroyed)
-        {
-            _destroyed = true;
-            _gd.Vk.DestroyBuffer(_gd.Device, _deviceBuffer, null);
-            _gd.MemoryManager.Free(Memory);
-            _gd.RecordBufferFree(Usage, SizeInBytes);
-        }
+        _gd.Vk.DestroyBuffer(_gd.Device, _deviceBuffer, null);
+        _gd.MemoryManager.Free(Memory);
+        _gd.RecordBufferFree(Usage, SizeInBytes);
     }
 }

@@ -3,37 +3,37 @@ using System;
 namespace Prowl.Graphite;
 
 /// <summary>
-/// Describes a compute program, for creation via ResourceFactory.
+/// Compute program descriptor for ResourceFactory.
 /// </summary>
 public struct ComputeDescription : IEquatable<ComputeDescription>
 {
     /// <summary>
-    /// Compute stage description. Stage must be Compute.
+    /// Compute stage; must be Compute type.
     /// </summary>
     public ShaderStageDescription Stage;
 
     /// <summary>
-    /// Resource layouts this program declares.
+    /// Resource layouts declared.
     /// </summary>
     public ResourceLayoutDescription[] ResourceLayouts;
 
     /// <summary>
-    /// Thread group size, X.
+    /// Thread group size X.
     /// </summary>
     public uint ThreadGroupSizeX;
 
     /// <summary>
-    /// Thread group size, Y.
+    /// Thread group size Y.
     /// </summary>
     public uint ThreadGroupSizeY;
 
     /// <summary>
-    /// Thread group size, Z.
+    /// Thread group size Z.
     /// </summary>
     public uint ThreadGroupSizeZ;
 
     /// <summary>
-    /// Constructs a new instance.
+    /// Creates new instance.
     /// </summary>
     public ComputeDescription(
         ShaderStageDescription stage,
@@ -50,7 +50,7 @@ public struct ComputeDescription : IEquatable<ComputeDescription>
     }
 
     /// <summary>
-    /// Field-by-field equality.
+    /// Field-by-field equality check.
     /// </summary>
     public bool Equals(ComputeDescription other)
     {
