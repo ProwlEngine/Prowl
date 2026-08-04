@@ -33,8 +33,8 @@ internal unsafe partial class VkGraphicsDevice
             return null;
 
         QueryPool pool = GetFreePipelineStatsQueryPool();
-        _vk.CmdResetQueryPool(cb, pool, 0, 1);
-        _vk.CmdBeginQuery(cb, pool, 0, QueryControlFlags.None);
+        Vk.CmdResetQueryPool(cb, pool, 0, 1);
+        Vk.CmdBeginQuery(cb, pool, 0, QueryControlFlags.None);
         return pool;
     }
 
@@ -44,7 +44,7 @@ internal unsafe partial class VkGraphicsDevice
         if (pool is not { } p)
             return;
 
-        _vk.CmdEndQuery(cb, p, 0);
+        Vk.CmdEndQuery(cb, p, 0);
     }
 
     // Blocks until the query's results are available (the caller only reaches here once the
@@ -53,8 +53,8 @@ internal unsafe partial class VkGraphicsDevice
     internal GpuVertexStats ResolvePipelineStats(QueryPool pool)
     {
         ulong* results = stackalloc ulong[5];
-        _vk.GetQueryPoolResults(
-            _device, pool, 0, 1,
+        Vk.GetQueryPoolResults(
+            Device, pool, 0, 1,
             (nuint)(sizeof(ulong) * 5), results, sizeof(ulong) * 5,
             QueryResultFlags.ResultWaitBit | QueryResultFlags.Result64Bit).CheckResult();
 
@@ -73,7 +73,7 @@ internal unsafe partial class VkGraphicsDevice
             QueryCount = 1,
             PipelineStatistics = PipelineStatsFlags,
         };
-        _vk.CreateQueryPool(_device, in ci, null, out QueryPool newPool).CheckResult();
+        Vk.CreateQueryPool(Device, in ci, null, out QueryPool newPool).CheckResult();
         return newPool;
     }
 }

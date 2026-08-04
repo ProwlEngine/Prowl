@@ -15,11 +15,11 @@ internal unsafe partial class VkGraphicsDevice
             PNext = &budget
         };
 
-        _getPhysicalDeviceMemoryProperties2(_physicalDevice, &props2);
+        _getPhysicalDeviceMemoryProperties2(PhysicalDevice, &props2);
 
         ulong totalBudget = 0;
         ulong totalUsage = 0;
-        for (int i = 0; i < _physicalDeviceMemProperties.MemoryHeapCount; i++)
+        for (int i = 0; i < PhysicalDeviceMemProperties.MemoryHeapCount; i++)
         {
             totalBudget += budget.HeapBudget[i];
             totalUsage += budget.HeapUsage[i];

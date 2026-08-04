@@ -19,8 +19,8 @@ internal unsafe partial class VkGraphicsDevice
             return null;
 
         QueryPool pool = GetFreeTimingQueryPool();
-        _vk.CmdResetQueryPool(cb, pool, 0, 2);
-        _vk.CmdWriteTimestamp(cb, PipelineStageFlags.TopOfPipeBit, pool, 0);
+        Vk.CmdResetQueryPool(cb, pool, 0, 2);
+        Vk.CmdWriteTimestamp(cb, PipelineStageFlags.TopOfPipeBit, pool, 0);
         return pool;
     }
 
@@ -30,7 +30,7 @@ internal unsafe partial class VkGraphicsDevice
         if (pool is not { } p)
             return;
 
-        _vk.CmdWriteTimestamp(cb, PipelineStageFlags.BottomOfPipeBit, p, 1);
+        Vk.CmdWriteTimestamp(cb, PipelineStageFlags.BottomOfPipeBit, p, 1);
     }
 
     // Blocks until both timestamps are available (the caller only reaches here once the
@@ -39,8 +39,8 @@ internal unsafe partial class VkGraphicsDevice
     internal double ResolveTiming(QueryPool pool)
     {
         ulong* timestamps = stackalloc ulong[2];
-        _vk.GetQueryPoolResults(
-            _device, pool, 0, 2,
+        Vk.GetQueryPoolResults(
+            Device, pool, 0, 2,
             (nuint)(sizeof(ulong) * 2), timestamps, sizeof(ulong),
             QueryResultFlags.ResultWaitBit | QueryResultFlags.Result64Bit).CheckResult();
 
@@ -61,7 +61,7 @@ internal unsafe partial class VkGraphicsDevice
             QueryType = QueryType.Timestamp,
             QueryCount = 2,
         };
-        _vk.CreateQueryPool(_device, in ci, null, out QueryPool newPool).CheckResult();
+        Vk.CreateQueryPool(Device, in ci, null, out QueryPool newPool).CheckResult();
         return newPool;
     }
 }

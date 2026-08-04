@@ -1,14 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 
 using Silk.NET.Core;
-using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
-using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 
 namespace Prowl.Graphite.Vk;
@@ -16,6 +11,9 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private const uint VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR = 0x00000001;
+
+    private bool _standardValidationSupported;
+    private bool _khronosValidationSupported;
 
     private void CreateInstance(bool debug, VulkanDeviceOptions options, VkSurfaceSwapchainSource? surface)
     {
@@ -120,7 +118,7 @@ internal unsafe partial class VkGraphicsDevice
             instanceCI.PpEnabledLayerNames = (byte**)instanceLayers;
         }
 
-        _vk.CreateInstance(in instanceCI, null, out _instance).CheckResult();
+        Vk.CreateInstance(in instanceCI, null, out Instance).CheckResult();
 
         if (debug && debugReportExtensionAvailable)
         {
@@ -139,53 +137,10 @@ internal unsafe partial class VkGraphicsDevice
         }
     }
 
-    public void EnableDebugCallback(DebugReportFlagsEXT flags = DebugReportFlagsEXT.WarningBitExt | DebugReportFlagsEXT.ErrorBitExt)
-    {
-        Debug.WriteLine("Enabling Vulkan Debug callbacks.");
-        _debugCallbackFunc = new PfnDebugReportCallbackEXT(&DebugCallback);
-        DebugReportCallbackCreateInfoEXT debugCallbackCI = new(sType: StructureType.DebugReportCallbackCreateInfoExt);
-        debugCallbackCI.Flags = flags;
-        debugCallbackCI.PfnCallback = _debugCallbackFunc;
-
-        if (_vk.TryGetInstanceExtension(_instance, out _extDebugReport))
-        {
-            _extDebugReport.CreateDebugReportCallback(_instance, in debugCallbackCI, null, out _debugCallbackHandle).CheckResult();
-        }
-    }
-
-    // Stored validation error from the debug callback (cannot throw from unmanaged callback)
-    private static volatile string? _lastValidationError;
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static Bool32 DebugCallback(
-        DebugReportFlagsEXT flags,
-        DebugReportObjectTypeEXT objectType,
-        ulong @object,
-        nuint location,
-        int messageCode,
-        byte* pLayerPrefix,
-        byte* pMessage,
-        void* pUserData)
-    {
-        string message = Util.GetString(pMessage);
-        DebugReportFlagsEXT debugReportFlags = flags;
-
-        string fullMessage = $"[{debugReportFlags}] ({objectType}) {message}";
-
-        if (debugReportFlags == DebugReportFlagsEXT.ErrorBitExt)
-        {
-            _lastValidationError = fullMessage;
-            return true;
-        }
-
-        Console.WriteLine(fullMessage);
-        return false;
-    }
-
     private void CreatePhysicalDevice()
     {
         uint deviceCount = 0;
-        _vk.EnumeratePhysicalDevices(_instance, ref deviceCount, null);
+        Vk.EnumeratePhysicalDevices(Instance, ref deviceCount, null);
         if (deviceCount == 0)
         {
             throw new InvalidOperationException("No physical devices exist.");
@@ -194,13 +149,13 @@ internal unsafe partial class VkGraphicsDevice
         PhysicalDevice[] physicalDevices = new PhysicalDevice[deviceCount];
         fixed (PhysicalDevice* devicesPtr = physicalDevices)
         {
-            _vk.EnumeratePhysicalDevices(_instance, ref deviceCount, devicesPtr);
+            Vk.EnumeratePhysicalDevices(Instance, ref deviceCount, devicesPtr);
         }
         // Just use the first enumerated device.
         // apologies to the dual-GPU crowd.
-        _physicalDevice = physicalDevices[0];
+        PhysicalDevice = physicalDevices[0];
 
-        _vk.GetPhysicalDeviceProperties(_physicalDevice, out _physicalDeviceProperties);
+        Vk.GetPhysicalDeviceProperties(PhysicalDevice, out _physicalDeviceProperties);
         fixed (byte* utf8NamePtr = _physicalDeviceProperties.DeviceName)
         {
             _deviceName = Util.GetString(utf8NamePtr);
@@ -208,30 +163,18 @@ internal unsafe partial class VkGraphicsDevice
 
         _vendorName = "id:" + _physicalDeviceProperties.VendorID.ToString("x8");
         _apiVersion = GraphicsApiVersion.Unknown;
-        _driverInfo = "version:" + _physicalDeviceProperties.DriverVersion.ToString("x8");
+        DriverInfo = "version:" + _physicalDeviceProperties.DriverVersion.ToString("x8");
 
-        _vk.GetPhysicalDeviceFeatures(_physicalDevice, out _physicalDeviceFeatures);
+        Vk.GetPhysicalDeviceFeatures(PhysicalDevice, out _physicalDeviceFeatures);
 
-        _vk.GetPhysicalDeviceMemoryProperties(_physicalDevice, out _physicalDeviceMemProperties);
-    }
-
-    public ExtensionProperties[] GetDeviceExtensionProperties()
-    {
-        uint propertyCount = 0;
-        _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, null).CheckResult();
-        ExtensionProperties[] props = new ExtensionProperties[(int)propertyCount];
-        fixed (ExtensionProperties* properties = props)
-        {
-            _vk.EnumerateDeviceExtensionProperties(_physicalDevice, (byte*)null, &propertyCount, properties).CheckResult();
-        }
-        return props;
+        Vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out PhysicalDeviceMemProperties);
     }
 
     private void CreateLogicalDevice(SurfaceKHR surface, bool preferStandardClipY, VulkanDeviceOptions options)
     {
         GetQueueFamilyIndices(surface);
 
-        HashSet<uint> familyIndices = [_graphicsQueueIndex, _presentQueueIndex];
+        HashSet<uint> familyIndices = [GraphicsQueueIndex, PresentQueueIndex];
         DeviceQueueCreateInfo* queueCreateInfos = stackalloc DeviceQueueCreateInfo[familyIndices.Count];
         uint queueCreateInfosCount = (uint)familyIndices.Count;
 
@@ -349,30 +292,23 @@ internal unsafe partial class VkGraphicsDevice
             deviceCreateInfo.EnabledExtensionCount = activeExtensionCount;
             deviceCreateInfo.PpEnabledExtensionNames = (byte**)activeExtensionsPtr;
 
-            _vk.CreateDevice(_physicalDevice, in deviceCreateInfo, null, out _device).CheckResult();
+            Vk.CreateDevice(PhysicalDevice, in deviceCreateInfo, null, out Device).CheckResult();
         }
 
-        _vk.GetDeviceQueue(_device, _graphicsQueueIndex, 0, out _graphicsQueue);
+        Vk.GetDeviceQueue(Device, GraphicsQueueIndex, 0, out GraphicsQueue);
 
-        _vk.TryGetInstanceExtension(_instance, out _khrSurface);
-        _vk.TryGetDeviceExtension(_instance, _device, out _khrSwapchain);
+        Vk.TryGetInstanceExtension(Instance, out KhrSurface);
+        Vk.TryGetDeviceExtension(Instance, Device, out KhrSwapchain);
 
         if (_debugMarkerEnabled)
         {
-            _setObjectNameDelegate = Marshal.GetDelegateForFunctionPointer<vkDebugMarkerSetObjectNameEXT_t>(
-                GetInstanceProcAddr("vkDebugMarkerSetObjectNameEXT"));
-            _markerBegin = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerBeginEXT_t>(
-                GetInstanceProcAddr("vkCmdDebugMarkerBeginEXT"));
-            _markerEnd = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerEndEXT_t>(
-                GetInstanceProcAddr("vkCmdDebugMarkerEndEXT"));
-            _markerInsert = Marshal.GetDelegateForFunctionPointer<vkCmdDebugMarkerInsertEXT_t>(
-                GetInstanceProcAddr("vkCmdDebugMarkerInsertEXT"));
+            LoadDebugMarkerFunctions();
         }
         if (hasDedicatedAllocation && hasMemReqs2)
         {
-            _getBufferMemoryRequirements2 = GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2")
+            GetBufferMemoryRequirements2 = GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2")
                 ?? GetDeviceProcAddr<vkGetBufferMemoryRequirements2_t>("vkGetBufferMemoryRequirements2KHR");
-            _getImageMemoryRequirements2 = GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2")
+            GetImageMemoryRequirements2 = GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2")
                 ?? GetDeviceProcAddr<vkGetImageMemoryRequirements2_t>("vkGetImageMemoryRequirements2KHR");
         }
         if (_getPhysicalDeviceProperties2 != null && hasMemoryBudget)
@@ -386,7 +322,7 @@ internal unsafe partial class VkGraphicsDevice
             VkPhysicalDeviceDriverProperties driverProps = VkPhysicalDeviceDriverProperties.New();
 
             deviceProps.PNext = &driverProps;
-            _getPhysicalDeviceProperties2(_physicalDevice, &deviceProps);
+            _getPhysicalDeviceProperties2(PhysicalDevice, &deviceProps);
 
             string driverName = Encoding.UTF8.GetString(
                 driverProps.driverName, VkPhysicalDeviceDriverProperties.DriverNameLength).TrimEnd('\0');
@@ -396,55 +332,19 @@ internal unsafe partial class VkGraphicsDevice
 
             VkConformanceVersion conforming = driverProps.conformanceVersion;
             _apiVersion = new GraphicsApiVersion(conforming.major, conforming.minor, conforming.subminor, conforming.patch);
-            _driverName = driverName;
-            _driverInfo = driverInfo;
+            DriverName = driverName;
+            DriverInfo = driverInfo;
         }
-    }
-
-    private IntPtr GetInstanceProcAddr(string name)
-    {
-        byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
-        Utf8Stack.Write(name, utf8Ptr);
-
-        return (IntPtr)_vk.GetInstanceProcAddr(_instance, utf8Ptr);
-    }
-
-    internal T? GetInstanceProcAddr<T>(string name)
-    {
-        IntPtr funcPtr = GetInstanceProcAddr(name);
-        if (funcPtr != IntPtr.Zero)
-        {
-            return Marshal.GetDelegateForFunctionPointer<T>(funcPtr);
-        }
-        return default;
-    }
-
-    private IntPtr GetDeviceProcAddr(string name)
-    {
-        byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
-        Utf8Stack.Write(name, utf8Ptr);
-
-        return (IntPtr)_vk.GetDeviceProcAddr(_device, utf8Ptr);
-    }
-
-    private T? GetDeviceProcAddr<T>(string name)
-    {
-        IntPtr funcPtr = GetDeviceProcAddr(name);
-        if (funcPtr != IntPtr.Zero)
-        {
-            return Marshal.GetDelegateForFunctionPointer<T>(funcPtr);
-        }
-        return default;
     }
 
     private void GetQueueFamilyIndices(SurfaceKHR surface)
     {
         uint queueFamilyCount = 0;
-        _vk.GetPhysicalDeviceQueueFamilyProperties(_physicalDevice, ref queueFamilyCount, null);
+        Vk.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyCount, null);
         QueueFamilyProperties[] qfp = new QueueFamilyProperties[queueFamilyCount];
         fixed (QueueFamilyProperties* qfpPtr = qfp)
         {
-            _vk.GetPhysicalDeviceQueueFamilyProperties(_physicalDevice, ref queueFamilyCount, qfpPtr);
+            Vk.GetPhysicalDeviceQueueFamilyProperties(PhysicalDevice, ref queueFamilyCount, qfpPtr);
         }
 
         bool foundGraphics = false;
@@ -454,18 +354,18 @@ internal unsafe partial class VkGraphicsDevice
         {
             if ((qfp[idx].QueueFlags & QueueFlags.GraphicsBit) != 0)
             {
-                _graphicsQueueIndex = idx;
+                GraphicsQueueIndex = idx;
                 foundGraphics = true;
             }
 
             if (!foundPresent)
             {
-                if (_vk.TryGetInstanceExtension(_instance, out KhrSurface khrSurface))
+                if (Vk.TryGetInstanceExtension(Instance, out KhrSurface khrSurface))
                 {
-                    khrSurface.GetPhysicalDeviceSurfaceSupport(_physicalDevice, idx, surface, out Bool32 presentSupported);
+                    khrSurface.GetPhysicalDeviceSurfaceSupport(PhysicalDevice, idx, surface, out Bool32 presentSupported);
                     if (presentSupported)
                     {
-                        _presentQueueIndex = idx;
+                        PresentQueueIndex = idx;
                         foundPresent = true;
                     }
                 }
@@ -480,14 +380,14 @@ internal unsafe partial class VkGraphicsDevice
 
     private void CreateDescriptorPool()
     {
-        _descriptorPoolManager = new VkDescriptorPoolManager(this);
+        DescriptorPoolManager = new VkDescriptorPoolManager(this);
     }
 
     private void CreateGraphicsCommandPool()
     {
         CommandPoolCreateInfo commandPoolCI = new(sType: StructureType.CommandPoolCreateInfo);
         commandPoolCI.Flags = CommandPoolCreateFlags.ResetCommandBufferBit;
-        commandPoolCI.QueueFamilyIndex = _graphicsQueueIndex;
-        _vk.CreateCommandPool(_device, in commandPoolCI, null, out _graphicsCommandPool).CheckResult();
+        commandPoolCI.QueueFamilyIndex = GraphicsQueueIndex;
+        Vk.CreateCommandPool(Device, in commandPoolCI, null, out _graphicsCommandPool).CheckResult();
     }
 }

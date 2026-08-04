@@ -14,6 +14,19 @@ internal unsafe partial class VkGraphicsDevice
     private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new();
     private readonly List<FenceSubmissionInfo> _submittedFences = [];
 
+    public override void ResetFence(Fence fence)
+    {
+        VkFenceHandle vkFence = Util.AssertSubtype<Fence, VkFence>(fence).DeviceFence;
+        Vk.ResetFences(Device, 1, &vkFence);
+    }
+
+    public override bool WaitForFence(Fence fence, ulong nanosecondTimeout)
+    {
+        VkFenceHandle vkFence = Util.AssertSubtype<Fence, VkFence>(fence).DeviceFence;
+        Result result = Vk.WaitForFences(Device, 1, &vkFence, true, nanosecondTimeout);
+        return result == Result.Success;
+    }
+
     internal void SubmitCommandBufferInternal(CommandBuffer cl)
     {
         SubmitCommandBuffer(cl, 0, null, 0, null, null);
@@ -43,12 +56,12 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            _vk.QueueSubmit(_graphicsQueue, 1, &si, fence).CheckResult();
+            Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
             FlushValidationErrors();
         }
 
-        _vk.WaitForFences(_device, 1, &fence, true, ulong.MaxValue).CheckResult();
-        _vk.ResetFences(_device, 1, &fence).CheckResult();
+        Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue).CheckResult();
+        Vk.ResetFences(Device, 1, &fence).CheckResult();
         ReturnSubmissionFence(fence);
 
         if (timingPool is { } pool)
@@ -129,12 +142,12 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
-            _vk.QueueSubmit(_graphicsQueue, 1, &si, vkFence).CheckResult();
+            Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
             FlushValidationErrors();
 
             if (useExtraFence)
             {
-                _vk.QueueSubmit(_graphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
+                Vk.QueueSubmit(GraphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
             }
         }
 
@@ -151,7 +164,7 @@ internal unsafe partial class VkGraphicsDevice
             for (int i = 0; i < _submittedFences.Count; i++)
             {
                 FenceSubmissionInfo fsi = _submittedFences[i];
-                if (_vk.GetFenceStatus(_device, fsi.Fence) == Result.Success)
+                if (Vk.GetFenceStatus(Device, fsi.Fence) == Result.Success)
                 {
                     CompleteFenceSubmission(fsi);
                     _submittedFences.RemoveAt(i);
@@ -186,7 +199,7 @@ internal unsafe partial class VkGraphicsDevice
             Profiler?.RecordGpuVertexStats(profilerInfo, in stats);
         }
 
-        _vk.ResetFences(_device, 1, &fence).CheckResult();
+        Vk.ResetFences(Device, 1, &fence).CheckResult();
         ReturnSubmissionFence(fence);
         lock (_stagingResourcesLock)
         {
@@ -240,7 +253,7 @@ internal unsafe partial class VkGraphicsDevice
         {
             FenceCreateInfo fenceCI = new(sType: StructureType.FenceCreateInfo);
             VkFenceHandle newFence;
-            _vk.CreateFence(_device, &fenceCI, null, &newFence).CheckResult();
+            Vk.CreateFence(Device, &fenceCI, null, &newFence).CheckResult();
             return newFence;
         }
     }

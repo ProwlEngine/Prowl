@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 using Silk.NET.Vulkan;
@@ -57,7 +58,7 @@ internal unsafe partial class VkGraphicsDevice
                 DstOffset = bufferOffsetInBytes,
                 Size = sizeInBytes
             };
-            _vk.CmdCopyBuffer(cb, copySrcVkBuffer!.DeviceBuffer, vkBuffer.DeviceBuffer, 1, in copyRegion);
+            Vk.CmdCopyBuffer(cb, copySrcVkBuffer!.DeviceBuffer, vkBuffer.DeviceBuffer, 1, in copyRegion);
 
             pool.EndAndSubmit(cb);
             lock (_stagingResourcesLock)
@@ -78,25 +79,27 @@ internal unsafe partial class VkGraphicsDevice
         return new SharedCommandPool(this, false);
     }
 
-    private IntPtr MapBuffer(VkBuffer buffer, uint numBytes)
+    private void DisposeStagingResources()
     {
-        if (buffer.Memory.IsPersistentMapped)
+        Debug.Assert(_submittedStagingTextures.Count == 0);
+        foreach (VkTexture tex in _availableStagingTextures)
         {
-            return (IntPtr)buffer.Memory.BlockMappedPointer;
+            tex.Dispose();
         }
-        else
-        {
-            void* mappedPtr;
-            _vk.MapMemory(Device, buffer.Memory.DeviceMemory, buffer.Memory.Offset, numBytes, 0, &mappedPtr).CheckResult();
-            return (IntPtr)mappedPtr;
-        }
-    }
 
-    private void UnmapBuffer(VkBuffer buffer)
-    {
-        if (!buffer.Memory.IsPersistentMapped)
+        Debug.Assert(_submittedStagingBuffers.Count == 0);
+        foreach (VkBuffer buffer in _availableStagingBuffers)
         {
-            _vk.UnmapMemory(Device, buffer.Memory.DeviceMemory);
+            buffer.Dispose();
+        }
+
+        lock (_graphicsCommandPoolLock)
+        {
+            while (_sharedGraphicsCommandPools.Count > 0)
+            {
+                SharedCommandPool sharedPool = _sharedGraphicsCommandPools.Pop();
+                sharedPool.Destroy();
+            }
         }
     }
 
@@ -141,7 +144,7 @@ internal unsafe partial class VkGraphicsDevice
             SharedCommandPool pool = GetFreeCommandPool();
             Silk.NET.Vulkan.CommandBuffer cb = pool.BeginNewCommandBuffer();
             VkCommandBuffer.CopyTextureCore_VkCommandBuffer(
-                _vk,
+                Vk,
                 cb,
                 stagingTex, 0, 0, 0, 0, 0,
                 texture, x, y, z, mipLevel, arrayLayer,
