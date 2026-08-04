@@ -33,6 +33,9 @@ internal sealed class PropertyEntry
 
     public UniformPayload Uniform;
 
+    /// <summary>Bumped on every uniform write; lets binders skip repacking unchanged blocks.</summary>
+    public uint Version;
+
     public DeviceBufferRange? Buffer;
     public Texture? Texture;
     public TextureView? TextureView;
@@ -44,6 +47,7 @@ internal sealed class PropertyEntry
         Kind = PropertyEntryKind.Uniform;
         UniformType = type;
         Uniform.As<T>() = value;
+        unchecked { Version++; }
     }
 
 
