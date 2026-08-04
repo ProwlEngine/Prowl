@@ -1506,11 +1506,12 @@ public class EditorAssetBackend : AssetBackendBase
         imported.Add(relativePath);
     }
 
-    public void ProcessFileChanges()
+    /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>
+    public void ProcessFileChanges(bool force = false)
     {
         if (_watcher == null) return;
 
-        var events = _watcher.DrainEvents();
+        var events = _watcher.DrainEvents(force);
         if (events.Count == 0) return;
 
         var imported = new List<string>();
