@@ -260,13 +260,15 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// </summary>
     internal void HierarchyStateChanged()
     {
-        bool newState = _enabled && _go.EnabledInHierarchy;
+        // A component can be toggled before it is ever attached, and stays attached to a GameObject
+        // that has been disposed. Neither has a hierarchy to be enabled in.
+        bool newState = _enabled && _go.IsValid() && _go.EnabledInHierarchy;
         if (newState != _enabledInHierarchy)
         {
             _enabledInHierarchy = newState;
 
             // Only call OnEnable/OnDisable if we're in an active Scene
-            Scene? scene = _go.Scene;
+            Scene? scene = _go.IsValid() ? _go.Scene : null;
             if (scene.IsValid() && scene.IsActive)
             {
                 if (newState)
