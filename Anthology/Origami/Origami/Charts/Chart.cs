@@ -34,7 +34,4 @@ public static class Chart
 
     public static FlameGraphChart<T> FlameGraph<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
         => new(paper, id, Origami.Current, data);
-
-    public static TimelineChart<T> Timeline<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-        => new(paper, id, Origami.Current, data);
 }
