@@ -780,22 +780,16 @@ public class GameObject : EngineObject, ISerializable
     /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
     public IEnumerable<MonoBehaviour> GetComponents(Type type)
     {
+        // Snapshotted rather than yielded off the live storage, so a caller (or a lifecycle callback
+        // it triggers) can add or remove components while walking the result. Component counts are
+        // small enough that the copy costs less than the crash it prevents.
         if (type == typeof(MonoBehaviour))
-        {
-            // Special case for Component
-            foreach (MonoBehaviour comp in _components)
-                yield return comp;
-        }
-        else
-        {
-            if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
-                foreach (MonoBehaviour comp in components)
-                    yield return comp;
-            else
-                foreach (MonoBehaviour comp in _components)
-                    if (comp.GetType().IsAssignableTo(type))
-                        yield return comp;
-        }
+            return _components.ToArray();
+
+        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+            return components.ToArray();
+
+        return _components.Where(comp => comp.GetType().IsAssignableTo(type)).ToArray();
     }
 
     /// <summary>
