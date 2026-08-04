@@ -171,24 +171,85 @@ internal unsafe sealed partial class VkDescriptorBinder
         return range;
     }
 
+    // Memoized the same way as the transient path, keyed on the explicit buffer's identity, offset and
+    // content version plus each field's source entry and version. A hit skips every write for the draw.
     private DeviceBufferRange GetOrBuildImplicitUbo(
         UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange? writableTarget)
     {
         if (writableTarget is not { } target)
             return GetOrBuildTransientUbo(fields, blockSlot, blockSize);
 
-        // Write only the set fields into the explicit buffer, leaving unset bytes intact. The explicit
-        // buffer is stable across draws, so its identity never changes; write it every draw as before.
-        foreach (UniformBlockField field in fields)
+        VkUniformArena.Block block = CurrentExecution().UniformArena.GetBlock(blockSlot, fields, blockSize);
+
+        if (ExplicitTargetUnchanged(fields, block, target))
+            return target;
+
+        Span<byte> scratch = block.Scratch.AsSpan(0, (int)blockSize);
+
+        for (int i = 0; i < fields.Length; i++)
         {
-            if (FindProperty(field.Name, PropertyEntryKind.Uniform) is not { } uEntry)
+            ref UniformBlockField field = ref fields[i];
+            PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
+            block.ExplicitSources[i] = uEntry;
+            block.ExplicitVersions[i] = uEntry?.Version ?? 0;
+
+            if (uEntry == null)
                 continue;
 
-            ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
-            fixed (byte* ptr = &payload)
-                _gd.UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
+            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
+                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
+                (int)field.Size);
+            src.CopyTo(scratch.Slice((int)field.Offset, (int)field.Size));
         }
+
+        // One write per byte-contiguous run of set fields, so gaps left by unset fields stay intact.
+        fixed (byte* scratchPtr = block.Scratch)
+        {
+            int runStart = -1;
+            for (int i = 0; i < fields.Length; i++)
+            {
+                if (block.ExplicitSources[i] == null)
+                    continue;
+
+                if (runStart < 0)
+                    runStart = i;
+
+                if (i + 1 < fields.Length
+                    && block.ExplicitSources[i + 1] != null
+                    && fields[i].Offset + fields[i].Size == fields[i + 1].Offset)
+                {
+                    continue;
+                }
+
+                uint start = fields[runStart].Offset;
+                uint length = fields[i].Offset + fields[i].Size - start;
+                _gd.UpdateBuffer(target.Buffer, target.Offset + start, (IntPtr)(scratchPtr + start), length);
+                runStart = -1;
+            }
+        }
+
+        block.ExplicitBuffer = target.Buffer;
+        block.ExplicitOffset = target.Offset;
+        block.ExplicitContentVersion = target.Buffer.ContentVersion;
         return target;
+    }
+
+    private bool ExplicitTargetUnchanged(UniformBlockField[] fields, VkUniformArena.Block block, DeviceBufferRange target)
+    {
+        if (!ReferenceEquals(block.ExplicitBuffer, target.Buffer)
+            || block.ExplicitOffset != target.Offset
+            || block.ExplicitContentVersion != target.Buffer.ContentVersion)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < fields.Length; i++)
+        {
+            PropertyEntry? entry = FindProperty(fields[i].Name, PropertyEntryKind.Uniform);
+            if (!ReferenceEquals(entry, block.ExplicitSources[i]) || (entry != null && entry.Version != block.ExplicitVersions[i]))
+                return false;
+        }
+        return true;
     }
 
 
