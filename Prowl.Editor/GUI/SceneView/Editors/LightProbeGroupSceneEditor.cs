@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -22,9 +22,12 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 /// Add / Delete / Duplicate / Select-All from the toolbar or keyboard. Built on the public
 /// <see cref="Handles"/> transform API (dogfooding it for a non-GameObject target).
 /// </summary>
-[SceneViewEditorFor(typeof(LightProbeGroup))]
-public class LightProbeGroupSceneEditor : ISceneViewEditor
+[ComponentSceneTool(typeof(LightProbeGroup))]
+public class LightProbeGroupSceneEditor : SceneTool
 {
+    public override string Name => "Light Probes";
+    public override string Icon => EditorIcons.Lightbulb;
+
     private const string MoveHandleId = "lightprobegroup_move";
     private const string ProbeControl = "lightprobegroup_probe";
     private const string BackgroundControl = "lightprobegroup_bg";
@@ -36,25 +39,25 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
     private readonly List<int> _selection = new();
     private Camera? _cam;
 
-    public int Priority => 0;
-
-    public void OnActivate(GameObject target)
+    public override void OnActivated(SceneToolContext ctx)
     {
-        _group = target.GetComponent<LightProbeGroup>();
+        GameObject? target = ctx.ActiveObject;
+        _group = target.IsValid() ? target.GetComponent<LightProbeGroup>() : null;
         _selection.Clear();
         Handles.Forget(MoveHandleId);
     }
 
-    public void OnDeactivate()
+    public override void OnDeactivated()
     {
         _group = null;
         _selection.Clear();
         Handles.Forget(MoveHandleId);
     }
 
-    public void OnSceneInput(HandleContext ctx, Scene scene)
+    public override void OnSceneInput(SceneToolContext toolCtx)
     {
         if (_group == null) return;
+        HandleContext ctx = toolCtx.Handles;
         _cam = ctx.Camera;
 
         // --- Keyboard shortcuts (ctx.GetKeyDown yields while a text field is being typed into) ---
@@ -114,11 +117,14 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
         DrawProbes();
     }
 
-    public void DrawOverlay(Quill.Canvas canvas, Rect viewport) => Handles.Draw(canvas);
+    public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas) => Handles.Draw(canvas);
 
-    public bool DrawToolbar(Paper paper, string id, Scribe.FontFile font)
+    public override bool OverridesToolStrip => true;
+
+    public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        if (_group == null) return false;
+        if (_group == null) return;
+        var font = Theming.EditorTheme.DefaultFont!;
 
         ToolBtn(paper, $"{id}_add", EditorIcons.Plus, font, AddProbe);
         ToolBtn(paper, $"{id}_dup", EditorIcons.Clone, font, () => { if (_selection.Count > 0) DuplicateSelected(); });
@@ -131,7 +137,6 @@ public class LightProbeGroupSceneEditor : ISceneViewEditor
             .Text($"{_selection.Count}/{_group.ProbePositions.Count}", font)
             .TextColor(EditorTheme.Ink400).FontSize(10f).Alignment(TextAlignment.MiddleCenter);
 
-        return true; // replace the default transform toolbar while editing probes
     }
 
     private void ToolBtn(Paper paper, string id, string icon, Scribe.FontFile font, Action onClick)

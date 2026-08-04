@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -21,9 +21,12 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 /// Scene view editor for terrain provides toolbar with terrain brush tools
 /// and handles brush input (raycast, preview, application).
 /// </summary>
-[SceneViewEditorFor(typeof(TerrainComponent))]
-public class TerrainSceneEditor : ISceneViewEditor
+[ComponentSceneTool(typeof(TerrainComponent))]
+public class TerrainSceneEditor : SceneTool
 {
+    public override string Name => "Terrain";
+    public override string Icon => EditorIcons.Mountain;
+
     private const string BrushControl = "terrain_brush";
 
     private TerrainComponent? _terrain;
@@ -38,14 +41,16 @@ public class TerrainSceneEditor : ISceneViewEditor
 
     public int Priority => 0;
 
-    public void OnActivate(GameObject target)
+    public override void OnActivated(SceneToolContext ctx)
     {
+        GameObject? target = ctx.ActiveObject;
+        if (target == null) return;
         _terrain = target.GetComponent<TerrainComponent>();
         _useTransformTool = false;
         _isPainting = false;
     }
 
-    public void OnDeactivate()
+    public override void OnDeactivated()
     {
         if (_terrain != null)
         {
@@ -57,9 +62,12 @@ public class TerrainSceneEditor : ISceneViewEditor
         _isPainting = false;
     }
 
-    public bool DrawToolbar(Paper paper, string id, Scribe.FontFile font)
+    public override bool OverridesToolStrip => true;
+
+    public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        if (_terrain == null) return false;
+        if (_terrain == null) return;
+        var font = Theming.EditorTheme.DefaultFont!;
 
         // Transform tool button (always available)
         bool isTransform = _useTransformTool;
@@ -95,8 +103,6 @@ public class TerrainSceneEditor : ISceneViewEditor
             DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf, font);
         }
 
-        // Suppress default toolbar we're providing our own
-        return true;
     }
 
     private void DrawSimpleToolBtn(Paper paper, string id, string icon, Scribe.FontFile font)
@@ -135,8 +141,9 @@ public class TerrainSceneEditor : ISceneViewEditor
             });
     }
 
-    public void OnSceneInput(HandleContext ctx, Scene scene)
+    public override void OnSceneInput(SceneToolContext toolCtx)
     {
+        HandleContext ctx = toolCtx.Handles;
         if (_terrain == null || _useTransformTool)
         {
             if (_terrain != null) _terrain.BrushVisible = false;
@@ -466,7 +473,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             Array.Copy(rect, z * w * stride, dst, ((minZ + z) * res + minX) * stride, w * stride);
     }
 
-    public void DrawOverlay(Quill.Canvas canvas, Rect viewport)
+    public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas)
     {
         // Could draw additional 2D brush info here in the future
     }

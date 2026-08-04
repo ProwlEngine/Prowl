@@ -45,6 +45,10 @@ public class EditorSettings
     // IDs of interactive guides/tutorials the user has already completed or skipped.
     public List<string> SeenGuides { get; set; } = new();
 
+    /// <summary>Serialized per-scene-tool settings, keyed by settings type name. Per-user rather
+    /// than per-project: a brush size follows the user, it is not committed with the scene.</summary>
+    public Dictionary<string, string> SceneToolSettings { get; set; } = new();
+
     // Theme
     public EditorThemeData Theme { get; set; } = EditorThemeData.CreateDefault();
 

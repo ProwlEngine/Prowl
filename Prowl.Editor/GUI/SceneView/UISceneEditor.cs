@@ -1,10 +1,11 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -15,9 +16,12 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor;
 
-[SceneViewEditorFor(typeof(UIBehaviour))]
-public sealed class UISceneEditor : ISceneViewEditor
+[ComponentSceneTool(typeof(UIBehaviour))]
+public sealed class UISceneEditor : SceneTool
 {
+    public override string Name => "UI Rect";
+    public override string Icon => EditorIcons.Expand;
+
     private Texture2D _handleTexture = Texture2D.ParseDefault(DefaultTexture.Handle);
 
     /// <summary>The grabbable handles, plus <see cref="Move"/> for the rect body.</summary>
@@ -100,14 +104,13 @@ public sealed class UISceneEditor : ISceneViewEditor
     private Float3 _dragPlaneNormal;
     private Float3 _dragPlaneOrigin;
 
-    public int Priority => 0;
-
-    public void OnActivate(GameObject target)
+    public override void OnActivated(SceneToolContext ctx)
     {
-        _target = target.GetComponent<UIBehaviour>();
+        GameObject? target = ctx.ActiveObject;
+        _target = target.IsValid() ? target.GetComponent<UIBehaviour>() : null;
     }
 
-    public void OnDeactivate()
+    public override void OnDeactivated()
     {
         _target = null;
         _hover = Handle.None;
@@ -118,14 +121,15 @@ public sealed class UISceneEditor : ISceneViewEditor
     // anchors / pivot / size-delta, not Transform.Position), so this editor takes over
     // input entirely for world-space UI. The default toolbar buttons are left visible
     // but inert; the scene handles are the tool.
-    public bool DrawToolbar(Paper paper, string id, Prowl.Scribe.FontFile font) => false;
 
     // Transform.Position does not drive a RectTransform's layout, so the object gizmo would be an
     // inert decoy sitting on top of the rect handles.
-    public bool SuppressTransformGizmo => true;
+    public override bool SuppressTransformGizmo => true;
 
-    public void OnSceneInput(HandleContext ctx, Scene scene)
+    public override void OnSceneInput(SceneToolContext toolCtx)
     {
+        HandleContext ctx = toolCtx.Handles;
+        Scene scene = toolCtx.Scene;
         if (_target == null)
             return;
 

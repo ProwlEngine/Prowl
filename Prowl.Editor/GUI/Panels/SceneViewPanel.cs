@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.OrigamiUI;
@@ -32,6 +33,7 @@ public class SceneViewPanel : DockPanel
     private const string ViewCubeControl = "sceneview_viewcube";
 
     private readonly HandleContext _handles = new();
+    private readonly SceneToolContext _toolContext;
     private EditorCamera? _editorCamera;
     private Gizmo.TransformGizmo? _transformGizmo;
     private bool _wasGizmoActive;
@@ -42,42 +44,16 @@ public class SceneViewPanel : DockPanel
     private Float2 _viewCubeCenter;
     private float _viewCubeRadius;
 
+    public SceneViewPanel() => _toolContext = new SceneToolContext(_handles);
+
     /// <summary>Handle arbitration context for this viewport.</summary>
     public HandleContext Handles => _handles;
 
     /// <summary>The most recently active SceneViewPanel's camera. Used by other panels for "Move to View" etc.</summary>
     public static EditorCamera? ActiveCamera { get; private set; }
 
-    public static ISceneViewEditor? ActiveSceneViewEditor { get; private set; }
-    public static GameObject? ActiveSceneViewTarget { get; private set; }
-
-    public static void UpdateSceneViewEditor()
-    {
-        var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
-        if (selectedGO == null || selectedGO == ActiveSceneViewTarget)
-        {
-            if (selectedGO == null && ActiveSceneViewEditor != null) DeactivateSceneViewEditor();
-            return;
-        }
-        var editor = EditorRegistries.FindSceneViewEditor(selectedGO);
-        if (editor != null)
-        {
-            if (ActiveSceneViewEditor?.GetType() == editor.GetType() && ActiveSceneViewTarget == selectedGO) return;
-            DeactivateSceneViewEditor();
-            ActiveSceneViewEditor = editor;
-            ActiveSceneViewTarget = selectedGO;
-            ActiveSceneViewEditor.OnActivate(selectedGO);
-        }
-        else if (ActiveSceneViewEditor != null)
-            DeactivateSceneViewEditor();
-    }
-
-    public static void DeactivateSceneViewEditor()
-    {
-        ActiveSceneViewEditor?.OnDeactivate();
-        ActiveSceneViewEditor = null;
-        ActiveSceneViewTarget = null;
-    }
+    /// <summary>Tools ticking in the scene view this frame.</summary>
+    public static IReadOnlyList<SceneTool> LiveTools => SceneToolManager.Live;
     private Rect _viewportAbsoluteRect; // Cached absolute screen rect from layout
     private bool _gizmoActive; // Whether the gizmo should draw (selection exists)
 
@@ -152,10 +128,16 @@ public class SceneViewPanel : DockPanel
             .BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
             .Enter())
         {
-            var sceneEditor = ActiveSceneViewEditor;
-            bool suppressDefault = sceneEditor != null && sceneEditor.DrawToolbar(paper, "sv_sce", font);
-            if (!suppressDefault)
+            // The viewport owns the strip and draws the built-in buttons, so they exist even with no
+            // tool doing anything. Live tools append their own; a tool can also replace the built-ins.
+            if (!SceneToolManager.AnyOverridesToolStrip())
                 DrawDefaultToolbar(paper, font);
+
+            foreach (var tool in SceneToolManager.Live)
+            {
+                _toolContext.CurrentTool = tool;
+                tool.OnToolStripGUI(_toolContext, paper, $"sv_tool_{tool.GetType().Name}");
+            }
         }
     }
 
@@ -241,8 +223,6 @@ public class SceneViewPanel : DockPanel
             return;
         }
 
-        // Update scene view editor registry based on selection
-        UpdateSceneViewEditor();
 
         // The scene view always presents and edits UI in world space (each canvas's ReferenceResolution
         // + GameObject transform) regardless of its RenderMode, so screen-space UI can be manipulated
@@ -263,12 +243,15 @@ public class SceneViewPanel : DockPanel
                 // Use Paper's hover state which respects overlays/popups, not just bounds
                 _handles.BeginFrame(cam, _viewportAbsoluteRect, mouseLocal, paper.IsParentHovered);
 
+                _toolContext.Begin(scene, this);
+                SceneToolManager.SyncAvailability(_toolContext);
+
                 // Republished each frame so a tool that reads them without a context or a panel
                 // reference still sees the current state.
                 SceneTools.ViewToolActive = _handles.Blocked;
-                SceneTools.SuppressTransformGizmo = ActiveSceneViewEditor?.SuppressTransformGizmo == true;
+                SceneTools.SuppressTransformGizmo = SceneToolManager.AnySuppressesTransformGizmo();
 
-                ActiveSceneViewEditor?.OnSceneInput(_handles, scene);
+                SceneToolManager.TickInput(_toolContext);
                 UpdateTransformGizmo();
                 // Depth 0: the view cube is a screen-space overlay drawn on top of the scene, so it
                 // wins every overlap rather than competing on scene depth.
@@ -340,13 +323,16 @@ public class SceneViewPanel : DockPanel
                         });
                     }
 
-                    // Draw scene view editor overlay
-                    var sceneEditorOverlay = ActiveSceneViewEditor;
-                    if (sceneEditorOverlay != null)
+                    // Draw every live tool's overlay
+                    if (SceneToolManager.Live.Count > 0)
                     {
                         paper.DrawForeground(ref handle, (canvas2, r2) =>
                         {
-                            sceneEditorOverlay.DrawOverlay(canvas2, r2);
+                            foreach (var overlayTool in SceneToolManager.Live)
+                            {
+                                _toolContext.CurrentTool = overlayTool;
+                                overlayTool.OnDrawOverlay(_toolContext, canvas2);
+                            }
                         });
                     }
                 });
@@ -420,6 +406,22 @@ public class SceneViewPanel : DockPanel
 
             if (isHovered && !DragDrop.IsDragging && DragDrop.Payload is AssetDragPayload assetDrop)
             {
+                // The active tool sees the drop first, so a tool can accept assets its own way
+                // (a material onto a face, say) before the generic handlers spawn an object.
+                bool consumedByTool = false;
+                foreach (var dropTool in SceneToolManager.Live)
+                {
+                    _toolContext.CurrentTool = dropTool;
+                    if (!dropTool.OnAssetDropped(_toolContext, assetDrop)) continue;
+                    consumedByTool = true;
+                    break;
+                }
+                if (consumedByTool)
+                {
+                    DragDrop.EndDrag();
+                    return;
+                }
+
                 var handler = EditorRegistries.FindSceneDropHandler(assetDrop.AssetType);
                 if (handler != null)
                 {
