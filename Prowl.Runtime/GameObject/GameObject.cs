@@ -565,6 +565,11 @@ public class GameObject : EngineObject, ISerializable
 
         if (ReferenceEquals(comp.GameObject, this)) return;
 
+        // A component belongs to exactly one GameObject. Leaving it registered on its previous one
+        // would have both report it from GetComponent, and would destroy it when that one is disposed.
+        if (comp.GameObject.IsValid())
+            comp.GameObject.DetachComponent(comp);
+
         Type type = comp.GetType();
         RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
@@ -681,6 +686,21 @@ public class GameObject : EngineObject, ISerializable
             component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
             component.DetachFromGameObject();
         }
+    }
+
+    /// <summary>
+    /// Removes a component from this GameObject without destroying it, for a move to another one.
+    /// </summary>
+    internal void DetachComponent(MonoBehaviour component)
+    {
+        if (!_components.Remove(component)) return;
+
+        _componentCache.Remove(component.GetType(), component);
+
+        if (component.HasBeenEnabled && component.EnabledInHierarchy)
+            component.InternalOnDisable();
+
+        component.DetachFromGameObject();
     }
 
     /// <summary>
