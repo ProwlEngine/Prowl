@@ -170,6 +170,52 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
         Assert.Equal(new Color(0.2f, 0.4f, 0.6f, 1f), pixel, ColorFuzzyComparer.Instance);
     }
 
+    [Fact]
+    public void AlternatingVertexSources_OneRecording_EachDrawBindsCorrectBuffer()
+    {
+        const uint size = 50;
+        const uint norm = 1000;
+
+        GraphicsProgram program = CreateUIntColorPointProgram();
+
+        UIntPointVertex vertexA = new() { Position = new(10.5f, 10.5f), Color = new Int4 { X = (int)norm } };
+        UIntPointVertex vertexB = new() { Position = new(40.5f, 40.5f), Color = new Int4 { Y = (int)norm } };
+
+        TestVertexSource sourceA = new(PrimitiveTopology.PointList, [CreatePointVertexBuffer(vertexA)]);
+        TestVertexSource sourceB = new(PrimitiveTopology.PointList, [CreatePointVertexBuffer(vertexB)]);
+
+        (Texture target, Framebuffer fb) = CreateColorTarget(size, size);
+
+        PropertySet props = new();
+        props.SetMatrix("Ortho", Float4x4.CreateOrthoOffCenter(0, size, size, 0, -1, 1));
+        props.SetInt("ColorNormalizationFactor", (int)norm);
+
+        GD.RunTestGraph(context =>
+        {
+            CommandBuffer cl = context.GetCommandBuffer();
+            cl.SetFramebuffer(fb);
+            cl.ClearColorTarget(0, Color.Black);
+            cl.SetFullViewports();
+            cl.SetShader(program);
+            cl.SetProperties(props);
+            for (int i = 0; i < 6; i++)
+            {
+                cl.SetVertexSource((i % 2) == 0 ? sourceA : sourceB);
+                cl.Draw(1);
+            }
+            context.SubmitCommandBuffer(cl);
+        });
+
+        Texture readback = GetReadback(target);
+        MappedResourceView<Color> map = GD.Map<Color>(readback, MapMode.Read);
+        Color pixelA = map[10, FlipY(10, size)];
+        Color pixelB = map[40, FlipY(40, size)];
+        GD.Unmap(readback);
+
+        Assert.Equal(new Color(1f, 0f, 0f, 1f), pixelA, ColorFuzzyComparer.Instance);
+        Assert.Equal(new Color(0f, 1f, 0f, 1f), pixelB, ColorFuzzyComparer.Instance);
+    }
+
     // ---- Command-buffer pooling (#2): rented graph command buffers are recycled, not recreated ----
 
     [Fact]
@@ -259,6 +305,59 @@ public abstract class BindingOptimizationTests<T> : GraphicsDeviceTestBase<T> wh
 
     private DeviceBuffer CreateOutput()
         => RF.CreateBuffer(new BufferDescription(2 * sizeof(uint), BufferUsage.StructuredBufferReadWrite, sizeof(uint)));
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct UIntPointVertex
+    {
+        public Float2 Position;
+        public Int4 Color;
+    }
+
+    private uint FlipY(uint y, uint height)
+        => (!GD.IsUvOriginTopLeft || GD.IsClipSpaceYInverted) ? height - y - 1 : y;
+
+    private DeviceBuffer CreatePointVertexBuffer(UIntPointVertex vertex)
+    {
+        DeviceBuffer buffer = RF.CreateBuffer(new BufferDescription(
+            (uint)Unsafe.SizeOf<UIntPointVertex>(), BufferUsage.VertexBuffer));
+        GD.UpdateBuffer(buffer, 0, [vertex]);
+        return buffer;
+    }
+
+    private GraphicsProgram CreateUIntColorPointProgram()
+    {
+        VertexLayoutDescription layout = new(0, (uint)Unsafe.SizeOf<UIntPointVertex>(),
+            new VertexElementDescription("POSITION", VertexElementFormat.Float2),
+            new VertexElementDescription("COLOR", VertexElementFormat.UInt4));
+
+        ShaderStageDescription[] stages = TestShaderLoader.LoadGraphics(GD.BackendType, "UIntVertexAttribs.slang");
+        ShaderDescription desc = new(stages)
+        {
+            BlendState = BlendStateDescription.SingleOverrideBlend,
+            DepthStencilState = DepthStencilStateDescription.Disabled,
+            RasterizerState = RasterizerStateDescription.Default,
+            VertexLayouts = [layout],
+            ResourceLayouts =
+            [
+                new ResourceLayoutDescription
+                {
+                    Set = 0,
+                    Elements =
+                    [
+                        new ResourceLayoutElementDescription("Model", ResourceKind.UniformBuffer, ShaderStages.Vertex, 0)
+                        {
+                            UniformFields =
+                            [
+                                new UniformBlockField("Ortho", 0, sizeof(float) * 16, UniformScalarType.Float4x4),
+                                new UniformBlockField("ColorNormalizationFactor", sizeof(float) * 16, sizeof(uint), UniformScalarType.Int1),
+                            ]
+                        }
+                    ]
+                }
+            ],
+        };
+        return RF.CreateGraphicsProgram(desc);
+    }
 
     private uint[] Read(DeviceBuffer output)
     {
