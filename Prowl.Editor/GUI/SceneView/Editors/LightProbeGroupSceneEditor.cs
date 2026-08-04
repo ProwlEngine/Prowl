@@ -95,6 +95,7 @@ public class LightProbeGroupSceneEditor : SceneTool
             Float3 world = Float4x4.TransformPoint(_group.ProbePositions[i], l2w);
             // World overload carries depth, so stacked probes resolve to the nearest one.
             ctx.AddControl(id, world, ProbePickRadius);
+            ctx.RequestCursor(id, PaperUI.PaperCursor.Grab);
             if (ctx.IsNearest(id)) { hitId = id; hitIndex = i; }
         }
 

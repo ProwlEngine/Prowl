@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Editor.Core;
+using Prowl.PaperUI;
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -102,6 +103,28 @@ public sealed class HandleContext
     /// <summary>Key-held that yields to text editing. See <see cref="GetKeyDown"/>.</summary>
     public bool GetKey(KeyCode key) => !KeyboardCaptured && Input.GetKey(key);
 
+    /// <summary>
+    /// Cursor shape requested by handles this frame, or <see cref="PaperCursor.Inherit"/> when none
+    /// asked. The viewport applies it to its own element, so Paper resolves it exactly like any UI
+    /// hover cursor rather than fighting it.
+    /// </summary>
+    public PaperCursor Cursor { get; private set; }
+
+    /// <summary>
+    /// Ask for a cursor shape while this control owns the cursor. Ignored unless the control is
+    /// active (hovered with nothing dragging, or itself dragging), so a handle can call it
+    /// unconditionally and only the one the user is actually on gets to change the pointer.
+    /// </summary>
+    public void RequestCursor(ControlID id, PaperCursor shape)
+    {
+        if (shape == PaperCursor.Inherit || !IsActive(id)) return;
+
+        // A drag in progress outranks a mere hover, so the shape does not flicker when the cursor
+        // strays over a different handle mid-drag.
+        if (Cursor == PaperCursor.Inherit || IsHot(id))
+            Cursor = shape;
+    }
+
     // ================================================================
     //  Lifecycle
     // ================================================================
@@ -137,6 +160,7 @@ public sealed class HandleContext
         Alt = Input.IsAltPressed;
         Blocked = Input.IsAltPressed || Input.GetMouseButton(1) || Input.GetMouseButton(2);
         KeyboardCaptured = EditorApplication.Instance?.PaperInstance?.WantsCaptureKeyboard == true;
+        Cursor = PaperCursor.Inherit;
 
         // A drag whose owner never saw the release (viewport lost focus mid-drag) would otherwise
         // hold Hot forever.

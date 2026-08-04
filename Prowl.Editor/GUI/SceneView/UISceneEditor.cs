@@ -313,6 +313,7 @@ public sealed class UISceneEditor : SceneTool
         {
             ControlID id = ctx.GetControlID(HandleControl, (int)h);
             ctx.AddControl(id, distance, depth);
+            ctx.RequestCursor(id, CursorFor(h));
             if (ctx.IsNearest(id)) { nearest = h; nearestControl = id; }
         }
 
@@ -360,6 +361,22 @@ public sealed class UISceneEditor : SceneTool
         nearestId = nearestControl;
         return nearest;
     }
+
+    /// <summary>The pointer shape that matches what a handle actually does. Corner and edge handles
+    /// use the resize arrow along their own axis; the rect body and the anchors move things.</summary>
+    private static PaperCursor CursorFor(Handle h) => h switch
+    {
+        Handle.ResizeL or Handle.ResizeR => PaperCursor.ResizeHorizontal,
+        Handle.ResizeB or Handle.ResizeT => PaperCursor.ResizeVertical,
+        // Screen Y grows downward while the rect's Y grows upward, so the diagonals are swapped
+        // relative to the naive reading of the corner names.
+        Handle.ResizeTL or Handle.ResizeBR => PaperCursor.ResizeNESW,
+        Handle.ResizeTR or Handle.ResizeBL => PaperCursor.ResizeNWSE,
+        Handle.Pivot => PaperCursor.Crosshair,
+        Handle.AnchorBL or Handle.AnchorBR or Handle.AnchorTR or Handle.AnchorTL => PaperCursor.Grab,
+        Handle.Move => PaperCursor.ResizeAll,
+        _ => PaperCursor.Inherit,
+    };
 
     // ================================================================
     //  Drag application

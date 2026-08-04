@@ -136,6 +136,10 @@ public abstract class SceneTool
     protected void DrawHandleDot(Float3 center, Color32 color, float sizePixels = 7f, HandleCap cap = HandleCap.Square)
         => Draw.Dot(center, color, sizePixels, cap);
 
+    /// <summary>Ask for a cursor shape while <paramref name="id"/> owns the cursor. Safe to call
+    /// unconditionally; only the control the user is actually on changes the pointer.</summary>
+    protected void SetCursor(ControlID id, PaperCursor shape) => Handles.RequestCursor(id, shape);
+
     /// <summary>Project a world point to viewport pixels; null when behind the camera.</summary>
     protected Float2? WorldToScreen(Float3 world) => Handles.WorldToScreen(world);
 
