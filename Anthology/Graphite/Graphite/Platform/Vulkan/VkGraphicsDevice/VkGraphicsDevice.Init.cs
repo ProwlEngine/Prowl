@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Text;
 
 using Silk.NET.Core;
@@ -26,8 +27,8 @@ internal unsafe partial class VkGraphicsDevice
             ApiVersion = new Version32(1, 0, 0),
             ApplicationVersion = new Version32(1, 0, 0),
             EngineVersion = new Version32(1, 0, 0),
-            PApplicationName = s_name,
-            PEngineName = s_name
+            PApplicationName = Name,
+            PEngineName = Name
         };
 
         instanceCI.PApplicationInfo = &applicationInfo;
@@ -42,11 +43,11 @@ internal unsafe partial class VkGraphicsDevice
         uint instanceLayerCount = 0;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_subset))
-            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_portability_subset;
+            instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_portability_subsetUtf8;
 
         if (availableInstanceExtensions.Contains(CommonStrings.VK_KHR_portability_enumeration))
         {
-            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_portability_enumeration;
+            instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_portability_enumerationUtf8;
             instanceCI.Flags |= (InstanceCreateFlags)VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
         }
 
@@ -54,86 +55,83 @@ internal unsafe partial class VkGraphicsDevice
         {
             byte** surfaceExtensions = surface.VkSurface.GetRequiredExtensions(out uint extensionCount);
             HashSet<string> addedExtensions = [];
-            string[] requested = [
-                "VK_KHR_surface"
-            ];
 
             for (int i = 0; i < extensionCount; i++)
             {
                 instanceExtensions[instanceExtensionCount++] = (nint)surfaceExtensions[i];
-                addedExtensions.Add(new FixedUtf8String(surfaceExtensions[i]));
+                addedExtensions.Add(Util.GetString(surfaceExtensions[i]));
             }
 
-            for (int r = 0; r < requested.Length; r++)
-            {
-                if (addedExtensions.Contains(requested[r]))
-                    continue;
-
-                instanceExtensions[instanceExtensionCount++] = new FixedUtf8String(requested[r]);
-            }
+            if (!addedExtensions.Contains(CommonStrings.VK_KHR_SURFACE_EXTENSION_NAME))
+                instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_SURFACE_EXTENSION_NAMEUtf8;
         }
 
         bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
         if (hasDeviceProperties2)
-            instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_KHR_get_physical_device_properties2;
+            instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_KHR_get_physical_device_properties2Utf8;
 
         string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
-        List<FixedUtf8String> tempStrings = [];
-        foreach (string requiredExt in requestedInstanceExtensions)
+        List<IntPtr> tempStrings = [];
+        try
         {
-            if (!availableInstanceExtensions.Contains(requiredExt))
-                throw new RenderException($"The required instance extension was not available: {requiredExt}");
-
-            FixedUtf8String utf8Str = new(requiredExt);
-            instanceExtensions[instanceExtensionCount++] = utf8Str;
-            tempStrings.Add(utf8Str);
-        }
-
-        bool debugReportExtensionAvailable = false;
-        if (debug)
-        {
-            if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+            foreach (string requiredExt in requestedInstanceExtensions)
             {
-                debugReportExtensionAvailable = true;
-                instanceExtensions[instanceExtensionCount++] = CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+                if (!availableInstanceExtensions.Contains(requiredExt))
+                    throw new RenderException($"The required instance extension was not available: {requiredExt}");
+
+                IntPtr utf8Str = Marshal.StringToCoTaskMemUTF8(requiredExt);
+                instanceExtensions[instanceExtensionCount++] = utf8Str;
+                tempStrings.Add(utf8Str);
             }
-            if (availableInstanceLayers.Contains(CommonStrings.StandardValidationLayerName))
+
+            bool debugReportExtensionAvailable = false;
+            if (debug)
             {
-                _standardValidationSupported = true;
-                instanceLayers[instanceLayerCount++] = CommonStrings.StandardValidationLayerName;
+                if (availableInstanceExtensions.Contains(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
+                {
+                    debugReportExtensionAvailable = true;
+                    instanceExtensions[instanceExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAMEUtf8;
+                }
+                if (availableInstanceLayers.Contains(CommonStrings.StandardValidationLayerName))
+                {
+                    _standardValidationSupported = true;
+                    instanceLayers[instanceLayerCount++] = (nint)CommonStrings.StandardValidationLayerNameUtf8;
+                }
+                if (availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
+                {
+                    _khronosValidationSupported = true;
+                    instanceLayers[instanceLayerCount++] = (nint)CommonStrings.KhronosValidationLayerNameUtf8;
+                }
             }
-            if (availableInstanceLayers.Contains(CommonStrings.KhronosValidationLayerName))
+
+            instanceCI.EnabledExtensionCount = instanceExtensionCount;
+            instanceCI.PpEnabledExtensionNames = (byte**)instanceExtensions;
+
+            instanceCI.EnabledLayerCount = instanceLayerCount;
+            if (instanceLayerCount > 0)
             {
-                _khronosValidationSupported = true;
-                instanceLayers[instanceLayerCount++] = CommonStrings.KhronosValidationLayerName;
+                instanceCI.PpEnabledLayerNames = (byte**)instanceLayers;
+            }
+
+            Vk.CreateInstance(in instanceCI, null, out Instance).CheckResult();
+
+            if (debug && debugReportExtensionAvailable)
+            {
+                EnableDebugCallback();
+            }
+
+            if (hasDeviceProperties2)
+            {
+                _getPhysicalDeviceProperties2 = GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2")
+                    ?? GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2KHR");
             }
         }
-
-        instanceCI.EnabledExtensionCount = instanceExtensionCount;
-        instanceCI.PpEnabledExtensionNames = (byte**)instanceExtensions;
-
-        instanceCI.EnabledLayerCount = instanceLayerCount;
-        if (instanceLayerCount > 0)
+        finally
         {
-            instanceCI.PpEnabledLayerNames = (byte**)instanceLayers;
-        }
-
-        Vk.CreateInstance(in instanceCI, null, out Instance).CheckResult();
-
-        if (debug && debugReportExtensionAvailable)
-        {
-            EnableDebugCallback();
-        }
-
-        if (hasDeviceProperties2)
-        {
-            _getPhysicalDeviceProperties2 = GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2")
-                ?? GetInstanceProcAddr<vkGetPhysicalDeviceProperties2_t>("vkGetPhysicalDeviceProperties2KHR");
-        }
-
-        foreach (FixedUtf8String tempStr in tempStrings)
-        {
-            tempStr.Dispose();
+            foreach (IntPtr tempStr in tempStrings)
+            {
+                Marshal.FreeCoTaskMem(tempStr);
+            }
         }
     }
 
@@ -210,7 +208,7 @@ internal unsafe partial class VkGraphicsDevice
                 string extensionName = Util.GetString(properties[property].ExtensionName);
                 if (extensionName == "VK_EXT_debug_marker")
                 {
-                    activeExtensions[activeExtensionCount++] = CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
+                    activeExtensions[activeExtensionCount++] = (nint)CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAMEUtf8;
                     requiredInstanceExtensions.Remove(extensionName);
                     _debugMarkerEnabled = true;
                 }
@@ -278,11 +276,11 @@ internal unsafe partial class VkGraphicsDevice
         uint layerNameCount = 0;
         if (_standardValidationSupported)
         {
-            layerNames[layerNameCount++] = CommonStrings.StandardValidationLayerName;
+            layerNames[layerNameCount++] = (nint)CommonStrings.StandardValidationLayerNameUtf8;
         }
         if (_khronosValidationSupported)
         {
-            layerNames[layerNameCount++] = CommonStrings.KhronosValidationLayerName;
+            layerNames[layerNameCount++] = (nint)CommonStrings.KhronosValidationLayerNameUtf8;
         }
         deviceCreateInfo.EnabledLayerCount = layerNameCount;
         deviceCreateInfo.PpEnabledLayerNames = (byte**)layerNames;

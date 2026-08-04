@@ -195,13 +195,13 @@ internal unsafe partial class VkSwapchain : Swapchain
             ImageUsage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferDstBit
         };
 
-        FixedArray2<uint> queueFamilyIndices = new(_gd.GraphicsQueueIndex, _gd.PresentQueueIndex);
+        uint* queueFamilyIndices = stackalloc uint[2] { _gd.GraphicsQueueIndex, _gd.PresentQueueIndex };
 
         if (_gd.GraphicsQueueIndex != _gd.PresentQueueIndex)
         {
             swapchainCI.ImageSharingMode = SharingMode.Concurrent;
             swapchainCI.QueueFamilyIndexCount = 2;
-            swapchainCI.PQueueFamilyIndices = &queueFamilyIndices.First;
+            swapchainCI.PQueueFamilyIndices = queueFamilyIndices;
         }
         else
         {

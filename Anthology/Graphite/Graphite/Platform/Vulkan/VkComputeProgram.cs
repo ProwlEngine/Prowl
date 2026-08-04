@@ -60,7 +60,7 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
         stageCI.Module = _module;
         stageCI.Stage = VkFormats.ToVkShaderStages(ShaderStages.Compute);
-        stageCI.PName = CommonStrings.main;
+        stageCI.PName = CommonStrings.mainUtf8;
         pipelineCI.Stage = stageCI;
 
         _gd.Vk.CreateComputePipelines(_gd.Device, default, 1, in pipelineCI, null, out VkPipelineHandle pipeline).CheckResult();

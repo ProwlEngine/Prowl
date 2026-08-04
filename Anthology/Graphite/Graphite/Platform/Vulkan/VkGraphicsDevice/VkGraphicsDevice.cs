@@ -14,7 +14,7 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkGraphicsDevice : GraphicsDevice
 {
-    private static readonly FixedUtf8String s_name = "Prowl.Graphite-VkGraphicsDevice";
+    private static byte* Name => CommonStrings.Utf8("Prowl.Graphite-VkGraphicsDevice"u8);
     private static readonly Lazy<bool> s_isSupported = new(CheckIsSupported, isThreadSafe: true);
 
     private readonly BackendInfoVulkan _vulkanInfo;
@@ -202,8 +202,8 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
         applicationInfo.ApiVersion = new Version32(1, 0, 0);
         applicationInfo.ApplicationVersion = new Version32(1, 0, 0);
         applicationInfo.EngineVersion = new Version32(1, 0, 0);
-        applicationInfo.PApplicationName = s_name;
-        applicationInfo.PEngineName = s_name;
+        applicationInfo.PApplicationName = Name;
+        applicationInfo.PEngineName = Name;
 
         instanceCI.PApplicationInfo = &applicationInfo;
 
