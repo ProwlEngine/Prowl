@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Runtime.Resources;
@@ -194,9 +195,10 @@ public sealed class EventSystem : MonoBehaviour
         GameObject? first = null;
         while (node != null)
         {
-            foreach (MonoBehaviour comp in node.GetComponents<MonoBehaviour>())
+            System.Collections.Generic.List<MonoBehaviour> components = [..node.GetComponents<MonoBehaviour>()];
+            foreach (MonoBehaviour comp in components)
             {
-                if (comp is TInterface handler && comp.EnabledInHierarchy)
+                if (comp is TInterface handler && comp.IsValid() && comp.EnabledInHierarchy)
                 {
                     if (first.IsNotValid()) first = node;
                     try { action(handler, e); }
