@@ -1,40 +1,19 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-internal struct ResolvedBinding
+// Lets VkDescriptorBinder read the Vulkan-specific descriptor plumbing off a ShaderProgram without
+// caring whether it is backing a graphics draw or a compute dispatch.
+internal interface IVkDescriptorProgram
 {
-    public ResourceKind Kind;
-    public bool Missing;
-    public VkBuffer Buffer;      // UniformBuffer / StructuredBuffer backing buffer
-    public ulong DescOffset;     // descriptor offset (UBO: 0, dynamic offset carries the range offset)
-    public ulong DescRange;      // descriptor range/size
-    public uint DynOffset;       // UBO dynamic offset
-    public VkTextureView View;   // texture view
-    public VkSampler Sampler;    // sampler element, or combined-image-sampler's sampler
-    public bool Combined;
-}
-
-internal sealed class ImplicitUboCacheEntry
-{
-    public DeviceBufferRange Range;
-    public byte[] Bytes = Array.Empty<byte>();
-    public bool Valid;
-}
-
-internal sealed class SetBindState
-{
-    public readonly ulong[] Identity = new ulong[1 + VkDescriptorBinder.MaxSetElements * 3];
-    public int IdentityLen = -1;
-    public DescriptorSet Set;
-    public uint[] DynOffsets = new uint[16];
-    public int DynOffsetCount;
+    DescriptorSetLayout[] DescriptorSetLayouts { get; }
+    DescriptorResourceCounts[] PerSetCounts { get; }
+    PipelineLayout PipelineLayout { get; }
+    uint ResourceSetCount { get; }
+    VkDescriptorSetCache DescriptorCache { get; }
 }
 
 // Owns the per-command-buffer descriptor resolve/cache/bind pipeline: resolving a shader program's
@@ -42,9 +21,18 @@ internal sealed class SetBindState
 // vkCmdBindDescriptorSets call. Lives in the hot draw/dispatch path, so it is deliberately decoupled from
 // render-pass and pooling state: it only touches the owning command buffer, the device, the active
 // property set, and its own scratch/cache fields.
-internal unsafe sealed class VkDescriptorBinder
+internal unsafe sealed partial class VkDescriptorBinder
 {
     internal const int MaxSetElements = 64;
+
+    private sealed class SetBindState
+    {
+        public readonly ulong[] Identity = new ulong[1 + MaxSetElements * 3];
+        public int IdentityLen = -1;
+        public DescriptorSet Set;
+        public uint[] DynOffsets = new uint[16];
+        public int DynOffsetCount;
+    }
 
     private readonly VkCommandBuffer _cbOwner;
     private readonly VkGraphicsDevice _gd;
@@ -96,8 +84,8 @@ internal unsafe sealed class VkDescriptorBinder
     // descriptor sets into the per-set bind cache. Returns whether EmitBind must run: false only when a
     // graphics draw's properties are unchanged since the last draw and the sets are still bound.
     // reportProgram is the shader passed to the missing-property callback; it always mirrors the current
-    // graphics shader regardless of isGraphics/isCompute, matching prior behavior.
-    internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isCompute, bool isGraphics, bool renderPassActive)
+    // graphics shader even for a compute dispatch, matching prior behavior.
+    internal bool Prepare(ShaderProgram program, ShaderProgram reportProgram, bool isGraphics, bool renderPassActive)
     {
         IVkDescriptorProgram descProgram = (IVkDescriptorProgram)program;
         uint setCount = descProgram.ResourceSetCount;
@@ -129,27 +117,9 @@ internal unsafe sealed class VkDescriptorBinder
             SetBindingMetadata meta = metadata[setIdx];
             SetBindState state = _setBindStates[setIdx];
 
-            ResolveSet(program, setIdx, elements, meta, isCompute, reportProgram);
+            ResolveSet(setIdx, elements, meta, reportProgram);
             TransitionResolvedTextures(elements);
-
-            int idLen = BuildIdentityFromScratch(setIdx, elements.Length, _identityScratch);
-            ReadOnlySpan<ulong> newId = _identityScratch.AsSpan(0, idLen);
-
-            bool changed = state.IdentityLen != idLen
-                || !newId.SequenceEqual(state.Identity.AsSpan(0, state.IdentityLen));
-
-            if (changed)
-            {
-                if (!cache.TryGet(newId, executionId, out DescriptorSet ds))
-                {
-                    ds = cache.Allocate(setIdx, dslLayouts[setIdx], in perSetCounts[setIdx], newId, executionId);
-                    WriteDescriptorsFromScratch(setIdx, elements, ds, reportProgram);
-                }
-                state.Set = ds;
-                newId.CopyTo(state.Identity);
-                state.IdentityLen = idLen;
-            }
-
+            SyncSet(cache, state, setIdx, elements, dslLayouts[setIdx], in perSetCounts[setIdx], executionId, reportProgram);
             GatherDynOffsets(meta, state);
         }
 
@@ -159,7 +129,7 @@ internal unsafe sealed class VkDescriptorBinder
         return true;
     }
 
-    internal void EmitBind(Silk.NET.Vulkan.PipelineLayout pipelineLayout, PipelineBindPoint bindPoint)
+    internal void EmitBind(PipelineLayout pipelineLayout, PipelineBindPoint bindPoint)
     {
         uint setCount = _preparedSetCount;
         Silk.NET.Vulkan.CommandBuffer cb = _cbOwner.CommandBuffer;
@@ -201,82 +171,27 @@ internal unsafe sealed class VkDescriptorBinder
         }
     }
 
-    private void ResolveSet(
-        ShaderProgram program, int setIdx, ResourceLayoutElementDescription[] elements,
-        SetBindingMetadata meta, bool isCompute, ShaderProgram reportProgram)
+    // Rebuilds the set's content identity and, when it differs from what this set index last bound,
+    // fetches or allocates+writes the matching descriptor set.
+    private void SyncSet(
+        VkDescriptorSetCache cache, SetBindState state, int setIdx, ResourceLayoutElementDescription[] elements,
+        DescriptorSetLayout layout, in DescriptorResourceCounts counts, ulong executionId, ShaderProgram reportProgram)
     {
-        ulong executionId = _cbOwner.ExecutionId;
+        int idLen = BuildIdentityFromScratch(setIdx, elements.Length, _identityScratch);
+        ReadOnlySpan<ulong> newId = _identityScratch.AsSpan(0, idLen);
 
-        for (int i = 0; i < elements.Length; i++)
+        if (state.IdentityLen == idLen && newId.SequenceEqual(state.Identity.AsSpan(0, idLen)))
+            return;
+
+        if (!cache.TryGet(newId, executionId, out DescriptorSet ds))
         {
-            ref ResourceLayoutElementDescription elem = ref elements[i];
-            ref ResolvedBinding r = ref _resolveScratch[i];
-            r = default;
-            r.Kind = elem.Kind;
-
-            switch (elem.Kind)
-            {
-                case ResourceKind.UniformBuffer:
-                    {
-                        DeviceBufferRange range = ResolveUboRange(program, (uint)setIdx, in elem, out bool missing);
-                        range.Buffer.MarkInFlight(_gd, executionId);
-                        r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
-                        r.DescOffset = 0;
-                        r.DescRange = range.SizeInBytes;
-                        r.DynOffset = range.Offset;
-                        r.Missing = missing;
-                        break;
-                    }
-
-                case ResourceKind.StructuredBufferReadOnly:
-                case ResourceKind.StructuredBufferReadWrite:
-                    {
-                        DeviceBufferRange range = ResolveStructuredRange(in elem, setIdx, out bool missing);
-                        range.Buffer.MarkInFlight(_gd, executionId);
-                        r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
-                        r.DescOffset = range.Offset;
-                        r.DescRange = range.SizeInBytes;
-                        r.Missing = missing;
-                        break;
-                    }
-
-                case ResourceKind.TextureReadOnly:
-                    r.Combined = (elem.Options & ResourceLayoutElementOptions.CombinedImageSampler) != 0;
-                    r.View = ResolveTextureView(in elem, (uint)setIdx, out r.Missing);
-                    if (r.Combined)
-                        r.Sampler = ResolveSampler(in elem, elements, meta, i);
-                    break;
-
-                case ResourceKind.TextureReadWrite:
-                    r.View = ResolveTextureView(in elem, (uint)setIdx, out r.Missing);
-                    break;
-
-                case ResourceKind.Sampler:
-                    r.Sampler = ResolveSampler(in elem, elements, meta, i);
-                    break;
-            }
+            ds = cache.Allocate(setIdx, layout, in counts, newId, executionId);
+            WriteDescriptorsFromScratch(setIdx, elements, ds, reportProgram);
         }
-    }
 
-    private void TransitionResolvedTextures(ResourceLayoutElementDescription[] elements)
-    {
-        Silk.NET.Vulkan.CommandBuffer cb = _cbOwner.CommandBuffer;
-        for (int i = 0; i < elements.Length; i++)
-        {
-            ref ResolvedBinding r = ref _resolveScratch[i];
-            if (r.Kind != ResourceKind.TextureReadOnly && r.Kind != ResourceKind.TextureReadWrite)
-                continue;
-
-            VkTexture tex = r.View.Target;
-            ImageLayout targetLayout = r.Kind == ResourceKind.TextureReadOnly
-                ? ImageLayout.ShaderReadOnlyOptimal
-                : ImageLayout.General;
-
-            tex.TransitionImageLayout(cb, 0, tex.MipLevels, 0, tex.ActualArrayLayers, targetLayout);
-
-            if (r.Kind == ResourceKind.TextureReadWrite && (tex.Usage & TextureUsage.Sampled) != 0)
-                _cbOwner.QueuePreDrawSampledImage(tex);
-        }
+        state.Set = ds;
+        newId.CopyTo(state.Identity);
+        state.IdentityLen = idLen;
     }
 
     // Content key for the per-program set cache: resolved handles minus per-draw dynamic UBO offsets.
@@ -327,278 +242,5 @@ internal unsafe sealed class VkDescriptorBinder
             state.DynOffsets[i] = _resolveScratch[order[i]].DynOffset;
 
         state.DynOffsetCount = order.Length;
-    }
-
-    private void WriteDescriptorsFromScratch(int setIdx, ResourceLayoutElementDescription[] elements, DescriptorSet dstSet, ShaderProgram reportProgram)
-    {
-        WriteDescriptorSet* writes = stackalloc WriteDescriptorSet[MaxSetElements];
-        DescriptorBufferInfo* bufInfos = stackalloc DescriptorBufferInfo[MaxSetElements];
-        DescriptorImageInfo* imgInfos = stackalloc DescriptorImageInfo[MaxSetElements];
-        int writeCount = 0, bufIdx = 0, imgIdx = 0;
-
-        for (int i = 0; i < elements.Length; i++)
-        {
-            ref ResolvedBinding r = ref _resolveScratch[i];
-            ref ResourceLayoutElementDescription elem = ref elements[i];
-
-            if (r.Missing)
-                ReportMissing(in elem, (uint)setIdx, reportProgram);
-
-            WriteDescriptorSet write = new()
-            {
-                SType = StructureType.WriteDescriptorSet,
-                DstSet = dstSet,
-                DstBinding = (uint)elem.BindingIndex,
-                DescriptorCount = 1,
-            };
-
-            switch (r.Kind)
-            {
-                case ResourceKind.UniformBuffer:
-                    bufInfos[bufIdx] = new DescriptorBufferInfo
-                    {
-                        Buffer = r.Buffer.DeviceBuffer,
-                        Offset = 0,
-                        Range = r.DescRange,
-                    };
-                    write.DescriptorType = DescriptorType.UniformBufferDynamic;
-                    write.PBufferInfo = &bufInfos[bufIdx++];
-                    break;
-
-                case ResourceKind.StructuredBufferReadOnly:
-                case ResourceKind.StructuredBufferReadWrite:
-                    bufInfos[bufIdx] = new DescriptorBufferInfo
-                    {
-                        Buffer = r.Buffer.DeviceBuffer,
-                        Offset = r.DescOffset,
-                        Range = r.DescRange,
-                    };
-                    write.DescriptorType = DescriptorType.StorageBuffer;
-                    write.PBufferInfo = &bufInfos[bufIdx++];
-                    break;
-
-                case ResourceKind.TextureReadOnly:
-                    imgInfos[imgIdx] = new DescriptorImageInfo
-                    {
-                        ImageView = r.View.ImageView,
-                        ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
-                        Sampler = r.Combined ? r.Sampler.DeviceSampler : default,
-                    };
-                    write.DescriptorType = r.Combined ? DescriptorType.CombinedImageSampler : DescriptorType.SampledImage;
-                    write.PImageInfo = &imgInfos[imgIdx++];
-                    break;
-
-                case ResourceKind.TextureReadWrite:
-                    imgInfos[imgIdx] = new DescriptorImageInfo
-                    {
-                        ImageView = r.View.ImageView,
-                        ImageLayout = ImageLayout.General,
-                    };
-                    write.DescriptorType = DescriptorType.StorageImage;
-                    write.PImageInfo = &imgInfos[imgIdx++];
-                    break;
-
-                case ResourceKind.Sampler:
-                    imgInfos[imgIdx] = new DescriptorImageInfo
-                    {
-                        Sampler = r.Sampler.DeviceSampler,
-                    };
-                    write.DescriptorType = DescriptorType.Sampler;
-                    write.PImageInfo = &imgInfos[imgIdx++];
-                    break;
-
-                default:
-                    continue;
-            }
-
-            writes[writeCount++] = write;
-        }
-
-        if (writeCount > 0)
-            _gd.Vk.UpdateDescriptorSets(_gd.Device, (uint)writeCount, writes, 0, null);
-    }
-
-    private void ReportMissing(in ResourceLayoutElementDescription elem, uint setIdx, ShaderProgram reportProgram)
-    {
-        _gd.OnMissingProperty?.Invoke(
-            (GraphicsProgram)reportProgram,
-            null,
-            elem.Name, elem.Kind, setIdx, elem.BindingIndex);
-    }
-
-    private VkTexture GetMissingTexture(ResourceKind kind)
-        => (VkTexture)(kind == ResourceKind.TextureReadWrite ? _gd.NullTextureRW2D : _gd.NullTexture2D);
-
-    private DeviceBufferRange ResolveStructuredRange(
-        in ResourceLayoutElementDescription elem, int setIdx, out bool missing)
-    {
-        if (_cbOwner.ActiveProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? ssboEntry)
-            && ssboEntry.Kind == PropertyEntryKind.Buffer)
-        {
-            missing = false;
-            return ssboEntry.Buffer!.Value;
-        }
-
-        missing = true;
-        return new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
-    }
-
-    private DeviceBufferRange ResolveUboRange(
-        ShaderProgram programKey, uint setIdx, in ResourceLayoutElementDescription elem, out bool missing)
-    {
-        missing = false;
-
-        bool hasExplicit = _cbOwner.ActiveProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? uboEntry)
-            && uboEntry.Kind == PropertyEntryKind.Buffer;
-
-        // A read-only buffer is bound with its existing contents; any scalar writes are ignored.
-        if (hasExplicit && uboEntry!.ReadOnly)
-            return uboEntry.Buffer!.Value;
-
-        // Loose uniform fields go into the explicit writable buffer if bound, else a per-draw transient.
-        if (elem.UniformFields != null && elem.UniformFields.Length > 0)
-        {
-            DeviceBufferRange? writableTarget = hasExplicit ? uboEntry!.Buffer : null;
-            return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields, writableTarget);
-        }
-
-        // No loose uniform fields declared: bind the explicit buffer directly.
-        if (hasExplicit)
-            return uboEntry!.Buffer!.Value;
-
-        missing = true;
-        return AllocateExecutionTransient(16);
-    }
-
-    private DeviceBufferRange AllocateExecutionTransient(uint sizeInBytes)
-    {
-        if (_cbOwner.Execution == null)
-            throw new RenderException("Recording a draw that needs transient uniform memory requires a command buffer rented from a render context.");
-        return _cbOwner.Execution.AllocateTransientInternal(sizeInBytes);
-    }
-
-    private DeviceBufferRange GetOrBuildImplicitUbo(
-        int setIdx, int bindingIndex, UniformBlockField[] fields, DeviceBufferRange? writableTarget)
-    {
-        // Write only the set fields into the explicit buffer, leaving unset bytes intact. The explicit
-        // buffer is stable across draws, so its identity never changes; write it every draw as before.
-        if (writableTarget.HasValue)
-        {
-            DeviceBufferRange target = writableTarget.Value;
-            foreach (UniformBlockField field in fields)
-            {
-                if (_cbOwner.ActiveProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
-                    && uEntry.Kind == PropertyEntryKind.Uniform)
-                {
-                    ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
-                    fixed (byte* ptr = &payload)
-                        _gd.UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
-                }
-            }
-            return target;
-        }
-
-        // Transient path: build this draw's uniform bytes and reuse the previously allocated range when
-        // they are byte-identical to the last upload. An unchanged UBO then neither reallocates a
-        // transient nor re-uploads, and keeps a stable descriptor identity across draws. Comparing the
-        // bytes (rather than entry versions) stays correct when a merge swaps in a fresh entry object.
-        (int, int) key = (setIdx, bindingIndex);
-        if (!_implicitUboCache.TryGetValue(key, out ImplicitUboCacheEntry? entry))
-        {
-            entry = new ImplicitUboCacheEntry();
-            _implicitUboCache[key] = entry;
-        }
-
-        uint totalSize = 0;
-        foreach (UniformBlockField field in fields)
-            totalSize = Math.Max(totalSize, field.Offset + field.Size);
-        if (totalSize == 0) totalSize = 16;
-
-        byte[] uploadBuf = ArrayPool<byte>.Shared.Rent((int)totalSize);
-        try
-        {
-            Array.Clear(uploadBuf, 0, (int)totalSize);
-            foreach (UniformBlockField field in fields)
-            {
-                if (_cbOwner.ActiveProperties.Entries.TryGetValue(field.Name, out PropertyEntry? uEntry)
-                    && uEntry.Kind == PropertyEntryKind.Uniform)
-                {
-                    ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
-                        ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
-                        (int)field.Size);
-                    src.CopyTo(uploadBuf.AsSpan((int)field.Offset, (int)field.Size));
-                }
-            }
-
-            if (entry.Valid
-                && entry.Bytes.Length == (int)totalSize
-                && uploadBuf.AsSpan(0, (int)totalSize).SequenceEqual(entry.Bytes))
-            {
-                return entry.Range;
-            }
-
-            DeviceBufferRange range = AllocateExecutionTransient(totalSize);
-            fixed (byte* ptr = uploadBuf)
-                _gd.UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, totalSize);
-
-            if (entry.Bytes.Length != (int)totalSize)
-                entry.Bytes = new byte[(int)totalSize];
-            uploadBuf.AsSpan(0, (int)totalSize).CopyTo(entry.Bytes);
-            entry.Range = range;
-            entry.Valid = true;
-
-            return range;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(uploadBuf);
-        }
-    }
-
-    private VkTextureView ResolveTextureView(
-        in ResourceLayoutElementDescription elem, uint setIdx, out bool missing)
-    {
-        if (_cbOwner.ActiveProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
-            && texEntry.Kind == PropertyEntryKind.Texture)
-        {
-            if (texEntry.TextureView != null)
-            {
-                missing = false;
-                return (VkTextureView)texEntry.TextureView;
-            }
-            if (texEntry.Texture != null)
-            {
-                missing = false;
-                return _gd.GetOrCreateDefaultView((VkTexture)texEntry.Texture);
-            }
-        }
-
-        missing = true;
-        return _gd.GetOrCreateDefaultView(GetMissingTexture(elem.Kind));
-    }
-
-    private VkSampler ResolveSampler(
-        in ResourceLayoutElementDescription elem, ResourceLayoutElementDescription[] elements,
-        SetBindingMetadata meta, int elemIndex)
-    {
-        // case 1: explicit SetSampler(name) entry
-        if (_cbOwner.ActiveProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? samplerEntry)
-            && samplerEntry.Kind == PropertyEntryKind.Sampler
-            && samplerEntry.Sampler != null)
-        {
-            return (VkSampler)samplerEntry.Sampler;
-        }
-
-        // case 2: SetTexture(name, _, sampler) where a same-named texture element exists (precomputed)
-        if (meta.HasSameNamedTexture[elemIndex]
-            && _cbOwner.ActiveProperties.Entries.TryGetValue(elem.Name, out PropertyEntry? texEntry)
-            && texEntry.Kind == PropertyEntryKind.Texture
-            && texEntry.Sampler != null)
-        {
-            return (VkSampler)texEntry.Sampler;
-        }
-
-        // case 3: fall back to the default linear sampler
-        return (VkSampler)_gd.LinearSampler;
     }
 }

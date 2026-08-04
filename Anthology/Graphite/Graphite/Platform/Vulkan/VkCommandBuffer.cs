@@ -227,7 +227,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         bool needBind = _descriptorBinder.Prepare(
             _currentShaderProgram,
             reportProgram: _currentShaderProgram,
-            isCompute: false,
             isGraphics: true,
             renderPassActive);
 
@@ -286,7 +285,6 @@ internal unsafe partial class VkCommandBuffer : CommandBuffer
         bool needBind = _descriptorBinder.Prepare(
             _currentComputeProgram,
             reportProgram: _currentShaderProgram,
-            isCompute: true,
             isGraphics: false,
             renderPassActive);
 
