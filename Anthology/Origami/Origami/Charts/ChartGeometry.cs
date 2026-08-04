@@ -6,7 +6,9 @@ using System;
 using Prowl.Quill;
 using Prowl.Vector;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Canvas primitives shared by every chart family that paints radial geometry.

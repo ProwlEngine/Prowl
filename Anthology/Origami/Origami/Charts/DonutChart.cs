@@ -8,36 +8,41 @@ using Prowl.PaperUI;
 using Prowl.Quill;
 using Prowl.Vector;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
-/// Circular pie chart. Every visible slice takes the share of the full circle its value is of the
-/// visible total, laid out from <see cref="StartAngle"/> in the direction <see cref="Clockwise"/> picks.
-/// Individual slices can be pulled out of the circle with <see cref="Explode"/>.
+/// Circular donut chart. Behaves exactly like a pie, except the slices are cut off short of the centre
+/// by <see cref="InnerRadius"/>, leaving a hole the chart draws nothing in.
 /// </summary>
-public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
+public sealed class DonutChart<T> : CircularCore<DonutChart<T>, T>
 {
-    internal PieChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
+    internal DonutChart(Paper paper, string id, OrigamiTheme theme, IReadOnlyList<T>? data)
         : base(paper, id, theme, data) { }
 
     private float _startAngle = -90f;
     private bool _clockwise = true;
+    private float _innerRadius = 0.6f;
     private HashSet<int>? _exploded;
 
     private const float ExplodeFraction = 0.08f;
-    private const float LabelRadiusFraction = 0.68f;
     private const float HighlightWidth = 1.5f;
 
     /// <summary>Angle, in degrees clockwise from three o'clock, the first slice starts at. Defaults to
     /// -90, which puts it at twelve o'clock.</summary>
-    public PieChart<T> StartAngle(float degrees) { _startAngle = degrees; return this; }
+    public DonutChart<T> StartAngle(float degrees) { _startAngle = degrees; return this; }
 
     /// <summary>Direction the slices are laid out in around the circle. Defaults to clockwise.</summary>
-    public PieChart<T> Clockwise(bool clockwise = true) { _clockwise = clockwise; return this; }
+    public DonutChart<T> Clockwise(bool clockwise = true) { _clockwise = clockwise; return this; }
+
+    /// <summary>Radius of the hole as a fraction of the chart's radius, clamped into (0, 0.95].
+    /// Defaults to 0.6.</summary>
+    public DonutChart<T> InnerRadius(float fraction) { _innerRadius = Math.Clamp(fraction, 0.001f, 0.95f); return this; }
 
     /// <summary>Pulls the slice of the item at <paramref name="index"/> in the source data set out of the
-    /// circle along its middle. Call once per slice to explode several of them.</summary>
-    public PieChart<T> Explode(int index) { (_exploded ??= new HashSet<int>()).Add(index); return this; }
+    /// ring along its middle. Call once per slice to explode several of them.</summary>
+    public DonutChart<T> Explode(int index) { (_exploded ??= new HashSet<int>()).Add(index); return this; }
 
     private bool IsExploded(CircularSlice<T> slice) => _exploded != null && _exploded.Contains(slice.Index);
 
@@ -85,6 +90,7 @@ public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
     {
         float cursor = _startAngle * DegToRad;
         float outerR = OuterRadius(in ctx);
+        float innerR = outerR * _innerRadius;
         Color32 highlight = ToC32(_theme.Ink.C100);
 
         for (int i = 0; i < ctx.Slices.Count; i++)
@@ -99,16 +105,17 @@ public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
 
             Float2 center = CenterOf(in ctx, slice, (a0 + a1) * 0.5f);
 
-            PaintWedge(canvas, center.X, center.Y, 0f, outerR, a0, a1, ToC32(slice.Color));
+            PaintWedge(canvas, center.X, center.Y, innerR, outerR, a0, a1, ToC32(slice.Color));
 
             if (ctx.HoverIndex == i)
-                StrokeWedge(canvas, center.X, center.Y, 0f, outerR, a0, a1, highlight);
+                StrokeWedge(canvas, center.X, center.Y, innerR, outerR, a0, a1, highlight);
         }
     }
 
     protected override int HitTest(in CircularContext ctx, Float2 pointer)
     {
         float outerR = OuterRadius(in ctx);
+        float innerR = outerR * _innerRadius;
 
         for (int i = 0; i < ctx.Slices.Count; i++)
         {
@@ -120,7 +127,7 @@ public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
             float dx = pointer.X - center.X, dy = pointer.Y - center.Y;
             float radius = MathF.Sqrt(dx * dx + dy * dy);
 
-            if (radius > outerR) continue;
+            if (radius < innerR || radius > outerR) continue;
             if (InSweep(MathF.Atan2(dy, dx), a0, a1 - a0)) return i;
         }
 
@@ -133,11 +140,10 @@ public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
             return new Float2(ctx.CenterX, ctx.CenterY);
 
         float mid = (a0 + a1) * 0.5f;
+        float radius = OuterRadius(in ctx) * (1f + _innerRadius) * 0.5f;
         Float2 center = CenterOf(in ctx, ctx.Slices[ordinal], mid);
 
-        return new Float2(
-            center.X + MathF.Cos(mid) * OuterRadius(in ctx) * LabelRadiusFraction,
-            center.Y + MathF.Sin(mid) * OuterRadius(in ctx) * LabelRadiusFraction);
+        return new Float2(center.X + MathF.Cos(mid) * radius, center.Y + MathF.Sin(mid) * radius);
     }
 
     private static bool InSweep(float angle, float a0, float span)
@@ -164,18 +170,10 @@ public sealed class PieChart<T> : CircularCore<PieChart<T>, T>
             float x = cx + MathF.Cos(a) * outerR, y = cy + MathF.Sin(a) * outerR;
             if (i == 0) canvas.MoveTo(x, y); else canvas.LineTo(x, y);
         }
-
-        if (innerR <= 0f)
+        for (int i = segments; i >= 0; i--)
         {
-            canvas.LineTo(cx, cy);
-        }
-        else
-        {
-            for (int i = segments; i >= 0; i--)
-            {
-                float a = a0 + (a1 - a0) * i / segments;
-                canvas.LineTo(cx + MathF.Cos(a) * innerR, cy + MathF.Sin(a) * innerR);
-            }
+            float a = a0 + (a1 - a0) * i / segments;
+            canvas.LineTo(cx + MathF.Cos(a) * innerR, cy + MathF.Sin(a) * innerR);
         }
 
         canvas.ClosePath();

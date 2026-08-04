@@ -11,7 +11,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Radar (spider) chart. The data set defines the spokes, one per item and labelled by <c>Name</c>, and

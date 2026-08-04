@@ -6,7 +6,9 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Timeline. Every item becomes one horizontal bar spanning its start and end against a shared time axis,

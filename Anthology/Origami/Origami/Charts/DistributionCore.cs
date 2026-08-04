@@ -8,7 +8,9 @@ using Prowl.PaperUI;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Shared implementation for the distribution chart types (Histogram). Unlike the rest of

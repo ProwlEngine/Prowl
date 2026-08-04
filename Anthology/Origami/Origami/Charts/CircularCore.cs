@@ -12,7 +12,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>One slice of a <see cref="CircularCore{TSelf, T}"/> chart: a single item of the source data
 /// set resolved into the label, value and colour the chart draws it with. <c>Index</c> stays the item's

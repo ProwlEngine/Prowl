@@ -14,7 +14,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>Dash pattern for a Cartesian series' stroke. Set via <c>.Dashed()</c>/<c>.Dotted()</c>.</summary>
 public enum CartesianDash
@@ -43,7 +45,7 @@ public sealed class CartesianSeries<T>
 
     /// <summary>The <see cref="CartesianModuleBase{T}"/> that owns this series on a <see cref="CartesianChart{T}"/>.
     /// Null for a series that belongs directly to a single-type Cartesian chart (Line/Bar/Scatter/Bubble
-    /// used standalone rather than through <see cref="Origami.Chart.CreateCartesian{T}"/>).</summary>
+    /// used standalone rather than through <see cref="Chart.CreateCartesian{T}"/>).</summary>
     public object? Owner;
 
     public bool EffectiveVisible => Visible && !LegendHidden;

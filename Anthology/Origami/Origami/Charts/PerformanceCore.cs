@@ -9,7 +9,9 @@ using Prowl.PaperUI.LayoutEngine;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>One group header row of a <see cref="PerformanceCore{TSelf, T}"/> chart: a thread or a track
 /// within one, drawn as a full-width row the user clicks to collapse. <c>Row</c> is its index into the

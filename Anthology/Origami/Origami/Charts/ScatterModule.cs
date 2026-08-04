@@ -10,7 +10,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Scatter module for a <see cref="CartesianChart{T}"/>. Plots one marker per point of every visible

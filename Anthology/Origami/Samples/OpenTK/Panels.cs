@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Prowl.OrigamiUI;
+using Prowl.OrigamiUI.Charts;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
@@ -1463,7 +1464,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void LineChart(Paper P)
     {
-        Origami.Chart.CreateCartesian<object>(P, "chart_line")
+        Chart.CreateCartesian<object>(P, "chart_line")
             .Title("Revenue vs. Cost - Last 24 Months")
             .Height(ChartHeight)
             .YLabel("Dollars (K)").XLabel("Month")
@@ -1485,7 +1486,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void BarChart(Paper P)
     {
-        Origami.Chart.CreateCartesian<object>(P, "chart_bar")
+        Chart.CreateCartesian<object>(P, "chart_bar")
             .Title("Quarterly Sales by Region")
             .Height(ChartHeight)
             .YLabel("Units (K)").XLabel("Quarter")
@@ -1506,7 +1507,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void ScatterChart(Paper P)
     {
-        Origami.Chart.CreateCartesian<ScatterPoint>(P, "chart_scatter", _scatter)
+        Chart.CreateCartesian<ScatterPoint>(P, "chart_scatter", _scatter)
             .Title("Spend vs. Conversion")
             .Height(ChartHeight)
             .YLabel("Conversion").XLabel("Spend")
@@ -1528,7 +1529,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void BubbleChart(Paper P)
     {
-        Origami.Chart.CreateCartesian<BubblePoint>(P, "chart_bubble", _bubbles)
+        Chart.CreateCartesian<BubblePoint>(P, "chart_bubble", _bubbles)
             .Title("Accounts - Reach by Seat Count")
             .Height(ChartHeight)
             .YLabel("Reach").XLabel("Tenure")
@@ -1550,7 +1551,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void PieChart(Paper P)
     {
-        Origami.Chart.Pie(P, "chart_pie", _sourceKeys)
+        Chart.Pie(P, "chart_pie", _sourceKeys)
             .Title("Traffic by Source")
             .Height(ChartHeight)
             .Legend().LegendShowValue().LegendInteractive(true)
@@ -1566,7 +1567,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void DonutChart(Paper P)
     {
-        Origami.Chart.Donut(P, "chart_donut", _sourceKeys)
+        Chart.Donut(P, "chart_donut", _sourceKeys)
             .Title("Traffic by Source - Donut")
             .Height(ChartHeight)
             .Legend().LegendShowValue().LegendInteractive(true)
@@ -1584,7 +1585,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void RadarChart(Paper P)
     {
-        Origami.Chart.Radar(P, "chart_radar", _axisKeys)
+        Chart.Radar(P, "chart_radar", _axisKeys)
             .Title("Frame Budget - Baseline vs. Current")
             .Height(ChartHeight)
             .Legend().LegendInteractive(true)
@@ -1602,7 +1603,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void HistogramChart(Paper P)
     {
-        Origami.Chart.Histogram<object>(P, "chart_histogram")
+        Chart.Histogram<object>(P, "chart_histogram")
             .Title("Frame Time Distribution")
             .Height(ChartHeight)
             .YLabel("Frames").XLabel("Frame Time Bin")
@@ -1620,7 +1621,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void FlameGraphChart(Paper P)
     {
-        Origami.Chart.FlameGraph(P, "chart_flamegraph", _buildTree)
+        Chart.FlameGraph(P, "chart_flamegraph", _buildTree)
             .Title("Build Time by Module - Flame Graph")
             .Height(ChartHeight)
             .Legend().LegendInteractive(true)
@@ -1639,7 +1640,7 @@ public sealed class ChartsPanel : DockPanel
 
     private void TimelineChart(Paper P)
     {
-        Origami.Chart.Timeline(P, "chart_timeline", _trace)
+        Chart.Timeline(P, "chart_timeline", _trace)
             .Title("Frame Trace - Timeline")
             .Height(ChartHeight)
             .Legend().LegendInteractive(true)

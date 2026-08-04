@@ -13,7 +13,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>One node of a <see cref="HierarchicalCore{TSelf, T}"/> chart's forest: a single item of the
 /// source tree resolved into the label, aggregated value and colour the chart draws it with.

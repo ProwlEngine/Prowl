@@ -10,7 +10,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Line module for a <see cref="CartesianChart{T}"/>. Plots one or more series as a stroked polyline.

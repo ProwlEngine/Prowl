@@ -10,7 +10,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>Non-generic-in-TSelf surface a <see cref="CartesianChart{T}"/> talks to its modules through.
 /// Internal: a module never needs to know this exists, it only ever sees the protected members
@@ -189,7 +191,7 @@ public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where 
 /// A Cartesian chart whose marks come entirely from the modules plugged into it via
 /// <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c> and <c>.AddBubbleChart()</c>,
 /// which is what lets a line be overlaid on a bar or a scatter share one plot with a bubble. Built with
-/// <see cref="Origami.Chart.CreateCartesian{T}"/>.
+/// <see cref="Chart.CreateCartesian{T}"/>.
 ///
 /// The x axis is shared: set it once with <see cref="X"/>, and every module reads it back to place its
 /// own <c>.Y(...)</c>-selected series. This is also what keeps a combo of a banded module (Bar) and a

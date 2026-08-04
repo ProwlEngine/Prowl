@@ -10,7 +10,9 @@ using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Bar module for a <see cref="CartesianChart{T}"/>. Every visible series gets its own bar side by side,

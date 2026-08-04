@@ -6,7 +6,9 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI;
 
-namespace Prowl.OrigamiUI;
+using Prowl.OrigamiUI;
+
+namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Flame graph. Every node becomes one horizontal bar whose width is its share of the forest total and
