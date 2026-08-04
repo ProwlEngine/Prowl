@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -35,8 +35,23 @@ public sealed class SceneToolContext
     /// <summary>The viewport this context belongs to.</summary>
     public object View { get; private set; } = null!;
 
-    /// <summary>The tool currently being serviced, used to scope <see cref="State{T}"/>.</summary>
-    internal SceneTool? CurrentTool { get; set; }
+    /// <summary>
+    /// The tool currently being serviced. Scopes <see cref="State{T}"/> and binds the tool's
+    /// protected drawing helpers, so setting this is the single act that makes a tool "current".
+    /// </summary>
+    internal SceneTool? CurrentTool
+    {
+        get => _currentTool;
+        set
+        {
+            if (ReferenceEquals(_currentTool, value)) return;
+            _currentTool?.BindContext(null);
+            _currentTool = value;
+            _currentTool?.BindContext(this);
+        }
+    }
+
+    private SceneTool? _currentTool;
 
     public GameObject? ActiveObject => Selection.GetSelected<GameObject>().FirstOrDefault();
 

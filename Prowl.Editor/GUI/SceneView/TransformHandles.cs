@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -12,7 +12,7 @@ using Gizmo = Prowl.OrigamiUI.Gizmo;
 namespace Prowl.Editor.GUI.SceneView;
 
 /// <summary>
-/// Immediate-mode transform handles for custom scene-view editors. Wraps Origami's
+/// Immediate-mode transform handles for scene tools. Wraps Origami's
 /// <see cref="Gizmo.TransformGizmo"/> so an editor can manipulate an arbitrary world point/transform
 /// (not just a GameObject): e.g. a light probe, a spline knot, a bounds corner.
 ///
@@ -23,7 +23,7 @@ namespace Prowl.Editor.GUI.SceneView;
 /// the handles touched this frame. Each distinct <paramref name="id"/> keeps its own drag state
 /// across frames.
 /// </summary>
-public static class Handles
+public static class TransformHandles
 {
     private static readonly Dictionary<string, Gizmo.TransformGizmo> _gizmos = new();
     private static readonly Dictionary<string, Gizmo.TransformGizmoMode> _modes = new();

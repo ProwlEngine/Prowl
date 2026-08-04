@@ -44,6 +44,11 @@ public class SceneViewPanel : DockPanel
     private Float2 _viewCubeCenter;
     private float _viewCubeRadius;
 
+    // Marquee (box) selection, driven by the same control as click-picking.
+    private const float MarqueeThreshold = 4f;
+    private bool _marqueeActive;
+    private Float2 _marqueeStart;
+
     public SceneViewPanel() => _toolContext = new SceneToolContext(_handles);
 
     /// <summary>Handle arbitration context for this viewport.</summary>
@@ -323,18 +328,18 @@ public class SceneViewPanel : DockPanel
                         });
                     }
 
-                    // Draw every live tool's overlay
-                    if (SceneToolManager.Live.Count > 0)
+                    // Tool overlays, then everything recorded into the shared draw list this frame
+                    // (by tools, by handles, and by the viewport itself).
+                    paper.DrawForeground(ref handle, (canvas2, r2) =>
                     {
-                        paper.DrawForeground(ref handle, (canvas2, r2) =>
+                        foreach (var overlayTool in SceneToolManager.Live)
                         {
-                            foreach (var overlayTool in SceneToolManager.Live)
-                            {
-                                _toolContext.CurrentTool = overlayTool;
-                                overlayTool.OnDrawOverlay(_toolContext, canvas2);
-                            }
-                        });
-                    }
+                            _toolContext.CurrentTool = overlayTool;
+                            try { overlayTool.OnDrawOverlay(_toolContext, canvas2); }
+                            catch (Exception ex) { Runtime.Debug.LogError($"[SceneTool] {overlayTool.GetType().Name}.OnDrawOverlay threw: {ex.Message}"); }
+                        }
+                        _handles.Draw.Replay(canvas2);
+                    });
                 });
 
             // Camera input
@@ -493,23 +498,100 @@ public class SceneViewPanel : DockPanel
     }
 
     /// <summary>
-    /// Object picking is just another control: it registers as the default, so it wins only when no
-    /// handle anywhere in the viewport claimed the cursor. This replaces the frame-wide "did an
-    /// editor consume input" flag, which suppressed picking across the whole viewport even far away
-    /// from the editor's handles.
+    /// Object picking and marquee selection, sharing one control: a press that never travels is a
+    /// click-select, a press that drags out a rectangle is a box-select. Registered as the default
+    /// control, so it only runs when no handle anywhere in the viewport claimed the cursor.
     /// </summary>
     private void UpdatePickControl(Scene scene, Float2 panelSize)
     {
         ControlID pick = _handles.GetControlID(PickControl);
         _handles.AddDefaultControl(pick);
 
-        // Released first, unconditionally: a press that starts in the viewport and releases outside
-        // it would otherwise hold the drag and block every other handle until the next frame.
-        _handles.TryEndDrag(pick);
+        bool owned = _handles.IsHot(pick);
+
+        // Released first and unconditionally: a press that starts in the viewport and releases
+        // outside it would otherwise hold the drag and block every other handle until next frame.
+        if (owned && _handles.PrimaryUp)
+        {
+            if (_marqueeActive)
+                ApplyMarquee(scene, panelSize);
+            else
+                PickObject(scene, _handles.MouseLocal, panelSize);
+
+            _marqueeActive = false;
+            _handles.TryEndDrag(pick);
+            return;
+        }
+
+        if (owned && _handles.PrimaryHeld)
+        {
+            // Promote to a marquee once the cursor has travelled far enough to mean it.
+            if (!_marqueeActive && _handles.DragExceededThreshold(pick, MarqueeThreshold))
+            {
+                _marqueeActive = true;
+                _marqueeStart = _handles.MousePosition;
+            }
+            if (_marqueeActive)
+                _handles.Draw.ScreenRect(_marqueeStart, _handles.MousePosition,
+                    Color32.FromArgb(40, 120, 170, 255), Color32.FromArgb(200, 140, 190, 255));
+            return;
+        }
 
         if (!_handles.ViewportHovered || _handles.Blocked) return;
         if (_handles.TryBeginDrag(pick))
-            PickObject(scene, _handles.MouseLocal, panelSize);
+            _marqueeStart = _handles.MousePosition;
+    }
+
+    /// <summary>
+    /// Select everything whose screen-projected bounds centre falls inside the marquee. Shift adds to
+    /// the selection, Ctrl toggles, plain replaces.
+    /// </summary>
+    private void ApplyMarquee(Scene scene, Float2 panelSize)
+    {
+        Float2 a = _marqueeStart, b = _handles.MousePosition;
+        float minX = MathF.Min(a.X, b.X), maxX = MathF.Max(a.X, b.X);
+        float minY = MathF.Min(a.Y, b.Y), maxY = MathF.Max(a.Y, b.Y);
+
+        bool additive = _handles.Shift || _handles.Ctrl;
+        if (!additive) Selection.Clear();
+
+        foreach (var go in scene.ActiveObjects)
+        {
+            if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
+            if (!TryGetSelectionAnchor(go, out Float3 anchor)) continue;
+
+            Float2? screen = _handles.WorldToScreen(anchor);
+            if (screen is null) continue;
+            if (screen.Value.X < minX || screen.Value.X > maxX) continue;
+            if (screen.Value.Y < minY || screen.Value.Y > maxY) continue;
+
+            if (_handles.Ctrl) Selection.ToggleSelection(go);
+            else Selection.AddToSelection(go);
+        }
+    }
+
+    /// <summary>The point a marquee tests against: renderer bounds centre, else the transform.</summary>
+    private static bool TryGetSelectionAnchor(GameObject go, out Float3 anchor)
+    {
+        var mr = go.GetComponent<MeshRenderer>();
+        if (mr != null && mr.EnabledInHierarchy && mr.Mesh.Res != null)
+        {
+            AABB b = mr.Mesh.Res.bounds;
+            anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
+            return true;
+        }
+
+        var smr = go.GetComponent<SkinnedMeshRenderer>();
+        if (smr != null && smr.EnabledInHierarchy && smr.SharedMesh.Res != null)
+        {
+            AABB b = smr.SharedMesh.Res.bounds;
+            anchor = Float4x4.TransformPoint((b.Min + b.Max) * 0.5f, go.Transform.LocalToWorldMatrix);
+            return true;
+        }
+
+        // Everything else (lights, cameras, empties) selects on its origin.
+        anchor = go.Transform.Position;
+        return true;
     }
 
     private void PickObject(Scene scene, Float2 screenPos, Float2 panelSize)

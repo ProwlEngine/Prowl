@@ -20,7 +20,7 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 /// Scene-view editor for <see cref="LightProbeGroup"/>: click to
 /// select probes (Shift adds, Ctrl toggles), drag the position handle to move the selection, and
 /// Add / Delete / Duplicate / Select-All from the toolbar or keyboard. Built on the public
-/// <see cref="Handles"/> transform API (dogfooding it for a non-GameObject target).
+/// <see cref="TransformHandles"/> transform API (dogfooding it for a non-GameObject target).
 /// </summary>
 [ComponentSceneTool(typeof(LightProbeGroup))]
 public class LightProbeGroupSceneEditor : SceneTool
@@ -44,14 +44,14 @@ public class LightProbeGroupSceneEditor : SceneTool
         GameObject? target = ctx.ActiveObject;
         _group = target.IsValid() ? target.GetComponent<LightProbeGroup>() : null;
         _selection.Clear();
-        Handles.Forget(MoveHandleId);
+        TransformHandles.Forget(MoveHandleId);
     }
 
     public override void OnDeactivated()
     {
         _group = null;
         _selection.Clear();
-        Handles.Forget(MoveHandleId);
+        TransformHandles.Forget(MoveHandleId);
     }
 
     public override void OnSceneInput(SceneToolContext toolCtx)
@@ -72,7 +72,7 @@ public class LightProbeGroupSceneEditor : SceneTool
         {
             Float3 centroid = SelectionCentroidWorld();
             Float3 before = centroid;
-            bool moved = Handles.PositionHandle(ctx, MoveHandleId, ref centroid, out handleHot);
+            bool moved = TransformHandles.PositionHandle(ctx, MoveHandleId, ref centroid, out handleHot);
 
             if (ctx.IsHot(ctx.GetControlID(MoveHandleId)))
                 Undo.Snapshot(_group);
@@ -117,7 +117,7 @@ public class LightProbeGroupSceneEditor : SceneTool
         DrawProbes();
     }
 
-    public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas) => Handles.Draw(canvas);
+    public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas) => TransformHandles.Draw(canvas);
 
     public override bool OverridesToolStrip => true;
 
