@@ -84,6 +84,18 @@ public abstract class UIBehaviour : MonoBehaviour
     /// <summary>Subclasses fill <paramref name="builder"/> in canvas-local pixel space.</summary>
     public abstract void GenerateMesh(UIMeshBuilder builder, in UIContext context);
 
+    /// <summary>
+    /// True while this element's geometry is built from an asset that hasn't streamed in yet, so what it
+    /// baked is missing or a placeholder.
+    /// <para>
+    /// The canvas stays dirty while any element reports this. Nothing else would bring it back: a clean
+    /// canvas skips the whole rebuild walk, so an element that baked nothing on frame one is never asked
+    /// again, and the asset arriving changes nothing on screen until something unrelated (a window
+    /// resize) happens to dirty the canvas.
+    /// </para>
+    /// </summary>
+    public virtual bool IsContentPending => false;
+
     /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
     public virtual void PopulateProperties(PropertyState props, in UIContext context) { }
 
