@@ -350,7 +350,6 @@ namespace Prowl.PaperUI
 
             _capturedKeyboard = false;
             _wrapPointer = false;
-            _pointerWrap = Float2.Zero;
 
         }
 
@@ -413,6 +412,7 @@ namespace Prowl.PaperUI
             // Reset transient values
             PointerWheel = 0;
             PreviousPointerPos = PointerPos;
+            _pointerWrap = Float2.Zero;
             InputString.Clear();
 
             WantsCaptureKeyboard = _capturedKeyboard;
