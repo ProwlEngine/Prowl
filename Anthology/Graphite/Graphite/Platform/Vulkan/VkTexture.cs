@@ -292,17 +292,7 @@ internal unsafe partial class VkTexture : Texture
 #endif
         if (oldLayout != newLayout)
         {
-            ImageAspectFlags aspectMask;
-            if ((Usage & TextureUsage.DepthStencil) != 0)
-            {
-                aspectMask = FormatHelpers.IsStencilFormat(Format)
-                    ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-                    : ImageAspectFlags.DepthBit;
-            }
-            else
-            {
-                aspectMask = ImageAspectFlags.ColorBit;
-            }
+            ImageAspectFlags aspectMask = GetAspectMask();
             _gd.Vk.TransitionImageLayout(
                 cb,
                 OptimalDeviceImage,
@@ -347,17 +337,7 @@ internal unsafe partial class VkTexture : Texture
 
                 if (oldLayout != newLayout)
                 {
-                    ImageAspectFlags aspectMask;
-                    if ((Usage & TextureUsage.DepthStencil) != 0)
-                    {
-                        aspectMask = FormatHelpers.IsStencilFormat(Format)
-                            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
-                            : ImageAspectFlags.DepthBit;
-                    }
-                    else
-                    {
-                        aspectMask = ImageAspectFlags.ColorBit;
-                    }
+                    ImageAspectFlags aspectMask = GetAspectMask();
                     _gd.Vk.TransitionImageLayout(
                         cb,
                         OptimalDeviceImage,
@@ -374,6 +354,18 @@ internal unsafe partial class VkTexture : Texture
                 }
             }
         }
+    }
+
+    private ImageAspectFlags GetAspectMask()
+    {
+        if ((Usage & TextureUsage.DepthStencil) == 0)
+        {
+            return ImageAspectFlags.ColorBit;
+        }
+
+        return FormatHelpers.IsStencilFormat(Format)
+            ? ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit
+            : ImageAspectFlags.DepthBit;
     }
 
     internal ImageLayout GetImageLayout(uint mipLevel, uint arrayLayer)

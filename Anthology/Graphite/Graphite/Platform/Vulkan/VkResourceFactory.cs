@@ -5,13 +5,11 @@ namespace Prowl.Graphite.Vk;
 internal class VkResourceFactory : ResourceFactory
 {
     private readonly VkGraphicsDevice _gd;
-    private readonly Device _device;
 
     public VkResourceFactory(VkGraphicsDevice vkGraphicsDevice)
         : base(vkGraphicsDevice, vkGraphicsDevice.Features)
     {
         _gd = vkGraphicsDevice;
-        _device = vkGraphicsDevice.Device;
     }
 
     public override GraphicsBackend BackendType => GraphicsBackend.Vulkan;
