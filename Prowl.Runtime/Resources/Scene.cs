@@ -612,7 +612,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             obj.Scene = null;
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         base.OnDispose();
 

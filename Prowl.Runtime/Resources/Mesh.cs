@@ -946,7 +946,7 @@ public class Mesh : EngineObject, ISerializable
 
     #endregion
 
-    public override void OnDispose() => DeleteGPUBuffers();
+    protected override void OnDispose() => DeleteGPUBuffers();
 
     ~Mesh() => Dispose();
 

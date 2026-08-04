@@ -76,7 +76,7 @@ public abstract class UIBehaviour : MonoBehaviour
 
         // Free the baked GPU buffers - the canvas will re-bake from scratch if this element
         // is ever re-added. Without this every created/destroyed UI element leaks its mesh.
-        if (CachedMesh.IsValid()) CachedMesh.OnDispose();
+        if (CachedMesh.IsValid()) CachedMesh.Dispose();
         CachedMesh = null;
         DirtyFlags |= UIDirtyFlags.Vertices;
     }
