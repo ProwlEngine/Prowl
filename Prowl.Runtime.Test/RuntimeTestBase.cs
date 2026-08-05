@@ -149,6 +149,10 @@ public abstract class RuntimeTestBase : IDisposable
 
     public virtual void Dispose()
     {
+        // DontDestroyOnLoad is static state, so anything a test preserved would still be in the
+        // registry for the next one. Immediate teardown: no frame follows to drain a destroy queue.
+        Scene.DestroyPreserved(immediate: true);
+
         foreach (var scene in _scenes)
         {
             if (scene.IsDisposed) continue;

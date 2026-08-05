@@ -185,6 +185,25 @@ public class ScriptCompilationTests : EditorTestHarness
         finally { TryDeleteDir(parent); }
     }
 
+    // Script files are the only input the recompile rule watches, so an engine rebuilt underneath an
+    // unchanged project leaves assemblies bound to an API that may no longer exist - surfacing much
+    // later as a MissingMethodException from whichever call site happened to run first.
+    [Fact]
+    public void ScriptsPredateEngine_TracksTheEngineBuild_NotJustTheScripts()
+    {
+        WriteScript("Persistent.cs", "using Prowl.Runtime; public class Persistent : MonoBehaviour { }");
+        var result = ScriptCompiler.CompileAll(Project);
+        Assert.True(result.Success, $"Compile failed:\n{result.Errors}");
+
+        // Freshly compiled: the assembly is younger than the engine it was built against.
+        Assert.False(ScriptAssemblyManager.ScriptsPredateEngine(Project));
+
+        // As if the engine had been rebuilt after that compile.
+        File.SetLastWriteTimeUtc(Project.GameAssemblyPath, DateTime.UtcNow.AddDays(-1));
+
+        Assert.True(ScriptAssemblyManager.ScriptsPredateEngine(Project));
+    }
+
     private string InvokeVersionedTag()
     {
         // Load by bytes so the file stays unlocked for the next recompile.
