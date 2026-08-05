@@ -99,6 +99,9 @@ public class EditorApplication : Game
                 // Load user script assemblies before registry scanning
                 ScriptAssemblyManager.LoadAssemblies(project);
 
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
+
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
             }
@@ -415,6 +418,9 @@ public class EditorApplication : Game
 
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
+
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
 
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
