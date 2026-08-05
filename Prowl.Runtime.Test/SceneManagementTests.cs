@@ -431,6 +431,184 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.False(scene.Render());
     }
 
+    // ---- Surviving a scene load ----
+
+    private sealed class TickCounter : MonoBehaviour
+    {
+        public int Enables, Disables, Updates;
+        public override void OnEnable() => Enables++;
+        public override void OnDisable() => Disables++;
+        public override void Update() => Updates++;
+    }
+
+    // The hand-rolled version: take the object out of the outgoing scene and put it in the incoming
+    // one. It works, as long as you add it to the scene you are loading and not to Scene.Current,
+    // which is still the outgoing scene until the swap applies.
+    [Fact]
+    public void ManualPreserve_RemoveFromOldSceneAndAddToTheNextOne_Survives()
+    {
+        var first = CreateScene();
+        var keeper = CreateGameObject("Keeper");
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        var second = CreateScene();
+        first.Remove(keeper);
+        second.Add(keeper);
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.False(keeper.IsDisposed);
+        Assert.Same(second, keeper.Scene);
+        Assert.Contains(keeper, second.AllObjects);
+    }
+
+    // The trap: after Load(), Scene.Current is still the outgoing scene, so adding there hands the
+    // object to the scene that is about to be disposed.
+    [Fact]
+    public void ManualPreserve_AddingBackToSceneCurrentAfterLoad_LosesTheObject()
+    {
+        var first = CreateScene();
+        var keeper = CreateGameObject("Keeper");
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        var second = CreateScene();
+        first.Remove(keeper);
+        Scene.Load(second);
+        Scene.Current.Add(keeper); // still `first` at this point
+        Scene.ProcessPendingLoad();
+
+        Assert.True(keeper.IsDisposed, "Scene.Current is only the new scene once the swap applies.");
+    }
+
+    [Fact]
+    public void DontDestroyOnLoad_SurvivesTheLoad_AndJoinsTheNewScene()
+    {
+        var first = CreateScene();
+        var keeper = CreateGameObject("Keeper");
+        var doomed = CreateGameObject("Doomed");
+        first.Add(keeper);
+        first.Add(doomed);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        Scene.DontDestroyOnLoad(keeper);
+
+        var second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.False(keeper.IsDisposed);
+        Assert.Same(second, keeper.Scene);
+        Assert.Contains(keeper, second.AllObjects);
+        Assert.True(doomed.IsDisposed, "Anything not preserved goes with the old scene.");
+    }
+
+    [Fact]
+    public void DontDestroyOnLoad_KeepsTicking_InTheNewScene()
+    {
+        var first = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        var comp = keeper.AddComponent<TickCounter>();
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+
+        Update(first);
+        Assert.Equal(1, comp.Updates);
+
+        var second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Update(second);
+        Assert.Equal(2, comp.Updates); // re-registered with the new scene's dispatcher
+    }
+
+    [Fact]
+    public void DontDestroyOnLoad_DoesNotRestartTheObject()
+    {
+        var first = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        var comp = keeper.AddComponent<TickCounter>();
+        first.Add(keeper);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+        int enables = comp.Enables;
+
+        Scene.Load(CreateScene());
+        Scene.ProcessPendingLoad();
+
+        Assert.Equal(enables, comp.Enables);
+        Assert.Equal(0, comp.Disables);
+    }
+
+    [Fact]
+    public void DontDestroyOnLoad_OnAChild_PreservesItsRootInstead()
+    {
+        var first = CreateScene();
+        var root = CreateGameObject("Root");
+        var child = CreateGameObject("Child");
+        child.SetParent(root);
+        first.Add(root);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        Scene.DontDestroyOnLoad(child);
+
+        var second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad();
+
+        Assert.False(root.IsDisposed);
+        Assert.False(child.IsDisposed);
+        Assert.Same(second, root.Scene);
+        Assert.Same(second, child.Scene);
+        Assert.Same(root, child.Parent);
+    }
+
+    [Fact]
+    public void CancelDontDestroyOnLoad_LetsItDieWithTheScene()
+    {
+        var first = CreateScene();
+        var go = CreateGameObject();
+        first.Add(go);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+
+        Scene.DontDestroyOnLoad(go);
+        Scene.CancelDontDestroyOnLoad(go);
+
+        Scene.Load(CreateScene());
+        Scene.ProcessPendingLoad();
+
+        Assert.True(go.IsDisposed);
+    }
+
+    [Fact]
+    public void DontDestroyOnLoad_ADestroyedObject_IsDroppedNotResurrected()
+    {
+        var first = CreateScene();
+        var go = CreateGameObject();
+        first.Add(go);
+        Scene.Load(first);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(go);
+
+        go.Dispose();
+
+        var second = CreateScene();
+        Scene.Load(second);
+        Scene.ProcessPendingLoad(); // must not throw or re-add the corpse
+
+        Assert.Empty(second.AllObjects);
+    }
+
     [Fact]
     public void Load_SkipsASceneDisposedBeforeItApplied()
     {
