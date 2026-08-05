@@ -29,6 +29,12 @@
   <ItemGroup>
     <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
     <PackageReference Include="Jitter2" Version="2.8.5" />
+
+    <PackageReference Include="DotRecast.Core" Version="2026.1.3" />
+    <PackageReference Include="DotRecast.Recast" Version="2026.1.3" />
+    <PackageReference Include="DotRecast.Detour" Version="2026.1.3" />
+    <PackageReference Include="DotRecast.Detour.Crowd" Version="2026.1.3" />
+    <PackageReference Include="DotRecast.Detour.TileCache" Version="2026.1.3" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.0" />
 
     <!-- <ProjectReference Include="..\..\Anthology\Clay\Clay\Clay.csproj" /> -->

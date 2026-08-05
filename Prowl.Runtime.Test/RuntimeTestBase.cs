@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Test;
 
@@ -94,6 +95,49 @@ public abstract class RuntimeTestBase : IDisposable
     {
         for (int i = 0; i < steps; i++)
             scene.FixedUpdate();
+    }
+
+    /// <summary> Coarse voxels and small tiles, so navmesh bakes in tests stay fast. </summary>
+    protected static void ApplyFastBakeSettings(NavMeshSurface surface)
+    {
+        surface.BuildOverrides.OverrideVoxelSize = true;
+        surface.BuildOverrides.VoxelSize = 0.25f;
+        surface.BuildOverrides.OverrideTileSize = true;
+        surface.BuildOverrides.TileSize = 64;
+        surface.UseGeometry = NavMeshCollectGeometry.PhysicsColliders;
+    }
+
+    /// <summary> A flat collider floor with its top surface at y=0, plus a surface configured
+    /// for a fast bake. Pass <paramref name="bake"/> to bake and register it immediately. </summary>
+    protected (Scene scene, NavMeshSurface surface) CreateFloorScene(float size = 20f, bool bake = false)
+    {
+        Scene scene = CreateScene(enable: true);
+
+        GameObject floor = CreateGameObject("Floor");
+        scene.Add(floor);
+        floor.AddComponent<BoxCollider>().Size = new Float3(size, 1, size);
+        floor.Transform.Position = new Float3(0, -0.5f, 0);
+
+        GameObject surfaceGo = CreateGameObject("NavMeshSurface");
+        scene.Add(surfaceGo);
+        var surface = surfaceGo.AddComponent<NavMeshSurface>();
+        ApplyFastBakeSettings(surface);
+        if (bake && !surface.BuildNavMesh())
+            throw new InvalidOperationException("CreateFloorScene: the floor bake produced no walkable geometry.");
+
+        return (scene, surface);
+    }
+
+    /// <summary> Tick until <paramref name="condition"/> holds — incremental cache updates
+    /// process a bounded slice per frame. Returns the ticks taken, or -1 on timeout. </summary>
+    protected int TickUntil(Scene scene, Func<bool> condition, int maxTicks = 240)
+    {
+        for (int i = 0; i < maxTicks; i++)
+        {
+            if (condition()) return i;
+            Tick(scene, 1);
+        }
+        return condition() ? maxTicks : -1;
     }
 
     public virtual void Dispose()
