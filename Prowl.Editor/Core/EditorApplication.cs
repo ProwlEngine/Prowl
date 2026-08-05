@@ -1573,6 +1573,8 @@ public class EditorApplication : Game
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
+        Runtime.Resources.Scene.DestroyPreserved();
+
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
         Undo.Clear();
@@ -1597,6 +1599,8 @@ public class EditorApplication : Game
 
         // Clear selection (play scene references)
         Selection.Clear();
+
+        Runtime.Resources.Scene.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)

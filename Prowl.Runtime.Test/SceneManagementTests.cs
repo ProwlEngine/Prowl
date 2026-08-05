@@ -609,6 +609,77 @@ public class SceneManagementTests : RuntimeTestBase
         Assert.Empty(second.AllObjects);
     }
 
+    // Leaving play mode ends the preservation session. Without this the objects a play session kept
+    // alive would ride the swap into the authoring scene the editor restores behind it, and stay there.
+    [Fact]
+    public void DestroyPreserved_KeepsThemOutOfTheNextScene()
+    {
+        var play = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        play.Add(keeper);
+        Scene.Load(play);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+
+        Scene.DestroyPreserved();
+
+        // Same order the game loop uses: the destroy queue drains, then the scene swap applies.
+        var restored = CreateScene();
+        Scene.Load(restored);
+        EngineObject.ProcessDestroyed();
+        Scene.ProcessPendingLoad();
+
+        Assert.True(keeper.IsDisposed);
+        Assert.Empty(restored.AllObjects);
+    }
+
+    // Queued like any other Destroy, so teardown lands at the end of the frame rather than under
+    // whatever was running when the play button was clicked.
+    [Fact]
+    public void DestroyPreserved_TearsDownAtTheEndOfTheFrame()
+    {
+        var scene = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        var comp = keeper.AddComponent<TickCounter>();
+        scene.Add(keeper);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+
+        Scene.DestroyPreserved();
+
+        Assert.False(keeper.IsDisposed);
+        Assert.Equal(0, comp.Disables);
+
+        EngineObject.ProcessDestroyed();
+
+        Assert.True(keeper.IsDisposed);
+        Assert.Equal(1, comp.Disables); // torn down properly, not just dropped from the registry
+    }
+
+    [Fact]
+    public void Shutdown_DestroysPreservedObjects()
+    {
+        var scene = CreateScene(enable: true);
+        var keeper = CreateGameObject("Keeper");
+        scene.Add(keeper);
+        Scene.Load(scene);
+        Scene.ProcessPendingLoad();
+        Scene.DontDestroyOnLoad(keeper);
+
+        Scene.Shutdown();
+
+        // No frame follows a shutdown, so nothing would drain a destroy queue: teardown is immediate.
+        Assert.True(keeper.IsDisposed);
+        Assert.True(scene.IsDisposed);
+
+        // And the registry is empty, so the next run does not inherit the last one's objects.
+        var next = CreateScene();
+        Scene.Load(next);
+        Scene.ProcessPendingLoad();
+        Assert.Empty(next.AllObjects);
+    }
+
     [Fact]
     public void Load_SkipsASceneDisposedBeforeItApplied()
     {

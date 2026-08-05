@@ -91,6 +91,29 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public static void CancelDontDestroyOnLoad(GameObject go)
         => _preserved.RemoveAll(p => ReferenceEquals(p, go));
 
+    /// <summary>
+    /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
+    /// <para/>
+    /// Teardown is queued like any other <see cref="EngineObject.Destroy"/>, so it lands at the end of
+    /// the frame, which is before the scene swap and therefore before anything could be carried over.
+    /// Pass <paramref name="immediate"/> when no further frame will run, since nothing would be left
+    /// to drain the queue.
+    /// </summary>
+    internal static void DestroyPreserved(bool immediate = false)
+    {
+        foreach (GameObject go in _preserved)
+        {
+            if (go.IsNotValid()) continue;
+
+            if (immediate)
+                go.Dispose();
+            else
+                go.Destroy();
+        }
+
+        _preserved.Clear();
+    }
+
     /// <summary>Whether this GameObject (or the root it belongs to) survives scene loads.</summary>
     public static bool IsPreserved(GameObject go)
     {
@@ -154,6 +177,8 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     internal static void Shutdown()
     {
         _pendingScene = null;
+
+        DestroyPreserved(immediate: true);
 
         if (_current is null || _current.IsDisposed)
         {
