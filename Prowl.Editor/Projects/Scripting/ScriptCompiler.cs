@@ -127,29 +127,6 @@ public static class ScriptCompiler
     /// packages (a bad name or version surfaces now instead of only after the first script is written)
     /// and lets IDEs resolve them. Returns success with nothing to reload when there is nothing to do.
     /// </summary>
-    /// <summary>
-    /// When the engine the scripts compile against was last built. User assemblies are compiled
-    /// against the running editor's own binaries, so a newer engine invalidates them exactly like an
-    /// edited script does: the API they were bound to may no longer exist, and the mismatch does not
-    /// surface until a call into the changed member throws MissingMethodException at runtime.
-    /// </summary>
-    public static DateTime EngineBuildTimeUtc()
-    {
-        string engineDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
-
-        DateTime newest = DateTime.MinValue;
-        foreach (string name in new[] { "Prowl.Runtime.dll", "Prowl.Editor.dll" })
-        {
-            string path = Path.Combine(engineDir, name);
-            if (!File.Exists(path)) continue;
-
-            DateTime stamp = File.GetLastWriteTimeUtc(path);
-            if (stamp > newest) newest = stamp;
-        }
-
-        return newest;
-    }
-
     private static CompileResult RestorePackagesOnly(Project project, List<CompilationUnit> units)
     {
         if (!ProjectDeclaresPackages(project))

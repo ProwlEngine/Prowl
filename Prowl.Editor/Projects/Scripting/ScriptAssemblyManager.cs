@@ -248,36 +248,6 @@ public static class ScriptAssemblyManager
         // Load every produced user assembly in dependency order.
         foreach (var dll in ScriptCompiler.GetEditorAssemblyPaths(project))
             LoadAssembly(dll, Path.GetFileNameWithoutExtension(dll));
-
-        if (ScriptsPredateEngine(project))
-        {
-            Runtime.Debug.Log("[Scripts] The engine has been rebuilt since these scripts were compiled; recompiling them.");
-            RequestRecompile();
-        }
-    }
-
-    /// <summary>
-    /// Whether the compiled user assemblies predate the engine they are about to run against.
-    /// <para/>
-    /// They were built against whatever engine was running at the time, so one rebuilt since can have
-    /// moved or dropped a member they still call - and nothing else notices, because the script files
-    /// themselves are unchanged and that is the only thing the recompile rule looks at. The mismatch
-    /// then waits until the affected code path runs and throws MissingMethodException, by which point
-    /// nothing points back at the engine change that caused it.
-    /// </summary>
-    internal static bool ScriptsPredateEngine(Project project)
-    {
-        DateTime oldestBuilt = DateTime.MaxValue;
-
-        foreach (var dll in ScriptCompiler.GetEditorAssemblyPaths(project))
-        {
-            if (!File.Exists(dll)) continue;
-
-            DateTime built = File.GetLastWriteTimeUtc(dll);
-            if (built < oldestBuilt) oldestBuilt = built;
-        }
-
-        return oldestBuilt != DateTime.MaxValue && ScriptCompiler.EngineBuildTimeUtc() > oldestBuilt;
     }
 
     /// <summary>Snapshot the project's plugins so the resolvers can satisfy user-assembly imports.</summary>
