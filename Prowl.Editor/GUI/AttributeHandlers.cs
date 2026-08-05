@@ -17,6 +17,40 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
 
+/// <summary>
+/// The default property-grid row recipe (gutter padding, label width/colour/truncation) for
+/// handler-drawn fields, so they align with grid-drawn rows instead of each hand-copying the
+/// layout. This is the one place the recipe lives — grid metric changes go here.
+/// </summary>
+public static class HandlerRowLayout
+{
+    /// <summary>Draw a label + control row matching the default grid rows. The control is
+    /// drawn inside a stretch-width, row-height box.</summary>
+    public static void LabelledRow(Paper paper, string id, string label, Action drawControl)
+    {
+        var theme = OrigamiUI.Origami.Current;
+        var m = theme.Metrics;
+        var font = theme.Font;
+
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        {
+            if (font != null && !string.IsNullOrEmpty(label))
+            {
+                paper.Box($"{id}_lbl")
+                    .Width(m.LabelWidth).Height(m.RowHeight)
+                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .Text(label, font).TextColor(theme.Ink.C300)
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+            }
+
+            using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(m.RowHeight).Enter())
+                drawControl();
+        }
+    }
+}
+
 /// <summary>[Header("text")] - draws a header label above the field.</summary>
 public class HeaderAttributeHandler : OrigamiUI.AttributeHandler
 {
