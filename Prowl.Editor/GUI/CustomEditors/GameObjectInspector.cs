@@ -907,12 +907,13 @@ public static class GameObjectInspector
                 {
                     var customEditor = EditorRegistries.GetCustomEditor(comp.GetType());
                     if (customEditor != null)
+                    {
                         customEditor.OnGUI(paper, compId, comp);
+                        // The PropertyGrid draws [Button] methods itself, a custom editor does not.
+                        DrawButtonMethods(paper, $"{compId}_btns", comp);
+                    }
                     else
                         PropertyGridUtils.Draw(paper, compId, comp);
-
-                    // Draw [Button] attributed methods
-                    DrawButtonMethods(paper, $"{compId}_btns", comp);
                 }
                 catch (Exception ex)
                 {

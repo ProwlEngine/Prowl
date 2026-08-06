@@ -106,14 +106,13 @@ public class ComponentPopoutPanel : DockPanel
             if (customEditor != null)
             {
                 customEditor.OnGUI(paper, compId, comp);
+                // The PropertyGrid draws [Button] methods itself, a custom editor does not.
+                GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
             }
             else
             {
                 PropertyGridUtils.Draw(paper, compId, comp);
             }
-
-            // Draw [Button] methods
-            GameObjectInspector.DrawButtonMethods(paper, $"{compId}_btns", comp);
         });
     }
 
