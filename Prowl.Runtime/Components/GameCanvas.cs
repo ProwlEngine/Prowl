@@ -282,6 +282,9 @@ public class GameCanvas : MonoBehaviour
         }
         while (_isDirty && ++pass < MaxLayoutPasses);
 
+        // The memo keys on GameObject, so holding it between rebuilds would keep destroyed objects alive.
+        LayoutUtility.InvalidateCache();
+
         // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset. A
         // layout that never settled also stays dirty and retries next frame rather than showing a
         // half-resolved result.
