@@ -335,7 +335,7 @@ internal static class DefaultGameObjectCreators
         placeholder.Text = "Enter text...";
         placeholder.Alignment = TextAlignment.CenterLeft;
         placeholder.Size = 16;
-        placeholder.TextColor = new Color(0.5f, 0.5f, 0.55f, 1f);
+        placeholder.Color = new Color(0.5f, 0.5f, 0.55f, 1f);
 
         var textGo = HierarchyPanel.CreateGameObject("Text", areaGo, select: false, beginRename: false);
         textGo.EnsureRectTransform();
@@ -343,7 +343,7 @@ internal static class DefaultGameObjectCreators
         var text = textGo.AddComponent<TextComponent>();
         text.Alignment = TextAlignment.CenterLeft;
         text.Size = 16;
-        text.TextColor = new Color(0.90f, 0.90f, 0.92f, 1f);
+        text.Color = new Color(0.90f, 0.90f, 0.92f, 1f);
 
         var caretGo = HierarchyPanel.CreateGameObject("Caret", areaGo, select: false, beginRename: false);
         caretGo.EnsureRectTransform();
@@ -379,7 +379,7 @@ internal static class DefaultGameObjectCreators
         var label = labelGo.AddComponent<TextComponent>();
         label.Alignment = TextAlignment.CenterLeft;
         label.Size = 16;
-        label.TextColor = new Color(0.90f, 0.90f, 0.92f, 1f);
+        label.Color = new Color(0.90f, 0.90f, 0.92f, 1f);
 
         var optionsGo = HierarchyPanel.CreateGameObject("Options", go, select: false, beginRename: false);
         optionsGo.EnsureRectTransform();

@@ -24,7 +24,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("UI/Text")]
 [ComponentIcon("T")] // Text
-public class TextComponent : UIBehaviour
+public class TextComponent : Graphic
 {
     [SerializeField] private AssetRef<FontAsset> _font;
     public AssetRef<FontAsset> Font
@@ -46,13 +46,6 @@ public class TextComponent : UIBehaviour
     /// <summary>A font is assigned but hasn't loaded, so this text is currently laid out with the
     /// built-in fallback and has to be rebuilt once the real one arrives.</summary>
     public override bool IsContentPending => !_font.IsExplicitNull && _font.Res.IsNotValid();
-
-    [SerializeField] private Color _textColor = Color.White;
-    public Color TextColor
-    {
-        get => _textColor;
-        set => SetField(ref _textColor, value, UIDirtyFlags.Vertices);
-    }
 
     [SerializeField] private string _text = string.Empty;
     public string Text
@@ -93,19 +86,7 @@ public class TextComponent : UIBehaviour
         set => SetField(ref _richText, value, UIDirtyFlags.Vertices);
     }
 
-    // ---- Material override ----
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material
-    {
-        get => _material;
-        set => SetField(ref _material, value, UIDirtyFlags.Material);
-    }
-
-    public override Material GetMaterial()
-    {
-        var m = _material.Res;
-        return m.IsValid() ? m : GameCanvas.SharedTextMaterial;
-    }
+    protected override Material DefaultMaterial => GameCanvas.SharedTextMaterial;
 
     /// <summary>
     /// Atlas version recorded at the last successful bake. When Scribe grows the atlas
