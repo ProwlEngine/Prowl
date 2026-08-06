@@ -184,6 +184,7 @@ public class Selectable : UIBehaviour,
     [SerializeIgnore] private Color _toColor = Color.White;
     [SerializeIgnore] private float _transitionElapsed;
     [SerializeIgnore] private AssetRef<Sprite> _authoredSprite;
+    [SerializeIgnore] private bool _authoredSpriteCaptured;
 
     /// <summary>The current high-level state. Read-only for derived classes.</summary>
     public SelectionState CurrentState => _currentState;
@@ -204,7 +205,6 @@ public class Selectable : UIBehaviour,
     public override void OnEnable()
     {
         base.OnEnable();
-        CaptureAuthoredSprite();
         RefreshState(immediate: true);
     }
 
@@ -315,6 +315,14 @@ public class Selectable : UIBehaviour,
     {
         if (TargetGraphic is not UIImage image) return;
 
+        // Captured on first use rather than in OnEnable: the target graphic may be added after this
+        // component, and capturing an empty ref would make the Normal state wipe the real sprite.
+        if (!_authoredSpriteCaptured)
+        {
+            _authoredSprite = image.Sprite;
+            _authoredSpriteCaptured = true;
+        }
+
         AssetRef<Sprite> next = state switch
         {
             SelectionState.Disabled    => _spriteState.DisabledSprite,
@@ -325,13 +333,6 @@ public class Selectable : UIBehaviour,
         };
 
         image.Sprite = next.IsExplicitNull ? _authoredSprite : next;
-    }
-
-    /// <summary>Remembers the sprite the target graphic was authored with so the Normal state (and any
-    /// unassigned state) can return to it.</summary>
-    private void CaptureAuthoredSprite()
-    {
-        if (TargetGraphic is UIImage image) _authoredSprite = image.Sprite;
     }
 
     private SelectionState ComputeState()
