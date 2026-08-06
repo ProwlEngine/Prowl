@@ -203,14 +203,6 @@ public static class EditorSceneManager
         NewScene();
     }
 
-    /// <summary>
-    /// Handle double-clicking an asset in the project panel. Dispatches to a handler
-    /// registered via <see cref="AssetDoubleClickHandlerAttribute"/>. Returns true if the
-    /// asset was handled.
-    /// </summary>
-    public static bool HandleAssetDoubleClick(string relativePath, Guid guid)
-        => EditorRegistries.DispatchDoubleClick(relativePath, guid);
-
     [AssetDoubleClickHandler(".scene")]
     private static bool OpenSceneHandler(string relativePath, Guid guid) => OpenScene(relativePath);
 
