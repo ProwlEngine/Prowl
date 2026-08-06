@@ -274,15 +274,20 @@ public sealed class RectTransform : MonoBehaviour
         if (canvas.IsValid()) canvas.RebuildIfDirty();
     }
 
-    /// <summary>Laid-out size of the parent rect this element anchors against: the parent's
-    /// RectTransform, or the canvas root rect when the parent is the canvas itself.</summary>
+    /// <summary>
+    /// Laid-out size of the rect this element anchors against. Walks up past any ancestor without a
+    /// RectTransform, because the canvas passes its parent rect straight through those, and ends at the
+    /// canvas root rect.
+    /// </summary>
     private Float2 ParentSize()
     {
-        GameObject? parent = GameObject.Parent;
-        if (parent is null) return Float2.Zero;
-        if (parent.RectTransform is { } prt) return prt.ComputedRect.Size;
-        GameCanvas? canvas = parent.GetComponent<GameCanvas>();
-        return canvas.IsValid() ? canvas.RootRect.Size : Float2.Zero;
+        for (GameObject? node = GameObject.Parent; node != null; node = node.Parent)
+        {
+            if (node.RectTransform is { } prt) return prt.ComputedRect.Size;
+            GameCanvas? canvas = node.GetComponent<GameCanvas>();
+            if (canvas.IsValid()) return canvas.RootRect.Size;
+        }
+        return Float2.Zero;
     }
 
     public void MarkLayoutDirty()
