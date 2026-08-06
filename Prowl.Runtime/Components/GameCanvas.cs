@@ -233,8 +233,10 @@ public class GameCanvas : MonoBehaviour
         // via GameCanvas.ScreenSizeOverride before calling here, so a mismatch forces a rebuild.
         // The glyph atlas is rewritten (and every glyph UV rescaled) as new glyphs are rasterized, which
         // silently invalidates already-baked text meshes. Checked here rather than from
-        // TextComponent.Update so it holds in edit mode, where Update does not run.
-        int atlasVersion = UIFontSystem.Default.System.AtlasVersion;
+        // TextComponent.Update so it holds in edit mode, where Update does not run. Read without forcing
+        // the font system to exist: it allocates a GPU texture, and a canvas with no text must not
+        // trigger that (nor must a headless context that never draws).
+        int atlasVersion = UIFontSystem.CurrentAtlasVersion;
         if (_lastAtlasVersion != atlasVersion)
         {
             _lastAtlasVersion = atlasVersion;

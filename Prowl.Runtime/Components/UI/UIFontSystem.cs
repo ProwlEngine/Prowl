@@ -34,6 +34,13 @@ internal sealed class UIFontSystem : IFontRenderer
     private static UIFontSystem? s_default;
     public static UIFontSystem Default => s_default ??= new UIFontSystem();
 
+    /// <summary>
+    /// Atlas version without forcing the font system into existence, for callers that only want to know
+    /// whether glyph UVs moved. Constructing it allocates a GPU texture, so a canvas holding no text
+    /// (or any headless context) must not be the thing that brings it up.
+    /// </summary>
+    public static int CurrentAtlasVersion => s_default is null ? 0 : s_default.System.AtlasVersion;
+
     /// <summary>The Scribe font system.</summary>
     public FontSystem System { get; }
 
