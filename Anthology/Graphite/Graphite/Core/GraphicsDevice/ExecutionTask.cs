@@ -24,6 +24,11 @@ public abstract partial class ExecutionTask
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
 
     /// <summary>
+    /// Submits everything queued so far, so later work on the queue is ordered after it.
+    /// </summary>
+    internal virtual void FlushSubmissions() { }
+
+    /// <summary>
     /// Tracks a rented command buffer so it's reclaimed when GPU work retires. No-op if backend doesn't pool.
     /// </summary>
     /// <param name="commandBuffer">Buffer rented via the render context.</param>

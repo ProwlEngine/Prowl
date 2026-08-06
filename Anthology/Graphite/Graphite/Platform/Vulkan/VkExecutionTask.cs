@@ -57,6 +57,17 @@ internal sealed class VkExecutionTask : ExecutionTask
     }
 
 
+    /// <inheritdoc/>
+    internal override void FlushSubmissions()
+    {
+        if (_queuedCommandBuffers.Count == 0)
+            return;
+
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, null);
+        _queuedCommandBuffers.Clear();
+    }
+
+
     /// <summary>Submits whatever is still queued and signals the execution's slot fence.</summary>
     internal void FinalSubmit(Silk.NET.Vulkan.Fence slotFence)
     {
