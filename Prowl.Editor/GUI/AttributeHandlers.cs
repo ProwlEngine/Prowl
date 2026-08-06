@@ -6,8 +6,10 @@
 // and are registered by the editor at startup.
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
@@ -130,8 +132,21 @@ public class RangeAttributeHandler : OrigamiUI.AttributeHandler
 /// <summary>[Tooltip("text")] - attaches a tooltip to the field row.</summary>
 public class TooltipAttributeHandler : OrigamiUI.AttributeHandler
 {
-    // Tooltips are handled by the PropertyGrid row itself checking for the attribute
-    // and calling .Tooltip() on the row element. No pre/post draw needed.
+    private readonly Stack<IDisposable> _scopes = new();
+
+    public override bool OnBeforeDraw(Paper paper, string id, Attribute attr, FieldInfo field, object target, int depth)
+    {
+        var tooltip = (TooltipAttribute)attr;
+        _scopes.Push(paper.Column($"{id}_tip").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+            .Tooltip(tooltip.Text).Enter());
+        return true;
+    }
+
+    public override void OnAfterDraw(Paper paper, string id, Attribute attr, FieldInfo field, object target, int depth)
+    {
+        if (_scopes.Count > 0)
+            _scopes.Pop().Dispose();
+    }
 }
 
 /// <summary>[TextArea(min, max)] - replaces string field with a multiline text area.</summary>
@@ -181,6 +196,6 @@ public static class BuiltInAttributeHandlers
         registry.Register<ReadOnlyAttribute>(new ReadOnlyAttributeHandler());
         registry.Register<RangeAttribute>(new RangeAttributeHandler());
         registry.Register<TextAreaAttribute>(new TextAreaAttributeHandler());
-        // TooltipAttribute is handled inline by PropertyGrid row rendering
+        registry.Register<TooltipAttribute>(new TooltipAttributeHandler());
     }
 }
