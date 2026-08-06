@@ -620,6 +620,26 @@ public class ProjectPanel : DockPanel
         }
     }
 
+    /// <summary>True when a folder holds no visible files or subfolders. Served from the cached folder index.</summary>
+    private static bool IsFolderEmpty(string relativePath)
+    {
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return false;
+
+        var subs = db.GetSubFolders(relativePath);
+        for (int i = 0; i < subs.Count; i++)
+            if (!subs[i].Name.StartsWith('.')) return false;
+
+        var files = db.GetFolderFiles(relativePath);
+        for (int i = 0; i < files.Count; i++)
+            if (!files[i].Name.StartsWith('.')) return false;
+
+        return true;
+    }
+
+    private static AssetTypeStyle FolderStyle(string relativePath)
+        => IsFolderEmpty(relativePath) ? AssetTypeStyles.EmptyFolder : AssetTypeStyles.Folder;
+
     private static void BuildFolderNodes(List<OrigamiUI.TreeNode> nodes, string relativePath, string displayName, int depth)
     {
         // Read the folder structure from the asset database's cached index instead of walking the
@@ -636,7 +656,7 @@ public class ProjectPanel : DockPanel
         {
             Id = relativePath,
             Label = displayName,
-            Icon = EditorIcons.Folder,
+            Icon = IsFolderEmpty(relativePath) ? EditorIcons.FolderOpen : EditorIcons.Folder,
             IconColor = EditorTheme.Amber400,
             HasChildren = subDirs.Count > 0,
             DefaultExpanded = depth < 2,
@@ -820,7 +840,7 @@ public class ProjectPanel : DockPanel
         bool isSelected = Selection.IsSelected(item);
         bool hasSubs = item.Subs.Count > 0;
         bool expanded = hasSubs && _expandedAssets.Contains(item.Guid);
-        var style = item.IsFolder ? AssetTypeStyles.Folder : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
+        var style = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
         if (col == 0)
         {
@@ -898,7 +918,7 @@ public class ProjectPanel : DockPanel
             bool isMulti = Selection.Count > 1;
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;
-            var titleStyle = item.IsFolder ? AssetTypeStyles.Folder : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
+            var titleStyle = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
             // Subject of the menu.
             builder.Title(isMulti ? Loc.Get("project.item_count", new { count = Selection.Count }) : item.Name, iconDraw: titleStyle.Icon);
@@ -1362,7 +1382,7 @@ public class ProjectPanel : DockPanel
             }
             else
             {
-                var style = item.IsFolder ? AssetTypeStyles.Folder
+                var style = item.IsFolder ? FolderStyle(item.RelativePath)
                     : item.IsSubAsset ? AssetTypeStyles.SubAsset
                     : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
