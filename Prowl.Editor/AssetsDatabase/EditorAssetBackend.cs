@@ -1326,9 +1326,27 @@ public class EditorAssetBackend : AssetBackendBase
         OnAssetsDeleted?.Invoke(new[] { relativePath });
         _folderIndexDirty = true;
 
-        // Script deleted - trigger recompile
-        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        if (AffectsCompilation(relativePath))
             ScriptAssemblyManager.RequestRecompile();
+    }
+
+    /// <summary>
+    /// True for files whose path feeds script compilation: sources, assembly definitions (they own
+    /// scripts by folder) and managed plugins. Moving one changes the generated csproj and which
+    /// assembly a script lands in, so it has to recompile even though no file content changed.
+    /// </summary>
+    private static bool AffectsCompilation(string path)
+    {
+        string ext = Path.GetExtension(path);
+        return ext.Equals(".cs", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(AssemblyDefinitionDatabase.Extension, StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".dll", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsCompilationInput(string directory)
+    {
+        try { return Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Any(AffectsCompilation); }
+        catch { return false; }
     }
 
     /// <summary>
@@ -1399,6 +1417,9 @@ public class EditorAssetBackend : AssetBackendBase
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
         _folderIndexDirty = true;
+
+        if (AffectsCompilation(oldRelativePath) || AffectsCompilation(newRelativePath))
+            ScriptAssemblyManager.RequestRecompile();
         return true;
     }
 
@@ -1460,8 +1481,10 @@ public class EditorAssetBackend : AssetBackendBase
             return false;
         }
 
+        bool recompile = false;
         foreach (var (oldPath, newPath, guid) in toRemap)
         {
+            recompile |= AffectsCompilation(oldPath);
             _pathToGuid.Remove(oldPath);
             _pathToGuid[newPath] = guid;
             if (_guidToEntry.TryGetValue(guid, out var entry))
@@ -1479,6 +1502,9 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         _folderIndexDirty = true;
+
+        if (recompile)
+            ScriptAssemblyManager.RequestRecompile();
         return true;
     }
 
@@ -1630,7 +1656,13 @@ public class EditorAssetBackend : AssetBackendBase
                 _folderIndexDirty = true;
 
             // Skip directory events - ScanAssets handles directory .meta creation
-            if (Directory.Exists(evt.Path)) return;
+            if (Directory.Exists(evt.Path))
+            {
+                // A renamed folder relocates everything under it without any per-file event.
+                if (evt.Type == FileEventType.Renamed && ContainsCompilationInput(evt.Path))
+                    ScriptAssemblyManager.RequestRecompile();
+                return;
+            }
 
             string relativePath = ToRelativePath(evt.Path);
 
@@ -1666,8 +1698,7 @@ public class EditorAssetBackend : AssetBackendBase
 
                         deleted.Add(relativePath);
 
-                        // Script deleted trigger recompile
-                        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                        if (AffectsCompilation(relativePath))
                             ScriptAssemblyManager.RequestRecompile();
                     }
                     break;
@@ -1678,6 +1709,13 @@ public class EditorAssetBackend : AssetBackendBase
                     if (evt.OldPath != null)
                     {
                         string oldRelative = ToRelativePath(evt.OldPath);
+
+                        // A move keeps the file's timestamp and content, so nothing else here asks for a
+                        // recompile, yet the csproj still lists the old path and asmdef ownership may
+                        // have changed.
+                        if (AffectsCompilation(oldRelative) || AffectsCompilation(relativePath))
+                            ScriptAssemblyManager.RequestRecompile();
+
                         if (!_pathToGuid.TryGetValue(oldRelative, out var guid))
                         {
                             // The old path was never tracked e.g. the "write-to-temp-then-rename-

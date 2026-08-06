@@ -236,13 +236,24 @@ internal static class RoslynScriptBackend
         var refs = new List<MetadataReference>();
 
         // Framework + engine assemblies: everything the editor process itself has loaded. An asmdef
-        // that opts out of engine references excludes the assemblies living in the engine folder.
+        // that opts out of engine references excludes the assemblies living in the engine folder,
+        // except the shared framework: a self-contained editor publish drops the whole .NET runtime
+        // there too, and dropping it would leave the compile without System.Object (CS0518).
         string tpa = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "";
         foreach (var path in tpa.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (unit.NoEngineReferences && IsUnderDirectory(path, engineDir)) continue;
-            AddFileReference(refs, seen, Path.GetFileNameWithoutExtension(path), path);
+            string name = Path.GetFileNameWithoutExtension(path);
+            if (unit.NoEngineReferences && !ScriptCompiler.IsFrameworkAssembly(name) && IsUnderDirectory(path, engineDir))
+                continue;
+            AddFileReference(refs, seen, name, path);
         }
+
+        // Nothing above is guaranteed to land: an empty TPA list, or a filter that goes wrong, leaves a
+        // compile with no System.Object at all (CS0518). Make sure the running corelib is in there.
+        var corelib = typeof(object).Assembly;
+        string corelibName = corelib.GetName().Name ?? "System.Private.CoreLib";
+        if (!seen.Contains(corelibName))
+            AddFileReference(refs, seen, corelibName, corelib.Location);
 
         // User scripts resolve [ReloadIgnore], [ReloadInitializer] and the reload interfaces out of
         // Prowl.Ember.Contracts. It reaches the editor as a lazily loaded transitive dependency, so it may not be

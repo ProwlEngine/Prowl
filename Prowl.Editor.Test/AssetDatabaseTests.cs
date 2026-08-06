@@ -322,6 +322,32 @@ public class AssetDatabaseTests : EditorTestHarness
         Assert.True(File.Exists(AssetAbsolutePath("New/S.scene")));
     }
 
+    // A moved script keeps its content and timestamp, so nothing else asks for a recompile - but the
+    // generated csproj still points at the old path and the owning assembly may have changed.
+    [Fact]
+    public void MoveAsset_Script_RequestsRecompile()
+    {
+        WriteScript("Moved.cs", "public class Moved { }");
+        Assets.Refresh();
+        Projects.Scripting.ScriptAssemblyManager.RecompilePending = false;
+
+        Assert.True(Assets.MoveAsset("Moved.cs", "Sub/Moved.cs"));
+
+        Assert.True(Projects.Scripting.ScriptAssemblyManager.RecompilePending);
+    }
+
+    [Fact]
+    public void MoveFolder_WithScripts_RequestsRecompile()
+    {
+        WriteScript("Old/Moved.cs", "public class Moved { }");
+        Assets.Refresh();
+        Projects.Scripting.ScriptAssemblyManager.RecompilePending = false;
+
+        Assert.True(Assets.MoveFolder("Old", "New"));
+
+        Assert.True(Projects.Scripting.ScriptAssemblyManager.RecompilePending);
+    }
+
     [Fact]
     public void DeleteAsset_RemovesFileMetaIndexAndCache()
     {

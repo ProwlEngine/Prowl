@@ -81,6 +81,9 @@ public static class ScriptAssemblyManager
         }
     }
 
+    /// <summary>Pending-recompile flag, so tests can assert that a change asked for one.</summary>
+    internal static bool RecompilePending { get => _recompileRequested; set => _recompileRequested = value; }
+
     /// <summary>Signal that scripts have changed and need recompilation.</summary>
     public static void RequestRecompile()
     {
