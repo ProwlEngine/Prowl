@@ -219,7 +219,7 @@ public class SceneViewPanel : DockPanel
                     .Enter())
                 {
                     paper.Box("sv_btn_spacer_l");
-                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => CreateAndLoadDefaultScene()).Width(120).Show();
+                    Origami.Button(paper, "sv_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
                     paper.Box("sv_btn_spacer_r");
                 }
 
@@ -649,65 +649,6 @@ public class SceneViewPanel : DockPanel
 
     private bool? _pendingGrid;
     private bool? _pendingGizmos;
-
-    /// <summary>
-    /// Create a default scene with camera, light, floor, and cubes, and load it.
-    /// </summary>
-    public static void CreateAndLoadDefaultScene()
-    {
-        var scene = new Scene();
-        scene.Name = "Untitled Scene";
-
-        var defaultMat = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
-        var cubeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
-        var planeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
-
-        // Main Camera
-        var camGo = new GameObject("Main Camera");
-        camGo.Tag = "Main Camera";
-        camGo.Transform.Position = new Float3(0, 5, -15);
-        camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
-        var cam = camGo.AddComponent<Camera>();
-        cam.Depth = -1;
-        cam.HDR = true;
-        scene.Add(camGo);
-
-        // Directional Light
-        var lightGo = new GameObject("Directional Light");
-        lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
-        var light = lightGo.AddComponent<DirectionalLight>();
-        light.Intensity = 1f;
-        scene.Add(lightGo);
-
-        // Floor
-        var floorGo = new GameObject("Floor");
-        floorGo.Transform.Position = new Float3(0, 0, 0);
-        floorGo.Transform.LocalScale = new Float3(1, 1, 1);
-        var floorRenderer = floorGo.AddComponent<MeshRenderer>();
-        floorRenderer.Mesh = planeMesh;
-        floorRenderer.Material = defaultMat;
-        scene.Add(floorGo);
-
-        // Cube 1
-        var cube1 = new GameObject("Cube");
-        cube1.Transform.Position = new Float3(0, 0.5f, 0);
-        var cube1Renderer = cube1.AddComponent<MeshRenderer>();
-        cube1Renderer.Mesh = cubeMesh;
-        cube1Renderer.Material = defaultMat;
-        scene.Add(cube1);
-
-        // Cube 2
-        var cube2 = new GameObject("Cube (1)");
-        cube2.Transform.Position = new Float3(2, 0.5f, 1);
-        var cube2Renderer = cube2.AddComponent<MeshRenderer>();
-        cube2Renderer.Mesh = cubeMesh;
-        cube2Renderer.Material = defaultMat;
-        scene.Add(cube2);
-
-        Scene.Load(scene);
-        Undo.Clear();
-        Runtime.Debug.Log("Created default scene.");
-    }
 
     /// <summary>
     /// Raycast into the scene to find a drop position. Falls back to the XZ plane at Y=0.

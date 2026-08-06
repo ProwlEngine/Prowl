@@ -325,6 +325,12 @@ public static class EditorRegistries
         }
     }
 
+    /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
+    private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
+    {
+        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultScene,
+    };
+
     private static void ScanAssetMenuEntry(Type type)
     {
         if (type.IsAbstract || !typeof(EngineObject).IsAssignableFrom(type)) return;
@@ -337,6 +343,7 @@ public static class EditorRegistries
             Extension = attr.Extension,
             Icon = attr.Icon,
             Order = attr.Order,
+            Factory = _assetFactories.GetValueOrDefault(type),
         };
         MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
         {

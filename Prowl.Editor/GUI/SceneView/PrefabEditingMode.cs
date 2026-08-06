@@ -217,12 +217,12 @@ public static class PrefabEditingMode
             else
             {
                 Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
-                SceneViewPanel.CreateAndLoadDefaultScene();
+                EditorSceneManager.CreateAndLoadDefaultScene();
             }
         }
         else
         {
-            SceneViewPanel.CreateAndLoadDefaultScene();
+            EditorSceneManager.CreateAndLoadDefaultScene();
         }
     }
 
