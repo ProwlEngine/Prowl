@@ -35,8 +35,7 @@ internal static class UIRaycaster
         GameObject? bestGO = null;
         GameCanvas? bestCanvas = null;
         Float2 bestDesign = Float2.Zero;
-        int bestSortOrder = int.MinValue;
-        int bestDfs = -1;
+        long bestKey = long.MinValue;
 
         foreach (GameObject go in scene.ActiveObjects)
         {
@@ -58,21 +57,19 @@ internal static class UIRaycaster
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
-            // Higher SortOrder wins; ties resolved by deeper DFS index (drawn on top).
-            bool wins =
-                canvas.SortOrder > bestSortOrder ||
-                (canvas.SortOrder == bestSortOrder && localDfs > bestDfs);
-
-            if (wins)
+            // Rank with the same key the renderer sorts by (SortOrder, then a per-canvas discriminator,
+            // then depth-first index) so the element the pointer picks is always the one drawn on top.
+            // Both walks are depth-first pre-order over the same tree, so their indices order alike.
+            long key = canvas.BuildSortKey(localDfs);
+            if (key > bestKey)
             {
+                bestKey = key;
                 bestGO = localHit;
                 bestCanvas = canvas;
                 bestDesign = designPt;
-                bestSortOrder = canvas.SortOrder;
-                bestDfs = localDfs;
             }
         }
 
@@ -118,7 +115,7 @@ internal static class UIRaycaster
             int dfs = 0;
             GameObject? localHit = null;
             int localDfs = -1;
-            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, ref dfs, ref localHit, ref localDfs);
+            WalkRecurse(canvas, canvas.GameObject, designPt, rayO, rayD, scissor: null, blocksRaycasts: true, ref dfs, ref localHit, ref localDfs);
             if (localHit == null) continue;
 
             bestT = t;
@@ -196,8 +193,9 @@ internal static class UIRaycaster
 
     // pt is the pointer on the canvas plane (used for the RectMask scissor, which is canvas-aligned);
     // (rayO, rayD) is the same pointer as a design-space ray, intersected with each element's own quad
-    // so out-of-plane (3D) element rotation is respected.
-    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Float3 rayO, Float3 rayD, Rect? scissor, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
+    // so out-of-plane (3D) element rotation is respected. blocksRaycasts is inherited from the enclosing
+    // CanvasGroups, matching how the render walk threads UIContext down.
+    private static void WalkRecurse(GameCanvas canvas, GameObject parent, Float2 pt, Float3 rayO, Float3 rayD, Rect? scissor, bool blocksRaycasts, ref int dfs, ref GameObject? bestGO, ref int bestDfs)
     {
         foreach (GameObject child in parent.Children)
         {
@@ -219,37 +217,37 @@ internal static class UIRaycaster
                 continue;
             }
 
-            // A CanvasGroup with BlocksRaycasts off makes the whole subtree transparent
-            // to the pointer - children still draw, but they don't consume input.
+            // A CanvasGroup with BlocksRaycasts off makes the whole subtree transparent to the pointer -
+            // children still draw, they just don't consume input. IgnoreParentGroups restarts the chain.
+            bool childBlocks = blocksRaycasts;
             CanvasGroup? grp = child.GetComponent<CanvasGroup>();
-            bool blocked = grp == null || grp.BlocksRaycasts;
+            if (grp != null && grp.EnabledInHierarchy)
+                childBlocks = (grp.IgnoreParentGroups || blocksRaycasts) && grp.BlocksRaycasts;
 
-            if (blocked)
+            dfs++;
+            if (childBlocks && child.RectTransform is { } rt && IsRaycastTarget(child)
+                && RayHitsRect(canvas, rt, rayO, rayD))
             {
-                RectTransform? rt = child.RectTransform;
-                if (rt != null)
-                {
-                    bool inside = RayHitsRect(canvas, rt, rayO, rayD);
-
-                    foreach (UIBehaviour ui in child.GetComponents<UIBehaviour>())
-                    {
-                        if (!ui.EnabledInHierarchy) continue;
-                        if (ui is UIImage img && !img.RaycastTarget) { dfs++; continue; }
-                        if (ui is CanvasGroup) continue;
-                        if (ui is RectMask) continue;
-
-                        if (inside)
-                        {
-                            bestGO = child;
-                            bestDfs = dfs;
-                        }
-                        dfs++;
-                    }
-                }
+                // Later in the depth-first order means drawn on top, so a plain overwrite keeps the
+                // top-most hit.
+                bestGO = child;
+                bestDfs = dfs;
             }
 
-            WalkRecurse(canvas, child, pt, rayO, rayD, childScissor, ref dfs, ref bestGO, ref bestDfs);
+            WalkRecurse(canvas, child, pt, rayO, rayD, childScissor, childBlocks, ref dfs, ref bestGO, ref bestDfs);
         }
+    }
+
+    /// <summary>
+    /// True when the GameObject carries an enabled <see cref="Graphic"/> that opts into hit-testing.
+    /// Behaviours that draw nothing (layout groups, fitters, scroll rects, <see cref="Selectable"/>) are
+    /// deliberately not targets on their own - a widget needs a graphic to be clickable, as in Unity.
+    /// </summary>
+    private static bool IsRaycastTarget(GameObject go)
+    {
+        foreach (Graphic g in go.GetComponents<Graphic>())
+            if (g.EnabledInHierarchy && g.RaycastTarget) return true;
+        return false;
     }
 
     internal static Rect IntersectRect(Rect a, Rect b)

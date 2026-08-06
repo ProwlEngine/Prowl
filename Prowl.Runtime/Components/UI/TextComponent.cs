@@ -89,13 +89,12 @@ public class TextComponent : Graphic
     protected override Material DefaultMaterial => GameCanvas.SharedTextMaterial;
 
     /// <summary>
-    /// Atlas version recorded at the last successful bake. When Scribe grows the atlas
-    /// (e.g. a new glyph or pixel-size variant is introduced) all existing AtlasGlyph
-    /// UVs are recomputed against the new texture dimensions, so any cached glyph mesh
-    /// is now pointing at the wrong region. We catch that in <see cref="Update"/> and
-    /// force a rebake.
+    /// When Scribe grows the atlas (a new glyph or pixel-size variant) every existing AtlasGlyph UV is
+    /// recomputed against the new texture dimensions, so any cached glyph mesh points at the wrong
+    /// region. Reporting the atlas version here makes the canvas re-bake this text in both play and
+    /// edit mode.
     /// </summary>
-    [SerializeIgnore] private int _lastAtlasVersion = -1;
+    public override int ContentVersion => UIFontSystem.Default.System.AtlasVersion;
 
     // Cached rich-text layout. Reused across frames so its animation start-time survives (a fresh
     // layout each rebuild would re-anchor to "now" and freeze animated effects). Rebuilt only when the
@@ -106,13 +105,6 @@ public class TextComponent : Graphic
 
     public override void Update()
     {
-        int v = UIFontSystem.Default.System.AtlasVersion;
-        if (v != _lastAtlasVersion)
-        {
-            _lastAtlasVersion = v;
-            MarkDirty(UIDirtyFlags.Vertices);
-        }
-
         // Animated rich-text effects (wave, shake, rainbow, typewriter, ...) are time-driven, so the
         // mesh has to be rebuilt every frame to advance them.
         if (_richText && _richAnimated)
@@ -146,7 +138,7 @@ public class TextComponent : Graphic
         float originX = -pivot.X * w;
         float originY = (1f - pivot.Y) * h;
 
-        Color tinted = TextColor * new Color(1f, 1f, 1f, context.Alpha);
+        Color tinted = Color * new Color(1f, 1f, 1f, context.Alpha);
         FontColor color = new FontColor(tinted.R, tinted.G, tinted.B, tinted.A);
 
         // Scribe generates the geometry (plain or rich-tag parsed) and drives DrawQuads; the capture
@@ -204,31 +196,83 @@ public class TextComponent : Graphic
         }
     }
 
+    // ============================================================
+    // Single-line measurement (caret / selection support for input fields)
+    // ============================================================
+
+    // One cached layout, rebuilt only when the text or the font settings change. Callers hit-test
+    // against it instead of re-laying-out a substring per character, which was quadratic per frame.
+    [SerializeIgnore] private TextLayout? _measureLayout;
+    [SerializeIgnore] private string _measureText = string.Empty;
+    [SerializeIgnore] private int _measureSig;
+
+    private TextLayout? GetSingleLineLayout(string? s)
+    {
+        FontAsset? font = ResolvedFont;
+        if (font.IsNotValid() || font.FontFile is null) return null;
+
+        string text = s ?? string.Empty;
+        int sig = HashCode.Combine(font.FontFile, _size, (int)_quality);
+
+        if (_measureLayout is null || sig != _measureSig || !string.Equals(_measureText, text, StringComparison.Ordinal))
+        {
+            TextLayoutSettings settings = new TextLayoutSettings
+            {
+                Font          = font.FontFile,
+                PixelSize     = Maths.Max(1, _size),
+                Quality       = _quality,
+                Alignment     = ScribeAlign.Left,
+                MaxWidth      = float.MaxValue,
+                WrapMode      = TextWrapMode.NoWrap,
+                LineHeight    = 1.0f,
+                TabSize       = 4,
+                LetterSpacing = 0f,
+                WordSpacing   = 0f,
+            };
+            _measureLayout = UIFontSystem.Default.System.CreateLayout(text, settings);
+            _measureText = text;
+            _measureSig = sig;
+        }
+        else
+        {
+            _measureLayout.EnsureUpToDate(UIFontSystem.Default.System);
+        }
+
+        return _measureLayout;
+    }
+
     /// <summary>
     /// Measures the width, in design pixels, of <paramref name="s"/> laid out on a single line with this
-    /// component's current font, size and quality. Input fields use this to place the caret and selection
-    /// box relative to the text. Returns 0 for empty text or when no font is available.
+    /// component's current font, size and quality. Returns 0 for empty text or when no font is available.
     /// </summary>
     public float MeasureWidth(string? s)
     {
-        FontAsset? font = ResolvedFont;
-        if (font.IsNotValid() || font.FontFile is null || string.IsNullOrEmpty(s)) return 0f;
+        if (string.IsNullOrEmpty(s)) return 0f;
+        TextLayout? layout = GetSingleLineLayout(s);
+        return layout is null ? 0f : (float)layout.Size.X;
+    }
 
-        TextLayoutSettings settings = new TextLayoutSettings
-        {
-            Font          = font.FontFile,
-            PixelSize     = Maths.Max(1, _size),
-            Quality       = _quality,
-            Alignment     = ScribeAlign.Left,
-            MaxWidth      = float.MaxValue,
-            WrapMode      = TextWrapMode.NoWrap,
-            LineHeight    = 1.0f,
-            TabSize       = 4,
-            LetterSpacing = 0f,
-            WordSpacing   = 0f,
-        };
-        TextLayout layout = UIFontSystem.Default.System.CreateLayout(s, settings);
-        return (float)layout.Size.X;
+    /// <summary>
+    /// X offset, in design pixels from the left edge of <paramref name="s"/>, of the caret sitting before
+    /// character <paramref name="charIndex"/>. Single-line layout.
+    /// </summary>
+    public float MeasureCaretOffset(string? s, int charIndex)
+    {
+        TextLayout? layout = GetSingleLineLayout(s);
+        if (layout is null) return 0f;
+        int clamped = Math.Clamp(charIndex, 0, (s ?? string.Empty).Length);
+        return (float)layout.GetCursorPosition(clamped).X;
+    }
+
+    /// <summary>
+    /// The character index whose caret slot is nearest <paramref name="x"/>, measured in design pixels
+    /// from the left edge of <paramref name="s"/>. Single-line layout.
+    /// </summary>
+    public int MeasureCaretIndexAt(string? s, float x)
+    {
+        TextLayout? layout = GetSingleLineLayout(s);
+        if (layout is null) return 0;
+        return layout.GetCursorIndex(new Float2(x, 0f));
     }
 
     public override void PopulateProperties(PropertyState p, in UIContext _)

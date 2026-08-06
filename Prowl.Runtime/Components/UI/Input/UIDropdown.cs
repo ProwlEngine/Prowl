@@ -214,7 +214,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
             it.Label.Text = _options[i];
             it.Label.Size = _itemTextSize;
-            it.Label.TextColor = _itemTextColor;
+            it.Label.Color = _itemTextColor;
             it.Background.Color = (i == _value) ? _itemSelectedColor : _itemColor;
 
             RectTransform rt = it.Go.RectTransform!;
@@ -243,7 +243,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         TextComponent label = labelGo.AddComponent<TextComponent>();
         label.Alignment = TextAlignment.CenterLeft;
         label.Size = _itemTextSize;
-        label.TextColor = _itemTextColor;
+        label.Color = _itemTextColor;
         labelGo.SetParent(go, worldPositionStays: false);
 
         // Stretch the label to fill the item with a small left inset.
