@@ -49,7 +49,7 @@ public abstract class Graphic : UIBehaviour
     /// <summary>The material used when no override is assigned.</summary>
     protected virtual Material DefaultMaterial => GameCanvas.SharedUIMaterial;
 
-    public sealed override Material GetMaterial()
+    public override Material GetMaterial()
     {
         Material? m = _material.Res;
         return m.IsValid() ? m : DefaultMaterial;
