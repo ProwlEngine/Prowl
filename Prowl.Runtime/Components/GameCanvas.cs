@@ -260,41 +260,30 @@ public class GameCanvas : MonoBehaviour
         // this rebuild every frame in ScaleWithScreenSize mode.
         _scaleFactor = ComputeScaleFactor();
 
-        // The walk itself can dirty the canvas: a ContentSizeFitter writes its SizeDelta mid-walk, so
-        // ancestors and earlier siblings were arranged against the previous size. Clear the flag first
-        // and re-walk while it comes back, which settles the layout within this frame instead of
-        // leaving it permanently stale (the flag used to be overwritten, discarding the request).
-        int pass = 0;
-        do
-        {
-            _isDirty = false;
+        // Clear the flag before walking, not after. The walk can legitimately raise it again - a
+        // ContentSizeFitter writes SizeDelta as it goes - and the old code assigned over the flag at the
+        // end, discarding the request. One walk is always enough to produce a correct layout: sizes are
+        // resolved by LayoutUtility, which recurses through the whole subtree on its own, so a fitter
+        // writes a value the pass has already accounted for and its own rect is computed right after.
+        _isDirty = false;
 
-            LayoutUtility.InvalidateCache();
-            Tree.Clear();
+        LayoutUtility.InvalidateCache();
+        Tree.Clear();
 
-            Rect rootRect = ComputeRootRect();
-            _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
+        Rect rootRect = ComputeRootRect();
+        _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
 
-            int dfs = 0;
-            _contentPending = false;
-            BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
-            Tree.SortHierarchical();
-        }
-        while (_isDirty && ++pass < MaxLayoutPasses);
+        int dfs = 0;
+        _contentPending = false;
+        BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
+        Tree.SortHierarchical();
 
         // The memo keys on GameObject, so holding it between rebuilds would keep destroyed objects alive.
         LayoutUtility.InvalidateCache();
 
-        // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset. A
-        // layout that never settled also stays dirty and retries next frame rather than showing a
-        // half-resolved result.
+        // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset.
         _isDirty |= _contentPending;
     }
-
-    /// <summary>How many times a single rebuild re-walks when the walk dirties the canvas (nested
-    /// content-size fitters need one pass per level). Beyond this the layout is treated as unstable and
-    /// left dirty for the next frame.</summary>
-    private const int MaxLayoutPasses = 4;
 
     private Rect ComputeRootRect()
     {
