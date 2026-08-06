@@ -99,6 +99,9 @@ public class EditorApplication : Game
                 // Load user script assemblies before registry scanning
                 ScriptAssemblyManager.LoadAssemblies(project);
 
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
+
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
             }
@@ -415,6 +418,9 @@ public class EditorApplication : Game
 
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
+
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
 
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
@@ -1573,6 +1579,8 @@ public class EditorApplication : Game
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
 
+        Runtime.Resources.Scene.DestroyPreserved();
+
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
         Undo.Clear();
@@ -1597,6 +1605,8 @@ public class EditorApplication : Game
 
         // Clear selection (play scene references)
         Selection.Clear();
+
+        Runtime.Resources.Scene.DestroyPreserved();
 
         // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)

@@ -71,7 +71,17 @@ public sealed class ProwlCall
     /// </summary>
     public void Invoke()
     {
-        if (_target == null || string.IsNullOrEmpty(_member)) return;
+        if (string.IsNullOrEmpty(_member)) return;
+
+        // Not `_target == null`: EngineObject's == is reference equality, so that test lets a
+        // destroyed target through and reflection happily calls into the corpse. Common with objects
+        // whose lifetime differs from the scene holding the reference - a DontDestroyOnLoad object
+        // outliving the scene, or a scene object outliving nothing at all.
+        if (_target.IsNotValid())
+        {
+            Debug.LogWarning($"[ProwlAction] '{_member}' was not called: its target is null or destroyed.");
+            return;
+        }
 
         Type type = _target.GetType();
         object? arg = ArgValue();
@@ -79,7 +89,8 @@ public sealed class ProwlCall
         MethodInfo? method = FindMethod(type, _member, _argType);
         if (method != null)
         {
-            method.Invoke(_target, _argType == ProwlActionArgType.None ? null : new[] { arg });
+            method.Invoke(_target, BindingFlags.DoNotWrapExceptions, null,
+                _argType == ProwlActionArgType.None ? null : new[] { arg }, null);
             return;
         }
 
@@ -99,6 +110,17 @@ public sealed class ProwlCall
 
         Debug.LogWarning($"[ProwlAction] Member '{_member}' not found on {type.Name}.");
     }
+
+    internal string Describe()
+        => $"{(_target.IsValid() ? _target.Name : "<none>")}.{(string.IsNullOrEmpty(_member) ? "<none>" : _member)}";
+
+
+    internal string? DiagnoseTarget()
+        => _target is MonoBehaviour component && component.GameObject.IsNotValid()
+            ? $"Its target '{_target.Name}' is a detached {_target.GetType().Name}: no GameObject behind it, " +
+              "which is what a reference to an object outside the saved scene loads back as. Re-wire the " +
+              "call at runtime instead of saving a cross-scene reference."
+            : null;
 
     private static MethodInfo? FindMethod(Type type, string name, ProwlActionArgType argType)
     {
@@ -141,7 +163,14 @@ public sealed class ProwlAction
             try { _calls[i].Invoke(); }
             catch (Exception ex)
             {
-                Debug.LogError($"[ProwlAction] Call {i} threw: {ex.Message}\n{ex.StackTrace}");
+                Exception fault = ex is TargetInvocationException { InnerException: not null } wrapper
+                    ? wrapper.InnerException
+                    : ex;
+
+                string hint = _calls[i].DiagnoseTarget() is { } diagnosis ? $"\n{diagnosis}" : "";
+
+                Debug.LogError($"[ProwlAction] Call {i} ({_calls[i].Describe()}) threw " +
+                               $"{fault.GetType().Name}: {fault.Message}{hint}\n{fault.StackTrace}");
             }
         }
     }
