@@ -48,7 +48,7 @@ public enum FillMethod
 /// The image fills the rect computed by the <see cref="RectTransform"/>.
 /// Alpha from the parent <see cref="CanvasGroup"/> is multiplied into <see cref="Color"/>.
 /// </remarks>
-public class UIImage : UIBehaviour
+public class UIImage : Graphic
 {
     [SerializeIgnore] private static Texture2D _defaultTexture;
     public static Texture2D defaultTexture
@@ -104,22 +104,6 @@ public class UIImage : UIBehaviour
         {
             b.SetUVRect(Float2.Zero, Float2.One);
         }
-    }
-
-    // ---- Material override ----
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material
-    {
-        get => _material;
-        set => SetField(ref _material, value, UIDirtyFlags.Material);
-    }
-
-    /// <summary>The tint color of the image. Alpha is modulated by the parent <see cref="CanvasGroup"/>.</summary>
-    [SerializeField] private Color _color = Color.White;
-    public Color Color
-    {
-        get => _color;
-        set => SetField(ref _color, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>Whether the image should preserve the source texture's aspect ratio.</summary>
