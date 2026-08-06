@@ -185,6 +185,46 @@ public class ScriptCompilationTests : EditorTestHarness
         finally { TryDeleteDir(parent); }
     }
 
+    // Moving a script leaves its content and timestamp untouched, so the compiler has to notice the
+    // path change itself: the csproj must list the new location and the assembly must be rebuilt.
+    [Fact]
+    public void MovedScript_UpdatesCsprojAndRebuilds()
+    {
+        WriteScript("Movable.cs", "public static class Movable { public static int V() => 1; }");
+        Assert.True(ScriptCompiler.CompileAll(Project).Success);
+
+        string from = AssetAbsolutePath("Movable.cs");
+        string to = AssetAbsolutePath(Path.Combine("Sub", "Movable.cs"));
+        Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+        File.Move(from, to);
+
+        var result = ScriptCompiler.CompileAll(Project);
+        Assert.True(result.Success, $"Compile failed:\n{result.Errors}");
+        Assert.True(result.RequiresReload, "A moved script changes the unit's file set, so it must rebuild.");
+
+        string csproj = File.ReadAllText(Project.GameCsprojPath);
+        Assert.Contains(Path.GetRelativePath(Project.RootPath, to), csproj);
+        Assert.DoesNotContain(Path.GetRelativePath(Project.RootPath, from), csproj);
+    }
+
+    // Moving a script into an Editor folder hands it to the editor assembly, without any edit to the file.
+    [Fact]
+    public void ScriptMovedIntoEditorFolder_SwitchesAssembly()
+    {
+        WriteScript("Relocated.cs", "public class Relocated { }");
+        WriteScript("Keeper.cs", "public class Keeper { }"); // keeps the game assembly in the build
+        Assert.True(ScriptCompiler.CompileAll(Project).Success);
+        Assert.NotNull(Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath)).GetType("Relocated"));
+
+        string to = AssetAbsolutePath(Path.Combine("Editor", "Relocated.cs"));
+        Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+        File.Move(AssetAbsolutePath("Relocated.cs"), to);
+
+        Assert.True(ScriptCompiler.CompileAll(Project).Success);
+        Assert.Null(Assembly.Load(File.ReadAllBytes(Project.GameAssemblyPath)).GetType("Relocated"));
+        Assert.NotNull(Assembly.Load(File.ReadAllBytes(Project.EditorAssemblyPath)).GetType("Relocated"));
+    }
+
     private string InvokeVersionedTag()
     {
         // Load by bytes so the file stays unlocked for the next recompile.
