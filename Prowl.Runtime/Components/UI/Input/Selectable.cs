@@ -395,8 +395,16 @@ public class Selectable : UIBehaviour,
     {
         Scene? scene = GameObject.Scene;
         if (scene is null) return null;
+        if (!TryWorldCenter(this, out Float3 origin, out Float4x4 model)) return null;
 
-        Float2 origin = RectCenter(this);
+        // Map the design-space direction through the canvas so a rotated (or world-space) canvas
+        // navigates along its own axes rather than the world's.
+        Float3 dirWorld = Float4x4.TransformPoint(new Float3(dir.X, dir.Y, 0f), model)
+                        - Float4x4.TransformPoint(Float3.Zero, model);
+        float dirLength = Float3.Length(dirWorld);
+        if (dirLength < 1e-6f) return null;
+        dirWorld /= dirLength;
+
         Selectable? best = null;
         float bestScore = float.NegativeInfinity;
         Selectable? wrap = null;
@@ -408,12 +416,13 @@ public class Selectable : UIBehaviour,
             {
                 if (ReferenceEquals(candidate, this) || !candidate.EnabledInHierarchy) continue;
                 if (!candidate.IsInteractable() || candidate._navigation.Mode == NavigationMode.None) continue;
+                if (!TryWorldCenter(candidate, out Float3 center, out _)) continue;
 
-                Float2 offset = RectCenter(candidate) - origin;
-                float distance = Float2.Length(offset);
+                Float3 offset = center - origin;
+                float distance = Float3.Length(offset);
                 if (distance < 1e-4f) continue;
 
-                float alignment = Float2.Dot(offset / distance, dir);
+                float alignment = Float3.Dot(offset / distance, dirWorld);
                 if (alignment > 0.1f)
                 {
                     float score = alignment / distance;
@@ -431,11 +440,21 @@ public class Selectable : UIBehaviour,
         return best.IsValid() ? best : wrap;
     }
 
-    private static Float2 RectCenter(Selectable s)
+    private static bool TryWorldCenter(Selectable s, out Float3 center, out Float4x4 model)
     {
+        center = default;
+        model = Float4x4.Identity;
+
         RectTransform? rt = s.GameObject.RectTransform;
-        if (rt is null) return Float2.Zero;
-        Rect r = rt.ComputedRect;
-        return (r.Min + r.Max) * 0.5f;
+        if (rt is null) return false;
+
+        GameCanvas? canvas = s.GetCanvas();
+        if (canvas.IsNotValid()) return false;
+
+        model = canvas.CanvasToWorld * canvas.BuildRectModel(rt);
+        Rect local = rt.Rect;
+        Float2 localCenter = (local.Min + local.Max) * 0.5f;
+        center = Float4x4.TransformPoint(new Float3(localCenter.X, localCenter.Y, 0f), model);
+        return true;
     }
 }
