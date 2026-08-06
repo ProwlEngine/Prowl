@@ -146,7 +146,7 @@ public class HierarchyPanel : DockPanel
             if (scene == null)
             {
                 EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
-                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 

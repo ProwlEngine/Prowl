@@ -138,7 +138,7 @@ public class CreateAssetTask : EditorTask
 
         try
         {
-            var instance = Activator.CreateInstance(entry.Type);
+            var instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type);
             var echo = Serializer.Serialize(typeof(object), instance);
             if (echo != null)
                 File.WriteAllText(filePath, echo.WriteToString());

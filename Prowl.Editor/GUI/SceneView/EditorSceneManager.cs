@@ -6,6 +6,7 @@ using Prowl.Editor.Importers;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects.Settings;
 using Prowl.Editor.Core;
@@ -36,12 +37,74 @@ public static class EditorSceneManager
     public static void NewScene()
     {
         if (Application.IsPlaying) { Debug.LogWarning("Cannot create new scene during play mode."); return; }
-        SceneViewPanel.CreateAndLoadDefaultScene();
+        CreateAndLoadDefaultScene();
         CurrentScenePath = null;
         IsDirty = false;
         Undo.Clear();
         Selection.Clear(); // drop references to the now-unloaded scene's objects
         SaveLastScenePath(null);
+    }
+
+    /// <summary>
+    /// Build a new default scene with camera, light, floor, and cubes.
+    /// </summary>
+    public static Scene CreateDefaultScene()
+    {
+        var scene = new Scene();
+        scene.Name = "Untitled Scene";
+
+        var defaultMat = new AssetRef<Material>(BuiltInAssets.GuidFor(DefaultMaterial.Standard));
+        var cubeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Cube));
+        var planeMesh = new AssetRef<Mesh>(BuiltInAssets.GuidForMesh(DefaultModel.Plane));
+
+        var camGo = new GameObject("Main Camera");
+        camGo.Tag = "Main Camera";
+        camGo.Transform.Position = new Float3(0, 5, -15);
+        camGo.Transform.LocalEulerAngles = new Float3(15, 0, 0);
+        var cam = camGo.AddComponent<Camera>();
+        cam.Depth = -1;
+        cam.HDR = true;
+        scene.Add(camGo);
+
+        var lightGo = new GameObject("Directional Light");
+        lightGo.Transform.LocalEulerAngles = new Float3(-45, 45, 0);
+        var light = lightGo.AddComponent<DirectionalLight>();
+        light.Intensity = 1f;
+        scene.Add(lightGo);
+
+        var floorGo = new GameObject("Floor");
+        floorGo.Transform.Position = new Float3(0, 0, 0);
+        floorGo.Transform.LocalScale = new Float3(1, 1, 1);
+        var floorRenderer = floorGo.AddComponent<MeshRenderer>();
+        floorRenderer.Mesh = planeMesh;
+        floorRenderer.Material = defaultMat;
+        scene.Add(floorGo);
+
+        var cube1 = new GameObject("Cube");
+        cube1.Transform.Position = new Float3(0, 0.5f, 0);
+        var cube1Renderer = cube1.AddComponent<MeshRenderer>();
+        cube1Renderer.Mesh = cubeMesh;
+        cube1Renderer.Material = defaultMat;
+        scene.Add(cube1);
+
+        var cube2 = new GameObject("Cube (1)");
+        cube2.Transform.Position = new Float3(2, 0.5f, 1);
+        var cube2Renderer = cube2.AddComponent<MeshRenderer>();
+        cube2Renderer.Mesh = cubeMesh;
+        cube2Renderer.Material = defaultMat;
+        scene.Add(cube2);
+
+        return scene;
+    }
+
+    /// <summary>
+    /// Create a default scene and load it as the current scene.
+    /// </summary>
+    public static void CreateAndLoadDefaultScene()
+    {
+        Scene.Load(CreateDefaultScene());
+        Undo.Clear();
+        Debug.Log("Created default scene.");
     }
 
     /// <summary>
