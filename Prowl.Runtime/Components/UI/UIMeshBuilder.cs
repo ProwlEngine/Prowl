@@ -18,7 +18,7 @@ public sealed class UIMeshBuilder
 
     public int  VertexCount => _verts.Count;
     public int  IndexCount  => _indices.Count;
-    public bool IsEmpty     => _verts.Count == 0;
+    public bool IsEmpty     => _verts.Count == 0 || _indices.Count == 0;
 
     // ---------- UV sub-rect remap ----------
     // Generation-time UVs are authored in 0..1 space. When drawing a Sprite that is a sub-rect of an
