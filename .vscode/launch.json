@@ -23,6 +23,206 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
+        },
+        {
+            "name": "AudioDemo (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: AudioDemo Debug",
+            "program": "${workspaceFolder}/Samples/AudioDemo/bin/Debug/net10.0/AudioDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/AudioDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "AudioDemo (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: AudioDemo Release",
+            "program": "${workspaceFolder}/Samples/AudioDemo/bin/Release/net10.0/AudioDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/AudioDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "BananaMan (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: BananaMan Debug",
+            "program": "${workspaceFolder}/Samples/BananaMan/bin/Debug/net10.0/BananaMan.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/BananaMan",
+            "stopAtEntry": false
+        },
+        {
+            "name": "BananaMan (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: BananaMan Release",
+            "program": "${workspaceFolder}/Samples/BananaMan/bin/Release/net10.0/BananaMan.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/BananaMan",
+            "stopAtEntry": false
+        },
+        {
+            "name": "CarPhysicsDemo (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: CarPhysicsDemo Debug",
+            "program": "${workspaceFolder}/Samples/CarPhysicsDemo/bin/Debug/net10.0/CarPhysicsDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/CarPhysicsDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "CarPhysicsDemo (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: CarPhysicsDemo Release",
+            "program": "${workspaceFolder}/Samples/CarPhysicsDemo/bin/Release/net10.0/CarPhysicsDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/CarPhysicsDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "FlyCamera (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: FlyCamera Debug",
+            "program": "${workspaceFolder}/Samples/FlyCamera/bin/Debug/net10.0/FlyCamera.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/FlyCamera",
+            "stopAtEntry": false
+        },
+        {
+            "name": "FlyCamera (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: FlyCamera Release",
+            "program": "${workspaceFolder}/Samples/FlyCamera/bin/Release/net10.0/FlyCamera.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/FlyCamera",
+            "stopAtEntry": false
+        },
+        {
+            "name": "LifecycleTest (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: LifecycleTest Debug",
+            "program": "${workspaceFolder}/Samples/LifecycleTest/bin/Debug/net10.0/LifecycleTest.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/LifecycleTest",
+            "stopAtEntry": false
+        },
+        {
+            "name": "LifecycleTest (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: LifecycleTest Release",
+            "program": "${workspaceFolder}/Samples/LifecycleTest/bin/Release/net10.0/LifecycleTest.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/LifecycleTest",
+            "stopAtEntry": false
+        },
+        {
+            "name": "PhysicsCubes (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: PhysicsCubes Debug",
+            "program": "${workspaceFolder}/Samples/PhysicsCubes/bin/Debug/net10.0/PhysicsCubes.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/PhysicsCubes",
+            "stopAtEntry": false
+        },
+        {
+            "name": "PhysicsCubes (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: PhysicsCubes Release",
+            "program": "${workspaceFolder}/Samples/PhysicsCubes/bin/Release/net10.0/PhysicsCubes.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/PhysicsCubes",
+            "stopAtEntry": false
+        },
+        {
+            "name": "PhysicsTesterDemo (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: PhysicsTesterDemo Debug",
+            "program": "${workspaceFolder}/Samples/PhysicsTesterDemo/bin/Debug/net10.0/PhysicsTesterDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/PhysicsTesterDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "PhysicsTesterDemo (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: PhysicsTesterDemo Release",
+            "program": "${workspaceFolder}/Samples/PhysicsTesterDemo/bin/Release/net10.0/PhysicsTesterDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/PhysicsTesterDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "ShapeCastDemo (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: ShapeCastDemo Debug",
+            "program": "${workspaceFolder}/Samples/ShapeCastDemo/bin/Debug/net10.0/ShapeCastDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/ShapeCastDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "ShapeCastDemo (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: ShapeCastDemo Release",
+            "program": "${workspaceFolder}/Samples/ShapeCastDemo/bin/Release/net10.0/ShapeCastDemo.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/ShapeCastDemo",
+            "stopAtEntry": false
+        },
+        {
+            "name": "SimpleCube (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: SimpleCube Debug",
+            "program": "${workspaceFolder}/Samples/SimpleCube/bin/Debug/net10.0/SimpleCube.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/SimpleCube",
+            "stopAtEntry": false
+        },
+        {
+            "name": "SimpleCube (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: SimpleCube Release",
+            "program": "${workspaceFolder}/Samples/SimpleCube/bin/Release/net10.0/SimpleCube.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/SimpleCube",
+            "stopAtEntry": false
+        },
+        {
+            "name": "VoxelEngine (Debug)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: VoxelEngine Debug",
+            "program": "${workspaceFolder}/Samples/VoxelEngine/bin/Debug/net10.0/VoxelEngine.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/VoxelEngine",
+            "stopAtEntry": false
+        },
+        {
+            "name": "VoxelEngine (Release)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build: VoxelEngine Release",
+            "program": "${workspaceFolder}/Samples/VoxelEngine/bin/Release/net10.0/VoxelEngine.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Samples/VoxelEngine",
+            "stopAtEntry": false
         }
     ]
 }
