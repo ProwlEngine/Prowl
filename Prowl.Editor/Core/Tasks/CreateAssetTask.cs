@@ -45,6 +45,9 @@ public class CreateAssetTask : EditorTask
         var panel = ProjectPanel.Instance;
         if (panel != null)
         {
+            // The rename placeholder is drawn in the browsed folder, so show the target folder.
+            panel.NavigateTo(relativeFolder);
+
             string newName = entry.Name;
             string? renameResult = null;
             bool finished = false;
@@ -74,9 +77,9 @@ public class CreateAssetTask : EditorTask
             {
                 var path = TaskType switch
                 {
-                    AssetType.Asset => CreateAsset(entry, panel.CurrentFolder, renameResult),
-                    AssetType.Shader => CreateShader(renameResult, panel.CurrentFolder),
-                    AssetType.Folder => CreateFolder(renameResult, panel.CurrentFolder),
+                    AssetType.Asset => CreateAsset(entry, relativeFolder, renameResult),
+                    AssetType.Shader => CreateShader(renameResult, relativeFolder),
+                    AssetType.Folder => CreateFolder(renameResult, relativeFolder),
                     _ => null
                 };
             }

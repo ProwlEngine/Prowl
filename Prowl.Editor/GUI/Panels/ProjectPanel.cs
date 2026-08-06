@@ -93,7 +93,7 @@ public class ProjectPanel : DockPanel
 
     private bool IsListView => _thumbnailSize < ListThreshold;
 
-    private void NavigateTo(string folder)
+    public void NavigateTo(string folder)
     {
         if (folder == _currentFolder) return;
         _navBack.Push(_currentFolder);
