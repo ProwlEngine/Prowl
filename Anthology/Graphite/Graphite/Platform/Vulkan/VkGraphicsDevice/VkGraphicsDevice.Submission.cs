@@ -14,6 +14,10 @@ internal unsafe partial class VkGraphicsDevice
     private readonly object _submittedFencesLock = new();
     private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new();
     private readonly List<FenceSubmissionInfo> _submittedFences = [];
+    private int _graphicsQueueSubmitCount;
+
+    /// <summary>Test hook: total vkQueueSubmit calls made against the graphics queue.</summary>
+    internal int GraphicsQueueSubmitCount => System.Threading.Volatile.Read(ref _graphicsQueueSubmitCount);
 
     public override void ResetFence(Fence fence)
     {
@@ -67,6 +71,7 @@ internal unsafe partial class VkGraphicsDevice
 
                 lock (_graphicsQueueLock)
                 {
+                    _graphicsQueueSubmitCount++;
                     Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
                     FlushValidationErrors();
                 }
@@ -114,6 +119,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
+            _graphicsQueueSubmitCount++;
             Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
             FlushValidationErrors();
         }
@@ -183,11 +189,13 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
+            _graphicsQueueSubmitCount++;
             Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
             FlushValidationErrors();
 
             if (useExtraFence)
             {
+                _graphicsQueueSubmitCount++;
                 Vk.QueueSubmit(GraphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
             }
         }
