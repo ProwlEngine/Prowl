@@ -34,6 +34,15 @@ public abstract class UIBehaviour : MonoBehaviour
     // force a re-bake when they drift (otherwise a stretched child renders at its old size).
     [SerializeIgnore] internal Float2 LastBakeSize = new(float.NaN, float.NaN);
     [SerializeIgnore] internal float LastBakeAlpha = float.NaN;
+    [SerializeIgnore] internal int LastBakeContentVersion = -1;
+
+    /// <summary>
+    /// Stamp of external state the baked mesh depends on but which nothing dirties: text geometry is
+    /// tied to the glyph atlas, and the atlas is rewritten (and its UVs rescaled) as new glyphs arrive.
+    /// The canvas re-bakes whenever this moves, so it holds in edit mode too, where <c>Update</c> does
+    /// not run.
+    /// </summary>
+    public virtual int ContentVersion => 0;
 
     public override void OnEnable()
     {

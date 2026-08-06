@@ -276,9 +276,16 @@ public sealed class EventSystem : MonoBehaviour
         }
         else
         {
-            winSize = new(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+            // Canvases lay out against the framebuffer, but the OS mouse arrives in window coordinates.
+            // Those differ on a HiDPI display, so scale the pointer into framebuffer pixels or every hit
+            // test would be offset and scaled against what was actually drawn.
+            var fb = Window.InternalWindow.FramebufferSize;
+            var win = Window.InternalWindow.Size;
+            winSize = new(fb.X, fb.Y);
             Int2 mp = Input.MousePosition;
-            pos = new(mp.X, mp.Y);
+            float sx = win.X > 0 ? (float)fb.X / win.X : 1f;
+            float sy = win.Y > 0 ? (float)fb.Y / win.Y : 1f;
+            pos = new(mp.X * sx, mp.Y * sy);
             gated = false;
         }
 
@@ -404,14 +411,13 @@ public sealed class EventSystem : MonoBehaviour
                 e.ClickCount = 1;
 
             if (hovered != null)
-            {
                 Bubble<IPointerDownHandler>(hovered, e, static (h, ev) => h.OnPointerDown(ev));
 
-                // Auto-focus a Selectable on press so subsequent keyboard input goes to that widget.
-                // Non-Selectable presses don't change focus.
-                if (button == MouseButton.Left)
-                    SetSelected(FindAncestor<Selectable>(hovered));
-            }
+            // Focus follows the press: a Selectable under the pointer takes focus, and a press on
+            // anything else - including empty space - clears it. Without the clear, an input field
+            // would keep its caret and keep eating keystrokes after the user clicked away.
+            if (button == MouseButton.Left)
+                SetSelected(hovered != null ? FindAncestor<Selectable>(hovered) : null);
         }
 
         // ---- Drag detection / continuation ----

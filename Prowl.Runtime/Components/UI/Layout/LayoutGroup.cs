@@ -43,17 +43,22 @@ public abstract class LayoutGroup : UIBehaviour, ILayoutElement
     public abstract float PreferredHeight { get; }
     public virtual float FlexibleHeight => -1f;
 
+    // Refilled in place rather than reallocated: a group's children are queried several times per
+    // layout pass (once per reported dimension, once to arrange). Never enumerated across a nested
+    // query - a child's sizes come from components on the child, never back from this group.
+    [SerializeIgnore] private readonly List<GameObject> _layoutChildren = new();
+
     protected List<GameObject> GetLayoutChildren()
     {
-        var list = new List<GameObject>();
+        _layoutChildren.Clear();
         foreach (GameObject child in GameObject.Children)
         {
             if (!child.EnabledInHierarchy || child.RectTransform is null) continue;
             LayoutElement? le = child.GetComponent<LayoutElement>();
             if (le is { IgnoreLayout: true }) continue;
-            list.Add(child);
+            _layoutChildren.Add(child);
         }
-        return list;
+        return _layoutChildren;
     }
 
     protected static void SetChildRect(GameObject child, Rect rect)
@@ -95,38 +100,49 @@ public abstract class HorizontalOrVerticalLayoutGroup : LayoutGroup
     private float AlongOf(Float2 s) => IsVertical ? s.Y : s.X;
     private float CrossOf(Float2 s) => IsVertical ? s.X : s.Y;
 
-    public override float PreferredWidth => IsVertical ? CrossPreferred() : AlongPreferred();
-    public override float PreferredHeight => IsVertical ? AlongPreferred() : CrossPreferred();
-    public override float MinWidth => IsVertical ? CrossMin() : AlongMin();
-    public override float MinHeight => IsVertical ? AlongMin() : CrossMin();
+    public override float PreferredWidth  { get { EnsureSizes(); return IsVertical ? _crossPreferred : _alongPreferred; } }
+    public override float PreferredHeight { get { EnsureSizes(); return IsVertical ? _alongPreferred : _crossPreferred; } }
+    public override float MinWidth        { get { EnsureSizes(); return IsVertical ? _crossMin : _alongMin; } }
+    public override float MinHeight       { get { EnsureSizes(); return IsVertical ? _alongMin : _crossMin; } }
 
-    private float AlongPreferred()
+    [SerializeIgnore] private int _sizesGeneration = -1;
+    [SerializeIgnore] private float _alongPreferred, _alongMin, _crossPreferred, _crossMin;
+
+    /// <summary>Computes all four reported dimensions in a single walk of the children, cached for the
+    /// current layout pass. A parent asks for every one of them, and each child query can itself be a
+    /// whole nested group, so recomputing per property would multiply the work at every level.</summary>
+    private void EnsureSizes()
     {
-        var kids = GetLayoutChildren();
-        float sum = _spacing * Maths.Max(0, kids.Count - 1) + PaddingAlong;
-        foreach (GameObject k in kids) sum += AlongOf(LayoutUtility.GetPreferredSize(k));
-        return sum;
+        if (_sizesGeneration == LayoutUtility.Generation) return;
+        _sizesGeneration = LayoutUtility.Generation;
+
+        List<GameObject> kids = GetLayoutChildren();
+        float gaps = _spacing * Maths.Max(0, kids.Count - 1) + PaddingAlong;
+        float along = gaps, alongMin = gaps, cross = 0f, crossMin = 0f;
+
+        foreach (GameObject k in kids)
+        {
+            Float2 pref = LayoutUtility.GetPreferredSize(k);
+            Float2 min = LayoutUtility.GetMinSize(k);
+            along += AlongOf(pref);
+            alongMin += AlongOf(min);
+            cross = Maths.Max(cross, CrossOf(pref));
+            crossMin = Maths.Max(crossMin, CrossOf(min));
+        }
+
+        _alongPreferred = along;
+        _alongMin = alongMin;
+        _crossPreferred = cross + PaddingCross;
+        _crossMin = crossMin + PaddingCross;
     }
-    private float AlongMin()
+
+    // Per-child scratch for Arrange, grown on demand instead of reallocated every layout pass.
+    [SerializeIgnore] private float[] _pref = [], _min = [], _flex = [], _size = [];
+
+    private void EnsureScratch(int n)
     {
-        var kids = GetLayoutChildren();
-        float sum = _spacing * Maths.Max(0, kids.Count - 1) + PaddingAlong;
-        foreach (GameObject k in kids) sum += AlongOf(LayoutUtility.GetMinSize(k));
-        return sum;
-    }
-    private float CrossPreferred()
-    {
-        var kids = GetLayoutChildren();
-        float max = 0f;
-        foreach (GameObject k in kids) max = Maths.Max(max, CrossOf(LayoutUtility.GetPreferredSize(k)));
-        return max + PaddingCross;
-    }
-    private float CrossMin()
-    {
-        var kids = GetLayoutChildren();
-        float max = 0f;
-        foreach (GameObject k in kids) max = Maths.Max(max, CrossOf(LayoutUtility.GetMinSize(k)));
-        return max + PaddingCross;
+        if (_pref.Length >= n) return;
+        _pref = new float[n]; _min = new float[n]; _flex = new float[n]; _size = new float[n];
     }
 
     public override void Arrange(Rect rect)
@@ -146,7 +162,8 @@ public abstract class HorizontalOrVerticalLayoutGroup : LayoutGroup
         bool forceExpandMain = IsVertical ? _childForceExpandHeight : _childForceExpandWidth;
         bool controlCross = IsVertical ? _childControlWidth : _childControlHeight;
 
-        float[] pref = new float[n], min = new float[n], flex = new float[n], size = new float[n];
+        EnsureScratch(n);
+        float[] pref = _pref, min = _min, flex = _flex, size = _size;
         float totalPref = _spacing * (n - 1), totalFlex = 0f, totalShrink = 0f;
         for (int i = 0; i < n; i++)
         {

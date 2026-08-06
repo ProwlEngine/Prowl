@@ -129,7 +129,6 @@ public class GameCanvas : MonoBehaviour
     // Read-only auto-property: not serialized by Prowl.Echo.
     internal UIRenderTree Tree { get; } = new();
     [SerializeIgnore] private bool _isDirty = true;
-    [SerializeIgnore] private UIDirtyFlags _aggregateDirty = UIDirtyFlags.All;
 
     /// <summary>Set during a rebuild when some element was still waiting on an asset. Keeps the canvas
     /// dirty so it rebuilds again, since nothing else re-triggers one once it goes clean.</summary>
@@ -144,17 +143,27 @@ public class GameCanvas : MonoBehaviour
     /// </summary>
     [SerializeIgnore] private Float2 _lastBuildSize = Float2.Zero;
 
+    /// <summary>Whether the last rebuild laid out as world-space. <see cref="EditorWorldSpaceOverride"/>
+    /// swaps the root rect and <see cref="CanvasToWorld"/> under us as the scene view and game view take
+    /// turns rendering, and it is not covered by <see cref="_lastBuildSize"/> - two panels at the same
+    /// pixel size would otherwise share one build and show each other's layout.</summary>
+    [SerializeIgnore] private bool _lastBuildWorldSpace;
+
+    /// <summary>Glyph atlas version seen at the last rebuild. See the check in <see cref="RebuildIfDirty"/>.</summary>
+    [SerializeIgnore] private int _lastAtlasVersion = -1;
+
     /// <summary>The canvas's root rect (design pixels) from the last rebuild. The canvas itself has no
     /// RectTransform; this is its layout extent, used by children and the bounds gizmo.</summary>
     [SerializeIgnore] private Rect _rootRect;
     public Rect RootRect => _rootRect;
 
-    /// <summary>Called by descendants (or by property setters above) to request a rebuild.</summary>
-    public void MarkDirty(UIDirtyFlags flags)
-    {
-        _aggregateDirty |= flags;
-        _isDirty = true;
-    }
+    /// <summary>
+    /// Called by descendants (or by the property setters above) to request a rebuild. The canvas rebuild
+    /// is all-or-nothing: Layout and Hierarchy both need the full walk, and Vertices/Material are already
+    /// tracked per element (<see cref="UIBehaviour.DirtyFlags"/>), so the flags are only carried for the
+    /// elements' benefit and not accumulated here.
+    /// </summary>
+    public void MarkDirty(UIDirtyFlags flags) => _isDirty = true;
 
     /// <summary>
     /// Backing-field setter for this canvas's properties: assigns only on a real change and
@@ -209,25 +218,6 @@ public class GameCanvas : MonoBehaviour
         ScreenSizeOverride?.Y ?? Window.InternalWindow.FramebufferSize.Y);
 
     // ============================================================
-    // NEW: WorldSpace IRenderable plumbing
-    // ============================================================
-
-    /// <summary>
-    /// For <see cref="RenderMode.WorldSpace"/> canvases, adds every item in <see cref="Tree"/>
-    /// to the scene's main renderable list so they participate in #13 Transparent + UI passes.
-    /// Overlay/Camera canvases ignore this hook - they are pulled by
-    /// <see cref="UIRenderTree.CollectFor"/> from the pipeline directly.
-    /// </summary>
-    public override void OnRenderCollect(Camera camera, List<IRenderable> renderables, List<IRenderableLight> _)
-    {
-        if (RenderMode != RenderMode.WorldSpace) return;
-        RebuildIfDirty();
-        Tree.RefreshTransforms();
-        foreach (UIRenderItem it in Tree.Items)
-            renderables.Add(it);
-    }
-
-    // ============================================================
     // NEW: rebuild driver - replaces the old DrawGUI
     // ============================================================
 
@@ -241,11 +231,23 @@ public class GameCanvas : MonoBehaviour
         // Detect a render-target size change (window resize, editor viewport change, switch
         // between cameras with different RT sizes). The pipeline pushes the active surface size
         // via GameCanvas.ScreenSizeOverride before calling here, so a mismatch forces a rebuild.
+        // The glyph atlas is rewritten (and every glyph UV rescaled) as new glyphs are rasterized, which
+        // silently invalidates already-baked text meshes. Checked here rather than from
+        // TextComponent.Update so it holds in edit mode, where Update does not run.
+        int atlasVersion = UIFontSystem.Default.System.AtlasVersion;
+        if (_lastAtlasVersion != atlasVersion)
+        {
+            _lastAtlasVersion = atlasVersion;
+            _isDirty = true;
+        }
+
         Float2 currentSize = ResolveScreenSize();
-        if (!_lastBuildSize.Equals(currentSize))
+        bool currentWorldSpace = UseWorldSpace;
+        if (!_lastBuildSize.Equals(currentSize) || _lastBuildWorldSpace != currentWorldSpace)
         {
             _isDirty = true;
             _lastBuildSize = currentSize;
+            _lastBuildWorldSpace = currentWorldSpace;
         }
 
         if (!_isDirty) return;
@@ -256,20 +258,38 @@ public class GameCanvas : MonoBehaviour
         // this rebuild every frame in ScaleWithScreenSize mode.
         _scaleFactor = ComputeScaleFactor();
 
-        Tree.Clear();
+        // The walk itself can dirty the canvas: a ContentSizeFitter writes its SizeDelta mid-walk, so
+        // ancestors and earlier siblings were arranged against the previous size. Clear the flag first
+        // and re-walk while it comes back, which settles the layout within this frame instead of
+        // leaving it permanently stale (the flag used to be overwritten, discarding the request).
+        int pass = 0;
+        do
+        {
+            _isDirty = false;
 
-        Rect rootRect = ComputeRootRect();
-        _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
+            LayoutUtility.InvalidateCache();
+            Tree.Clear();
 
-        int dfs = 0;
-        _contentPending = false;
-        BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
-        Tree.SortHierarchical();
+            Rect rootRect = ComputeRootRect();
+            _rootRect = rootRect; // the canvas has no RectTransform; children lay out against this directly
 
-        // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset.
-        _isDirty = _contentPending;
-        _aggregateDirty = UIDirtyFlags.None;
+            int dfs = 0;
+            _contentPending = false;
+            BuildRecursive(GameObject, rootRect, UIContext.Default, canvasScissor: null, activeClip: null, ref dfs);
+            Tree.SortHierarchical();
+        }
+        while (_isDirty && ++pass < MaxLayoutPasses);
+
+        // Stay dirty while anything is still streaming in, so it gets rebuilt with the real asset. A
+        // layout that never settled also stays dirty and retries next frame rather than showing a
+        // half-resolved result.
+        _isDirty |= _contentPending;
     }
+
+    /// <summary>How many times a single rebuild re-walks when the walk dirties the canvas (nested
+    /// content-size fitters need one pass per level). Beyond this the layout is treated as unstable and
+    /// left dirty for the next frame.</summary>
+    private const int MaxLayoutPasses = 4;
 
     private Rect ComputeRootRect()
     {
@@ -391,7 +411,8 @@ public class GameCanvas : MonoBehaviour
         bool needsBake = ui.CachedMesh is null
                       || (ui.DirtyFlags & UIDirtyFlags.Vertices) != 0
                       || !ui.LastBakeSize.Equals(size)
-                      || !ui.LastBakeAlpha.Equals(childCtx.Alpha);
+                      || !ui.LastBakeAlpha.Equals(childCtx.Alpha)
+                      || ui.LastBakeContentVersion != ui.ContentVersion;
         if (!needsBake) return;
 
         UIMeshBuilder builder = UIMeshBuilder.Rent();
@@ -416,6 +437,7 @@ public class GameCanvas : MonoBehaviour
         ui.DirtyFlags &= ~UIDirtyFlags.Vertices;
         ui.LastBakeSize = size;
         ui.LastBakeAlpha = childCtx.Alpha;
+        ui.LastBakeContentVersion = ui.ContentVersion;
     }
 
     private void EmitItem(UIBehaviour ui, Mesh mesh, int dfsIndex, UIClip? clip)
@@ -439,7 +461,7 @@ public class GameCanvas : MonoBehaviour
     /// overflow past 127) and 21 bits each for the canvas id and DFS index. The canvas discriminator
     /// keeps two equal-<c>SortOrder</c> canvases as contiguous layers instead of interleaving them.
     /// </summary>
-    private long BuildSortKey(int dfsIndex)
+    internal long BuildSortKey(int dfsIndex)
     {
         long canvasDisc = InstanceID & 0x1FFFFF;
         long dfs = (uint)dfsIndex & 0x1FFFFF;
@@ -485,8 +507,12 @@ public class GameCanvas : MonoBehaviour
 
     /// <summary>
     /// Builds the canvas-design-pixel space matrix that places a RectTransform's pivot-centered
-    /// mesh into the canvas frame, threading <b>parent rotation and scale</b> down the chain.
+    /// mesh into the canvas frame, threading <b>parent rotation, scale and Z</b> down the chain.
     /// </summary>
+    /// <remarks>
+    /// X and Y come from the layout (anchors, pivot, anchored position); Z comes from the GameObject's
+    /// Transform, so an element can be pushed off the canvas plane without the layout fighting it.
+    /// </remarks>
     internal Float4x4 BuildRectModel(RectTransform rt)
     {
         Rect cr = rt.ComputedRect;
@@ -499,7 +525,7 @@ public class GameCanvas : MonoBehaviour
         // Element TRS: rotation/scale apply around the pivot (mesh is pivot-centered),
         // then the pivot is placed at its layout position.
         Float4x4 model = Float4x4.CreateTRS(
-            new Float3(pivotX, pivotY, 0),
+            new Float3(pivotX, pivotY, rt.LocalPosition.Z),
             rt.LocalRotation,
             rt.LocalScale);
 
@@ -515,7 +541,9 @@ public class GameCanvas : MonoBehaviour
             float pPivotY = pcr.Min.Y + prt.Pivot.Y * pcr.Size.Y;
             Float3 pPivot = new Float3(pPivotX, pPivotY, 0);
 
-            Float4x4 wrap = Float4x4.CreateTRS(pPivot, prt.LocalRotation, prt.LocalScale)
+            // Rotate/scale about the parent's pivot without moving it (XY placement already comes from
+            // the child's own computed rect), then carry the parent's Z offset down.
+            Float4x4 wrap = Float4x4.CreateTRS(pPivot + new Float3(0, 0, prt.LocalPosition.Z), prt.LocalRotation, prt.LocalScale)
                           * Float4x4.CreateTranslation(-pPivot);
             model = wrap * model;
 

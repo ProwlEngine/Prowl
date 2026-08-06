@@ -167,23 +167,6 @@ public class UIImage : Graphic
         set => SetField(ref _fillClockwise, value, UIDirtyFlags.Vertices);
     }
 
-    /// <summary>
-    /// Whether this element should block raycasts (pointer hit-testing).
-    /// Affects input dispatch only - does not change rendering.
-    /// </summary>
-    [SerializeField] private bool _raycastTarget = true;
-    public bool RaycastTarget
-    {
-        get => _raycastTarget;
-        set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
-    }
-
-    public override Material GetMaterial()
-    {
-        var m = _material.Res;
-        return m.IsValid() ? m : base.GetMaterial();
-    }
-
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)
     {
         var rt = GameObject.RectTransform;

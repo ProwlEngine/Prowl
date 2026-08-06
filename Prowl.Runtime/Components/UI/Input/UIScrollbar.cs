@@ -91,6 +91,22 @@ public class UIScrollbar : Selectable, IDragHandler, IBeginDragHandler
         e.Use();
     }
 
+    /// <summary>Arrows along the bar's own axis step the value; the cross axis navigates away.</summary>
+    public override void OnMove(MoveDirection direction)
+    {
+        bool horizontal = _direction is ScrollbarDirection.LeftToRight or ScrollbarDirection.RightToLeft;
+        bool alongAxis = horizontal
+            ? direction is MoveDirection.Left or MoveDirection.Right
+            : direction is MoveDirection.Up or MoveDirection.Down;
+
+        if (!alongAxis || !IsInteractable()) { base.OnMove(direction); return; }
+
+        float sign = direction is MoveDirection.Right or MoveDirection.Up ? 1f : -1f;
+        if (_direction is ScrollbarDirection.RightToLeft or ScrollbarDirection.TopToBottom) sign = -sign;
+
+        SetValue(_value + sign * 0.1f, notify: true);
+    }
+
     private float ValueFromPointer(PointerEventData e)
     {
         Rect rect = GameObject.RectTransform!.ComputedRect; // design space, +Y up

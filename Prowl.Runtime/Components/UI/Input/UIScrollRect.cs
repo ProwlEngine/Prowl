@@ -60,6 +60,25 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
     [SerializeField] private float _verticalScrollbarSpacing = 0f;
     public float VerticalScrollbarSpacing { get => _verticalScrollbarSpacing; set => _verticalScrollbarSpacing = value; }
 
+    /// <summary>How the content behaves at the ends of its travel.</summary>
+    public enum ScrollMovementType
+    {
+        /// <summary>No bounds at all; the content can be dragged anywhere.</summary>
+        Unrestricted,
+        /// <summary>The content can be dragged past the end but resists, then springs back.</summary>
+        Elastic,
+        /// <summary>The content stops hard at the ends.</summary>
+        Clamped,
+    }
+
+    [SerializeField] private ScrollMovementType _movementType = ScrollMovementType.Elastic;
+    public ScrollMovementType MovementType { get => _movementType; set => _movementType = value; }
+
+    /// <summary>Roughly the seconds the content takes to spring back after being dragged past an end.
+    /// Only used by <see cref="ScrollMovementType.Elastic"/>.</summary>
+    [SerializeField] private float _elasticity = 0.1f;
+    public float Elasticity { get => _elasticity; set => _elasticity = Maths.Max(0f, value); }
+
     [SerializeField] private bool _horizontal = true;
     public bool Horizontal { get => _horizontal; set => _horizontal = value; }
 
@@ -111,8 +130,40 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         if (_horizontal) target.X += delta.X;
         if (_vertical) target.Y += delta.Y;
 
-        SetContentPosition(ClampContent(target));
+        SetContentPosition(ConstrainDrag(target));
         e.Use();
+    }
+
+    /// <summary>Applies <see cref="MovementType"/> to a dragged-to position.</summary>
+    private Float2 ConstrainDrag(Float2 candidate)
+    {
+        if (_movementType == ScrollMovementType.Unrestricted) return FilterAxes(candidate);
+        if (_movementType == ScrollMovementType.Clamped) return ClampContent(candidate);
+
+        // Elastic: allow travel past the end, but with sharply diminishing returns.
+        Float2 clamped = ClampContent(candidate);
+        Float2 over = FilterAxes(candidate) - clamped;
+        Rect vp = ViewportRect();
+        return new Float2(
+            clamped.X + RubberDelta(over.X, vp.Size.X),
+            clamped.Y + RubberDelta(over.Y, vp.Size.Y));
+    }
+
+    /// <summary>Overshoot remapped so it approaches (but never reaches) the viewport size.</summary>
+    private static float RubberDelta(float overshoot, float viewSize)
+    {
+        if (viewSize <= 0f || overshoot == 0f) return 0f;
+        float magnitude = Maths.Abs(overshoot);
+        return (1f - 1f / (magnitude * 0.55f / viewSize + 1f)) * viewSize * MathF.Sign(overshoot);
+    }
+
+    /// <summary>Drops movement on any axis this scroll rect does not scroll.</summary>
+    private Float2 FilterAxes(Float2 candidate)
+    {
+        Float2 cur = _content!.AnchoredPosition;
+        if (!_horizontal) candidate.X = cur.X;
+        if (!_vertical) candidate.Y = cur.Y;
+        return candidate;
     }
 
     public void OnEndDrag(PointerEventData e)
@@ -130,7 +181,8 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         else if (_horizontal) pos.X += e.ScrollDelta * _scrollSensitivity;
 
         _velocity = Float2.Zero;
-        SetContentPosition(ClampContent(pos));
+        // The wheel always lands inside the bounds; only a drag is allowed to overshoot.
+        SetContentPosition(_movementType == ScrollMovementType.Unrestricted ? FilterAxes(pos) : ClampContent(pos));
         e.Use();
     }
 
@@ -157,17 +209,35 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
             return;
         }
 
+        // Past the end and no longer held: pull back in. Elastic eases over Elasticity seconds,
+        // Clamped snaps. Unrestricted has no ends to be past.
+        if (_movementType != ScrollMovementType.Unrestricted)
+        {
+            Float2 pos = _content.AnchoredPosition;
+            Float2 inBounds = ClampContent(pos);
+            Float2 offset = inBounds - pos;
+            if (Maths.Abs(offset.X) > 1e-4f || Maths.Abs(offset.Y) > 1e-4f)
+            {
+                float t = _movementType == ScrollMovementType.Clamped || _elasticity <= 0f
+                    ? 1f
+                    : Maths.Clamp(Time.DeltaTime / _elasticity, 0f, 1f);
+                _velocity = Float2.Zero;
+                SetContentPosition(pos + offset * t);
+                return;
+            }
+        }
+
         if (!_inertia || Maths.Abs(_velocity.X) + Maths.Abs(_velocity.Y) < 1f) { _velocity = Float2.Zero; return; }
 
         float decay = MathF.Pow(_decelerationRate, Time.DeltaTime);
         _velocity *= decay;
 
         Float2 target = _content.AnchoredPosition + _velocity * Time.DeltaTime;
-        Float2 clamped = ClampContent(target);
-        // Kill velocity on the axis that hit a clamp edge so it doesn't fight the wall.
-        if (clamped.X != target.X) _velocity.X = 0f;
-        if (clamped.Y != target.Y) _velocity.Y = 0f;
-        SetContentPosition(clamped);
+        // Clamped stops dead at the wall; Elastic coasts past it and the spring above brings it back.
+        Float2 result = _movementType == ScrollMovementType.Clamped ? ClampContent(target) : FilterAxes(target);
+        if (result.X != target.X) _velocity.X = 0f;
+        if (result.Y != target.Y) _velocity.Y = 0f;
+        SetContentPosition(result);
     }
 
     private void SetContentPosition(Float2 pos)
@@ -200,6 +270,17 @@ public class UIScrollRect : UIBehaviour, IBeginDragHandler, IDragHandler, IEndDr
         else candidate.Y = ClampAxis(candidate.Y, cur.Y, ct.Min.Y, ct.Max.Y, ct.Size.Y, vp.Min.Y, vp.Max.Y, vp.Size.Y, pinToMax: true);
 
         return candidate;
+    }
+
+    /// <summary>Live overshoot past the ends, zero when the content sits inside its bounds.</summary>
+    public Float2 Overshoot
+    {
+        get
+        {
+            if (_content == null) return Float2.Zero;
+            Float2 pos = _content.AnchoredPosition;
+            return pos - ClampContent(pos);
+        }
     }
 
     // ============================================================
