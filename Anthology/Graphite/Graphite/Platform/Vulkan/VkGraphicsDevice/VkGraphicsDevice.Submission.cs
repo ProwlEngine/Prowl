@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -27,9 +28,66 @@ internal unsafe partial class VkGraphicsDevice
         return result == Result.Success;
     }
 
-    internal void SubmitCommandBufferInternal(CommandBuffer cl)
+    /// <summary>
+    /// Submits an execution's queued command buffers as one vkQueueSubmit. A null slot fence takes a
+    /// pooled one instead, for a mid-execution flush.
+    /// </summary>
+    internal void SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, VkFenceHandle? slotFence)
     {
-        SubmitCommandBuffer(cl, 0, null, 0, null, null);
+        int count = commandBuffers.Count;
+        if (count == 0 && slotFence == null)
+            return;
+
+        CheckSubmittedFences();
+
+        bool poolFence = slotFence == null;
+        VkFenceHandle fence = slotFence ?? GetFreeSubmissionFence();
+
+        Silk.NET.Vulkan.CommandBuffer[] handles = ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Rent(count + 1);
+        try
+        {
+            for (int i = 0; i < count; i++)
+            {
+                VkCommandBuffer cb = commandBuffers[i];
+                Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
+                cb.CommandBufferSubmitted(handle);
+                handles[i] = handle;
+            }
+
+            PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
+
+            fixed (Silk.NET.Vulkan.CommandBuffer* pHandles = handles)
+            {
+                SubmitInfo si = new(sType: StructureType.SubmitInfo)
+                {
+                    CommandBufferCount = (uint)count,
+                    PCommandBuffers = count > 0 ? pHandles : null,
+                    PWaitDstStageMask = &waitDstStageMask
+                };
+
+                lock (_graphicsQueueLock)
+                {
+                    Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+                    FlushValidationErrors();
+                }
+            }
+
+            lock (_submittedFencesLock)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    VkCommandBuffer cb = commandBuffers[i];
+                    _submittedFences.Add(new FenceSubmissionInfo(
+                        fence, cb, handles[i], cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
+                        cb.Name, isTransfer: false, cb.Pass, transferId: 0,
+                        ownsFence: poolFence && i == count - 1));
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Return(handles);
+        }
     }
 
     private protected override void SubmitTransferCore(TransferCommandBuffer commandBuffer)
@@ -75,23 +133,6 @@ internal unsafe partial class VkGraphicsDevice
     {
         VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
         vkCb.SubmitAndWait();
-    }
-
-    private void SubmitCommandBuffer(
-        CommandBuffer cl,
-        uint waitSemaphoreCount,
-        VkSemaphore* waitSemaphoresPtr,
-        uint signalSemaphoreCount,
-        VkSemaphore* signalSemaphoresPtr,
-        Fence? fence)
-    {
-        VkCommandBuffer vkCL = Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(cl);
-        Silk.NET.Vulkan.CommandBuffer vkCB = vkCL.CommandBuffer;
-
-        vkCL.CommandBufferSubmitted(vkCB);
-        SubmitCommandBuffer(
-            vkCL, vkCB, waitSemaphoreCount, waitSemaphoresPtr, signalSemaphoreCount, signalSemaphoresPtr, fence,
-            vkCL.TakePendingTimingPool(), vkCL.TakePendingStatsPool(), vkCL.Name, isTransfer: false, pass: vkCL.Pass);
     }
 
     internal void SubmitCommandBuffer(
