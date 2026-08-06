@@ -136,6 +136,155 @@ public sealed class RectTransform : MonoBehaviour
         return ComputedRect;
     }
 
+    // ============================================================
+    // Derived rect accessors
+    // ============================================================
+
+    /// <summary>Which parent edge <see cref="SetInsetAndSizeFromParentEdge"/> anchors to.</summary>
+    public enum Edge { Left, Right, Top, Bottom }
+
+    /// <summary>Axis selector for <see cref="SetSizeWithCurrentAnchors"/>.</summary>
+    public enum Axis { Horizontal, Vertical }
+
+    /// <summary>
+    /// The laid-out rect in this element's own space, with the pivot at the origin - the same space
+    /// meshes are generated in. Valid after the owning canvas has run its layout.
+    /// </summary>
+    public Rect Rect
+    {
+        get
+        {
+            Float2 size = ComputedRect.Size;
+            return new Rect(-_pivot.X * size.X, -_pivot.Y * size.Y,
+                            (1f - _pivot.X) * size.X, (1f - _pivot.Y) * size.Y);
+        }
+    }
+
+    /// <summary>Offset of the lower-left corner from the lower-left anchor. Setting it moves that
+    /// corner, resizing the element rather than translating it.</summary>
+    public Float2 OffsetMin
+    {
+        get => _anchoredPosition - new Float2(_sizeDelta.X * _pivot.X, _sizeDelta.Y * _pivot.Y);
+        set
+        {
+            Float2 delta = value - OffsetMin;
+            SizeDelta = _sizeDelta - delta;
+            AnchoredPosition = _anchoredPosition + new Float2(delta.X * (1f - _pivot.X), delta.Y * (1f - _pivot.Y));
+        }
+    }
+
+    /// <summary>Offset of the upper-right corner from the upper-right anchor. Setting it moves that
+    /// corner, resizing the element rather than translating it.</summary>
+    public Float2 OffsetMax
+    {
+        get => _anchoredPosition + new Float2(_sizeDelta.X * (1f - _pivot.X), _sizeDelta.Y * (1f - _pivot.Y));
+        set
+        {
+            Float2 delta = value - OffsetMax;
+            SizeDelta = _sizeDelta + delta;
+            AnchoredPosition = _anchoredPosition + new Float2(delta.X * _pivot.X, delta.Y * _pivot.Y);
+        }
+    }
+
+    /// <summary><see cref="AnchoredPosition"/> plus the Transform's Z, which is the one positional axis
+    /// the layout does not drive.</summary>
+    public Float3 AnchoredPosition3D
+    {
+        get => new(_anchoredPosition.X, _anchoredPosition.Y, LocalPosition.Z);
+        set
+        {
+            LocalPosition = new Float3(LocalPosition.X, LocalPosition.Y, value.Z);
+            AnchoredPosition = new Float2(value.X, value.Y);
+        }
+    }
+
+    /// <summary>
+    /// Pins the element to one parent edge at a fixed inset and size on that axis, collapsing the
+    /// anchors on it. The other axis keeps whatever anchoring it had.
+    /// </summary>
+    public void SetInsetAndSizeFromParentEdge(Edge edge, float inset, float size)
+    {
+        bool horizontal = edge is Edge.Left or Edge.Right;
+        bool atMax = edge is Edge.Right or Edge.Top;
+        float anchor = atMax ? 1f : 0f;
+
+        Float2 min = _anchorMin, max = _anchorMax, sd = _sizeDelta, ap = _anchoredPosition;
+        if (horizontal)
+        {
+            min.X = max.X = anchor;
+            sd.X = size;
+            ap.X = atMax ? -inset - size * (1f - _pivot.X) : inset + size * _pivot.X;
+        }
+        else
+        {
+            min.Y = max.Y = anchor;
+            sd.Y = size;
+            ap.Y = atMax ? -inset - size * (1f - _pivot.Y) : inset + size * _pivot.Y;
+        }
+
+        AnchorMin = min;
+        AnchorMax = max;
+        SizeDelta = sd;
+        AnchoredPosition = ap;
+    }
+
+    /// <summary>Resizes one axis to an absolute pixel size without touching the anchors, by solving
+    /// for the <see cref="SizeDelta"/> that produces it against the current anchor span.</summary>
+    public void SetSizeWithCurrentAnchors(Axis axis, float size)
+    {
+        Float2 parent = ParentSize();
+        Float2 sd = _sizeDelta;
+        if (axis == Axis.Horizontal) sd.X = size - parent.X * (_anchorMax.X - _anchorMin.X);
+        else                          sd.Y = size - parent.Y * (_anchorMax.Y - _anchorMin.Y);
+        SizeDelta = sd;
+    }
+
+    /// <summary>The four corners of <see cref="Rect"/> in this element's own space, ordered
+    /// bottom-left, top-left, top-right, bottom-right.</summary>
+    public void GetLocalCorners(Float3[] fourCorners)
+    {
+        if (fourCorners is null || fourCorners.Length < 4) return;
+        Rect r = Rect;
+        fourCorners[0] = new Float3(r.Min.X, r.Min.Y, 0f);
+        fourCorners[1] = new Float3(r.Min.X, r.Max.Y, 0f);
+        fourCorners[2] = new Float3(r.Max.X, r.Max.Y, 0f);
+        fourCorners[3] = new Float3(r.Max.X, r.Min.Y, 0f);
+    }
+
+    /// <summary>The four corners in world space, in the same order as <see cref="GetLocalCorners"/>.
+    /// Leaves the array untouched when the element is not under a canvas.</summary>
+    public void GetWorldCorners(Float3[] fourCorners)
+    {
+        if (fourCorners is null || fourCorners.Length < 4) return;
+
+        GameCanvas? canvas = GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
+        if (canvas.IsNotValid()) return;
+
+        GetLocalCorners(fourCorners);
+        Float4x4 model = canvas.CanvasToWorld * canvas.BuildRectModel(this);
+        for (int i = 0; i < 4; i++)
+            fourCorners[i] = Float4x4.TransformPoint(fourCorners[i], model);
+    }
+
+    /// <summary>Rebuilds the owning canvas immediately so <see cref="ComputedRect"/> reflects
+    /// changes made this frame, instead of waiting for the next render.</summary>
+    public void ForceUpdateRectTransforms()
+    {
+        GameCanvas? canvas = GameObject.GetComponentInParent<GameCanvas>(includeSelf: true);
+        if (canvas.IsValid()) canvas.RebuildIfDirty();
+    }
+
+    /// <summary>Laid-out size of the parent rect this element anchors against: the parent's
+    /// RectTransform, or the canvas root rect when the parent is the canvas itself.</summary>
+    private Float2 ParentSize()
+    {
+        GameObject? parent = GameObject.Parent;
+        if (parent is null) return Float2.Zero;
+        if (parent.RectTransform is { } prt) return prt.ComputedRect.Size;
+        GameCanvas? canvas = parent.GetComponent<GameCanvas>();
+        return canvas.IsValid() ? canvas.RootRect.Size : Float2.Zero;
+    }
+
     public void MarkLayoutDirty()
     {
         foreach (UIBehaviour ui in GameObject.GetComponents<UIBehaviour>())
