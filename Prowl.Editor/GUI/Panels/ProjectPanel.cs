@@ -772,13 +772,12 @@ public class ProjectPanel : DockPanel
             .OnRowActivate(i =>
             {
                 var it = visible[i].item;
-                if (it.IsFolder) NavigateTo(it.RelativePath);
-                else if (it.Subs.Count > 0)
+                if (!it.IsFolder && it.Subs.Count > 0)
                 {
                     if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
                     else _expandedAssets.Add(it.Guid);
                 }
-                else EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+                else OpenItem(it);
             })
             .OnRowContext(i =>
             {
@@ -905,10 +904,7 @@ public class ProjectPanel : DockPanel
             builder.Title(isMulti ? Loc.Get("project.item_count", new { count = Selection.Count }) : item.Name, iconDraw: titleStyle.Icon);
 
             // Open / reveal.
-            if (item.IsFolder)
-                builder.Item(Loc.Get("launcher.open"), () => NavigateTo(item.RelativePath), icon: EditorIcons.FolderOpen);
-            else
-                builder.Item(Loc.Get("launcher.open"), () => OpenWithSystem(item), icon: EditorIcons.FolderOpen);
+            builder.Item(Loc.Get("launcher.open"), () => OpenItem(item), icon: EditorIcons.FolderOpen);
             builder.Item(Loc.Get("project.show_in_explorer"), () => ShowInExplorer(item), icon: EditorIcons.FolderTree);
 
             builder.Separator();
@@ -1111,6 +1107,23 @@ public class ProjectPanel : DockPanel
         });
     }
 
+    /// <summary>
+    /// Open an item: folders navigate, assets go to their registered
+    /// <see cref="AssetDoubleClickHandlerAttribute"/> handler, and anything without one
+    /// falls back to the system default application.
+    /// </summary>
+    private void OpenItem(ContentItem item)
+    {
+        if (item.IsFolder)
+        {
+            NavigateTo(item.RelativePath);
+            return;
+        }
+
+        if (!EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid))
+            OpenWithSystem(item);
+    }
+
     private static void OpenWithSystem(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -1118,7 +1131,10 @@ public class ProjectPanel : DockPanel
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(absPath) { UseShellExecute = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to open {item.RelativePath}: {ex.Message}");
+        }
     }
 
     private static void ShowInExplorer(ContentItem item)
@@ -1260,15 +1276,13 @@ public class ProjectPanel : DockPanel
             })
             .OnDoubleClick(item, (it, _) =>
             {
-                if (it.IsFolder)
-                    NavigateTo(it.RelativePath);
-                else if (it.HasSubAssets)
+                if (!it.IsFolder && it.HasSubAssets)
                 {
                     if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
                     else _expandedAssets.Add(it.Guid);
                 }
                 else
-                    EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+                    OpenItem(it);
             })
             .OnDragStart(item, (it, _) =>
             {
