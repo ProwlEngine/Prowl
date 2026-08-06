@@ -84,7 +84,7 @@ public sealed class RenderContext<TView>
         return cb;
     }
 
-    /// <summary>Ends and submits a command buffer rented here.</summary>
+    /// <summary>Ends a command buffer rented here and queues it for this execution's submit.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
     public void SubmitCommandBuffer(CommandBuffer cmd)
     {

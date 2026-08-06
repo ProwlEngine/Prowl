@@ -15,6 +15,7 @@ internal unsafe partial class VkGraphicsDevice
         public VkFence FenceWrapper;
         public VkUniformArena UniformArena;
         public List<VkCommandBuffer> RentedCommandBuffers;
+        public List<VkCommandBuffer> QueuedCommandBuffers;
         public ulong CurrentExecutionId;
     }
 
@@ -39,6 +40,7 @@ internal unsafe partial class VkGraphicsDevice
                 FenceWrapper = slotWrapper,
                 UniformArena = new VkUniformArena(this, primary),
                 RentedCommandBuffers = [],
+                QueuedCommandBuffers = [],
                 CurrentExecutionId = 0,
             };
         }
@@ -47,6 +49,9 @@ internal unsafe partial class VkGraphicsDevice
     private protected override ExecutionTask BeginExecutionCore(ulong executionId, uint ringSlot)
     {
         ref SlotState slot = ref _slots[ringSlot];
+
+        // Retire anything still riding this slot's fence before it goes unsignaled again.
+        CheckSubmittedFences();
 
         // The base class only hands out a slot whose previous execution has completed and been reclaimed,
         // so no fence wait is needed here; just recycle the slot's fence and transient memory.
@@ -79,22 +84,13 @@ internal unsafe partial class VkGraphicsDevice
         slot.CurrentExecutionId = executionId;
 
         return new VkExecutionTask(this, executionId, ringSlot, slot.FenceWrapper,
-            slot.UniformArena, slot.RentedCommandBuffers);
+            slot.UniformArena, slot.RentedCommandBuffers, slot.QueuedCommandBuffers);
     }
 
     private protected override void CompleteExecutionCore(ExecutionTask task)
     {
-        uint ringSlot = task.RingSlot;
-        VkFenceHandle slotFence = _slots[ringSlot].Fence;
-
-        SubmitInfo si = new(sType: StructureType.SubmitInfo);
-        si.CommandBufferCount = 0;
-
-        lock (_graphicsQueueLock)
-        {
-            Vk.QueueSubmit(GraphicsQueue, 1, in si, slotFence).CheckResult();
-            FlushValidationErrors();
-        }
+        VkExecutionTask vkTask = Util.AssertSubtype<ExecutionTask, VkExecutionTask>(task);
+        vkTask.FinalSubmit(_slots[task.RingSlot].Fence);
     }
 
     private protected override bool IsExecutionCompleteCore(ExecutionTask task)

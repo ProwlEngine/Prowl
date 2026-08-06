@@ -12,6 +12,7 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly VkFence _slotFenceWrapper;
     private readonly VkUniformArena _uniformArena;
     private readonly List<VkCommandBuffer> _rentedCommandBuffers;
+    private readonly List<VkCommandBuffer> _queuedCommandBuffers;
 
     public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
@@ -24,7 +25,8 @@ internal sealed class VkExecutionTask : ExecutionTask
         uint ringSlot,
         VkFence slotFenceWrapper,
         VkUniformArena uniformArena,
-        List<VkCommandBuffer> rentedCommandBuffers)
+        List<VkCommandBuffer> rentedCommandBuffers,
+        List<VkCommandBuffer> queuedCommandBuffers)
     {
         _gd = gd;
         _id = id;
@@ -32,6 +34,7 @@ internal sealed class VkExecutionTask : ExecutionTask
         _slotFenceWrapper = slotFenceWrapper;
         _uniformArena = uniformArena;
         _rentedCommandBuffers = rentedCommandBuffers;
+        _queuedCommandBuffers = queuedCommandBuffers;
     }
 
     internal VkUniformArena UniformArena => _uniformArena;
@@ -48,9 +51,17 @@ internal sealed class VkExecutionTask : ExecutionTask
     internal override void SubmitCommandsInternal(CommandBuffer commandList)
     {
         SubmitCommands_CheckEnded(commandList);
-        _gd.SubmitCommandBufferInternal(commandList);
+        _queuedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
 
         _gd.Profiler?.RecordSubmit(commandList.ProfilerInfo, isTransfer: false);
+    }
+
+
+    /// <summary>Submits whatever is still queued and signals the execution's slot fence.</summary>
+    internal void FinalSubmit(Silk.NET.Vulkan.Fence slotFence)
+    {
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, slotFence);
+        _queuedCommandBuffers.Clear();
     }
 
 
