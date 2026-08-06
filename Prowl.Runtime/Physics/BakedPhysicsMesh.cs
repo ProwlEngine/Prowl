@@ -24,7 +24,11 @@ public sealed class BakedPhysicsMesh
     /// <summary>The triangle soup in mesh-local space. Used to build convex hulls.</summary>
     public IReadOnlyList<JTriangle> Triangles { get; }
 
-    /// <summary>The concave triangle mesh, shareable across many <see cref="TriangleShape"/>s.</summary>
+    /// <summary>
+    /// The concave triangle mesh, shareable across many <see cref="TriangleShape"/>s. It holds only the
+    /// non-degenerate triangles, so it can contain fewer than <see cref="Triangles"/>; index into it by
+    /// its own <c>Indices.Length</c>, never by the soup count.
+    /// </summary>
     public TriangleMesh TriangleMesh { get; }
 
     /// <summary>The <see cref="Mesh.Version"/> this was baked from, used to detect staleness.</summary>
