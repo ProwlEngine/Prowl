@@ -185,7 +185,7 @@ public sealed class UISceneEditor : SceneTool
             upW = Float3.Normalize(upW);
             Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
 
-            Rect parentRect = ResolveParentRect(rt, canvas.RootRect);
+            Rect parentRect = ResolveParentRect(rt, canvas);
 
             Float3 camPos = ctx.Camera.GameObject.Transform.Position;
             Float3 centerW = Float4x4.TransformPoint(
@@ -604,14 +604,18 @@ public sealed class UISceneEditor : SceneTool
         _moveIsClick = false;
     }
 
-    private static Rect ResolveParentRect(RectTransform rt, Rect canvasRootRect)
+    private static Rect ResolveParentRect(RectTransform rt, GameCanvas canvas)
     {
         GameObject? parentGo = rt.GameObject.Parent;
-        RectTransform? parent = parentGo.IsValid() ? parentGo.RectTransform : null;
-        // A top-level element's parent is the canvas, which has no RectTransform. Anchor against the
-        // canvas ROOT rect - never the element's own rect, which would move/resize with the element
-        // and feed back into layout (the anchor reference shifting each frame = the drag jitter).
-        return parent != null ? parent.ComputedRect : canvasRootRect;
+        // A top-level element lays out against the canvas ROOT rect. The canvas GameObject may still
+        // carry a RectTransform, but the rebuild never lays it out, so its ComputedRect is empty and
+        // using it would place every anchor at the design origin - the element jumps by half the
+        // canvas the moment a drag applies a rect. Never the element's own rect either, which would
+        // move with the element and feed back into layout.
+        RectTransform? parent = parentGo.IsValid() && !ReferenceEquals(parentGo, canvas.GameObject)
+            ? parentGo.RectTransform
+            : null;
+        return parent != null ? parent.ComputedRect : canvas.RootRect;
     }
 
     private void RegisterUndo(GameObject go, LayoutState before, LayoutState after)
