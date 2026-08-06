@@ -56,12 +56,16 @@ public static class AssetCreateMenu
         catch (Exception ex) { Debug.LogError($"Failed to create {entry.Name}: {ex.Message}"); return null; }
     }
 
+    /// <summary>
+    /// The folder new assets go into: the selected folder if there is one, otherwise the folder
+    /// the project panel is currently browsing.
+    /// </summary>
     public static string GetCurrentFolder()
     {
         var selected = Selection.GetActiveAs<ContentItem>();
         if (selected != null && selected.IsFolder)
             return selected.RelativePath;
-        return "";
+        return ProjectPanel.Instance?.CurrentFolder ?? "";
     }
 
     public static string GetAbsoluteFolder(string relativeFolder)
