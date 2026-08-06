@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
@@ -29,6 +30,8 @@ public static class PlayerSettingsLoader
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
+        ApplyGeneral(settingsDir);
+        ApplyNavigation(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
         ApplyPhysics(settingsDir);
@@ -186,6 +189,62 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
+    }
+
+    private static void ApplyGeneral(string dir)
+    {
+        // Informational only for now
+    }
+
+    private static void ApplyNavigation(string dir)
+    {
+        var settings = Read(dir, PlayerSettingsFiles.Navigation);
+        if (settings == null) return;
+
+        try
+        {
+            // AreaNames / AreaCosts are List<string> / List<float> (serialize as lists directly).
+            var names = new List<string>();
+            if (settings.TryGet("AreaNames", out var namesProp) && namesProp!.TagType == EchoType.List)
+                foreach (var name in namesProp.List)
+                    names.Add(name.StringValue);
+
+            var costs = new List<float>();
+            if (settings.TryGet("AreaCosts", out var costsProp) && costsProp!.TagType == EchoType.List)
+                foreach (var cost in costsProp.List)
+                    costs.Add(cost.FloatValue);
+
+            if (names.Count > 0 || costs.Count > 0)
+            {
+                NavMeshAreas.ApplyTable(names, costs);
+                Debug.Log("[PlayerSettings] Navigation areas applied.");
+            }
+
+            // AgentTypes is a List<NavMeshAgentType> (a list of compounds).
+            if (settings.TryGet("AgentTypes", out var typesProp) && typesProp!.TagType == EchoType.List)
+            {
+                var types = new List<NavMeshAgentType>();
+                foreach (var entry in typesProp.List)
+                {
+                    types.Add(new NavMeshAgentType
+                    {
+                        Id = entry.TryGet("Id", out var id) ? id!.IntValue : 0,
+                        Name = entry.TryGet("Name", out var name) ? name!.StringValue : string.Empty,
+                        Radius = entry.TryGet("Radius", out var r) ? r!.FloatValue : 0.5f,
+                        Height = entry.TryGet("Height", out var h) ? h!.FloatValue : 2f,
+                        MaxSlope = entry.TryGet("MaxSlope", out var s) ? s!.FloatValue : 45f,
+                        MaxClimb = entry.TryGet("MaxClimb", out var c) ? c!.FloatValue : 0.4f,
+                    });
+                }
+
+                if (types.Count > 0)
+                {
+                    NavMeshAgentTypes.ApplyTable(types);
+                    Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
+                }
+            }
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply navigation settings: {ex.Message}"); }
     }
 
     /// <summary>
