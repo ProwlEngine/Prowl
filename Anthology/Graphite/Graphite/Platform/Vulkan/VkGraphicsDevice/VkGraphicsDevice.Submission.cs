@@ -199,8 +199,12 @@ internal unsafe partial class VkGraphicsDevice
             Profiler?.RecordGpuVertexStats(profilerInfo, in stats);
         }
 
-        Vk.ResetFences(Device, 1, &fence).CheckResult();
-        ReturnSubmissionFence(fence);
+        if (fsi.OwnsFence)
+        {
+            Vk.ResetFences(Device, 1, &fence).CheckResult();
+            ReturnSubmissionFence(fence);
+        }
+
         lock (_stagingResourcesLock)
         {
             if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
@@ -270,6 +274,9 @@ internal unsafe partial class VkGraphicsDevice
         public PassInfo? Pass;
         public ulong TransferId;
 
+        /// <summary>False when the fence is a slot fence, or is shared with a later entry.</summary>
+        public bool OwnsFence;
+
         public FenceSubmissionInfo(
             VkFenceHandle fence,
             VkCommandBuffer? commandBuffer,
@@ -279,8 +286,10 @@ internal unsafe partial class VkGraphicsDevice
             string bufferName,
             bool isTransfer,
             PassInfo? pass,
-            ulong transferId)
+            ulong transferId,
+            bool ownsFence = true)
         {
+            OwnsFence = ownsFence;
             Fence = fence;
             CommandBuffer = commandBuffer;
             VulkanCommandBuffer = vulkanCommandBuffer;
