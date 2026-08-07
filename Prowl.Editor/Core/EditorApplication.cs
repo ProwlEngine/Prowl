@@ -164,6 +164,7 @@ public class EditorApplication : Game
         // Build the editor's PropertyGrid config
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
+        RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
         PropertyGridConfig.OnFieldChanged = target =>
