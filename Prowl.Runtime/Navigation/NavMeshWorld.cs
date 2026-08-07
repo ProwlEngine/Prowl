@@ -625,6 +625,7 @@ public sealed class NavMeshWorld
                     corners[i] = ToFloat3(straight[i].pos);
 
                 path.SetCorners(corners.AsSpan(0, cornerCount), partial ? NavMeshPathStatus.PathPartial : NavMeshPathStatus.PathComplete);
+                path.SetPolys(polys.AsSpan(0, polyCount));
                 return true;
             }
             finally

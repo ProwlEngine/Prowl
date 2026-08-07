@@ -148,6 +148,10 @@ public class NavMeshAgent : MonoBehaviour
     private bool _isStopped;
     private bool _arrived;
 
+    /// <summary>Whether obstacle avoidance is currently switched on for this agent. Starts on, so
+    /// a freshly added agent avoids until a crowd step proves there is nothing in range.</summary>
+    internal bool AvoidanceEngaged = true;
+
     // Corner-window distance below which a path counts as arrived when StoppingDistance is 0.
     private const float ArrivalEpsilon = 0.05f;
 
@@ -190,9 +194,6 @@ public class NavMeshAgent : MonoBehaviour
 
     /// <summary>True when the agent has a path it is following.</summary>
     public bool HasPath => _agent != null && _agent.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_VALID;
-
-    /// <summary>True when the current path only reaches partway to the destination.</summary>
-    public bool IsPathStale => _agent?.partial ?? false;
 
     /// <summary>Status of the current path.</summary>
     public NavMeshPathStatus PathStatus
@@ -412,7 +413,7 @@ public class NavMeshAgent : MonoBehaviour
             | DtCrowdAgentUpdateFlags.DT_CROWD_OPTIMIZE_TOPO;
         if (Separation)
             updateFlags |= DtCrowdAgentUpdateFlags.DT_CROWD_SEPARATION;
-        if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance)
+        if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance && AvoidanceEngaged)
             updateFlags |= DtCrowdAgentUpdateFlags.DT_CROWD_OBSTACLE_AVOIDANCE;
 
         float radius = Math.Max(0.01f, Radius);
@@ -502,14 +503,34 @@ public class NavMeshAgent : MonoBehaviour
         }
     }
 
-    /// <summary>Follow a pre-calculated path by steering to its end (the crowd re-plans the
-    /// corridor itself; the path supplies the destination).</summary>
+    /// <summary>
+    /// Follow a pre-calculated path, steering along the route it describes rather than re-planning
+    /// one to its endpoint. The path must come from <see cref="CalculatePath"/> (or
+    /// <see cref="NavMeshWorld.CalculatePath(Float3, Float3, int, NavMeshPath)"/>) and start where
+    /// the agent is standing; the crowd still re-plans later if the navmesh invalidates it.
+    /// </summary>
+    /// <returns>False if the path is unusable, or does not begin at the agent's current polygon.</returns>
     public bool SetPath(NavMeshPath path)
     {
         ArgumentNullException.ThrowIfNull(path);
         if (path.Status == NavMeshPathStatus.PathInvalid || path.CornerCount == 0) return false;
-        Float3[] corners = path.Corners;
-        return SetDestination(corners[^1]);
+        if (_agent == null || _crowd == null) return false;
+
+        Span<long> polys = path.Polys;
+        if (polys.Length == 0) return false;
+
+        // The corridor must continue from where the agent stands, not teleport to wherever the
+        // path was computed from.
+        if (polys[0] != _agent.corridor.GetFirstPoly()) return false;
+
+        Float3 destination = path.LastCorner;
+        if (!_crowd.SetAgentPath(_agent, polys[^1], ToRc(destination), polys, polys.Length))
+            return false;
+
+        _destination = destination;
+        _hasDestination = true;
+        _arrived = false;
+        return true;
     }
 
     /// <summary>Clear the current path and destination without unregistering.</summary>
@@ -525,22 +546,49 @@ public class NavMeshAgent : MonoBehaviour
     /// current destination.</summary>
     public bool Warp(Float3 newPosition)
     {
-        Transform.Position = newPosition + new Float3(0, BaseOffset, 0);
-        if (_world == null) return false;
-
         DtCrowd? crowd = _crowd;
-        if (_agent == null || crowd == null) return IsOnNavMesh;
+        if (_world == null || _agent == null || crowd == null)
+        {
+            Transform.Position = newPosition + new Float3(0, BaseOffset, 0);
+            return _world != null && IsOnNavMesh;
+        }
 
         // Detour has no teleport: re-add the agent at the new position.
         crowd.RemoveAgent(_agent);
         _agent = crowd.AddAgent(ToRc(newPosition), BuildAgentParams());
-        if (_hasDestination && !_isStopped && !_arrived)
+
+        // A teleport is a fresh approach, so a previous arrival would otherwise park the agent
+        // wherever it landed.
+        _arrived = false;
+        if (_hasDestination && !_isStopped)
             RequestPathTo(_destination);
+
+        // Use the position the crowd snapped to: the requested one can be off the mesh.
+        Transform.Position = ToFloat3(_agent.npos) + new Float3(0, BaseOffset, 0);
         return true;
     }
 
-    /// <summary>Displace the agent by a world-space offset, constrained to the navmesh.</summary>
-    public void Move(Float3 offset) => Warp(NextPosition + offset);
+    /// <summary>
+    /// Displace the agent by a world-space offset, constrained to the navmesh — the per-frame API
+    /// for driving an agent yourself. Slides the path corridor along, keeping the path, boundary
+    /// cache and neighbour set; use <see cref="Warp"/> to jump somewhere unrelated, which rebuilds
+    /// all of that.
+    /// </summary>
+    public void Move(Float3 offset)
+    {
+        if (_agent == null || _world == null) return;
+        if (!_world.TryRentQuery(out NavMeshQueryLease lease, AgentTypeId)) return;
+
+        using (lease)
+        {
+            RcVec3f target = ToRc(NextPosition + offset);
+            _agent.corridor.MovePosition(target, lease.Query, Filter);
+            _agent.npos = _agent.corridor.GetPos();
+        }
+
+        if (UpdatePosition)
+            Transform.Position = ToFloat3(_agent.npos) + new Float3(0, BaseOffset, 0);
+    }
 
     /// <summary>Calculate a path from the agent's position with the agent's filter, without
     /// moving the agent.</summary>
@@ -599,17 +647,20 @@ public class NavMeshAgent : MonoBehaviour
             RefreshParams();
 
         // Velocity-obstacle sampling is the expensive half of a crowd step, and it picks from a
-        // DISCRETE set of candidate velocities: with nothing in range to dodge, the winner is
-        // merely the sample nearest the velocity we asked for, and that rounding walks the agent
-        // a few centimetres sideways off a straight line by the time it arrives. An agent with
-        // no neighbours has nothing to avoid, so let it steer exactly — and skip the sampling.
-        // Neighbours come from the last crowd step, so engaging avoidance lags by one frame;
-        // they are gathered from several metres out, which is many frames of approach.
+        // DISCRETE set of candidate velocities, so running it with nothing in range still rounds
+        // the result and walks the agent centimetres sideways off a straight line. Skip it only
+        // when nothing is in range at all: the query consumes navmesh boundary segments as well as
+        // neighbouring agents, so an agent alone beside a wall still has the wall to keep off.
+        // Both come from the last crowd step, so engaging lags a frame — they are gathered from
+        // metres out, which is many frames of approach.
         if (ObstacleAvoidanceQuality != ObstacleAvoidanceType.NoObstacleAvoidance)
         {
-            _agent.option.updateFlags = _agent.nneis > 0
-                ? _agent.option.updateFlags | DtCrowdAgentUpdateFlags.DT_CROWD_OBSTACLE_AVOIDANCE
-                : _agent.option.updateFlags & ~DtCrowdAgentUpdateFlags.DT_CROWD_OBSTACLE_AVOIDANCE;
+            bool engage = _agent.nneis > 0 || _agent.boundary.GetSegmentCount() > 0;
+            if (engage != AvoidanceEngaged)
+            {
+                AvoidanceEngaged = engage;
+                _crowd?.UpdateAgentParameters(_agent, BuildAgentParams());
+            }
         }
 
         if (UpdatePosition)

@@ -80,19 +80,23 @@ public class NavMeshCrowdTests : RuntimeTestBase
 
     /// <summary>
     /// With nothing in range to dodge, an agent must travel the straight line it was given —
-    /// exactly, not approximately. Velocity-obstacle sampling picks from a discrete candidate
-    /// set, so running it against zero obstacles still rounds the chosen velocity, and the
-    /// rounding walked the agent centimetres off its line by the time it arrived. Avoidance is
-    /// skipped for an agent with no neighbours now, which also skips the most expensive part of
-    /// its crowd step. <see cref="NavMeshObstacleTests"/> covers the other half — that a blocker
-    /// in range still deflects it.
+    /// exactly, not approximately. Velocity-obstacle sampling picks from a discrete candidate set,
+    /// so running it against zero obstacles still rounds the chosen velocity, and the rounding
+    /// walks the agent centimetres off its line by the time it arrives. Skipping it also skips the
+    /// most expensive part of the crowd step.
+    /// <para/>
+    /// The floor is deliberately far wider than the walk: the same query consumes navmesh boundary
+    /// segments, so on a floor whose edge sits inside the agent's collision query range there IS
+    /// something in range and avoidance correctly stays on. <see cref="NavMeshObstacleTests"/>
+    /// covers the other half — that a blocker in range still deflects it.
     /// </summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void Agent_AloneOnAStraightPath_DoesNotDriftSideways(bool alongX)
     {
-        (Scene scene, _) = CreateBakedFloorScene();
+        // Walks ±8 with AddAgent's 2m query range, so 40 keeps every edge well out of range.
+        (Scene scene, _) = CreateBakedFloorScene(40f);
         NavMeshAgent agent = AddAgent(scene, alongX ? new Float3(-8, 0, 0) : new Float3(0, 0, -8));
         Assert.NotEqual(ObstacleAvoidanceType.NoObstacleAvoidance, agent.ObstacleAvoidanceQuality);
         Tick(scene, 2);
@@ -112,6 +116,60 @@ public class NavMeshCrowdTests : RuntimeTestBase
         Assert.True(arrived, "The agent should reach the destination.");
         Assert.True(worstLateral < 0.005,
             $"Agent strayed {worstLateral:0.0000} units off a straight path with nothing to avoid.");
+    }
+
+    /// <summary>
+    /// An agent alone beside a wall keeps avoidance switched on. The crowd feeds navmesh boundary
+    /// segments into the same query as neighbouring agents, so deciding on neighbour count alone
+    /// would leave a solitary agent with nothing keeping it off the edges.
+    /// </summary>
+    [Fact]
+    public void Agent_AloneNearABoundary_KeepsAvoidanceEngaged()
+    {
+        // Walk the agent one metre from an edge, inside AddAgent's 2m query range.
+        (Scene scene, _) = CreateBakedFloorScene(12f);
+        NavMeshAgent agent = AddAgent(scene, new Float3(-4, 0, 5));
+        Tick(scene, 2);
+
+        Assert.True(agent.SetDestination(new Float3(4, 0, 5)));
+        Tick(scene, 5);
+
+        Assert.Equal(0, agent.NativeAgent!.nneis);
+        Assert.True(agent.NativeAgent.boundary.GetSegmentCount() > 0, "The edge should be in range.");
+        Assert.True(agent.AvoidanceEngaged,
+            "A lone agent within range of the navmesh boundary must keep avoiding it.");
+    }
+
+    /// <summary>
+    /// SetPath steers along the route it is given, rather than throwing it away and re-planning to
+    /// its endpoint. A path that does not begin where the agent stands is refused, since adopting
+    /// it would jump the corridor somewhere the agent is not.
+    /// </summary>
+    [Fact]
+    public void Agent_SetPath_FollowsTheSuppliedRoute()
+    {
+        (Scene scene, _) = CreateBakedFloorScene(40f);
+        NavMeshAgent agent = AddAgent(scene, new Float3(-8, 0, 0));
+        Tick(scene, 2);
+
+        Assert.False(agent.SetPath(new NavMeshPath()), "An unusable path must be refused.");
+
+        var path = new NavMeshPath();
+        Assert.True(agent.CalculatePath(new Float3(8, 0, 0), path));
+        Assert.True(agent.SetPath(path));
+        Assert.True(agent.HasPath);
+        Assert.False(agent.PathPending, "An adopted path is already planned; nothing should be pending.");
+
+        bool arrived = false;
+        for (int i = 0; i < 400 && !arrived; i++)
+        {
+            Tick(scene, 1);
+            arrived = !agent.PathPending && agent.RemainingDistance <= 0f;
+        }
+
+        Assert.True(arrived, "The agent should walk the supplied path to its end.");
+        Assert.True(Float3.Distance(agent.Transform.Position, new Float3(8, 0, 0)) < 1.0,
+            $"Agent finished at {agent.Transform.Position}, not the path's end.");
     }
 
     // ── Per-agent-type crowds ───────────────────────────────────────────
@@ -420,12 +478,12 @@ public class NavMeshCrowdTests : RuntimeTestBase
 
     // ── Filter slot allocation ──────────────────────────────────────────
 
-    private (Scene scene, NavMeshSurface surface) CreateBakedFloorScene()
+    private (Scene scene, NavMeshSurface surface) CreateBakedFloorScene(float size = 20f)
     {
         Scene scene = CreateScene(enable: true);
         GameObject floor = CreateGameObject("Floor");
         scene.Add(floor);
-        floor.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        floor.AddComponent<BoxCollider>().Size = new Float3(size, 1, size);
         floor.Transform.Position = new Float3(0, -0.5f, 0);
 
         GameObject surfaceGo = CreateGameObject("NavMeshSurface");

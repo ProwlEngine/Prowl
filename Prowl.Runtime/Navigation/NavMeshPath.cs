@@ -28,6 +28,13 @@ public sealed class NavMeshPath
     private Float3[] _corners = [];
     private int _cornerCount;
 
+    // The polygons the corners were derived from, so NavMeshAgent.SetPath can hand the crowd the
+    // route itself. Corners cannot express one: two different polygon paths can share them.
+    private long[] _polys = [];
+    private int _polyCount;
+
+    internal Span<long> Polys => _polys.AsSpan(0, _polyCount);
+
     /// <summary>The state of the path.</summary>
     public NavMeshPathStatus Status { get; internal set; } = NavMeshPathStatus.PathInvalid;
 
@@ -46,6 +53,10 @@ public sealed class NavMeshPath
     /// <summary>Number of valid corners.</summary>
     public int CornerCount => _cornerCount;
 
+    /// <summary>The point the path actually reaches, which for a partial path is not the requested
+    /// destination. Callers must check <see cref="CornerCount"/> first.</summary>
+    internal Float3 LastCorner => _corners[_cornerCount - 1];
+
     /// <summary>Copy up to <paramref name="results"/>.Length corners into the given array,
     /// returning the number written.</summary>
     public int GetCornersNonAlloc(Float3[] results)
@@ -60,7 +71,16 @@ public sealed class NavMeshPath
     public void ClearCorners()
     {
         _cornerCount = 0;
+        _polyCount = 0;
         Status = NavMeshPathStatus.PathInvalid;
+    }
+
+    internal void SetPolys(ReadOnlySpan<long> polys)
+    {
+        if (_polys.Length < polys.Length)
+            _polys = new long[polys.Length];
+        polys.CopyTo(_polys);
+        _polyCount = polys.Length;
     }
 
     internal void SetCorners(ReadOnlySpan<Float3> corners, NavMeshPathStatus status)
