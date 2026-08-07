@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+
+    <PackageId>Prowl.Recast</PackageId>
+    <Title>Prowl.Recast</Title>
+    <Description>Navigation mesh generation and pathfinding. A port of DotRecast by ikpil, itself a port of recastnavigation and recast4j. Bundles Recast, Detour, Crowd, Dynamic, TileCache, Extras and the Toolset in a single package.</Description>
+    <PackageTags>navmesh;navigation;pathfinding;recast;detour;crowd-simulation;ai;gamedev;game-engine;prowl</PackageTags>
+
+    <!-- Vendored code, so the upstream copyright stands alongside the monorepo default. -->
+    <Copyright>Copyright (c) Prowl Group 2026. Portions copyright (c) Choi Ikpil, Piotr Piastucki and Mikko Mononen.</Copyright>
+
+    <!-- Upstream treats the ref-readonly diagnostic as an error; kept so ported code stays honest. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS9191</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

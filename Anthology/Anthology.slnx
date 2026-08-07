@@ -19,6 +19,7 @@
     <Project Path="Graphite/ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
     <Project Path="Ember/Ember/Prowl.Ember.csproj" />
     <Project Path="Ember/Contracts/Prowl.Ember.Contracts.csproj" />
+    <Project Path="Recast/Recast/Prowl.Recast.csproj" />
   </Folder>
   <Folder Name="/Tooling/">
     <Project Path="Echo/Echo.SourceGenerator/Echo.SourceGenerator.csproj" />
@@ -44,5 +45,6 @@
     <Project Path="Graphite/Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
     <Project Path="Graphite/Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
     <Project Path="Ember/Tests/Prowl.Ember.Tests.csproj" />
+    <Project Path="Recast/Tests/Prowl.Recast.Tests.csproj" />
   </Folder>
 </Solution>
