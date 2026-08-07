@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Libraries/">
+    <Project Path="Recast/Prowl.Recast.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Prowl.Recast.Tests.csproj" />
+  </Folder>
+</Solution>

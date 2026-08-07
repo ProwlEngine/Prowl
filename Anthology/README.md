@@ -25,6 +25,7 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 | `Drift`      | Prowl.Drift       | 2D Physics Engine                |
 | `Slang`      | Prowl.Slang       | Bindings for the Sland Compiler  |
 | `Graphite`   | Prowl.Graphite    | Low-level GPU graphics (Vulkan / D3D11); also `.Compiler`, `.ShaderDef`, `.Variants` |
+| `Recast`     | Prowl.Recast      | DotRecast fork for Navmesh generation and pathfinding |
 
 ## Versioning
 
