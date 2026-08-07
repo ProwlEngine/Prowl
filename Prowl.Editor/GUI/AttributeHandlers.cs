@@ -185,37 +185,38 @@ public class ReadOnlyAttributeHandler : OrigamiUI.AttributeHandler
     }
 }
 
-/// <summary>[Range(min, max)] - replaces numeric fields with a slider.</summary>
+/// <summary>[Range(min, max)] - replaces numeric fields with a slider. The row and label still come
+/// from the property grid, so they match every other field; only the control is swapped, by
+/// RangeSliderDrawer.</summary>
 public class RangeAttributeHandler : OrigamiUI.AttributeHandler
 {
     public override bool OnDraw(Paper paper, string id, string label, Attribute attr,
         FieldInfo field, object target, Action<object?> onChange, int depth)
     {
-        var range = (RangeAttribute)attr;
-        var value = field.GetValue(target);
-        var type = field.FieldType;
+        Type type = field.FieldType;
         if (type != typeof(float) && type != typeof(int))
-            return false; // unsupported type: fall through to default rendering
+            return false; // no slider for this type: let the grid draw the field untouched
 
-        HandlerRowLayout.LabelledRow(paper, id, label, () =>
+        var range = (RangeAttribute)attr;
+        RangeSliderDrawer.Pending = range;
+        try
         {
-            if (type == typeof(float))
-            {
-                float f = (float)(value ?? 0f);
-                OrigamiUI.Origami.Slider(paper, $"{id}_sl", f,
-                    v => onChange(v), range.Min, range.Max).Format("F2").Show();
-            }
-            else
-            {
-                int i = (int)(value ?? 0);
-                OrigamiUI.Origami.Slider(paper, $"{id}_sl", (float)i,
-                    v => onChange((int)MathF.Round(v)), range.Min, range.Max)
-                    .Format("F0").Step(1f).Show();
-            }
-        });
-
+            // The grid makes a numeric field's label a drag-scrubber that writes straight through
+            // onChange, so the bounds have to be enforced here rather than by the slider alone.
+            PropertyGridUtils.DrawField(paper, id, label, type, field.GetValue(target),
+                v => onChange(Clamp(v, range, type)), depth);
+        }
+        finally
+        {
+            RangeSliderDrawer.Pending = null;
+        }
         return true;
     }
+
+    private static object Clamp(object? value, RangeAttribute range, Type type)
+        => type == typeof(float)
+            ? Math.Clamp((float)(value ?? 0f), range.Min, range.Max)
+            : Math.Clamp((int)(value ?? 0), (int)MathF.Round(range.Min), (int)MathF.Round(range.Max));
 }
 
 /// <summary>[Tooltip("text")] - attaches a tooltip to the field row.</summary>
