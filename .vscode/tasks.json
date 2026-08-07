@@ -8,10 +8,13 @@
             "args": [
                 "build",
                 "${workspaceFolder}/Prowl.Editor/Prowl.Editor.csproj",
-                "-c", "Debug"
+                "-c",
+                "Debug"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
@@ -21,10 +24,13 @@
             "args": [
                 "build",
                 "${workspaceFolder}/Prowl.Editor/Prowl.Editor.csproj",
-                "-c", "Release"
+                "-c",
+                "Release"
             ],
             "group": "build",
-            "presentation": { "reveal": "silent" },
+            "presentation": {
+                "reveal": "silent"
+            },
             "problemMatcher": "$msCompile"
         },
         {
@@ -286,6 +292,15 @@
             "group": "build",
             "presentation": { "reveal": "silent" },
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "pack: Repack Anthology",
+            "command": "bash",
+            "type": "process",
+            "args": [
+                "refresh-anthology.sh"
+            ],
+            "group": "none"
         }
     ]
 }
