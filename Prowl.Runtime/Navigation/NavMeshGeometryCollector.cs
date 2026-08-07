@@ -260,8 +260,8 @@ public static class NavMeshGeometryCollector
 
     /// <summary>
     /// Collect one collider as triangles. Primitive colliders tessellate to the same shape the
-    /// physics engine uses (capsules included); mesh colliders reuse the shared physics bake so
-    /// the triangle extraction cost is paid once per mesh, not per bake.
+    /// physics engine uses (capsules included); mesh colliders hand over the shared mesh's own
+    /// vertex and index arrays, without copying them.
     /// </summary>
     public static void CollectCollider(Collider collider, int area, List<NavMeshGeometrySource> results, AABB? bounds = null)
     {

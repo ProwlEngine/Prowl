@@ -147,7 +147,7 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
                 Array.Resize(ref tris, tWrite);
 
             totalTris += tWrite / 3;
-            _areaMeshes.Add(new AreaMesh(new RcTriMesh(verts, tris), DetourAreaFor(area), gMinX, gMinZ, gMaxX, gMaxZ));
+            _areaMeshes.Add(new AreaMesh(new RcTriMesh(verts, tris), RasterAreaFor(area), gMinX, gMinZ, gMaxX, gMaxZ));
         }
 
         TriangleCount = totalTris;
@@ -162,14 +162,22 @@ internal sealed class ProwlInputGeomProvider : IRcInputGeomProvider
         _boundsMax = new RcVec3f((float)max.X, (float)max.Y, (float)max.Z);
     }
 
-    /// <summary>
-    /// Bake-side area conversion: Not Walkable maps to Detour's null area (0), so the marked
-    /// voxels are obstacles rather than traversable "area 1" polys — Unity's Not Walkable
-    /// semantics for sources, modifiers, and modifier volumes alike. Everything else goes
-    /// through <see cref="NavMeshAreas.ToDetourArea"/>.
-    /// </summary>
+    /// <summary>Area conversion for values written straight onto the compact heightfield (convex
+    /// volumes) or into a tile (off-mesh connections): Not Walkable becomes Detour's null area, so
+    /// it is an obstacle rather than a traversable "area 1" poly. Rasterized geometry goes through
+    /// <see cref="RasterAreaFor"/> instead.</summary>
     internal static int DetourAreaFor(int area)
         => area == NavMeshAreas.NotWalkable ? 0 : NavMeshAreas.ToDetourArea(area);
+
+    /// <summary>The area Not Walkable rasterizes as, above every real one: merging two spans keeps
+    /// the HIGHER of their areas, so the null area would lose to a walkable surface within the
+    /// climb threshold. <see cref="NavMeshTileBuilder"/> retires it once the spans are compacted.
+    /// </summary>
+    internal const int NotWalkableRasterArea = NavMeshAreas.MaxAreas + 1;
+
+    /// <inheritdoc cref="DetourAreaFor"/>
+    internal static int RasterAreaFor(int area)
+        => area == NavMeshAreas.NotWalkable ? NotWalkableRasterArea : DetourAreaFor(area);
 
     /// <summary>The first area's soup (interface requirement; the area-aware voxelizer uses
     /// <see cref="AreaMeshes"/> instead, which carries all of them).</summary>

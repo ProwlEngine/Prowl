@@ -712,6 +712,8 @@ public sealed class NavMeshWorld
                 hit.Position = position;
                 hit.Normal = blocked ? ToFloat3(normal) : Float3.UnitY;
                 hit.Distance = (float)Float3.Distance(sourcePosition, position);
+                // The area walked out of, which is the one the wall belongs to.
+                hit.Mask = GetPolyAreaMaskBit(query.GetAttachedNavMesh(), startRef);
                 hit.Hit = blocked;
                 return blocked;
             }
@@ -722,12 +724,21 @@ public sealed class NavMeshWorld
         }
     }
 
-    /// <summary>Locate the closest navmesh border edge from a point.</summary>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask)
-        => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask));
+    /// <summary>Default <paramref name="maxDistance"/> for
+    /// <see cref="FindClosestEdge(Float3, out NavMeshHit, int, float)"/>: wide enough for a
+    /// typical level, not derived from the mesh.</summary>
+    public const float DefaultEdgeSearchDistance = 100f;
 
-    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int)"/>
-    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter)
+    /// <summary>Locate the closest navmesh border edge from a point.</summary>
+    /// <param name="maxDistance">How far to search. Cost grows with it and an edge beyond it is
+    /// not found, so pass the widest gap that matters rather than a blanket maximum.</param>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, int areaMask,
+        float maxDistance = DefaultEdgeSearchDistance)
+        => FindClosestEdge(sourcePosition, out hit, GetScratchFilter(areaMask), maxDistance);
+
+    /// <inheritdoc cref="FindClosestEdge(Float3, out NavMeshHit, int, float)"/>
+    public bool FindClosestEdge(Float3 sourcePosition, out NavMeshHit hit, NavMeshQueryFilter filter,
+        float maxDistance = DefaultEdgeSearchDistance)
     {
         ArgumentNullException.ThrowIfNull(filter);
         hit = default;
@@ -742,8 +753,7 @@ public sealed class NavMeshWorld
             if (startRef == 0)
                 return false;
 
-            // Search radius: generous enough to always find the border of the current region.
-            DtStatus status = query.FindDistanceToWall(startRef, startPt, 100f, filter,
+            DtStatus status = query.FindDistanceToWall(startRef, startPt, maxDistance, filter,
                 out float distance, out RcVec3f hitPos, out RcVec3f hitNormal);
             if (status.Failed())
                 return false;

@@ -52,6 +52,28 @@ public class NavMeshLinkTests : RuntimeTestBase
         return link;
     }
 
+    /// <summary>
+    /// Link ids come from the component's persistent identifier, so each link has its own and it
+    /// does not change as the component is enabled and disabled. Nothing mints one at runtime,
+    /// which would dirty the scene just by entering play mode.
+    /// </summary>
+    [Fact]
+    public void Link_Id_IsDistinctPerComponentAndStable()
+    {
+        Scene scene = CreateScene(enable: true);
+        NavMeshLink a = AddLink(scene);
+        NavMeshLink b = AddLink(scene);
+
+        Assert.NotEqual(0, a.LinkId);
+        Assert.NotEqual(a.LinkId, b.LinkId);
+
+        int before = a.LinkId;
+        a.Enabled = false;
+        a.Enabled = true;
+        Assert.Equal(before, a.LinkId);
+        Assert.Same(a, NavMeshLink.FindByLinkId(before));
+    }
+
     private static NavMeshPathStatus PathStatus(Scene scene, Float3 from, Float3 to, int areaMask = NavMesh.AllAreas)
     {
         var path = new NavMeshPath();

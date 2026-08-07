@@ -57,13 +57,27 @@ public class NavMeshLink : MonoBehaviour
     [EnableIf(nameof(UsesExplicitAgentTypes))]
     public List<int> AffectedAgentTypeIds = [];
 
-    /// <summary>Persistent id stamped on the baked connections, resolving a traversing agent
-    /// back to this component (<see cref="NavMeshAgent.CurrentOffMeshLinkData"/>). Assigned
-    /// on first enable; stable across sessions via serialization. Resolution is best-effort
-    /// (ids can be re-minted on duplicate clashes, and baked data can outlive components) —
-    /// don't hang gameplay-critical logic on <c>CurrentOffMeshLinkData.Link</c>.</summary>
-    [HideInInspector]
-    public int LinkId;
+    /// <summary>Persistent id stamped on the baked connections, resolving a traversing agent back
+    /// to this component (<see cref="NavMeshAgent.CurrentOffMeshLinkData"/>). Derived from the
+    /// component's <see cref="MonoBehaviour.Identifier"/>, which the scene persists, so it survives
+    /// a reload and a duplicated object gets its own. Resolution is best-effort — baked data can
+    /// outlive the component that produced it — so don't hang gameplay-critical logic on
+    /// <c>CurrentOffMeshLinkData.Link</c>.</summary>
+    public int LinkId => StableLinkId(Identifier);
+
+    /// <summary>Fold an identifier into the non-zero int a baked connection stores. Written out
+    /// rather than using Guid.GetHashCode, which is only guaranteed stable within one process;
+    /// a baked id has to match across sessions.</summary>
+    private static int StableLinkId(Guid identifier)
+    {
+        Span<byte> bytes = stackalloc byte[16];
+        identifier.TryWriteBytes(bytes);
+
+        int id = 0;
+        for (int i = 0; i < 16; i += 4)
+            id ^= BitConverter.ToInt32(bytes.Slice(i, 4));
+        return id == 0 ? 1 : id;
+    }
 
     private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
 
@@ -176,14 +190,6 @@ public class NavMeshLink : MonoBehaviour
 
     public override void OnEnable()
     {
-        // First enable mints the persistent id; a clash with another LIVE link (duplicated
-        // in-scene prefab) re-mints so resolution stays unambiguous. The re-mint only lives
-        // in memory — warn so the duplication gets fixed and saved rather than silently
-        // re-minting every session.
-        if (LinkId != 0 && s_liveLinks.TryGetValue(LinkId, out NavMeshLink? clash) && clash.IsValid() && !ReferenceEquals(clash, this))
-            Debug.LogWarning($"[Navigation] NavMeshLink '{GameObject.Name}' shares link id {LinkId} with '{clash.GameObject.Name}' (duplicated object?); re-minting. Re-save the scene to persist distinct ids.");
-        while (LinkId == 0 || (s_liveLinks.TryGetValue(LinkId, out NavMeshLink? other) && other.IsValid() && !ReferenceEquals(other, this)))
-            LinkId = Random.Shared.Next(int.MinValue, int.MaxValue);
         s_liveLinks[LinkId] = this;
 
         CaptureAppliedDefinition();

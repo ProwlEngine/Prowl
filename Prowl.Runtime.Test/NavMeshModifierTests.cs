@@ -332,6 +332,30 @@ public class NavMeshModifierTests : RuntimeTestBase
 
     // ── Not Walkable source parity ──────────────────────────────────────
 
+    /// <summary>
+    /// A Not Walkable object sitting ON a walkable floor still erases it. Rasterizing it as the
+    /// null area would not: merging two spans in a column keeps the HIGHER of their areas, so
+    /// the floor it rests on would win and the object would come out walkable.
+    /// </summary>
+    [Fact]
+    public void Modifier_NotWalkableOnAWalkableFloor_ErasesIt()
+    {
+        Scene scene = CreateScene(enable: true);
+        AddFloorBox(scene, "Floor", new Float3(0, -0.5f, 0), new Float3(20, 1, 20));
+
+        // Thin and flush with the floor, so the two span tops land within the climb threshold and
+        // their areas merge — the case where the null area would be discarded.
+        GameObject blocked = AddFloorBox(scene, "Blocked", new Float3(0, 0.05f, 0), new Float3(6, 0.1f, 6));
+        var modifier = blocked.AddComponent<NavMeshModifier>();
+        modifier.OverrideArea = true;
+        modifier.Area = NavMeshAreas.NotWalkable;
+
+        Assert.True(AddSurface(scene).BuildNavMesh());
+
+        Assert.Equal(0, SampleAreaMask(scene, new Float3(0, 0.2f, 0)));
+        Assert.NotEqual(0, SampleAreaMask(scene, new Float3(8, 0.2f, 8)));
+    }
+
     /// <summary>A source marked Not Walkable produces no navmesh at all (Unity parity): its
     /// geometry is an obstacle, not traversable "area 1" polys.</summary>
     [Fact]

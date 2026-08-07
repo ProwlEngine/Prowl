@@ -33,11 +33,20 @@ public class NavigationSettings : ProjectSettingsBase
 
     private int _activeTab; // 0 = Agents, 1 = Areas
 
+    // Literal defaults, not reads of NavMeshAreas: these feed ResetToDefaults, which runs as a
+    // project opens, before that project's settings load — the statics still hold the previous
+    // project's table at that point.
     private static List<string> CreateDefaultNames()
     {
         var names = new List<string>(NavMeshAreas.MaxAreas);
         for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-            names.Add(NavMeshAreas.GetAreaName(i));
+            names.Add(i switch
+            {
+                NavMeshAreas.Walkable => "Walkable",
+                NavMeshAreas.NotWalkable => "Not Walkable",
+                NavMeshAreas.Jump => "Jump",
+                _ => string.Empty,
+            });
         return names;
     }
 
@@ -45,7 +54,7 @@ public class NavigationSettings : ProjectSettingsBase
     {
         var costs = new List<float>(NavMeshAreas.MaxAreas);
         for (int i = 0; i < NavMeshAreas.MaxAreas; i++)
-            costs.Add(NavMeshAreas.GetAreaCost(i));
+            costs.Add(1f);
         return costs;
     }
 
@@ -68,9 +77,6 @@ public class NavigationSettings : ProjectSettingsBase
     {
         AreaNames = CreateDefaultNames();
         AreaCosts = CreateDefaultCosts();
-        AreaNames[NavMeshAreas.Walkable] = "Walkable";
-        AreaNames[NavMeshAreas.NotWalkable] = "Not Walkable";
-        AreaNames[NavMeshAreas.Jump] = "Jump";
         AgentTypes = [new NavMeshAgentType { Id = NavMeshAgentTypes.Humanoid, Name = "Humanoid" }];
         NextAgentTypeId = 1;
         Apply();

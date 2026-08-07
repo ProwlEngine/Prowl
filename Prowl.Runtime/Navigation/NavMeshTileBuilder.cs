@@ -149,6 +149,13 @@ internal static class NavMeshTileBuilder
             RcFilters.FilterWalkableLowHeightSpans(ctx, cfg.WalkableHeight, solid);
 
         RcCompactHeightfield chf = RcCompacts.BuildCompactHeightfield(ctx, cfg.WalkableHeight, cfg.WalkableClimb, solid);
+
+        // Not Walkable rasterizes as a sentinel area so span merging cannot discard it; retire it
+        // here, before erosion, so agents keep their radius clear of it like any other wall.
+        for (int i = 0; i < chf.spanCount; i++)
+            if (chf.areas[i] == ProwlInputGeomProvider.NotWalkableRasterArea)
+                chf.areas[i] = RcRecast.RC_NULL_AREA;
+
         RcAreas.ErodeWalkableArea(ctx, cfg.WalkableRadius, chf);
         foreach (RcConvexVolume vol in geom.ConvexVolumes())
             RcAreas.MarkConvexPolyArea(ctx, vol.verts, vol.hmin, vol.hmax, vol.areaMod, chf);
