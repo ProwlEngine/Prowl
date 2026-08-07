@@ -429,6 +429,20 @@ internal sealed class SlangCompile(string searchPath, string moduleName)
         }
     }
 
+    // Matches Prowl.Graphite.ShaderDef.Compiler.SlangShaderCompiler's UVOrigin decl module, so shared
+    // sources can `import UVOrigin` and read IsUVOriginTopLeft. Every backend this tool emits GLSL/HLSL
+    // for here (GL, GLES, legacy GL, Unity HLSL) samples with the origin at the bottom-left, so the
+    // implementation module is fixed at false rather than resolved per target.
+    private const string UVOriginDeclModule = """
+        module UVOrigin;
+        extern public static const bool IsUVOriginTopLeft;
+        """;
+
+    private const string UVOriginBottomLeftModule = """
+        module UVOriginBottomLeft;
+        export public static const bool IsUVOriginTopLeft = false;
+        """;
+
     /// <summary>
     /// Emits one entry point. All entry points are linked together every time so their shared
     /// varying and uniform layout stays consistent; <paramref name="entryPoints"/> fixes the order.
@@ -448,10 +462,19 @@ internal sealed class SlangCompile(string searchPath, string moduleName)
         };
 
         Session session = GlobalSession.CreateSession(sessionDesc);
-        Module module = session.LoadModule(moduleName, out DiagnosticInfo diag);
+
+        // Imports resolve at parse time, so the declaring module must be loaded before anything that
+        // imports it; the implementation only needs to be present by link time.
+        session.LoadModuleFromSource("UVOrigin", "UVOrigin.slang", Encoding.UTF8.GetBytes(UVOriginDeclModule), out DiagnosticInfo diag);
         Check(diag);
 
-        List<ComponentType> parts = [module];
+        Module module = session.LoadModule(moduleName, out diag);
+        Check(diag);
+
+        Module uvModule = session.LoadModuleFromSource("UVOriginBottomLeft", "UVOriginBottomLeft.slang", Encoding.UTF8.GetBytes(UVOriginBottomLeftModule), out diag);
+        Check(diag);
+
+        List<ComponentType> parts = [module, uvModule];
         foreach (string name in entryPoints)
             parts.Add(module.FindEntryPointByName(name));
 

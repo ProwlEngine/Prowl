@@ -6,6 +6,8 @@
 
 module Blur;
 
+import UVOrigin;
+
 uniform Sampler2D src;
 uniform float2 halfpixel; // half a texel of the basis surface
 uniform float offset;     // sample spread, i.e. blur strength
@@ -23,7 +25,9 @@ BlurVaryings BlurVertex(uint vertexIndex : SV_VertexID)
 {
     BlurVaryings output;
     float2 p = float2(float((vertexIndex << 1) & 2), float(vertexIndex & 2));
-    output.vUV = p;
+    // p is bottom-left relative (matches the standard clip-space Y the backend's viewport transform
+    // produces), so top-left-origin backends need their V flipped to sample the right way up.
+    output.vUV = IsUVOriginTopLeft ? float2(p.x, 1.0 - p.y) : p;
     output.position = float4(p * 2.0 - 1.0, 0.0, 1.0);
     return output;
 }
