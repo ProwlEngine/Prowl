@@ -108,11 +108,20 @@ public static class NavMeshBuilder
         var layerResults = new List<byte[]>?[tilesX * tilesZ];
         if (threads > 1)
         {
-            Parallel.For(0, tilesX * tilesZ, new ParallelOptions { MaxDegreeOfParallelism = threads, CancellationToken = CancellationToken.None }, i =>
-            {
-                if (cancellation.IsCancellationRequested) return;
-                layerResults[i] = NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, i % tilesX, i / tilesX);
-            });
+            // Loop-local scratch, not thread-static: a bake fans out over pool threads, and a
+            // thread-static set on one of those would outlive the bake by the life of the thread,
+            // pinning a tile's worth of span pages per worker. This still recycles across every
+            // tile a partition builds, then goes out of scope with the loop.
+            Parallel.For(0, tilesX * tilesZ,
+                new ParallelOptions { MaxDegreeOfParallelism = threads, CancellationToken = CancellationToken.None },
+                () => new NavMeshTileBuilder.TileBuildScratch(),
+                (i, _, scratch) =>
+                {
+                    if (cancellation.IsCancellationRequested) return scratch;
+                    layerResults[i] = NavMeshTileBuilder.BuildTileLayers(geom, cfg, bmin, bmax, i % tilesX, i / tilesX, scratch);
+                    return scratch;
+                },
+                _ => { });
         }
         else
         {
@@ -191,19 +200,15 @@ public static class NavMeshBuilder
     /// Prologue of the partial-rebuild path: builds the geometry provider, applies volumes, and
     /// derives the affected tile range. The grid-anchoring invariant lives HERE and only here:
     /// <para/>
-    /// Sources may legitimately be empty (a region walled in completely) — the provider is
-    /// then null and the affected tiles are EMPTIED; "no geometry" must not be conflated with
-    /// "no change". The tile grid is anchored in XZ to the ORIGINAL bake bounds (fresh
-    /// geometry bounds would shift tile (0,0) and misalign every tile against the live
-    /// navmesh), while the Y range follows the CURRENT geometry — Recast clips rasterized
-    /// spans to the heightfield's vertical range, so new geometry above the original bounds
-    /// (a wall dropped on a flat floor) would silently vanish from the rebuild. (With no
-    /// geometry the Y union is skipped: an empty provider reports (0,0,0) bounds, which would
-    /// spuriously widen bakes that don't straddle Y=0.) The affected range expands by the
-    /// erosion border, and a changed region entirely OUTSIDE the baked bounds returns false —
-    /// clamping it would drag the tile range onto the nearest edge column and rebuild healthy
-    /// edge tiles against sources that don't cover them. Easy to hit from destructible-world
-    /// events near the map border.
+    /// Empty sources are legitimate (a region walled in completely) — the provider is null and the
+    /// affected tiles are EMPTIED, since "no geometry" is not "no change". XZ anchors to the
+    /// ORIGINAL bake bounds, or tile (0,0) shifts and every tile misaligns against the live
+    /// navmesh. Y follows the CURRENT geometry, because Recast clips spans to the heightfield's
+    /// vertical range and a wall dropped on a flat floor would otherwise vanish — but is skipped
+    /// when there is no geometry, since an empty provider reports (0,0,0) and would widen bakes
+    /// that don't straddle Y=0. The range expands by the erosion border. A region entirely OUTSIDE
+    /// the baked bounds returns false rather than clamping, which would drag the range onto the
+    /// nearest edge column and rebuild healthy tiles against sources that don't cover them.
     /// </summary>
     private static bool TryPrepareRebuild(NavMeshData data, IReadOnlyList<NavMeshGeometrySource> sources,
         int defaultArea, IReadOnlyList<NavMeshAreaVolume>? volumes, Float3 worldMin, Float3 worldMax,

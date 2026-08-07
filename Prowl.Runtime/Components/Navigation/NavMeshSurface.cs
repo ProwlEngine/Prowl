@@ -246,7 +246,7 @@ public class NavMeshSurface : MonoBehaviour
 
         world.MutateTileCache(instance, cache =>
         {
-            instance.TileCacheLinks.SetLinks(links, data.Settings.AgentRadius, data.Origin, data.TileWorldSize);
+            instance.TileCacheLinks.SetLinks(links, data.Settings.AgentRadius);
 
             float ts = data.TileWorldSize;
             int tx0 = (int)Math.Floor((worldBounds.Min.X - data.Origin.X) / ts);

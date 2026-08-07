@@ -55,13 +55,11 @@ public sealed class NavMeshData : EngineObject
 
     /// <summary>Current serialized-tile format version. Bump when the tile byte format changes
     /// (e.g. a Prowl.Recast upgrade changing Detour's tile layout), so stale assets fail with a
-    /// clear message instead of a deserialize throw. Version 4 dropped the finished-tile
-    /// representation: every navmesh is now compressed layers plus <see cref="Links"/>.</summary>
-    public const int CurrentFormatVersion = 4;
+    /// clear message instead of a deserialize throw.</summary>
+    public const int CurrentFormatVersion = 1;
 
-    /// <summary>Oldest format version this engine still reads. Versions 1-3 could hold finished
-    /// Detour tiles, which nothing instantiates any more; those assets must be rebaked.</summary>
-    public const int MinReadableFormatVersion = 4;
+    /// <summary>Oldest format version this engine still reads. Anything older must be rebaked.</summary>
+    public const int MinReadableFormatVersion = 1;
 
     /// <summary>The format version this asset's tiles were serialized with.</summary>
     public int FormatVersion = CurrentFormatVersion;

@@ -34,12 +34,11 @@ internal static class NavMeshTileBuilder
     public const int VertsPerPoly = 6;
 
     /// <summary>
-    /// Per-thread reusable bake state. Tile building allocates a fixed working set per tile
-    /// (heightfield spans, context bookkeeping) regardless of geometry; recycling it across
-    /// tiles removes that churn from bake-heavy games (destructible maps rebuild tiles at
-    /// gameplay frequency). Thread-static because full bakes build tiles in Parallel.For.
+    /// Reusable bake state. Tile building allocates a fixed working set per tile (heightfield
+    /// spans, context bookkeeping) regardless of geometry; recycling it across tiles removes that
+    /// churn from bake-heavy games (destructible maps rebuild tiles at gameplay frequency).
     /// </summary>
-    private sealed class TileBuildScratch
+    internal sealed class TileBuildScratch
     {
         public readonly RcContext Context = new();
         /// <summary>Recycled span pool pages, transplanted into each tile's heightfield. Grows
@@ -47,6 +46,11 @@ internal static class NavMeshTileBuilder
         public RcSpanPool? SpanPools;
     }
 
+    /// <summary>
+    /// Fallback scratch for callers that supply none — runtime tile rebuilds, which stay on the
+    /// main thread and want their pages warm between frames. Parallel bakes pass their own: a
+    /// thread-static set on a pool thread outlives the bake by the life of that thread.
+    /// </summary>
     [ThreadStatic] private static TileBuildScratch? t_scratch;
 
     /// <summary>Chunk lists per area mesh overlapping this tile (parallel to
@@ -83,18 +87,15 @@ internal static class NavMeshTileBuilder
     }
 
     private static RcHeightfield BuildHeightfieldPooled(ProwlInputGeomProvider geom, RcBuilderConfig builderCfg,
-        List<RcChunkyTriMeshNode>[]? overlappingChunks, TileBuildScratch? scratch)
+        List<RcChunkyTriMeshNode>[]? overlappingChunks, TileBuildScratch scratch)
     {
         RcConfig cfg = builderCfg.cfg;
         var solid = new RcHeightfield(builderCfg.width, builderCfg.height, builderCfg.bmin, builderCfg.bmax, cfg.Cs, cfg.Ch, cfg.BorderSize);
 
         // Attach recycled span pool pages: every span in them is free (the previous tile's
         // heightfield was discarded), so the freelist is simply all of them.
-        if (scratch?.SpanPools != null)
-        {
-            solid.pools = scratch.SpanPools;
-            solid.freelist = NavMeshRasterizer.BuildFreeList(scratch.SpanPools);
-        }
+        if (scratch.SpanPools != null)
+            RcRasterizations.AdoptSpanPools(solid, scratch.SpanPools);
 
         if (overlappingChunks == null)
             return solid;
@@ -107,8 +108,8 @@ internal static class NavMeshTileBuilder
             // Chunky-mesh culling: only triangles overlapping this tile (plus border) rasterize.
             foreach (RcChunkyTriMeshNode node in overlappingChunks[i])
             {
-                NavMeshRasterizer.RasterizeTriangles(solid, verts, node.tris, node.tris.Length / 3,
-                    walkableSlopeCos, areaMesh.DetourArea, cfg.WalkableClimb);
+                RcRasterizations.RasterizeTriangles(scratch.Context, verts, node.tris, node.tris.Length / 3,
+                    walkableSlopeCos, areaMesh.DetourArea, solid, cfg.WalkableClimb);
             }
         }
 
@@ -123,7 +124,10 @@ internal static class NavMeshTileBuilder
     /// Contours/polymeshes are NOT built here — the TileCache builds them per tile at runtime,
     /// which is what lets obstacles re-carve without re-voxelizing.
     /// </summary>
-    public static List<byte[]> BuildTileLayers(ProwlInputGeomProvider geom, RcConfig cfg, RcVec3f bmin, RcVec3f bmax, int tileX, int tileZ)
+    /// <param name="reusable">Scratch to build through, so its span pages survive into the next
+    /// tile. Null shares the calling thread's.</param>
+    public static List<byte[]> BuildTileLayers(ProwlInputGeomProvider geom, RcConfig cfg, RcVec3f bmin, RcVec3f bmax,
+        int tileX, int tileZ, TileBuildScratch? reusable = null)
     {
         var builderCfg = new RcBuilderConfig(cfg, bmin, bmax, tileX, tileZ);
 
@@ -131,7 +135,7 @@ internal static class NavMeshTileBuilder
         if (overlappingChunks == null)
             return [];
 
-        TileBuildScratch scratch = t_scratch ??= new TileBuildScratch();
+        TileBuildScratch scratch = reusable ?? (t_scratch ??= new TileBuildScratch());
         RcHeightfield solid = BuildHeightfieldPooled(geom, builderCfg, overlappingChunks, scratch);
         RcContext ctx = scratch.Context;
 
@@ -220,120 +224,26 @@ internal static class NavMeshTileBuilder
         private readonly List<(Float3 Start, Float3 End, float Radius, bool Bidirectional, int Area, int UserId)> _connections = [];
 
         /// <summary>
-        /// Unbudgeted links a single tile's pool can absorb. Detour sizes that pool when the tile
-        /// is built, from the connections whose endpoints are inside it — and it under-counts in
-        /// BOTH directions. A connection that leaves the tile costs its source one extra link
-        /// (the bidirectional back-link), and costs the tile it LANDS in one more, which that
-        /// tile budgeted nothing for because the connection is not stored there. Past a handful
-        /// the pool overflows and AddTile throws IndexOutOfRange — at instantiation, on an asset
-        /// that baked and saved cleanly.
-        /// <para/>
-        /// DO NOT raise this without measuring. A tile's real spare capacity is whatever is left
-        /// of <c>edgeCount + portalCount*2</c> after its own polygons are linked, so a sparse
-        /// tile — two flat planes, one polygon each — has the least of it and sets the limit for
-        /// everyone. Raising this to 5, 6 or 8 was tried: all three crash that geometry, while a
-        /// denser 40x40 bake survives 8 arrivals happily. The bound cannot be derived either;
-        /// the binding constraint is arrivals from up to eight neighbours, which are only
-        /// visible from the global pass in <see cref="SetLinks"/>, before any tile exists to
-        /// measure.
-        /// </summary>
-        private const int MaxTileCrossingConnections = 4;
-
-        // Ration bookkeeping, reused across calls: connections charged to each tile, by grid
-        // coordinate. Rationing runs once per link-set change, never per tile build.
-        private readonly Dictionary<(int X, int Z), int> _tileBudget = [];
-        private int _severedLinks;
-
-        /// <summary>
         /// Replace the link set future tile builds inject. Call under the instance's write lock,
         /// then rebuild the tiles that should carry the change.
-        /// <para/>
-        /// Rationing happens HERE, once, rather than per tile build: a tile's pool is spent by
-        /// connections arriving from any of its eight neighbours as well as by its own, and a
-        /// tile build sees only its own. Every connection is charged to the tile it starts in
-        /// and the tile it ends in, so a destination cannot be swamped by sources that each stay
-        /// under the limit on their own. Lanes are handed out breadth first — every link keeps
-        /// one before any link gets a second — so a wide link never crowds out another link.
         /// </summary>
-        /// <param name="origin">Tile grid origin, from the asset.</param>
-        /// <param name="tileWorldSize">Tile side length in world units, from the asset.</param>
-        public void SetLinks(IReadOnlyList<NavMeshLinkSource>? links, float agentRadius, Float3 origin, float tileWorldSize)
+        public void SetLinks(IReadOnlyList<NavMeshLinkSource>? links, float agentRadius)
         {
             _connections.Clear();
-            _tileBudget.Clear();
-            _severedLinks = 0;
 
             if (links == null || links.Count == 0) return;
 
             float radius = Math.Max(0.01f, agentRadius);
-            float ts = tileWorldSize > 0 ? tileWorldSize : float.MaxValue; // ungridded: one tile
             List<(Float3 Start, Float3 End)> crossings = [];
-            var lanes = new List<(Float3 Start, Float3 End, int Link)>();
-            var linkFirstLane = new int[links.Count];
 
-            for (int l = 0; l < links.Count; l++)
+            foreach (NavMeshLinkSource link in links)
             {
                 crossings.Clear();
-                links[l].ExpandCrossings(radius, crossings);
-                linkFirstLane[l] = lanes.Count;
+                link.ExpandCrossings(radius, crossings);
                 foreach ((Float3 start, Float3 end) in crossings)
-                    lanes.Add((start, end, l));
+                    _connections.Add((start, end, radius, link.Bidirectional,
+                        ProwlInputGeomProvider.DetourAreaFor(link.Area), link.UserId));
             }
-
-            (int, int) Tile(Float3 p) => ((int)MathF.Floor((float)(p.X - origin.X) / ts),
-                                          (int)MathF.Floor((float)(p.Z - origin.Z) / ts));
-
-            // A connection wholly inside one tile costs that tile nothing extra, so it is never
-            // rationed; only the two ends of a crossing are charged.
-            bool TryCharge((Float3 Start, Float3 End, int Link) lane, bool commit)
-            {
-                (int, int) from = Tile(lane.Start), to = Tile(lane.End);
-                if (from == to) return true;
-                _tileBudget.TryGetValue(from, out int a);
-                _tileBudget.TryGetValue(to, out int b);
-                if (a >= MaxTileCrossingConnections || b >= MaxTileCrossingConnections) return false;
-                if (commit) { _tileBudget[from] = a + 1; _tileBudget[to] = b + 1; }
-                return true;
-            }
-
-            Span<bool> taken = lanes.Count <= 256 ? stackalloc bool[lanes.Count] : new bool[lanes.Count];
-            for (int l = 0; l < links.Count; l++)
-            {
-                int end = l + 1 < links.Count ? linkFirstLane[l + 1] : lanes.Count;
-                bool got = false;
-                for (int i = linkFirstLane[l]; i < end && !got; i++)
-                {
-                    if (!TryCharge(lanes[i], commit: true)) continue;
-                    taken[i] = true;
-                    got = true;
-                }
-                if (!got && end > linkFirstLane[l]) _severedLinks++;
-            }
-
-            // Spend what is left widening the links that got through.
-            for (int l = 0; l < links.Count; l++)
-            {
-                int start = linkFirstLane[l], end = l + 1 < links.Count ? linkFirstLane[l + 1] : lanes.Count;
-                bool linkIsIn = false;
-                for (int i = start; i < end; i++) if (taken[i]) { linkIsIn = true; break; }
-                if (!linkIsIn) continue;
-                for (int i = start; i < end; i++)
-                {
-                    if (taken[i] || !TryCharge(lanes[i], commit: true)) continue;
-                    taken[i] = true;
-                }
-            }
-
-            for (int i = 0; i < lanes.Count; i++)
-            {
-                if (!taken[i]) continue;
-                NavMeshLinkSource link = links[lanes[i].Link];
-                _connections.Add((lanes[i].Start, lanes[i].End, radius, link.Bidirectional,
-                    ProwlInputGeomProvider.DetourAreaFor(link.Area), link.UserId));
-            }
-
-            if (_severedLinks > 0)
-                Debug.LogWarning($"[Navigation] {_severedLinks} NavMeshLink(s) cross a navmesh tile boundary already carrying the {MaxTileCrossingConnections} connections its link pool holds, and were dropped — agents cannot use them. Spread the links out, move them off the tile edge, or bake with a larger tile size.");
         }
 
         public void Process(DtNavMeshCreateParams option)
@@ -347,8 +257,7 @@ internal static class NavMeshTileBuilder
             // so do that first: handing over every link on the map would allocate six arrays
             // sized by the whole set for a tile that usually contains none of them. The tile box
             // is widened by each connection's radius so this can never be stricter than the
-            // classification it front-runs. Rationing already happened in SetLinks — everything
-            // still here is approved.
+            // classification it front-runs.
             int count = 0;
             for (int i = 0; i < _connections.Count; i++)
                 if (StartsInTile(_connections[i], option)) count++;
@@ -425,7 +334,7 @@ internal static class NavMeshTileBuilder
         var links = new List<NavMeshLinkSource>(data.Links.Count);
         foreach (NavMeshData.NavMeshLinkEntry entry in data.Links)
             links.Add(entry.ToSource());
-        meshProcess.SetLinks(links, data.Settings.AgentRadius, data.Origin, data.TileWorldSize);
+        meshProcess.SetLinks(links, data.Settings.AgentRadius);
 
         // FastLZ + cCompatibility layout, matching how BuildTileLayers compressed the blobs.
         return new DtTileCache(option, new DtTileCacheStorageParams(RcByteOrder.LITTLE_ENDIAN, true),

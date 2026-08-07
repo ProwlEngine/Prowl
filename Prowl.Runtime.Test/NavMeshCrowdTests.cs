@@ -29,12 +29,10 @@ public class NavMeshCrowdTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// An agent walking a straight line must not shiver as it brakes into its destination. Its
-    /// facing used to follow the crowd's ACTUAL velocity, which carries avoidance and collision
-    /// corrections that do not shrink with speed: once the agent slowed near the goal those
-    /// corrections dominated a small vector and swung its direction frame to frame, so it
-    /// wobbled left and right while tracking the path exactly. Facing follows the steering
-    /// vector now, which points down the path the whole way in.
+    /// An agent walking a straight line must not shiver as it brakes into its destination. Facing
+    /// follows the steering vector rather than the crowd's actual velocity: the latter carries
+    /// avoidance and collision corrections that do not shrink with speed, so near the goal they
+    /// dominate a small vector and swing the agent's direction frame to frame.
     /// </summary>
     [Fact]
     public void Agent_ApproachingDestination_DoesNotWobble()

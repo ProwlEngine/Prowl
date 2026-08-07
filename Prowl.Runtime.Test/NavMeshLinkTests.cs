@@ -325,11 +325,10 @@ public class NavMeshLinkTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// The Unity arrival idiom must not false-fire while the agent is traversing a link:
-    /// RemainingDistance previously collapsed to ~0 as the hop animation landed, so waypoint
-    /// scripts driven by "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance"
-    /// issued their next destination mid-hop and ping-ponged the agent across the link
-    /// forever. Mid-hop the value must stay bounded below by the path remaining AFTER landing.
+    /// The Unity arrival idiom "!PathPending &amp;&amp; RemainingDistance &lt;= StoppingDistance"
+    /// must not false-fire mid-link, or a waypoint script issues its next destination during the
+    /// hop and ping-pongs the agent across the link forever. Mid-hop the value stays bounded below
+    /// by the path remaining AFTER landing.
     /// </summary>
     [Fact]
     public void Agent_MidHop_NeverReportsArrival()

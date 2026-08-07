@@ -373,9 +373,32 @@ public class NavMeshBuildTests
     }
 
     /// <summary>
-    /// A baked asset triangulates without being registered with any scene or world — this is
-    /// what lets the editor draw the surface overlay outside play mode, where nothing
-    /// registers the surface (previously the overlay only appeared until the next reload).
+    /// A threaded bake produces byte-identical tiles to a serial one. Every surface bake is
+    /// threaded, and workers build through their own reusable scratch — so a partition carrying
+    /// state between the tiles it builds, or writing results out of order, would show up here.
+    /// </summary>
+    [Fact]
+    public void Build_Threaded_MatchesSingleThreaded()
+    {
+        // 40x40 spans several tiles, so the work actually partitions across threads.
+        NavMeshData? serial = NavMeshBuilder.Build(TestSettings(), [FlatQuad(40f)], threads: 1);
+        NavMeshData? threaded = NavMeshBuilder.Build(TestSettings(), [FlatQuad(40f)], threads: 4);
+
+        Assert.NotNull(serial);
+        Assert.NotNull(threaded);
+        Assert.True(serial!.CacheLayers.Count > 1, "Test geometry must span more than one tile.");
+        Assert.Equal(serial.CacheLayers.Count, threaded!.CacheLayers.Count);
+        for (int i = 0; i < serial.CacheLayers.Count; i++)
+        {
+            Assert.Equal(serial.CacheLayers[i].X, threaded.CacheLayers[i].X);
+            Assert.Equal(serial.CacheLayers[i].Z, threaded.CacheLayers[i].Z);
+            Assert.Equal(serial.CacheLayers[i].Data, threaded.CacheLayers[i].Data);
+        }
+    }
+
+    /// <summary>
+    /// A baked asset triangulates without being registered with any scene or world, which is what
+    /// lets the editor draw the surface overlay outside play mode where nothing registers it.
     /// </summary>
     [Fact]
     public void NavMeshData_CalculateTriangulation_WorksWithoutRegistration()
@@ -435,11 +458,9 @@ public class NavMeshBuildTests
     }
 
     /// <summary>
-    /// A tile's link pool is spent by connections ARRIVING from any of its eight neighbours as
-    /// well as by its own, and each arrival is one Detour budgeted nothing for. Rationing only
-    /// departures let eight neighbours each stay under the limit while jointly swamping one
-    /// destination — no link severed, no warning, and IndexOutOfRange at load on an asset that
-    /// baked and saved cleanly. This drives every neighbour at the destination at once.
+    /// A tile's link pool is spent by connections ARRIVING from its eight neighbours as well as by
+    /// its own, and Detour budgets nothing for arrivals — so a destination can be swamped by
+    /// sources that are individually modest. This drives every neighbour at one destination at once.
     /// </summary>
     [Theory]
     [InlineData(1)]
@@ -471,24 +492,23 @@ public class NavMeshBuildTests
         var world = new NavMeshWorld();
         NavMeshInstance? instance = world.AddNavMeshData(data);
         Assert.NotNull(instance);
-        // Rationing may drop the excess; at least one route into the destination must survive.
-        Assert.True(instance!.ContainsLinkId(1), "The first link must reach the live navmesh.");
+
+        for (int link = 1; link < id; link++)
+            Assert.True(instance!.ContainsLinkId(link), $"Link {link} must reach the live navmesh.");
     }
 
     /// <summary>
-    /// A tile can only hold so many connections leaving it, so when links crowd one boundary the
-    /// tile builder rations them — breadth first, one lane per link before any link gets a
-    /// second. A wide link shedding lanes still crosses, just at fewer points, and must stay
-    /// silent; only a link left with NO lane has actually stopped working, and only that is
-    /// worth interrupting anyone over.
+    /// Links crowding one tile boundary all cross, however many there are and however wide.
+    /// Detour sizes a tile's link pool from the connections stored in the tile and budgets nothing
+    /// for those arriving from neighbours, so a crowded boundary is where the pool runs out.
     /// </summary>
     [Theory]
-    [InlineData(1, 5f, 1, false)]    // one wide link: lanes are shed, the link still works
-    [InlineData(1, 20f, 1, false)]
-    [InlineData(4, 0f, 4, false)]    // exactly the budget
-    [InlineData(6, 0f, 4, true)]     // two links genuinely lose their route
-    public void Build_LinksCrowdingATileBoundary_RationBreadthFirst(
-        int linkCount, float width, int expectedInMesh, bool expectWarning)
+    [InlineData(1, 5f)]    // one wide link
+    [InlineData(1, 20f)]
+    [InlineData(4, 0f)]
+    [InlineData(6, 0f)]
+    [InlineData(12, 0f)]
+    public void Build_LinksCrowdingATileBoundary_AllCross(int linkCount, float width)
     {
         var links = new List<NavMeshLinkSource>();
         for (int i = 0; i < linkCount; i++)
@@ -518,8 +538,8 @@ public class NavMeshBuildTests
             int inMesh = 0;
             for (int i = 1; i <= linkCount; i++)
                 if (instance!.ContainsLinkId(i)) inMesh++;
-            Assert.Equal(expectedInMesh, inMesh);
-            Assert.Equal(expectWarning, warnings.Count > 0);
+            Assert.Equal(linkCount, inMesh);
+            Assert.Empty(warnings);
         }
         finally
         {

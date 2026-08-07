@@ -170,8 +170,8 @@ public class NavMeshCollectorTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// The bug this guards: an agent standing on the floor at bake time used to voxelize as
-    /// an obstruction, leaving a permanent hole in the navmesh under wherever it stood.
+    /// An agent standing on the floor at bake time must not voxelize as an obstruction, or it
+    /// leaves a permanent hole in the navmesh under wherever it stood.
     /// </summary>
     [Fact]
     public void Bake_WithAgentStandingOnFloor_LeavesNoHole()

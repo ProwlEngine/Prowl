@@ -588,10 +588,8 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Carving works outside play mode, because that is where you place buildings. OnEnable runs
-    /// in the editor and queues the carve, but the pump used to be gameplay-gated, so the request
-    /// sat unprocessed forever: the component looked configured, the mesh looked untouched, and
-    /// the scene-view overlay had nothing to show.
+    /// Carving works outside play mode, because that is where you place buildings: OnEnable queues
+    /// the carve in the editor, and the pump must process it rather than waiting for play.
     /// </summary>
     [Fact]
     public void Obstacle_CarvesAndFollowsOutsidePlayMode()
@@ -673,14 +671,11 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// A carve has to ANNOUNCE itself. The scene-view overlay caches its triangulation and
-    /// rebuilds it when the world reports a change, so a carve nobody is told about leaves the
-    /// overlay drawing intact floor over a real hole — indistinguishable from an obstacle that
-    /// is only steering agents around itself. The pump used to fire only on the
-    /// converged->working edge, which a carve small enough to finish inside one cache update
-    /// never crosses: it reported up-to-date on its first call and the notification was
-    /// swallowed. Anything queued into a cache must report, every frame it works and on the
-    /// frame it finishes.
+    /// A carve has to ANNOUNCE itself. The scene-view overlay caches its triangulation and rebuilds
+    /// it when the world reports a change, so a carve nobody is told about leaves the overlay
+    /// drawing intact floor over a real hole. Anything queued into a cache reports every frame it
+    /// works AND on the frame it finishes — a carve small enough to complete inside one cache
+    /// update would otherwise never announce at all.
     /// </summary>
     [Fact]
     public void Carve_FinishingInOneUpdate_StillReportsTheChange()
