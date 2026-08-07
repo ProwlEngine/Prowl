@@ -9,46 +9,13 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.GUI;
-
-/// <summary>
-/// The default property-grid row recipe (gutter padding, label width/colour/truncation) for
-/// handler-drawn fields, so they align with grid-drawn rows instead of each hand-copying the
-/// layout. This is the one place the recipe lives — grid metric changes go here.
-/// </summary>
-public static class HandlerRowLayout
-{
-    /// <summary>Draw a label + control row matching the default grid rows. The control is
-    /// drawn inside a stretch-width, row-height box.</summary>
-    public static void LabelledRow(Paper paper, string id, string label, Action drawControl)
-    {
-        var theme = OrigamiUI.Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
-
-        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
-            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
-        {
-            if (font != null && !string.IsNullOrEmpty(label))
-            {
-                paper.Box($"{id}_lbl")
-                    .Width(m.LabelWidth).Height(m.RowHeight)
-                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
-                    .IsNotInteractable()
-                    .Text(label, font).TextColor(theme.Ink.C300)
-                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
-            }
-
-            using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(m.RowHeight).Enter())
-                drawControl();
-        }
-    }
-}
 
 /// <summary>[Header("text")] - draws a header label above the field.</summary>
 public class HeaderAttributeHandler : OrigamiUI.AttributeHandler
@@ -189,42 +156,16 @@ public class EnableIfAttributeHandler : OrigamiUI.AttributeHandler
     }
 }
 
-/// <summary>[InspectorName("label")] - overrides the field's display label; on enum-typed
-/// fields the dropdown also shows each member's own [InspectorName] instead of the raw name.</summary>
+/// <summary>[InspectorName("label")] - overrides the field's display label.</summary>
 public class InspectorNameAttributeHandler : OrigamiUI.AttributeHandler
 {
-    /// <summary>Display name for an enum member: its [InspectorName] if present, else the
-    /// nicified member name.</summary>
-    public static string GetEnumDisplayName(Type enumType, object value)
-    {
-        string name = Enum.GetName(enumType, value) ?? value.ToString() ?? "";
-        var attr = enumType.GetField(name)?.GetCustomAttribute<InspectorNameAttribute>();
-        return attr?.DisplayName ?? PropertyGridUtils.NicifyName(name);
-    }
-
     public override bool OnDraw(Paper paper, string id, string label, Attribute attr,
         FieldInfo field, object target, Action<object?> onChange, int depth)
     {
-        string displayLabel = ((InspectorNameAttribute)attr).DisplayName;
-        Type type = field.FieldType;
-
-        // Non-flags enums get a dropdown honouring per-member display names.
-        if (type.IsEnum && !type.IsDefined(typeof(FlagsAttribute), false))
-        {
-            object value = field.GetValue(target) ?? Enum.GetValues(type).GetValue(0)!;
-            HandlerRowLayout.LabelledRow(paper, id, displayLabel, () =>
-            {
-                var values = new List<object>();
-                foreach (object v in Enum.GetValues(type)) values.Add(v);
-                OrigamiUI.Origami.Dropdown(paper, $"{id}_dd", value, v => onChange(v), values)
-                    .Display(v => GetEnumDisplayName(type, v))
-                    .Show();
-            });
-            return true;
-        }
-
-        // Everything else: default rendering, relabelled.
-        PropertyGridUtils.DrawField(paper, id, displayLabel, type, field.GetValue(target), onChange, depth);
+        // Nothing type-specific here: an enum's member names come from the field drawer
+        // registered for its type, which DrawField resolves like any other.
+        PropertyGridUtils.DrawField(paper, id, ((InspectorNameAttribute)attr).DisplayName,
+            field.FieldType, field.GetValue(target), onChange, depth);
         return true;
     }
 }
