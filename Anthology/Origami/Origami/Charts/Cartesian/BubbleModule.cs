@@ -49,7 +49,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
             if (double.IsNaN(x) || double.IsInfinity(x)) continue;
             if (double.IsNaN(y) || double.IsInfinity(y)) continue;
 
-            Color color = s.Color ?? Color.Gray;
+            Color color = s.Color ?? System.Drawing.Color.Gray;
             float diameter = DiameterOf(payload);
 
             SampleRing(paper, $"bubble_{i}", ctx.XPos(x), Math.Clamp(ctx.YPos(y), ctx.PlotT, ctx.PlotB), diameter, color);
@@ -68,7 +68,7 @@ public sealed class BubbleModule<T> : CartesianModuleBase<BubbleModule<T>, T>
         {
             if (!s.EffectiveVisible || s.Points.Count == 0) continue;
 
-            Color baseColor = s.Color ?? Color.Gray;
+            Color baseColor = s.Color ?? System.Drawing.Color.Gray;
             Color32 fillCol = ToC32(baseColor, 0.45f);
             Color32 outlineCol = ToC32(s.StrokeColor ?? baseColor);
 

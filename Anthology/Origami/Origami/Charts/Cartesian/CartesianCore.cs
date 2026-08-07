@@ -42,6 +42,7 @@ public sealed class CartesianSeries<T>
     public bool Visible = true;
     public bool LegendHidden;
     public readonly List<(double X, double Y, T? Payload)> Points = new();
+    internal object? Owner;
 
     public bool EffectiveVisible => Visible && !LegendHidden;
 }

@@ -61,9 +61,9 @@ public sealed class BarModule<T> : CartesianModuleBase<BarModule<T>, T>
         for (int k = 0; k < visible.Count; k++)
         {
             CartesianSeries<T> s = visible[k];
-            Color32 fill = ToC32(s.Color ?? Color.Gray);
+            Color32 fill = ToC32(s.Color ?? System.Drawing.Color.Gray);
             bool stroke = s.StrokeColor.HasValue;
-            Color32 strokeCol = ToC32(s.StrokeColor ?? Color.Gray);
+            Color32 strokeCol = ToC32(s.StrokeColor ?? System.Drawing.Color.Gray);
             float strokeWidth = s.StrokeWidth ?? 1f;
 
             for (int i = 0; i < s.Points.Count; i++)
@@ -112,7 +112,7 @@ public sealed class BarModule<T> : CartesianModuleBase<BarModule<T>, T>
             double value = s.Points[ctx.Index].Y;
             if (double.IsNaN(value) || double.IsInfinity(value)) continue;
 
-            Color color = s.Color ?? Color.Gray;
+            Color color = s.Color ?? System.Drawing.Color.Gray;
 
             rows.Add((color, $"{s.Label}: {FormatValue(value)}"));
         }
