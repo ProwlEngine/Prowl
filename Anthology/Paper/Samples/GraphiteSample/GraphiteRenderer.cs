@@ -456,8 +456,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             _owner._blurPass.SetKeyword(upsample ? UpsampleOn : UpsampleOff);
 
-            _properties.SetTexture("sourceTexture", source, _owner._sampler);
-            _properties.SetFloat2("halfPixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
+            _properties.SetTexture("src", source, _owner._sampler);
+            _properties.SetFloat2("halfpixel", new Float2(0.5f / basis.X, 0.5f / basis.Y));
             _properties.SetFloat("offset", offset);
 
             cmd.SetShader(_owner._blurPass);
@@ -545,8 +545,8 @@ public class GraphiteRenderer : ICanvasRenderer, IDisposable
 
             _owner._blurPass.SetKeyword(UpsampleOff);
 
-            _properties.SetTexture("sourceTexture", scene.ColorTextures[0], _owner._sampler);
-            _properties.SetFloat2("halfPixel", new Float2(0f, 0f));
+            _properties.SetTexture("src", scene.ColorTextures[0], _owner._sampler);
+            _properties.SetFloat2("halfpixel", new Float2(0f, 0f));
             _properties.SetFloat("offset", 0f);
 
             cmd.SetShader(_owner._blurPass);
