@@ -8,6 +8,11 @@ namespace Prowl.Graphite;
 public struct ResourceLayoutDescription : IEquatable<ResourceLayoutDescription>
 {
     /// <summary>
+    /// Hard cap on <see cref="Elements"/> per set.
+    /// </summary>
+    public const int MaxElementsPerSet = 64;
+
+    /// <summary>
     /// Descriptor set index. Ignored on backends without sets.
     /// </summary>
     public uint Set;

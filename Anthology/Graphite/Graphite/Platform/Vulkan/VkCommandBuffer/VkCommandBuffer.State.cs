@@ -21,6 +21,7 @@ internal unsafe partial class VkCommandBuffer
     private PrimitiveTopology _resolvedTopology;
 
     private Rect2D[] _scissorRects = Array.Empty<Rect2D>();
+    private Viewport[] _viewports = Array.Empty<Viewport>();
 
     private readonly List<VkTexture> _preDrawSampledImages = [];
 
@@ -37,6 +38,13 @@ internal unsafe partial class VkCommandBuffer
         _hasResolvedPipeline = false;
         _resolvedTopology = default;
         Util.ClearArray(_scissorRects);
+        Util.ClearArray(_viewports);
+        _vbCacheSource = null;
+        _vbCacheProgram = null;
+        _vbCacheCount = 0;
+        _ibCacheBuffer = default;
+        _ibCacheFormat = default;
+        _ibCacheValid = false;
     }
 
     private protected override void SetVertexSourceCore(IVertexSource source)
@@ -81,6 +89,9 @@ internal unsafe partial class VkCommandBuffer
     public override void SetViewport(uint index, ref Viewport viewport)
     {
         if (index != 0 && !_gd.Features.MultipleViewports) return;
+
+        if (viewport.Equals(_viewports[index])) return;
+        _viewports[index] = viewport;
 
         Silk.NET.Vulkan.Viewport vkViewport = new()
         {

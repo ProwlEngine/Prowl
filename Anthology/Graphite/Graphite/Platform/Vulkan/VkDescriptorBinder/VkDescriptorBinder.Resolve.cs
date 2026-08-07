@@ -1,5 +1,5 @@
 using System;
-using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -7,8 +7,7 @@ using Silk.NET.Vulkan;
 
 namespace Prowl.Graphite.Vk;
 
-// Resolve phase: turns one set's layout elements into concrete buffers, views and samplers taken from
-// the active property set, substituting null resources for anything unbound.
+
 internal unsafe sealed partial class VkDescriptorBinder
 {
     internal struct ResolvedBinding
@@ -24,16 +23,11 @@ internal unsafe sealed partial class VkDescriptorBinder
         public bool Combined;
     }
 
-    private sealed class ImplicitUboCacheEntry
-    {
-        public DeviceBufferRange Range;
-        public byte[] Bytes = Array.Empty<byte>();
-        public bool Valid;
-    }
-
     private void ResolveSet(
         int setIdx, ResourceLayoutElementDescription[] elements, SetBindingMetadata meta, ShaderProgram reportProgram)
     {
+        Debug.Assert(elements.Length <= MaxSetElements, "Resource layout exceeds MaxSetElements; program creation should have rejected it.");
+
         ulong executionId = _cbOwner.ExecutionId;
 
         for (int i = 0; i < elements.Length; i++)
@@ -47,7 +41,7 @@ internal unsafe sealed partial class VkDescriptorBinder
             {
                 case ResourceKind.UniformBuffer:
                     {
-                        DeviceBufferRange range = ResolveUboRange((uint)setIdx, in elem, out r.Missing);
+                        DeviceBufferRange range = ResolveUboRange(in elem, meta, i, out r.Missing);
                         range.Buffer.MarkInFlight(_gd, executionId);
                         r.Buffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(range.Buffer);
                         r.DescRange = range.SizeInBytes;
@@ -101,7 +95,8 @@ internal unsafe sealed partial class VkDescriptorBinder
         return new DeviceBufferRange(_gd.NullStructuredRW, 0, 0);
     }
 
-    private DeviceBufferRange ResolveUboRange(uint setIdx, in ResourceLayoutElementDescription elem, out bool missing)
+    private DeviceBufferRange ResolveUboRange(
+        in ResourceLayoutElementDescription elem, SetBindingMetadata meta, int elemIndex, out bool missing)
     {
         missing = false;
         PropertyEntry? uboEntry = FindProperty(elem.Name, PropertyEntryKind.Buffer);
@@ -112,7 +107,10 @@ internal unsafe sealed partial class VkDescriptorBinder
 
         // Loose uniform fields go into the explicit writable buffer if bound, else a per-draw transient.
         if (elem.UniformFields is { Length: > 0 })
-            return GetOrBuildImplicitUbo((int)setIdx, elem.BindingIndex, elem.UniformFields, uboEntry?.Buffer);
+        {
+            return GetOrBuildImplicitUbo(
+                elem.UniformFields, meta.UniformBlockSlots[elemIndex], meta.UniformBlockSizes[elemIndex], uboEntry?.Buffer);
+        }
 
         // No loose uniform fields declared: bind the explicit buffer directly.
         if (uboEntry != null)
@@ -160,77 +158,151 @@ internal unsafe sealed partial class VkDescriptorBinder
         return (VkSampler)_gd.LinearSampler;
     }
 
-    private DeviceBufferRange AllocateExecutionTransient(uint sizeInBytes)
+    private VkExecutionTask CurrentExecution()
     {
-        if (_cbOwner.Execution == null)
+        if (_cbOwner.Execution is not VkExecutionTask execution)
             throw new RenderException("Recording a draw that needs transient uniform memory requires a command buffer rented from a render context.");
-        return _cbOwner.Execution.AllocateTransientInternal(sizeInBytes);
+        return execution;
     }
 
+    private DeviceBufferRange AllocateExecutionTransient(uint sizeInBytes)
+    {
+        CurrentExecution().AllocateTransientMapped(sizeInBytes, out DeviceBufferRange range);
+        return range;
+    }
+
+    // Memoized the same way as the transient path, keyed on the explicit buffer's identity, offset and
+    // content version plus each field's source entry and version. A hit skips every write for the draw.
     private DeviceBufferRange GetOrBuildImplicitUbo(
-        int setIdx, int bindingIndex, UniformBlockField[] fields, DeviceBufferRange? writableTarget)
+        UniformBlockField[] fields, int blockSlot, uint blockSize, DeviceBufferRange? writableTarget)
     {
         if (writableTarget is not { } target)
-            return GetOrBuildTransientUbo(setIdx, bindingIndex, fields);
+            return GetOrBuildTransientUbo(fields, blockSlot, blockSize);
 
-        // Write only the set fields into the explicit buffer, leaving unset bytes intact. The explicit
-        // buffer is stable across draws, so its identity never changes; write it every draw as before.
-        foreach (UniformBlockField field in fields)
+        VkUniformArena.Block block = CurrentExecution().UniformArena.GetBlock(blockSlot, fields, blockSize);
+
+        if (ExplicitTargetUnchanged(fields, block, target))
+            return target;
+
+        Span<byte> scratch = block.Scratch.AsSpan(0, (int)blockSize);
+
+        for (int i = 0; i < fields.Length; i++)
         {
-            if (FindProperty(field.Name, PropertyEntryKind.Uniform) is not { } uEntry)
+            ref UniformBlockField field = ref fields[i];
+            PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
+            block.ExplicitSources[i] = uEntry;
+            block.ExplicitVersions[i] = uEntry?.Version ?? 0;
+
+            if (uEntry == null)
                 continue;
 
-            ref byte payload = ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform);
-            fixed (byte* ptr = &payload)
-                _gd.UpdateBuffer(target.Buffer, target.Offset + field.Offset, (IntPtr)ptr, field.Size);
+            ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
+                ref Unsafe.As<PropertyEntry.UniformPayload, byte>(ref uEntry.Uniform),
+                (int)field.Size);
+            src.CopyTo(scratch.Slice((int)field.Offset, (int)field.Size));
         }
+
+        // One write per byte-contiguous run of set fields, so gaps left by unset fields stay intact.
+        fixed (byte* scratchPtr = block.Scratch)
+        {
+            int runStart = -1;
+            for (int i = 0; i < fields.Length; i++)
+            {
+                if (block.ExplicitSources[i] == null)
+                    continue;
+
+                if (runStart < 0)
+                    runStart = i;
+
+                if (i + 1 < fields.Length
+                    && block.ExplicitSources[i + 1] != null
+                    && fields[i].Offset + fields[i].Size == fields[i + 1].Offset)
+                {
+                    continue;
+                }
+
+                uint start = fields[runStart].Offset;
+                uint length = fields[i].Offset + fields[i].Size - start;
+                _gd.UpdateBuffer(target.Buffer, target.Offset + start, (IntPtr)(scratchPtr + start), length);
+                runStart = -1;
+            }
+        }
+
+        block.ExplicitBuffer = target.Buffer;
+        block.ExplicitOffset = target.Offset;
+        block.ExplicitContentVersion = target.Buffer.ContentVersion;
         return target;
     }
 
-    // Builds this draw's uniform bytes and reuses the previously allocated range when they are
-    // byte-identical to the last upload. An unchanged UBO then neither reallocates a transient nor
-    // re-uploads, and keeps a stable descriptor identity across draws. Comparing the bytes (rather than
-    // entry versions) stays correct when a merge swaps in a fresh entry object.
-    private DeviceBufferRange GetOrBuildTransientUbo(int setIdx, int bindingIndex, UniformBlockField[] fields)
+    private bool ExplicitTargetUnchanged(UniformBlockField[] fields, VkUniformArena.Block block, DeviceBufferRange target)
     {
-        (int, int) key = (setIdx, bindingIndex);
-        if (!_implicitUboCache.TryGetValue(key, out ImplicitUboCacheEntry? entry))
-            _implicitUboCache[key] = entry = new ImplicitUboCacheEntry();
-
-        uint totalSize = UniformBlockSize(fields);
-        byte[] uploadBuf = ArrayPool<byte>.Shared.Rent((int)totalSize);
-        try
+        if (!ReferenceEquals(block.ExplicitBuffer, target.Buffer)
+            || block.ExplicitOffset != target.Offset
+            || block.ExplicitContentVersion != target.Buffer.ContentVersion)
         {
-            Span<byte> bytes = uploadBuf.AsSpan(0, (int)totalSize);
-            PackUniformFields(fields, bytes);
-
-            if (entry.Valid && bytes.SequenceEqual(entry.Bytes))
-                return entry.Range;
-
-            DeviceBufferRange range = AllocateExecutionTransient(totalSize);
-            fixed (byte* ptr = uploadBuf)
-                _gd.UpdateBuffer(range.Buffer, range.Offset, (IntPtr)ptr, totalSize);
-
-            if (entry.Bytes.Length != bytes.Length)
-                entry.Bytes = new byte[bytes.Length];
-            bytes.CopyTo(entry.Bytes);
-            entry.Range = range;
-            entry.Valid = true;
-
-            return range;
+            return false;
         }
-        finally
+
+        for (int i = 0; i < fields.Length; i++)
         {
-            ArrayPool<byte>.Shared.Return(uploadBuf);
+            PropertyEntry? entry = FindProperty(fields[i].Name, PropertyEntryKind.Uniform);
+            if (!ReferenceEquals(entry, block.ExplicitSources[i]) || (entry != null && entry.Version != block.ExplicitVersions[i]))
+                return false;
         }
+        return true;
     }
 
-    private void PackUniformFields(UniformBlockField[] fields, Span<byte> dst)
+
+    // The packed block is memoized for the whole execution, so a block whose sources are untouched is
+    // packed, allocated and uploaded once no matter how many draws or command buffers reference it.
+    private DeviceBufferRange GetOrBuildTransientUbo(UniformBlockField[] fields, int blockSlot, uint blockSize)
+    {
+        VkExecutionTask execution = CurrentExecution();
+        ulong executionId = execution.Id;
+        VkUniformArena.Block block = execution.UniformArena.GetBlock(blockSlot, fields, blockSize);
+
+        bool live = block.ExecutionId == executionId;
+        if (live && SourcesUnchanged(fields, block))
+            return block.Range;
+
+        Span<byte> packed = block.Scratch.AsSpan(0, (int)blockSize);
+        PackUniformFields(fields, packed, block);
+
+        // A different entry object can still hold identical bytes; that must not cost a new range.
+        if (live && packed.SequenceEqual(block.Packed))
+            return block.Range;
+
+        Span<byte> mapped = execution.AllocateTransientMapped(blockSize, out DeviceBufferRange range);
+        packed.CopyTo(mapped);
+
+        block.CommitScratch();
+        block.Range = range;
+        block.ExecutionId = executionId;
+        return range;
+    }
+
+    private bool SourcesUnchanged(UniformBlockField[] fields, VkUniformArena.Block block)
+    {
+        for (int i = 0; i < fields.Length; i++)
+        {
+            PropertyEntry? entry = FindProperty(fields[i].Name, PropertyEntryKind.Uniform);
+            if (!ReferenceEquals(entry, block.Sources[i]) || (entry != null && entry.Version != block.Versions[i]))
+                return false;
+        }
+        return true;
+    }
+
+    private void PackUniformFields(UniformBlockField[] fields, Span<byte> dst, VkUniformArena.Block block)
     {
         dst.Clear();
-        foreach (UniformBlockField field in fields)
+        for (int i = 0; i < fields.Length; i++)
         {
-            if (FindProperty(field.Name, PropertyEntryKind.Uniform) is not { } uEntry)
+            ref UniformBlockField field = ref fields[i];
+            PropertyEntry? uEntry = FindProperty(field.Name, PropertyEntryKind.Uniform);
+            block.Sources[i] = uEntry;
+            block.Versions[i] = uEntry?.Version ?? 0;
+
+            if (uEntry == null)
                 continue;
 
             ReadOnlySpan<byte> src = MemoryMarshal.CreateReadOnlySpan(
@@ -238,13 +310,5 @@ internal unsafe sealed partial class VkDescriptorBinder
                 (int)field.Size);
             src.CopyTo(dst.Slice((int)field.Offset, (int)field.Size));
         }
-    }
-
-    private static uint UniformBlockSize(UniformBlockField[] fields)
-    {
-        uint size = 0;
-        foreach (UniformBlockField field in fields)
-            size = Math.Max(size, field.Offset + field.Size);
-        return size == 0 ? 16 : size;
     }
 }

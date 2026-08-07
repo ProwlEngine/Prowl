@@ -10,12 +10,9 @@ internal sealed class VkExecutionTask : ExecutionTask
     private readonly uint _ringSlot;
 
     private readonly VkFence _slotFenceWrapper;
-    private readonly VkBuffer _transientPrimary;
-    private readonly List<VkBuffer> _transientOverflow;
+    private readonly VkUniformArena _uniformArena;
     private readonly List<VkCommandBuffer> _rentedCommandBuffers;
-    private uint _transientHead;
-    private uint _activeTransientSize;
-    private VkBuffer _activeTransientBuffer;
+    private readonly List<VkCommandBuffer> _queuedCommandBuffers;
 
     public override ulong Id => _id;
     public override uint RingSlot => _ringSlot;
@@ -27,21 +24,20 @@ internal sealed class VkExecutionTask : ExecutionTask
         ulong id,
         uint ringSlot,
         VkFence slotFenceWrapper,
-        VkBuffer transientPrimary,
-        List<VkBuffer> transientOverflow,
-        List<VkCommandBuffer> rentedCommandBuffers)
+        VkUniformArena uniformArena,
+        List<VkCommandBuffer> rentedCommandBuffers,
+        List<VkCommandBuffer> queuedCommandBuffers)
     {
         _gd = gd;
         _id = id;
         _ringSlot = ringSlot;
         _slotFenceWrapper = slotFenceWrapper;
-        _transientPrimary = transientPrimary;
-        _transientOverflow = transientOverflow;
+        _uniformArena = uniformArena;
         _rentedCommandBuffers = rentedCommandBuffers;
-
-        _activeTransientBuffer = transientPrimary;
-        _activeTransientSize = transientPrimary.SizeInBytes;
+        _queuedCommandBuffers = queuedCommandBuffers;
     }
+
+    internal VkUniformArena UniformArena => _uniformArena;
 
 
     /// <inheritdoc/>
@@ -55,52 +51,52 @@ internal sealed class VkExecutionTask : ExecutionTask
     internal override void SubmitCommandsInternal(CommandBuffer commandList)
     {
         SubmitCommands_CheckEnded(commandList);
-        _gd.SubmitCommandBufferInternal(commandList);
+        _queuedCommandBuffers.Add(Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(commandList));
 
         _gd.Profiler?.RecordSubmit(commandList.ProfilerInfo, isTransfer: false);
     }
 
 
     /// <inheritdoc/>
-    internal override DeviceBufferRange AllocateTransientInternal(uint sizeInBytes)
+    internal override void FlushSubmissions()
     {
-        uint alignment = _gd.UniformBufferMinOffsetAlignment;
-        uint alignedHead = (_transientHead + alignment - 1) & ~(alignment - 1);
+        if (_queuedCommandBuffers.Count == 0)
+            return;
 
-        if (alignedHead + sizeInBytes <= _activeTransientSize)
-        {
-            uint offset = alignedHead;
-            _transientHead = alignedHead + sizeInBytes;
-            return new DeviceBufferRange(_activeTransientBuffer, offset, sizeInBytes);
-        }
-
-        return AllocateFromOverflow(sizeInBytes);
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, null);
+        _queuedCommandBuffers.Clear();
     }
 
 
-    private DeviceBufferRange AllocateFromOverflow(uint sizeInBytes)
+    /// <summary>Submits whatever is still queued and signals the execution's slot fence.</summary>
+    internal void FinalSubmit(Silk.NET.Vulkan.Fence slotFence)
     {
-        uint requiredSize = Math.Max(sizeInBytes, _transientPrimary.SizeInBytes * 2);
-        VkBuffer overflowBuffer = _gd.CreateTransientBuffer(requiredSize);
-        _transientOverflow.Add(overflowBuffer);
+        _gd.SubmitExecutionBatch(_queuedCommandBuffers, slotFence);
+        _queuedCommandBuffers.Clear();
+    }
 
-        _activeTransientBuffer = overflowBuffer;
-        _activeTransientSize = overflowBuffer.SizeInBytes;
-        _transientHead = 0;
 
-        CheckCumulativeCaps();
+    /// <inheritdoc/>
+    internal override DeviceBufferRange AllocateTransientInternal(uint sizeInBytes)
+    {
+        AllocateTransientMapped(sizeInBytes, out DeviceBufferRange range);
+        return range;
+    }
 
-        uint offset = 0;
-        _transientHead = sizeInBytes;
-        return new DeviceBufferRange(overflowBuffer, offset, sizeInBytes);
+
+    /// <summary>Allocates transient uniform space and returns a span over its mapped memory.</summary>
+    internal Span<byte> AllocateTransientMapped(uint sizeInBytes, out DeviceBufferRange range)
+    {
+        Span<byte> dst = _uniformArena.Allocate(sizeInBytes, out range, out bool grew);
+        if (grew)
+            CheckCumulativeCaps();
+        return dst;
     }
 
 
     private void CheckCumulativeCaps()
     {
-        ulong cumulative = _transientPrimary.SizeInBytes;
-        foreach (VkBuffer buf in _transientOverflow)
-            cumulative += buf.SizeInBytes;
+        ulong cumulative = _uniformArena.CumulativeBytes;
 
         CheckCumulativeCaps_CheckHardCap(cumulative, _gd._transientHardCapBytes);
 

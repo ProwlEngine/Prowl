@@ -15,9 +15,6 @@ namespace Prowl.OrigamiUI.Charts;
 /// </summary>
 internal static class ChartGeometry
 {
-    /// <summary>Fills the sector between <paramref name="a0"/> and <paramref name="a1"/>. An
-    /// <paramref name="innerR"/> of zero or less gives a solid pie wedge; anything larger cuts the
-    /// wedge's inner end out for a donut or sunburst ring segment.</summary>
     internal static void PaintWedge(Canvas canvas, float cx, float cy, float innerR, float outerR,
         float a0, float a1, Color32 fill)
     {
@@ -51,9 +48,6 @@ internal static class ChartGeometry
         canvas.FillComplexAA();
     }
 
-    /// <summary>How many straight segments an arc of this radius and sweep is flattened into. Scales
-    /// with arc length so a large ring stays smooth without a small one paying for subdivision it
-    /// cannot show.</summary>
     internal static int ArcSegments(float radius, float sweep)
         => Math.Clamp((int)MathF.Ceiling(MathF.Abs(sweep) * MathF.Max(radius, 1f) / 4f), 3, 240);
 }

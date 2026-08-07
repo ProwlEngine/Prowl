@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Silk.NET.Vulkan;
@@ -8,6 +9,16 @@ namespace Prowl.Graphite.Vk;
 
 internal unsafe partial class VkCommandBuffer
 {
+    private IVertexSource _vbCacheSource;
+    private VkGraphicsProgram _vbCacheProgram;
+    private int _vbCacheCount;
+    private VertexBinding[] _vbCacheBindings = Array.Empty<VertexBinding>();
+    private ResourceRefCount[] _vbCacheRefCounts = Array.Empty<ResourceRefCount>();
+
+    private VkBufferHandle _ibCacheBuffer;
+    private IndexFormat _ibCacheFormat;
+    private bool _ibCacheValid;
+
     private protected override void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
     {
         PreDrawCommand();
@@ -129,7 +140,8 @@ internal unsafe partial class VkCommandBuffer
 
     private void BindVertexBuffersFromSource()
     {
-        IReadOnlyList<VertexLayoutDescription> layouts = _currentShaderProgram.VertexLayouts;
+        VkGraphicsProgram program = _currentShaderProgram;
+        IReadOnlyList<VertexLayoutDescription> layouts = program.VertexLayouts;
         int count = layouts.Count;
 
         bool captureForProfiler = WantsDrawBufferCapture;
@@ -138,13 +150,33 @@ internal unsafe partial class VkCommandBuffer
 
         if (count == 0) return;
 
+        IVertexSource source = _currentVertexSource!;
+
+        // Same source + program as last draw: reuse the resolved bindings, skip re-resolving and rebinding.
+        if (_vbCacheSource == source && _vbCacheProgram == program && _vbCacheCount == count)
+        {
+            for (int slot = 0; slot < count; slot++)
+            {
+                VertexBinding binding = _vbCacheBindings[slot];
+                binding.Buffer.MarkInFlight(_gd, ExecutionId);
+                AddStagingResource(_vbCacheRefCounts[slot]);
+
+                if (captureForProfiler)
+                    CaptureResolvedVertexBinding(in binding);
+            }
+            return;
+        }
+
+        Util.EnsureArrayMinimumSize(ref _vbCacheBindings, (uint)count);
+        Util.EnsureArrayMinimumSize(ref _vbCacheRefCounts, (uint)count);
+
         VkBufferHandle* buffers = stackalloc VkBufferHandle[count];
         ulong* offsets = stackalloc ulong[count];
 
         for (int slot = 0; slot < count; slot++)
         {
             VertexLayoutDescription layout = layouts[slot];
-            _currentVertexSource!.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
+            source.ResolveSlot((uint)slot, in layout, out VertexBinding binding);
             CheckVertexBindingUsage(in binding, (uint)slot);
             binding.Buffer.MarkInFlight(_gd, ExecutionId);
 
@@ -156,9 +188,16 @@ internal unsafe partial class VkCommandBuffer
             offsets[slot] = binding.Offset;
 
             AddStagingResource(vkBuffer.RefCount);
+
+            _vbCacheBindings[slot] = binding;
+            _vbCacheRefCounts[slot] = vkBuffer.RefCount;
         }
 
         _gd.Vk.CmdBindVertexBuffers(_cb, 0u, (uint)count, buffers, offsets);
+
+        _vbCacheSource = source;
+        _vbCacheProgram = program;
+        _vbCacheCount = count;
     }
 
     private void BindIndexBufferFromSource()
@@ -173,7 +212,16 @@ internal unsafe partial class VkCommandBuffer
             CaptureResolvedIndexBinding(ib, fmt, indexCount);
 
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(ib);
-        _gd.Vk.CmdBindIndexBuffer(_cb, vkBuffer.DeviceBuffer, 0, VkFormats.ToVkIndexFormat(fmt));
         AddStagingResource(vkBuffer.RefCount);
+
+        VkBufferHandle nativeBuffer = vkBuffer.DeviceBuffer;
+        if (_ibCacheValid && _ibCacheBuffer.Handle == nativeBuffer.Handle && _ibCacheFormat == fmt)
+            return;
+
+        _gd.Vk.CmdBindIndexBuffer(_cb, nativeBuffer, 0, VkFormats.ToVkIndexFormat(fmt));
+
+        _ibCacheBuffer = nativeBuffer;
+        _ibCacheFormat = fmt;
+        _ibCacheValid = true;
     }
 }

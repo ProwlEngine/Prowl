@@ -89,6 +89,14 @@ internal static unsafe partial class VkDescriptorLayoutBuilder
         VkGraphicsDevice gd, ref ResourceLayoutDescription desc)
     {
         ResourceLayoutElementDescription[] elems = desc.Elements;
+
+        if (elems.Length > VkDescriptorBinder.MaxSetElements)
+        {
+            throw new RenderException(
+                $"ResourceLayout for Set {desc.Set} declares {elems.Length} elements but at most " +
+                $"{VkDescriptorBinder.MaxSetElements} are supported per set. Split the resources across additional sets.");
+        }
+
         DescriptorSetLayoutBinding* bindings = stackalloc DescriptorSetLayoutBinding[elems.Length];
 
         uint uniformBufferDynamic = 0, sampledImage = 0, sampler = 0, storageBuffer = 0, storageImage = 0, combinedImageSampler = 0;

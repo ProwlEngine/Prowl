@@ -84,7 +84,7 @@ public sealed class RenderContext<TView>
         return cb;
     }
 
-    /// <summary>Ends and submits a command buffer rented here.</summary>
+    /// <summary>Ends a command buffer rented here and queues it for this execution's submit.</summary>
     /// <param name="cmd">Command buffer to submit.</param>
     public void SubmitCommandBuffer(CommandBuffer cmd)
     {
@@ -126,7 +126,12 @@ public sealed class RenderContext<TView>
 
     /// <summary>Submits a transfer command buffer, non-blocking.</summary>
     /// <param name="cmd">Transfer command buffer to submit.</param>
-    public void SubmitTransferCommandBuffer(TransferCommandBuffer cmd) => _device.SubmitTransfer(cmd);
+    public void SubmitTransferCommandBuffer(TransferCommandBuffer cmd)
+    {
+        // The transfer goes straight to the queue, so anything recorded before it has to go first.
+        _task.FlushSubmissions();
+        _device.SubmitTransfer(cmd);
+    }
 
     /// <summary>Allocates a transient uniform buffer range from this execution's bump allocator.</summary>
     /// <param name="sizeInBytes">Bytes to allocate.</param>

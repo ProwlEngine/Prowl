@@ -27,6 +27,12 @@ public abstract class ShaderProgram : GraphicsResource
 
     internal SetBindingMetadata[] BindingMetadata => _bindingMetadata;
 
+    private protected override void OnDisposing()
+    {
+        foreach (SetBindingMetadata meta in _bindingMetadata)
+            meta.ReleaseUniformBlockSlots();
+    }
+
     private protected static void DeepCloneUniformFields(ResourceLayoutDescription[] layouts)
     {
         for (int i = 0; i < layouts.Length; i++)

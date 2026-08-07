@@ -13,10 +13,6 @@ namespace Prowl.OrigamiUI.Charts;
 /// pass the full current data set on every call and finish with <c>.Show()</c>.</summary>
 public static class Chart
 {
-    /// <summary>A Cartesian chart whose marks come from the modules plugged into it -
-    /// <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c>, <c>.AddBubbleChart()</c>
-    /// - so a line can be overlaid on a bar, a scatter share one plot with a bubble, and so on. Every
-    /// module reads the same x, set once with <c>.X(...)</c>.</summary>
     public static CartesianChart<T> CreateCartesian<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
         => new(paper, id, Origami.Current, data);
 
@@ -33,8 +29,5 @@ public static class Chart
         => new(paper, id, Origami.Current, data);
 
     public static FlameGraphChart<T> FlameGraph<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
-        => new(paper, id, Origami.Current, data);
-
-    public static TimelineChart<T> Timeline<T>(Paper paper, string id, IReadOnlyList<T>? data = null)
         => new(paper, id, Origami.Current, data);
 }

@@ -1222,7 +1222,6 @@ public sealed class ChartsPanel : DockPanel
     private readonly record struct ScatterPoint(double X, double Y);
     private readonly record struct BubblePoint(double X, double Y, float Size);
     private sealed record BuildNode(string Name, double Ms, BuildNode[] Kids);
-    private sealed record TraceSpan(string Name, double Start, double End, string Thread, string Track, string Category);
 
     private static readonly string[] Months =
     {
@@ -1264,7 +1263,6 @@ public sealed class ChartsPanel : DockPanel
     private readonly List<ScatterPoint> _scatter = new();
     private readonly List<BubblePoint> _bubbles = new();
     private readonly BuildNode[] _buildTree;
-    private readonly TraceSpan[] _trace;
 
     private readonly double[] _frameBaseline = new double[400];
     private readonly double[] _frameOptimized = new double[400];
@@ -1340,41 +1338,6 @@ public sealed class ChartsPanel : DockPanel
         }
 
         _buildTree = MakeBuildTree(rng);
-        _trace = MakeTrace(rng);
-    }
-
-    private static TraceSpan[] MakeTrace(Random rng)
-    {
-        (string Thread, string Track, string[] Work)[] lanes =
-        {
-            ("Main", "Simulation", new[] { "Input", "Physics", "Animation", "Scripts" }),
-            ("Main", "Render", new[] { "Cull", "Shadows", "Opaque", "Present" }),
-            ("Worker 1", "Jobs", new[] { "Skinning", "Particles", "Culling" }),
-            ("Worker 2", "Jobs", new[] { "Streaming", "Decompress", "Upload" }),
-            ("Worker 2", "IO", new[] { "ReadAsset", "ParseAsset" }),
-        };
-
-        string[] categories = { "CPU", "GPU", "IO", "Wait" };
-
-        var spans = new List<TraceSpan>();
-        foreach ((string thread, string track, string[] work) in lanes)
-        {
-            double t = rng.NextDouble() * 1.5;
-            for (int i = 0; i < 14; i++)
-            {
-                string name = work[i % work.Length];
-                double duration = 0.4 + rng.NextDouble() * 2.6;
-                spans.Add(new TraceSpan(name, t, t + duration, thread, track, categories[(i + name.Length) % categories.Length]));
-
-                if (rng.NextDouble() < 0.35)
-                    spans.Add(new TraceSpan(name + " (nested)", t + duration * 0.2, t + duration * 0.9,
-                        thread, track, categories[(i + 2) % categories.Length]));
-
-                t += duration + rng.NextDouble() * 1.2;
-            }
-        }
-
-        return spans.ToArray();
     }
 
     private static BuildNode[] MakeBuildTree(Random rng)
@@ -1441,7 +1404,6 @@ public sealed class ChartsPanel : DockPanel
                 Row(P, "chartsrow2", () => { PieChart(P); DonutChart(P); });
                 Row(P, "chartsrow3", () => { RadarChart(P); HistogramChart(P); });
                 Row(P, "chartsrow4", () => { FlameGraphChart(P); });
-                Row(P, "chartsrow5", () => { TimelineChart(P); });
             });
         }
     }
@@ -1634,25 +1596,6 @@ public sealed class ChartsPanel : DockPanel
             .Pannable(true)
             .Info()
             .ValueFormatter(v => $"{v:0.#}ms")
-            .Padding(6)
-            .Show();
-    }
-
-    private void TimelineChart(Paper P)
-    {
-        Chart.Timeline(P, "chart_timeline", _trace)
-            .Title("Frame Trace - Timeline")
-            .Height(ChartHeight)
-            .Legend().LegendInteractive(true)
-            .Name(s => s.Name)
-            .Start(s => s.Start)
-            .End(s => s.End)
-            .Thread(s => s.Thread)
-            .Track(s => s.Track)
-            .Category(s => s.Category)
-            .ValueFormatter(v => $"{v:0.##}ms")
-            .Zoomable(true)
-            .Pannable(true)
             .Padding(6)
             .Show();
     }

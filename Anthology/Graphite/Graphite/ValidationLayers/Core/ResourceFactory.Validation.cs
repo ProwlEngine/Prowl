@@ -293,6 +293,13 @@ public abstract partial class ResourceFactory
         ResourceLayoutElementDescription[] elements = layout.Elements;
         if (elements == null) return;
 
+        if (elements.Length > ResourceLayoutDescription.MaxElementsPerSet)
+        {
+            throw new RenderException(
+                $"ResourceLayout for Set {layout.Set} declares {elements.Length} elements but at most " +
+                $"{ResourceLayoutDescription.MaxElementsPerSet} are supported per set. Split the resources across additional sets.");
+        }
+
         for (int e = 0; e < elements.Length; e++)
         {
             ref ResourceLayoutElementDescription element = ref elements[e];

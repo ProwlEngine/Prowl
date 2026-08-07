@@ -19,9 +19,14 @@ public abstract partial class ExecutionTask
     /// <summary>Owning device.</summary>
     public abstract GraphicsDevice Device { get; }
 
-    /// <summary>Submits a recorded command buffer. Call End() first.</summary>
+    /// <summary>Queues a recorded command buffer for this execution's submit. Call End() first.</summary>
     /// <param name="commandList">Buffer to submit.</param>
     internal abstract void SubmitCommandsInternal(CommandBuffer commandList);
+
+    /// <summary>
+    /// Submits everything queued so far, so later work on the queue is ordered after it.
+    /// </summary>
+    internal virtual void FlushSubmissions() { }
 
     /// <summary>
     /// Tracks a rented command buffer so it's reclaimed when GPU work retires. No-op if backend doesn't pool.

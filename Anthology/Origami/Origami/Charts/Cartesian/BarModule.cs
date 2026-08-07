@@ -16,13 +16,8 @@ namespace Prowl.OrigamiUI.Charts;
 
 /// <summary>
 /// Bar module for a <see cref="CartesianChart{T}"/>. Every visible series gets its own bar side by side,
-/// grouped around each index. Bars grow from the zero baseline, so negative values hang below it. Added
+/// grouped around each index. Bars grow from the zero baseline, so negative values hang below it. Create
 /// with <c>.AddBarChart()</c>.
-///
-/// Unlike a standalone banded chart, a bar here is centred on the same continuous x every other module on
-/// the chart plots against (<see cref="PlotContext{T}.UnitWidth"/>) rather than owning a
-/// <c>[i, i + 1)</c> band of its own - so a bar for index i lines up directly under a Line or Scatter
-/// module's point at that same index instead of sitting offset in an adjacent band.
 /// </summary>
 public sealed class BarModule<T> : CartesianModuleBase<BarModule<T>, T>
 {
@@ -66,9 +61,9 @@ public sealed class BarModule<T> : CartesianModuleBase<BarModule<T>, T>
         for (int k = 0; k < visible.Count; k++)
         {
             CartesianSeries<T> s = visible[k];
-            Color32 fill = ToC32(s.Color ?? System.Drawing.Color.Gray);
+            Color32 fill = ToC32(s.Color ?? Color.Gray);
             bool stroke = s.StrokeColor.HasValue;
-            Color32 strokeCol = ToC32(s.StrokeColor ?? System.Drawing.Color.Gray);
+            Color32 strokeCol = ToC32(s.StrokeColor ?? Color.Gray);
             float strokeWidth = s.StrokeWidth ?? 1f;
 
             for (int i = 0; i < s.Points.Count; i++)
@@ -117,7 +112,7 @@ public sealed class BarModule<T> : CartesianModuleBase<BarModule<T>, T>
             double value = s.Points[ctx.Index].Y;
             if (double.IsNaN(value) || double.IsInfinity(value)) continue;
 
-            Color color = s.Color ?? System.Drawing.Color.Gray;
+            Color color = s.Color ?? Color.Gray;
 
             rows.Add((color, $"{s.Label}: {FormatValue(value)}"));
         }

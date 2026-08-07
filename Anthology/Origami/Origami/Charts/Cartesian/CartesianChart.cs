@@ -149,7 +149,6 @@ public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where 
     protected static Color32 ToC32(Color c) => new(c.R, c.G, c.B, c.A);
     protected static Color32 ToC32(Color c, float alpha) => new(c.R, c.G, c.B, (byte)Math.Clamp(c.A * alpha, 0f, 255f));
 
-    /// <summary>This module's own visible series carrying the most points.</summary>
     protected static CartesianSeries<T>? LongestVisible(IReadOnlyList<CartesianSeries<T>> series)
     {
         CartesianSeries<T>? longest = null;
@@ -159,7 +158,6 @@ public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where 
         return longest;
     }
 
-    // ── ICartesianModule<T> plumbing ───────────────────────────
 
     private List<CartesianSeries<T>> ResolveOwnSeriesCore()
     {
@@ -188,17 +186,10 @@ public abstract class CartesianModuleBase<TSelf, T> : ICartesianModule<T> where 
 }
 
 /// <summary>
-/// A Cartesian chart whose marks come entirely from the modules plugged into it via
-/// <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c> and <c>.AddBubbleChart()</c>,
-/// which is what lets a line be overlaid on a bar or a scatter share one plot with a bubble. Built with
-/// <see cref="Chart.CreateCartesian{T}"/>.
+/// A Cartesian chart whose marks come from modules: <c>.AddLineChart()</c>, <c>.AddBarChart()</c>, <c>.AddScatterPlot()</c>, <c>.AddBubbleChart()</c>. 
+/// Built with <see cref="Chart.CreateCartesian{T}"/>.
 ///
-/// The x axis is shared: set it once with <see cref="X"/>, and every module reads it back to place its
-/// own <c>.Y(...)</c>-selected series. This is also what keeps a combo of a banded module (Bar) and a
-/// continuous one (Line/Scatter/Bubble) aligned - rather than Bar owning a separate band coordinate space,
-/// its bars are centred on the same continuous x every other module plots against (see
-/// <see cref="PlotContext{T}.UnitWidth"/>), so a bar for index i sits directly under a line's point at
-/// that same index instead of being offset into an adjacent band.
+/// X axis is shared, every module reads it back to place its own <c>.Y(...)</c>-selected series.
 /// </summary>
 public sealed class CartesianChart<T> : CartesianCore<CartesianChart<T>, T>
 {
@@ -215,40 +206,6 @@ public sealed class CartesianChart<T> : CartesianCore<CartesianChart<T>, T>
     public BarModule<T> AddBarChart() => new(this);
     public ScatterModule<T> AddScatterPlot() => new(this);
     public BubbleModule<T> AddBubbleChart() => new(this);
-
-    // ── Chart-level replacements for the per-series methods CartesianCore exposes ──
-    // Series data belongs on a module (AddLineChart().Series(...)/.Y(...)), not on the chart itself: a
-    // series added directly here would never be painted, since PaintMarks only loops registered modules.
-
-    [Obsolete("Add a series through a module instead, e.g. AddLineChart().Series(label, color, values).", true)]
-    public new CartesianChart<T> Series(string label, Color color, IReadOnlyList<double> values) => throw new InvalidOperationException();
-
-    [Obsolete("Set Y through a module instead, e.g. AddLineChart().Y(selector). X stays shared via CartesianChart<T>.X(...).", true)]
-    public new CartesianChart<T> Y(Func<T, double> selector) => throw new InvalidOperationException();
-
-    [Obsolete("Name the implicit series on a module instead, e.g. AddLineChart().Y(selector).Name(text).", true)]
-    public new CartesianChart<T> Name(string text) => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().Color(...).", true)]
-    public new CartesianChart<T> Color(Color color) => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().Stroke(...).", true)]
-    public new CartesianChart<T> Stroke(Color color) => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().StrokeWidth(...).", true)]
-    public new CartesianChart<T> StrokeWidth(float width) => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().Fill(...).", true)]
-    public new CartesianChart<T> Fill(bool fill = true) => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().Dashed().", true)]
-    public new CartesianChart<T> Dashed() => throw new InvalidOperationException();
-
-    [Obsolete("Style the most recently added module's series instead, e.g. AddLineChart().Dotted().", true)]
-    public new CartesianChart<T> Dotted() => throw new InvalidOperationException();
-
-    [Obsolete("Show/hide the most recently added module's series instead, e.g. AddLineChart().Visible(false).", true)]
-    public new CartesianChart<T> Visible(bool visible) => throw new InvalidOperationException();
 
     // ── Internal access for CartesianModuleBase<TSelf, T> ──────
 
@@ -305,7 +262,7 @@ public sealed class CartesianChart<T> : CartesianCore<CartesianChart<T>, T>
     }
 
     /// <summary>One shared crosshair for the whole chart, at the sampled index of whichever module's
-    /// series is longest, then each module's own dots/rings/rows layered into a single popup.</summary>
+    /// series is longest.</summary>
     protected override void DrawSampler(Paper paper, in SampleContext<T> ctx)
     {
         if (ctx.MaxN <= 0) return;

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -13,6 +14,10 @@ internal unsafe partial class VkGraphicsDevice
     private readonly object _submittedFencesLock = new();
     private readonly ConcurrentQueue<VkFenceHandle> _availableSubmissionFences = new();
     private readonly List<FenceSubmissionInfo> _submittedFences = [];
+    private int _graphicsQueueSubmitCount;
+
+    /// <summary>Test hook: total vkQueueSubmit calls made against the graphics queue.</summary>
+    internal int GraphicsQueueSubmitCount => System.Threading.Volatile.Read(ref _graphicsQueueSubmitCount);
 
     public override void ResetFence(Fence fence)
     {
@@ -27,9 +32,67 @@ internal unsafe partial class VkGraphicsDevice
         return result == Result.Success;
     }
 
-    internal void SubmitCommandBufferInternal(CommandBuffer cl)
+    /// <summary>
+    /// Submits an execution's queued command buffers as one vkQueueSubmit. A null slot fence takes a
+    /// pooled one instead, for a mid-execution flush.
+    /// </summary>
+    internal void SubmitExecutionBatch(List<VkCommandBuffer> commandBuffers, VkFenceHandle? slotFence)
     {
-        SubmitCommandBuffer(cl, 0, null, 0, null, null);
+        int count = commandBuffers.Count;
+        if (count == 0 && slotFence == null)
+            return;
+
+        CheckSubmittedFences();
+
+        bool poolFence = slotFence == null;
+        VkFenceHandle fence = slotFence ?? GetFreeSubmissionFence();
+
+        Silk.NET.Vulkan.CommandBuffer[] handles = ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Rent(count + 1);
+        try
+        {
+            for (int i = 0; i < count; i++)
+            {
+                VkCommandBuffer cb = commandBuffers[i];
+                Silk.NET.Vulkan.CommandBuffer handle = cb.CommandBuffer;
+                cb.CommandBufferSubmitted(handle);
+                handles[i] = handle;
+            }
+
+            PipelineStageFlags waitDstStageMask = PipelineStageFlags.ColorAttachmentOutputBit;
+
+            fixed (Silk.NET.Vulkan.CommandBuffer* pHandles = handles)
+            {
+                SubmitInfo si = new(sType: StructureType.SubmitInfo)
+                {
+                    CommandBufferCount = (uint)count,
+                    PCommandBuffers = count > 0 ? pHandles : null,
+                    PWaitDstStageMask = &waitDstStageMask
+                };
+
+                lock (_graphicsQueueLock)
+                {
+                    _graphicsQueueSubmitCount++;
+                    Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
+                    FlushValidationErrors();
+                }
+            }
+
+            lock (_submittedFencesLock)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    VkCommandBuffer cb = commandBuffers[i];
+                    _submittedFences.Add(new FenceSubmissionInfo(
+                        fence, cb, handles[i], cb.TakePendingTimingPool(), cb.TakePendingStatsPool(),
+                        cb.Name, isTransfer: false, cb.Pass, transferId: 0,
+                        ownsFence: poolFence && i == count - 1));
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<Silk.NET.Vulkan.CommandBuffer>.Shared.Return(handles);
+        }
     }
 
     private protected override void SubmitTransferCore(TransferCommandBuffer commandBuffer)
@@ -56,6 +119,7 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
+            _graphicsQueueSubmitCount++;
             Vk.QueueSubmit(GraphicsQueue, 1, &si, fence).CheckResult();
             FlushValidationErrors();
         }
@@ -75,23 +139,6 @@ internal unsafe partial class VkGraphicsDevice
     {
         VkTransferCommandBuffer vkCb = Util.AssertSubtype<TransferCommandBuffer, VkTransferCommandBuffer>(commandBuffer);
         vkCb.SubmitAndWait();
-    }
-
-    private void SubmitCommandBuffer(
-        CommandBuffer cl,
-        uint waitSemaphoreCount,
-        VkSemaphore* waitSemaphoresPtr,
-        uint signalSemaphoreCount,
-        VkSemaphore* signalSemaphoresPtr,
-        Fence? fence)
-    {
-        VkCommandBuffer vkCL = Util.AssertSubtype<CommandBuffer, VkCommandBuffer>(cl);
-        Silk.NET.Vulkan.CommandBuffer vkCB = vkCL.CommandBuffer;
-
-        vkCL.CommandBufferSubmitted(vkCB);
-        SubmitCommandBuffer(
-            vkCL, vkCB, waitSemaphoreCount, waitSemaphoresPtr, signalSemaphoreCount, signalSemaphoresPtr, fence,
-            vkCL.TakePendingTimingPool(), vkCL.TakePendingStatsPool(), vkCL.Name, isTransfer: false, pass: vkCL.Pass);
     }
 
     internal void SubmitCommandBuffer(
@@ -142,11 +189,13 @@ internal unsafe partial class VkGraphicsDevice
 
         lock (_graphicsQueueLock)
         {
+            _graphicsQueueSubmitCount++;
             Vk.QueueSubmit(GraphicsQueue, 1, &si, vkFence).CheckResult();
             FlushValidationErrors();
 
             if (useExtraFence)
             {
+                _graphicsQueueSubmitCount++;
                 Vk.QueueSubmit(GraphicsQueue, 0, (SubmitInfo*)null, submissionFence).CheckResult();
             }
         }
@@ -199,8 +248,12 @@ internal unsafe partial class VkGraphicsDevice
             Profiler?.RecordGpuVertexStats(profilerInfo, in stats);
         }
 
-        Vk.ResetFences(Device, 1, &fence).CheckResult();
-        ReturnSubmissionFence(fence);
+        if (fsi.OwnsFence)
+        {
+            Vk.ResetFences(Device, 1, &fence).CheckResult();
+            ReturnSubmissionFence(fence);
+        }
+
         lock (_stagingResourcesLock)
         {
             if (_submittedStagingTextures.TryGetValue(completedCB, out VkTexture? stagingTex))
@@ -270,6 +323,9 @@ internal unsafe partial class VkGraphicsDevice
         public PassInfo? Pass;
         public ulong TransferId;
 
+        /// <summary>False when the fence is a slot fence, or is shared with a later entry.</summary>
+        public bool OwnsFence;
+
         public FenceSubmissionInfo(
             VkFenceHandle fence,
             VkCommandBuffer? commandBuffer,
@@ -279,8 +335,10 @@ internal unsafe partial class VkGraphicsDevice
             string bufferName,
             bool isTransfer,
             PassInfo? pass,
-            ulong transferId)
+            ulong transferId,
+            bool ownsFence = true)
         {
+            OwnsFence = ownsFence;
             Fence = fence;
             CommandBuffer = commandBuffer;
             VulkanCommandBuffer = vulkanCommandBuffer;
