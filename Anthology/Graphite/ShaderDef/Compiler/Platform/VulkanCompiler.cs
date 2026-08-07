@@ -60,10 +60,6 @@ public class VulkanCompiler : CompilerModule
         foreach (VariableLayoutReflection parameter in layout.Parameters)
             Collect(parameter, baseSpace: 0, programStages, bySet);
 
-        // Loose global uniforms (not wrapped in an explicit cbuffer/ParameterBlock<T>) don't show up as a
-        // ParameterBlock in layout.Parameters: Slang instead flattens them into individual top-level Scalar
-        // /Vector/Matrix parameters, which Collect() has no resource kind for and skips. Slang still packs
-        // them into an implicit global constant buffer under the hood, reflected here.
         if (layout.GlobalConstantBufferSize > 0)
         {
             UniformBlockField[] globalFields = SlangReflector.ReflectUniformFields(layout.GlobalParamsTypeLayout.ElementTypeLayout);
