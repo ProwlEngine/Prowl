@@ -52,7 +52,15 @@ namespace Prowl.Recast.Detour.TileCache
         private DtTileCacheObstacle m_nextFreeObstacle;
 
         private readonly List<DtObstacleRequest> m_reqs = new List<DtObstacleRequest>();
-        private readonly List<long> m_update = new List<long>();
+
+        /// Tiles queued for rebuild, oldest first. A queue rather than a list because Update()
+        /// takes from the front: List.RemoveAt(0) shifts every remaining entry, which turns
+        /// draining a batch into O(n²).
+        private readonly Queue<long> m_update = new Queue<long>();
+
+        /// Membership mirror of m_update, so queueing the tiles an obstacle touches is O(1) per
+        /// tile instead of a linear scan of everything already queued.
+        private readonly HashSet<long> m_updateSet = new HashSet<long>();
 
         public DtTileCache(in DtTileCacheParams option, DtTileCacheStorageParams storageParams, DtNavMesh navmesh, IRcCompressor tcomp, IDtTileCacheMeshProcess tmprocs)
         {
@@ -481,8 +489,24 @@ namespace Prowl.Recast.Detour.TileCache
          *         cache is up to date another (immediate) call to update will have no effect; otherwise another call will
          *         continue processing obstacle requests and tile rebuilds.
          */
-        public bool Update()
+        public bool Update() => Update(1);
+
+        /**
+         * As {@link #Update()}, but rebuilds up to @p maxTiles tiles in this call instead of one.
+         *
+         * A carve touching many tiles otherwise takes one frame per tile to reach the navmesh, and
+         * no new obstacle request is processed while any rebuild is still pending, so a large batch
+         * stalls everything behind it. Callers that can afford the frame time raise the budget.
+         *
+         * @param maxTiles Maximum tiles to rebuild this call. Values below 1 are treated as 1.
+         */
+        public bool Update(int maxTiles)
         {
+            if (maxTiles < 1)
+            {
+                maxTiles = 1;
+            }
+
             if (0 == m_update.Count)
             {
                 // Process requests.
@@ -514,9 +538,9 @@ namespace Prowl.Recast.Detour.TileCache
                         ob.pending.Clear();
                         foreach (var j in ob.touched)
                         {
-                            if (!Contains(m_update, j))
+                            if (m_updateSet.Add(j))
                             {
-                                m_update.Add(j);
+                                m_update.Enqueue(j);
                             }
 
                             ob.pending.Add(j);
@@ -530,9 +554,9 @@ namespace Prowl.Recast.Detour.TileCache
                         ob.pending.Clear();
                         foreach (long j in ob.touched)
                         {
-                            if (!Contains(m_update, j))
+                            if (m_updateSet.Add(j))
                             {
-                                m_update.Add(j);
+                                m_update.Enqueue(j);
                             }
 
                             ob.pending.Add(j);
@@ -544,10 +568,10 @@ namespace Prowl.Recast.Detour.TileCache
             }
 
             // Process updates
-            if (0 < m_update.Count)
+            for (int n = 0; n < maxTiles && 0 < m_update.Count; ++n)
             {
-                long refs = m_update[0];
-                m_update.RemoveAt(0);
+                long refs = m_update.Dequeue();
+                m_updateSet.Remove(refs);
                 // Build mesh
                 BuildNavMeshTile(refs);
 
