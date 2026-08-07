@@ -82,7 +82,7 @@ public static class MetaFile
     /// Ensure a .meta file exists for the given asset. Creates one if missing.
     /// Returns the meta data.
     /// </summary>
-    public static MetaFileData EnsureMeta(string absoluteAssetPath, string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null, Guid? forcedGuid = null)
+    public static MetaFileData EnsureMeta(string absoluteAssetPath, string importerTypeName, int importerVersion = 1, EchoObject? defaultSettings = null)
     {
         string metaPath = GetMetaPath(absoluteAssetPath);
         if (File.Exists(metaPath))
@@ -111,17 +111,8 @@ public static class MetaFile
             try { existing = Parse(text); }
             catch { /* unparseable */ }
 
-            if (existing != null)
-            {
-                if (forcedGuid.HasValue && existing.Guid != forcedGuid.Value)
-                {
-                    existing.Guid = forcedGuid.Value;
-                    Write(metaPath, existing);
-                }
-
-                if (existing.Guid != Guid.Empty)
-                    return existing;
-            }
+            if (existing != null && existing.Guid != Guid.Empty)
+                return existing;
 
             Runtime.Debug.LogError(
                 $"'{metaPath}' is corrupt or carries no GUID. Assigning a new one - existing references " +
@@ -129,8 +120,6 @@ public static class MetaFile
         }
 
         var data = CreateNew(importerTypeName, importerVersion, defaultSettings);
-        if (forcedGuid.HasValue)
-            data.Guid = forcedGuid.Value;
         Write(metaPath, data);
         return data;
     }

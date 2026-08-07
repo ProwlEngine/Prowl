@@ -116,9 +116,6 @@ public class EditorAssetBackend : AssetBackendBase
         // Rebuild sub-asset index
         RebuildSubAssetIndex();
 
-        // Materialize engine default assets onto disk so the scan below can import them
-        ExtractDefaultAssets();
-
         // Scan and reconcile with actual files
         ScanAssets();
 
@@ -140,55 +137,6 @@ public class EditorAssetBackend : AssetBackendBase
 
         // Initialize GameResources mapping for editor play mode
         RefreshResourcesMap();
-    }
-
-    /// <summary>
-    /// Materialize the engine's embedded default assets verbatim into the project's read-only
-    /// Defaults/ folder (a sibling of Assets/), so the asset scan can import them like any other
-    /// asset. The folder is engine-managed: every embedded file is (over)written when missing or out
-    /// of date, which is what makes it effectively read-only. Default shaders' .meta is forced onto
-    /// their deterministic BuiltInAssets GUID (see <see cref="DefaultAssetGuid"/>), which is what
-    /// lets Shader.LoadDefault resolve them.
-    /// </summary>
-    private void ExtractDefaultAssets()
-    {
-        string defaultsDir = _project.DefaultsPath;
-        Directory.CreateDirectory(defaultsDir);
-
-        foreach (string fileName in Runtime.Resources.EmbeddedResources.EnumerateDefaultFileNames())
-        {
-            byte[] embedded = Runtime.Resources.EmbeddedResources.ReadAllBytes($"Assets/Defaults/{fileName}");
-            string targetPath = Path.Combine(defaultsDir, fileName);
-
-            if (File.Exists(targetPath) && File.ReadAllBytes(targetPath).AsSpan().SequenceEqual(embedded))
-                continue;
-
-            File.WriteAllBytes(targetPath, embedded);
-        }
-
-        MigrateLegacyDefaults();
-    }
-
-    /// <summary>
-    /// Older projects extracted default shaders into Assets/Defaults. Those files use the same
-    /// project-relative path ("Defaults/X.shader") and the same forced GUID as the new sibling
-    /// Defaults/ root, so leaving them in place would make two files claim one GUID. Remove the
-    /// legacy in-Assets copy (engine-owned, regenerated) so the sibling root is the only source.
-    /// </summary>
-    private void MigrateLegacyDefaults()
-    {
-        string legacyDir = Path.Combine(_project.AssetsPath, Projects.Project.DefaultsFolder);
-        if (!Directory.Exists(legacyDir)) return;
-
-        try
-        {
-            Directory.Delete(legacyDir, true);
-            Runtime.Debug.Log("Migrated legacy Assets/Defaults to the read-only Defaults/ sibling folder.");
-        }
-        catch (Exception ex)
-        {
-            Runtime.Debug.LogWarning($"Failed to remove legacy Assets/Defaults folder: {ex.Message}");
-        }
     }
 
     /// <summary>
@@ -421,43 +369,27 @@ public class EditorAssetBackend : AssetBackendBase
 
     private void ScanAssets()
     {
-        // Track which paths we find on disk across all roots
+        var assetsPath = _project.AssetsPath;
+        if (!Directory.Exists(assetsPath)) return;
+
+        // Track which paths we find on disk
         var foundPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Primary, writable asset root.
-        ScanRoot(_project.AssetsPath, "", foundPaths);
-        // Read-only engine defaults, materialized as a sibling of Assets/. Stored with a
-        // "Defaults/" prefix so its entries resolve via Project.ToAbsolutePath.
-        ScanRoot(_project.DefaultsPath, Projects.Project.DefaultsFolder, foundPaths);
-
-        RemoveStaleEntries(foundPaths);
-    }
-
-    /// <summary>
-    /// Scan a single asset root. <paramref name="relativePrefix"/> is prepended to each discovered
-    /// path ("" for the Assets/ root, "Defaults" for the read-only Defaults/ sibling) so entry
-    /// paths stay project-relative and round-trip through <see cref="Projects.Project.ToAbsolutePath"/>.
-    /// </summary>
-    private void ScanRoot(string rootPath, string relativePrefix, HashSet<string> foundPaths)
-    {
-        if (!Directory.Exists(rootPath)) return;
-
-        foreach (var file in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
+        foreach (var file in Directory.EnumerateFiles(assetsPath, "*", SearchOption.AllDirectories))
         {
             // Skip .meta files and hidden files
             if (file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
             string fileName = Path.GetFileName(file);
             if (fileName.StartsWith('.')) continue;
 
-            string rel = NormalizePath(Path.GetRelativePath(rootPath, file));
-            string relativePath = string.IsNullOrEmpty(relativePrefix) ? rel : $"{relativePrefix}/{rel}";
+            string relativePath = NormalizePath(Path.GetRelativePath(assetsPath, file));
             foundPaths.Add(relativePath);
 
             // A single broken file (bad custom importer, corrupt .meta) must not abort scanning the
             // rest of the project - log it and move on, leaving that entry to retry on the next scan.
             try
             {
-                ScanAssetFile(rootPath, file, relativePath);
+                ScanAssetFile(assetsPath, file, relativePath);
             }
             catch (Exception ex)
             {
@@ -466,7 +398,7 @@ public class EditorAssetBackend : AssetBackendBase
         }
 
         // Also scan for directories (they need .meta files too for folder GUIDs)
-        foreach (var dir in Directory.EnumerateDirectories(rootPath, "*", SearchOption.AllDirectories))
+        foreach (var dir in Directory.EnumerateDirectories(assetsPath, "*", SearchOption.AllDirectories))
         {
             string dirName = Path.GetFileName(dir);
             if (dirName.StartsWith('.')) continue;
@@ -475,6 +407,8 @@ public class EditorAssetBackend : AssetBackendBase
             try { MetaFile.EnsureMeta(dir, "DefaultImporter"); }
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to read folder meta for '{dir}': {ex.Message}"); }
         }
+
+        RemoveStaleEntries(foundPaths);
     }
 
     /// <summary>Drop tracked entries (and their caches/sub-assets) whose files are gone from disk.</summary>
@@ -519,12 +453,8 @@ public class EditorAssetBackend : AssetBackendBase
         var importer = EditorRegistries.CreateImporterByName(importerName);
         var defaultSettings = importer?.DefaultSettings();
 
-        // Engine default shaders are forced onto their deterministic BuiltInAssets GUID so
-        // Shader.LoadDefault resolves them; everything else gets a random GUID.
-        Guid? forcedGuid = DefaultAssetGuid.TryGet(relativePath, out var defaultGuid) ? defaultGuid : null;
-
         // Ensure .meta exists (with default settings if creating new)
-        var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings, forcedGuid);
+        var meta = MetaFile.EnsureMeta(file, importerName, importer?.Version ?? 1, defaultSettings);
 
         if (_pathToGuid.TryGetValue(relativePath, out var existingGuid))
         {
@@ -762,7 +692,7 @@ public class EditorAssetBackend : AssetBackendBase
 
     private bool RunImportCore(AssetEntry entry)
     {
-        string absolutePath = _project.ToAbsolutePath(entry.Path);
+        string absolutePath = Path.Combine(_project.AssetsPath, entry.Path);
         if (!File.Exists(absolutePath))
         {
             entry.NeedsReimport = false;
@@ -1630,7 +1560,7 @@ public class EditorAssetBackend : AssetBackendBase
             if (reloaded != null)
             {
                 string? sourceFile = entry.MainAssetType == typeof(Runtime.Resources.Texture2D)
-                    ? _project.ToAbsolutePath(entry.Path)
+                    ? Path.Combine(_project.AssetsPath, entry.Path)
                     : null;
                 ThumbnailGenerator.Enqueue(guid, reloaded, sourceFile);
             }
@@ -1973,9 +1903,9 @@ public class EditorAssetBackend : AssetBackendBase
         return true;
     }
 
-    /// <summary>Get a project-relative path from an absolute path, normalized and root-aware.</summary>
+    /// <summary>Get a relative path from an absolute path, normalized.</summary>
     public string ToRelativePath(string absolutePath)
-        => _project.ToRelativePath(absolutePath);
+        => NormalizePath(Path.GetRelativePath(_project.AssetsPath, absolutePath));
 
     public void Dispose()
     {
