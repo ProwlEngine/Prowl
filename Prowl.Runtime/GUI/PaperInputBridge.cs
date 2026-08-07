@@ -30,6 +30,7 @@ public static class PaperInputBridge
             return;
         }
 
+        pointerPos = ApplyPointerWrap(paper, pointerPos);
         float x = pointerPos.X;
         float y = pointerPos.Y;
         paper.SetPointerState(PaperMouseBtn.Unknown, x, y, false, true);
@@ -53,6 +54,21 @@ public static class PaperInputBridge
             else if (Input.GetKeyUp(key))
                 paper.SetKeyState(mapped, false);
         }
+    }
+
+    /// <summary>
+    /// Honour <see cref="Paper.WantsPointerWrap"/>: while a widget is mid-drag, teleport the OS cursor
+    /// to the opposite window edge instead of letting it run out of screen. Paper is told the jump so
+    /// <see cref="Paper.PointerDelta"/> stays continuous, and the widget never learns it happened.
+    /// </summary>
+    private static Float2 ApplyPointerWrap(Paper paper, Float2 pointerPos)
+    {
+        var size = Window.Size;
+        if (!paper.TryWrapPointer(pointerPos, size.X, size.Y, out Float2 wrapped))
+            return pointerPos;
+
+        Input.MousePosition = new Int2((int)wrapped.X, (int)wrapped.Y);
+        return wrapped;
     }
 
     private static void PumpButton(Paper paper, int button, PaperMouseBtn btn, float x, float y)

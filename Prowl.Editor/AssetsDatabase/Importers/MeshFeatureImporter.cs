@@ -19,7 +19,10 @@ public static class MeshFeatureImporter
     /// Sub-asset names are <c>{meshName}_{featureKey}</c> for deterministic GUIDs
     /// across reimports.
     /// </summary>
-    public static void GenerateAll(Mesh mesh, EchoObject? settings, ImportContext ctx)
+    /// <param name="ownerIdentity">The sub-asset identity of the mesh these features belong to, so each
+    /// feature keys off its owner plus its own spec key. Registration order would not do here: a feature
+    /// that stops generating shifts every later one onto the wrong GUID.</param>
+    public static void GenerateAll(Mesh mesh, EchoObject? settings, ImportContext ctx, string ownerIdentity)
     {
         foreach (var spec in MeshFeatureRegistry.Specs)
         {
@@ -37,7 +40,7 @@ public static class MeshFeatureImporter
             if (feature == null) continue;
 
             string meshName = string.IsNullOrEmpty(mesh.Name) ? "Mesh" : mesh.Name;
-            ctx.AddSubAsset($"{meshName}_{spec.Key}", feature);
+            ctx.AddSubAsset($"{meshName}_{spec.Key}", feature, SubAssetIdentity.Key($"{ownerIdentity}/{spec.Key}"));
         }
     }
 }

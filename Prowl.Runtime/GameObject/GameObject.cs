@@ -563,6 +563,13 @@ public class GameObject : EngineObject, ISerializable
     {
         ArgumentNullException.ThrowIfNull(comp, nameof(comp));
 
+        if (ReferenceEquals(comp.GameObject, this)) return;
+
+        // A component belongs to exactly one GameObject. Leaving it registered on its previous one
+        // would have both report it from GetComponent, and would destroy it when that one is disposed.
+        if (comp.GameObject.IsValid())
+            comp.GameObject.DetachComponent(comp);
+
         Type type = comp.GetType();
         RequireComponentAttribute? requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
         if (requireComponentAttribute != null)
@@ -639,9 +646,8 @@ public class GameObject : EngineObject, ISerializable
 
             foreach (MonoBehaviour c in componentList)
             {
-                if (c.HasBeenEnabled) // OnDispose is only called if OnEnable was previously called
-                    c.Dispose();
-
+                c.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
+                c.DetachFromGameObject();
                 _components.Remove(c);
             }
             _componentCache.Remove(typeof(T));
@@ -656,17 +662,7 @@ public class GameObject : EngineObject, ISerializable
     public void RemoveComponent<T>(T component) where T : MonoBehaviour
     {
         ArgumentNullException.ThrowIfNull(component, nameof(component));
-        if (component.CanDestroy() == false) return;
-
-        _components.Remove(component);
-        _componentCache.Remove(component.GetType(), component);
-
-        // OnDisable and OnDispose are only called if OnEnable was previously called
-        if (component.HasBeenEnabled)
-        {
-            if (component.EnabledInHierarchy) component.InternalOnDisable();
-            component.Dispose();
-        }
+        RemoveComponent((MonoBehaviour)component);
     }
 
     /// <summary>
@@ -675,19 +671,36 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
+        ArgumentNullException.ThrowIfNull(component, nameof(component));
         if (component.CanDestroy() == false) return;
 
         if (_components.Remove(component))
         {
             _componentCache.Remove(component.GetType(), component);
 
-            // OnDisable and OnDispose are only called if OnEnable was previously called
-            if (component.HasBeenEnabled)
-            {
-                if (component.EnabledInHierarchy) component.InternalOnDisable();
-                component.Dispose();
-            }
+            // OnDisable only if OnEnable ran, but disposal is unconditional: a component can take
+            // ownership of something from its constructor, long before it is ever enabled.
+            if (component.HasBeenEnabled && component.EnabledInHierarchy)
+                component.InternalOnDisable();
+
+            component.Destroy(); // Will call Dispose at end of frame not immediately so the component technically is still usable
+            component.DetachFromGameObject();
         }
+    }
+
+    /// <summary>
+    /// Removes a component from this GameObject without destroying it, for a move to another one.
+    /// </summary>
+    internal void DetachComponent(MonoBehaviour component)
+    {
+        if (!_components.Remove(component)) return;
+
+        _componentCache.Remove(component.GetType(), component);
+
+        if (component.HasBeenEnabled && component.EnabledInHierarchy)
+            component.InternalOnDisable();
+
+        component.DetachFromGameObject();
     }
 
     /// <summary>
@@ -767,22 +780,16 @@ public class GameObject : EngineObject, ISerializable
     /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
     public IEnumerable<MonoBehaviour> GetComponents(Type type)
     {
+        // Snapshotted rather than yielded off the live storage, so a caller (or a lifecycle callback
+        // it triggers) can add or remove components while walking the result. Component counts are
+        // small enough that the copy costs less than the crash it prevents.
         if (type == typeof(MonoBehaviour))
-        {
-            // Special case for Component
-            foreach (MonoBehaviour comp in _components)
-                yield return comp;
-        }
-        else
-        {
-            if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
-                foreach (MonoBehaviour comp in components)
-                    yield return comp;
-            else
-                foreach (MonoBehaviour comp in _components)
-                    if (comp.GetType().IsAssignableTo(type))
-                        yield return comp;
-        }
+            return _components.ToArray();
+
+        if (_componentCache.TryGetValue(type, out IReadOnlyCollection<MonoBehaviour>? components))
+            return components.ToArray();
+
+        return _components.Where(comp => comp.GetType().IsAssignableTo(type)).ToArray();
     }
 
     /// <summary>
@@ -993,7 +1000,7 @@ public class GameObject : EngineObject, ISerializable
     /// <summary>
     /// Disposes of the GameObject and its components.
     /// </summary>
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         for (int i = Children.Count - 1; i >= 0; i--)
             Children[i].Dispose();
@@ -1003,17 +1010,13 @@ public class GameObject : EngineObject, ISerializable
             MonoBehaviour component = _components[i];
             if (component.IsDisposed) continue;
 
-            // Only call OnDisable/OnDispose if OnEnable was previously called
-            if (component.HasBeenEnabled)
-            {
-                // Only call OnDisable if the component is enabled in hierarchy AND the scene is active
-                // This prevents calling OnDisable twice when disposing after scene deactivation
-                Scene? scene = Scene;
-                if (component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
-                    component.InternalOnDisable();
+            // Only call OnDisable if OnEnable previously ran, the component is enabled in hierarchy
+            // and the scene is active, so it is never delivered twice after a scene deactivation.
+            Scene? scene = Scene;
+            if (component.HasBeenEnabled && component.EnabledInHierarchy && scene.IsValid() && scene.IsActive)
+                component.InternalOnDisable();
 
-                component.Dispose();
-            }
+            component.Dispose();
         }
         _components.Clear();
 

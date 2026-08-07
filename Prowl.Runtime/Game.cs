@@ -65,6 +65,9 @@ public abstract class Game
         // drives play/pause itself. Set before Window.Load -> Initialize so that override wins.
         Application.IsPlaying = true;
 
+        // Installed on this thread, which is the one the loop runs on, so an await in game code resumes
+        // where the scene actually lives. The editor starts and ends a session per play instead.
+        Tasks.MainThreadContext.Install();
         InitializeWindow(title, width, height);
 
         Window.Load += () =>
@@ -162,6 +165,14 @@ public abstract class Game
                 // === End of End Graphics ===
 
                 Debug.ClearGizmos();
+
+                // Last thing in the frame: everything Destroy()ed stayed usable right through
+                // update, render and GUI, and is torn down here where nothing is mid-callback.
+                EngineObject.ProcessDestroyed();
+
+                // Then the scene swap, so a load requested this frame tears the outgoing scene down
+                // here rather than under whatever was still running.
+                Scene.ProcessPendingLoad();
             }
             catch (Exception e)
             {
@@ -186,8 +197,8 @@ public abstract class Game
         {
             Closing();
 
-            // Unload the current scene
-            Scene.Unload();
+            // Dispose the current scene so everything in it runs its teardown callbacks.
+            Scene.Shutdown();
 
             AudioContext.Deinitialize();
 
@@ -217,6 +228,7 @@ public abstract class Game
         Application.IsPlaying = true;
         Application.IsHeadless = true;
 
+        Tasks.MainThreadContext.Install();
         // Registers built-in asset loaders (no GPU work happens until something resolves them).
         BuiltInAssets.Initialize();
         Initialize();
@@ -247,6 +259,13 @@ public abstract class Game
                 SimulationStep(Time.DeltaTime);
                 EndUpdate();
 
+                // No render phase here, so the end of the simulation step is the end of the frame.
+                EngineObject.ProcessDestroyed();
+
+                // Then the scene swap, so a load requested this frame tears the outgoing scene down
+                // here rather than under whatever was still running.
+                Scene.ProcessPendingLoad();
+
                 frame++;
                 if (options.MaxFrames > 0 && frame >= options.MaxFrames) break;
                 if (options.MaxSeconds > 0 && runClock.Elapsed.TotalSeconds >= options.MaxSeconds) break;
@@ -264,7 +283,7 @@ public abstract class Game
         {
             try { Console.CancelKeyPress -= cancelHandler; } catch { }
             Closing();
-            Scene.Unload();
+            Scene.Shutdown();
             Application.IsHeadless = false;
         }
     }
@@ -279,6 +298,10 @@ public abstract class Game
     private void SimulationStep(float delta)
     {
         Scene? currentScene = Scene.Current;
+
+        // Before the scene runs, so a continuation resumed this frame sees the same world the rest of
+        // the frame will. Anything left over from a finished play session is dropped here.
+        Tasks.MainThreadContext.Current?.Pump();
 
         // Fixed update loop only when gameplay should run
         fixedTimeAccumulator += delta;

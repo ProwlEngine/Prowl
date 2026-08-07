@@ -57,8 +57,8 @@ public class TextComponentEditor : CustomEditor
 
         paper.Box($"{id}_sp0.2").Height(6);
 
-        EditorGUI.Row(paper, $"{id}_color", "Text Color", () =>
-        Origami.ColorField(paper, $"{id}_color_f", text.TextColor, v => text.TextColor = v).Show());
+        EditorGUI.Row(paper, $"{id}_color", "Color", () =>
+        Origami.ColorField(paper, $"{id}_color_f", text.Color, v => text.Color = v).Show());
 
         paper.Box($"{id}_sp0.3").Height(6);
 

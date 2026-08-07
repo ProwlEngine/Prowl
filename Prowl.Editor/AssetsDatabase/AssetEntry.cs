@@ -51,13 +51,14 @@ public class AssetEntry
     }
 
     /// <summary>
-    /// Generate a deterministic GUID for a sub-asset based on parent GUID + name.
-    /// Stable across reimports as long as parent GUID and sub-asset name don't change.
+    /// Generate a deterministic GUID for a sub-asset based on parent GUID + identity.
+    /// Stable across reimports as long as the parent GUID and the identity don't change
+    /// (see <see cref="Importers.ImportContext.AddSubAsset"/> for what makes a good identity).
     /// </summary>
-    public static Guid DeriveSubAssetGuid(Guid parentGuid, string subAssetName)
+    public static Guid DeriveSubAssetGuid(Guid parentGuid, string identity)
     {
         byte[] parentBytes = parentGuid.ToByteArray();
-        byte[] nameBytes = Encoding.UTF8.GetBytes(subAssetName);
+        byte[] nameBytes = Encoding.UTF8.GetBytes(identity);
         byte[] combined = new byte[parentBytes.Length + nameBytes.Length];
         parentBytes.CopyTo(combined, 0);
         nameBytes.CopyTo(combined, parentBytes.Length);

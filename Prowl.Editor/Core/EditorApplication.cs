@@ -40,6 +40,7 @@ public class EditorApplication : Game
     private const double IntroDuration = 5.0;      // total
     private bool _introClosing; // true = closing phase (bars sliding in)
     private bool _launcherWasOpen = true;
+    private bool _wasFocused = true;
     private IDisposable? _origamiScope;
 
     private string _curDefaultFont;
@@ -100,6 +101,9 @@ public class EditorApplication : Game
 
                 // Load user script assemblies before registry scanning
                 ScriptAssemblyManager.LoadAssemblies(project);
+
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
 
                 projectAlreadyInitialized = true;
                 Window.InternalWindow.Title = $"Prowl Editor - {project.Name}";
@@ -163,6 +167,7 @@ public class EditorApplication : Game
         // Build the editor's PropertyGrid config
         PropertyGridConfig = new OrigamiUI.PropertyGridConfig();
         OrigamiUI.BuiltInFieldDrawers.Register(PropertyGridConfig.Drawers);
+        RangeSliderDrawer.Register(PropertyGridConfig.Drawers); // wraps the built-in float/int drawers
         BuiltInAttributeHandlers.Register(PropertyGridConfig.Handlers);
         PropertyGridConfig.OnBeginRoot = target => Undo.Snapshot(target);
         PropertyGridConfig.OnFieldChanged = target =>
@@ -174,6 +179,7 @@ public class EditorApplication : Game
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
                 EngineObjectPropertyEditor.SetFieldType(fieldType);
+            InspectorNameEnumDrawer.EnsureRegistered(PropertyGridConfig.Drawers, fieldType);
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
@@ -418,6 +424,9 @@ public class EditorApplication : Game
                 // Load user script assemblies and re-register all types
                 ScriptAssemblyManager.LoadAssemblies(Project.Current);
 
+                // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+                ScriptAssemblyManager.RequestRecompile();
+
                 // Rebuild the scan-based registries (mesh features, menu items) against the loaded assemblies.
                 ReinitializeRegistries();
 
@@ -433,8 +442,16 @@ public class EditorApplication : Game
             }
         }
 
+        // Regaining focus is when external edits (a DCC app, a text editor, a branch switch) have most
+        // likely landed, and the watcher can miss those outright. Reconcile once on the rising edge
+        // rather than trusting whatever it happened to catch.
+        bool focused = Window.IsFocused;
+        if (focused && !_wasFocused)
+            EditorAssetBackend.Instance?.Refresh();
+        _wasFocused = focused;
+
         // Process file changes optionally only when window is focused
-        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || Window.IsFocused;
+        bool canProcessAssets = !EditorSettings.Instance.ReimportOnFocusOnly || focused;
         if (canProcessAssets)
         {
             EditorAssetBackend.Instance?.ProcessFileChanges();
@@ -482,10 +499,6 @@ public class EditorApplication : Game
                 return; // launcher still active, don't draw editor
             }
         }
-
-        // Ensure a scene always exists
-        if (Project.Current != null && Runtime.Resources.Scene.Current == null)
-            EditorSceneManager.EnsureSceneLoaded();
 
         // Editor backdrop (behind the translucent glass panels) shared with the launcher.
         _nebula ??= new GUI.NebulaBackground(paper);
@@ -1547,10 +1560,8 @@ public class EditorApplication : Game
         // Clear selection (references will be invalid)
         Selection.Clear();
 
-        // Unload the editor scene
-        Runtime.Resources.Scene.Unload();
-
-        // Deserialize a fresh play copy
+        // Deserialize a fresh play copy. Loading it is what disposes the editor scene, at the end of
+        // the frame, so a failure here leaves the editor scene loaded and the editor usable.
         var playCtx = Importers.ImportHelper.CreateTrackingContext(out _);
         var playScene = Echo.Serializer.Deserialize<Runtime.Resources.Scene>(_savedEditorScene, playCtx);
         if (playScene == null)
@@ -1572,6 +1583,8 @@ public class EditorApplication : Game
 
         // Push play-mode input handler (only forwards input when Game View focused)
         Input.PushHandler(new GameViewInputHandler(Input.Current));
+
+        Runtime.Resources.Scene.DestroyPreserved();
 
         // Load with full lifecycle (Enable -> OnEnable/Start will fire)
         Runtime.Resources.Scene.Load(playScene);
@@ -1598,10 +1611,9 @@ public class EditorApplication : Game
         // Clear selection (play scene references)
         Selection.Clear();
 
-        // Unload the play scene
-        Runtime.Resources.Scene.Unload();
+        Runtime.Resources.Scene.DestroyPreserved();
 
-        // Restore the editor scene WITHOUT lifecycle callbacks
+        // Restore the editor scene. Loading it is what disposes the play scene, at the end of the frame.
         if (_savedEditorScene != null)
         {
             var ctx = Importers.ImportHelper.CreateTrackingContext(out _);

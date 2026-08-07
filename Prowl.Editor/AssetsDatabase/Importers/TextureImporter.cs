@@ -17,7 +17,9 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".png", ".jpg", ".jpeg", ".bmp", ".tga", ".psd", ".hdr", ".dds", ".exr")]
 public class TextureImporter : AssetImporter
 {
-    public override int Version => 4; // Bumped: min/mag/mip filter booleans
+    // 4: min/mag/mip filter booleans
+    // 5: sprite sub-asset GUIDs derive from the slice's persistent Id instead of its name.
+    public override int Version => 5;
 
     public override bool Import(ImportContext ctx)
     {
@@ -47,8 +49,8 @@ public class TextureImporter : AssetImporter
             foreach (var kv in spriteSettings.SecondaryTextures)
                 if (!kv.Value.IsExplicitNull) ctx.AddDependency(kv.Value.AssetID);
 
-            foreach (var (name, sprite) in SpriteBuilder.Build(texture, spriteSettings))
-                ctx.AddSubAsset(name, sprite);
+            foreach (var (slice, sprite) in SpriteBuilder.Build(texture, spriteSettings))
+                ctx.AddSubAsset(slice.Name, sprite, SpriteBuilder.IdentityOf(spriteSettings, slice));
         }
 
         return true;
@@ -110,6 +112,11 @@ public enum PivotUnitMode
 /// <summary>One sprite's authoring record.</summary>
 public class SpriteSliceData
 {
+    /// <summary>Persistent identity, minted once when the slice is created and carried in the texture's
+    /// <c>.meta</c>. This is what the sprite sub-asset's GUID is derived from, so renaming the slice or the
+    /// texture leaves every reference to it intact.</summary>
+    public Guid Id;
+
     public string Name = "sprite";
     public SpriteRect Rect;
     public SpriteAlignment Alignment = SpriteAlignment.Center;
@@ -181,7 +188,17 @@ public static class TextureSpriteMeta
     /// <summary>Serializes the sprite settings into a texture's <c>.meta</c> settings compound.</summary>
     public static void WriteInto(EchoObject settings, SpriteImportSettings s)
     {
+        AssignMissingSliceIds(s);
         settings[Key] = Serializer.Serialize(typeof(SpriteImportSettings), s);
+    }
+
+    /// <summary>Gives every slice a persistent ID before it reaches disk. The single choke point for
+    /// slices authored anywhere other than the slicing tools (hand-edited metas, older projects).</summary>
+    private static void AssignMissingSliceIds(SpriteImportSettings s)
+    {
+        foreach (SpriteSliceData slice in s.Slices)
+            if (slice.Id == Guid.Empty)
+                slice.Id = Guid.NewGuid();
     }
 
     /// <summary>Loads the sprite settings for a texture by GUID.</summary>
@@ -416,6 +433,7 @@ public static class SpriteSlicer
     {
         list.Add(new SpriteSliceData
         {
+            Id = Guid.NewGuid(),
             Name = $"{baseName}_{list.Count}",
             Rect = rect,
             Alignment = align,
@@ -485,9 +503,20 @@ public static class SpriteSlicer
 /// </summary>
 public static class SpriteBuilder
 {
-    public static List<(string name, Sprite sprite)> Build(Texture2D tex, SpriteImportSettings s)
+    /// <summary>The identity of Single mode's one sprite. Fixed, because there is only ever one of them.</summary>
+    private const string SingleIdentity = "single";
+
+    /// <summary>
+    /// The identity seeding a slice's sub-asset GUID. Always an explicit key, never order: slices are a
+    /// user-edited list, and the grid slicer skips cells that become fully transparent, so an index here
+    /// tracks neither the slice nor anything stable about it.
+    /// </summary>
+    public static SubAssetIdentity IdentityOf(SpriteImportSettings s, SpriteSliceData slice)
+        => SubAssetIdentity.Key(s.Mode == SpriteMode.Single ? SingleIdentity : slice.Id.ToString("N"));
+
+    public static List<(SpriteSliceData slice, Sprite sprite)> Build(Texture2D tex, SpriteImportSettings s)
     {
-        var result = new List<(string, Sprite)>();
+        var result = new List<(SpriteSliceData, Sprite)>();
         int texW = (int)tex.Width, texH = (int)tex.Height;
         if (texW <= 0 || texH <= 0) return result;
 
@@ -495,7 +524,7 @@ public static class SpriteBuilder
         byte[]? alpha = s.GenerateTightMesh ? SpriteSlicer.ReadAlpha(tex) : null;
 
         foreach (SpriteSliceData slice in slices)
-            result.Add((slice.Name, BuildOne(tex, s, slice, texW, texH, alpha)));
+            result.Add((slice, BuildOne(tex, s, slice, texW, texH, alpha)));
 
         return result;
     }

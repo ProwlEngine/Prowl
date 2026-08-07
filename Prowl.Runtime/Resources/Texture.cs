@@ -132,7 +132,7 @@ public abstract class Texture : EngineObject
         SetTextureFilters(DefaultMipmapFilter);
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         // Defer the GPU handle's disposal: it may still be bound by an in-flight frame (e.g. the UI
         // drawing this texture while it is reimported). Freeing it now is a use-after-free that

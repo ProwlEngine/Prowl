@@ -36,6 +36,15 @@ public abstract class UIBehaviour : MonoBehaviour
     // force a re-bake when they drift (otherwise a stretched child renders at its old size).
     [SerializeIgnore] internal Float2 LastBakeSize = new(float.NaN, float.NaN);
     [SerializeIgnore] internal float LastBakeAlpha = float.NaN;
+    [SerializeIgnore] internal int LastBakeContentVersion = -1;
+
+    /// <summary>
+    /// Stamp of external state the baked mesh depends on but which nothing dirties: text geometry is
+    /// tied to the glyph atlas, and the atlas is rewritten (and its UVs rescaled) as new glyphs arrive.
+    /// The canvas re-bakes whenever this moves, so it holds in edit mode too, where <c>Update</c> does
+    /// not run.
+    /// </summary>
+    public virtual int ContentVersion => 0;
 
     public override void OnEnable()
     {
@@ -78,13 +87,25 @@ public abstract class UIBehaviour : MonoBehaviour
 
         // Free the baked GPU buffers - the canvas will re-bake from scratch if this element
         // is ever re-added. Without this every created/destroyed UI element leaks its mesh.
-        if (CachedMesh.IsValid()) CachedMesh.OnDispose();
+        if (CachedMesh.IsValid()) CachedMesh.Dispose();
         CachedMesh = null;
         DirtyFlags |= UIDirtyFlags.Vertices;
     }
 
     /// <summary>Subclasses fill <paramref name="builder"/> in canvas-local pixel space.</summary>
     public abstract void GenerateMesh(UIMeshBuilder builder, in UIContext context);
+
+    /// <summary>
+    /// True while this element's geometry is built from an asset that hasn't streamed in yet, so what it
+    /// baked is missing or a placeholder.
+    /// <para>
+    /// The canvas stays dirty while any element reports this. Nothing else would bring it back: a clean
+    /// canvas skips the whole rebuild walk, so an element that baked nothing on frame one is never asked
+    /// again, and the asset arriving changes nothing on screen until something unrelated (a window
+    /// resize) happens to dirty the canvas.
+    /// </para>
+    /// </summary>
+    public virtual bool IsContentPending => false;
 
     /// <summary>Subclasses bind per-item shader properties (textures, scalars). Called every frame the item is visible.</summary>
     public virtual void PopulateProperties(PropertySet props, in UIContext context) { }

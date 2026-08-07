@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -21,9 +21,14 @@ namespace Prowl.Editor.GUI.SceneView.Editors;
 /// Scene view editor for terrain provides toolbar with terrain brush tools
 /// and handles brush input (raycast, preview, application).
 /// </summary>
-[SceneViewEditorFor(typeof(TerrainComponent))]
-public class TerrainSceneEditor : ISceneViewEditor
+[ComponentSceneTool(typeof(TerrainComponent))]
+public class TerrainSceneEditor : SceneTool
 {
+    public override string Name => "Terrain";
+    public override string Icon => EditorIcons.Mountain;
+
+    private const string BrushControl = "terrain_brush";
+
     private TerrainComponent? _terrain;
     private bool _isPainting;
     private bool _useTransformTool;
@@ -36,14 +41,16 @@ public class TerrainSceneEditor : ISceneViewEditor
 
     public int Priority => 0;
 
-    public void OnActivate(GameObject target)
+    public override void OnActivated(SceneToolContext ctx)
     {
+        GameObject? target = ctx.ActiveObject;
+        if (target == null) return;
         _terrain = target.GetComponent<TerrainComponent>();
         _useTransformTool = false;
         _isPainting = false;
     }
 
-    public void OnDeactivate()
+    public override void OnDeactivated()
     {
         if (_terrain != null)
         {
@@ -55,9 +62,12 @@ public class TerrainSceneEditor : ISceneViewEditor
         _isPainting = false;
     }
 
-    public bool DrawToolbar(Paper paper, string id, Scribe.FontFile font)
+    public override bool OverridesToolStrip => true;
+
+    public override void OnToolStripGUI(SceneToolContext ctx, Paper paper, string id)
     {
-        if (_terrain == null) return false;
+        if (_terrain == null) return;
+        var font = Theming.EditorTheme.DefaultFont!;
 
         // Transform tool button (always available)
         bool isTransform = _useTransformTool;
@@ -93,8 +103,6 @@ public class TerrainSceneEditor : ISceneViewEditor
             DrawSimpleToolBtn(paper, $"{id}_tplace", EditorIcons.Leaf, font);
         }
 
-        // Suppress default toolbar we're providing our own
-        return true;
     }
 
     private void DrawSimpleToolBtn(Paper paper, string id, string icon, Scribe.FontFile font)
@@ -133,26 +141,27 @@ public class TerrainSceneEditor : ISceneViewEditor
             });
     }
 
-    public bool OnSceneInput(Camera camera, Scene scene, Rect viewport, Ray mouseRay, Float2 mousePos, bool viewportHovered)
+    public override void OnSceneInput(SceneToolContext toolCtx)
     {
+        HandleContext ctx = toolCtx.Handles;
         if (_terrain == null || _useTransformTool)
         {
             if (_terrain != null) _terrain.BrushVisible = false;
-            return false;
+            return;
         }
 
         // Only handle brush input on height/paint tabs
         if (TerrainEditor.ActiveTab == TerrainTab.Settings)
         {
             _terrain.BrushVisible = false;
-            return false;
+            return;
         }
 
         // Raycast against terrain
-        if (!viewportHovered || !_terrain.Raycast(mouseRay, out Float3 hitPoint, out Float2 terrainUV))
+        if (!ctx.ViewportHovered || !_terrain.Raycast(ctx.MouseRay, out Float3 hitPoint, out Float2 terrainUV))
         {
             _terrain.BrushVisible = false;
-            return false;
+            return;
         }
 
         // Update brush preview
@@ -160,7 +169,7 @@ public class TerrainSceneEditor : ISceneViewEditor
         if (terrainData == null)
         {
             _terrain.BrushVisible = false;
-            return false;
+            return;
         }
 
         // Set brush preview based on active tab
@@ -172,15 +181,22 @@ public class TerrainSceneEditor : ISceneViewEditor
         _terrain.BrushFalloff = isTreeTab ? 1f : TerrainEditor.BrushFalloff;
         _terrain.BrushVisible = true;
 
-        // Handle input
-        bool leftDown = Input.GetMouseButton(0);
-        bool leftPressed = Input.GetMouseButtonDown(0);
-        bool leftReleased = Input.GetMouseButtonUp(0);
-        bool shiftHeld = Input.GetKey(KeyCode.ShiftLeft) || Input.GetKey(KeyCode.ShiftRight);
+        // The brush covers the whole terrain surface rather than a point, so it registers as a body:
+        // far enough to lose to any real handle the cursor is near, near enough to beat object picking.
+        ControlID brush = ctx.GetControlID(BrushControl);
+        ctx.AddControl(brush, HandleContext.BodyDistance, ctx.DepthOf(hitPoint));
+        if (!ctx.IsNearest(brush) && !ctx.IsHot(brush))
+            return;
 
-        // Don't act if right/middle mouse (camera controls)
-        if (Input.GetMouseButton(1) || Input.GetMouseButton(2))
-            return false;
+        // Don't act while the camera is being driven
+        if (ctx.Blocked)
+            return;
+
+        bool leftPressed = ctx.TryBeginDrag(brush);
+        bool leftDown = ctx.IsHot(brush) && ctx.PrimaryHeld;
+        bool leftReleased = ctx.PrimaryUp;
+        bool shiftHeld = ctx.Shift;
+        ctx.TryEndDrag(brush);
 
         if (isTreeTab)
         {
@@ -249,9 +265,6 @@ public class TerrainSceneEditor : ISceneViewEditor
                 RegisterStrokeUndo(terrainData);
             }
         }
-
-        // Consume input when over terrain with brush tool (prevents object picking)
-        return true;
     }
 
     private void SnapshotPreStroke(TerrainData data)
@@ -460,7 +473,7 @@ public class TerrainSceneEditor : ISceneViewEditor
             Array.Copy(rect, z * w * stride, dst, ((minZ + z) * res + minX) * stride, w * stride);
     }
 
-    public void DrawOverlay(Quill.Canvas canvas, Rect viewport)
+    public override void OnDrawOverlay(SceneToolContext ctx, Quill.Canvas canvas)
     {
         // Could draw additional 2D brush info here in the future
     }

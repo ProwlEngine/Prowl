@@ -39,6 +39,7 @@ public class PrefabOverrideTests : EditorTestHarness
         var scene = new Scene();
         scene.Add(instance);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
     }
 
     // ---------------------------------------------------------------------

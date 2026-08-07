@@ -74,14 +74,17 @@ public class AssetWatcher : IDisposable
     /// <summary>
     /// Called on the main thread each frame. Returns debounced, coalesced events.
     /// </summary>
-    public List<FileEvent> DrainEvents()
+    /// <param name="force">Skip the debounce wait and return whatever is queued right now. For callers
+    /// that must not run against stale state (starting a build, regaining focus) and would otherwise
+    /// race the debounce window.</param>
+    public List<FileEvent> DrainEvents(bool force = false)
     {
         lock (_lock)
         {
             if (_pendingEvents.Count == 0) return new List<FileEvent>();
 
             // Wait for debounce period
-            if ((DateTime.UtcNow - _lastEventTime).TotalMilliseconds < DebounceMs)
+            if (!force && (DateTime.UtcNow - _lastEventTime).TotalMilliseconds < DebounceMs)
                 return new List<FileEvent>();
 
             // Coalesce: for each path, determine the net effect.

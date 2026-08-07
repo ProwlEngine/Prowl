@@ -282,12 +282,19 @@ public abstract class EditorTestHarness : IDisposable
         };
         using var proc = Process.Start(psi)!;
         string stdout = proc.StandardOutput.ReadToEnd();
-        proc.StandardError.ReadToEnd();
+        string stderr = proc.StandardError.ReadToEnd();
         bool exited = proc.WaitForExit(90_000);
         if (!exited) { try { proc.Kill(true); } catch { } }
 
         Assert.True(exited, "Headless player did not exit within the timeout.");
-        Assert.Equal(0, proc.ExitCode);
+
+        // The captured streams are the only account of what went wrong inside the player, so a bare exit
+        // code assertion here costs an hour of guessing every time a build regresses.
+        Assert.True(proc.ExitCode == 0,
+            $"Player exited with {proc.ExitCode}.{Environment.NewLine}" +
+            $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}" +
+            $"stderr:{Environment.NewLine}{stderr}");
+
         return stdout;
     }
 
@@ -317,7 +324,8 @@ public abstract class EditorTestHarness : IDisposable
 
     public virtual void Dispose()
     {
-        try { if (Scene.Current != null) Scene.Unload(); } catch { }
+        // Drop this test's scene so the next one starts from a fresh empty Scene.Current.
+        try { Scene.Current.Dispose(); } catch { }
 
         Assets.Dispose(); // stops the FileSystemWatcher and clears AssetDatabase.Current / Instance
         Project.CloseCurrent();

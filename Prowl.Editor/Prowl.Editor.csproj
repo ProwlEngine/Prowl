@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -6,8 +6,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>1.0-preview-2</Version>
-    <NoWarn>8600;8601;8618;8602;8603;8604;8625;NU1902;NU1903</NoWarn>
+    <Version>1.0-preview-3</Version>
+    <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
     <ApplicationIcon>prowl.ico</ApplicationIcon>
   </PropertyGroup>
 
@@ -57,6 +57,10 @@
     <EmbeddedResource Include="..\Prowl.Runtime\Assets\Fonts\Inter\static\Inter_18pt-Bold.ttf">
       <Link>Resources\Inter-Bold.ttf</Link>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Players\Desktop\Prowl.Player.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

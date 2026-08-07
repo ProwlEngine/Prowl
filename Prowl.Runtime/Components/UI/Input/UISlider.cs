@@ -107,6 +107,24 @@ public class UISlider : Selectable, IDragHandler, IBeginDragHandler
         e.Use();
     }
 
+    /// <summary>Arrows along the slider's own axis nudge the value; the cross axis navigates away.</summary>
+    public override void OnMove(MoveDirection direction)
+    {
+        bool horizontal = _direction is SliderDirection.LeftToRight or SliderDirection.RightToLeft;
+        bool alongAxis = horizontal
+            ? direction is MoveDirection.Left or MoveDirection.Right
+            : direction is MoveDirection.Up or MoveDirection.Down;
+
+        if (!alongAxis || !IsInteractable()) { base.OnMove(direction); return; }
+
+        float sign = direction is MoveDirection.Right or MoveDirection.Up ? 1f : -1f;
+        if (_direction is SliderDirection.RightToLeft or SliderDirection.TopToBottom) sign = -sign;
+
+        float span = _maxValue - _minValue;
+        float step = _wholeNumbers ? 1f : Maths.Abs(span) * 0.1f;
+        SetValue(_value + sign * step, notify: true);
+    }
+
     private void UpdateValueFromPointer(PointerEventData e)
     {
         Rect rect = GameObject.RectTransform!.ComputedRect; // design space, +Y up, origin bottom-left

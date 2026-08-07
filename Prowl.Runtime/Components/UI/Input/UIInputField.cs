@@ -210,6 +210,14 @@ public class UIInputField : Selectable,
         // The event system clears focus after this; nothing extra to revert for now.
     }
 
+    /// <summary>Horizontal moves drive the caret (see <see cref="ProcessKeyboard"/>), so they must not
+    /// also hand focus to a neighbouring widget. Vertical moves navigate as usual.</summary>
+    public override void OnMove(MoveDirection direction)
+    {
+        if (direction is MoveDirection.Left or MoveDirection.Right) return;
+        base.OnMove(direction);
+    }
+
     // ============================================================
     // Pointer
     // ============================================================
@@ -242,15 +250,7 @@ public class UIInputField : Selectable,
     {
         string d = DisplayText;
         if (_textComponent is null || d.Length == 0 || localX <= 0f) return 0;
-
-        float prev = 0f;
-        for (int i = 1; i <= d.Length; i++)
-        {
-            float w = _textComponent.MeasureWidth(d.Substring(0, i));
-            if (localX < (prev + w) * 0.5f) return i - 1;
-            prev = w;
-        }
-        return d.Length;
+        return Math.Clamp(_textComponent.MeasureCaretIndexAt(d, localX), 0, d.Length);
     }
 
     // ============================================================
@@ -502,8 +502,7 @@ public class UIInputField : Selectable,
         if (_textComponent is null) return;
 
         string d = DisplayText;
-        int caret = Math.Clamp(_caretPos, 0, d.Length);
-        float caretX = _textComponent.MeasureWidth(d.Substring(0, caret));
+        float caretX = _textComponent.MeasureCaretOffset(d, _caretPos);
         float viewW = Area.ComputedRect.Size.X;
 
         // Scroll so the caret stays inside the viewport, then clamp so we never scroll past the text.
@@ -519,8 +518,8 @@ public class UIInputField : Selectable,
 
         if (_selection != null && HasSelection)
         {
-            float aX = _textComponent.MeasureWidth(d.Substring(0, SelMin));
-            float bX = _textComponent.MeasureWidth(d.Substring(0, SelMax));
+            float aX = _textComponent.MeasureCaretOffset(d, SelMin);
+            float bX = _textComponent.MeasureCaretOffset(d, SelMax);
             _selection.AnchoredPosition = new Float2(aX - _scrollX, _selection.AnchoredPosition.Y);
             _selection.SizeDelta = new Float2(bX - aX, _selection.SizeDelta.Y);
         }

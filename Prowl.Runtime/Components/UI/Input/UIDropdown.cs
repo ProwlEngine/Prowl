@@ -178,14 +178,19 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         base.Update();
         if (!Application.IsPlaying || !_open) return;
 
-        if (Input.GetMouseButtonDown(0) && !IsWithinSubtree(EventSystem.Current.IsValid() ? EventSystem.Current.Hovered : null))
+        GameObject? hovered = EventSystem.Current.IsValid() ? EventSystem.Current.Hovered : null;
+        if (Input.GetMouseButtonDown(0) && !IsWithinDropdown(hovered))
             Close();
     }
 
-    private bool IsWithinSubtree(GameObject? go)
+    /// <summary>True when <paramref name="go"/> is inside this dropdown or inside its item list. The
+    /// list is checked separately because <see cref="OptionsRoot"/> is a free reference - it is commonly
+    /// parented elsewhere so it can escape a mask or a scroll view.</summary>
+    private bool IsWithinDropdown(GameObject? go)
     {
+        GameObject? listRoot = _optionsRoot.IsValid() ? _optionsRoot.GameObject : null;
         for (GameObject? n = go; n != null; n = n.Parent)
-            if (ReferenceEquals(n, GameObject)) return true;
+            if (ReferenceEquals(n, GameObject) || ReferenceEquals(n, listRoot)) return true;
         return false;
     }
 
@@ -209,7 +214,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
 
             it.Label.Text = _options[i];
             it.Label.Size = _itemTextSize;
-            it.Label.TextColor = _itemTextColor;
+            it.Label.Color = _itemTextColor;
             it.Background.Color = (i == _value) ? _itemSelectedColor : _itemColor;
 
             RectTransform rt = it.Go.RectTransform!;
@@ -238,7 +243,7 @@ public class UIDropdown : Selectable, IPointerClickHandler, ISubmitHandler, ICan
         TextComponent label = labelGo.AddComponent<TextComponent>();
         label.Alignment = TextAlignment.CenterLeft;
         label.Size = _itemTextSize;
-        label.TextColor = _itemTextColor;
+        label.Color = _itemTextColor;
         labelGo.SetParent(go, worldPositionStays: false);
 
         // Stretch the label to fill the item with a small left inset.

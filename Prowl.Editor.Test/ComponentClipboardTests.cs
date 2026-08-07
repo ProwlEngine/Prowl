@@ -124,6 +124,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         scene.Add(a);
         scene.Add(b);
         Scene.Load(scene);
+        Scene.ProcessPendingLoad();
         return scene;
     }
 
@@ -359,6 +360,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         var host = new GameObject("Host");
         other.Add(host);
         Scene.Load(other);
+        Scene.ProcessPendingLoad();
 
         var pasted = ComponentClipboard.PasteAsNew(host) as ClipRefComp;
 
@@ -385,6 +387,7 @@ public class ComponentClipboardTests : EditorTestHarness, IDisposable
         var echo = Echo.Serializer.Serialize(scene);
         var restored = Echo.Serializer.Deserialize<Scene>(echo)!;
         Scene.Load(restored);
+        Scene.ProcessPendingLoad();
 
         var restoredA = restored.AllObjects.First(g => g.Identifier == originalId);
         var host = new GameObject("Host");

@@ -94,7 +94,7 @@ public class ProjectPanel : DockPanel
 
     private bool IsListView => _thumbnailSize < ListThreshold;
 
-    private void NavigateTo(string folder)
+    public void NavigateTo(string folder)
     {
         if (folder == _currentFolder) return;
         _navBack.Push(_currentFolder);
@@ -621,6 +621,26 @@ public class ProjectPanel : DockPanel
         }
     }
 
+    /// <summary>True when a folder holds no visible files or subfolders. Served from the cached folder index.</summary>
+    private static bool IsFolderEmpty(string relativePath)
+    {
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return false;
+
+        var subs = db.GetSubFolders(relativePath);
+        for (int i = 0; i < subs.Count; i++)
+            if (!subs[i].Name.StartsWith('.')) return false;
+
+        var files = db.GetFolderFiles(relativePath);
+        for (int i = 0; i < files.Count; i++)
+            if (!files[i].Name.StartsWith('.')) return false;
+
+        return true;
+    }
+
+    private static AssetTypeStyle FolderStyle(string relativePath)
+        => IsFolderEmpty(relativePath) ? AssetTypeStyles.EmptyFolder : AssetTypeStyles.Folder;
+
     private static void BuildFolderNodes(List<OrigamiUI.TreeNode> nodes, string relativePath, string displayName, int depth)
     {
         // Read the folder structure from the asset database's cached index instead of walking the
@@ -637,7 +657,7 @@ public class ProjectPanel : DockPanel
         {
             Id = relativePath,
             Label = displayName,
-            Icon = EditorIcons.Folder,
+            Icon = IsFolderEmpty(relativePath) ? EditorIcons.FolderOpen : EditorIcons.Folder,
             IconColor = EditorTheme.Amber400,
             HasChildren = subDirs.Count > 0,
             DefaultExpanded = depth < 2,
@@ -773,13 +793,12 @@ public class ProjectPanel : DockPanel
             .OnRowActivate(i =>
             {
                 var it = visible[i].item;
-                if (it.IsFolder) NavigateTo(it.RelativePath);
-                else if (it.Subs.Count > 0)
+                if (!it.IsFolder && it.Subs.Count > 0)
                 {
                     if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
                     else _expandedAssets.Add(it.Guid);
                 }
-                else EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+                else OpenItem(it);
             })
             .OnRowContext(i =>
             {
@@ -822,7 +841,7 @@ public class ProjectPanel : DockPanel
         bool isSelected = Selection.IsSelected(item);
         bool hasSubs = item.Subs.Count > 0;
         bool expanded = hasSubs && _expandedAssets.Contains(item.Guid);
-        var style = item.IsFolder ? AssetTypeStyles.Folder : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
+        var style = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
         if (col == 0)
         {
@@ -900,16 +919,13 @@ public class ProjectPanel : DockPanel
             bool isMulti = Selection.Count > 1;
             bool isRoot = string.IsNullOrEmpty(item.RelativePath);
             string folder = item.IsFolder ? item.RelativePath : _currentFolder;
-            var titleStyle = item.IsFolder ? AssetTypeStyles.Folder : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
+            var titleStyle = item.IsFolder ? FolderStyle(item.RelativePath) : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 
             // Subject of the menu.
             builder.Title(isMulti ? Loc.Get("project.item_count", new { count = Selection.Count }) : item.Name, iconDraw: titleStyle.Icon);
 
             // Open / reveal.
-            if (item.IsFolder)
-                builder.Item(Loc.Get("launcher.open"), () => NavigateTo(item.RelativePath), icon: EditorIcons.FolderOpen);
-            else
-                builder.Item(Loc.Get("launcher.open"), () => OpenWithSystem(item), icon: EditorIcons.FolderOpen);
+            builder.Item(Loc.Get("launcher.open"), () => OpenItem(item), icon: EditorIcons.FolderOpen);
             builder.Item(Loc.Get("project.show_in_explorer"), () => ShowInExplorer(item), icon: EditorIcons.FolderTree);
 
             builder.Separator();
@@ -1085,8 +1101,11 @@ public class ProjectPanel : DockPanel
         RenameOverlay.Begin(id, editName, newText =>
         {
             string ext = item.IsFolder ? "" : Path.GetExtension(item.Name);
-            string newName = newText + ext;
-            if (newName == item.Name || string.IsNullOrWhiteSpace(newText))
+
+            // Typed text becoming a path segment. A separator in it would move the asset rather than
+            // rename it, and the characters the filesystem refuses would surface as an IO exception.
+            string newName = EditorUtils.SafeFileName(newText, "") + ext;
+            if (newName == item.Name || string.IsNullOrWhiteSpace(newText) || newName == ext)
                 return;
 
             string parentFolder = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? "";
@@ -1109,6 +1128,23 @@ public class ProjectPanel : DockPanel
         });
     }
 
+    /// <summary>
+    /// Open an item: folders navigate, assets go to their registered
+    /// <see cref="AssetDoubleClickHandlerAttribute"/> handler, and anything without one
+    /// falls back to the system default application.
+    /// </summary>
+    private void OpenItem(ContentItem item)
+    {
+        if (item.IsFolder)
+        {
+            NavigateTo(item.RelativePath);
+            return;
+        }
+
+        if (!EditorRegistries.DispatchDoubleClick(item.RelativePath, item.Guid))
+            OpenWithSystem(item);
+    }
+
     private static void OpenWithSystem(ContentItem item)
     {
         string absPath = Path.Combine(Project.Current!.AssetsPath, item.RelativePath);
@@ -1116,7 +1152,10 @@ public class ProjectPanel : DockPanel
         {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(absPath) { UseShellExecute = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to open {item.RelativePath}: {ex.Message}");
+        }
     }
 
     private static void ShowInExplorer(ContentItem item)
@@ -1258,15 +1297,13 @@ public class ProjectPanel : DockPanel
             })
             .OnDoubleClick(item, (it, _) =>
             {
-                if (it.IsFolder)
-                    NavigateTo(it.RelativePath);
-                else if (it.HasSubAssets)
+                if (!it.IsFolder && it.HasSubAssets)
                 {
                     if (_expandedAssets.Contains(it.Guid)) _expandedAssets.Remove(it.Guid);
                     else _expandedAssets.Add(it.Guid);
                 }
                 else
-                    EditorSceneManager.HandleAssetDoubleClick(it.RelativePath, it.Guid);
+                    OpenItem(it);
             })
             .OnDragStart(item, (it, _) =>
             {
@@ -1346,7 +1383,7 @@ public class ProjectPanel : DockPanel
             }
             else
             {
-                var style = item.IsFolder ? AssetTypeStyles.Folder
+                var style = item.IsFolder ? FolderStyle(item.RelativePath)
                     : item.IsSubAsset ? AssetTypeStyles.SubAsset
                     : AssetTypeStyles.For(Path.GetExtension(item.Name), item.TypeLabel);
 

@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Echo;
 using Prowl.Vector;
 
@@ -57,11 +59,51 @@ public class LayoutElement : UIBehaviour, ILayoutElement
 /// priority (a nested <see cref="LayoutGroup"/> reports its content size this way), otherwise the
 /// element's intrinsic size (its <see cref="RectTransform.SizeDelta"/>).
 /// </summary>
+/// <remarks>
+/// Results are memoized for the duration of one canvas layout pass. A nested group answers a size query
+/// by querying all of its own children, so without the memo the cost multiplies at every nesting level -
+/// each of the three queries below would re-walk the entire subtree beneath it.
+/// </remarks>
 public static class LayoutUtility
 {
-    public static Float2 GetPreferredSize(GameObject go)
+    private readonly struct Sizes
     {
-        float pw = -1f, ph = -1f, mw = -1f, mh = -1f;
+        public readonly Float2 Min;
+        public readonly Float2 Preferred;
+        public readonly Float2 Flexible;
+
+        public Sizes(Float2 min, Float2 preferred, Float2 flexible)
+        {
+            Min = min; Preferred = preferred; Flexible = flexible;
+        }
+    }
+
+    private static readonly Dictionary<GameObject, Sizes> s_cache = new();
+
+    /// <summary>Bumped by <see cref="InvalidateCache"/>. Layout groups stamp their own cached
+    /// aggregates with it so they expire together with this cache.</summary>
+    internal static int Generation { get; private set; }
+
+    /// <summary>Drops the memo. Called by the canvas at the start of every layout pass, since a
+    /// <see cref="ContentSizeFitter"/> can rewrite sizes part-way through a walk.</summary>
+    internal static void InvalidateCache()
+    {
+        s_cache.Clear();
+        Generation++;
+    }
+
+    public static Float2 GetPreferredSize(GameObject go) => Resolve(go).Preferred;
+
+    public static Float2 GetMinSize(GameObject go) => Resolve(go).Min;
+
+    /// <summary>Per-axis flexible weight (0 when none set).</summary>
+    public static Float2 GetFlexible(GameObject go) => Resolve(go).Flexible;
+
+    private static Sizes Resolve(GameObject go)
+    {
+        if (s_cache.TryGetValue(go, out Sizes cached)) return cached;
+
+        float pw = -1f, ph = -1f, mw = -1f, mh = -1f, fw = 0f, fh = 0f;
         foreach (MonoBehaviour c in go.GetComponents<MonoBehaviour>())
         {
             if (c is not ILayoutElement le || !c.EnabledInHierarchy) continue;
@@ -69,40 +111,24 @@ public static class LayoutUtility
             ph = Maths.Max(ph, le.PreferredHeight);
             mw = Maths.Max(mw, le.MinWidth);
             mh = Maths.Max(mh, le.MinHeight);
+            if (le.FlexibleWidth  > fw) fw = le.FlexibleWidth;
+            if (le.FlexibleHeight > fh) fh = le.FlexibleHeight;
         }
 
         Float2 intrinsic = Intrinsic(go);
+
         float w = pw >= 0f ? pw : (mw >= 0f ? mw : intrinsic.X);
         float h = ph >= 0f ? ph : (mh >= 0f ? mh : intrinsic.Y);
         if (mw >= 0f) w = Maths.Max(w, mw);
         if (mh >= 0f) h = Maths.Max(h, mh);
-        return new Float2(w, h);
-    }
 
-    public static Float2 GetMinSize(GameObject go)
-    {
-        float mw = -1f, mh = -1f;
-        foreach (MonoBehaviour c in go.GetComponents<MonoBehaviour>())
-        {
-            if (c is not ILayoutElement le || !c.EnabledInHierarchy) continue;
-            mw = Maths.Max(mw, le.MinWidth);
-            mh = Maths.Max(mh, le.MinHeight);
-        }
-        Float2 intrinsic = Intrinsic(go);
-        return new Float2(mw >= 0f ? mw : intrinsic.X, mh >= 0f ? mh : intrinsic.Y);
-    }
+        Sizes sizes = new Sizes(
+            new Float2(mw >= 0f ? mw : intrinsic.X, mh >= 0f ? mh : intrinsic.Y),
+            new Float2(w, h),
+            new Float2(fw, fh));
 
-    /// <summary>Per-axis flexible weight (0 when none set).</summary>
-    public static Float2 GetFlexible(GameObject go)
-    {
-        float fw = 0f, fh = 0f;
-        foreach (MonoBehaviour c in go.GetComponents<MonoBehaviour>())
-        {
-            if (c is not ILayoutElement le || !c.EnabledInHierarchy) continue;
-            if (le.FlexibleWidth  > fw) fw = le.FlexibleWidth;
-            if (le.FlexibleHeight > fh) fh = le.FlexibleHeight;
-        }
-        return new Float2(fw, fh);
+        s_cache[go] = sizes;
+        return sizes;
     }
 
     private static Float2 Intrinsic(GameObject go)

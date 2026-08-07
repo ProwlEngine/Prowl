@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 using Prowl.Runtime;
 
@@ -27,26 +28,62 @@ public sealed class BuildLogEntry
 /// </summary>
 public sealed class BuildProgress
 {
-    /// <summary>
-    /// The progress value of the build, between 0 and 1.
-    /// It's thread-safe and can be updated from the build pipeline to reflect progress in the UI.
-    /// </summary>
-    public float ProgressValue;
+    private const int StateRunning = 0;
+    private const int StateCancelling = 1;
+    private const int StateComplete = 2;
 
     private readonly object _lock = new();
     private readonly List<BuildLogEntry> _entries = [];
+    private readonly CancellationTokenSource _cancellation = new();
+    private float _progressValue;
+    private int _state;
+    private BuildResult? _result;
+
+    /// <summary>Passed to the pipeline, so every stage and every tool it starts observes a stop.</summary>
+    public CancellationToken Token => _cancellation.Token;
+
+    public bool IsCancelled => _cancellation.IsCancellationRequested;
 
     /// <summary>
-    /// Whether the build has finished (success or failure).
+    /// Asks the running build to stop. Not instant: a tool already running is killed with its process
+    /// tree, and the stage that started it unwinds afterwards.
     /// </summary>
-    public bool IsComplete { get; private set; }
+    /// <remarks>
+    /// The claim on the running state is atomic, so a build finishing at the same moment as the click
+    /// either completes or is cancelled, never both. Signalling happens outside any lock, because
+    /// cancelling runs the waiting operations' callbacks on this thread.
+    /// </remarks>
+    public void Cancel()
+    {
+        if (Interlocked.CompareExchange(ref _state, StateCancelling, StateRunning) != StateRunning)
+            return;
+
+        _cancellation.Cancel();
+    }
+
+    /// <summary>
+    /// The progress value of the build, between 0 and 1.
+    /// Read under the same lock as everything else here, so the UI thread cannot see a torn or
+    /// reordered view of a build the worker thread is still updating.
+    /// </summary>
+    public float ProgressValue
+    {
+        get { lock (_lock) { return _progressValue; } }
+        set { lock (_lock) { _progressValue = value; } }
+    }
+
+    /// <summary>
+    /// Whether the build has finished (success, failure or cancellation).
+    /// </summary>
+    public bool IsComplete => Volatile.Read(ref _state) == StateComplete;
 
     /// <summary>
     /// The final result, available once <see cref="IsComplete"/> is true.
     /// </summary>
-    public BuildResult? Result { get; private set; }
-
-    public Action<string, float> OnLog;
+    public BuildResult? Result
+    {
+        get { lock (_lock) { return _result; } }
+    }
 
     /// <summary>
     /// Appends a log line with default (Normal) severity and updates the <see cref="ProgressValue"/>.
@@ -88,23 +125,11 @@ public sealed class BuildProgress
     {
         lock (_lock)
         {
-            Result = result;
-            IsComplete = true;
+            _result = result;
         }
-    }
 
-    public string ToString(LogSeverity severity)
-    {
-        var sb = new StringBuilder();
-        lock (_lock)
-        {
-            foreach (var entry in _entries)
-            {
-                if (entry.Severity == severity)
-                    sb.AppendLine(entry.Message);
-            }
-        }
-        return sb.ToString();
+        // Published last, so anything that sees the build as complete also sees its result.
+        Interlocked.Exchange(ref _state, StateComplete);
     }
 
     public override string ToString()
@@ -121,20 +146,9 @@ public sealed class BuildProgress
     }
 
     /// <summary>
-    /// Returns a thread-safe snapshot of all log entries accumulated so far.
-    /// </summary>
-    public List<BuildLogEntry> GetEntries()
-    {
-        lock (_lock)
-        {
-            return [.. _entries];
-        }
-    }
-
-    /// <summary>
     /// Returns the last entry as the current build state.
     /// </summary>
-    public BuildLogEntry GetState()
+    public BuildLogEntry? GetState()
     {
         lock (_lock)
         {
@@ -145,12 +159,5 @@ public sealed class BuildProgress
         }
     }
 
-    /// <summary>
-    /// Returns the thread-safe number of log entries.
-    /// </summary>
-    public int EntryCount
-    {
-        get { lock (_lock) { return _entries.Count; } }
-    }
 }
 

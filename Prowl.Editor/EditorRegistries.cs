@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -50,13 +50,6 @@ public static class EditorRegistries
 
     public delegate bool AssetDoubleClickHandler(string relativePath, Guid guid);
 
-    private struct SceneViewEditorEntry
-    {
-        public Type ComponentType;
-        public Type EditorType;
-        public int Priority;
-    }
-
     private struct DropHandlerEntry
     {
         public Type AssetType;
@@ -82,9 +75,6 @@ public static class EditorRegistries
     private static readonly Dictionary<Type, string> _componentIcons = new();
 
     private static readonly Dictionary<Type, IThumbnailGenerator> _thumbnailGenerators = new();
-
-    private static readonly List<SceneViewEditorEntry> _sceneViewEditors = [];
-    private static readonly Dictionary<Type, ISceneViewEditor> _sceneViewEditorInstances = [];
 
     private static readonly List<DropHandlerEntry> _dropHandlers = [];
 
@@ -126,12 +116,11 @@ public static class EditorRegistries
         _componentIcons.Clear();
         _thumbnailGenerators.Clear();
 
-        SceneViewPanel.DeactivateSceneViewEditor();
-        _sceneViewEditors.Clear();
-        _sceneViewEditorInstances.Clear();
+        SceneToolManager.Clear();
         _dropHandlers.Clear();
 
         _settingsEntries.Clear();
+        Build.TargetRegistry.Shared.ResetToBuiltIns();
 
         MenuItemAttribute.Clear();
         _scriptTemplates.Clear();
@@ -171,10 +160,11 @@ public static class EditorRegistries
                 ScanImporter(type);
                 ScanComponentIcon(type);
                 ScanThumbnailGenerator(type);
-                ScanSceneViewEditor(type);
+                ScanSceneTool(type);
                 ScanSceneDropHandler(type);
                 ScanProjectSettings(type);
                 ScanAssetMenuEntry(type);
+                ScanBuildTargetProvider(type);
 
                 foreach (var method in type.GetMethods(methodFlags))
                 {
@@ -197,7 +187,6 @@ public static class EditorRegistries
             int c = a.Order.CompareTo(b.Order);
             return c != 0 ? c : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
         });
-        _sceneViewEditors.Sort((a, b) => a.Priority.CompareTo(b.Priority));
         _dropHandlers.Sort((a, b) => a.Order.CompareTo(b.Order));
         _settingsEntries.Sort((a, b) => a.Order.CompareTo(b.Order));
 
@@ -262,18 +251,28 @@ public static class EditorRegistries
         catch { }
     }
 
-    private static void ScanSceneViewEditor(Type type)
+    private static void ScanSceneTool(Type type)
     {
-        if (type.IsInterface || type.IsAbstract || !typeof(ISceneViewEditor).IsAssignableFrom(type)) return;
-        var attr = type.GetCustomAttribute<SceneViewEditorForAttribute>();
-        if (attr == null) return;
+        if (type.IsAbstract || !typeof(SceneTool).IsAssignableFrom(type)) return;
+
+        var global = type.GetCustomAttribute<GlobalSceneToolAttribute>();
+        var scoped = type.GetCustomAttribute<ComponentSceneToolAttribute>();
+        if (global == null && scoped == null) return;
+
         try
         {
-            var instance = (ISceneViewEditor)Activator.CreateInstance(type)!;
-            _sceneViewEditorInstances[type] = instance;
-            _sceneViewEditors.Add(new SceneViewEditorEntry { ComponentType = attr.ComponentType, EditorType = type, Priority = instance.Priority });
+            var tool = (SceneTool)Activator.CreateInstance(type)!;
+            SceneToolManager.Register(new SceneToolEntry
+            {
+                Tool = tool,
+                ComponentType = scoped?.ComponentType,
+                Group = global?.Group,
+            });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[SceneTool] Failed to construct '{type.FullName}': {ex.Message}");
+        }
     }
 
     private static void ScanSceneDropHandler(Type type)
@@ -305,6 +304,33 @@ public static class EditorRegistries
         });
     }
 
+    /// <summary>
+    /// Adds the targets of any <see cref="Build.IBuildTargetProvider"/> to the shared registry.
+    /// </summary>
+    /// <remarks>
+    /// The hook is only worth having if something calls it. Without this scan a platform shipped from a
+    /// private assembly implements the interface and its targets never reach the registry.
+    /// </remarks>
+    private static void ScanBuildTargetProvider(Type type)
+    {
+        if (type.IsAbstract || type.IsInterface || !typeof(Build.IBuildTargetProvider).IsAssignableFrom(type)) return;
+
+        try
+        {
+            Build.TargetRegistry.Shared.RegisterFrom((Build.IBuildTargetProvider)Activator.CreateInstance(type)!);
+        }
+        catch (Exception e)
+        {
+            Runtime.Debug.LogWarning($"[Build] Target provider '{type.Name}' was skipped: {e.Message}");
+        }
+    }
+
+    /// <summary>Types whose "Create" menu entry needs more than a blank instance.</summary>
+    private static readonly Dictionary<Type, Func<EngineObject>> _assetFactories = new()
+    {
+        [typeof(Runtime.Resources.Scene)] = GUI.SceneView.EditorSceneManager.CreateDefaultScene,
+    };
+
     private static void ScanAssetMenuEntry(Type type)
     {
         if (type.IsAbstract || !typeof(EngineObject).IsAssignableFrom(type)) return;
@@ -317,6 +343,7 @@ public static class EditorRegistries
             Extension = attr.Extension,
             Icon = attr.Icon,
             Order = attr.Order,
+            Factory = _assetFactories.GetValueOrDefault(type),
         };
         MenuItemAttribute.Register("Assets/Create/" + attr.Name, () =>
         {
@@ -460,14 +487,6 @@ public static class EditorRegistries
         if (_thumbnailGenerators.TryGetValue(type, out var gen)) return gen;
         for (var t = type.BaseType; t != null && t != typeof(object); t = t.BaseType)
             if (_thumbnailGenerators.TryGetValue(t, out gen)) return gen;
-        return null;
-    }
-
-    public static ISceneViewEditor? FindSceneViewEditor(GameObject go)
-    {
-        foreach (var entry in _sceneViewEditors)
-            if (go.GetComponent(entry.ComponentType) != null)
-                return _sceneViewEditorInstances[entry.EditorType];
         return null;
     }
 

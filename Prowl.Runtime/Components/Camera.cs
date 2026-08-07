@@ -168,13 +168,13 @@ public class Camera : MonoBehaviour
         SavePreviousViewProjectionMatrix();
     }
 
-    public RenderTexture? UpdateRenderData()
+    /// <param name="fallbackTarget">Where this render goes when the camera has no <see cref="Target"/>
+    /// asset of its own. Null means the backbuffer.</param>
+    public RenderTexture? UpdateRenderData(RenderTexture? fallbackTarget = null)
     {
         // Since Scene Updating is guranteed to execute before rendering, we can setup camera data for this frame here
-        RenderTexture? camTarget = null;
-
-        if (Target.IsValid())
-            camTarget = Target;
+        RenderTexture? camTarget = Target;
+        if (camTarget.IsNotValid()) camTarget = fallbackTarget;
 
         int width = camTarget.IsValid() ? camTarget.Width : Window.InternalWindow.FramebufferSize.X;
         int height = camTarget.IsValid() ? camTarget.Height : Window.InternalWindow.FramebufferSize.Y;

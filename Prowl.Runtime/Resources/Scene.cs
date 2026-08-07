@@ -17,59 +17,179 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 {
     #region Scene Manager
 
+    private static Scene? _current;
+
     /// <summary>
-    /// The currently active scene managed by the built-in Scene Manager.
-    /// For simple games, use Scene.Load() and Scene.Current for automatic scene management.
-    /// For advanced use cases (e.g., multiplayer servers with multiple scenes),
-    /// create and manage your own Scene instances directly.
+    /// The currently active scene. There is always one: reading this before anything has been loaded
+    /// creates an empty scene, so the engine is never in a no-scene state and callers never have to
+    /// handle null. Use <see cref="Load"/> to replace it.
     /// </summary>
-    public static Scene? Current { get; private set; }
+    public static Scene Current
+    {
+        get
+        {
+            if (_current is null || _current.IsDisposed)
+            {
+                _current = new Scene { Name = "Untitled" };
+                _current.Enable();
+            }
+            return _current;
+        }
+    }
 
     /// <summary>Fires after a scene is loaded via Load().</summary>
     public static event Action? OnSceneLoaded;
 
+    private static Scene? _pendingScene;
+
     /// <summary>
-    /// Loads a scene as the current active scene, replacing any previously loaded scene.
-    /// The previous scene will be disabled and disposed.
+    /// Queues a scene to become the current one, replacing the previously loaded scene. The swap
+    /// happens at the end of the frame, alongside the destroy queue, so the outgoing scene stays
+    /// usable for everything still running this frame.
     /// </summary>
     public static void Load(Scene scene)
     {
         if (scene == null)
             throw new ArgumentNullException(nameof(scene));
 
-        if (Current != null)
+        _pendingScene = scene;
+    }
+
+    private static readonly List<GameObject> _preserved = [];
+
+    /// <summary>
+    /// Keeps a GameObject alive across scene loads. It moves straight from the outgoing scene to the
+    /// incoming one when the swap applies, so it is never held by a scene that is about to be
+    /// disposed, and it is not disabled and re-enabled on the way.
+    /// <para/>
+    /// Only roots can be preserved, since half a hierarchy surviving a load is never what was meant.
+    /// Passing a child preserves its root instead.
+    /// </summary>
+    public static void DontDestroyOnLoad(GameObject go)
+    {
+        if (go.IsNotValid())
         {
-            if (Current.IsActive)
-                Current.Disable();
-            Current.Dispose();
+            Debug.LogWarning("[Scene] DontDestroyOnLoad on a null or destroyed GameObject does nothing.");
+            return;
         }
 
-        Current = scene;
-        Current.Enable();
+        GameObject root = go;
+        while (root.Parent.IsValid())
+            root = root.Parent;
+
+        if (!ReferenceEquals(root, go))
+            Debug.LogWarning($"[Scene] '{go.Name}' is not a root object, so its root '{root.Name}' is preserved instead.");
+
+        if (!_preserved.Any(p => ReferenceEquals(p, root)))
+            _preserved.Add(root);
+    }
+
+    /// <summary>
+    /// Stops preserving a GameObject. It stays in whatever scene it is in now, and goes with that
+    /// scene on the next load.
+    /// </summary>
+    public static void CancelDontDestroyOnLoad(GameObject go)
+        => _preserved.RemoveAll(p => ReferenceEquals(p, go));
+
+    /// <summary>
+    /// Destroys everything <see cref="DontDestroyOnLoad"/> is holding and empties the registry.
+    /// <para/>
+    /// Teardown is queued like any other <see cref="EngineObject.Destroy"/>, so it lands at the end of
+    /// the frame, which is before the scene swap and therefore before anything could be carried over.
+    /// Pass <paramref name="immediate"/> when no further frame will run, since nothing would be left
+    /// to drain the queue.
+    /// </summary>
+    internal static void DestroyPreserved(bool immediate = false)
+    {
+        foreach (GameObject go in _preserved)
+        {
+            if (go.IsNotValid()) continue;
+
+            if (immediate)
+                go.Dispose();
+            else
+                go.Destroy();
+        }
+
+        _preserved.Clear();
+    }
+
+    /// <summary>Whether this GameObject (or the root it belongs to) survives scene loads.</summary>
+    public static bool IsPreserved(GameObject go)
+    {
+        if (go.IsNotValid()) return false;
+
+        GameObject root = go;
+        while (root.Parent.IsValid())
+            root = root.Parent;
+
+        return _preserved.Any(p => ReferenceEquals(p, root));
+    }
+
+    /// <summary>
+    /// Applies a queued <see cref="Load"/>. Driven once per frame by the game loop, right after the
+    /// destroy queue. Nothing is mid-callback at that point, so the outgoing scene is disposed
+    /// outright rather than queued for another frame.
+    /// </summary>
+    public static void ProcessPendingLoad()
+    {
+        if (_pendingScene is null) return;
+
+        Scene next = _pendingScene;
+        _pendingScene = null;
+
+        if (next.IsDisposed)
+        {
+            Debug.LogWarning("[Scene] The scene queued for loading was disposed before the frame ended, so it was skipped.");
+            return;
+        }
+
+        // Loading the scene that is already current would dispose it and then enable the corpse.
+        if (ReferenceEquals(next, _current)) return;
+
+        // Preserved objects leave before the outgoing scene is disposed, and join the incoming one
+        // after it is enabled, so they are never registered with a scene that is being torn down.
+        _preserved.RemoveAll(p => p.IsNotValid());
+        foreach (GameObject go in _preserved)
+            if (ReferenceEquals(go.Scene, _current))
+                _current!.Detach(go);
+
+        if (_current is not null && !_current.IsDisposed)
+        {
+            if (_current.IsActive)
+                _current.Disable();
+            _current.Dispose();
+        }
+
+        _current = next;
+        _current.Enable();
+
+        foreach (GameObject go in _preserved)
+            _current.Attach(go);
+
         OnSceneLoaded?.Invoke();
     }
 
     /// <summary>
-    /// Unloads the current scene, disabling and disposing it.
-    /// After calling this, Scene.Current will be null.
+    /// Disposes the current scene, so everything in it runs its teardown callbacks. Driven by the
+    /// game loop on the way out. Reading <see cref="Current"/> afterwards creates a fresh empty scene.
     /// </summary>
-    /// <summary>
-    /// Loads a scene as Current without calling Enable().
-    /// Kept for backward compatibility now just calls Load() since lifecycle gating
-    /// is handled per-component via ShouldExecuteGameplay.
-    /// </summary>
-    [Obsolete("Use Scene.Load() instead. Lifecycle gating is now per-component via [ExecuteAlways].")]
-    public static void LoadWithoutEnable(Scene scene) => Load(scene);
-
-    public static void Unload()
+    internal static void Shutdown()
     {
-        if (Current != null)
+        _pendingScene = null;
+
+        DestroyPreserved(immediate: true);
+
+        if (_current is null || _current.IsDisposed)
         {
-            if (Current.IsActive)
-                Current.Disable();
-            Current.Dispose();
-            Current = null;
+            _current = null;
+            return;
         }
+
+        if (_current.IsActive)
+            _current.Disable();
+        _current.Dispose();
+        _current = null;
     }
 
     #endregion
@@ -297,7 +417,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Enable()
     {
         EnsureNotDisposed();
-        if (_isActive) throw new Exception("Scene is already enabled!");
+        if (_isActive) return; // already enabled, nothing to deliver
 
         _isActive = true;
 
@@ -311,8 +431,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                // Create a copy of components to avoid modification during enumeration
-                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                var components = go.GetComponents<MonoBehaviour>();
                 foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
@@ -330,7 +449,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     public void Disable()
     {
         EnsureNotDisposed();
-        if (!_isActive) throw new Exception("Scene is not enabled!");
+        if (!_isActive) return; // already disabled, nothing to deliver
 
         // Create a copy to avoid collection modification during enumeration
         List<GameObject> allObjectsCopy = [.. AllObjects];
@@ -342,8 +461,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
 
             if (go.EnabledInHierarchy)
             {
-                // Create a copy of components to avoid modification during enumeration
-                MonoBehaviour[] components = [.. go.GetComponents<MonoBehaviour>()];
+                var components = go.GetComponents<MonoBehaviour>();
                 foreach (MonoBehaviour component in components)
                 {
                     if (component.IsDisposed) continue;
@@ -407,17 +525,81 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Unregisters a GameObject and all of its children
+    /// Unregisters a GameObject and all of its children.
     /// </summary>
+    /// <remarks>
+    /// Asking to remove something this scene does not hold is reported rather than ignored. It leaves the
+    /// object ticking in whichever scene does hold it, which reads as the engine having ignored the call.
+    /// </remarks>
     public void Remove(GameObject obj)
     {
         EnsureNotDisposed();
-        if (obj.Scene != this) return;
+
+        if (object.ReferenceEquals(obj, null))
+        {
+            Debug.LogWarning("[Scene] Remove(null) does nothing.");
+            return;
+        }
+
+        if (obj.IsNotValid())
+        {
+            Debug.LogWarning("[Scene] Cannot remove a Disposed or Null GameObject.");
+            return;
+        }
+
+        if (obj.Scene != this)
+        {
+            Debug.LogWarning(obj.Scene.IsValid()
+                ? $"[Scene] '{obj.Name}' belongs to another scene, so this one cannot remove it."
+                : $"[Scene] '{obj.Name}' is not in any scene, so there is nothing to remove.");
+            return;
+        }
+
         if (obj.Parent.IsValid() && obj.Parent.Scene == this)
         {
             obj.SetParent(null);
         }
         RemoveObject(obj);
+    }
+
+    /// <summary>
+    /// Hands a GameObject tree over to another scene without running any lifecycle callback. Only the
+    /// registration moves: the scene's object list and, for each enabled component, the per-frame
+    /// dispatch slot. Used by <see cref="DontDestroyOnLoad"/>, where the object is not entering or
+    /// leaving the world, just changing which scene holds it.
+    /// </summary>
+    internal void Detach(GameObject obj)
+    {
+        foreach (GameObject child in obj.Children.ToArray())
+            Detach(child);
+
+        if (!_allObjSet.Remove(obj)) return;
+
+        _allObj.Remove(obj);
+
+        foreach (MonoBehaviour component in obj._components)
+            if (!component.IsDisposed)
+                _dispatcher.Unregister(component);
+
+        obj.Scene = null;
+    }
+
+    /// <inheritdoc cref="Detach"/>
+    internal void Attach(GameObject obj)
+    {
+        if (_allObjSet.Add(obj))
+        {
+            _allObj.Add(obj);
+            obj.Scene = this;
+
+            if (IsActive && obj.EnabledInHierarchy)
+                foreach (MonoBehaviour component in obj._components)
+                    if (!component.IsDisposed && component.Enabled && component.EnabledInHierarchy)
+                        _dispatcher.Register(component);
+        }
+
+        foreach (GameObject child in obj.Children.ToArray())
+            Attach(child);
     }
 
     private void AddObject(GameObject obj)
@@ -427,8 +609,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             _allObj.Add(obj);
             obj.Scene = this;
 
-            // Create a copy of components to avoid modification during enumeration
-            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+            var components = obj.GetComponents<MonoBehaviour>();
 
             // Call OnAddedToScene for all components
             foreach (MonoBehaviour component in components)
@@ -466,8 +647,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         if (_allObjSet.Remove(obj))
         {
             _allObj.Remove(obj);
-            // Create a copy of components to avoid modification during enumeration
-            MonoBehaviour[] components = [.. obj.GetComponents<MonoBehaviour>()];
+            var components = obj.GetComponents<MonoBehaviour>();
 
             // Call OnDisable for currently enabled components (only if scene is active)
             if (IsActive && obj.EnabledInHierarchy)
@@ -551,7 +731,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// <summary> Unregisters all dead / disposed GameObjects </summary>
     public void Flush()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         List<GameObject> removed = [];
         foreach (GameObject obj in _allObj)
         {
@@ -566,13 +746,14 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
             obj.Scene = null;
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         base.OnDispose();
 
-        // Clear the current scene reference if this is the current scene
-        if (Current == this)
-            Current = null;
+        // Drop the current-scene reference without going through the property, which would build a
+        // replacement scene in the middle of this one's teardown.
+        if (ReferenceEquals(_current, this))
+            _current = null;
 
         // Scene-scoped locks auto-expire with the scene rather than leaking forever.
         AssetDatabase.ReleaseSceneLocks(this);
@@ -659,7 +840,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void Update()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunStart();
         _dispatcher.RunUpdate();
         _dispatcher.RunLateUpdate();
@@ -673,7 +854,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void FixedUpdate()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         // Start must run before a component's first FixedUpdate. The loop runs FixedUpdate before
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
@@ -703,7 +884,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void DrawGizmos()
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunDrawGizmos();
 
         Flush();
@@ -715,7 +896,7 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
     /// </summary>
     public void OnGui(Paper paper)
     {
-        EnsureNotDisposed();
+        if (IsDisposed) return;
         _dispatcher.RunOnGui(paper);
 
         Flush();

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>annotations</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>Prowl.Player.Desktop</AssemblyName>
+    <RootNamespace>Prowl.Player</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    A library rather than an executable. The build still generates a csproj and runs dotnet publish, which
+    is what keeps PublishAot, PublishTrimmed and RuntimeIdentifier working per profile. What it no longer
+    generates is the player itself: the generated Program.cs is one line that calls into here.
+
+    One project per platform family under Players/. Another platform is a sibling rather than a branch
+    inside this one, because what differs is the whole startup path: how dependencies resolve, what a
+    window is, and what the entry point may assume exists. The namespace stays Prowl.Player across them,
+    since a build references exactly one player and never two.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

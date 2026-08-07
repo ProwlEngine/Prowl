@@ -989,7 +989,7 @@ public class Mesh : EngineObject, ISerializable, IVertexSource
 
     #endregion
 
-    public override void OnDispose() => DeleteGPUBuffers();
+    protected override void OnDispose() => DeleteGPUBuffers();
 
     ~Mesh() => Dispose();
 

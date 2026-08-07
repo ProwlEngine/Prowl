@@ -26,9 +26,10 @@ public static class MetaFile
 
     public static bool Exists(string assetPath) => File.Exists(GetMetaPath(assetPath));
 
-    public static MetaFileData Read(string metaFilePath)
+    public static MetaFileData Read(string metaFilePath) => Parse(File.ReadAllText(metaFilePath));
+
+    private static MetaFileData Parse(string text)
     {
-        string text = File.ReadAllText(metaFilePath);
         var echo = EchoObject.ReadFromString(text);
 
         var data = new MetaFileData();
@@ -86,9 +87,32 @@ public static class MetaFile
         string metaPath = GetMetaPath(absoluteAssetPath);
         if (File.Exists(metaPath))
         {
+            // Reading the bytes and understanding them are separate failures and must stay that way.
+            // A file we cannot read at all is this asset's identity temporarily out of reach - a lock
+            // held by a sync client, scanner, or editor - and minting a fresh GUID there would orphan
+            // every reference to the asset and its sub-assets, silently and permanently. Refuse, and
+            // let the caller skip the file until it can be read.
+            string text;
             try
             {
-                var existing = Read(metaPath);
+                text = File.ReadAllText(metaPath);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException(
+                    $"Could not read '{metaPath}'. Refusing to regenerate it, which would break every " +
+                    "existing reference to this asset. Restore or delete the .meta file.", ex);
+            }
+
+            // Content we can read but not parse (or that carries no GUID) has no identity left to
+            // preserve, so minting one is the only way forward - but say so, because any existing
+            // reference to this asset is about to stop resolving.
+            MetaFileData? existing = null;
+            try { existing = Parse(text); }
+            catch { /* unparseable */ }
+
+            if (existing != null)
+            {
                 if (forcedGuid.HasValue && existing.Guid != forcedGuid.Value)
                 {
                     existing.Guid = forcedGuid.Value;
@@ -98,7 +122,10 @@ public static class MetaFile
                 if (existing.Guid != Guid.Empty)
                     return existing;
             }
-            catch { /* corrupted meta, recreate */ }
+
+            Runtime.Debug.LogError(
+                $"'{metaPath}' is corrupt or carries no GUID. Assigning a new one - existing references " +
+                "to this asset will no longer resolve. Restore the .meta from source control to recover them.");
         }
 
         var data = CreateNew(importerTypeName, importerVersion, defaultSettings);

@@ -176,8 +176,14 @@ public static class PrefabEditingMode
         // Restore original scene
         RestoreScene();
 
-        // Now refresh instances in the restored scene with the updated prefab
-        PrefabUtility.RefreshAllInstances(prefabGuid);
+        // The restore only queues the swap, so refresh instances once that scene is actually current.
+        Action? onLoaded = null;
+        onLoaded = () =>
+        {
+            Scene.OnSceneLoaded -= onLoaded;
+            PrefabUtility.RefreshAllInstances(prefabGuid);
+        };
+        Scene.OnSceneLoaded += onLoaded;
 
         Cleanup();
         Debug.Log("[Prefab] Saved and exited editing mode.");
@@ -211,12 +217,12 @@ public static class PrefabEditingMode
             else
             {
                 Debug.LogWarning("[Prefab] Failed to restore scene. Creating default.");
-                SceneViewPanel.CreateAndLoadDefaultScene();
+                EditorSceneManager.CreateAndLoadDefaultScene();
             }
         }
         else
         {
-            SceneViewPanel.CreateAndLoadDefaultScene();
+            EditorSceneManager.CreateAndLoadDefaultScene();
         }
     }
 

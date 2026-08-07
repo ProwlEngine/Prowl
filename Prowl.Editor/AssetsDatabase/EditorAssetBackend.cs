@@ -295,14 +295,20 @@ public class EditorAssetBackend : AssetBackendBase
         string cachePath = GetCachePath(assetId);
         var entry = GetEntry(assetId);
 
-        // Validate cache check importer version matches current importer
-        if (onMainThread && entry != null && !string.IsNullOrEmpty(entry.ImporterType))
+        // Validate the cache against both the importer and the source file before trusting it.
+        if (onMainThread && entry != null)
         {
-            var importer = EditorRegistries.CreateImporterByName(entry.ImporterType);
-            if (importer != null && importer.Version != entry.ImporterVersion)
+            var importer = !string.IsNullOrEmpty(entry.ImporterType)
+                ? EditorRegistries.CreateImporterByName(entry.ImporterType) : null;
+            bool importerChanged = importer != null && importer.Version != entry.ImporterVersion;
+            bool sourceChanged = IsSourceNewerThanImport(entry);
+
+            if (importerChanged || sourceChanged)
             {
-                // Cache is stale importer was updated since last import
-                Runtime.Debug.Log($"Cache stale for '{entry.Path}': importer v{entry.ImporterVersion} -> v{importer.Version}. Reimporting.");
+                string why = sourceChanged
+                    ? "source file changed"
+                    : $"importer v{entry.ImporterVersion} -> v{importer!.Version}";
+                Runtime.Debug.Log($"Cache stale for '{entry.Path}': {why}. Reimporting.");
                 entry.NeedsReimport = true;
                 RunImport(entry);
                 return TryGetLoaded(assetId, out var reimported) ? reimported : null;
@@ -464,8 +470,10 @@ public class EditorAssetBackend : AssetBackendBase
         {
             string dirName = Path.GetFileName(dir);
             if (dirName.StartsWith('.')) continue;
-            // Ensure folder .meta exists (for stable folder GUIDs in version control)
-            MetaFile.EnsureMeta(dir, "DefaultImporter");
+            // Ensure folder .meta exists (for stable folder GUIDs in version control). One unreadable
+            // folder meta must not abort the rest of the scan, same as the file loop above.
+            try { MetaFile.EnsureMeta(dir, "DefaultImporter"); }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to read folder meta for '{dir}': {ex.Message}"); }
         }
     }
 
@@ -580,22 +588,36 @@ public class EditorAssetBackend : AssetBackendBase
 
             if (originalStillExists)
             {
-                // Two files share a GUID (the asset + its .meta were copied). A GUID must be unique,
-                // so mint a fresh one for the copy and rewrite its .meta.
-                var newGuid = Guid.NewGuid();
-                meta.Guid = newGuid;
-                MetaFile.Write(MetaFile.GetMetaPath(file), meta);
-
-                var copyEntry = new AssetEntry
+                // Two files share a GUID (the asset + its .meta were copied). A GUID must be unique, and
+                // whichever file keeps it is what every existing reference in the project resolves to -
+                // so the ORIGINAL has to keep it. Picking "whichever the directory walk reached second"
+                // gets that backwards half the time, silently retargeting the whole project at the copy.
+                // Older file wins, path as the tiebreak, so the outcome doesn't depend on walk order.
+                string claimedAbsolute = Path.Combine(assetsPath, oldPath);
+                if (IsOriginalOf(claimedAbsolute, oldPath, file, relativePath))
                 {
-                    Guid = newGuid,
-                    Path = relativePath,
-                    ImporterType = importerName,
-                    ImporterVersion = meta.ImporterVersion,
-                    NeedsReimport = true
-                };
-                _guidToEntry[newGuid] = copyEntry;
-                _pathToGuid[relativePath] = newGuid;
+                    AssignFreshGuid(file, relativePath, importerName, meta);
+                }
+                else
+                {
+                    // The file already holding the GUID is the copy - move it off, then let this one take it.
+                    var displacedMeta = MetaFile.Read(MetaFile.GetMetaPath(claimedAbsolute));
+                    AssignFreshGuid(claimedAbsolute, oldPath, entry.ImporterType, displacedMeta);
+
+                    _guidToEntry.TryRemove(meta.Guid, out _);
+                    DisposeAndRemove(meta.Guid);
+                    RemoveSubAssets(entry, includeThumbnails: true);
+
+                    _guidToEntry[meta.Guid] = new AssetEntry
+                    {
+                        Guid = meta.Guid,
+                        Path = relativePath,
+                        ImporterType = importerName,
+                        ImporterVersion = meta.ImporterVersion,
+                        NeedsReimport = true
+                    };
+                    _pathToGuid[relativePath] = meta.Guid;
+                }
             }
             else
             {
@@ -619,6 +641,38 @@ public class EditorAssetBackend : AssetBackendBase
             _guidToEntry[meta.Guid] = entry;
             _pathToGuid[relativePath] = meta.Guid;
         }
+    }
+
+    /// <summary>Of two files claiming one GUID, whether the first is the original that should keep it.
+    /// Creation time decides; identical timestamps fall back to path order so the answer is stable.</summary>
+    private static bool IsOriginalOf(string absoluteA, string relativeA, string absoluteB, string relativeB)
+    {
+        static DateTime Created(string path)
+        {
+            try { return File.GetCreationTimeUtc(path); }
+            catch { return DateTime.MinValue; }
+        }
+
+        int byAge = Created(absoluteA).CompareTo(Created(absoluteB));
+        return byAge != 0 ? byAge < 0 : string.CompareOrdinal(relativeA, relativeB) < 0;
+    }
+
+    /// <summary>Move a file onto a brand new GUID, rewriting its .meta and registering it.</summary>
+    private void AssignFreshGuid(string absolutePath, string relativePath, string importerName, MetaFileData meta)
+    {
+        var newGuid = Guid.NewGuid();
+        meta.Guid = newGuid;
+        MetaFile.Write(MetaFile.GetMetaPath(absolutePath), meta);
+
+        _guidToEntry[newGuid] = new AssetEntry
+        {
+            Guid = newGuid,
+            Path = relativePath,
+            ImporterType = importerName,
+            ImporterVersion = meta.ImporterVersion,
+            NeedsReimport = true
+        };
+        _pathToGuid[relativePath] = newGuid;
     }
 
     // ================================================================
@@ -700,7 +754,13 @@ public class EditorAssetBackend : AssetBackendBase
         GC.Collect();
     }
 
-    private bool RunImport(AssetEntry entry)
+    // Under _loadLock: an import rewrites the very cache files LoadFresh reads, and the AssetLoader
+    // reads them from its own thread. Unsynchronized, a load either fails on a sharing violation or
+    // reads a file mid-replace, and the replace itself can lose to the reader and leave the previous
+    // cache in place. Re-entrant, so LoadFresh's own on-demand import path still works.
+    private bool RunImport(AssetEntry entry) { lock (_loadLock) return RunImportCore(entry); }
+
+    private bool RunImportCore(AssetEntry entry)
     {
         string absolutePath = _project.ToAbsolutePath(entry.Path);
         if (!File.Exists(absolutePath))
@@ -764,6 +824,9 @@ public class EditorAssetBackend : AssetBackendBase
 
             if (!success || ctx.MainAsset == null)
             {
+                // Clearing the list alone would strand the sub-assets in the index and their caches on
+                // disk, leaving GUIDs that resolve to a parent claiming it has no sub-assets.
+                RemoveSubAssets(entry, includeThumbnails: true);
                 entry.SubAssets = Array.Empty<SubAssetEntry>();
                 entry.NeedsReimport = false;
                 return false;
@@ -782,6 +845,7 @@ public class EditorAssetBackend : AssetBackendBase
             // sub-assets that disappear this import (renamed/removed) can be cleaned up below.
             var previousSubGuids = entry.SubAssets?.Select(s => s.Guid).ToHashSet() ?? new HashSet<Guid>();
             var newSubGuids = new HashSet<Guid>();
+            bool cachesWritten = true;
 
             if (ctx.SubAssets.Count > 0)
             {
@@ -796,7 +860,8 @@ public class EditorAssetBackend : AssetBackendBase
                     // A sub-asset (e.g. a Sprite) can hold AssetRef fields of its own - track those
                     // under its own GUID, or a DependenciesOnly build's walk stops at the sub-asset.
                     var subCtx = new DependencySerializationContext();
-                    SerializeToCache(sub.AssetID, sub, subCtx);
+                    if (!SerializeToCache(sub.AssetID, sub, subCtx))
+                        cachesWritten = false;
                     _dependencies.SetDependencies(sub.AssetID, subCtx.Dependencies);
 
                     // Populate the sub-asset index BEFORE SetLoaded (which touches the activity
@@ -831,7 +896,19 @@ public class EditorAssetBackend : AssetBackendBase
             }
 
             // Serialize main asset
-            SerializeToCache(entry.Guid, ctx.MainAsset);
+            if (!SerializeToCache(entry.Guid, ctx.MainAsset))
+                cachesWritten = false;
+
+            // The cache file IS the imported asset - it's what loads later and what a build ships. An
+            // import that couldn't write one has produced nothing, so it must not be recorded as done:
+            // that would leave the previous cache in place while claiming to be current.
+            if (!cachesWritten)
+            {
+                Runtime.Debug.LogError(
+                    $"Import of '{entry.Path}' could not write its cache. Leaving it flagged for reimport.");
+                entry.LastModifiedTicks = 0;
+                return false;
+            }
 
             // Update timestamps
             entry.LastModifiedTicks = File.GetLastWriteTimeUtc(absolutePath).Ticks;
@@ -861,7 +938,8 @@ public class EditorAssetBackend : AssetBackendBase
         }
     }
 
-    private void SerializeToCache(Guid guid, EngineObject obj, SerializationContext? context = null)
+    /// <summary>Writes the asset's cache file, reporting whether it actually landed.</summary>
+    private bool SerializeToCache(Guid guid, EngineObject obj, SerializationContext? context = null)
     {
         string cachePath = GetCachePath(guid);
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
@@ -879,18 +957,23 @@ public class EditorAssetBackend : AssetBackendBase
                 : Serializer.Serialize(typeof(object), obj);
             obj.AssetID = savedId;
 
-            if (echo != null)
+            if (echo == null)
             {
-                // Write to a temp file and rename into place (matching MetaFile.Write) so a
-                // crash/power-loss mid-write can't leave a truncated cache file behind.
-                string tempPath = cachePath + ".tmp";
-                echo.WriteToBinary(new FileInfo(tempPath));
-                File.Move(tempPath, cachePath, overwrite: true);
+                Runtime.Debug.LogError($"Serializing asset {guid} produced nothing.");
+                return false;
             }
+
+            // Write to a temp file and rename into place (matching MetaFile.Write) so a
+            // crash/power-loss mid-write can't leave a truncated cache file behind.
+            string tempPath = cachePath + ".tmp";
+            echo.WriteToBinary(new FileInfo(tempPath));
+            File.Move(tempPath, cachePath, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
-            Runtime.Debug.LogWarning($"Failed to cache asset {guid}: {ex.Message}");
+            Runtime.Debug.LogError($"Failed to cache asset {guid}: {ex.Message}");
+            return false;
         }
     }
 
@@ -1320,9 +1403,27 @@ public class EditorAssetBackend : AssetBackendBase
         OnAssetsDeleted?.Invoke(new[] { relativePath });
         _folderIndexDirty = true;
 
-        // Script deleted - trigger recompile
-        if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        if (AffectsCompilation(relativePath))
             ScriptAssemblyManager.RequestRecompile();
+    }
+
+    /// <summary>
+    /// True for files whose path feeds script compilation: sources, assembly definitions (they own
+    /// scripts by folder) and managed plugins. Moving one changes the generated csproj and which
+    /// assembly a script lands in, so it has to recompile even though no file content changed.
+    /// </summary>
+    private static bool AffectsCompilation(string path)
+    {
+        string ext = Path.GetExtension(path);
+        return ext.Equals(".cs", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(AssemblyDefinitionDatabase.Extension, StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".dll", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsCompilationInput(string directory)
+    {
+        try { return Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Any(AffectsCompilation); }
+        catch { return false; }
     }
 
     /// <summary>
@@ -1393,6 +1494,9 @@ public class EditorAssetBackend : AssetBackendBase
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         OnAssetMoved?.Invoke(oldRelativePath, newRelativePath);
         _folderIndexDirty = true;
+
+        if (AffectsCompilation(oldRelativePath) || AffectsCompilation(newRelativePath))
+            ScriptAssemblyManager.RequestRecompile();
         return true;
     }
 
@@ -1454,8 +1558,10 @@ public class EditorAssetBackend : AssetBackendBase
             return false;
         }
 
+        bool recompile = false;
         foreach (var (oldPath, newPath, guid) in toRemap)
         {
+            recompile |= AffectsCompilation(oldPath);
             _pathToGuid.Remove(oldPath);
             _pathToGuid[newPath] = guid;
             if (_guidToEntry.TryGetValue(guid, out var entry))
@@ -1473,6 +1579,9 @@ public class EditorAssetBackend : AssetBackendBase
 
         MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
         _folderIndexDirty = true;
+
+        if (recompile)
+            ScriptAssemblyManager.RequestRecompile();
         return true;
     }
 
@@ -1583,11 +1692,12 @@ public class EditorAssetBackend : AssetBackendBase
         imported.Add(relativePath);
     }
 
-    public void ProcessFileChanges()
+    /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>
+    public void ProcessFileChanges(bool force = false)
     {
         if (_watcher == null) return;
 
-        var events = _watcher.DrainEvents();
+        var events = _watcher.DrainEvents(force);
         if (events.Count == 0) return;
 
         var imported = new List<string>();
@@ -1595,6 +1705,27 @@ public class EditorAssetBackend : AssetBackendBase
 
         foreach (var evt in events)
         {
+            // One bad file (unreadable .meta, broken importer) must not drop the rest of this batch of
+            // events on the floor - those changes would never be seen again until a full rescan.
+            try { ProcessFileEvent(evt, imported, deleted); }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to process change to '{evt.Path}': {ex.Message}"); }
+        }
+
+        if (imported.Count > 0 || deleted.Count > 0)
+        {
+            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+            if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
+            if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
+
+            // Refresh resources map if any changes involved Resources/ folders
+            if (imported.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/"))
+                || deleted.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/")))
+                RefreshResourcesMap();
+        }
+    }
+
+    private void ProcessFileEvent(FileEvent evt, List<string> imported, List<string> deleted)
+    {
             // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
             // change a file's size/date, so the cached folder index the Project Panel reads is stale.
             // .meta files are ours and don't affect the displayed structure.
@@ -1602,12 +1733,18 @@ public class EditorAssetBackend : AssetBackendBase
                 _folderIndexDirty = true;
 
             // Skip directory events - ScanAssets handles directory .meta creation
-            if (Directory.Exists(evt.Path)) continue;
+            if (Directory.Exists(evt.Path))
+            {
+                // A renamed folder relocates everything under it without any per-file event.
+                if (evt.Type == FileEventType.Renamed && ContainsCompilationInput(evt.Path))
+                    ScriptAssemblyManager.RequestRecompile();
+                return;
+            }
 
             string relativePath = ToRelativePath(evt.Path);
 
             // Skip .meta files we manage them
-            if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+            if (relativePath.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)) return;
 
             switch (evt.Type)
             {
@@ -1638,8 +1775,7 @@ public class EditorAssetBackend : AssetBackendBase
 
                             deleted.Add(relativePath);
 
-                            // Script deleted trigger recompile
-                            if (relativePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                            if (AffectsCompilation(relativePath))
                                 ScriptAssemblyManager.RequestRecompile();
                         }
                         break;
@@ -1650,6 +1786,13 @@ public class EditorAssetBackend : AssetBackendBase
                         if (evt.OldPath != null)
                         {
                             string oldRelative = ToRelativePath(evt.OldPath);
+
+                            // A move keeps the file's timestamp and content, so nothing else here asks for a
+                            // recompile, yet the csproj still lists the old path and asmdef ownership may
+                            // have changed.
+                            if (AffectsCompilation(oldRelative) || AffectsCompilation(relativePath))
+                                ScriptAssemblyManager.RequestRecompile();
+
                             if (!_pathToGuid.TryGetValue(oldRelative, out var guid))
                             {
                                 // The old path was never tracked e.g. the "write-to-temp-then-rename-
@@ -1702,19 +1845,31 @@ public class EditorAssetBackend : AssetBackendBase
                         break;
                     }
             }
-        }
+    }
 
-        if (imported.Count > 0 || deleted.Count > 0)
+    /// <summary>
+    /// Reconcile the whole database against what is actually on disk: pending watcher events first, then a
+    /// full scan that picks up anything added, removed, or modified since the last import.
+    /// <para>
+    /// The watcher is best-effort - it debounces, it can drop events on buffer overflow, and it is gated
+    /// behind window focus by default - so anything that must not act on stale state calls this first.
+    /// Main-thread only, since it imports.
+    /// </para>
+    /// </summary>
+    public void Refresh()
+    {
+        if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
         {
-            MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
-            if (imported.Count > 0) OnAssetsImported?.Invoke(imported.ToArray());
-            if (deleted.Count > 0) OnAssetsDeleted?.Invoke(deleted.ToArray());
-
-            // Refresh resources map if any changes involved Resources/ folders
-            if (imported.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/"))
-                || deleted.Any(p => p.Contains("/Resources/") || p.StartsWith("Resources/")))
-                RefreshResourcesMap();
+            Runtime.Debug.LogWarning("AssetDatabase.Refresh must run on the main thread; ignoring.");
+            return;
         }
+
+        ProcessFileChanges(force: true);
+        ScanAssets();
+        ImportDirty();
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        RefreshResourcesMap();
+        _folderIndexDirty = true;
     }
 
     // ================================================================
@@ -1723,6 +1878,41 @@ public class EditorAssetBackend : AssetBackendBase
 
     private string GetCachePath(Guid guid)
         => Path.Combine(_project.CachePath, $"{guid}.asset");
+
+    /// <summary>True when the source file has been written since the entry was last imported, i.e. the
+    /// cached import no longer represents what's on disk.</summary>
+    private bool IsSourceNewerThanImport(AssetEntry entry)
+    {
+        string absolutePath = Path.Combine(_project.AssetsPath, entry.Path);
+        if (!File.Exists(absolutePath)) return false;
+        return File.GetLastWriteTimeUtc(absolutePath).Ticks != entry.LastModifiedTicks;
+    }
+
+    /// <summary>
+    /// Reimport <paramref name="guid"/> if its cache file is missing or its source file has changed since
+    /// the last import, and report whether it did. Sub-asset GUIDs resolve to their parent, since only the
+    /// parent can be imported.
+    /// <para>
+    /// The file watcher normally keeps caches current, but it debounces and can miss changes outright
+    /// (buffer overflow, a save immediately before the work that reads the cache), and until now nothing
+    /// but a full editor restart reconciled that. Anything that reads caches straight off disk rather than
+    /// through <see cref="LoadFresh"/> - a build, above all - has to check first or it ships whatever the
+    /// asset used to be.
+    /// </para>
+    /// </summary>
+    public bool EnsureCacheUpToDate(Guid guid)
+    {
+        Guid parentGuid = _subAssetIndex.TryGetValue(guid, out var subInfo) ? subInfo.parentGuid : guid;
+
+        var entry = GetEntry(parentGuid);
+        if (entry == null) return false;
+
+        bool cacheMissing = !File.Exists(GetCachePath(guid)) || !File.Exists(GetCachePath(parentGuid));
+        if (!cacheMissing && !IsSourceNewerThanImport(entry)) return false;
+
+        Reimport(parentGuid);
+        return true;
+    }
 
     private void RemoveSubAsset(Guid subGuid, bool includeThumbnails)
     {

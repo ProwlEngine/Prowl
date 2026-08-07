@@ -339,6 +339,28 @@ public class PhysicsTests : RuntimeTestBase
             $"Body should rest on the concave mesh, was at y={body.Transform.Position.Y}");
     }
 
+    // Jitter drops degenerate triangles while baking, so the shape count has to come from the baked
+    // mesh and not from the source triangle soup - indexing by the soup count runs off the end.
+    [Fact]
+    public void MeshCollider_Concave_MeshWithDegenerateTriangle_BuildsShapes()
+    {
+        var mesh = new Mesh
+        {
+            Vertices = [new Float3(0, 0, 0), new Float3(1, 0, 0), new Float3(0, 0, 1), new Float3(2, 0, 0)]
+        };
+        mesh.Indices = [0, 1, 2, 0, 0, 3]; // the second triangle has zero area
+
+        var go = CreateGameObject("DegenerateMesh");
+        var mc = go.AddComponent<MeshCollider>();
+        mc.Mesh = mesh;
+        mc.Convex = false;
+
+        var shapes = mc.CreateShapes();
+
+        Assert.NotNull(shapes);
+        Assert.Single(shapes);
+    }
+
     [Fact]
     public void MeshCollider_Convex_RegistersHull()
     {

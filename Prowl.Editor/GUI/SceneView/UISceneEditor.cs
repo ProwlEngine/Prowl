@@ -1,10 +1,11 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.SceneView;
+using Prowl.Editor.Theming;
 using Prowl.OrigamiUI.Gizmo;
 using Prowl.PaperUI;
 using Prowl.Runtime;
@@ -15,9 +16,12 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Editor;
 
-[SceneViewEditorFor(typeof(UIBehaviour))]
-public sealed class UISceneEditor : ISceneViewEditor
+[ComponentSceneTool(typeof(UIBehaviour))]
+public sealed class UISceneEditor : SceneTool
 {
+    public override string Name => "UI Rect";
+    public override string Icon => EditorIcons.Expand;
+
     private Texture2D _handleTexture = Texture2D.ParseDefault(DefaultTexture.Handle);
 
     /// <summary>The grabbable handles, plus <see cref="Move"/> for the rect body.</summary>
@@ -71,6 +75,11 @@ public sealed class UISceneEditor : ISceneViewEditor
 
     private const float MinRectSize = 1f;
 
+    /// <summary>Screen-space grab radius for a point handle, in pixels.</summary>
+    private const float HandlePickRadius = 9f;
+
+    private const string HandleControl = "ui_rect_handle";
+
     private UIBehaviour? _target;
 
     private Handle _hover = Handle.None;
@@ -84,7 +93,7 @@ public sealed class UISceneEditor : ISceneViewEditor
     // Move click-vs-drag: a press inside the rect body tentatively grabs Move; if the pointer doesn't
     // travel past ClickThreshold before release, it's treated as a plain selection click instead of a move.
     private bool _moveIsClick;
-    private Float2 _dragStartMouse;
+    private ControlID _dragControl;
     private const float ClickThreshold = 4f;
 
     // Coordinate frame frozen at grab. The element frame (BuildItemModel) depends on ComputedRect,
@@ -95,14 +104,13 @@ public sealed class UISceneEditor : ISceneViewEditor
     private Float3 _dragPlaneNormal;
     private Float3 _dragPlaneOrigin;
 
-    public int Priority => 0;
-
-    public void OnActivate(GameObject target)
+    public override void OnActivated(SceneToolContext ctx)
     {
-        _target = target.GetComponent<UIBehaviour>();
+        GameObject? target = ctx.ActiveObject;
+        _target = target.IsValid() ? target.GetComponent<UIBehaviour>() : null;
     }
 
-    public void OnDeactivate()
+    public override void OnDeactivated()
     {
         _target = null;
         _hover = Handle.None;
@@ -113,18 +121,21 @@ public sealed class UISceneEditor : ISceneViewEditor
     // anchors / pivot / size-delta, not Transform.Position), so this editor takes over
     // input entirely for world-space UI. The default toolbar buttons are left visible
     // but inert; the scene handles are the tool.
-    public bool DrawToolbar(Paper paper, string id, Prowl.Scribe.FontFile font) => false;
 
-    public bool OnSceneInput(Camera camera, Scene scene, Rect viewport, Ray mouseRay, Float2 mousePos, bool viewportHovered)
+    // Transform.Position does not drive a RectTransform's layout, so the object gizmo would be an
+    // inert decoy sitting on top of the rect handles.
+    public override bool SuppressTransformGizmo => true;
+
+    public override void OnSceneInput(SceneToolContext toolCtx)
     {
+        HandleContext ctx = toolCtx.Handles;
+        Scene scene = toolCtx.Scene;
         if (_target == null)
-            return false;
+            return;
 
         // Revert overlay preview if play mode starts while we're active.
         if (Application.IsPlaying)
-        {
-            return false;
-        }
+            return;
 
         RectTransform? rt = _target.GameObject.RectTransform;
         GameCanvas? canvas = _target.GetCanvas();
@@ -132,13 +143,15 @@ public sealed class UISceneEditor : ISceneViewEditor
         {
             _hover = Handle.None;
             _active = Handle.None;
-            return false;
+            return;
         }
 
-        RenderTexture? sceneRT = camera.Target;
+        // The scene view renders at viewport size, so that IS the screen size a canvas should lay out
+        // against here - and it's the viewport's own business, not something to read back off the camera.
+        Float2 viewport = ctx.ViewportSize;
         Float2? prevScreenOverride = GameCanvas.ScreenSizeOverride;
-        if (sceneRT != null && sceneRT.Width > 0 && sceneRT.Height > 0)
-            GameCanvas.ScreenSizeOverride = new Float2(sceneRT.Width, sceneRT.Height);
+        if (viewport.X > 0 && viewport.Y > 0)
+            GameCanvas.ScreenSizeOverride = viewport;
 
         try
         {
@@ -150,7 +163,7 @@ public sealed class UISceneEditor : ISceneViewEditor
             {
                 _hover = Handle.None;
                 _active = Handle.None;
-                return false;
+                return;
             }
 
             // Work in the element's own model frame (BuildItemModel = CanvasToWorld * BuildRectModel),
@@ -167,29 +180,27 @@ public sealed class UISceneEditor : ISceneViewEditor
             Float3 upW = Float4x4.TransformPoint(Float3.UnitY, frameToWorld) - originW;
             float worldPerPixel = Float3.Length(rightW);
             if (worldPerPixel < 1e-9f)
-                return _active != Handle.None;
+                return;
             rightW /= worldPerPixel;
             upW = Float3.Normalize(upW);
             Float3 normalW = Float3.Normalize(Float3.Cross(rightW, upW));
 
-            Rect parentRect = ResolveParentRect(rt, canvas.RootRect);
+            Rect parentRect = ResolveParentRect(rt, canvas);
 
-            Float3 camPos = camera.GameObject.Transform.Position;
+            Float3 camPos = ctx.Camera.GameObject.Transform.Position;
             Float3 centerW = Float4x4.TransformPoint(
                 new Float3(cr.Min.X + cr.Size.X * 0.5f - pivotCanvasPos.X, cr.Min.Y + cr.Size.Y * 0.5f - pivotCanvasPos.Y, 0), frameToWorld);
             float handleWorld = Maths.Max(Float3.Distance(camPos, centerW) * 0.018f, worldPerPixel * 4f);
-            float pickRadius = handleWorld / worldPerPixel; // design pixels
 
             // Draw the rect outline + handles every frame, BEFORE any input-related early-out, so they
             // never flicker off while navigating the camera or when the pointer leaves the canvas plane.
             DrawHandles(rt, parentRect, frameToWorld, pivotCanvasPos, rightW, upW, handleWorld);
 
             // Camera navigation (RMB/MMB) takes over: don't hit-test or drag while orbiting / panning.
-            bool camNav = Input.GetMouseButton(1) || Input.GetMouseButton(2);
-            if (camNav && _active == Handle.None)
+            if (ctx.Blocked && _active == Handle.None)
             {
                 _hover = Handle.None;
-                return false;
+                return;
             }
 
             // While dragging, use the frame captured at grab so resizing the element doesn't shift the
@@ -200,11 +211,12 @@ public sealed class UISceneEditor : ISceneViewEditor
             Float4x4 hitWorldToFrame = dragging ? _dragWorldToFrame : worldToFrame;
             Float2 hitPivot = dragging ? _dragFramePivot : pivotCanvasPos;
 
+            Ray mouseRay = ctx.MouseRay;
             if (!GizmoUtils.IntersectPlane(planeNormal, planeOrigin, mouseRay.Origin, mouseRay.Direction, out float tHit))
             {
-                if (_active != Handle.None) return true;
+                if (_active != Handle.None) return;
                 _hover = Handle.None;
-                return false;
+                return;
             }
             Float3 worldHit = mouseRay.Origin + mouseRay.Direction * tHit;
             // Map the world hit into the element's local frame, then shift by the pivot so it lands in
@@ -212,54 +224,25 @@ public sealed class UISceneEditor : ISceneViewEditor
             Float3 localHit = Float4x4.TransformPoint(worldHit, hitWorldToFrame);
             Float2 designHit = new(localHit.X + hitPivot.X, localHit.Y + hitPivot.Y);
 
-            bool leftDown = Input.GetMouseButton(0);
-            bool leftPressed = Input.GetMouseButtonDown(0);
-            Handle activeBefore = _active;
+            // ---- Register every handle so they arbitrate against each other and against the rest
+            //      of the viewport. Ties go to the last registration, so the priority order is
+            //      body, then anchors and pivot, then edge mid-points, then corners.
+            Handle nearest = RegisterControls(ctx, rt, cr, parentRect, frameToWorld, pivotCanvasPos, out ControlID nearestId);
+
+            _hover = _active != Handle.None ? _active : nearest;
 
             // ---- Begin a drag ----
-            if (_active == Handle.None)
+            if (_active == Handle.None && nearest != Handle.None && ctx.TryBeginDrag(nearestId))
             {
-                _hover = HitTest(rt, cr, parentRect, designHit, pickRadius);
+                BeginDrag(nearest, designHit, cr, rt);
+                _dragControl = nearestId;
 
-                if (leftPressed && viewportHovered && !camNav)
-                {
-                    if (_hover != Handle.None && _hover != Handle.Move)
-                    {
-                        // A resize/pivot/anchor handle on the selected element always wins - clicking it
-                        // edits the element (e.g. resizing something behind a panel), never re-selects.
-                        BeginDrag(_hover, designHit, cr, rt);
-                        _moveIsClick = false;
-                    }
-                    else if (_hover == Handle.Move)
-                    {
-                        // Inside the selected element's body (Move covers the whole rect): tentatively
-                        // grab Move. Release decides - a drag past ClickThreshold moves the element, a
-                        // click in place re-selects whatever is under the cursor. This lets you drag-move
-                        // a selected element even when another one is drawn in front of it.
-                        BeginDrag(Handle.Move, designHit, cr, rt);
-                        _moveIsClick = true;
-                        _dragStartMouse = mousePos;
-                    }
-                    else
-                    {
-                        // Outside the selected rect: select the top-most element under the cursor.
-                        GameObject? topMost = UIPicker.Pick(scene, mouseRay);
-                        if (topMost != null && !ReferenceEquals(topMost, _target.GameObject))
-                        {
-                            if (Input.IsCtrlPressed) Selection.ToggleSelection(topMost);
-                            else Selection.Select(topMost);
-                        }
-                        else if (topMost == null && !Input.IsCtrlPressed && !Input.IsShiftPressed)
-                        {
-                            Selection.Clear();
-                        }
-                    }
-                }
-            }
+                // A press inside the body tentatively grabs Move; release decides whether it was a
+                // move or a plain selection click. Any other handle is an immediate edit.
+                _moveIsClick = nearest == Handle.Move;
 
-            // A drag just began this frame: freeze the coordinate frame for the rest of it.
-            if (activeBefore == Handle.None && _active != Handle.None)
-            {
+                // Freeze the coordinate frame for the whole drag: the element frame depends on
+                // ComputedRect, which moves as we edit, so a live frame would feed back into itself.
                 _dragWorldToFrame = worldToFrame;
                 _dragFramePivot = pivotCanvasPos;
                 _dragPlaneNormal = normalW;
@@ -268,11 +251,11 @@ public sealed class UISceneEditor : ISceneViewEditor
 
             if (_active != Handle.None)
             {
-                if (leftDown)
+                if (ctx.PrimaryHeld)
                 {
                     // A pending Move stays put until the pointer travels past the click threshold; once
                     // it does, it becomes a real drag and starts moving the element.
-                    if (_active == Handle.Move && _moveIsClick && Distance(mousePos, _dragStartMouse) > ClickThreshold)
+                    if (_active == Handle.Move && _moveIsClick && ctx.DragExceededThreshold(_dragControl, ClickThreshold))
                         _moveIsClick = false;
 
                     if (!(_active == Handle.Move && _moveIsClick))
@@ -286,23 +269,20 @@ public sealed class UISceneEditor : ISceneViewEditor
                 {
                     // Released without dragging: treat as a selection click, not a move -> select the
                     // top-most element under the cursor (the one in front), leaving the rect untouched.
-                    GameObject? topMost = UIPicker.Pick(scene, mouseRay);
+                    GameObject? topMost = UIPicker.Pick(scene, ctx.MouseRay);
                     if (topMost != null && !ReferenceEquals(topMost, _target.GameObject))
                     {
-                        if (Input.IsCtrlPressed) Selection.ToggleSelection(topMost);
+                        if (ctx.Ctrl) Selection.ToggleSelection(topMost);
                         else Selection.Select(topMost);
                     }
-                    _active = Handle.None;
-                    _moveIsClick = false;
+                    EndDrag(ctx);
                 }
                 else
                 {
                     RegisterUndo(_target.GameObject, _dragStartState, LayoutState.Capture(rt));
-                    _active = Handle.None;
+                    EndDrag(ctx);
                 }
             }
-
-            return true;
         }
         finally
         {
@@ -311,60 +291,92 @@ public sealed class UISceneEditor : ISceneViewEditor
     }
 
     // ================================================================
-    //  Hit testing
+    //  Control registration
     // ================================================================
 
-    private static Handle HitTest(RectTransform rt, Rect cr, Rect parentRect, Float2 p, float radius)
+    /// <summary>
+    /// Register one control per grabbable handle and return whichever won arbitration. Distances are
+    /// screen-space pixels, so the handles compete with every other control in the viewport on the
+    /// same terms. Registration order sets tie-breaking (last wins): body, then anchors and pivot,
+    /// then edge mid-points, then corners - so a corner still beats an anchor sitting on top of it.
+    /// </summary>
+    private Handle RegisterControls(HandleContext ctx, RectTransform rt, Rect cr, Rect parentRect,
+                                    Float4x4 frameToWorld, Float2 pivotCanvasPos, out ControlID nearestId)
     {
-        Float2 min = cr.Min, max = cr.Max;
-        Float2 midBottom = new((min.X + max.X) * 0.5f, min.Y);
-        Float2 midTop = new((min.X + max.X) * 0.5f, max.Y);
-        Float2 midLeft = new(min.X, (min.Y + max.Y) * 0.5f);
-        Float2 midRight = new(max.X, (min.Y + max.Y) * 0.5f);
+        Float3 ToWorld(Float2 d) => Float4x4.TransformPoint(
+            new Float3(d.X - pivotCanvasPos.X, d.Y - pivotCanvasPos.Y, 0), frameToWorld);
 
-        Float2 pivot = new(min.X + rt.Pivot.X * cr.Size.X, min.Y + rt.Pivot.Y * cr.Size.Y);
+        Handle nearest = Handle.None;
+        ControlID nearestControl = ControlID.None;
+
+        void Register(Handle h, float distance, float depth)
+        {
+            ControlID id = ctx.GetControlID(HandleControl, (int)h);
+            ctx.AddControl(id, distance, depth);
+            ctx.RequestCursor(id, CursorFor(h));
+            if (ctx.IsNearest(id)) { nearest = h; nearestControl = id; }
+        }
+
+        void Point(Handle h, Float2 designPos)
+        {
+            Float3 world = ToWorld(designPos);
+            Register(h, ctx.DistanceToPoint(world, HandlePickRadius), ctx.DepthOf(world));
+        }
+
+        Float2 min = cr.Min, max = cr.Max;
+        Float2 mid = (min + max) * 0.5f;
+
+        // Body: registered first and far, so it loses to any point handle but still beats
+        // object picking, keeping a press inside the rect on this element.
+        Float2 screenMouse = ctx.MousePosition;
+        Float2? bl = ctx.WorldToScreen(ToWorld(min));
+        Float2? br = ctx.WorldToScreen(ToWorld(new Float2(max.X, min.Y)));
+        Float2? tr = ctx.WorldToScreen(ToWorld(max));
+        Float2? tl = ctx.WorldToScreen(ToWorld(new Float2(min.X, max.Y)));
+        if (bl.HasValue && br.HasValue && tr.HasValue && tl.HasValue
+            && GizmoUtils.IsPointInPolygon(screenMouse, [bl.Value, br.Value, tr.Value, tl.Value]))
+            Register(Handle.Move, HandleContext.BodyDistance, ctx.DepthOf(ToWorld(mid)));
 
         float aMinX = parentRect.Min.X + rt.AnchorMin.X * parentRect.Size.X;
         float aMaxX = parentRect.Min.X + rt.AnchorMax.X * parentRect.Size.X;
         float aMinY = parentRect.Min.Y + rt.AnchorMin.Y * parentRect.Size.Y;
         float aMaxY = parentRect.Min.Y + rt.AnchorMax.Y * parentRect.Size.Y;
+        Point(Handle.AnchorBL, new Float2(aMinX, aMinY));
+        Point(Handle.AnchorBR, new Float2(aMaxX, aMinY));
+        Point(Handle.AnchorTR, new Float2(aMaxX, aMaxY));
+        Point(Handle.AnchorTL, new Float2(aMinX, aMaxY));
 
-        Handle best = Handle.None;
-        float bestDist = radius;
+        Point(Handle.Pivot, new Float2(min.X + rt.Pivot.X * cr.Size.X, min.Y + rt.Pivot.Y * cr.Size.Y));
 
-        void Test(Handle h, Float2 c)
-        {
-            float d = Distance(p, c);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                best = h;
-            }
-        }
+        Point(Handle.ResizeB, new Float2(mid.X, min.Y));
+        Point(Handle.ResizeT, new Float2(mid.X, max.Y));
+        Point(Handle.ResizeL, new Float2(min.X, mid.Y));
+        Point(Handle.ResizeR, new Float2(max.X, mid.Y));
 
-        Test(Handle.ResizeBL, min);
-        Test(Handle.ResizeBR, new Float2(max.X, min.Y));
-        Test(Handle.ResizeTR, max);
-        Test(Handle.ResizeTL, new Float2(min.X, max.Y));
-        Test(Handle.ResizeB, midBottom);
-        Test(Handle.ResizeT, midTop);
-        Test(Handle.ResizeL, midLeft);
-        Test(Handle.ResizeR, midRight);
-        Test(Handle.Pivot, pivot);
-        Test(Handle.AnchorBL, new Float2(aMinX, aMinY));
-        Test(Handle.AnchorBR, new Float2(aMaxX, aMinY));
-        Test(Handle.AnchorTR, new Float2(aMaxX, aMaxY));
-        Test(Handle.AnchorTL, new Float2(aMinX, aMaxY));
+        Point(Handle.ResizeBL, min);
+        Point(Handle.ResizeBR, new Float2(max.X, min.Y));
+        Point(Handle.ResizeTR, max);
+        Point(Handle.ResizeTL, new Float2(min.X, max.Y));
 
-        if (best != Handle.None)
-            return best;
-
-        // Inside the rect body - move.
-        if (p.X >= min.X && p.X <= max.X && p.Y >= min.Y && p.Y <= max.Y)
-            return Handle.Move;
-
-        return Handle.None;
+        nearestId = nearestControl;
+        return nearest;
     }
+
+    /// <summary>The pointer shape that matches what a handle actually does. Corner and edge handles
+    /// use the resize arrow along their own axis; the rect body and the anchors move things.</summary>
+    private static PaperCursor CursorFor(Handle h) => h switch
+    {
+        Handle.ResizeL or Handle.ResizeR => PaperCursor.ResizeHorizontal,
+        Handle.ResizeB or Handle.ResizeT => PaperCursor.ResizeVertical,
+        // Screen Y grows downward while the rect's Y grows upward, so the diagonals are swapped
+        // relative to the naive reading of the corner names.
+        Handle.ResizeTL or Handle.ResizeBR => PaperCursor.ResizeNESW,
+        Handle.ResizeTR or Handle.ResizeBL => PaperCursor.ResizeNWSE,
+        Handle.Pivot => PaperCursor.Crosshair,
+        Handle.AnchorBL or Handle.AnchorBR or Handle.AnchorTR or Handle.AnchorTL => PaperCursor.Grab,
+        Handle.Move => PaperCursor.ResizeAll,
+        _ => PaperCursor.Inherit,
+    };
 
     // ================================================================
     //  Drag application
@@ -584,14 +596,26 @@ public sealed class UISceneEditor : ISceneViewEditor
         _dragStartState = LayoutState.Capture(rt);
     }
 
-    private static Rect ResolveParentRect(RectTransform rt, Rect canvasRootRect)
+    private void EndDrag(HandleContext ctx)
+    {
+        ctx.TryEndDrag(_dragControl);
+        _active = Handle.None;
+        _dragControl = ControlID.None;
+        _moveIsClick = false;
+    }
+
+    private static Rect ResolveParentRect(RectTransform rt, GameCanvas canvas)
     {
         GameObject? parentGo = rt.GameObject.Parent;
-        RectTransform? parent = parentGo.IsValid() ? parentGo.RectTransform : null;
-        // A top-level element's parent is the canvas, which has no RectTransform. Anchor against the
-        // canvas ROOT rect - never the element's own rect, which would move/resize with the element
-        // and feed back into layout (the anchor reference shifting each frame = the drag jitter).
-        return parent != null ? parent.ComputedRect : canvasRootRect;
+        // A top-level element lays out against the canvas ROOT rect. The canvas GameObject may still
+        // carry a RectTransform, but the rebuild never lays it out, so its ComputedRect is empty and
+        // using it would place every anchor at the design origin - the element jumps by half the
+        // canvas the moment a drag applies a rect. Never the element's own rect either, which would
+        // move with the element and feed back into layout.
+        RectTransform? parent = parentGo.IsValid() && !ReferenceEquals(parentGo, canvas.GameObject)
+            ? parentGo.RectTransform
+            : null;
+        return parent != null ? parent.ComputedRect : canvas.RootRect;
     }
 
     private void RegisterUndo(GameObject go, LayoutState before, LayoutState after)
@@ -605,10 +629,4 @@ public sealed class UISceneEditor : ISceneViewEditor
             () => { GameObject? go = Undo.FindGO(id); RectTransform? rt = go.IsValid() ? go.RectTransform : null; if (rt != null) after.ApplyTo(rt); });
     }
 
-    private static float Distance(Float2 a, Float2 b)
-    {
-        float dx = a.X - b.X;
-        float dy = a.Y - b.Y;
-        return MathF.Sqrt(dx * dx + dy * dy);
-    }
 }

@@ -103,6 +103,9 @@ public static class Program
             // Load user script assemblies before registry scanning
             ScriptAssemblyManager.LoadAssemblies(project);
 
+            // Request a full recompile of scripts so that any missing API or compiler error can be caught right away
+            ScriptAssemblyManager.RequestRecompile();
+
             // Initialize asset database for the already-opened project
             var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();

@@ -146,7 +146,7 @@ public class HierarchyPanel : DockPanel
             if (scene == null)
             {
                 EditorGUI.EmptyState(paper, "hier_empty", Loc.Get("hierarchy.no_scene_loaded"), font);
-                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => SceneViewPanel.CreateAndLoadDefaultScene()).Width(120).Show();
+                Origami.Button(paper, "hier_create_scene", $"{EditorIcons.Plus}  {Loc.Get("hierarchy.new_scene")}", () => EditorSceneManager.CreateAndLoadDefaultScene()).Width(120).Show();
                 return;
             }
 
@@ -1103,11 +1103,8 @@ public class HierarchyPanel : DockPanel
         if (Selection.IsSelected(go))
             Selection.RemoveFromSelection(go);
 
-        foreach (var child in go.GetChildrenDeep().ToList())
-            scene.Remove(child);
-
         scene.Remove(go);
-        go.Dispose();
+        go.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
     }
 
     // ================================================================

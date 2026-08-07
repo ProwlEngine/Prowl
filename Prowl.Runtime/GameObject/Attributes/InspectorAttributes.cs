@@ -59,6 +59,24 @@ public class ShowIfAttribute : Attribute
     public ShowIfAttribute(string conditionMember) => ConditionMember = conditionMember;
 }
 
+/// <summary>Greys the field out (visible but not editable) unless the named bool
+/// field/property is true. Use for values only meaningful behind an enabling toggle.</summary>
+[AttributeUsage(AttributeTargets.Field)]
+public class EnableIfAttribute : Attribute
+{
+    public string ConditionMember { get; }
+    public EnableIfAttribute(string conditionMember) => ConditionMember = conditionMember;
+}
+
+/// <summary>Overrides the display name the inspector shows for a field or an enum member,
+/// without renaming the code symbol (e.g. keep an API-parity enum name but show "None").</summary>
+[AttributeUsage(AttributeTargets.Field)]
+public class InspectorNameAttribute : Attribute
+{
+    public string DisplayName { get; }
+    public InspectorNameAttribute(string displayName) => DisplayName = displayName;
+}
+
 /// <summary>Draws a string field as a multi-line text area.</summary>
 [AttributeUsage(AttributeTargets.Field)]
 public class TextAreaAttribute : Attribute

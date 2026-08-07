@@ -352,10 +352,8 @@ public static class Undo
                 if (Selection.IsSelected(target))
                     Selection.Clear();
 
-                foreach (var child in target.GetChildrenDeep().ToList())
-                    scene.Remove(child);
                 scene.Remove(target);
-                target.Dispose();
+                target.Destroy(); // TODO: Should this be Dispose... or Destroy? Destroy defers it to end of frame?
             },
             redo: () =>
             {
@@ -433,10 +431,8 @@ public static class Undo
                 if (Selection.IsSelected(target))
                     Selection.Clear();
 
-                foreach (var child in target.GetChildrenDeep().ToList())
-                    scene.Remove(child);
                 scene.Remove(target);
-                target.Dispose();
+                target.Destroy(); // TODO: Should this be Dispose... or Destroy? Destroy defers it to end of frame?
                 EditorSceneManager.MarkDirty();
             });
     }

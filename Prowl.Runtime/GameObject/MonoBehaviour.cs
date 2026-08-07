@@ -248,18 +248,27 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     }
 
     /// <summary>
+    /// Marks this component as no longer part of its GameObject. Disposal waits for the end of the
+    /// frame, so without this a removed component keeps ticking off the already-built dispatch list
+    /// while nothing can find it on the GameObject any more.
+    /// </summary>
+    internal void DetachFromGameObject() => _enabledInHierarchy = false;
+
+    /// <summary>
     /// Updates the enabled state based on changes in the hierarchy.
     /// OnEnable/OnDisable are only called if the GameObject is in an active Scene.
     /// </summary>
     internal void HierarchyStateChanged()
     {
-        bool newState = _enabled && _go.EnabledInHierarchy;
+        // A component can be toggled before it is ever attached, and stays attached to a GameObject
+        // that has been disposed. Neither has a hierarchy to be enabled in.
+        bool newState = _enabled && _go.IsValid() && _go.EnabledInHierarchy;
         if (newState != _enabledInHierarchy)
         {
             _enabledInHierarchy = newState;
 
             // Only call OnEnable/OnDisable if we're in an active Scene
-            Scene? scene = _go.Scene;
+            Scene? scene = _go.IsValid() ? _go.Scene : null;
             if (scene.IsValid() && scene.IsActive)
             {
                 if (newState)
@@ -492,7 +501,7 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Called when the MonoBehaviour will be destroyed.
     /// This is an override of EngineObject.OnDispose() and is also exposed as a virtual lifecycle method.
     /// </summary>
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         if (GameObject.IsValid())
             GameObject.RemoveComponent(this);

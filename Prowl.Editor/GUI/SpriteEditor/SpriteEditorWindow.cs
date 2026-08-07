@@ -125,12 +125,13 @@ public class SpriteEditorWindow : DockPanel
         EnsureSingleSlice();
     }
 
-    // Single mode always has exactly one full-texture slice; keep pivot/border of any existing one.
+    // Single mode always has exactly one full-texture slice; keep name/pivot/border of any existing one.
     private void EnsureSingleSlice()
     {
         if (!IsSingle || _texture.Res is not Texture2D tex) return;
-        var slice = _settings.Slices.Count > 0 ? _settings.Slices[0] : new SpriteSliceData();
-        slice.Name = tex.Name;
+        bool isNew = _settings.Slices.Count == 0;
+        var slice = isNew ? new SpriteSliceData() : _settings.Slices[0];
+        if (isNew) slice.Name = tex.Name;
         slice.Rect = new SpriteRect(0, 0, (int)tex.Width, (int)tex.Height);
         _settings.Slices = new List<SpriteSliceData> { slice };
         _selected = 0;
@@ -149,9 +150,11 @@ public class SpriteEditorWindow : DockPanel
         public byte TightMeshAlphaThreshold;
     }
 
+    // Id is carried through: an undo/redo that dropped it would re-mint the slice's identity and
+    // break every reference to its sprite.
     private static SpriteSliceData CloneSlice(SpriteSliceData s) => new()
     {
-        Name = s.Name, Rect = s.Rect, Alignment = s.Alignment,
+        Id = s.Id, Name = s.Name, Rect = s.Rect, Alignment = s.Alignment,
         CustomPivot = s.CustomPivot, PivotUnit = s.PivotUnit, Border = s.Border,
     };
 
@@ -597,6 +600,7 @@ public class SpriteEditorWindow : DockPanel
                 ClampDisplay(ref dx, ref dy, ref dw, ref dh, texW, texH);
                 _settings.Slices.Add(new SpriteSliceData
                 {
+                    Id = Guid.NewGuid(),
                     Name = $"{tex.Name}_{_settings.Slices.Count}",
                     Rect = ToSpriteRect(dx, dy, dw, dh, texH),
                     Alignment = _settings.GeneratedPivot,

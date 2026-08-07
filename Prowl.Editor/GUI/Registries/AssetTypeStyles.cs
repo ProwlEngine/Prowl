@@ -33,6 +33,7 @@ public static class AssetTypeStyles
         Gray = C(148, 143, 171), Red = C(251, 113, 133);
 
     public static AssetTypeStyle Folder => new() { Icon = EditorIcons.Folder_I, Color = Amber, Bare = true };
+    public static AssetTypeStyle EmptyFolder => new() { Icon = EditorIcons.FolderOpen_I, Color = Amber, Bare = true };
     public static AssetTypeStyle SubAsset => new() { Icon = EditorIcons.Cube_I, Color = Purple };
 
     private static readonly System.Collections.Generic.Dictionary<string, AssetTypeStyle> _map =
@@ -61,6 +62,7 @@ public static class AssetTypeStyles
         [".hdr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
         [".exr"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
         [".psd"] = new() { Icon = EditorIcons.Image_I, Color = Blue },
+        [".rendertexture"] = new() { Icon = EditorIcons.Image_I, Color = Cyan },
         // Materials.
         [".mat"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },
         [".material"] = new() { Icon = EditorIcons.Palette_I, Color = Pink },

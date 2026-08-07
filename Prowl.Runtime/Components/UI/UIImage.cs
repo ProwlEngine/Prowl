@@ -50,7 +50,7 @@ public enum FillMethod
 /// The image fills the rect computed by the <see cref="RectTransform"/>.
 /// Alpha from the parent <see cref="CanvasGroup"/> is multiplied into <see cref="Color"/>.
 /// </remarks>
-public class UIImage : UIBehaviour
+public class UIImage : Graphic
 {
     [SerializeIgnore] private static Texture2D _defaultTexture;
     public static Texture2D defaultTexture
@@ -84,6 +84,9 @@ public class UIImage : UIBehaviour
     /// <summary>The source texture bound for drawing: the sprite's texture, or null when no sprite is set.</summary>
     private Texture2D? SourceTexture { get { var s = Spr; return s.IsValid() ? s.Texture.Res : null; } }
 
+    /// <summary>A sprite is assigned but it (or its texture) is still loading, so this image drew nothing.</summary>
+    public override bool IsContentPending => !_sprite.IsExplicitNull && SourceTexture is null;
+
     /// <summary>9-slice border in source pixels, taken from the sprite (zero when no sprite is set).</summary>
     private Float4 EffectiveBorder => Spr is Sprite s ? s.Border : Float4.Zero;
 
@@ -103,22 +106,6 @@ public class UIImage : UIBehaviour
         {
             b.SetUVRect(Float2.Zero, Float2.One);
         }
-    }
-
-    // ---- Material override ----
-    [SerializeField] private AssetRef<Material> _material;
-    public AssetRef<Material> Material
-    {
-        get => _material;
-        set => SetField(ref _material, value, UIDirtyFlags.Material);
-    }
-
-    /// <summary>The tint color of the image. Alpha is modulated by the parent <see cref="CanvasGroup"/>.</summary>
-    [SerializeField] private Color _color = Color.White;
-    public Color Color
-    {
-        get => _color;
-        set => SetField(ref _color, value, UIDirtyFlags.Vertices);
     }
 
     /// <summary>Whether the image should preserve the source texture's aspect ratio.</summary>
@@ -180,23 +167,6 @@ public class UIImage : UIBehaviour
     {
         get => _fillClockwise;
         set => SetField(ref _fillClockwise, value, UIDirtyFlags.Vertices);
-    }
-
-    /// <summary>
-    /// Whether this element should block raycasts (pointer hit-testing).
-    /// Affects input dispatch only - does not change rendering.
-    /// </summary>
-    [SerializeField] private bool _raycastTarget = true;
-    public bool RaycastTarget
-    {
-        get => _raycastTarget;
-        set => SetField(ref _raycastTarget, value, UIDirtyFlags.Hierarchy);
-    }
-
-    public override Material GetMaterial()
-    {
-        var m = _material.Res;
-        return m.IsValid() ? m : base.GetMaterial();
     }
 
     public override void GenerateMesh(UIMeshBuilder b, in UIContext ctx)

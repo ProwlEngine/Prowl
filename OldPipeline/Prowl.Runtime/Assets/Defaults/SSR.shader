@@ -229,13 +229,15 @@ Pass "Resolve"
 
         const vec2 resolveOffset[4] = vec2[]( vec2(0,0), vec2(2,-2), vec2(-2,-2), vec2(0,2) );
 
+        // Only the two levels bracketing `mip` can contribute - the chained mixes below a level
+        // collapse to 1.0 and above it to 0.0. Fetching all five and blending threw away three
+        // quarters of the bandwidth, and this runs once per reused ray.
         vec3 samplePyramid(vec2 uv, float mip)
         {
-            vec3 c = mix(texture(_Scene0, uv).rgb, texture(_Scene1, uv).rgb, clamp(mip, 0.0, 1.0));
-            c = mix(c, texture(_Scene2, uv).rgb, clamp(mip - 1.0, 0.0, 1.0));
-            c = mix(c, texture(_Scene3, uv).rgb, clamp(mip - 2.0, 0.0, 1.0));
-            c = mix(c, texture(_Scene4, uv).rgb, clamp(mip - 3.0, 0.0, 1.0));
-            return c;
+            if (mip <= 1.0) return mix(texture(_Scene0, uv).rgb, texture(_Scene1, uv).rgb, mip);
+            if (mip <= 2.0) return mix(texture(_Scene1, uv).rgb, texture(_Scene2, uv).rgb, mip - 1.0);
+            if (mip <= 3.0) return mix(texture(_Scene2, uv).rgb, texture(_Scene3, uv).rgb, mip - 2.0);
+            return mix(texture(_Scene3, uv).rgb, texture(_Scene4, uv).rgb, clamp(mip - 3.0, 0.0, 1.0));
         }
 
         // Smith-GGX visibility * GGX NDF * PI/4 -> the resolve weight (matched with 1/pdf).
@@ -360,8 +362,8 @@ Pass "Temporal"
         vec2 reflectionVelocity(vec2 uv)
         {
             // Use the reflection hit point's depth so the history follows the reflected geometry.
-            float hitDepthW = texture(_RayCast, uv).w > 0.0 ? texture(_CameraDepthTexture, texture(_RayCast, uv).xy).r
-                                                            : texture(_CameraDepthTexture, uv).r;
+            vec4 rd = texture(_RayCast, uv);
+            float hitDepthW = texture(_CameraDepthTexture, rd.w > 0.0 ? rd.xy : uv).r;
             vec4 clip = vec4(uv * 2.0 - 1.0, hitDepthW * 2.0 - 1.0, 1.0);
             vec4 world = PROWL_MATRIX_I_VP * clip;
             world /= world.w;

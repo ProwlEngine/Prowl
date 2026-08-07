@@ -88,9 +88,18 @@ public sealed class MeshCollider : Collider
         }
         else
         {
+            // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
+            // indexes into it - the source soup can hold more.
             var triMesh = baked.TriangleMesh;
-            var shapes = new TriangleShape[baked.Triangles.Count];
-            for (int i = 0; i < shapes.Length; i++)
+            int count = triMesh.Indices.Length;
+            if (count == 0)
+            {
+                Debug.LogWarning("MeshCollider: mesh has no non-degenerate triangles.");
+                return null;
+            }
+
+            var shapes = new TriangleShape[count];
+            for (int i = 0; i < count; i++)
                 shapes[i] = new TriangleShape(triMesh, i);
             return shapes;
         }

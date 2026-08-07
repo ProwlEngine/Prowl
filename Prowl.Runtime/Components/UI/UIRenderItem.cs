@@ -54,7 +54,7 @@ internal sealed class UIRenderItem : IRenderable
     // -------- Sort + lifecycle --------
     public long   SortKey;                       // (SortOrder << 42) | (canvasDiscriminator << 21) | depthFirstIndex
     public UISurface Surface;                    // mirrors Canvas.RenderMode, frozen at rebuild time
-    public uint   LastTransformVersion;          // (matrix-only refresh)
+    public Float4x4 LastOwnerWorld;              // owner's world matrix at the last model refresh
     public UIDirtyFlags PropertyCacheState;      // tracks whether Props needs repopulating
 
     // -------- Clip (mask) state (set by the canvas during BuildRecursive) --------
@@ -140,7 +140,7 @@ internal sealed class UIRenderItem : IRenderable
         Model = model;
         SortKey = sortKey;
         Surface = surface;
-        LastTransformVersion = owner.Transform.Version;
+        LastOwnerWorld = owner.Transform.LocalToWorldMatrix;
         PropertyCacheState = UIDirtyFlags.All;   // forces first GetRenderingData to populate
 
         if (clip is { } c)
@@ -162,15 +162,22 @@ internal sealed class UIRenderItem : IRenderable
     /// <summary>
     /// Called once per frame, before the pipeline draws this surface, by
     /// <see cref="UIRenderTree.RefreshTransforms"/>. Patches <see cref="Model"/>
-    /// when only the owning <see cref="Transform"/> has changed (no mesh rebuild needed).
+    /// when only the transforms have changed (no mesh rebuild needed).
     /// </summary>
+    /// <remarks>
+    /// The model is composed from the owner's transform <b>and every ancestor's</b>: parent panels
+    /// contribute rotation/scale/Z and the canvas contributes <c>CanvasToWorld</c>. The owner's world
+    /// matrix already folds in that whole chain, so comparing it catches a moved canvas or a rotated
+    /// parent panel - which the local-only <see cref="Transform.Version"/> does not. Reading it is a
+    /// couple of version compares per ancestor while nothing has moved.
+    /// </remarks>
     internal void RefreshModelIfDirty()
     {
-        uint v = Owner.Transform.Version;
-        if (v == LastTransformVersion) return;
+        Float4x4 world = Owner.Transform.LocalToWorldMatrix;
+        if (world == LastOwnerWorld) return;
         Model = Canvas.BuildItemModel(Owner);
         if (HasClip && ClipSource != null)
             ClipToLocal = Canvas.BuildItemModel(ClipSource).Invert();
-        LastTransformVersion = v;
+        LastOwnerWorld = world;
     }
 }

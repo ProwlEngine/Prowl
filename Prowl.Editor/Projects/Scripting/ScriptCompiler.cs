@@ -508,7 +508,7 @@ public static class ScriptCompiler
     /// reference assemblies for all of these, so a generated csproj must never reference the runtime's
     /// own implementation copies (which sit in the engine folder only on a self-contained publish).
     /// </summary>
-    private static bool IsFrameworkAssembly(string name)
+    internal static bool IsFrameworkAssembly(string name)
     {
         if (name.StartsWith("System.", StringComparison.OrdinalIgnoreCase)) return true;
         if (name.StartsWith("Microsoft.VisualBasic", StringComparison.OrdinalIgnoreCase)) return true;

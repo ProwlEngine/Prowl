@@ -126,7 +126,7 @@ public class TextMeshComponent : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (_mesh.IsValid()) _mesh.OnDispose();
+        if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;
         _hasGeometry = false;
         _dirty = true;

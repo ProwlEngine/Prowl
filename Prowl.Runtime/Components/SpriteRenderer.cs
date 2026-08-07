@@ -176,7 +176,7 @@ public class SpriteRenderer : MonoBehaviour
         Debug.DrawLine(p - up, p + up, pivotColor);
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         if (_mesh.IsValid()) _mesh.Dispose();
         _mesh = null;

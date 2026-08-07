@@ -2,16 +2,20 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI.Panels;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Settings;
+using Prowl.Editor.Utils;
 using Prowl.OrigamiUI;
 using Prowl.Runtime;
+
 
 namespace Prowl.Editor.Build;
 
@@ -187,9 +191,18 @@ public static class ProjectBuilder
         settings.OutputDirectory = outputPath;
         EditorRegistries.SaveSettings();
 
-        var pipeline = new DesktopBuildPipeline();
+        var pipeline = CreateSelectedPipeline(settings);
+        if (pipeline == null)
+        {
+            Runtime.Debug.LogError($"[Build] Build pipeline '{settings.SelectedPipeline}' was not found.");
+            return null;
+        }
 
-        Runtime.Debug.Log($"[Build] Starting build to {outputPath}...", LogSeverity.Normal);
+        // The build reads the Library caches straight off disk, so reconcile them against the actual
+        // files first. Waiting on the watcher would ship whatever the assets were before the last save.
+        EditorAssetBackend.Instance?.Refresh();
+
+        Runtime.Debug.Log($"[Build] Starting {pipeline.DisplayName} build to {outputPath}...", LogSeverity.Normal);
 
         var progress = new BuildProgress();
         var projectPath = Project.Current?.RootPath ?? "";
@@ -217,16 +230,66 @@ public static class ProjectBuilder
         return progress;
     }
 
+    /// <summary>
+    /// Every pipeline the editor can build with, in a stable order.
+    /// </summary>
+    /// <remarks>
+    /// Constructed here rather than only reflected over, because a pipeline that cannot be constructed
+    /// cannot be built with either, and the Build window needs a live instance for its name and icon
+    /// anyway. One that throws is left out with a warning instead of being offered and failing later.
+    /// </remarks>
+    public static List<BuildPipeline> DiscoverPipelines()
+    {
+        var found = new List<BuildPipeline>();
+
+        foreach (var type in EditorUtils.GetAllTypes())
+        {
+            if (type.IsAbstract || !type.IsSubclassOf(typeof(BuildPipeline))) continue;
+
+            try
+            {
+                if (Activator.CreateInstance(type) is BuildPipeline pipeline)
+                    found.Add(pipeline);
+            }
+            catch (Exception e)
+            {
+                Runtime.Debug.LogWarning($"[Build] Skipping pipeline '{type.Name}': {e.Message}");
+            }
+        }
+
+        // Type enumeration promises no order, and the first entry is what a fresh project defaults to.
+        return found
+            .OrderBy(p => p.DisplayName, StringComparer.Ordinal)
+            .ThenBy(p => p.GetType().FullName, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>The pipeline the Build window selected, or the desktop one when nothing is stored.</summary>
+    /// <remarks>
+    /// Returns null rather than throwing for anything it cannot produce, so a settings file naming a
+    /// pipeline that has since been deleted or become unconstructable reports a build failure instead of
+    /// taking the editor down from a button press.
+    /// </remarks>
+    public static BuildPipeline? CreateSelectedPipeline(BuildSettings settings)
+        => string.IsNullOrEmpty(settings.SelectedPipeline)
+            ? new DesktopBuildPipeline()
+            : DiscoverPipelines().FirstOrDefault(p => p.GetType().FullName == settings.SelectedPipeline);
+
     public static void ProcessBuild(string projectPath, BuildPipeline pipeline, BuildSettings settings, string outputPath, BuildProgress progress, bool andRun)
     {
         try
         {
             Console.WriteLine($"[BEGIN]{projectPath}[END]");
             var result = pipeline.BuildAsync(
-                projectPath, settings, outputPath, progress).GetAwaiter().GetResult();
+                projectPath, settings, outputPath, progress, progress.Token).GetAwaiter().GetResult();
             progress.Complete(result);
 
             HandleBuildResult(pipeline, result, settings, andRun);
+        }
+        catch (OperationCanceledException)
+        {
+            progress.Log("Build cancelled.", Runtime.LogSeverity.Warning);
+            progress.Complete(new BuildResult { Success = false, Cancelled = true });
         }
         catch (Exception ex)
         {
@@ -241,16 +304,30 @@ public static class ProjectBuilder
         {
             BuildLog($"[Build] SUCCESS: {result.AssetCount} assets -> {result.OutputPath} ({result.Duration.TotalSeconds:F1}s)", LogSeverity.Success);
 
-            if (andRun)
-            {
-                string exe = pipeline.GetExecutablePath(result.OutputPath, settings);
+            if (!andRun) return;
 
-                if (File.Exists(exe))
-                {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true }); }
-                    catch (Exception ex) { Runtime.Debug.LogError($"[Build] Failed to launch: {ex.Message}"); }
-                }
+            if (!pipeline.CanRunOnHost(settings))
+            {
+                BuildLog("[Build] Built for another platform, so it was not launched.", LogSeverity.Normal);
+                return;
             }
+
+            string exe = pipeline.GetExecutablePath(result.OutputPath, settings);
+
+            if (!File.Exists(exe))
+            {
+                Runtime.Debug.LogError($"[Build] Nothing to launch at '{exe}'.");
+                return;
+            }
+
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true }); }
+            catch (Exception ex) { Runtime.Debug.LogError($"[Build] Failed to launch: {ex.Message}"); }
+        }
+        else if (result.Cancelled)
+        {
+            BuildLog(string.IsNullOrEmpty(result.OutputPath)
+                ? "[Build] CANCELLED."
+                : $"[Build] CANCELLED. A partial build is left in {result.OutputPath}", LogSeverity.Warning);
         }
         else
         {

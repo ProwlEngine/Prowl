@@ -10,6 +10,12 @@ using Prowl.Graphite;
 
 namespace Prowl.Runtime.Resources;
 
+/// <summary>
+/// An off-screen render target. Also a project asset (<c>.rendertexture</c>): the file stores the
+/// description below, and the GPU resources behind it are allocated on first use, so an asset can be
+/// created and inspected without a graphics context.
+/// </summary>
+[CreateAssetMenu("Render Texture", Extension = ".rendertexture", Order = 1200)]
 public sealed class RenderTexture : EngineObject, ISerializable
 {
     private Framebuffer _frameBuffer;
@@ -103,17 +109,21 @@ public sealed class RenderTexture : EngineObject, ISerializable
         frameBuffer.Name = $"{Name} Framebuffer";
     }
 
-    public override void OnDispose()
+    private void ReleaseResources()
     {
-        if (_frameBuffer == null) return;
-        foreach (Texture2D texture in _internalTextures)
-            texture.Dispose();
+        if (_internalTextures != null)
+            foreach (Texture2D texture in _internalTextures)
+                if (texture.IsValid()) texture.Dispose();
+        _internalTextures = null;
 
         if (ownsDepth && _internalDepth != null)
             _internalDepth.Dispose();
 
-        _frameBuffer.Dispose();
+        _frameBuffer?.Dispose();
+        _frameBuffer = null;
     }
+
+    protected override void OnDispose() => ReleaseResources();
 
     ~RenderTexture() => Dispose();
 
@@ -150,5 +160,4 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         DeserializeHeader(value);
     }
-
 }

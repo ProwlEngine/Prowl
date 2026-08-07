@@ -47,7 +47,7 @@ public class LifecycleComponent : MonoBehaviour
         }
     }
 
-    public override void OnDispose()
+    protected override void OnDispose()
     {
         Debug.Log($"[{ComponentName}] OnDispose - GameObject: {GameObject.Name}");
     }

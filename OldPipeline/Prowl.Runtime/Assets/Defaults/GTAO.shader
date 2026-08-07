@@ -89,9 +89,11 @@ Pass "CalculateGTAO"
             float radius = _Radius * saturate(0.25 + viewDistance * rcp(64.0));
             vec2 sRadius = rSampleCount * radius * norm * diagonal2(PROWL_MATRIX_P);
             // Floor the per-sample step so consecutive samples are at least ~1.5 texels apart in the
-            // (full-res) depth buffer. Without this, distant/flat surfaces sample sub-texel and the
-            // horizon estimate degenerates into depth-precision noise.
-            sRadius = max(sRadius, vec2(1.5) / _ScreenParams.xy);
+            // depth buffer we are actually reading. Without this, distant/flat surfaces sample
+            // sub-texel and the horizon estimate degenerates into depth-precision noise. Keyed off
+            // the bound texture rather than _ScreenParams, since that depth is downsampled to AO
+            // resolution and a full-res floor would let the step fall below one of its texels.
+            sRadius = max(sRadius, vec2(1.5) / vec2(textureSize(_CameraDepthTexture, 0)));
             vec2 falloff = sqr(radius * vec2(1.0, 4.0));
 
             float visibility = 0.0;
@@ -114,8 +116,9 @@ Pass "CalculateGTAO"
 
                 vec2 cHorizonCos = vec2(-1.0);
 
+                vec2 stepDir = directionV.xy * sRadius;
+
                 for (int samp = 0; samp < sampleCount; ++samp) {
-                    vec2 stepDir = directionV.xy * sRadius;
                     vec2 offset = (float(samp) + dither.y) * stepDir;
 
                     SampleHorizonCos(coord, offset, viewPos, viewDir, falloff, cHorizonCos.x);
@@ -361,6 +364,54 @@ Pass "Temporal"
 
             float ao = mix(current, previous, response);
             fragColor = vec4(vec3(ao), 1.0);
+        }
+    }
+    ENDGLSL
+}
+
+// Point-samples full-res depth down to the AO resolution. The AO pass takes dozens of scattered
+// taps per pixel, so having them hit a texture the same size as the pass it feeds - rather than one
+// 16x larger - is what makes those taps cache-friendly. Appended last so the existing pass indices
+// the effect blits by stay put.
+//
+// texelFetch rather than a filtered sample on purpose: averaging two depths yields a position on no
+// actual surface, which the horizon search would read as real geometry.
+Pass "DownsampleDepth"
+{
+    Tags { "RenderOrder" = "Opaque" }
+    Blend Off
+    ZTest Off
+    ZWrite Off
+    Cull Off
+
+    GLSLPROGRAM
+
+    Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+        layout (location = 1) in vec2 vertexTexCoord;
+
+        out vec2 TexCoords;
+
+        void main()
+        {
+            gl_Position = vec4(vertexPosition, 1.0);
+            TexCoords = vertexTexCoord;
+        }
+    }
+
+    Fragment
+    {
+        uniform sampler2D _CameraDepthTexture;
+
+        in vec2 TexCoords;
+
+        layout(location = 0) out vec4 fragColor;
+
+        void main()
+        {
+            ivec2 full = ivec2(TexCoords * vec2(textureSize(_CameraDepthTexture, 0)));
+            fragColor = vec4(texelFetch(_CameraDepthTexture, full, 0).r, 0.0, 0.0, 1.0);
         }
     }
     ENDGLSL

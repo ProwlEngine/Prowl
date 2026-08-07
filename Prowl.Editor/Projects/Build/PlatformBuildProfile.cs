@@ -4,32 +4,26 @@
 using System;
 using System.Collections.Generic;
 
-using Prowl.Editor.Projects.Settings;
-using Prowl.PaperUI;
-
-namespace Prowl.Editor;
+namespace Prowl.Editor.Build;
 
 /// <summary>
-/// Per-platform scripting define symbols and any future platform-specific
-/// build knobs. Serialised as part of <see cref="BuildSettings"/>.
+/// Per-platform scripting define symbols and any future platform-specific build knobs.
+/// Serialised as part of the project's build settings.
 /// </summary>
+/// <remarks>
+/// Deliberately has no drawing code. A profile is data, so a CI build can construct one without a UI
+/// toolkit present. The editor renders it through a registered drawer keyed on the profile type.
+/// </remarks>
 public class PlatformBuildProfile
 {
     /// <summary>
-    /// Semicolon-separated list of scripting define symbols that will be
-    /// passed to <c>dotnet publish</c> when
-    /// building for this platform.
+    /// Scripting define symbols passed to the compiler when building for this platform.
     /// </summary>
     public List<string> ScriptingDefineSymbols { get; set; } = [];
 
-    public virtual Type GetPipelineType()
-    {
-        return null;
-    }
+    public virtual Type? GetPipelineType() => null;
 
     public virtual void ToDefault() { }
-
-    public virtual void OnGUI(Paper paper) { }
 
     public virtual void ModifyDefines(List<string> defines) { }
 }
