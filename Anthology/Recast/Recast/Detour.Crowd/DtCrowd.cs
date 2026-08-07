@@ -339,6 +339,45 @@ namespace Prowl.Recast.Detour.Crowd
             return true;
         }
 
+        /// Steers an agent along a caller-supplied path instead of one the crowd plans.
+        ///
+        /// RequestMoveTarget only takes a destination and plans the route itself, which discards
+        /// any path the caller already has. This adopts that path directly: the corridor is
+        /// replaced and the agent left in the VALID target state, so the next update follows the
+        /// supplied polygons rather than replanning over them. The crowd still re-plans later if
+        /// the path is invalidated, exactly as it would for a route it planned.
+        ///
+        /// @p path must be contiguous and begin at a polygon the agent is standing on — as
+        /// returned by DtNavMeshQuery.FindPath — and end at @p refs.
+        ///
+        ///  @param[in]		agent	The agent to steer.
+        ///  @param[in]		refs	Target polyref, which must be the last polygon of @p path.
+        ///  @param[in]		pos		Target position, inside @p refs.
+        ///  @param[in]		path	Polygon path from the agent's current polygon to @p refs.
+        ///  @param[in]		npath	Number of polygons in @p path.
+        /// @return True if the path was adopted.
+        public bool SetAgentPath(DtCrowdAgent agent, long refs, RcVec3f pos, Span<long> path, int npath)
+        {
+            if (refs == 0 || npath <= 0 || npath > path.Length || path[npath - 1] != refs)
+            {
+                return false;
+            }
+
+            agent.targetRef = refs;
+            agent.targetPos = pos;
+            agent.targetPathQueryResult = null;
+            agent.targetReplan = false;
+            agent.targetReplanTime = 0;
+            agent.partial = false;
+
+            // Same order the planner uses when a path completes: install the corridor, force the
+            // boundary to rebuild around it, then mark the target valid.
+            agent.corridor.SetCorridor(pos, path, npath);
+            agent.boundary.Reset();
+            agent.targetState = DtMoveRequestState.DT_CROWDAGENT_TARGET_VALID;
+            return true;
+        }
+
         /// Submits a new move request for the specified agent.
         /// @param[in] idx The agent index. [Limits: 0 <= value < #GetAgentCount()]
         /// @param[in] vel The movement velocity. [(x, y, z)]
