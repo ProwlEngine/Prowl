@@ -12,8 +12,8 @@
 
 using System;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Recast;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast;
 
 namespace Prowl.Runtime;
 

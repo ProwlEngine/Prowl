@@ -4,13 +4,13 @@
 using System;
 using System.Collections.Generic;
 
-using DotRecast.Core;
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
-using DotRecast.Detour.TileCache;
-using DotRecast.Detour.TileCache.Io.Compress;
-using DotRecast.Recast;
-using DotRecast.Recast.Geom;
+using Prowl.Recast.Core;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
+using Prowl.Recast.Detour.TileCache.Io.Compress;
+using Prowl.Recast;
+using Prowl.Recast.Geom;
 
 using Prowl.Vector;
 

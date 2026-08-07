@@ -6,8 +6,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using DotRecast.Detour;
-using DotRecast.Detour.TileCache;
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 

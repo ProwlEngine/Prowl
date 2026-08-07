@@ -3,8 +3,8 @@
 
 using System;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
 
 namespace Prowl.Runtime;
 

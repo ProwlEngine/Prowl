@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
-using DotRecast.Recast;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast;
 
 using Prowl.Vector;
 

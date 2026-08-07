@@ -4,8 +4,8 @@
 using System;
 using System.Collections.Generic;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour.TileCache;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour.TileCache;
 
 using Prowl.Vector;
 
@@ -89,7 +89,7 @@ public class NavMeshObstacle : MonoBehaviour
     private bool _carveApplied;
 
     // Velocity-obstacle mode: one immovable agent per live crowd, re-pinned every frame.
-    private readonly Dictionary<DotRecast.Detour.Crowd.DtCrowd, DotRecast.Detour.Crowd.DtCrowdAgent> _blockers = [];
+    private readonly Dictionary<Prowl.Recast.Detour.Crowd.DtCrowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent> _blockers = [];
     private int _blockerCrowdCount = -1;
     private float _blockerRadius, _blockerHeight;
     private bool _warnedBlockerUnplaced;
@@ -251,7 +251,7 @@ public class NavMeshObstacle : MonoBehaviour
         // centimetre even under sustained pressure, but it costs nothing to be exact).
         Float3 position = BlockerPosition(height);
         var pinned = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
-        foreach (DotRecast.Detour.Crowd.DtCrowdAgent blocker in _blockers.Values)
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker in _blockers.Values)
             blocker.npos = pinned;
     }
 
@@ -265,22 +265,22 @@ public class NavMeshObstacle : MonoBehaviour
         var rcPosition = new RcVec3f((float)position.X, (float)position.Y, (float)position.Z);
         foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
         {
-            DotRecast.Detour.Crowd.DtCrowd? crowd = _world.GetNativeCrowd(type.Id);
+            Prowl.Recast.Detour.Crowd.DtCrowd? crowd = _world.GetNativeCrowd(type.Id);
             if (crowd == null) continue;
-            if (_blockers.TryGetValue(crowd, out DotRecast.Detour.Crowd.DtCrowdAgent? existing))
+            if (_blockers.TryGetValue(crowd, out Prowl.Recast.Detour.Crowd.DtCrowdAgent? existing))
             {
                 crowd.UpdateAgentParameters(existing, BlockerParams(radius, height));
                 continue;
             }
 
-            DotRecast.Detour.Crowd.DtCrowdAgent blocker = crowd.AddAgent(rcPosition, BlockerParams(radius, height));
+            Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker = crowd.AddAgent(rcPosition, BlockerParams(radius, height));
             _blockers[crowd] = blocker;
             WarnIfUnplaced(blocker);
         }
 
         // A crowd the world no longer owns died with its navmesh; its agents went with it.
-        List<DotRecast.Detour.Crowd.DtCrowd>? dead = null;
-        foreach (DotRecast.Detour.Crowd.DtCrowd crowd in _blockers.Keys)
+        List<Prowl.Recast.Detour.Crowd.DtCrowd>? dead = null;
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in _blockers.Keys)
         {
             bool live = false;
             foreach (NavMeshAgentType type in NavMeshAgentTypes.All)
@@ -288,7 +288,7 @@ public class NavMeshObstacle : MonoBehaviour
             if (!live) (dead ??= []).Add(crowd);
         }
         if (dead != null)
-            foreach (DotRecast.Detour.Crowd.DtCrowd crowd in dead)
+            foreach (Prowl.Recast.Detour.Crowd.DtCrowd crowd in dead)
                 _blockers.Remove(crowd);
 
         _blockerCrowdCount = _world.CrowdCount;
@@ -296,7 +296,7 @@ public class NavMeshObstacle : MonoBehaviour
 
     private void RemoveBlockers()
     {
-        foreach ((DotRecast.Detour.Crowd.DtCrowd crowd, DotRecast.Detour.Crowd.DtCrowdAgent blocker) in _blockers)
+        foreach ((Prowl.Recast.Detour.Crowd.DtCrowd crowd, Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker) in _blockers)
             crowd.RemoveAgent(blocker);
         _blockers.Clear();
         _blockerCrowdCount = -1;
@@ -309,9 +309,9 @@ public class NavMeshObstacle : MonoBehaviour
     /// <see cref="NavMeshWorld.CrowdMaxAgentRadius"/>), so an obstacle floating well above the
     /// walkable surface — a tall Center offset, spawned mid-air — lands invalid.
     /// </summary>
-    private void WarnIfUnplaced(DotRecast.Detour.Crowd.DtCrowdAgent blocker)
+    private void WarnIfUnplaced(Prowl.Recast.Detour.Crowd.DtCrowdAgent blocker)
     {
-        if (blocker.state != DotRecast.Detour.Crowd.DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
+        if (blocker.state != Prowl.Recast.Detour.Crowd.DtCrowdAgentState.DT_CROWDAGENT_STATE_INVALID) return;
         if (_warnedBlockerUnplaced) return;
         _warnedBlockerUnplaced = true;
         Debug.LogWarning($"[Navigation] NavMeshObstacle '{GameObject.Name}' could not place its avoidance blocker: no navmesh near its base. Agents will not steer around it. Move the obstacle onto the navmesh (check Center and the object's height), or raise NavMeshWorld.CrowdMaxAgentRadius to widen the placement search.");
@@ -343,7 +343,7 @@ public class NavMeshObstacle : MonoBehaviour
         return MathF.Max(0.01f, (Shape == NavMeshObstacleShape.Capsule ? Height : (float)Size.Y) * scaleY);
     }
 
-    private DotRecast.Detour.Crowd.DtCrowdAgentParams BlockerParams(float radius, float height) => new()
+    private Prowl.Recast.Detour.Crowd.DtCrowdAgentParams BlockerParams(float radius, float height) => new()
     {
         radius = radius,
         height = height,
@@ -381,7 +381,7 @@ public class NavMeshObstacle : MonoBehaviour
         CaptureAppliedGeometry();
     }
 
-    // No try/catch: verified against DotRecast 2026.1.3 — AllocObstacle grows its pool and
+    // No try/catch: verified against Prowl.Recast — AllocObstacle grows its pool and
     // the request queue is an unbounded list, so Add*Obstacle never throws and never returns
     // 0 for capacity (maxObstacles only sizes the initial id encoding).
     /// <param name="agentRadius">Envelope of the navmesh being carved. The hole is widened by it

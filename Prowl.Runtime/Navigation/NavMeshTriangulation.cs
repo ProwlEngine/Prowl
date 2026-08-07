@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-using DotRecast.Detour;
+using Prowl.Recast.Detour;
 
 using Prowl.Vector;
 

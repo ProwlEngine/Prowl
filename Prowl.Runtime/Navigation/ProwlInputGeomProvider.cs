@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Recast;
-using DotRecast.Recast.Geom;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast;
+using Prowl.Recast.Geom;
 
 using Prowl.Vector;
 

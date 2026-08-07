@@ -3,9 +3,9 @@
 
 using System;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
-using DotRecast.Detour.Crowd;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.Crowd;
 
 using Prowl.Vector;
 

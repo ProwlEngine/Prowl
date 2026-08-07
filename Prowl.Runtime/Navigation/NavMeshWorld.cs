@@ -7,9 +7,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
-using DotRecast.Detour.Crowd;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
+using Prowl.Recast.Detour.Crowd;
 
 using Prowl.Vector;
 
@@ -37,7 +37,7 @@ public sealed class NavMeshInstance
     // registration itself.
     internal bool CachePending;
 
-    internal NavMeshInstance(NavMeshData data, DotRecast.Detour.TileCache.DtTileCache tileCache,
+    internal NavMeshInstance(NavMeshData data, Prowl.Recast.Detour.TileCache.DtTileCache tileCache,
         NavMeshTileBuilder.ProwlTileCacheMeshProcess tileCacheLinks)
     {
         Data = data;
@@ -57,7 +57,7 @@ public sealed class NavMeshInstance
     /// only runs for instances known to have pending work, and DtTileCache cannot be asked
     /// whether it has any, so a request enqueued behind its back waits forever. Code that
     /// queues on this handle directly must call <see cref="MarkCachePending"/>.</summary>
-    public DotRecast.Detour.TileCache.DtTileCache TileCache { get; }
+    public Prowl.Recast.Detour.TileCache.DtTileCache TileCache { get; }
 
     /// <summary>Tell the pump this cache has work waiting. Only needed after queuing on
     /// <see cref="TileCache"/> directly; <see cref="NavMeshWorld.MutateTileCache"/> and the
@@ -405,7 +405,7 @@ public sealed class NavMeshWorld
         NavMeshInstance instance;
         try
         {
-            DotRecast.Detour.TileCache.DtTileCache cache = data.CreateTileCache(TileCacheMaxObstacles,
+            Prowl.Recast.Detour.TileCache.DtTileCache cache = data.CreateTileCache(TileCacheMaxObstacles,
                 out NavMeshTileBuilder.ProwlTileCacheMeshProcess links);
             instance = new NavMeshInstance(data, cache, links);
         }
@@ -497,7 +497,7 @@ public sealed class NavMeshWorld
     /// <summary>
     /// Run a mutation against an instance's TileCache under the write lock (layer
     /// regeneration, bulk obstacle edits). In-flight queries finish first. Pooled queries
-    /// survive the mutation: verified against DotRecast 2026.1.3, DtNavMeshQuery holds only the
+    /// survive the mutation: verified against Prowl.Recast, DtNavMeshQuery holds only the
     /// mesh reference (the same object we mutate) plus node pools and an open list that every
     /// query method clears on entry — there is no cached tile state, so discarding the pool
     /// here would only churn tens-of-KB query objects on every rebuild for nothing.
@@ -505,7 +505,7 @@ public sealed class NavMeshWorld
     /// Threading: fires <see cref="NavMeshChanged"/> synchronously on the calling thread (see
     /// <see cref="AddNavMeshData"/> — same main-thread contract).
     /// </summary>
-    public void MutateTileCache(NavMeshInstance instance, Action<DotRecast.Detour.TileCache.DtTileCache> mutation)
+    public void MutateTileCache(NavMeshInstance instance, Action<Prowl.Recast.Detour.TileCache.DtTileCache> mutation)
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(mutation);

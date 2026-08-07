@@ -4,8 +4,8 @@
 using System;
 using System.Collections.Generic;
 
-using DotRecast.Core.Numerics;
-using DotRecast.Detour;
+using Prowl.Recast.Core.Numerics;
+using Prowl.Recast.Detour;
 
 using Prowl.Vector;
 
@@ -54,7 +54,7 @@ public sealed class NavMeshData : EngineObject
     }
 
     /// <summary>Current serialized-tile format version. Bump when the tile byte format changes
-    /// (e.g. a DotRecast upgrade changing Detour's tile layout), so stale assets fail with a
+    /// (e.g. a Prowl.Recast upgrade changing Detour's tile layout), so stale assets fail with a
     /// clear message instead of a deserialize throw. Version 4 dropped the finished-tile
     /// representation: every navmesh is now compressed layers plus <see cref="Links"/>.</summary>
     public const int CurrentFormatVersion = 4;
@@ -172,19 +172,19 @@ public sealed class NavMeshData : EngineObject
     /// affected tiles incrementally via <c>DtTileCache.Update</c>.
     /// </summary>
     /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
-    public DotRecast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles)
+    public Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles)
         => CreateTileCache(maxObstacles, out _);
 
     /// <inheritdoc cref="CreateTileCache(int)"/>
     /// <param name="maxObstacles">Obstacle capacity the cache is created with.</param>
     /// <param name="meshProcess">The cache's link registry, so live <see cref="NavMeshLink"/>s
     /// can update the connections that later tile builds inject.</param>
-    internal DotRecast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles,
+    internal Prowl.Recast.Detour.TileCache.DtTileCache CreateTileCache(int maxObstacles,
         out NavMeshTileBuilder.ProwlTileCacheMeshProcess meshProcess)
     {
         ValidateVersion();
         DtNavMesh navMesh = CreateEmptyNavMesh();
-        DotRecast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
+        Prowl.Recast.Detour.TileCache.DtTileCache cache = NavMeshTileBuilder.CreateTileCache(this, navMesh, maxObstacles, out meshProcess);
 
         foreach (NavMeshTile layer in CacheLayers)
         {

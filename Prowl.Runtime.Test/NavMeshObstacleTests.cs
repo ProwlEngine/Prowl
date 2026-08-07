@@ -838,8 +838,8 @@ public class NavMeshObstacleTests : RuntimeTestBase
         }
 
         Float3 expected = cart.Transform.Position;
-        DotRecast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
-        foreach (DotRecast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
+        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
         {
             if (!ReferenceEquals(a.option.userData, obstacle)) continue;
             Assert.True(Math.Abs(a.npos.X - expected.X) < 0.05f && Math.Abs(a.npos.Z - expected.Z) < 0.05f,
@@ -878,8 +878,8 @@ public class NavMeshObstacleTests : RuntimeTestBase
         }
 
         Tick(scene, 300);
-        DotRecast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
-        foreach (DotRecast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
+        Prowl.Recast.Detour.Crowd.DtCrowd crowd = scene.Navigation.NativeCrowd!;
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
         {
             if (!ReferenceEquals(a.option.userData, obstacle)) continue;
             Assert.True(Math.Abs(a.npos.X) < 0.05f && Math.Abs(a.npos.Z) < 0.05f,
@@ -926,10 +926,10 @@ public class NavMeshObstacleTests : RuntimeTestBase
     /// a count so a failure reports which side of the switch broke.</summary>
     private static int BlockerCount(Scene scene, NavMeshObstacle obstacle)
     {
-        DotRecast.Detour.Crowd.DtCrowd? crowd = scene.Navigation.NativeCrowd;
+        Prowl.Recast.Detour.Crowd.DtCrowd? crowd = scene.Navigation.NativeCrowd;
         if (crowd == null) return 0;
         int count = 1;
-        foreach (DotRecast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
+        foreach (Prowl.Recast.Detour.Crowd.DtCrowdAgent a in crowd.GetActiveAgents())
             if (ReferenceEquals(a.option.userData, obstacle))
                 count++;
         return count;
