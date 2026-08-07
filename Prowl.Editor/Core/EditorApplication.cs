@@ -175,6 +175,7 @@ public class EditorApplication : Game
         {
             if (typeof(Runtime.EngineObject).IsAssignableFrom(fieldType))
                 EngineObjectPropertyEditor.SetFieldType(fieldType);
+            InspectorNameEnumDrawer.EnsureRegistered(PropertyGridConfig.Drawers, fieldType);
         };
         PropertyGridConfig.DrawTypePicker = (paper, id, baseType, currentValue, onChange) =>
         {
