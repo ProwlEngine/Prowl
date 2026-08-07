@@ -30,7 +30,6 @@ public static class PlayerSettingsLoader
         ApplyAudio(settingsDir);
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
-        ApplyGeneral(settingsDir);
         ApplyNavigation(settingsDir);
 
         // Physics needs to apply to each new scene's PhysicsWorld
@@ -189,11 +188,6 @@ public static class PlayerSettingsLoader
             Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
-    }
-
-    private static void ApplyGeneral(string dir)
-    {
-        // Informational only for now
     }
 
     private static void ApplyNavigation(string dir)
