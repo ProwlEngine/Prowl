@@ -379,15 +379,28 @@ public sealed class NavMeshWorld
     /// <summary>Raised at the start of each navigation update, before the crowd steps.</summary>
     public event Action<float>? PreUpdate;
 
-    /// <summary>Raised whenever a navmesh is added, removed, or mutated. Agents waiting for a
-    /// navmesh subscribe to this instead of polling.</summary>
+    /// <summary>Raised whenever a navmesh is added, removed, or mutated — including on every
+    /// frame a carve is still converging, so a listener that only wants the finished result
+    /// should use <see cref="NavMeshSettled"/>.</summary>
     public event Action? NavMeshChanged;
+
+    /// <summary>
+    /// Raised when queued work finishes and the navmesh is stable again. A carve spans several
+    /// frames, and anything expensive — re-pathing a crowd, rebuilding a cached triangulation —
+    /// wants to run once at the end rather than on each of them.
+    /// </summary>
+    public event Action? NavMeshSettled;
 
     #region Registration
 
     /// <summary>Obstacle capacity navmeshes are instantiated with. Set BEFORE the surface
     /// registers — applied at instantiation.</summary>
     public int TileCacheMaxObstacles = 256;
+
+    /// <summary>Tiles each instance may rebuild per frame while draining queued carves. Higher
+    /// spends more frame time to put a carve on the navmesh sooner: a batch takes
+    /// <c>tiles / MaxTileUpdatesPerFrame</c> frames to land. Values below 1 are treated as 1.</summary>
+    public int MaxTileUpdatesPerFrame = 4;
 
     /// <summary>
     /// Instantiate and register a baked navmesh. Returns the instance handle, or null when the
@@ -841,7 +854,7 @@ public sealed class NavMeshWorld
             instance.Lock.EnterWriteLock();
             try
             {
-                upToDate = instance.TileCache.Update();
+                upToDate = instance.TileCache.Update(MaxTileUpdatesPerFrame);
             }
             finally
             {
@@ -849,14 +862,19 @@ public sealed class NavMeshWorld
             }
 
             // Reaching here means work was queued, so report unconditionally — idle instances
-            // never enter the scratch list. Do NOT gate this on the converged edge: a carve
-            // small enough to finish inside one Update() reports up-to-date on its first call,
-            // which swallowed the only notification it would ever send and left agents and the
-            // scene-view overlay on stale geometry. Pooled queries deliberately survive the tile
-            // swaps — same verified invariant as MutateTileCache; only instance death poisons.
+            // never enter the scratch list. Changed must NOT be gated on the converged edge: a
+            // carve small enough to finish inside one Update reports up-to-date on its first
+            // call, so gating would leave it with no notification at all. Settled is the gated
+            // one, for listeners that want the finished mesh rather than each step toward it.
+            // Pooled queries deliberately survive the tile swaps — same verified invariant as
+            // MutateTileCache; only instance death poisons.
             instance.InvalidateLinkIds();
             NavMeshChanged?.Invoke();
-            if (upToDate) instance.CachePending = false;
+            if (upToDate)
+            {
+                instance.CachePending = false;
+                NavMeshSettled?.Invoke();
+            }
         }
     }
 

@@ -96,6 +96,43 @@ public sealed class NavMeshData : EngineObject
     public List<NavMeshTile> CacheLayers = [];
 
     /// <summary>
+    /// Baked tile coordinates overlapping <paramref name="worldBounds"/>, inclusive; false when
+    /// none do. Intersecting with the tiles that were actually baked keeps the range bounded by
+    /// the navmesh — a range taken straight from a caller's rect spans every coordinate in it,
+    /// however few tiles exist.
+    /// </summary>
+    internal bool TryGetTileRange(AABB worldBounds, out int minTx, out int maxTx, out int minTz, out int maxTz)
+    {
+        minTx = maxTx = minTz = maxTz = 0;
+        if (TileWorldSize <= 0) return false;
+
+        int rx0 = (int)Math.Floor((worldBounds.Min.X - Origin.X) / TileWorldSize);
+        int rx1 = (int)Math.Floor((worldBounds.Max.X - Origin.X) / TileWorldSize);
+        int rz0 = (int)Math.Floor((worldBounds.Min.Z - Origin.Z) / TileWorldSize);
+        int rz1 = (int)Math.Floor((worldBounds.Max.Z - Origin.Z) / TileWorldSize);
+
+        bool found = false;
+        foreach (NavMeshTile tile in CacheLayers)
+        {
+            if (tile.X < rx0 || tile.X > rx1 || tile.Z < rz0 || tile.Z > rz1) continue;
+            if (!found)
+            {
+                minTx = maxTx = tile.X;
+                minTz = maxTz = tile.Z;
+                found = true;
+                continue;
+            }
+
+            minTx = Math.Min(minTx, tile.X);
+            maxTx = Math.Max(maxTx, tile.X);
+            minTz = Math.Min(minTz, tile.Z);
+            maxTz = Math.Max(maxTz, tile.Z);
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// Off-mesh links. Tiles are rebuilt from geometry-only layers whenever an obstacle carves
     /// or a region regenerates — anything baked into them is regenerated away — so links live
     /// here and are re-injected on every tile build. Kept in step with the live

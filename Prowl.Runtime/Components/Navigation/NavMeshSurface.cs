@@ -244,15 +244,16 @@ public class NavMeshSurface : MonoBehaviour
         NavMeshWorld? world = World;
         if (world == null) return false;
 
+        // Resolved before the write lock is taken, so worker-thread queries do not block on it.
+        bool anyTiles = data.TryGetTileRange(worldBounds, out int tx0, out int tx1, out int tz0, out int tz1);
+
         world.MutateTileCache(instance, cache =>
         {
+            // Always replace the link set, even with no tiles in range: it is what tiles rebuilt
+            // later — by a carve, or by a rebuild of a neighbouring region — will be built from.
             instance.TileCacheLinks.SetLinks(links, data.Settings.AgentRadius);
+            if (!anyTiles) return;
 
-            float ts = data.TileWorldSize;
-            int tx0 = (int)Math.Floor((worldBounds.Min.X - data.Origin.X) / ts);
-            int tx1 = (int)Math.Floor((worldBounds.Max.X - data.Origin.X) / ts);
-            int tz0 = (int)Math.Floor((worldBounds.Min.Z - data.Origin.Z) / ts);
-            int tz1 = (int)Math.Floor((worldBounds.Max.Z - data.Origin.Z) / ts);
             for (int tz = tz0; tz <= tz1; tz++)
                 for (int tx = tx0; tx <= tx1; tx++)
                     foreach (long tileRef in cache.GetTilesAt(tx, tz))

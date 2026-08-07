@@ -330,6 +330,7 @@ public class NavMeshAgent : MonoBehaviour
 
         _world = scene!.Navigation;
         _world.NavMeshChanged += OnNavMeshChanged;
+        _world.NavMeshSettled += OnNavMeshSettled;
         TryRegister();
     }
 
@@ -338,6 +339,7 @@ public class NavMeshAgent : MonoBehaviour
         if (_world != null)
         {
             _world.NavMeshChanged -= OnNavMeshChanged;
+            _world.NavMeshSettled -= OnNavMeshSettled;
             Unregister();
             _world = null;
         }
@@ -363,14 +365,18 @@ public class NavMeshAgent : MonoBehaviour
 
         if (_agent == null)
         {
-            // A navmesh may have just become available.
+            // A navmesh may have just become available. Re-registering re-requests the
+            // destination, so there is no replan to do here.
             TryRegister();
         }
-        else if (AutoRepath && _hasDestination && !_isStopped && !_arrived)
-        {
-            // Ground moved under us: replan.
+    }
+
+    /// <summary>The ground stopped moving: replan once. Carves span several frames and report a
+    /// change on each, so replanning from that would throw the path away every frame of one.</summary>
+    private void OnNavMeshSettled()
+    {
+        if (_agent != null && AutoRepath && _hasDestination && !_isStopped && !_arrived)
             RequestPathTo(_destination);
-        }
     }
 
     private void TryRegister()

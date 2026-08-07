@@ -626,6 +626,54 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     /// <summary>
+    /// A carve reports progress on every frame it works, but settles only when it finishes.
+    /// Anything expensive — replanning a crowd, rebuilding a cached triangulation — hangs off the
+    /// settled event so it runs on the finished navmesh rather than on each intermediate frame.
+    /// </summary>
+    [Fact]
+    public void Carve_ReportsEveryFrame_ButSettlesOnlyWhenDone()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene(40f);
+        Assert.True(surface.BuildNavMesh());
+        Tick(scene, 2);
+
+        // One tile per frame, and enough obstacles spread far enough apart to touch several
+        // tiles, so the drain is unambiguously spread across frames.
+        scene.Navigation.MaxTileUpdatesPerFrame = 1;
+
+        int changed = 0, settled = 0;
+        scene.Navigation.NavMeshChanged += () => changed++;
+        scene.Navigation.NavMeshSettled += () => settled++;
+
+        Float3[] corners =
+        [
+            new(-14, 1, -14), new(14, 1, -14), new(-14, 1, 14), new(14, 1, 14),
+        ];
+
+        foreach (Float3 spot in corners)
+        {
+            GameObject crate = CreateGameObject("Crate");
+            scene.Add(crate);
+            crate.Transform.Position = spot;
+            var obstacle = crate.AddComponent<NavMeshObstacle>();
+            obstacle.Size = new Float3(4, 3, 4);
+            obstacle.CarvingTimeToStationary = 0.1f;
+        }
+
+        Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(14, 0.2f, 14))) >= 0, "The obstacles should carve.");
+        Tick(scene, 10); // let the drain finish
+
+        Assert.True(settled >= 1, "A finished carve must settle.");
+        Assert.True(changed > settled, $"Progress should outnumber settles (changed={changed}, settled={settled}).");
+
+        // Settling ends the work, so the pump stops and neither event fires again.
+        int changedAtRest = changed, settledAtRest = settled;
+        Tick(scene, 5);
+        Assert.Equal(changedAtRest, changed);
+        Assert.Equal(settledAtRest, settled);
+    }
+
+    /// <summary>
     /// A carved hole has to keep agents off the obstacle the way a baked wall does. A navmesh
     /// records where an agent's CENTRE may be, not where its body fits — a bake pulls the mesh
     /// back from every wall by the agent radius — so a hole cut to the obstacle's exact
