@@ -278,7 +278,10 @@ public sealed class SpriteEditTarget
 {
     public Guid TextureGuid;
     public SpriteImportSettings Settings = new();
-    /// <summary>True when the settings differ from what's on disk (i.e. a Save &amp; Reimport is pending).</summary>
+
+    /// <summary>Set when <see cref="Settings"/> has been edited and not yet folded back into the
+    /// texture's import-settings compound. The compound is what the inspector diffs to decide whether
+    /// anything needs applying, so this only marks "needs re-serializing", not "needs saving".</summary>
     public bool Dirty;
 
     /// <summary>True when the texture's existing sprite settings could not be read. <see cref="Settings"/>
@@ -309,6 +312,16 @@ public static class SpriteEditRegistry
             _targets[textureGuid] = t;
         }
         return t;
+    }
+
+    /// <summary>Replaces a texture's sprite settings wholesale - used when a revert restores the meta
+    /// values and the live copy has to follow.</summary>
+    public static void SetSettings(Guid textureGuid, SpriteImportSettings settings)
+    {
+        SpriteEditTarget t = Get(textureGuid);
+        t.Settings = settings;
+        t.Dirty = false;
+        t.LoadFailed = false;
     }
 
     public static bool IsDirty(Guid textureGuid) => _targets.TryGetValue(textureGuid, out SpriteEditTarget? t) && t.Dirty;

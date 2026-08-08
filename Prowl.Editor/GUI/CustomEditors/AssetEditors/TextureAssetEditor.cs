@@ -15,12 +15,30 @@ using Prowl.Vector.Spatial;
 namespace Prowl.Editor.Inspector;
 
 [CustomAssetEditor(typeof(Texture2D))]
-public class TextureAssetEditor : AssetImporterEditor
+public class TextureAssetEditor : ImportSettingsEditor
 {
-    // Cache settings across frames so changes stick until Save
-    private EchoObject? _cachedSettings;
-    private bool _dirty;
-    private Guid _cachedForGuid;
+    /// <summary>
+    /// Folds the live sprite configuration into the import-settings compound. Sprite edits are authored
+    /// on a separate object (shared with the Sprite Editor window), so they have to reach the compound
+    /// for the inspector's diff to see them - that compound is the single thing compared against disk.
+    /// </summary>
+    private static void FoldSpriteSettings(AssetEntry entry, EchoObject settings)
+    {
+        Importers.SpriteEditTarget target = Importers.SpriteEditRegistry.Get(entry.Guid);
+        if (target.LoadFailed) return; // never write defaults over slicing we failed to read
+
+        Importers.TextureSpriteMeta.WriteInto(settings, target.Settings);
+        target.Dirty = false;
+    }
+
+    protected override void OnBeforeApply(AssetEntry entry, EchoObject settings) => FoldSpriteSettings(entry, settings);
+
+    protected override void OnAfterRevert(AssetEntry entry, EchoObject settings)
+    {
+        // The restored compound is now the truth; the live sprite object has to be rebuilt from it or
+        // the Sprite Editor would still be holding the edits that were just discarded.
+        Importers.SpriteEditRegistry.SetSettings(entry.Guid, Importers.TextureSpriteMeta.ReadFrom(settings));
+    }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -80,56 +98,40 @@ public class TextureAssetEditor : AssetImporterEditor
             }
         }
 
-        if (Project.Current == null) return;
-        string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
-        string metaPath = MetaFile.GetMetaPath(absPath);
-        if (!File.Exists(metaPath)) return;
+        // No meta means nothing can be applied, so don't offer settings that can't be saved.
+        if (MetaPathOf(entry) is not string metaPath || !File.Exists(metaPath)) return;
 
-        // Load and cache settings (only reload when asset changes)
-        if (_cachedSettings == null || _cachedForGuid != entry.Guid)
-        {
-            var meta = MetaFile.Read(metaPath);
-            _cachedSettings = meta.Settings ?? EchoObject.NewCompound();
-
-            var defaults = new Importers.TextureImporter().DefaultSettings();
-            if (defaults != null)
-                foreach (var kvp in defaults.Tags)
-                    if (!_cachedSettings.TryGet(kvp.Key, out _))
-                        _cachedSettings[kvp.Key] = kvp.Value.Clone();
-
-            _dirty = false;
-            _cachedForGuid = entry.Guid;
-        }
-
-        var settings = _cachedSettings;
+        // Read once and kept live per asset by the base; edits stay put while you look at something else.
+        EchoObject settings = Settings(entry);
 
         EditorGUI.SectionHeader(paper, $"{id}_settings_hdr", "Import Settings", first: texture == null);
 
         bool genMips = settings.TryGet("generateMipmaps", out var mipTag) && mipTag.BoolValue;
         EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", genMips,
-            v => { settings["generateMipmaps"] = new EchoObject(v); _dirty = true; }, separator: false);
+            v => { settings["generateMipmaps"] = new EchoObject(v); }, separator: false);
 
         var currentMin = settings.TryGet("minFilter", out var minTag)
             ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
         EditorGUI.Row(paper, $"{id}_min", "Min Filter", () =>
             Origami.EnumDropdown(paper, $"{id}_min_v", currentMin,
-                v => { settings["minFilter"] = new EchoObject((int)v); _dirty = true; }).Show());
+                v => { settings["minFilter"] = new EchoObject((int)v); }).Show());
 
         var currentMag = settings.TryGet("magFilter", out var magTag)
             ? (TextureMag)magTag.IntValue : TextureMag.Linear;
         EditorGUI.Row(paper, $"{id}_mag", "Mag Filter", () =>
             Origami.EnumDropdown(paper, $"{id}_mag_v", currentMag,
-                v => { settings["magFilter"] = new EchoObject((int)v); _dirty = true; }).Show());
+                v => { settings["magFilter"] = new EchoObject((int)v); }).Show());
 
         var currentWrap = settings.TryGet("wrapMode", out var wrapTag)
             ? (TextureWrap)wrapTag.IntValue : TextureWrap.Repeat;
         EditorGUI.Row(paper, $"{id}_wrap", "Wrap Mode", () =>
             Origami.EnumDropdown(paper, $"{id}_wrap_v", currentWrap,
-                v => { settings["wrapMode"] = new EchoObject((int)v); _dirty = true; }).Show());
+                v => { settings["wrapMode"] = new EchoObject((int)v); }).Show());
 
-        // Sprite settings: mode + a button to open the full Sprite Editor. The Sprite Editor edits the
-        // shared settings instance and flags it dirty; persisting happens here via Save & Reimport.
+        // Sprite settings: mode + a button to open the full Sprite Editor, which edits the shared sprite
+        // object. Fold any edit of it back into the compound so the inspector's diff can see it.
         var spriteTarget = Importers.SpriteEditRegistry.Get(entry.Guid);
+        if (spriteTarget.Dirty) FoldSpriteSettings(entry, settings);
         Origami.Header(paper, $"{id}_sprite_hdr", "Sprite").Show();
         EditorGUI.Row(paper, $"{id}_spmode", "Sprite Mode", () =>
             Origami.EnumDropdown(paper, $"{id}_spmode_v", spriteTarget.Settings.Mode,
@@ -146,9 +148,9 @@ public class TextureAssetEditor : AssetImporterEditor
                 $"{EditorIcons.TriangleExclamation}  This texture's sprite settings could not be read. Saving is disabled so the existing data isn't overwritten - see the console.")
                 .Show();
 
-        // Save CTA - disabled until an import setting or the sprite config changes (and never in read-only,
-        // e.g. when this editor is shown for a texture sub-asset). It's a raw Box, so it must check IsReadOnly.
-        bool dirty = !Origami.IsReadOnly && !spriteTarget.LoadFailed && (_dirty || spriteTarget.Dirty);
+        // Save CTA - lit only when the settings actually differ from disk (and never in read-only, e.g.
+        // when this editor is shown for a texture sub-asset). It's a raw Box, so it must check IsReadOnly.
+        bool dirty = !Origami.IsReadOnly && !spriteTarget.LoadFailed && HasPendingChanges(entry, asset);
         paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
             .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
@@ -159,14 +161,7 @@ public class TextureAssetEditor : AssetImporterEditor
             .OnClick(0, (_, _) =>
             {
                 if (!dirty) return;
-                Importers.TextureSpriteMeta.WriteInto(settings, spriteTarget.Settings);
-                var meta = MetaFile.Read(metaPath);
-                meta.Settings = settings;
-                MetaFile.Write(metaPath, meta);
-                _cachedSettings = null;
-                _dirty = false;
-                Importers.SpriteEditRegistry.ClearDirty(entry.Guid);
-                EditorAssetBackend.Instance?.Reimport(entry.Guid);
+                ApplyPendingChanges(entry, asset);
             });
     }
 

@@ -26,9 +26,17 @@ public enum PhysicsThreadModel
 
 public class PhysicsWorld
 {
-    public static void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.IgnoreCollisionBetween(bodyA, bodyB);
+    /// <summary>
+    /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
+    /// pair is scoped to this world and is dropped when the world is cleared.
+    /// </summary>
+    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.IgnoreCollisionBetween(bodyA, bodyB);
 
-    public static void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.EnableCollisionBetween(bodyA, bodyB);
+    /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
+    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.EnableCollisionBetween(bodyA, bodyB);
+
+    /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
+    public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
 
     /// <summary>
     /// Bake (or fetch the cached) physics representation of a mesh. The bake is stored directly on
@@ -77,6 +85,8 @@ public class PhysicsWorld
     /// Composite filter that chains multiple broad phase filters together.
     /// </summary>
     private CompositeBroadPhaseFilter _compositeBroadPhaseFilter;
+
+    private readonly LayerFilter _layerFilter = new();
 
     // Registered terrain providers for shape casts. The grid placement is read from the provider per
     // query rather than captured here, so terrain can be moved and scaled after registration.
@@ -229,7 +239,7 @@ public class PhysicsWorld
 
         // Set up composite broad phase filter
         _compositeBroadPhaseFilter = new CompositeBroadPhaseFilter();
-        _compositeBroadPhaseFilter.AddFilter(new LayerFilter());
+        _compositeBroadPhaseFilter.AddFilter(_layerFilter);
         World.BroadPhaseFilter = _compositeBroadPhaseFilter;
 
         World.NarrowPhaseFilter = new TriangleEdgeCollisionFilter();
@@ -296,6 +306,7 @@ public class PhysicsWorld
         // The components re-register when they recreate their bodies.
         _syncBodies.Clear();
         _shapeOwners.Clear();
+        _layerFilter.ClearIgnoredCollisions();
     }
 
     public void Update()

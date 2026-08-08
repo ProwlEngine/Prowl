@@ -589,17 +589,40 @@ public class PhysicsTests : RuntimeTestBase
 
         var top = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: true);
 
-        PhysicsWorld.IgnoreCollisionBetween(top, floorRb);
-        try
-        {
-            Tick(scene, 180);
+        scene.Physics.IgnoreCollisionBetween(top, floorRb);
 
-            Assert.True(top.Transform.Position.Y < 0,
-                $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
-        }
-        finally
-        {
-            PhysicsWorld.EnableCollisionBetween(top, floorRb);
-        }
+        Tick(scene, 180);
+
+        Assert.True(top.Transform.Position.Y < 0,
+            $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void IgnoredCollisions_AreScopedToTheirOwnWorld()
+    {
+        var sceneA = CreatePhysicsScene();
+        var floorA = CreateGameObject("Floor");
+        var floorRbA = floorA.AddComponent<Rigidbody3D>();
+        floorRbA.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorA.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneA.Add(floorA);
+
+        var boxA = AddDynamicBox(sceneA, new Float3(0, 3, 0), gravity: true);
+        sceneA.Physics.IgnoreCollisionBetween(boxA, floorRbA);
+
+        // A second world must not inherit the first world's ignore pairs.
+        var sceneB = CreatePhysicsScene();
+        var floorB = CreateGameObject("Floor");
+        var floorRbB = floorB.AddComponent<Rigidbody3D>();
+        floorRbB.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorB.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneB.Add(floorB);
+
+        var boxB = AddDynamicBox(sceneB, new Float3(0, 3, 0), gravity: true);
+
+        Tick(sceneB, 180);
+
+        Assert.True(boxB.Transform.Position.Y > 0,
+            $"Pair ignored in another world should still collide here; body was at y={boxB.Transform.Position.Y}");
     }
 }
