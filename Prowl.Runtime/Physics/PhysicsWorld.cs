@@ -307,6 +307,13 @@ public class PhysicsWorld
         _syncBodies.Clear();
         _shapeOwners.Clear();
         _layerFilter.ClearIgnoredCollisions();
+
+        // World.Clear drops every dynamic tree proxy, terrain included, so the terrain filters would be
+        // left chained onto the broad phase testing against proxies that no longer exist. Reset the
+        // chain to the layer filter, which is all a fresh world starts with.
+        _terrainProxies.Clear();
+        _compositeBroadPhaseFilter.ClearFilters();
+        _compositeBroadPhaseFilter.AddFilter(_layerFilter);
     }
 
     public void Update()
