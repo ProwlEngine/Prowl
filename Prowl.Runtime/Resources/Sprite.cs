@@ -401,16 +401,20 @@ public static class SpriteMeshTracer
             if (simplified.Length < 3)
                 continue;
 
-            result.Contours.Add(simplified);
-
             tris.Clear();
             if (!Triangulate(simplified, tris))
                 continue;
 
             int baseIdx = verts.Count;
             if (baseIdx + simplified.Length > ushort.MaxValue)
-                break; // keep indices 16-bit; sprites never realistically hit this
+            {
+                // Indices stay 16-bit; sprites never realistically reach this, but truncating the
+                // silhouette without a word would look like the tracer simply lost part of the image.
+                Debug.LogWarning($"[Sprite] Tight mesh hit the {ushort.MaxValue}-vertex limit after {result.Contours.Count} of {raw.Count} contours; the rest were dropped. Raise the simplify tolerance to cut vertex count.");
+                break;
+            }
 
+            result.Contours.Add(simplified);
             verts.AddRange(simplified);
             foreach (int i in tris)
                 indices.Add((ushort)(baseIdx + i));
@@ -529,13 +533,27 @@ public static class SpriteMeshTracer
         if (n < 4 || tolerance <= 0f)
             return points;
 
-        var keep = new bool[n];
-        keep[0] = keep[n - 1] = true;
-        SimplifySegment(points, 0, n - 1, tolerance, keep);
+        int far = 1;
+        float farthest = -1f;
+        for (int i = 1; i < n; i++)
+        {
+            float dx = points[i].X - points[0].X, dy = points[i].Y - points[0].Y;
+            float distSq = dx * dx + dy * dy;
+            if (distSq > farthest) { farthest = distSq; far = i; }
+        }
+
+        var ring = new Float2[n + 1];
+        Array.Copy(points, ring, n);
+        ring[n] = points[0];
+
+        var keep = new bool[n + 1];
+        keep[0] = keep[far] = keep[n] = true;
+        SimplifySegment(ring, 0, far, tolerance, keep);
+        SimplifySegment(ring, far, n, tolerance, keep);
 
         var outPts = new List<Float2>(n);
         for (int i = 0; i < n; i++)
-            if (keep[i]) outPts.Add(points[i]);
+            if (keep[i]) outPts.Add(ring[i]);
 
         return outPts.Count >= 3 ? outPts.ToArray() : points;
     }
