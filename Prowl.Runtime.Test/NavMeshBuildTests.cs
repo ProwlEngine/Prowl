@@ -47,6 +47,24 @@ public class NavMeshBuildTests
     };
 
     /// <summary>
+    /// An asset whose tiles are in a format this engine cannot read says so, naming the versions,
+    /// rather than handing bytes to Detour that mean something else now. Nothing in the engine
+    /// produces such an asset — the guard exists for the next time the tile format changes, and
+    /// this is what keeps it honest until then.
+    /// </summary>
+    [Fact]
+    public void NavMeshData_FromAnUnreadableFormat_SaysWhichVersionsItReads()
+    {
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [FlatQuad()]);
+        Assert.NotNull(data);
+        data!.FormatVersion = NavMeshData.CurrentFormatVersion + 1;
+
+        var thrown = Assert.Throws<InvalidOperationException>(() => data.CreateTileCache(maxObstacles: 1));
+        Assert.Contains($"{NavMeshData.MinReadableFormatVersion}..{NavMeshData.CurrentFormatVersion}", thrown.Message);
+        Assert.Contains("Rebake", thrown.Message);
+    }
+
+    /// <summary>
     /// The winding gate: Recast derives walkability from triangle face normals, so a total
     /// winding/handedness mismatch fails as "the bake produced nothing" rather than an error.
     /// This test existing and passing is what proves the coordinate conventions line up.

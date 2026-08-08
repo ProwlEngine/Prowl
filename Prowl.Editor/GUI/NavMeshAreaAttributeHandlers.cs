@@ -12,6 +12,41 @@ using Prowl.Runtime;
 namespace Prowl.Editor.GUI;
 
 /// <summary>
+/// The property-grid row recipe (gutter padding, label width/colour/truncation) these handlers
+/// draw with. They are reachable from outside the grid's field loop — a custom editor laying
+/// fields out by hand calls the same dropdowns — so the recipe lives in one place rather than
+/// being hand-copied into each, and grid metric changes land here.
+/// </summary>
+internal static class HandlerRowLayout
+{
+    /// <summary>Draw a label + control row matching the default grid rows. The control is
+    /// drawn inside a stretch-width, row-height box.</summary>
+    public static void LabelledRow(Paper paper, string id, string label, Action drawControl)
+    {
+        var theme = OrigamiUI.Origami.Current;
+        var m = theme.Metrics;
+        var font = theme.Font;
+
+        using (paper.Row(id).Height(UnitValue.Auto).MinHeight(m.RowHeight)
+            .Padding(m.PaddingLarge, m.PaddingLarge, 0, 0).RowBetween(m.Padding).Enter())
+        {
+            if (font != null && !string.IsNullOrEmpty(label))
+            {
+                paper.Box($"{id}_lbl")
+                    .Width(m.LabelWidth).Height(m.RowHeight)
+                    .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .Text(label, font).TextColor(theme.Ink.C300)
+                    .FontSize(m.FontSize).Alignment(TextAlignment.MiddleLeft).TextTruncate();
+            }
+
+            using (paper.Box($"{id}_ctl").Width(UnitValue.Stretch()).Height(m.RowHeight).Enter())
+                drawControl();
+        }
+    }
+}
+
+/// <summary>
 /// [NavMeshArea] - draws an int field as a dropdown of the navigation areas defined in
 /// project settings, so users pick "Walkable" instead of typing 0.
 /// </summary>

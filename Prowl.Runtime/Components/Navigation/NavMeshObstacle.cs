@@ -14,8 +14,8 @@ namespace Prowl.Runtime;
 /// <summary>Shape of a <see cref="NavMeshObstacle"/>.</summary>
 public enum NavMeshObstacleShape
 {
-    /// <summary>Capsule input, carved as a cylinder of the same radius/height.</summary>
-    Capsule,
+    /// <summary>Upright cylinder of the given radius and height.</summary>
+    Cylinder,
     /// <summary>Oriented box (yaw only — Detour box obstacles rotate around Y).</summary>
     Box,
 }
@@ -46,7 +46,7 @@ public enum NavMeshObstacleShape
 [ExecuteAlways]
 public class NavMeshObstacle : MonoBehaviour
 {
-    [Tooltip("Obstacle shape: a capsule carves a cylinder; a box carves an oriented (yaw-only) box.")]
+    [Tooltip("Obstacle shape. Both stand upright: a cylinder has no tilt, and a box is oriented by yaw only.")]
     public NavMeshObstacleShape Shape = NavMeshObstacleShape.Box;
 
     [Tooltip("Obstacle center, local to this GameObject.")]
@@ -54,14 +54,14 @@ public class NavMeshObstacle : MonoBehaviour
 
     [Tooltip("Box size, local (scaled by the Transform).")]
     [ShowIf(nameof(IsBox))]
-    public Float3 Size = new(1, 2, 1);
+    public Float3 Size = new(1, 1, 1);
 
-    [Tooltip("Capsule radius (scaled by the largest horizontal Transform scale).")]
-    [ShowIf(nameof(IsCapsule))]
+    [Tooltip("Cylinder radius (scaled by the largest horizontal Transform scale).")]
+    [ShowIf(nameof(IsCylinder))]
     public float Radius = 0.5f;
 
-    [Tooltip("Capsule height (scaled by the vertical Transform scale).")]
-    [ShowIf(nameof(IsCapsule))]
+    [Tooltip("Cylinder height (scaled by the vertical Transform scale).")]
+    [ShowIf(nameof(IsCylinder))]
     public float Height = 2f;
 
     [Tooltip("On: cut a hole in the navmesh so paths route around this. Off: leave the mesh alone and make agents steer around it locally instead — cheaper, and the right choice for something that moves, but paths still lead through it.")]
@@ -77,7 +77,7 @@ public class NavMeshObstacle : MonoBehaviour
     public float CarvingTimeToStationary = 0.5f;
 
     private bool IsBox => Shape == NavMeshObstacleShape.Box;
-    private bool IsCapsule => Shape == NavMeshObstacleShape.Capsule;
+    private bool IsCylinder => Shape == NavMeshObstacleShape.Cylinder;
 
     private NavMeshWorld? _world;
     // Obstacle handle per navmesh instance the carve is registered with. Instances are
@@ -325,23 +325,38 @@ public class NavMeshObstacle : MonoBehaviour
         return new Float3(center.X, center.Y - height * 0.5f, center.Z);
     }
 
+    // The shape an obstacle occupies once the Transform's scale is applied. The carve, the
+    // avoidance blocker and the gizmo all describe the same volume and have to agree on it, so
+    // each shape's dimensions are worked out in exactly one place.
+
+    /// <summary>Radius by the larger horizontal scale, height by the vertical one.</summary>
+    private (float Radius, float Height) ScaledCylinder(Float3 scale) => (
+        Radius * MathF.Max(0.01f, MathF.Max(Math.Abs(scale.X), Math.Abs(scale.Z))),
+        Height * MathF.Max(0.01f, Math.Abs(scale.Y)));
+
+    /// <summary>Per-axis, and without the carve's horizontal clearance — that is a navmesh
+    /// concern (an agent's centre must clear the box, not just its body) rather than part of
+    /// the shape the user authored.</summary>
+    private Float3 ScaledBoxHalfExtents(Float3 scale) => new(
+        Size.X * 0.5f * Math.Abs(scale.X),
+        Size.Y * 0.5f * Math.Abs(scale.Y),
+        Size.Z * 0.5f * Math.Abs(scale.Z));
+
     /// <summary>Avoidance is circle-based, so a box is approximated by the circle enclosing its
     /// footprint — agents give a rotated crate a slightly wider berth than its corners need.</summary>
     private float BlockerRadius(Float3 scale)
     {
-        if (Shape == NavMeshObstacleShape.Capsule)
-            return Radius * MathF.Max(0.01f, (float)Math.Max(Math.Abs(scale.X), Math.Abs(scale.Z)));
+        if (Shape == NavMeshObstacleShape.Cylinder)
+            return MathF.Max(0.01f, ScaledCylinder(scale).Radius);
 
-        double x = Size.X * 0.5f * Math.Abs(scale.X);
-        double z = Size.Z * 0.5f * Math.Abs(scale.Z);
-        return MathF.Max(0.01f, (float)Math.Sqrt(x * x + z * z));
+        Float3 half = ScaledBoxHalfExtents(scale);
+        return MathF.Max(0.01f, MathF.Sqrt(half.X * half.X + half.Z * half.Z));
     }
 
     private float BlockerHeight(Float3 scale)
-    {
-        float scaleY = MathF.Max(0.01f, (float)Math.Abs(scale.Y));
-        return MathF.Max(0.01f, (Shape == NavMeshObstacleShape.Capsule ? Height : (float)Size.Y) * scaleY);
-    }
+        => MathF.Max(0.01f, Shape == NavMeshObstacleShape.Cylinder
+            ? ScaledCylinder(scale).Height
+            : ScaledBoxHalfExtents(scale).Y * 2f);
 
     private Prowl.Recast.Detour.Crowd.DtCrowdAgentParams BlockerParams(float radius, float height) => new()
     {
@@ -396,21 +411,18 @@ public class NavMeshObstacle : MonoBehaviour
         Float3 worldCenter = Transform.TransformPoint(Center);
         float clearance = Math.Max(0f, agentRadius);
 
-        if (Shape == NavMeshObstacleShape.Capsule)
+        if (Shape == NavMeshObstacleShape.Cylinder)
         {
-            float radius = Radius * MathF.Max(0.01f, (float)Math.Max(Math.Abs(scale.X), Math.Abs(scale.Z)));
-            float height = Height * MathF.Max(0.01f, (float)Math.Abs(scale.Y));
+            (float radius, float height) = ScaledCylinder(scale);
             // Cylinder obstacles anchor at the base center.
             var basePos = new RcVec3f((float)worldCenter.X, (float)(worldCenter.Y - height * 0.5f), (float)worldCenter.Z);
             return cache.AddObstacle(basePos, radius + clearance, height);
         }
 
-        // Horizontal only: erosion is a footprint concern, and growing the box vertically would
-        // start carving under things the obstacle passes beneath.
-        var halfExtents = new RcVec3f(
-            (float)(Size.X * 0.5f * Math.Abs(scale.X)) + clearance,
-            (float)(Size.Y * 0.5f * Math.Abs(scale.Y)),
-            (float)(Size.Z * 0.5f * Math.Abs(scale.Z)) + clearance);
+        // Clearance horizontally only: erosion is a footprint concern, and growing the box
+        // vertically would start carving under things the obstacle passes beneath.
+        Float3 half = ScaledBoxHalfExtents(scale);
+        var halfExtents = new RcVec3f(half.X + clearance, half.Y, half.Z + clearance);
         float yawRadians = (float)(Transform.Rotation.EulerAngles.Y * Maths.Deg2Rad);
         return cache.AddBoxObstacle(new RcVec3f((float)worldCenter.X, (float)worldCenter.Y, (float)worldCenter.Z), halfExtents, yawRadians);
     }
@@ -443,20 +455,28 @@ public class NavMeshObstacle : MonoBehaviour
                 _refs.Remove(instance);
     }
 
+    /// <summary>
+    /// The volume this obstacle actually carves, which is not the volume its Transform describes:
+    /// both shapes stand upright however the object is pitched or rolled, because Detour orients a
+    /// box obstacle by yaw alone. Drawing the full transform would promise a tilt the navmesh
+    /// never cuts.
+    /// </summary>
     public override void DrawGizmosSelected()
     {
         var color = new Color(1f, 0.5f, 0.1f, 1f);
-        if (Shape == NavMeshObstacleShape.Box)
+        Float3 scale = Transform.LossyScale;
+        Float3 worldCenter = Transform.TransformPoint(Center);
+
+        if (Shape == NavMeshObstacleShape.Cylinder)
         {
-            Debug.PushMatrix(Transform.LocalToWorldMatrix);
-            Debug.DrawWireCube(Center, Size * 0.5f, color);
-            Debug.PopMatrix();
+            (float radius, float height) = ScaledCylinder(scale);
+            Debug.DrawWireCylinder(worldCenter, Quaternion.Identity, radius, height, color);
+            return;
         }
-        else
-        {
-            Float3 worldCenter = Transform.TransformPoint(Center);
-            Debug.DrawWireSphere(worldCenter, Radius, color);
-            Debug.DrawLine(worldCenter - new Float3(0, Height * 0.5f, 0), worldCenter + new Float3(0, Height * 0.5f, 0), color);
-        }
+
+        var yaw = Quaternion.FromEuler(new Float3(0, Transform.Rotation.EulerAngles.Y, 0));
+        Debug.PushMatrix(Float4x4.CreateTRS(worldCenter, yaw, Float3.One));
+        Debug.DrawWireCube(Float3.Zero, ScaledBoxHalfExtents(scale), color);
+        Debug.PopMatrix();
     }
 }

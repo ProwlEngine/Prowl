@@ -137,6 +137,12 @@ public class NavMeshSurface : MonoBehaviour
         NavMeshWorld? world = World;
         if (world == null) return;
 
+        // The navmesh has to be present now: registration happens once, on enable, and nothing
+        // retries it — a transient null from async streaming would leave the scene permanently
+        // without a navmesh, which reads as obstacles that never carve and agents that never
+        // move. Block-load it, as the mesh and terrain colliders do for the same reason.
+        NavMeshData.EnsureLoaded();
+
         Runtime.NavMeshData? data = NavMeshData.Res;
         if (data.IsNotValid() || !data!.HasTiles) return;
 
