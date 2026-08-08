@@ -263,7 +263,7 @@ public class NavMeshLink : MonoBehaviour
             if (instance == null || !AffectsAgentType(surface.AgentTypeId)) continue;
             if (!_catchUpDone.Add(instance)) continue;      // one attempt per instance
             if (instance.ContainsLinkId(LinkId)) continue;  // already in the live mesh
-            RebuildEndpointRegions(surface, _appliedStart, _appliedEnd);
+            MarkEndpointRegions(surface, _appliedStart, _appliedEnd);
         }
     }
 
@@ -308,30 +308,29 @@ public class NavMeshLink : MonoBehaviour
         {
             NavMeshSurface surface = surfaces[i];
             if (surface.Instance == null || !AffectsOrDidAffect(surface.AgentTypeId)) continue;
-            RebuildEndpointRegions(surface, start, end);
+            MarkEndpointRegions(surface, start, end);
         }
     }
 
-    /// <summary>Rebuild around both endpoints: one call when the padded regions overlap (the
-    /// common short ladder/ledge link — rebuilding the same tiles twice back-to-back would
-    /// double the dominant cost), two separate calls when they don't (a merged AABB across a
-    /// long link would rebuild everything between the endpoints).</summary>
-    private void RebuildEndpointRegions(NavMeshSurface surface, Float3 start, Float3 end)
+    /// <summary>Dirty the tiles around both endpoints: one region when the padded regions overlap
+    /// (the common short ladder/ledge link), two when they don't — a merged AABB across a long
+    /// link would dirty everything between the endpoints. The world applies them, so a frame that
+    /// moves many links re-contours each affected tile once however many of them touched it.
+    /// </summary>
+    private void MarkEndpointRegions(NavMeshSurface surface, Float3 start, Float3 end)
     {
+        if (_world == null) return;
+
         float pad = Width * 0.5f + 1f;
         AABB startRegion = new AABB(start, start).Expanded(pad);
         AABB endRegion = new AABB(end, end).Expanded(pad);
 
-        // A rebuild replaces the whole link registry, so the collection is identical for both
-        // regions — gather it once rather than paying a scene scan per region.
-        List<NavMeshLinkSource> links = surface.CollectLinks(null);
-
         if (startRegion.Intersects(endRegion))
-            surface.RebuildLinkTiles(startRegion.Encapsulating(endRegion), links);
+            _world.MarkLinkTilesDirty(surface, startRegion.Encapsulating(endRegion));
         else
         {
-            surface.RebuildLinkTiles(startRegion, links);
-            surface.RebuildLinkTiles(endRegion, links);
+            _world.MarkLinkTilesDirty(surface, startRegion);
+            _world.MarkLinkTilesDirty(surface, endRegion);
         }
     }
 

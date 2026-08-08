@@ -263,6 +263,16 @@ public class NavMeshSurface : MonoBehaviour
     /// scene's <see cref="NavMeshLink"/>s; games driving navigation from explicit sources pass
     /// their own list and skip the scene scan.</param>
     public bool RebuildLinkTiles(AABB worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
+        => RebuildLinkTiles([worldBounds], links);
+
+    /// <inheritdoc cref="RebuildLinkTiles(AABB, IReadOnlyList{NavMeshLinkSource})"/>
+    /// <param name="worldBounds">Regions whose tiles pick up the change. A tile several of them
+    /// cover re-contours once — which is the whole point of handing a frame's link edits over
+    /// together rather than applying them one at a time.</param>
+    /// <param name="links">The surface's complete link set. Null (the default) collects the
+    /// scene's <see cref="NavMeshLink"/>s; games driving navigation from explicit sources pass
+    /// their own list and skip the collection.</param>
+    public bool RebuildLinkTiles(ReadOnlySpan<AABB> worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
     {
         NavMeshInstance? instance = Instance;
         Runtime.NavMeshData? data = _runtimeData;
@@ -274,19 +284,22 @@ public class NavMeshSurface : MonoBehaviour
         if (world == null) return false;
 
         // Resolved before the write lock is taken, so worker-thread queries do not block on it.
-        bool anyTiles = data.TryGetTileRange(worldBounds, out int tx0, out int tx1, out int tz0, out int tz1);
+        HashSet<(int X, int Z)> tiles = [];
+        foreach (AABB bounds in worldBounds)
+            if (data.TryGetTileRange(bounds, out int tx0, out int tx1, out int tz0, out int tz1))
+                for (int tz = tz0; tz <= tz1; tz++)
+                    for (int tx = tx0; tx <= tx1; tx++)
+                        tiles.Add((tx, tz));
 
         world.MutateTileCache(instance, cache =>
         {
             // Always replace the link set, even with no tiles in range: it is what tiles rebuilt
             // later — by a carve, or by a rebuild of a neighbouring region — will be built from.
             instance.TileCacheLinks.SetLinks(links, data.Settings.AgentRadius);
-            if (!anyTiles) return;
 
-            for (int tz = tz0; tz <= tz1; tz++)
-                for (int tx = tx0; tx <= tx1; tx++)
-                    foreach (long tileRef in cache.GetTilesAt(tx, tz))
-                        cache.BuildNavMeshTile(tileRef);
+            foreach ((int tx, int tz) in tiles)
+                foreach (long tileRef in cache.GetTilesAt(tx, tz))
+                    cache.BuildNavMeshTile(tileRef);
         });
 
         // Mirror onto the runtime copy, so a rebuild that re-instantiates it starts from the

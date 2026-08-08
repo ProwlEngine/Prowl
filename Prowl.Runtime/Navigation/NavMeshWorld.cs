@@ -5,6 +5,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 using Prowl.Recast.Core.Numerics;
@@ -562,6 +563,7 @@ public sealed class NavMeshWorld
         }
         foreach (NavMeshInstance instance in toRemove)
             instance.Retire();
+        _pendingLinkTiles.Clear();
         _crowds.Clear();
         if (toRemove.Count > 0)
         {
@@ -658,7 +660,35 @@ public sealed class NavMeshWorld
         if (!_surfaces.Contains(surface)) _surfaces.Add(surface);
     }
 
-    internal void UnregisterSurface(NavMeshSurface surface) => _surfaces.Remove(surface);
+    internal void UnregisterSurface(NavMeshSurface surface)
+    {
+        _surfaces.Remove(surface);
+        _pendingLinkTiles.Remove(surface);
+    }
+
+    // Link tiles waiting to re-contour, per surface. A link edit dirties the tiles around both
+    // its endpoints, and one event edits many links at once — a building coming down takes its
+    // ladders with it. Applied as they arrive, each edit would re-collect the scene's links,
+    // replace the whole link set again, and re-contour tiles the edit before it had just done.
+    // Held until the frame's edits are all in, then applied as one pass per surface.
+    private readonly Dictionary<NavMeshSurface, List<AABB>> _pendingLinkTiles = [];
+
+    internal void MarkLinkTilesDirty(NavMeshSurface surface, AABB region)
+    {
+        if (!_pendingLinkTiles.TryGetValue(surface, out List<AABB>? regions))
+            _pendingLinkTiles[surface] = regions = [];
+        regions.Add(region);
+    }
+
+    private void DrainLinkTiles()
+    {
+        if (_pendingLinkTiles.Count == 0) return;
+
+        foreach ((NavMeshSurface surface, List<AABB> regions) in _pendingLinkTiles)
+            if (surface.IsValid())
+                surface.RebuildLinkTiles(CollectionsMarshal.AsSpan(regions));
+        _pendingLinkTiles.Clear();
+    }
 
     /// <summary>Every enabled surface in this scene, whether or not it has a navmesh loaded.</summary>
     public IReadOnlyList<NavMeshSurface> Surfaces => _surfaces;
@@ -959,6 +989,12 @@ public sealed class NavMeshWorld
             foreach (NavMeshCrowdEntry entry in _crowds.Values)
                 entry.Crowd.Update(deltaTime, null);
         }
+
+        // Links mark their tiles from LateUpdate, which runs after this, so what drains here is
+        // the previous frame's edits — one frame of latency in exchange for a frame's worth of
+        // them costing one pass. Immediately before the pump, so the tile work a rebuild queues
+        // is drained this frame rather than waiting for the next.
+        DrainLinkTiles();
 
         // Carving is not: an obstacle queues its carve from OnEnable, which runs in the editor
         // too, and without a pump that request would sit unprocessed forever — the mesh looking

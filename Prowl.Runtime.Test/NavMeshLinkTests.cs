@@ -138,6 +138,37 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.Empty(scene.Navigation.CalculateTriangulation().Connections);
     }
 
+    /// <summary>
+    /// A frame's worth of link edits is applied as one pass per surface. Demolishing a building
+    /// disables all its ladders in the same frame; applied one at a time, each edit re-collects
+    /// the scene's links, replaces the whole link set again, and re-contours tiles the edit
+    /// before it just did — so the cost is per link rather than per affected tile.
+    /// </summary>
+    [Fact]
+    public void Links_ChangedInOneFrame_RebuildInOnePass()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        var links = new List<NavMeshLink>();
+        for (int i = 0; i < 6; i++)
+            links.Add(AddLink(scene));
+
+        Assert.True(surface.BuildNavMesh());
+        Assert.True(TickUntil(scene, () => !scene.Navigation.GetInstance()!.CachePending) >= 0);
+
+        int changes = 0;
+        scene.Navigation.NavMeshChanged += () => changes++;
+
+        foreach (NavMeshLink link in links)
+            link.Activated = false;
+        Tick(scene, 2); // links mark from LateUpdate; the world drains them at the next update
+
+        // One from the coalesced rebuild, one from the pump draining the tile work it queued.
+        // Uncoalesced this is two per link — each endpoint region is its own rebuild.
+        Assert.InRange(changes, 1, 2);
+        Assert.Equal(NavMeshPathStatus.PathPartial,
+            PathStatus(scene, new Float3(-6, 0, 0), new Float3(6, 0, 0)));
+    }
+
     /// <summary>A link answers for its own scene only: two additively loaded scenes derive ids
     /// from their own components and have no reason to agree on them, so one scene resolving
     /// another's link would hand an agent a component from the wrong world.</summary>
