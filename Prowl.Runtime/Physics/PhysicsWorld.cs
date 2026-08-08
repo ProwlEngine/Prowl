@@ -133,13 +133,27 @@ public class PhysicsWorld
     /// </summary>
     internal Transform GetTerrainTransform(IDynamicTreeProxy proxy)
     {
+        MonoBehaviour owner = GetTerrainOwner(proxy);
+        return owner.IsValid() && owner.GameObject.IsValid() ? owner.GameObject.Transform : null;
+    }
+
+    /// <summary>The component that registered the given terrain proxy, or null if it is not terrain.</summary>
+    private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
+    {
         if (proxy is TerrainHeightmapProxy terrain &&
             _terrainProxies.TryGetValue(terrain, out TerrainInfo info) &&
-            info.HeightProvider is MonoBehaviour owner &&
-            owner.IsValid() && owner.GameObject.IsValid())
-            return owner.GameObject.Transform;
+            info.HeightProvider is MonoBehaviour owner && owner.IsValid())
+            return owner;
 
         return null;
+    }
+
+    /// <summary>Whether a terrain proxy sits on a layer the mask accepts. Terrain has no body to carry
+    /// layer data, so it is taken from the GameObject the terrain component lives on.</summary>
+    private bool TerrainPassesLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    {
+        MonoBehaviour owner = GetTerrainOwner(proxy);
+        return owner.IsValid() && owner.GameObject.IsValid() && layerMask.HasLayer(owner.GameObject.LayerIndex);
     }
 
     /// <summary>
@@ -452,18 +466,17 @@ public class PhysicsWorld
         return true;
     }
 
-    private static bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    private bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
     {
         if (proxy is RigidBodyShape shape)
         {
-            if (!PreFilter(proxy)) return false;
-
-            var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            // A body without our user data has no layer to test, so a mask can only exclude it.
+            if (shape.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData userData) return false;
 
             return layerMask.HasLayer(userData.Layer);
         }
 
-        return false;
+        return TerrainPassesLayer(proxy, layerMask);
     }
 
     private static bool PostFilter(DynamicTree.RayCastResult result)
@@ -515,7 +528,8 @@ public class PhysicsWorld
             if (proxy is TerrainHeightmapProxy terrainProxy)
             {
                 // Shape cast against terrain heightmap triangles
-                SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
+                if (TerrainPassesLayer(terrainProxy, layerMask))
+                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
                 continue;
             }
 
