@@ -396,6 +396,7 @@ public class ConsolePanel : DockPanel
 
     private static (IOrigamiIcon, Color, string) LevelOf(LogSeverity s) => s switch
     {
+        LogSeverity.Success => (EditorIcons.CircleCheck_I, EditorTheme.Green400, "success"),
         LogSeverity.Warning => (EditorIcons.TriangleExclamation_I, EditorTheme.Amber400, "warning"),
         LogSeverity.Error or LogSeverity.Exception => (EditorIcons.CircleExclamation_I, EditorTheme.Red400, "error"),
         _ => (EditorIcons.CircleInfo_I, EditorTheme.Blue400, "info"),
