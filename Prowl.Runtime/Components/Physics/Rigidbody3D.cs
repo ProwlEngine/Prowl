@@ -347,8 +347,17 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
 
+        World? world = GameObject.Scene.Physics?.World;
+        if (world == null) return;
+
+        // Route through CreateBody so a body created here is wired up the same as one from OnEnable.
+        // A raw CreateRigidBody would leave the collision events unhooked and the body out of the
+        // transform-sync set, and OnEnable would then skip creation because a body already exists.
         if (_body == null || _body.Handle.IsZero)
-            _body = GameObject.Scene.Physics.World.CreateRigidBody();
+        {
+            CreateBody(world);
+            return;
+        }
 
         UpdateProperties(_body);
         UpdateShapes(_body);
