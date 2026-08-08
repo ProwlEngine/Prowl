@@ -90,6 +90,19 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected abstract void DestroyConstraint();
 
     /// <summary>
+    /// Removes a constraint from the world that owns it. The constraint names its own bodies, so this
+    /// still works during teardown, when the owning Rigidbody3D component may already be gone and
+    /// reaching back through it would throw.
+    /// </summary>
+    protected static void RemoveConstraint(Constraint constraint)
+    {
+        if (constraint == null || constraint.Handle.IsZero) return;
+
+        World world = constraint.Body1?.World;
+        world?.Remove(constraint);
+    }
+
+    /// <summary>
     /// Recreates the constraint with current settings.
     /// </summary>
     protected void RecreateConstraint()
