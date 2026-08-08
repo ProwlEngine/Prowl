@@ -175,6 +175,9 @@ public sealed class Texture2D : Texture, ISerializable
         EnsureNotDisposed();
         Graphics.SetWrapS(Handle, sWrapMode);
         Graphics.SetWrapT(Handle, tWrapMode);
+        // One field tracks both axes (every caller passes the same mode for each). Without this the
+        // property keeps reporting the constructor's default, and Serialize writes that stale value.
+        WrapMode = sWrapMode;
     }
 
     /// <summary>
@@ -245,28 +248,29 @@ public sealed class Texture2D : Texture, ISerializable
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Width = value["Width"].UIntValue;
-        Height = value["Height"].UIntValue;
+        uint width = value["Width"].UIntValue;
+        uint height = value["Height"].UIntValue;
         bool isMipMapped = value["IsMipMapped"].BoolValue;
-        TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-        var MinFilter = (TextureMin)value["MinFilter"].IntValue;
-        var MagFilter = (TextureMag)value["MagFilter"].IntValue;
-        var Wrap = (TextureWrap)value["Wrap"].IntValue;
+        var imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
+        var minFilter = (TextureMin)value["MinFilter"].IntValue;
+        var magFilter = (TextureMag)value["MagFilter"].IntValue;
+        var wrap = (TextureWrap)value["Wrap"].IntValue;
 
-        Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
-        object[] values = new object[] { Width, Height, false, imageFormat };
-        typeof(Texture2D).GetConstructor(param).Invoke(this, values);
+        // Take on the stored format and size in place. The serializer already ran a constructor to make
+        // this instance, so running another one over it would leak that constructor's GPU handle.
+        AdoptImageFormat(imageFormat);
+        RecreateImage(width, height);
 
         DeserializeHeader(value);
 
-        Memory<byte> memory = value["Data"].ByteArrayValue;
-        SetData(memory);
+        Memory<byte> data = value["Data"].ByteArrayValue;
+        SetData(data);
 
         if (isMipMapped)
             GenerateMipmaps();
 
-        SetTextureFilters(MinFilter, MagFilter);
-        SetWrapModes(Wrap, Wrap);
+        SetTextureFilters(minFilter, magFilter);
+        SetWrapModes(wrap, wrap);
     }
 
     #region ImageMagick integration

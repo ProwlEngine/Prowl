@@ -14,7 +14,7 @@ public abstract class Texture : EngineObject
     private protected const TextureMin DefaultMinFilter = TextureMin.Nearest, DefaultMipmapMinFilter = TextureMin.NearestMipmapLinear;
     private protected const TextureMag DefaultMagFilter = TextureMag.Nearest;
 
-    private readonly GraphicsTexture _handle;
+    private GraphicsTexture _handle;
     /// <summary>The handle for the GL Texture Object.</summary>
     public GraphicsTexture Handle { get { EnsureNotDisposed(); return _handle; } }
 
@@ -29,7 +29,7 @@ public abstract class Texture : EngineObject
     public TextureMag MagFilter { get { EnsureNotDisposed(); return _magFilter; } protected set => _magFilter = value; }
     public TextureWrap WrapMode { get { EnsureNotDisposed(); return _wrapMode; } protected set => _wrapMode = value; }
 
-    private readonly TextureImageFormat _imageFormat;
+    private TextureImageFormat _imageFormat;
     /// <summary>The format for this <see cref="Texture"/>'s image.</summary>
     public TextureImageFormat ImageFormat { get { EnsureNotDisposed(); return _imageFormat; } }
 
@@ -67,6 +67,24 @@ public abstract class Texture : EngineObject
         _minFilter = DefaultMinFilter;
         _magFilter = DefaultMagFilter;
         _wrapMode = TextureWrap.Repeat;
+    }
+
+    private protected void AdoptImageFormat(TextureImageFormat imageFormat)
+    {
+        EnsureNotDisposed();
+
+        if (!Enum.IsDefined(typeof(TextureImageFormat), imageFormat))
+            throw new FormatException("Invalid texture image format");
+
+        if (_imageFormat == imageFormat) return;
+
+        _handle.Dispose();
+        _imageFormat = imageFormat;
+        _isMipmapped = false;
+        _handle = Graphics.CreateTexture(_type, imageFormat);
+        Graphics.SetWrapS(_handle, _wrapMode);
+        Graphics.SetWrapT(_handle, _wrapMode);
+        Graphics.SetTextureFilters(_handle, _minFilter, _magFilter);
     }
 
     /// <summary>
