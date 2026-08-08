@@ -176,20 +176,37 @@ public static class TextureSpriteMeta
 {
     private const string Key = "sprite";
 
-    /// <summary>Deserializes the sprite settings from a texture's <c>.meta</c> settings compound (defaults if absent).</summary>
-    public static SpriteImportSettings ReadFrom(EchoObject? settings)
+    /// <summary>
+    /// Deserializes the sprite settings from a texture's <c>.meta</c> settings compound. An absent block
+    /// legitimately means defaults; a block that is present but unreadable is reported through
+    /// <paramref name="failed"/> so callers can refuse to write over it. Silently substituting defaults
+    /// would present the texture as having no sprites and let the next save destroy the real slicing.
+    /// </summary>
+    public static SpriteImportSettings ReadFrom(EchoObject? settings, out bool failed)
     {
+        failed = false;
         if (settings != null && settings.TryGet(Key, out EchoObject echo))
         {
             try
             {
                 var ctx = ImportHelper.CreateTrackingContext(out _);
-                return Serializer.Deserialize<SpriteImportSettings>(echo, ctx) ?? new SpriteImportSettings();
+                SpriteImportSettings? parsed = Serializer.Deserialize<SpriteImportSettings>(echo, ctx);
+                if (parsed != null) return parsed;
+
+                failed = true;
+                Prowl.Runtime.Debug.LogError("[Sprite] Sprite import settings deserialized to null. Keeping the existing block rather than replacing it with defaults.");
             }
-            catch { /* fall through to defaults */ }
+            catch (Exception ex)
+            {
+                failed = true;
+                Prowl.Runtime.Debug.LogError($"[Sprite] Failed to read sprite import settings: {ex.Message}\n{ex.StackTrace}");
+            }
         }
         return new SpriteImportSettings();
     }
+
+    /// <summary>Settings-only overload, for callers that just build from whatever is readable.</summary>
+    public static SpriteImportSettings ReadFrom(EchoObject? settings) => ReadFrom(settings, out _);
 
     /// <summary>Serializes the sprite settings into a texture's <c>.meta</c> settings compound.</summary>
     public static void WriteInto(EchoObject settings, SpriteImportSettings s)
@@ -207,21 +224,28 @@ public static class TextureSpriteMeta
                 slice.Id = Guid.NewGuid();
     }
 
-    /// <summary>Loads the sprite settings for a texture by GUID.</summary>
-    public static SpriteImportSettings Load(Guid textureGuid)
+    /// <summary>Loads the sprite settings for a texture by GUID. <paramref name="failed"/> is true when
+    /// existing settings could not be read, in which case the caller must not save over them.</summary>
+    public static SpriteImportSettings Load(Guid textureGuid, out bool failed)
     {
+        failed = false;
         try
         {
             string abs = AbsolutePath(textureGuid);
             string metaPath = MetaFile.GetMetaPath(abs);
             if (!File.Exists(metaPath)) return new SpriteImportSettings();
-            return ReadFrom(MetaFile.Read(metaPath).Settings);
+            return ReadFrom(MetaFile.Read(metaPath).Settings, out failed);
         }
-        catch
+        catch (Exception ex)
         {
+            failed = true;
+            Prowl.Runtime.Debug.LogError($"[Sprite] Could not read the meta for texture {textureGuid}: {ex.Message}\n{ex.StackTrace}");
             return new SpriteImportSettings();
         }
     }
+
+    /// <summary>Settings-only overload.</summary>
+    public static SpriteImportSettings Load(Guid textureGuid) => Load(textureGuid, out _);
 
     /// <summary>Writes the sprite settings into a texture's <c>.meta</c> and reimports it.</summary>
     public static void Save(Guid textureGuid, SpriteImportSettings s)
@@ -257,6 +281,10 @@ public sealed class SpriteEditTarget
     public SpriteImportSettings Settings = new();
     /// <summary>True when the settings differ from what's on disk (i.e. a Save &amp; Reimport is pending).</summary>
     public bool Dirty;
+
+    /// <summary>True when the texture's existing sprite settings could not be read. <see cref="Settings"/>
+    /// is then defaults that do not describe what is on disk, so saving would destroy the real slicing.</summary>
+    public bool LoadFailed;
 }
 
 /// <summary>
@@ -276,7 +304,8 @@ public static class SpriteEditRegistry
             t = new SpriteEditTarget
             {
                 TextureGuid = textureGuid,
-                Settings = TextureSpriteMeta.Load(textureGuid),
+                Settings = TextureSpriteMeta.Load(textureGuid, out bool failed),
+                LoadFailed = failed,
             };
             _targets[textureGuid] = t;
         }
@@ -295,7 +324,8 @@ public static class SpriteEditRegistry
     {
         if (_targets.TryGetValue(textureGuid, out SpriteEditTarget? t))
         {
-            t.Settings = TextureSpriteMeta.Load(textureGuid);
+            t.Settings = TextureSpriteMeta.Load(textureGuid, out bool failed);
+            t.LoadFailed = failed;
             t.Dirty = false;
         }
     }

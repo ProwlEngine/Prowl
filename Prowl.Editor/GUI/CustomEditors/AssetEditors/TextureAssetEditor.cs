@@ -143,9 +143,16 @@ public class TextureAssetEditor : AssetImporterEditor
             Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
                 () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
 
+        // The settings on screen are defaults, not what the meta actually holds, so saving would replace
+        // the real slicing with them. Say so and keep the save locked out until the meta is fixed.
+        if (spriteTarget.LoadFailed)
+            Origami.Label(paper, $"{id}_sperr",
+                $"{EditorIcons.TriangleExclamation}  This texture's sprite settings could not be read. Saving is disabled so the existing data isn't overwritten - see the console.")
+                .Show();
+
         // Save CTA - disabled until an import setting or the sprite config changes (and never in read-only,
         // e.g. when this editor is shown for a texture sub-asset). It's a raw Box, so it must check IsReadOnly.
-        bool dirty = !Origami.IsReadOnly && (_dirty || spriteTarget.Dirty);
+        bool dirty = !Origami.IsReadOnly && !spriteTarget.LoadFailed && (_dirty || spriteTarget.Dirty);
         paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
             .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
             .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
