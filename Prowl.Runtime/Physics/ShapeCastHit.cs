@@ -24,7 +24,8 @@ public struct ShapeCastHit
     public float Fraction;
 
     /// <summary>
-    /// The amount of penetration at the hit point. Only valid for overlap casts.
+    /// The amount of penetration at the hit point. Non-zero for overlap queries, and for shape casts
+    /// that were already overlapping at the start of the sweep (where <see cref="Fraction"/> is 0).
     /// </summary>
     public float Penetration;
 

@@ -522,14 +522,34 @@ public class PhysicsWorld
 
             if (hit && lambda >= 0 && lambda <= 1.0)
             {
+                float penetration = 0.0f;
+
+                // A zero normal means the shapes already overlapped at the start of the sweep, where
+                // Sweep reports lambda 0 and no direction. Recover the direction and the depth from
+                // MPR/EPA; the fraction stays 0, the depth belongs in Penetration.
                 if (normal.LengthSquared() <= 0)
                 {
-                    _ = NarrowPhase.MprEpa(
+                    lambda = 0.0f;
+
+                    bool resolved = NarrowPhase.MprEpa(
                         shape, targetShape,
                         jOrientation, targetBody.Data.Orientation,
                         jOrigin, targetBody.Data.Position,
-                        out JVector _, out JVector _, out normal, out lambda);
-                    normal = JVector.Normalize(normal);
+                        out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
+
+                    if (resolved && separation.LengthSquared() > 0)
+                    {
+                        pointA = deepestA;
+                        pointB = deepestB;
+                        normal = JVector.Normalize(separation);
+                    }
+                    else
+                    {
+                        // EPA did not converge. Report the sweep direction so the caller is still
+                        // blocked, rather than handing back a zero normal it would divide by.
+                        penetration = 0.0f;
+                        normal = jDirection;
+                    }
                 }
 
                 Collider owner = GetShapeOwner(targetShape);
@@ -537,6 +557,7 @@ public class PhysicsWorld
                 {
                     Hit = true,
                     Fraction = lambda,
+                    Penetration = penetration,
                     Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
                     Point = new Float3(pointA.X, pointA.Y, pointA.Z),
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
