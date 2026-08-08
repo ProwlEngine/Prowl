@@ -119,50 +119,11 @@ public sealed class Texture2D : Texture, ISerializable
             Graphics.GetTexImage(Handle, 0, ptr);
     }
 
+    /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
     public int GetSize()
     {
         EnsureNotDisposed();
-        int size = (int)Width * (int)Height;
-        switch (ImageFormat)
-        {
-            case TextureImageFormat.UnsignedInt:
-            case TextureImageFormat.Int:
-            case TextureImageFormat.Float:
-                return size * 4;
-            case TextureImageFormat.UnsignedInt2:
-            case TextureImageFormat.Int2:
-            case TextureImageFormat.Float2:
-                return size * 4 * 2;
-            case TextureImageFormat.UnsignedInt3:
-            case TextureImageFormat.Int3:
-            case TextureImageFormat.Float3:
-                return size * 4 * 3;
-            case TextureImageFormat.UnsignedInt4:
-            case TextureImageFormat.Int4:
-            case TextureImageFormat.Float4:
-                return size * 4 * 4;
-            case TextureImageFormat.Depth16f:
-                return size * 2;
-            case TextureImageFormat.Depth24f:
-                return size * 3;
-            case TextureImageFormat.Depth32f:
-                return size * 4;
-
-            case TextureImageFormat.Short:
-            case TextureImageFormat.UnsignedShort:
-                return size * 1 * 2;
-            case TextureImageFormat.Short2:
-            case TextureImageFormat.UnsignedShort2:
-                return size * 2 * 2;
-            case TextureImageFormat.Short3:
-            case TextureImageFormat.UnsignedShort3:
-                return size * 3 * 2;
-            case TextureImageFormat.Short4:
-            case TextureImageFormat.UnsignedShort4:
-                return size * 4 * 2;
-
-            default: return size * 4;
-        }
+        return (int)Width * (int)Height * GetBytesPerPixel(ImageFormat);
     }
 
     /// <summary>
