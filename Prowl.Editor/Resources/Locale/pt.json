@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Excluir Assets",
   "dialog.unsaved_prefab": "Alteracoes nao salvas no Prefab",
   "dialog.unsaved_prefab_body": "\"{{name}}\" tem alteracoes nao salvas. Salvar antes de trocar?",
+  "dialog.unapplied_settings": "Configuracoes de importacao nao aplicadas",
+  "dialog.unapplied_settings_body": "\"{{name}}\" tem configuracoes de importacao nao aplicadas. Aplicar ou reverter para o disco?",
+  "dialog.apply": "Aplicar",
+  "dialog.revert": "Reverter",
 
   "hierarchy.delete": "Excluir",
   "hierarchy.duplicate": "Duplicar",

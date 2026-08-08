@@ -26,9 +26,45 @@ public class MaterialAssetEditor : AssetImporterEditor
     // per-instance to have a behaviour more coherent with user expectations
     private static readonly Dictionary<Guid, (Material Material, AssetEntry Entry)> _pending = new();
 
+    /// <summary>Used only to reach the instance members from the global save hook.</summary>
+    private static readonly MaterialAssetEditor s_saveHook = new();
+
     static MaterialAssetEditor()
     {
-        SaveManager.OnSave += () => SavePending(showToast: false);
+        SaveManager.OnSave += () => s_saveHook.SavePending(showToast: false);
+    }
+
+    // ============================================================
+    // Pending changes
+    // ============================================================
+    // A material is edited live, so the scene shows every tweak as it happens. What the base class
+    // measures is whether the live object still matches the .mat file on disk.
+
+    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
+        => asset is Material material && material.IsValid()
+            ? Serializer.Serialize(typeof(Material), material)
+            : null;
+
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
+    {
+        if (asset is not Material material || material.IsNotValid()) return false;
+        if (!Write(material, entry)) return false; // a failed write was logged and stays pending
+
+        _pending.Remove(entry.Guid);
+        EditorAssetBackend.Instance?.Reimport(entry.Guid);
+        return true;
+    }
+
+    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
+    {
+        if (asset is not Material material || material.IsNotValid()) return;
+
+        // Restored onto the live instance rather than swapped for a fresh one, so everything already
+        // referencing this material shows the revert immediately and keeps its GPU state.
+        Serializer.DeserializeInto(baseline, material);
+
+        _pending.Remove(entry.Guid);
+        _preview.Invalidate();
     }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
@@ -76,8 +112,9 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
-        // Save button writes material to disk then reimports
-        if (_pending.ContainsKey(entry.Guid))
+        // Save button writes material to disk then reimports. Shown when the live material actually
+        // differs from its file, not merely because it was touched at some point.
+        if (HasPendingChanges(entry, asset))
         {
             Origami.Separator(paper, $"{id}_sep_save").Show();
             Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material",
@@ -100,7 +137,7 @@ public class MaterialAssetEditor : AssetImporterEditor
     /// <summary>
     /// Write every pending material to disk.
     /// </summary>
-    private static string? SavePending(bool showToast)
+    private string? SavePending(bool showToast)
     {
         if (_pending.Count == 0) return null;
 
@@ -120,15 +157,18 @@ public class MaterialAssetEditor : AssetImporterEditor
                 continue;
             }
 
+            // Touched at some point but since put back to what the file already holds.
+            if (!HasPendingChanges(entry, material))
+            {
+                _pending.Remove(guid);
+                continue;
+            }
+
+            ApplyPendingChanges(entry, material);
+
             // A failed write stays pending (and was logged) so the next save retries it rather than
             // silently discarding the user's edits.
-            if (!Write(material, entry)) continue;
-
-            _pending.Remove(guid);
-
-            // Reimport refreshes the cache + thumbnail and replaces the loaded instance, so it has
-            // to run after this material leaves the pending set
-            db.Reimport(entry.Guid);
+            if (_pending.ContainsKey(guid)) continue;
 
             names.Add(Path.GetFileNameWithoutExtension(entry.Path));
         }

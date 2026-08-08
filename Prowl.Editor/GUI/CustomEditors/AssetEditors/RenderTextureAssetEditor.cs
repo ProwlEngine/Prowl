@@ -57,7 +57,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
     protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
         => s_edits.TryGetValue(entry.Guid, out Description? d) ? Serializer.Serialize(typeof(Description), d) : null;
 
-    protected override void ApplyState(AssetEntry entry, EngineObject? asset) => Save(entry);
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset) => Save(entry);
 
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
     {
@@ -125,7 +125,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             });
     }
 
-    private void Save(AssetEntry entry)
+    private bool Save(AssetEntry entry)
     {
         try
         {
@@ -141,10 +141,12 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             described.Dispose();
 
             EditorAssetBackend.Instance?.Reimport(entry.Guid);
+            return true;
         }
         catch (Exception ex)
         {
             Debug.LogError($"Failed to save render texture '{entry.Path}': {ex.Message}");
+            return false;
         }
     }
 }

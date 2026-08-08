@@ -34,6 +34,10 @@
   "dialog.delete_assets": "删除资产",
   "dialog.unsaved_prefab": "未保存的Prefab更改",
   "dialog.unsaved_prefab_body": "\"{{name}}\" 有未保存的更改。切换前是否保存？",
+  "dialog.unapplied_settings": "未应用的导入设置",
+  "dialog.unapplied_settings_body": "\"{{name}}\" 有未应用的导入设置。要应用还是恢复为磁盘上的内容？",
+  "dialog.apply": "应用",
+  "dialog.revert": "恢复",
 
   "hierarchy.delete": "删除",
   "hierarchy.duplicate": "复制",

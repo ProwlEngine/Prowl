@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Usun assety",
   "dialog.unsaved_prefab": "Niezapisane zmiany Prefabu",
   "dialog.unsaved_prefab_body": "\"{{name}}\" ma niezapisane zmiany. Zapisac przed przelaczeniem?",
+  "dialog.unapplied_settings": "Niezastosowane ustawienia importu",
+  "dialog.unapplied_settings_body": "\"{{name}}\" ma niezastosowane ustawienia importu. Zastosowac je czy przywrocic zapisane?",
+  "dialog.apply": "Zastosuj",
+  "dialog.revert": "Przywroc",
 
   "hierarchy.delete": "Usun",
   "hierarchy.duplicate": "Duplikuj",

@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Varliklari Sil",
   "dialog.unsaved_prefab": "Kaydedilmemis Prefab Degisiklikleri",
   "dialog.unsaved_prefab_body": "\"{{name}}\" kaydedilmemis degisiklikler iceriyor. Degistirmeden once kaydedilsin mi?",
+  "dialog.unapplied_settings": "Uygulanmamis Ice Aktarma Ayarlari",
+  "dialog.unapplied_settings_body": "\"{{name}}\" uygulanmamis ice aktarma ayarlarina sahip. Uygulansin mi yoksa dosyadaki haline mi donulsun?",
+  "dialog.apply": "Uygula",
+  "dialog.revert": "Geri Al",
 
   "hierarchy.delete": "Sil",
   "hierarchy.duplicate": "Cogalt",

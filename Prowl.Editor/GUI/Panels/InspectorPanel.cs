@@ -72,6 +72,44 @@ public class InspectorPanel : DockPanel
         }
     }
 
+    // The asset editor drawn last frame, so navigating away can offer to apply what it holds. Kept as a
+    // triple because Apply and Revert need the same entry and asset the editor was drawn against.
+    private AssetImporterEditor? _openEditor;
+    private AssetEntry? _openEntry;
+    private EngineObject? _openAsset;
+
+    /// <summary>The asset GUID <paramref name="active"/> inspects, or empty when it is not an asset.</summary>
+    private static Guid InspectedAssetGuid(object? active)
+    {
+        if (active is not ContentItem item || item.IsFolder) return Guid.Empty;
+        if (item.Guid != Guid.Empty) return item.Guid;
+        return EditorAssetBackend.Instance?.GetEntry(item.RelativePath)?.Guid ?? Guid.Empty;
+    }
+
+    /// <summary>
+    /// Raises the Apply/Revert prompt when the inspector moves off an asset whose editor still holds
+    /// unwritten changes. Whether anything is pending is measured by diffing the editor's state against
+    /// what was last written, so this cannot fire on an asset that was merely looked at.
+    /// </summary>
+    private void PromptIfLeavingUnappliedEdits(Guid nowInspecting)
+    {
+        if (_openEditor == null || _openEntry == null) return;
+        if (_openEntry.Guid == nowInspecting) return; // still on it
+
+        AssetImporterEditor editor = _openEditor;
+        AssetEntry entry = _openEntry;
+        EngineObject? asset = _openAsset;
+        _openEditor = null; _openEntry = null; _openAsset = null;
+
+        if (!editor.HasPendingChanges(entry, asset)) return;
+
+        string name = Path.GetFileName(entry.Path);
+        Origami.Dialog(Loc.Get("dialog.unapplied_settings"),
+                p => Origami.Label(p, "insp_unapplied_msg", Loc.Get("dialog.unapplied_settings_body", new { name })).Show())
+            .Button(Loc.Get("dialog.apply"), () => { editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
+            .Button(Loc.Get("dialog.revert"), () => { editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
+    }
+
     private void OnSelectionChanged()
     {
         var active = Selection.ActiveObject;
@@ -113,6 +151,10 @@ public class InspectorPanel : DockPanel
                 DrawEmpty(paper, font, width);
                 return;
             }
+
+            // Leaving an asset whose import settings were edited but not applied: offer to write them
+            // or put them back, rather than carrying them silently or dropping them.
+            PromptIfLeavingUnappliedEdits(InspectedAssetGuid(active));
 
             // Draw based on type GameObject has its own header
             if (active is GameObject gameObject)
@@ -304,6 +346,12 @@ public class InspectorPanel : DockPanel
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
+
+                // Remembered so moving off this asset can still reach its editor to apply or revert.
+                _openEditor = assetEditor;
+                _openEntry = entry;
+                _openAsset = asset;
+
                 try { assetEditor.OnGUI(paper, "insp_asset_editor", entry, asset); }
                 catch (Exception ex)
                 {

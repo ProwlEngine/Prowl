@@ -22,12 +22,18 @@ namespace Prowl.Editor.Inspector;
 /// <see cref="PluginAsset"/> the importer produces.
 /// </summary>
 [CustomAssetEditor(typeof(PluginAsset))]
-public class PluginAssetEditor : AssetImporterEditor
+public class PluginAssetEditor : ImportSettingsEditor
 {
     private enum PluginCpu { AnyCPU, x64, arm64 }
 
-    private EchoObject? _settings;
-    private Guid _forGuid;
+    /// <summary>Which platforms a plugin ships to feeds the build, so a change has to reach the
+    /// compiler as well as the asset database.</summary>
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
+    {
+        if (!base.ApplyState(entry, asset)) return false;
+        ScriptAssemblyManager.RequestRecompile();
+        return true;
+    }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -44,18 +50,8 @@ public class PluginAssetEditor : AssetImporterEditor
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.PuzzlePiece}  {(isNative ? "Native" : "Managed")} Plugin").Show();
         Origami.Label(paper, $"{id}_file", $"File: {Path.GetFileName(absPath)}").Show();
 
-        if (_settings == null || _forGuid != entry.Guid)
-        {
-            var meta = MetaFile.Read(metaPath);
-            _settings = meta.Settings ?? EchoObject.NewCompound();
-            var defaults = new Importers.PluginImporter().DefaultSettings();
-            if (defaults != null)
-                foreach (var kvp in defaults.Tags)
-                    if (!_settings.TryGet(kvp.Key, out _))
-                        _settings[kvp.Key] = kvp.Value.Clone();
-            _forGuid = entry.Guid;
-        }
-        var s = _settings;
+        // Read once and kept live per asset by the base, defaults already merged in.
+        EchoObject s = Settings(entry);
 
         paper.Box($"{id}_sp1").Height(6);
         Origami.Header(paper, $"{id}_settings_hdr", $"{EditorIcons.Gear}  Plugin Settings").Underline().Show();
@@ -98,15 +94,9 @@ public class PluginAssetEditor : AssetImporterEditor
         }
 
         paper.Box($"{id}_sp3").Height(8);
-        Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport", () =>
-        {
-            var meta = MetaFile.Read(metaPath);
-            meta.Settings = s;
-            MetaFile.Write(metaPath, meta);
-            _settings = null;
-            EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            ScriptAssemblyManager.RequestRecompile();
-        }).Width(150).Show();
+        if (HasPendingChanges(entry, asset))
+            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport",
+                () => ApplyPendingChanges(entry, asset)).Width(150).Show();
     }
 
     private static void PlatformToggle(Paper paper, string id, string label, EchoObject s, string key)

@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Удалить ассеты",
   "dialog.unsaved_prefab": "Несохранённые изменения Prefab",
   "dialog.unsaved_prefab_body": "\"{{name}}\" содержит несохранённые изменения. Сохранить перед переключением?",
+  "dialog.unapplied_settings": "Непримененные настройки импорта",
+  "dialog.unapplied_settings_body": "\"{{name}}\" содержит непримененные настройки импорта. Применить их или вернуть сохраненные?",
+  "dialog.apply": "Применить",
+  "dialog.revert": "Вернуть",
 
   "hierarchy.delete": "Удалить",
   "hierarchy.duplicate": "Дублировать",
