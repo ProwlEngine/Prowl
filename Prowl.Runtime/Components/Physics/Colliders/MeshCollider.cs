@@ -108,13 +108,17 @@ public sealed class MeshCollider : Collider
             vertices[i] = new JVector(v.X, v.Y, v.Z);
         }
 
+        // A mirrored transform reverses winding, which would flip every triangle normal and make the
+        // one-sided triangles solid from the wrong side. Swap two indices back to compensate.
+        bool mirrored = Float4x4.Determinant(transform) < 0.0f;
+
         ReadOnlySpan<TriangleMesh.Triangle> sourceTriangles = source.Indices;
         var indices = new int[sourceTriangles.Length * 3];
         for (int i = 0; i < sourceTriangles.Length; i++)
         {
             indices[i * 3 + 0] = sourceTriangles[i].IndexA;
-            indices[i * 3 + 1] = sourceTriangles[i].IndexB;
-            indices[i * 3 + 2] = sourceTriangles[i].IndexC;
+            indices[i * 3 + 1] = mirrored ? sourceTriangles[i].IndexC : sourceTriangles[i].IndexB;
+            indices[i * 3 + 2] = mirrored ? sourceTriangles[i].IndexB : sourceTriangles[i].IndexC;
         }
 
         return new TriangleMesh(vertices, indices, true);

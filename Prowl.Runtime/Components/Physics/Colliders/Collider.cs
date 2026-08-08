@@ -224,7 +224,16 @@ public abstract class Collider : MonoBehaviour
         for (Transform current = Transform; current != null; current = current.Parent)
             scale *= current.LocalScale;
 
-        return Maths.Max(scale, Float3.One * 0.05f);
+        return new Float3(ClampScale(scale.X), ClampScale(scale.Y), ClampScale(scale.Z));
+    }
+
+    // Clamps magnitude rather than value, so a mirrored (negative) axis stays mirrored instead of
+    // flipping to a tiny positive one.
+    private static float ClampScale(float value)
+    {
+        const float minScale = 1e-4f;
+        if (value <= -minScale || value >= minScale) return value;
+        return value < 0.0f ? -minScale : minScale;
     }
 
     /// <summary>
