@@ -56,21 +56,23 @@ public struct RaycastHit
 
     internal void SetFromJitterResult(PhysicsWorld world, DynamicTree.RayCastResult result, Float3 origin, Float3 direction)
     {
+        Hit = true;
+        Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        Distance = result.Lambda;
+        Point = origin + (direction * Distance);
+
         Shape = result.Entity as RigidBodyShape;
         if (Shape == null)
         {
-            Hit = false;
+            // Terrain has no shape or body to report, only the GameObject it was authored on.
+            Transform = world.GetTerrainTransform(result.Entity);
             return;
         }
 
         var userData = Shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
 
-        Hit = true;
         Rigidbody = userData?.Rigidbody;
         Collider = world.GetShapeOwner(Shape);
         Transform = PhysicsWorld.ResolveHitTransform(Rigidbody, Collider);
-        Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
-        Distance = result.Lambda;
-        Point = origin + (direction * Distance);
     }
 }

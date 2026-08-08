@@ -128,6 +128,21 @@ public class PhysicsWorld
     }
 
     /// <summary>
+    /// The Transform of the terrain owning the given proxy, or null if the proxy is not registered
+    /// terrain. Terrain has no shape or body, so this is the only way a hit can name its GameObject.
+    /// </summary>
+    internal Transform GetTerrainTransform(IDynamicTreeProxy proxy)
+    {
+        if (proxy is TerrainHeightmapProxy terrain &&
+            _terrainProxies.TryGetValue(terrain, out TerrainInfo info) &&
+            info.HeightProvider is MonoBehaviour owner &&
+            owner.IsValid() && owner.GameObject.IsValid())
+            return owner.GameObject.Transform;
+
+        return null;
+    }
+
+    /// <summary>
     /// The Transform a query hit should report: the rigidbody's when there is one, otherwise the
     /// collider's own.
     /// </summary>
