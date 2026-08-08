@@ -589,17 +589,60 @@ public class PhysicsTests : RuntimeTestBase
 
         var top = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: true);
 
-        PhysicsWorld.IgnoreCollisionBetween(top, floorRb);
-        try
-        {
-            Tick(scene, 180);
+        scene.Physics.IgnoreCollisionBetween(top, floorRb);
 
-            Assert.True(top.Transform.Position.Y < 0,
-                $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
-        }
-        finally
-        {
-            PhysicsWorld.EnableCollisionBetween(top, floorRb);
-        }
+        Tick(scene, 180);
+
+        Assert.True(top.Transform.Position.Y < 0,
+            $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void IgnoredCollisions_AreScopedToTheirOwnWorld()
+    {
+        var sceneA = CreatePhysicsScene();
+        var floorA = CreateGameObject("Floor");
+        var floorRbA = floorA.AddComponent<Rigidbody3D>();
+        floorRbA.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorA.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneA.Add(floorA);
+
+        var boxA = AddDynamicBox(sceneA, new Float3(0, 3, 0), gravity: true);
+        sceneA.Physics.IgnoreCollisionBetween(boxA, floorRbA);
+
+        // A second world must not inherit the first world's ignore pairs.
+        var sceneB = CreatePhysicsScene();
+        var floorB = CreateGameObject("Floor");
+        var floorRbB = floorB.AddComponent<Rigidbody3D>();
+        floorRbB.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorB.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneB.Add(floorB);
+
+        var boxB = AddDynamicBox(sceneB, new Float3(0, 3, 0), gravity: true);
+
+        Tick(sceneB, 180);
+
+        Assert.True(boxB.Transform.Position.Y > 0,
+            $"Pair ignored in another world should still collide here; body was at y={boxB.Transform.Position.Y}");
+    }
+
+    [Theory]
+    [InlineData(float.NaN, 0f, 0f)]
+    [InlineData(0f, float.PositiveInfinity, 0f)]
+    public void Queries_WithNonFiniteInputs_ReportNoHitInsteadOfThrowing(float x, float y, float z)
+    {
+        var scene = CreatePhysicsScene();
+        AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+
+        var bad = new Float3(x, y, z);
+        var hits = new List<ShapeCastHit>();
+
+        Assert.False(scene.Physics.Raycast(bad, new Float3(0, -1, 0), 10f, out _));
+        Assert.False(scene.Physics.Raycast(Float3.Zero, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.SphereCastAll(bad, 0.5f, new Float3(0, -1, 0), 10f, hits));
+        Assert.False(scene.Physics.SphereCast(Float3.Zero, 0.5f, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.OverlapSphere(bad, 0.5f, hits));
+        Assert.False(scene.Physics.CheckSphere(bad, 0.5f));
     }
 }

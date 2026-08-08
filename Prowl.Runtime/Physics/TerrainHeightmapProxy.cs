@@ -15,29 +15,26 @@ namespace Prowl.Runtime;
 public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
 {
     private readonly ITerrainHeightProvider _heightProvider;
-    private readonly JBoundingBox _worldBoundingBox;
-    private readonly JVector _terrainOrigin;
-    private readonly float _cellSize;
 
     public int SetIndex { get; set; } = -1;
     public int NodePtr { get; set; }
 
     public JVector Velocity => JVector.Zero;
-    public JBoundingBox WorldBoundingBox => _worldBoundingBox;
+
+    /// <summary>
+    /// Read live from the provider, since the terrain can be moved or scaled after registration.
+    /// The dynamic tree caches this, so <see cref="PhysicsWorld.RefreshTerrain"/> must be called when
+    /// it changes.
+    /// </summary>
+    public JBoundingBox WorldBoundingBox => _heightProvider.WorldBounds;
 
     /// <summary>
     /// Creates a new terrain heightmap proxy.
     /// </summary>
-    /// <param name="heightProvider">Provider for heightmap data.</param>
-    /// <param name="boundingBox">World-space bounding box of the terrain.</param>
-    /// <param name="terrainOrigin">World-space origin (bottom-left corner) of the terrain.</param>
-    /// <param name="cellSize">World-space size of each heightmap cell.</param>
-    public TerrainHeightmapProxy(ITerrainHeightProvider heightProvider, JBoundingBox boundingBox, JVector terrainOrigin, float cellSize)
+    /// <param name="heightProvider">Provider for heightmap data and grid placement.</param>
+    public TerrainHeightmapProxy(ITerrainHeightProvider heightProvider)
     {
         _heightProvider = heightProvider;
-        _worldBoundingBox = boundingBox;
-        _terrainOrigin = terrainOrigin;
-        _cellSize = cellSize;
     }
 
     /// <summary>
@@ -48,17 +45,27 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
     {
         const float maxDistance = 10000.0f;
 
+        JVector terrainOrigin = _heightProvider.Origin;
+        float cellSize = _heightProvider.CellSize;
+
+        if (cellSize <= 0.0f)
+        {
+            normal = JVector.Zero;
+            lambda = 0.0f;
+            return false;
+        }
+
         // Transform ray origin from world space to grid space
         JVector gridOrigin;
-        gridOrigin.X = (origin.X - _terrainOrigin.X) / _cellSize;
-        gridOrigin.Y = (origin.Y - _terrainOrigin.Y) / _cellSize;
-        gridOrigin.Z = (origin.Z - _terrainOrigin.Z) / _cellSize;
+        gridOrigin.X = (origin.X - terrainOrigin.X) / cellSize;
+        gridOrigin.Y = (origin.Y - terrainOrigin.Y) / cellSize;
+        gridOrigin.Z = (origin.Z - terrainOrigin.Z) / cellSize;
 
         // Direction doesn't need position offset, only scale
         JVector gridDirection;
-        gridDirection.X = direction.X / _cellSize;
-        gridDirection.Y = direction.Y / _cellSize;
-        gridDirection.Z = direction.Z / _cellSize;
+        gridDirection.X = direction.X / cellSize;
+        gridDirection.Y = direction.Y / cellSize;
+        gridDirection.Z = direction.Z / cellSize;
 
         // Only traverse on the XZ plane
         float dirX = gridDirection.X;
@@ -98,8 +105,8 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
 
         while (t <= maxDistance)
         {
-            // Check if we are out of bounds
-            if (!_heightProvider.IsValidCell(x, z))
+            // Skip cells that are out of bounds or punched out as holes
+            if (!_heightProvider.IsValidCell(x, z) || _heightProvider.IsCellHole(x, z))
                 goto continue_walk;
 
             // Check this quad
@@ -109,10 +116,10 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
                 _heightProvider.TryGetHeight(x + 0, z + 1, out float h01))
             {
                 // Convert grid coordinates to world coordinates
-                var a = new JVector((x + 0) * _cellSize + _terrainOrigin.X, h00, (z + 0) * _cellSize + _terrainOrigin.Z);
-                var b = new JVector((x + 1) * _cellSize + _terrainOrigin.X, h10, (z + 0) * _cellSize + _terrainOrigin.Z);
-                var c = new JVector((x + 1) * _cellSize + _terrainOrigin.X, h11, (z + 1) * _cellSize + _terrainOrigin.Z);
-                var d = new JVector((x + 0) * _cellSize + _terrainOrigin.X, h01, (z + 1) * _cellSize + _terrainOrigin.Z);
+                var a = new JVector((x + 0) * cellSize + terrainOrigin.X, h00, (z + 0) * cellSize + terrainOrigin.Z);
+                var b = new JVector((x + 1) * cellSize + terrainOrigin.X, h10, (z + 0) * cellSize + terrainOrigin.Z);
+                var c = new JVector((x + 1) * cellSize + terrainOrigin.X, h11, (z + 1) * cellSize + terrainOrigin.Z);
+                var d = new JVector((x + 0) * cellSize + terrainOrigin.X, h01, (z + 1) * cellSize + terrainOrigin.Z);
 
                 //  a ----- b
                 //  | \     |
@@ -203,4 +210,13 @@ public interface ITerrainHeightProvider
     /// Gets the height (depth) of the heightmap in grid cells.
     /// </summary>
     int Height { get; }
+
+    /// <summary>World-space position of grid sample (0,0). Read per query, so the terrain may move.</summary>
+    JVector Origin { get; }
+
+    /// <summary>World-space spacing between grid samples. Read per query, so the terrain may be scaled.</summary>
+    float CellSize { get; }
+
+    /// <summary>World-space bounds enclosing the terrain at its full possible height range.</summary>
+    JBoundingBox WorldBounds { get; }
 }

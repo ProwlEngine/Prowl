@@ -94,8 +94,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
-        if (data.Length < boxWidth * boxHeight * boxDepth)
-            throw new ArgumentException("Not enough voxel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)boxWidth * boxHeight * boxDepth * GetBytesPerPixel(ImageFormat), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
@@ -130,59 +129,17 @@ public sealed class Texture3D : Texture, ISerializable
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureNotDisposed();
-        if (data.Length < Width * Height * Depth)
-            throw new ArgumentException("Insufficient space to store the requested voxel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.GetTexImage(Handle, 0, ptr);
     }
 
+    /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
     public int GetSize()
     {
         EnsureNotDisposed();
-        int size = (int)Width * (int)Height * (int)Depth;
-        switch (ImageFormat)
-        {
-            case TextureImageFormat.Byte:
-                return size * 1;
-            case TextureImageFormat.UnsignedInt:
-            case TextureImageFormat.Int:
-            case TextureImageFormat.Float:
-                return size * 4;
-            case TextureImageFormat.UnsignedInt2:
-            case TextureImageFormat.Int2:
-            case TextureImageFormat.Float2:
-                return size * 4 * 2;
-            case TextureImageFormat.UnsignedInt3:
-            case TextureImageFormat.Int3:
-            case TextureImageFormat.Float3:
-                return size * 4 * 3;
-            case TextureImageFormat.UnsignedInt4:
-            case TextureImageFormat.Int4:
-            case TextureImageFormat.Float4:
-                return size * 4 * 4;
-            case TextureImageFormat.Depth16f:
-                return size * 2;
-            case TextureImageFormat.Depth24f:
-                return size * 3;
-            case TextureImageFormat.Depth32f:
-                return size * 4;
-
-            case TextureImageFormat.Short:
-            case TextureImageFormat.UnsignedShort:
-                return size * 1 * 2;
-            case TextureImageFormat.Short2:
-            case TextureImageFormat.UnsignedShort2:
-                return size * 2 * 2;
-            case TextureImageFormat.Short3:
-            case TextureImageFormat.UnsignedShort3:
-                return size * 3 * 2;
-            case TextureImageFormat.Short4:
-            case TextureImageFormat.UnsignedShort4:
-                return size * 4 * 2;
-
-            default: return size * 4;
-        }
+        return (int)Width * (int)Height * (int)Depth * GetBytesPerPixel(ImageFormat);
     }
 
     /// <summary>
@@ -228,6 +185,18 @@ public sealed class Texture3D : Texture, ISerializable
 
         if (depth <= 0 || depth > Graphics.MaxTextureSize)
             throw new ArgumentOutOfRangeException(nameof(depth), depth, nameof(depth) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + "]");
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="Texture.GetBytesPerPixel"/> bytes per voxel, so a byte buffer
+    /// sized one-per-voxel for an RGBA texture is a quarter of what TexSubImage3D goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     private void ValidateBoxOperation(int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)

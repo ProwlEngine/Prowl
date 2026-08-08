@@ -897,11 +897,11 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
 
+        _dispatcher.RunFixedUpdate();
+
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
         catch (Exception ex) { Debug.LogError($"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
-
-        _dispatcher.RunFixedUpdate();
 
         Flush();
     }

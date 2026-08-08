@@ -170,6 +170,7 @@ public class InspectorNameAttributeHandler : OrigamiUI.AttributeHandler
     }
 }
 
+
 /// <summary>[ReadOnly] - makes the field non-editable.</summary>
 public class ReadOnlyAttributeHandler : OrigamiUI.AttributeHandler
 {

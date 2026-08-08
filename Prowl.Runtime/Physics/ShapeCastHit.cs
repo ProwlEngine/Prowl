@@ -24,7 +24,8 @@ public struct ShapeCastHit
     public float Fraction;
 
     /// <summary>
-    /// The amount of penetration at the hit point. Only valid for overlap casts.
+    /// The amount of penetration at the hit point. Non-zero for overlap queries, and for shape casts
+    /// that were already overlapping at the start of the sweep (where <see cref="Fraction"/> is 0).
     /// </summary>
     public float Penetration;
 
@@ -54,7 +55,13 @@ public struct ShapeCastHit
     public RigidBodyShape Shape;
 
     /// <summary>
-    /// The Transform of the rigidbody that was hit.
+    /// The Collider that was hit. Null for hits that no Collider owns (e.g. terrain).
+    /// </summary>
+    public Collider Collider;
+
+    /// <summary>
+    /// The Transform of the rigidbody that was hit, or of the collider itself when the hit belongs to
+    /// static geometry (which shares one body per layer and so cannot identify a GameObject).
     /// </summary>
     public Transform Transform;
 

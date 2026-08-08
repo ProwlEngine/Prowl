@@ -76,8 +76,7 @@ public sealed class Texture2D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
-        if (data.Length < rectWidth * rectHeight)
-            throw new ArgumentException("Not enough pixel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * GetBytesPerPixel(ImageFormat), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
@@ -112,57 +111,17 @@ public sealed class Texture2D : Texture, ISerializable
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureNotDisposed();
-        if (data.Length < Width * Height)
-            throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.GetTexImage(Handle, 0, ptr);
     }
 
+    /// <summary>Bytes needed to hold this texture's full image, and so the size of a readback buffer.</summary>
     public int GetSize()
     {
         EnsureNotDisposed();
-        int size = (int)Width * (int)Height;
-        switch (ImageFormat)
-        {
-            case TextureImageFormat.UnsignedInt:
-            case TextureImageFormat.Int:
-            case TextureImageFormat.Float:
-                return size * 4;
-            case TextureImageFormat.UnsignedInt2:
-            case TextureImageFormat.Int2:
-            case TextureImageFormat.Float2:
-                return size * 4 * 2;
-            case TextureImageFormat.UnsignedInt3:
-            case TextureImageFormat.Int3:
-            case TextureImageFormat.Float3:
-                return size * 4 * 3;
-            case TextureImageFormat.UnsignedInt4:
-            case TextureImageFormat.Int4:
-            case TextureImageFormat.Float4:
-                return size * 4 * 4;
-            case TextureImageFormat.Depth16f:
-                return size * 2;
-            case TextureImageFormat.Depth24f:
-                return size * 3;
-            case TextureImageFormat.Depth32f:
-                return size * 4;
-
-            case TextureImageFormat.Short:
-            case TextureImageFormat.UnsignedShort:
-                return size * 1 * 2;
-            case TextureImageFormat.Short2:
-            case TextureImageFormat.UnsignedShort2:
-                return size * 2 * 2;
-            case TextureImageFormat.Short3:
-            case TextureImageFormat.UnsignedShort3:
-                return size * 3 * 2;
-            case TextureImageFormat.Short4:
-            case TextureImageFormat.UnsignedShort4:
-                return size * 4 * 2;
-
-            default: return size * 4;
-        }
+        return (int)Width * (int)Height * GetBytesPerPixel(ImageFormat);
     }
 
     /// <summary>
@@ -175,6 +134,9 @@ public sealed class Texture2D : Texture, ISerializable
         EnsureNotDisposed();
         Graphics.SetWrapS(Handle, sWrapMode);
         Graphics.SetWrapT(Handle, tWrapMode);
+        // One field tracks both axes (every caller passes the same mode for each). Without this the
+        // property keeps reporting the constructor's default, and Serialize writes that stale value.
+        WrapMode = sWrapMode;
     }
 
     /// <summary>
@@ -199,6 +161,18 @@ public sealed class Texture2D : Texture, ISerializable
         Height = height;
 
         Graphics.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="Texture.GetBytesPerPixel"/> bytes per texel, so a byte buffer
+    /// sized one-per-texel for an RGBA texture is a quarter of what TexSubImage2D goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     private void ValidateTextureSize(uint width, uint height)
@@ -245,28 +219,29 @@ public sealed class Texture2D : Texture, ISerializable
 
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
-        Width = value["Width"].UIntValue;
-        Height = value["Height"].UIntValue;
+        uint width = value["Width"].UIntValue;
+        uint height = value["Height"].UIntValue;
         bool isMipMapped = value["IsMipMapped"].BoolValue;
-        TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-        var MinFilter = (TextureMin)value["MinFilter"].IntValue;
-        var MagFilter = (TextureMag)value["MagFilter"].IntValue;
-        var Wrap = (TextureWrap)value["Wrap"].IntValue;
+        var imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
+        var minFilter = (TextureMin)value["MinFilter"].IntValue;
+        var magFilter = (TextureMag)value["MagFilter"].IntValue;
+        var wrap = (TextureWrap)value["Wrap"].IntValue;
 
-        Type[] param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
-        object[] values = new object[] { Width, Height, false, imageFormat };
-        typeof(Texture2D).GetConstructor(param).Invoke(this, values);
+        // Take on the stored format and size in place. The serializer already ran a constructor to make
+        // this instance, so running another one over it would leak that constructor's GPU handle.
+        AdoptImageFormat(imageFormat);
+        RecreateImage(width, height);
 
         DeserializeHeader(value);
 
-        Memory<byte> memory = value["Data"].ByteArrayValue;
-        SetData(memory);
+        Memory<byte> data = value["Data"].ByteArrayValue;
+        SetData(data);
 
         if (isMipMapped)
             GenerateMipmaps();
 
-        SetTextureFilters(MinFilter, MagFilter);
-        SetWrapModes(Wrap, Wrap);
+        SetTextureFilters(minFilter, magFilter);
+        SetWrapModes(wrap, wrap);
     }
 
     #region ImageMagick integration

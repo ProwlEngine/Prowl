@@ -24,12 +24,49 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(RenderTexture))]
 public class RenderTextureAssetEditor : AssetImporterEditor
 {
-    private int _width;
-    private int _height;
-    private bool _hasDepth;
-    private List<TextureImageFormat> _formats = [];
-    private Guid _forGuid;
-    private bool _dirty;
+    /// <summary>What the inspector is authoring. Serialized to Echo for the base class to diff against
+    /// the last written version, which is what decides whether anything needs applying.</summary>
+    private sealed class Description
+    {
+        public int Width = 1;
+        public int Height = 1;
+        public bool HasDepth;
+        public List<TextureImageFormat> Formats = [];
+    }
+
+    /// <summary>Per asset, so edits survive looking at something else and coming back. Per-instance
+    /// state would be one slot that the next selection overwrites.</summary>
+    private static readonly Dictionary<Guid, Description> s_edits = new();
+
+    private Description Edits(AssetEntry entry, RenderTexture rt)
+    {
+        if (s_edits.TryGetValue(entry.Guid, out Description? existing)) return existing;
+
+        var seeded = new Description
+        {
+            Width = rt.Width,
+            Height = rt.Height,
+            HasDepth = rt.HasDepthAttachment,
+            Formats = [.. rt.TextureFormats],
+        };
+        s_edits[entry.Guid] = seeded;
+        Rebaseline(entry, rt); // what was imported is the clean state
+        return seeded;
+    }
+
+    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
+        => s_edits.TryGetValue(entry.Guid, out Description? d) ? Serializer.Serialize(typeof(Description), d) : null;
+
+    protected override void ApplyState(AssetEntry entry, EngineObject? asset) => Save(entry);
+
+    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
+    {
+        if (Serializer.Deserialize<Description>(baseline) is Description restored)
+            s_edits[entry.Guid] = restored;
+    }
+
+    /// <summary>Forgets every buffered edit. GUIDs only mean anything within one project.</summary>
+    internal static void ClearEdits() => s_edits.Clear();
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -37,51 +74,43 @@ public class RenderTextureAssetEditor : AssetImporterEditor
         if (font == null || Project.Current == null) return;
         if (asset is not RenderTexture rt) return;
 
-        if (_forGuid != entry.Guid)
-        {
-            _width = rt.Width;
-            _height = rt.Height;
-            _hasDepth = rt.HasDepthAttachment;
-            _formats = [.. rt.TextureFormats];
-            _forGuid = entry.Guid;
-            _dirty = false;
-        }
+        Description edits = Edits(entry, rt);
 
         EditorGUI.SectionHeader(paper, $"{id}_hdr", "Render Texture", first: true);
 
         EditorGUI.Row(paper, $"{id}_w", "Width", () =>
-            Origami.NumericField<int>(paper, $"{id}_w_v", _width,
-                v => { if (v != _width) { _width = Math.Max(1, v); _dirty = true; } }).Show());
+            Origami.NumericField<int>(paper, $"{id}_w_v", edits.Width,
+                v => edits.Width = Math.Max(1, v)).Show());
 
         EditorGUI.Row(paper, $"{id}_h", "Height", () =>
-            Origami.NumericField<int>(paper, $"{id}_h_v", _height,
-                v => { if (v != _height) { _height = Math.Max(1, v); _dirty = true; } }).Show());
+            Origami.NumericField<int>(paper, $"{id}_h_v", edits.Height,
+                v => edits.Height = Math.Max(1, v)).Show());
 
-        Origami.Checkbox(paper, $"{id}_depth", _hasDepth,
-            v => { if (v != _hasDepth) { _hasDepth = v; _dirty = true; } })
+        Origami.Checkbox(paper, $"{id}_depth", edits.HasDepth,
+            v => edits.HasDepth = v)
             .LabelRight("Depth Attachment").Show();
 
         Origami.Header(paper, $"{id}_fmt_hdr", "Color Attachments").Show();
 
-        for (int i = 0; i < _formats.Count; i++)
+        for (int i = 0; i < edits.Formats.Count; i++)
         {
             int index = i;
             EditorGUI.Row(paper, $"{id}_fmt{index}", $"Format {index}", () =>
-                Origami.EnumDropdown(paper, $"{id}_fmt{index}_v", _formats[index],
-                    v => { if (v != _formats[index]) { _formats[index] = v; _dirty = true; } }).Show());
+                Origami.EnumDropdown(paper, $"{id}_fmt{index}_v", edits.Formats[index],
+                    v => edits.Formats[index] = v).Show());
         }
 
         using (paper.Row($"{id}_fmt_btns").Height(26).RowBetween(6).Enter())
         {
             Origami.Button(paper, $"{id}_fmt_add", $"{EditorIcons.Plus}  Add",
-                () => { _formats.Add(TextureImageFormat.Color4b); _dirty = true; }).Width(90).Show();
+                () => edits.Formats.Add(TextureImageFormat.Color4b)).Width(90).Show();
 
-            if (_formats.Count > 0)
+            if (edits.Formats.Count > 0)
                 Origami.Button(paper, $"{id}_fmt_rem", $"{EditorIcons.Minus}  Remove",
-                    () => { _formats.RemoveAt(_formats.Count - 1); _dirty = true; }).Width(110).Show();
+                    () => edits.Formats.RemoveAt(edits.Formats.Count - 1)).Width(110).Show();
         }
 
-        bool dirty = !Origami.IsReadOnly && _dirty;
+        bool dirty = !Origami.IsReadOnly && HasPendingChanges(entry, asset);
         paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
             .Margin(8, 8, 10, 10).Rounded(8).Padding(16, 16, 0, 0)
             .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
@@ -92,7 +121,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             .OnClick(0, (_, _) =>
             {
                 if (!dirty) return;
-                Save(entry);
+                ApplyPendingChanges(entry, asset);
             });
     }
 
@@ -103,14 +132,14 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             // Written as a fresh description rather than mutating the imported instance: the file is the
             // source of truth, and the reimport is what rebuilds every camera's view of this asset.
             var described = new RenderTexture();
-            described.Configure(_width, _height, _hasDepth, [.. _formats]);
+            Description edits = s_edits[entry.Guid];
+            described.Configure(edits.Width, edits.Height, edits.HasDepth, [.. edits.Formats]);
             described.Name = Path.GetFileNameWithoutExtension(entry.Path);
 
             EchoObject echo = Serializer.Serialize(typeof(object), described);
             File.WriteAllText(Path.Combine(Project.Current!.AssetsPath, entry.Path), echo.WriteToString());
             described.Dispose();
 
-            _dirty = false;
             EditorAssetBackend.Instance?.Reimport(entry.Guid);
         }
         catch (Exception ex)

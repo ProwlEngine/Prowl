@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Jitter2.Collision.Shapes;
@@ -50,24 +51,16 @@ public sealed class MeshCollider : Collider
     [SerializeIgnore] private ConvexHullShape? _cachedConvexShape;
     [SerializeIgnore] private List<JTriangle>? _cachedHullTris;
 
-    public override RigidBodyShape[] CreateShapes()
-    {
-        // Physics needs the mesh present now: a collider is built once, so a transient null
-        // from async streaming would leave it permanently missing. Block-load it (prioritized).
-        mesh.EnsureLoaded();
-        var m = mesh.Res;
-        if (m == null)
-        {
-            // Try to grab from a MeshRenderer on this GO
-            var mr = GetComponent<MeshRenderer>();
-            if (mr != null)
-            {
-                var rendererMesh = mr.Mesh;
-                rendererMesh.EnsureLoaded();
-                m = rendererMesh.Res;
-            }
-        }
+    public override RigidBodyShape[] CreateShapes() => BuildShapes(Float4x4.Identity);
 
+    // Concave colliders bake the transform into their vertices instead of being wrapped: Jitter's
+    // internal-edge filter tests `shape as TriangleShape`, so a wrapped triangle loses edge filtering
+    // and back-face rejection. Convex hulls have no such requirement and take the wrapping path.
+    protected override RigidBodyShape[] CreateBakedShapes(Float4x4 transform) => convex ? null : BuildShapes(transform);
+
+    private RigidBodyShape[] BuildShapes(Float4x4 transform)
+    {
+        Mesh m = ResolveMesh();
         if (m == null)
         {
             Debug.LogError("MeshCollider: no mesh assigned.");
@@ -83,26 +76,76 @@ public sealed class MeshCollider : Collider
         }
 
         if (convex)
-        {
             return [new ConvexHullShape(baked.Triangles)];
-        }
-        else
-        {
-            // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
-            // indexes into it - the source soup can hold more.
-            var triMesh = baked.TriangleMesh;
-            int count = triMesh.Indices.Length;
-            if (count == 0)
-            {
-                Debug.LogWarning("MeshCollider: mesh has no non-degenerate triangles.");
-                return null;
-            }
 
-            var shapes = new TriangleShape[count];
-            for (int i = 0; i < count; i++)
-                shapes[i] = new TriangleShape(triMesh, i);
-            return shapes;
+        // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
+        // indexes into it - the source soup can hold more.
+        TriangleMesh triMesh = transform == Float4x4.Identity ? baked.TriangleMesh : TransformMesh(baked.TriangleMesh, transform);
+        int count = triMesh.Indices.Length;
+        if (count == 0)
+        {
+            Debug.LogWarning("MeshCollider: mesh has no non-degenerate triangles.");
+            return null;
         }
+
+        // Every triangle becomes its own shape and its own dynamic tree leaf, so cost scales with the
+        // triangle count. Past a few thousand a convex hull or a decimated collision mesh is the answer.
+        const int TriangleBudget = 5000;
+        if (count > TriangleBudget)
+            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
+
+        var shapes = new TriangleShape[count];
+        for (int i = 0; i < count; i++)
+            shapes[i] = new TriangleShape(triMesh, i);
+        return shapes;
+    }
+
+    /// <summary>
+    /// Copies a baked mesh with its vertices moved into another space. Topology and adjacency are
+    /// preserved, so the internal-edge filter still sees a connected mesh.
+    /// </summary>
+    private static TriangleMesh TransformMesh(TriangleMesh source, Float4x4 transform)
+    {
+        ReadOnlySpan<JVector> sourceVertices = source.Vertices;
+        var vertices = new JVector[sourceVertices.Length];
+        for (int i = 0; i < sourceVertices.Length; i++)
+        {
+            Float3 v = Float4x4.TransformPoint(new Float3(sourceVertices[i].X, sourceVertices[i].Y, sourceVertices[i].Z), transform);
+            vertices[i] = new JVector(v.X, v.Y, v.Z);
+        }
+
+        // A mirrored transform reverses winding, which would flip every triangle normal and make the
+        // one-sided triangles solid from the wrong side. Swap two indices back to compensate.
+        bool mirrored = Float4x4.Determinant(transform) < 0.0f;
+
+        ReadOnlySpan<TriangleMesh.Triangle> sourceTriangles = source.Indices;
+        var indices = new int[sourceTriangles.Length * 3];
+        for (int i = 0; i < sourceTriangles.Length; i++)
+        {
+            indices[i * 3 + 0] = sourceTriangles[i].IndexA;
+            indices[i * 3 + 1] = mirrored ? sourceTriangles[i].IndexC : sourceTriangles[i].IndexB;
+            indices[i * 3 + 2] = mirrored ? sourceTriangles[i].IndexB : sourceTriangles[i].IndexC;
+        }
+
+        return new TriangleMesh(vertices, indices, true);
+    }
+
+    /// <summary>
+    /// The mesh to build collision from: the assigned one, else a sibling MeshRenderer's. Physics needs
+    /// it present now (a collider is built once, so a transient streaming null would leave it
+    /// permanently missing), so the load is blocking and prioritized.
+    /// </summary>
+    private Mesh ResolveMesh()
+    {
+        mesh.EnsureLoaded();
+        if (mesh.Res != null) return mesh.Res;
+
+        var mr = GetComponent<MeshRenderer>();
+        if (mr.IsNotValid()) return null;
+
+        AssetRef<Mesh> rendererMesh = mr.Mesh;
+        rendererMesh.EnsureLoaded();
+        return rendererMesh.Res;
     }
 
     public override void OnValidate()

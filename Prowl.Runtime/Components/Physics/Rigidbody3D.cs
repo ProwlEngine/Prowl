@@ -2,8 +2,11 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 
 using Jitter2;
+using Jitter2.Collision.Shapes;
+using Jitter2.DataStructures;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
@@ -11,6 +14,20 @@ using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
+
+/// <summary>
+/// How a rigidbody's Transform is filled in between physics steps. Physics runs at a fixed rate, so
+/// without smoothing the visuals move in fixed-rate jumps whenever the frame rate differs from it.
+/// </summary>
+public enum RigidbodyInterpolation
+{
+    /// <summary>Write the simulated pose as-is. Cheapest, and visibly steps at high frame rates.</summary>
+    None,
+    /// <summary>Render between the last two steps. Smooth, at the cost of trailing one fixed step behind.</summary>
+    Interpolate,
+    /// <summary>Predict ahead of the last step from the body's velocity. No lag, but can overshoot a collision.</summary>
+    Extrapolate
+}
 
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
@@ -39,11 +56,32 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private float linearSleepThreshold = 0.1f;
     [SerializeField] private float angularSleepThreshold = 0.1f;
 
+    [SerializeField] private RigidbodyInterpolation interpolation = RigidbodyInterpolation.Interpolate;
+
     private float interpTimer = 0;
+
+    // The poses the last two steps produced, and how far into the current step we have rendered.
+    private Float3 _previousPosition, _currentPosition;
+    private Quaternion _previousRotation, _currentRotation;
+    private bool _hasPose;
 
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
     private uint _lastSyncedTransformVersion;
+
+    /// <summary>
+    /// How the Transform is filled in between fixed steps. Turn this on for anything the player
+    /// watches closely; leave it off for bodies whose exact pose per frame does not matter.
+    /// </summary>
+    public RigidbodyInterpolation Interpolation
+    {
+        get => interpolation;
+        set
+        {
+            interpolation = value;
+            ResetPose();
+        }
+    }
 
     /// <summary>
     /// How this body participates in the simulation: <see cref="MotionType.Dynamic"/>,
@@ -97,7 +135,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentException("Mass can not be zero or negative.", nameof(value));
 
             mass = value;
-            if (_body != null) _body.SetMassInertia(value);
+            ApplyMassInertia();
         }
     }
 
@@ -346,8 +384,17 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
 
+        World? world = GameObject.Scene.Physics?.World;
+        if (world == null) return;
+
+        // Route through CreateBody so a body created here is wired up the same as one from OnEnable.
+        // A raw CreateRigidBody would leave the collision events unhooked and the body out of the
+        // transform-sync set, and OnEnable would then skip creation because a body already exists.
         if (_body == null || _body.Handle.IsZero)
-            _body = GameObject.Scene.Physics.World.CreateRigidBody();
+        {
+            CreateBody(world);
+            return;
+        }
 
         UpdateProperties(_body);
         UpdateShapes(_body);
@@ -366,22 +413,74 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         interpTimer += Time.DeltaTime;
 
-        //_body.PredictPose(interpTimer, out JVector predictedPosition, out JQuaternion predictedOrientation);
-        JVector predictedPosition = _body.Position;
-        JQuaternion predictedOrientation = _body.Orientation;
+        Float3 position;
+        Quaternion rotation;
 
-        Transform.Position = new Float3(predictedPosition.X, predictedPosition.Y, predictedPosition.Z);
-        Transform.Rotation = new Quaternion(predictedOrientation.X, predictedOrientation.Y, predictedOrientation.Z, predictedOrientation.W);
+        if (interpolation == RigidbodyInterpolation.None || !_hasPose)
+        {
+            position = ToFloat3(_body.Position);
+            rotation = ToQuaternion(_body.Orientation);
+        }
+        else if (interpolation == RigidbodyInterpolation.Extrapolate)
+        {
+            _body.PredictPose(interpTimer, out JVector predicted, out JQuaternion predictedOrientation);
+            position = ToFloat3(predicted);
+            rotation = ToQuaternion(predictedOrientation);
+        }
+        else
+        {
+            // Render between the last two steps. The visual trails the simulation by up to one fixed
+            // step, which is the price of never overshooting into geometry the solver has not seen.
+            float t = Time.FixedDeltaTime > 0.0f ? Maths.Clamp(interpTimer / Time.FixedDeltaTime, 0.0f, 1.0f) : 1.0f;
+            position = Maths.Lerp(_previousPosition, _currentPosition, t);
+            rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
+        }
+
+        Transform.Position = position;
+        Transform.Rotation = rotation;
 
         // Remember the version we just wrote so the transform->body sync doesn't treat this
         // physics-driven change as a user edit and push it straight back.
         _lastSyncedTransformVersion = Transform.Version;
     }
 
-    public override void FixedUpdate()
+    /// <summary>
+    /// Records the pose the step just produced, so the next frames can render between it and the one
+    /// before. Driven by the physics world for every registered body right after the step.
+    /// </summary>
+    internal void CapturePose()
     {
-        interpTimer = 0;
+        if (_body == null || _body.Handle.IsZero) return;
+
+        interpTimer = 0.0f;
+        _previousPosition = _currentPosition;
+        _previousRotation = _currentRotation;
+        _currentPosition = ToFloat3(_body.Position);
+        _currentRotation = ToQuaternion(_body.Orientation);
+
+        if (!_hasPose)
+        {
+            _previousPosition = _currentPosition;
+            _previousRotation = _currentRotation;
+            _hasPose = true;
+        }
     }
+
+    /// <summary>
+    /// Drops the interpolation history so a teleport snaps instead of being smeared across a frame.
+    /// </summary>
+    private void ResetPose()
+    {
+        if (_body == null || _body.Handle.IsZero) { _hasPose = false; return; }
+
+        interpTimer = 0.0f;
+        _currentPosition = _previousPosition = ToFloat3(_body.Position);
+        _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
+        _hasPose = true;
+    }
+
+    private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
+    private static Quaternion ToQuaternion(JQuaternion q) => new(q.X, q.Y, q.Z, q.W);
 
     public override void DrawGizmos()
     {
@@ -420,27 +519,24 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (_body != null && !_body.Handle.IsZero)
-        {
-            // Detach all child colliders - they will attach to the static rigidbody when they re-enable
-            var colliders = GetComponentsInChildren<Collider>();
-            foreach (var collider in colliders)
-            {
-                if (collider.IsValid() && collider.Enabled)
-                {
-                    collider.Detach();
-                    // Re-enable the collider so it attaches to the static rigidbody
-                    collider.OnEnable();
-                }
-            }
+        if (_body == null || _body.Handle.IsZero) return;
 
-            // Unhook collision events
-            _body.BeginCollide -= OnJitterBeginCollide;
-            _body.EndCollide -= OnJitterEndCollide;
+        // Take the colliders off while the body is still alive, so their shapes are removed cleanly.
+        Collider[] colliders = GetComponentsInChildren<Collider>().ToArray();
+        foreach (Collider collider in colliders)
+            if (collider.IsValid()) collider.Detach();
 
-            GameObject.Scene.Physics.UnregisterBody(this);
-            GameObject.Scene.Physics.World?.Remove(_body);
-        }
+        // Unhook collision events
+        _body.BeginCollide -= OnJitterBeginCollide;
+        _body.EndCollide -= OnJitterEndCollide;
+
+        GameObject.Scene.Physics.UnregisterBody(this);
+        GameObject.Scene.Physics.World?.Remove(_body);
+
+        // Only now that this body is gone will the colliders resolve past it, onto an outer rigidbody
+        // or their layer's static body.
+        foreach (Collider collider in colliders)
+            if (collider.IsValid() && collider.EnabledInHierarchy) collider.Reattach();
     }
 
     internal void UpdateProperties(RigidBody rb)
@@ -466,6 +562,52 @@ public sealed class Rigidbody3D : MonoBehaviour
         // the no-collider case.
     }
 
+    /// <summary>
+    /// Pushes <see cref="Mass"/> onto the Jitter body, deriving the inertia tensor from its shapes.
+    /// Shapes with no volume (the TriangleShapes of a concave MeshCollider) cannot report inertia, so
+    /// those bodies fall back to a solid box sized to the combined bounds of every attached shape - a
+    /// rough tensor that still rotates plausibly beats no body at all.
+    /// </summary>
+    internal void ApplyMassInertia()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+
+        try
+        {
+            _body.SetMassInertia(mass);
+        }
+        catch (NotSupportedException)
+        {
+            _body.SetMassInertia(ApproximateBoxInertia(_body.Shapes, mass), mass);
+        }
+    }
+
+    private static JMatrix ApproximateBoxInertia(ReadOnlyList<RigidBodyShape> shapes, float mass)
+    {
+        if (shapes.Count == 0) return JMatrix.Identity;
+
+        JVector min = new(float.MaxValue, float.MaxValue, float.MaxValue);
+        JVector max = new(float.MinValue, float.MinValue, float.MinValue);
+        foreach (RigidBodyShape shape in shapes)
+        {
+            shape.CalculateBoundingBox(JQuaternion.Identity, JVector.Zero, out JBoundingBox box);
+            min = JVector.Min(min, box.Min);
+            max = JVector.Max(max, box.Max);
+        }
+
+        // Clamp to a small positive size so the tensor stays positive-definite (invertible) even for
+        // perfectly flat or degenerate meshes.
+        float sx = Maths.Max(max.X - min.X, 1e-3f);
+        float sy = Maths.Max(max.Y - min.Y, 1e-3f);
+        float sz = Maths.Max(max.Z - min.Z, 1e-3f);
+
+        JMatrix inertia = JMatrix.Identity;
+        inertia.M11 = (1.0f / 12.0f) * mass * (sy * sy + sz * sz);
+        inertia.M22 = (1.0f / 12.0f) * mass * (sx * sx + sz * sz);
+        inertia.M33 = (1.0f / 12.0f) * mass * (sx * sx + sy * sy);
+        return inertia;
+    }
+
     internal void UpdateShapes(RigidBody rb)
     {
         // Remove all shapes from this rigidbody (Preserve mass/inertia, the rebuild below will refresh it)
@@ -482,9 +624,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
 
         // If no colliders provided shapes, RegisterShapes was never called and mass was never set.
-        // Safe to call here because the body has no shapes attached.
         if (rb.Shapes.Count == 0)
-            rb.SetMassInertia(mass);
+            ApplyMassInertia();
     }
 
     /// <summary>Unconditionally pushes the Transform pose into the body. WHEN this runs is controlled
@@ -493,6 +634,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         rb.Position = new JVector(Transform.Position.X, Transform.Position.Y, Transform.Position.Z);
         rb.Orientation = new JQuaternion(Transform.Rotation.X, Transform.Rotation.Y, Transform.Rotation.Z, Transform.Rotation.W);
+        ResetPose();
     }
 
     /// <summary>
@@ -629,6 +771,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (_body != null)
         {
             _body.Position = new JVector(position.X, position.Y, position.Z);
+            ResetPose();
         }
     }
 
@@ -640,6 +783,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (_body != null)
         {
             _body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+            ResetPose();
         }
     }
 }

@@ -1,12 +1,15 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
+using Jitter2.Dynamics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -22,10 +25,9 @@ public class LayerFilter : IBroadPhaseFilter
             this._b = shapeB;
         }
 
-        public bool Equals(Pair other)
-        {
-            return _a.Equals(other._a) && _b.Equals(other._b);
-        }
+        public bool IsAlive => _a.IsValid() && _b.IsValid();
+
+        public bool Equals(Pair other) => ReferenceEquals(_a, other._a) && ReferenceEquals(_b, other._b);
 
         public override bool Equals(object? obj)
         {
@@ -34,27 +36,61 @@ public class LayerFilter : IBroadPhaseFilter
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(_a, _b);
+            return HashCode.Combine(RuntimeHelpers.GetHashCode(_a), RuntimeHelpers.GetHashCode(_b));
         }
     }
 
-    private static readonly HashSet<Pair> _ignore = [];
+    private HashSet<Pair> _ignore = [];
 
-    internal static void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
+    internal void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
     {
-        if (bodyA.IsNotValid() || bodyB.IsNotValid()) return;
-        if (bodyA == bodyB) return;
+        if (!TryOrderPair(ref bodyA, ref bodyB)) return;
 
-        if (bodyB.InstanceID < bodyA.InstanceID) (bodyA, bodyB) = (bodyB, bodyA);
-        _ignore.Add(new Pair(bodyA, bodyB));
+        HashSet<Pair> next = LiveCopy();
+        next.Add(new Pair(bodyA, bodyB));
+        Volatile.Write(ref _ignore, next);
     }
 
-    internal static void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
+    internal void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB)
     {
-        if (bodyA.IsNotValid() || bodyB.IsNotValid()) return;
-        if (bodyA == bodyB) return;
+        if (!TryOrderPair(ref bodyA, ref bodyB)) return;
+
+        HashSet<Pair> next = LiveCopy();
+        next.Remove(new Pair(bodyA, bodyB));
+        Volatile.Write(ref _ignore, next);
+    }
+
+    internal void ClearIgnoredCollisions() => Volatile.Write(ref _ignore, []);
+
+    private static bool TryOrderPair(ref Rigidbody3D bodyA, ref Rigidbody3D bodyB)
+    {
+        if (bodyA.IsNotValid() || bodyB.IsNotValid()) return false;
+        if (bodyA == bodyB) return false;
+
         if (bodyB.InstanceID < bodyA.InstanceID) (bodyA, bodyB) = (bodyB, bodyA);
-        _ignore.Remove(new Pair(bodyA, bodyB));
+        return true;
+    }
+
+    // Rebuilding drops pairs whose bodies have been destroyed, so the set does not pin them forever.
+    private HashSet<Pair> LiveCopy()
+    {
+        HashSet<Pair> copy = [];
+        foreach (Pair pair in Volatile.Read(ref _ignore))
+            if (pair.IsAlive) copy.Add(pair);
+
+        return copy;
+    }
+
+    private static bool AreConstrainedTogether(RigidBody a, RigidBody b)
+    {
+        if (a.Constraints.Count == 0 || b.Constraints.Count == 0) return false;
+
+        if (b.Constraints.Count < a.Constraints.Count) (a, b) = (b, a);
+
+        foreach (Constraint constraint in a.Constraints)
+            if (constraint.Body1 == b || constraint.Body2 == b) return true;
+
+        return false;
     }
 
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
@@ -62,9 +98,7 @@ public class LayerFilter : IBroadPhaseFilter
         if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
         {
             // Things with constraints dont collide against eachother. (TODO: This should be toggleable)
-            if (rbsA.RigidBody.Constraints.Any(conn => conn.Body1 == rbsB.RigidBody || conn.Body2 == rbsB.RigidBody))
-                return false;
-            if (rbsB.RigidBody.Constraints.Any(conn => conn.Body1 == rbsA.RigidBody || conn.Body2 == rbsA.RigidBody))
+            if (AreConstrainedTogether(rbsA.RigidBody, rbsB.RigidBody))
                 return false;
 
             if (rbsA.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udA ||
@@ -72,14 +106,12 @@ public class LayerFilter : IBroadPhaseFilter
                 return true;
 
             bool isIgnored = false;
+            HashSet<Pair> ignore = Volatile.Read(ref _ignore);
             Rigidbody3D bodyA = udA.Rigidbody;
             Rigidbody3D bodyB = udB.Rigidbody;
-            if (bodyA.IsValid() && bodyB.IsValid())
-            {
-                // Order by InstanceID to match how IgnoreCollisionBetween stores the pair.
-                if (bodyB.InstanceID < bodyA.InstanceID) (bodyA, bodyB) = (bodyB, bodyA);
-                isIgnored = _ignore.Contains(new Pair(bodyA, bodyB));
-            }
+            if (ignore.Count > 0 && TryOrderPair(ref bodyA, ref bodyB))
+                isIgnored = ignore.Contains(new Pair(bodyA, bodyB));
+
             bool canCollide = CollisionMatrix.GetLayerCollision(udA.Layer, udB.Layer);
 
             return canCollide && !isIgnored;

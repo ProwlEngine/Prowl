@@ -1,7 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Collections.Generic;
+using System;
+using System.Threading;
 
 using Jitter2.Collision;
 
@@ -14,17 +15,19 @@ namespace Prowl.Runtime;
 /// </summary>
 public class CompositeBroadPhaseFilter : IBroadPhaseFilter
 {
-    private readonly List<IBroadPhaseFilter> _filters = new();
+    private IBroadPhaseFilter[] _filters = [];
 
     /// <summary>
     /// Adds a filter to the chain.
     /// </summary>
     public void AddFilter(IBroadPhaseFilter filter)
     {
-        if (filter != null && !_filters.Contains(filter))
-        {
-            _filters.Add(filter);
-        }
+        if (filter == null) return;
+
+        IBroadPhaseFilter[] current = Volatile.Read(ref _filters);
+        if (Array.IndexOf(current, filter) >= 0) return;
+
+        Volatile.Write(ref _filters, [.. current, filter]);
     }
 
     /// <summary>
@@ -32,16 +35,20 @@ public class CompositeBroadPhaseFilter : IBroadPhaseFilter
     /// </summary>
     public void RemoveFilter(IBroadPhaseFilter filter)
     {
-        _filters.Remove(filter);
+        IBroadPhaseFilter[] current = Volatile.Read(ref _filters);
+        int index = Array.IndexOf(current, filter);
+        if (index < 0) return;
+
+        var next = new IBroadPhaseFilter[current.Length - 1];
+        Array.Copy(current, next, index);
+        Array.Copy(current, index + 1, next, index, next.Length - index);
+        Volatile.Write(ref _filters, next);
     }
 
     /// <summary>
     /// Clears all filters from the chain.
     /// </summary>
-    public void ClearFilters()
-    {
-        _filters.Clear();
-    }
+    public void ClearFilters() => Volatile.Write(ref _filters, []);
 
     /// <summary>
     /// Filters the collision by running all registered filters.
@@ -50,14 +57,11 @@ public class CompositeBroadPhaseFilter : IBroadPhaseFilter
     /// </summary>
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
     {
-        foreach (var filter in _filters)
-        // In reverse order
-        //for (int i = 0; i < _filters.Count; i++)
-        {
-            //var filter = _filters[i];
-            if (!filter.Filter(proxyA, proxyB))
+        IBroadPhaseFilter[] filters = Volatile.Read(ref _filters);
+
+        for (int i = 0; i < filters.Length; i++)
+            if (!filters[i].Filter(proxyA, proxyB))
                 return false;
-        }
 
         return true;
     }

@@ -22,24 +22,18 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
     private readonly TerrainHeightmapProxy _heightmapProxy;
     private readonly ITerrainHeightProvider _heightProvider;
     private readonly ulong _minTriangleIndex;
-    private readonly JVector _terrainOrigin;
-    private readonly float _cellSize;
 
     /// <summary>
     /// Creates a new terrain collision filter.
     /// </summary>
     /// <param name="world">The Jitter2 physics world.</param>
     /// <param name="heightmapProxy">The heightmap proxy for raycasting.</param>
-    /// <param name="heightProvider">The height data provider.</param>
-    /// <param name="terrainOrigin">World-space origin of the terrain.</param>
-    /// <param name="cellSize">World-space size of each heightmap cell.</param>
-    public TerrainCollisionFilter(World world, TerrainHeightmapProxy heightmapProxy, ITerrainHeightProvider heightProvider, JVector terrainOrigin, float cellSize)
+    /// <param name="heightProvider">The height data provider, also the source of the live grid placement.</param>
+    public TerrainCollisionFilter(World world, TerrainHeightmapProxy heightmapProxy, ITerrainHeightProvider heightProvider)
     {
         _world = world;
         _heightmapProxy = heightmapProxy;
         _heightProvider = heightProvider;
-        _terrainOrigin = terrainOrigin;
-        _cellSize = cellSize;
 
         // Reserve unique IDs for all terrain triangles
         // Each grid cell has 2 triangles
@@ -77,20 +71,42 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
     }
 
     /// <summary>
+    /// Registers a contact against one terrain triangle. A degenerate cell (repeated corners, or a
+    /// terrain whose data has not sized itself yet) has a zero-area cross product, and normalising that
+    /// yields NaN rather than zero - feeding it to the solver poisons every body it touches.
+    /// </summary>
+    private void RegisterTriangleContact(RigidBodyShape rbs, ref RigidBodyData body, in CollisionTriangle triangle, ulong triangleIndex)
+    {
+        JVector normal = JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
+        if (normal.LengthSquared() <= 0.0f) return;
+
+        if (NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
+                out JVector pointA, out JVector pointB, out _, out _))
+        {
+            _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
+                pointA, pointB, normal);
+        }
+    }
+
+    /// <summary>
     /// Processes collision between a rigidbody shape and the terrain.
     /// </summary>
     private void ProcessTerrainCollision(RigidBodyShape rbs)
     {
         ref RigidBodyData body = ref rbs.RigidBody.Data;
 
+        JVector terrainOrigin = _heightProvider.Origin;
+        float cellSize = _heightProvider.CellSize;
+        if (cellSize <= 0.0f) return;
+
         var min = rbs.WorldBoundingBox.Min;
         var max = rbs.WorldBoundingBox.Max;
 
         // Convert world space bounds to grid space
-        int minX = Maths.Max(0, (int)Maths.Floor((min.X - _terrainOrigin.X) / _cellSize));
-        int minZ = Maths.Max(0, (int)Maths.Floor((min.Z - _terrainOrigin.Z) / _cellSize));
-        int maxX = Maths.Min(_heightProvider.Width - 1, (int)Maths.Ceiling((max.X - _terrainOrigin.X) / _cellSize));
-        int maxZ = Maths.Min(_heightProvider.Height - 1, (int)Maths.Ceiling((max.Z - _terrainOrigin.Z) / _cellSize));
+        int minX = Maths.Max(0, (int)Maths.Floor((min.X - terrainOrigin.X) / cellSize));
+        int minZ = Maths.Max(0, (int)Maths.Floor((min.Z - terrainOrigin.Z) / cellSize));
+        int maxX = Maths.Min(_heightProvider.Width - 1, (int)Maths.Ceiling((max.X - terrainOrigin.X) / cellSize));
+        int maxZ = Maths.Min(_heightProvider.Height - 1, (int)Maths.Ceiling((max.Z - terrainOrigin.Z) / cellSize));
 
         // Test each potentially colliding grid cell
         for (int x = minX; x < maxX; x++)
@@ -117,37 +133,18 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
 
                 CollisionTriangle triangle;
                 // Convert grid coordinates to world coordinates
-                triangle.A = new JVector((x + 0) * _cellSize + _terrainOrigin.X, h00, (z + 0) * _cellSize + _terrainOrigin.Z);
-                triangle.B = new JVector((x + 1) * _cellSize + _terrainOrigin.X, h11, (z + 1) * _cellSize + _terrainOrigin.Z);
-                triangle.C = new JVector((x + 1) * _cellSize + _terrainOrigin.X, h10, (z + 0) * _cellSize + _terrainOrigin.Z);
+                triangle.A = new JVector((x + 0) * cellSize + terrainOrigin.X, h00, (z + 0) * cellSize + terrainOrigin.Z);
+                triangle.B = new JVector((x + 1) * cellSize + terrainOrigin.X, h11, (z + 1) * cellSize + terrainOrigin.Z);
+                triangle.C = new JVector((x + 1) * cellSize + terrainOrigin.X, h10, (z + 0) * cellSize + terrainOrigin.Z);
 
-                JVector normal = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
-
-                bool hit = NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
-                    out JVector pointA, out JVector pointB, out _, out float penetration);
-
-                if (hit)
-                {
-                    _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
-                        pointA, pointB, normal);
-                }
+                RegisterTriangleContact(rbs, ref body, triangle, triangleIndex);
 
                 // Test second triangle of the quad (a-d-c)
-                triangleIndex += 1;
-                triangle.A = new JVector((x + 0) * _cellSize + _terrainOrigin.X, h00, (z + 0) * _cellSize + _terrainOrigin.Z);
-                triangle.B = new JVector((x + 0) * _cellSize + _terrainOrigin.X, h01, (z + 1) * _cellSize + _terrainOrigin.Z);
-                triangle.C = new JVector((x + 1) * _cellSize + _terrainOrigin.X, h11, (z + 1) * _cellSize + _terrainOrigin.Z);
+                triangle.A = new JVector((x + 0) * cellSize + terrainOrigin.X, h00, (z + 0) * cellSize + terrainOrigin.Z);
+                triangle.B = new JVector((x + 0) * cellSize + terrainOrigin.X, h01, (z + 1) * cellSize + terrainOrigin.Z);
+                triangle.C = new JVector((x + 1) * cellSize + terrainOrigin.X, h11, (z + 1) * cellSize + terrainOrigin.Z);
 
-                normal = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
-
-                hit = NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
-                    out pointA, out pointB, out _, out penetration);
-
-                if (hit)
-                {
-                    _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
-                        pointA, pointB, normal);
-                }
+                RegisterTriangleContact(rbs, ref body, triangle, triangleIndex + 1);
             }
         }
     }

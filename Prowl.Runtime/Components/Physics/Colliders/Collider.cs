@@ -40,6 +40,12 @@ public abstract class Collider : MonoBehaviour
     private RigidBodyShape[] _attachedShapes;
 
     /// <summary>
+    /// The physics world holding shape-owner entries for <see cref="_attachedShapes"/>. Captured at
+    /// registration so Detach can clean up even once the GameObject can no longer reach its scene.
+    /// </summary>
+    private PhysicsWorld _registeredWorld;
+
+    /// <summary>
     /// Transform version tracking for static colliders.
     /// Used to detect when the transform has moved and shapes need updating.
     /// </summary>
@@ -144,6 +150,13 @@ public abstract class Collider : MonoBehaviour
             }
         }
 
+        if (_registeredWorld != null && _attachedShapes != null)
+        {
+            foreach (RigidBodyShape shape in _attachedShapes)
+                _registeredWorld.UnregisterShapeOwner(shape);
+        }
+
+        _registeredWorld = null;
         _attachedBody = null;
         _attachedRigidbody3D = null;
         _attachedShapes = null;
@@ -171,65 +184,22 @@ public abstract class Collider : MonoBehaviour
 
         if (_attachedShapes != null)
         {
+            var scene = GameObject.IsValid() ? GameObject.Scene : null;
+            _registeredWorld = scene.IsValid() ? scene.Physics : null;
+
             foreach (RigidBodyShape shape in _attachedShapes)
             {
                 // Always use Preserve: per-shape Update mode calls SetMassInertia() after every
                 // addition, which iterates ALL attached shapes. Any TriangleShape in that set
                 // throws NotSupportedException. We set mass once below, after all shapes are added.
                 _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
+                _registeredWorld?.RegisterShapeOwner(shape, this);
             }
         }
 
-        if (_attachedRigidbody3D != null)
-        {
-            // SetMassInertia(mass) sums inertia from all shapes, then scales to the requested mass.
-            // TriangleShape has no volume so it throws NotSupportedException; fall back to treating the
-            // body as a solid box sized to the shapes' combined bounds so it still rotates plausibly.
-            try
-            {
-                _attachedBody.SetMassInertia(_attachedRigidbody3D.Mass);
-            }
-            catch (NotSupportedException)
-            {
-                JMatrix inertia = ApproximateBoxInertia(_attachedShapes, _attachedRigidbody3D.Mass);
-                _attachedBody.SetMassInertia(inertia, _attachedRigidbody3D.Mass);
-            }
-        }
-        // Static bodies don't need mass or inertia.
-    }
-
-    /// <summary>
-    /// Builds an inertia tensor for a body whose shapes have no usable volume (e.g. concave
-    /// TriangleShapes). The shapes are approximated as a single solid box sized to their combined
-    /// local-space bounds, using the same formula as <c>BoxShape</c>. The tensor is taken about the box
-    /// centre rather than the body's centre of mass, which is a close enough approximation for the
-    /// fallback case (the alternative is a meaningless identity tensor).
-    /// </summary>
-    private static JMatrix ApproximateBoxInertia(RigidBodyShape[] shapes, float mass)
-    {
-        if (shapes == null || shapes.Length == 0)
-            return JMatrix.Identity;
-
-        JVector min = new(float.MaxValue, float.MaxValue, float.MaxValue);
-        JVector max = new(float.MinValue, float.MinValue, float.MinValue);
-        foreach (RigidBodyShape shape in shapes)
-        {
-            shape.CalculateBoundingBox(JQuaternion.Identity, JVector.Zero, out JBoundingBox box);
-            min = JVector.Min(min, box.Min);
-            max = JVector.Max(max, box.Max);
-        }
-
-        // Clamp to a small positive size so the tensor stays positive-definite (invertible) even for
-        // perfectly flat or degenerate meshes.
-        float sx = Maths.Max(max.X - min.X, 1e-3f);
-        float sy = Maths.Max(max.Y - min.Y, 1e-3f);
-        float sz = Maths.Max(max.Z - min.Z, 1e-3f);
-
-        JMatrix inertia = JMatrix.Identity;
-        inertia.M11 = (1.0f / 12.0f) * mass * (sy * sy + sz * sz);
-        inertia.M22 = (1.0f / 12.0f) * mass * (sx * sx + sz * sz);
-        inertia.M33 = (1.0f / 12.0f) * mass * (sx * sx + sy * sy);
-        return inertia;
+        // Mass and inertia are derived from every shape on the body, so the rigidbody owns that step.
+        // Static bodies need neither.
+        if (_attachedRigidbody3D.IsValid()) _attachedRigidbody3D.ApplyMassInertia();
     }
 
     /// <summary>
@@ -238,71 +208,55 @@ public abstract class Collider : MonoBehaviour
     public abstract RigidBodyShape[] CreateShapes();
 
     /// <summary>
-    /// Create the Transformed Jitter Physics RigidBodyShape
+    /// Produce the collider's shapes with the given transform already applied to their geometry, or
+    /// null to let the base class wrap <see cref="CreateShapes"/> in a <see cref="TransformedShape"/>.
+    /// Triangle-mesh colliders must override this: Jitter's internal-edge filter only recognises a bare
+    /// <c>TriangleShape</c>, so a wrapped one silently loses edge filtering and one-sided triangles.
+    /// </summary>
+    protected virtual RigidBodyShape[] CreateBakedShapes(Float4x4 transform) => null;
+
+    /// <summary>
+    /// The collider's world-space scale, clamped away from zero so shapes stay non-degenerate.
+    /// </summary>
+    private Float3 CumulativeScale()
+    {
+        Float3 scale = Float3.One;
+        for (Transform current = Transform; current != null; current = current.Parent)
+            scale *= current.LocalScale;
+
+        return new Float3(ClampScale(scale.X), ClampScale(scale.Y), ClampScale(scale.Z));
+    }
+
+    // Clamps magnitude rather than value, so a mirrored (negative) axis stays mirrored instead of
+    // flipping to a tiny positive one.
+    private static float ClampScale(float value)
+    {
+        const float minScale = 1e-4f;
+        if (value <= -minScale || value >= minScale) return value;
+        return value < 0.0f ? -minScale : minScale;
+    }
+
+    /// <summary>
+    /// Create the Jitter Physics RigidBodyShapes in the space of the attached Rigidbody3D.
     /// </summary>
     public RigidBodyShape[] CreateTransformedShapes()
     {
-        // Create the base shape
-        RigidBodyShape[] shapes = CreateShapes();
-        if (shapes == null)
-            return null;
-        Rigidbody3D rb = RigidBody;
-        if (rb.IsNotValid()) return shapes;
+        // Prefer the body we are actually attached to over another walk up the component tree.
+        Rigidbody3D rb = _attachedRigidbody3D.IsValid() ? _attachedRigidbody3D : RigidBody;
+        if (rb.IsNotValid()) return CreateShapes();
 
-        // Get the cumulative scale from this object up to (but not including) the rigidbody
-        Float3 cumulativeScale = Float3.One;
-        Transform current = Transform;
-        Transform rbTransform = rb.Transform;
+        Float3 cumulativeScale = CumulativeScale();
+        Float3 worldCenter = Transform.TransformPoint(Center);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
 
-        while (current != null)
-        {
-            cumulativeScale *= current.LocalScale;
-            current = current.Parent;
-        }
+        // A Jitter body carries no scale, so its shape offsets are plain world-space distances rotated
+        // into body space. InverseTransformPoint would also divide out the body's scale and pull the
+        // shape toward the origin.
+        Quaternion inverseBodyRotation = Quaternion.Inverse(rb.Transform.Rotation);
+        Float3 rbLocalCenter = inverseBodyRotation * (worldCenter - rb.Transform.Position);
+        Quaternion rbLocalRotation = inverseBodyRotation * worldRotation;
 
-        cumulativeScale = Maths.Max(cumulativeScale, Float3.One * 0.05f);
-
-        // Get the local rotation and position in world space
-        Quaternion localRotation = Quaternion.FromEuler(Rotation);
-        Float3 scaledCenter = Center * cumulativeScale;
-
-        // Transform local position and rotation to world space
-        Float3 worldCenter = Transform.TransformPoint(scaledCenter);
-        Quaternion worldRotation = Transform.Rotation * localRotation;
-
-        // Transform from world space to rigid body's local space
-        Float3 rbLocalCenter = rb.Transform.InverseTransformPoint(worldCenter);
-        Quaternion rbLocalRotation = Quaternion.Inverse(rb.Transform.Rotation) * worldRotation;
-
-        // Create a scale transform matrix that includes both rotation and scale
-        Float4x4 scaleMatrix = Float4x4.CreateTRS(Float3.Zero, rbLocalRotation, cumulativeScale);
-
-        // If there's no transformation needed, return the original shape
-        if (rbLocalCenter.Equals(Float3.Zero) &&
-            cumulativeScale.Equals(Float3.One) &&
-            rbLocalRotation == Quaternion.Identity)
-            return shapes;
-
-        // Convert to Jitter types
-        var translation = new Jitter2.LinearMath.JVector(
-            rbLocalCenter.X,
-            rbLocalCenter.Y,
-            rbLocalCenter.Z
-        );
-
-        // Convert combined rotation and scale matrix to JMatrix
-        var orientation = new Jitter2.LinearMath.JMatrix(
-            scaleMatrix[0, 0], scaleMatrix[0, 1], scaleMatrix[0, 2],
-            scaleMatrix[1, 0], scaleMatrix[1, 1], scaleMatrix[1, 2],
-            scaleMatrix[2, 0], scaleMatrix[2, 1], scaleMatrix[2, 2]
-        );
-
-        //return new TransformedShape(shape, translation, orientation);
-        TransformedShape[] transformedShapes = new TransformedShape[shapes.Length];
-        for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], translation, orientation);
-
-        return transformedShapes;
+        return BuildShapes(rbLocalCenter, rbLocalRotation, cumulativeScale);
     }
 
     /// <summary>
@@ -310,77 +264,71 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private RigidBodyShape[] CreateWorldTransformedShapes()
     {
-        // Create the base shape
+        Float3 cumulativeScale = CumulativeScale();
+        Float3 worldCenter = Transform.TransformPoint(Center);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
+
+        return BuildShapes(worldCenter, worldRotation, cumulativeScale);
+    }
+
+    /// <summary>
+    /// Places the collider's shapes at the given pose and scale, letting colliders that bake the
+    /// transform into their geometry take precedence over the TransformedShape wrapper.
+    /// </summary>
+    private RigidBodyShape[] BuildShapes(Float3 translation, Quaternion rotation, Float3 scale)
+    {
+        RigidBodyShape[] baked = CreateBakedShapes(Float4x4.CreateTRS(translation, rotation, scale));
+        if (baked != null)
+            return baked;
+
         RigidBodyShape[] shapes = CreateShapes();
         if (shapes == null)
             return null;
 
-        // Get the cumulative scale
-        Float3 cumulativeScale = Float3.One;
-        Transform current = Transform;
-
-        while (current != null)
-        {
-            cumulativeScale *= current.LocalScale;
-            current = current.Parent;
-        }
-
-        cumulativeScale = Maths.Max(cumulativeScale, Float3.One * 0.05f);
-
-        // Get the local rotation and position
-        Quaternion localRotation = Quaternion.FromEuler(Rotation);
-        Float3 scaledCenter = Center * cumulativeScale;
-
-        // Transform to world space
-        Float3 worldCenter = Transform.TransformPoint(scaledCenter);
-        Quaternion worldRotation = Transform.Rotation * localRotation;
-
-        // Create a scale transform matrix that includes both rotation and scale
-        Float4x4 scaleMatrix = Float4x4.CreateTRS(Float3.Zero, worldRotation, cumulativeScale);
-
-        // Convert to Jitter types
-        var translation = new Jitter2.LinearMath.JVector(
-            worldCenter.X,
-            worldCenter.Y,
-            worldCenter.Z
-        );
-
-        // Convert combined rotation and scale matrix to JMatrix
-        var orientation = new Jitter2.LinearMath.JMatrix(
-            scaleMatrix[0, 0], scaleMatrix[0, 1], scaleMatrix[0, 2],
-            scaleMatrix[1, 0], scaleMatrix[1, 1], scaleMatrix[1, 2],
-            scaleMatrix[2, 0], scaleMatrix[2, 1], scaleMatrix[2, 2]
-        );
-
-        // If there's no transformation needed, return the original shape
-        if (worldCenter.Equals(Float3.Zero) &&
-            cumulativeScale.Equals(Float3.One) &&
-            worldRotation == Quaternion.Identity)
+        if (translation.Equals(Float3.Zero) && scale.Equals(Float3.One) && rotation == Quaternion.Identity)
             return shapes;
 
-        TransformedShape[] transformedShapes = new TransformedShape[shapes.Length];
+        Float4x4 linear = Float4x4.CreateTRS(Float3.Zero, rotation, scale);
+        var jTranslation = new JVector(translation.X, translation.Y, translation.Z);
+        var jLinear = new JMatrix(
+            linear[0, 0], linear[0, 1], linear[0, 2],
+            linear[1, 0], linear[1, 1], linear[1, 2],
+            linear[2, 0], linear[2, 1], linear[2, 2]);
+
+        var transformedShapes = new RigidBodyShape[shapes.Length];
         for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], translation, orientation);
+            transformedShapes[i] = new TransformedShape(shapes[i], jTranslation, jLinear);
 
         return transformedShapes;
     }
 
-    public override void OnEnable()
+    /// <summary>
+    /// The nearest enabled Rigidbody3D at or above this collider, or null when the collider belongs to
+    /// static geometry. A disabled rigidbody is skipped because its Jitter body has been removed, so
+    /// attaching to it would drop the collider out of the world entirely.
+    /// </summary>
+    private Rigidbody3D FindOwningRigidbody()
     {
-        // First check if there's a Rigidbody3D on this GameObject or any parent
-        Rigidbody3D rb = GetComponentInParent<Rigidbody3D>();
+        foreach (Rigidbody3D rb in GetComponentsInParent<Rigidbody3D>())
+            if (rb.IsValid() && rb.EnabledInHierarchy) return rb;
 
-        if (rb.IsValid())
-        {
-            // Attach to the Rigidbody3D
-            TryAttachTo(rb);
-        }
-        else
-        {
-            // No Rigidbody3D found, attach to the static rigidbody
-            AttachToStatic();
-        }
+        return null;
     }
+
+    /// <summary>
+    /// Re-resolves which body this collider belongs to and attaches to it, falling back to the static
+    /// rigidbody for its layer.
+    /// </summary>
+    internal void Reattach()
+    {
+        Detach();
+
+        Rigidbody3D rb = FindOwningRigidbody();
+        if (rb.IsValid()) TryAttachTo(rb);
+        else AttachToStatic();
+    }
+
+    public override void OnEnable() => Reattach();
 
     public override void OnDisable()
     {

@@ -23,11 +23,48 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     private TerrainHeightmapProxy _heightmapProxy;
     private TerrainCollisionFilter _collisionFilter;
     private bool _isRegistered;
+    private uint _lastTransformVersion;
 
     #region ITerrainHeightProvider samples directly from TerrainData
 
     public int Width => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
     public int Height => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
+
+    public JVector Origin => _origin;
+
+    public float CellSize => _cellSize;
+
+    public JBoundingBox WorldBounds => _worldBounds;
+
+    private JVector _origin;
+    private float _cellSize;
+    private float _heightScale = 1.0f;
+    private JBoundingBox _worldBounds;
+
+    private void RefreshPlacement()
+    {
+        Float3 p = Transform.Position;
+        Float3 scale = Transform.LossyScale;
+        _origin = new JVector((float)p.X, (float)p.Y, (float)p.Z);
+        _heightScale = MathF.Abs((float)scale.Y);
+
+        var data = _terrain.IsValid() ? _terrain.Data.Res : null;
+        if (data.IsNotValid() || data.HeightmapResolution < 2)
+        {
+            _cellSize = 0.0f;
+            _worldBounds = new JBoundingBox(_origin, _origin);
+            return;
+        }
+
+        float span = data.Size * MathF.Abs((float)scale.X);
+        float tall = data.Height * _heightScale;
+        _cellSize = span / (data.HeightmapResolution - 1);
+
+        // The stored heights span the full 0..Height range, so sculpting can never leave these bounds.
+        _worldBounds = new JBoundingBox(
+            new JVector(_origin.X, _origin.Y - tall * 0.1f, _origin.Z),
+            new JVector(_origin.X + span, _origin.Y + tall, _origin.Z + span));
+    }
 
     public bool TryGetHeight(int x, int z, out float height)
     {
@@ -40,7 +77,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         // Height in terrain-local space, scaled by terrain height (16-bit storage)
         float normalizedHeight = (float)data.Heights[z * res + x] / TerrainData.kMaxHeight;
-        height = normalizedHeight * data.Height + (float)Transform.Position.Y;
+        height = normalizedHeight * data.Height * _heightScale + _origin.Y;
         return true;
     }
 
@@ -103,40 +140,48 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         var physics = GameObject.Scene.Physics;
 
-        Float3 terrainPos = Transform.Position;
-        float terrainSize = terrainData.Size;
-        float terrainHeight = terrainData.Height;
-        int res = terrainData.HeightmapResolution;
+        WarnOnUnsupportedTransform();
+        RefreshPlacement();
 
-        float cellSize = terrainSize / (res - 1);
+        _heightmapProxy = new TerrainHeightmapProxy(this);
+        _collisionFilter = new TerrainCollisionFilter(physics.World, _heightmapProxy, this);
 
-        JVector terrainOrigin = new JVector(
-            (float)terrainPos.X, (float)terrainPos.Y, (float)terrainPos.Z);
-
-        // World-space AABB from transformed local corners
-        Float3 localMin = new(0, -terrainHeight * 0.1f, 0);
-        Float3 localMax = new(terrainSize, terrainHeight, terrainSize);
-        Float3 wMin = new(float.MaxValue), wMax = new(float.MinValue);
-        for (int i = 0; i < 8; i++)
-        {
-            Float3 corner = new(
-                (i & 1) == 0 ? localMin.X : localMax.X,
-                (i & 2) == 0 ? localMin.Y : localMax.Y,
-                (i & 4) == 0 ? localMin.Z : localMax.Z);
-            Float3 world = _terrain.TerrainToWorld(corner);
-            wMin = new Float3(MathF.Min(wMin.X, world.X), MathF.Min(wMin.Y, world.Y), MathF.Min(wMin.Z, world.Z));
-            wMax = new Float3(MathF.Max(wMax.X, world.X), MathF.Max(wMax.Y, world.Y), MathF.Max(wMax.Z, world.Z));
-        }
-
-        JBoundingBox boundingBox = new(
-            new JVector((float)wMin.X, (float)wMin.Y, (float)wMin.Z),
-            new JVector((float)wMax.X, (float)wMax.Y, (float)wMax.Z));
-
-        _heightmapProxy = new TerrainHeightmapProxy(this, boundingBox, terrainOrigin, cellSize);
-        _collisionFilter = new TerrainCollisionFilter(physics.World, _heightmapProxy, this, terrainOrigin, cellSize);
-
-        physics.RegisterTerrain(_heightmapProxy, _collisionFilter, this, terrainOrigin, cellSize);
+        physics.RegisterTerrain(_heightmapProxy, _collisionFilter, this);
+        _lastTransformVersion = ComputeWorldTransformVersion();
         _isRegistered = true;
+    }
+
+    private void WarnOnUnsupportedTransform()
+    {
+        Float3 scale = Transform.LossyScale;
+        bool squareCells = MathF.Abs(MathF.Abs((float)scale.X) - MathF.Abs((float)scale.Z)) <= 1e-4f;
+
+        if (Transform.Rotation != Quaternion.Identity || !squareCells)
+            Debug.LogError($"TerrainCollider on '{GameObject.Name}' needs an unrotated transform with equal X and Z scale. Collision will not line up with the rendered terrain.");
+    }
+
+    public override void Update()
+    {
+        if (!_isRegistered) return;
+
+        // Re-read the placement and re-fit the broad-phase bounds when the terrain (or an ancestor)
+        // moves. Doing it here, on the main thread, is what lets the filter sample it from workers.
+        uint version = ComputeWorldTransformVersion();
+        if (version == _lastTransformVersion) return;
+
+        _lastTransformVersion = version;
+        RefreshPlacement();
+
+        var scene = GameObject.IsValid() ? GameObject.Scene : null;
+        if (scene.IsValid()) scene.Physics?.RefreshTerrain(_heightmapProxy);
+    }
+
+    private uint ComputeWorldTransformVersion()
+    {
+        uint v = 17;
+        for (Transform t = Transform; t != null; t = t.Parent)
+            v = v * 31 + t.Version;
+        return v;
     }
 
     private void UnregisterFromPhysics()

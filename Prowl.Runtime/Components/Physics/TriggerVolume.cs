@@ -54,9 +54,20 @@ public sealed class TriggerVolume : MonoBehaviour
     /// <summary>The rigidbodies currently inside the volume.</summary>
     public IReadOnlyCollection<Rigidbody3D> Overlapping => _current;
 
-    public override void FixedUpdate()
+    private PhysicsWorld ResolvePhysics() =>
+        GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+
+    public override void OnEnable()
     {
-        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        // Sample after the step, not in FixedUpdate: FixedUpdate runs before the step, so it would
+        // report overlaps against poses the solver is about to change.
+        PhysicsWorld physics = ResolvePhysics();
+        if (physics != null) physics.PostStep += OnPostStep;
+    }
+
+    private void OnPostStep(float deltaTime)
+    {
+        PhysicsWorld physics = ResolvePhysics();
         if (physics == null) return;
 
         // Swap buffers: last step's occupants become the baseline we diff against.
@@ -69,7 +80,7 @@ public sealed class TriggerVolume : MonoBehaviour
         foreach (ShapeCastHit hit in _hits)
         {
             Rigidbody3D other = hit.Rigidbody;
-            if (other == null || other == self) continue; // skip static/unidentifiable and our own body
+            if (other.IsNotValid() || other == self) continue; // skip static/unidentifiable and our own body
             _current.Add(other);
         }
 
@@ -80,15 +91,30 @@ public sealed class TriggerVolume : MonoBehaviour
         }
 
         foreach (Rigidbody3D rb in _previous)
-            if (!_current.Contains(rb)) SceneDispatcher.TriggerExit(GameObject, rb);
+            if (!_current.Contains(rb)) RaiseExit(rb);
+
+        // The occupant set is rebuilt every step, so nothing is held longer than that, but the buffer
+        // we just diffed against would otherwise pin its bodies until the step after next.
+        _previous.Clear();
     }
 
     public override void OnDisable()
     {
+        PhysicsWorld physics = ResolvePhysics();
+        if (physics != null) physics.PostStep -= OnPostStep;
+
         // Everything that was inside counts as having left when the volume turns off.
-        foreach (Rigidbody3D rb in _current) SceneDispatcher.TriggerExit(GameObject, rb);
+        foreach (Rigidbody3D rb in _current) RaiseExit(rb);
         _current.Clear();
         _previous.Clear();
+    }
+
+    // A body destroyed while inside the volume has left as far as gameplay is concerned, but there is
+    // nothing meaningful to hand the callback, so the exit is dropped rather than reported against a
+    // destroyed component.
+    private void RaiseExit(Rigidbody3D rb)
+    {
+        if (rb.IsValid()) SceneDispatcher.TriggerExit(GameObject, rb);
     }
 
     private void QueryOverlaps(PhysicsWorld physics, List<ShapeCastHit> hits)

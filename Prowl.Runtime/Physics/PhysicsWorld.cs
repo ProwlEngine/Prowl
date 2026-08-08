@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Jitter2;
 using Jitter2.Collision;
@@ -26,9 +27,17 @@ public enum PhysicsThreadModel
 
 public class PhysicsWorld
 {
-    public static void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.IgnoreCollisionBetween(bodyA, bodyB);
+    /// <summary>
+    /// Stops two rigidbodies colliding with each other, on top of whatever the layer matrix says. The
+    /// pair is scoped to this world and is dropped when the world is cleared.
+    /// </summary>
+    public void IgnoreCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.IgnoreCollisionBetween(bodyA, bodyB);
 
-    public static void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => LayerFilter.EnableCollisionBetween(bodyA, bodyB);
+    /// <summary>Undoes <see cref="IgnoreCollisionBetween"/> for a pair.</summary>
+    public void EnableCollisionBetween(Rigidbody3D bodyA, Rigidbody3D bodyB) => _layerFilter.EnableCollisionBetween(bodyA, bodyB);
+
+    /// <summary>Forgets every pair passed to <see cref="IgnoreCollisionBetween"/>.</summary>
+    public void ClearIgnoredCollisions() => _layerFilter.ClearIgnoredCollisions();
 
     /// <summary>
     /// Bake (or fetch the cached) physics representation of a mesh. The bake is stored directly on
@@ -78,14 +87,11 @@ public class PhysicsWorld
     /// </summary>
     private CompositeBroadPhaseFilter _compositeBroadPhaseFilter;
 
-    // Registered terrain data for shape casts
-    internal struct TerrainInfo
-    {
-        public ITerrainHeightProvider HeightProvider;
-        public JVector Origin;
-        public float CellSize;
-    }
-    internal readonly Dictionary<TerrainHeightmapProxy, TerrainInfo> _terrainProxies = [];
+    private readonly LayerFilter _layerFilter = new();
+
+    // Registered terrain providers for shape casts. The grid placement is read from the provider per
+    // query rather than captured here, so terrain can be moved and scaled after registration.
+    internal readonly Dictionary<TerrainHeightmapProxy, ITerrainHeightProvider> _terrainProxies = [];
 
     public Float3 Gravity = new(0, -9.81f, 0);
     public int SolverIterations = 8;
@@ -106,8 +112,109 @@ public class PhysicsWorld
     // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
     private readonly HashSet<Rigidbody3D> _syncBodies = [];
 
+    // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
+    // which GameObject was struck. This maps every shape back to the Collider that created it. The key
+    // is weak, so an entry that no Detach reached (a shape bulk-removed during a rebuild, say) dies
+    // with the shape instead of pinning it and its collider for the lifetime of the world.
+    private readonly ConditionalWeakTable<RigidBodyShape, Collider> _shapeOwners = new();
+
+    private readonly List<IDynamicTreeProxy> _queryProxies = [];
+    private readonly List<ShapeCastHit> _queryHits = [];
+    private readonly SphereShape _querySphere = new(0.5f);
+    private readonly BoxShape _queryBox = new(1.0f, 1.0f, 1.0f);
+    private readonly CapsuleShape _queryCapsule = new(0.5f, 1.0f);
+    private readonly CylinderShape _queryCylinder = new(1.0f, 0.5f);
+    private readonly ConeShape _queryCone = new(0.5f, 1.0f);
+
+    private SphereShape QuerySphere(float radius)
+    {
+        _querySphere.Radius = radius;
+        return _querySphere;
+    }
+
+    private BoxShape QueryBox(Float3 size)
+    {
+        _queryBox.Size = new JVector(size.X, size.Y, size.Z);
+        return _queryBox;
+    }
+
+    private CapsuleShape QueryCapsule(float radius, float length)
+    {
+        _queryCapsule.Radius = radius;
+        _queryCapsule.Length = length;
+        return _queryCapsule;
+    }
+
+    private CylinderShape QueryCylinder(float radius, float height)
+    {
+        _queryCylinder.Radius = radius;
+        _queryCylinder.Height = height;
+        return _queryCylinder;
+    }
+
+    private ConeShape QueryCone(float radius, float height)
+    {
+        _queryCone.Radius = radius;
+        _queryCone.Height = height;
+        return _queryCone;
+    }
+
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+
+    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider) => _shapeOwners.AddOrUpdate(shape, collider);
+
+    internal void UnregisterShapeOwner(RigidBodyShape shape) => _shapeOwners.Remove(shape);
+
+    /// <summary>
+    /// The <see cref="Collider"/> that created the given shape, or null if the shape is not tracked.
+    /// </summary>
+    public Collider GetShapeOwner(RigidBodyShape shape)
+    {
+        if (shape != null && _shapeOwners.TryGetValue(shape, out Collider collider) && collider.IsValid())
+            return collider;
+        return null;
+    }
+
+    /// <summary>
+    /// The Transform of the terrain owning the given proxy, or null if the proxy is not registered
+    /// terrain. Terrain has no shape or body, so this is the only way a hit can name its GameObject.
+    /// </summary>
+    internal Transform GetTerrainTransform(IDynamicTreeProxy proxy)
+    {
+        MonoBehaviour owner = GetTerrainOwner(proxy);
+        return owner.IsValid() && owner.GameObject.IsValid() ? owner.GameObject.Transform : null;
+    }
+
+    /// <summary>The component that registered the given terrain proxy, or null if it is not terrain.</summary>
+    private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
+    {
+        if (proxy is TerrainHeightmapProxy terrain &&
+            _terrainProxies.TryGetValue(terrain, out ITerrainHeightProvider provider) &&
+            provider is MonoBehaviour owner && owner.IsValid())
+            return owner;
+
+        return null;
+    }
+
+    /// <summary>Whether a terrain proxy sits on a layer the mask accepts. Terrain has no body to carry
+    /// layer data, so it is taken from the GameObject the terrain component lives on.</summary>
+    private bool TerrainPassesLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    {
+        MonoBehaviour owner = GetTerrainOwner(proxy);
+        return owner.IsValid() && owner.GameObject.IsValid() && layerMask.HasLayer(owner.GameObject.LayerIndex);
+    }
+
+    /// <summary>
+    /// The Transform a query hit should report: the rigidbody's when there is one, otherwise the
+    /// collider's own.
+    /// </summary>
+    internal static Transform ResolveHitTransform(Rigidbody3D rigidbody, Collider collider)
+    {
+        if (rigidbody.IsValid() && rigidbody.GameObject.IsValid()) return rigidbody.GameObject.Transform;
+        if (collider.IsValid() && collider.GameObject.IsValid()) return collider.GameObject.Transform;
+        return null;
+    }
 
     /// <summary>
     /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
@@ -176,7 +283,7 @@ public class PhysicsWorld
 
         // Set up composite broad phase filter
         _compositeBroadPhaseFilter = new CompositeBroadPhaseFilter();
-        _compositeBroadPhaseFilter.AddFilter(new LayerFilter());
+        _compositeBroadPhaseFilter.AddFilter(_layerFilter);
         World.BroadPhaseFilter = _compositeBroadPhaseFilter;
 
         World.NarrowPhaseFilter = new TriangleEdgeCollisionFilter();
@@ -238,6 +345,19 @@ public class PhysicsWorld
 
         // Clear the static rigidbodies dictionary - they will be recreated as needed
         _staticRigidbodiesByLayer.Clear();
+
+        // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
+        // The components re-register when they recreate their bodies.
+        _syncBodies.Clear();
+        _shapeOwners.Clear();
+        _layerFilter.ClearIgnoredCollisions();
+
+        // World.Clear drops every dynamic tree proxy, terrain included, so the terrain filters would be
+        // left chained onto the broad phase testing against proxies that no longer exist. Reset the
+        // chain to the layer filter, which is all a fresh world starts with.
+        _terrainProxies.Clear();
+        _compositeBroadPhaseFilter.ClearFilters();
+        _compositeBroadPhaseFilter.AddFilter(_layerFilter);
     }
 
     public void Update()
@@ -264,6 +384,11 @@ public class PhysicsWorld
         SyncTransforms();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
+
+        // Record the pose each body just landed on, so interpolated bodies have two steps to render
+        // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
+        foreach (var body in _syncBodies)
+            if (body.IsValid()) body.CapturePose();
     }
 
     /// <summary>
@@ -271,6 +396,7 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction)
     {
+        if (!ValidateQuery(origin, direction, 0.0f, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
@@ -286,6 +412,8 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo)
     {
+        hitInfo = new RaycastHit();
+        if (!ValidateQuery(origin, direction, 0.0f, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
@@ -304,7 +432,7 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
@@ -315,14 +443,17 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance)
     {
+        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
-        return World.DynamicTree.RayCast(jOrigin, jDirection,
+        // Direction is normalized, so maxDistance is the ray parameter limit. Passing it in lets the
+        // tree traversal prune whole branches instead of finding the closest hit and discarding it.
+        return World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
             PreFilter, PostFilter,
-            out _, out _, out float dist) && dist <= maxDistance;
+            out _, out _, out _);
     }
 
     /// <summary>
@@ -330,15 +461,17 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo)
     {
+        hitInfo = new RaycastHit();
+        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         hitInfo = new RaycastHit();
-        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
+        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
             PreFilter, PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out float lambda) && lambda <= maxDistance;
+            out IDynamicTreeProxy shape, out JVector normal, out float lambda);
 
         if (hit)
         {
@@ -348,7 +481,7 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal,
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
@@ -359,14 +492,15 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, float maxDistance, LayerMask layerMask)
     {
+        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
-        return World.DynamicTree.RayCast(jOrigin, jDirection,
+        return World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
             shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out _, out _, out float lambda) && lambda <= maxDistance;
+            out _, out _, out _);
     }
 
     /// <summary>
@@ -374,15 +508,17 @@ public class PhysicsWorld
     /// </summary>
     public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo, float maxDistance, LayerMask layerMask)
     {
+        hitInfo = new RaycastHit();
+        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
         var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
 
         hitInfo = new RaycastHit();
-        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
+        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
             shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out float lambda) && lambda <= maxDistance;
+            out IDynamicTreeProxy shape, out JVector normal, out float lambda);
 
         if (hit)
         {
@@ -392,10 +528,41 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal,
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
+    }
+
+    private static bool IsFinite(Float3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
+
+    /// <summary>
+    /// Rejects query inputs that would take NaN or infinity into the solver. Jitter's support maps use
+    /// <c>Math.Sign</c> on the search direction, which throws outright on NaN, so a single poisoned
+    /// caller would otherwise crash the frame from deep inside the narrow phase. Reporting no hit and
+    /// naming the query gives the caller something to act on instead.
+    /// </summary>
+    private static bool ValidateQuery(Float3 origin, Float3 direction, float maxDistance, string query)
+    {
+        if (!IsFinite(origin) || !IsFinite(direction) || !float.IsFinite(maxDistance))
+        {
+            Debug.LogError($"[Physics] {query} was given a non-finite origin ({origin}), direction ({direction}) or distance ({maxDistance}) and was skipped.");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>As <see cref="ValidateQuery(Float3, Float3, float, string)"/>, for queries with no sweep.</summary>
+    private static bool ValidateQuery(Float3 position, string query)
+    {
+        if (!IsFinite(position))
+        {
+            Debug.LogError($"[Physics] {query} was given a non-finite position ({position}) and was skipped.");
+            return false;
+        }
+
+        return true;
     }
 
     private static bool PreFilter(IDynamicTreeProxy proxy)
@@ -403,18 +570,17 @@ public class PhysicsWorld
         return true;
     }
 
-    private static bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    private bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
     {
         if (proxy is RigidBodyShape shape)
         {
-            if (!PreFilter(proxy)) return false;
-
-            var userData = shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
+            // A body without our user data has no layer to test, so a mask can only exclude it.
+            if (shape.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData userData) return false;
 
             return layerMask.HasLayer(userData.Layer);
         }
 
-        return false;
+        return TerrainPassesLayer(proxy, layerMask);
     }
 
     private static bool PostFilter(DynamicTree.RayCastResult result)
@@ -437,6 +603,9 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
+        hits.Clear();
+        if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
+
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
         direction = Float3.Normalize(direction);
 
@@ -444,10 +613,9 @@ public class PhysicsWorld
         var jDirection = new JVector(direction.X, direction.Y, direction.Z);
         JVector sweep = jDirection * maxDistance;
 
-        hits.Clear();
-
         // Get all shapes from the dynamic tree that could potentially be hit
-        var potentialShapes = new List<IDynamicTreeProxy>();
+        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
+        potentialShapes.Clear();
 
         // Create a bounding box that encompasses the entire sweep
         JBoundingBox sweepBox = new();
@@ -466,7 +634,8 @@ public class PhysicsWorld
             if (proxy is TerrainHeightmapProxy terrainProxy)
             {
                 // Shape cast against terrain heightmap triangles
-                SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
+                if (TerrainPassesLayer(terrainProxy, layerMask))
+                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
                 continue;
             }
 
@@ -488,26 +657,49 @@ public class PhysicsWorld
 
             if (hit && lambda >= 0 && lambda <= 1.0)
             {
+                float penetration = 0.0f;
+
+                // A zero normal means the shapes already overlapped at the start of the sweep, where
+                // Sweep reports lambda 0 and no direction. Recover the direction and the depth from
+                // MPR/EPA; the fraction stays 0, the depth belongs in Penetration.
                 if (normal.LengthSquared() <= 0)
                 {
-                    _ = NarrowPhase.MprEpa(
+                    lambda = 0.0f;
+
+                    bool resolved = NarrowPhase.MprEpa(
                         shape, targetShape,
                         jOrientation, targetBody.Data.Orientation,
                         jOrigin, targetBody.Data.Position,
-                        out JVector _, out JVector _, out normal, out lambda);
-                    normal = JVector.Normalize(normal);
+                        out JVector deepestA, out JVector deepestB, out JVector separation, out penetration);
+
+                    if (resolved && separation.LengthSquared() > 0)
+                    {
+                        pointA = deepestA;
+                        pointB = deepestB;
+                        normal = JVector.Normalize(separation);
+                    }
+                    else
+                    {
+                        // EPA did not converge. Report the sweep direction so the caller is still
+                        // blocked, rather than handing back a zero normal it would divide by.
+                        penetration = 0.0f;
+                        normal = jDirection;
+                    }
                 }
 
+                Collider owner = GetShapeOwner(targetShape);
                 var castHit = new ShapeCastHit
                 {
                     Hit = true,
                     Fraction = lambda,
+                    Penetration = penetration,
                     Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
                     Point = new Float3(pointA.X, pointA.Y, pointA.Z),
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
+                    Collider = owner,
+                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
                 };
                 hits.Add(castHit);
             }
@@ -523,12 +715,12 @@ public class PhysicsWorld
         JVector jOrigin, JVector sweep, TerrainHeightmapProxy terrainProxy,
         JBoundingBox sweepBox, List<ShapeCastHit> hits)
     {
-        if (!_terrainProxies.TryGetValue(terrainProxy, out var info))
+        if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
             return;
 
-        var hp = info.HeightProvider;
-        var origin = info.Origin;
-        float cs = info.CellSize;
+        JVector origin = hp.Origin;
+        float cs = hp.CellSize;
+        if (cs <= 0.0f) return;
 
         // Convert sweep AABB to grid coordinates
         int minX = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.X - origin.X) / cs));
@@ -545,7 +737,7 @@ public class PhysicsWorld
         {
             for (int z = minZ; z < maxZ; z++)
             {
-                if (!hp.IsValidCell(x, z)) continue;
+                if (!hp.IsValidCell(x, z) || hp.IsCellHole(x, z)) continue;
                 if (!hp.TryGetHeight(x, z, out float h00) ||
                     !hp.TryGetHeight(x + 1, z, out float h10) ||
                     !hp.TryGetHeight(x + 1, z + 1, out float h11) ||
@@ -578,8 +770,15 @@ public class PhysicsWorld
 
                     if (hit && lambda >= 0 && lambda <= 1.0f && lambda < bestLambda)
                     {
+                        // Overlap at t=0 leaves no sweep direction. Substitute the triangle's own
+                        // normal, flipped to point from the caster at the triangle so it matches
+                        // the sign convention of the sweep normal (negated once when reported).
+                        // NormalizeSafe, because a degenerate cell would otherwise hand back NaN.
                         if (n.LengthSquared() <= 0)
-                            n = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
+                        {
+                            n = -JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
+                            if (n.LengthSquared() <= 0) continue;
+                        }
 
                         bestLambda = lambda;
                         bestNormal = n;
@@ -592,6 +791,9 @@ public class PhysicsWorld
 
         if (bestLambda < float.MaxValue)
         {
+            // The height provider is the TerrainCollider component itself, so it can name the GameObject
+            // even though terrain has no RigidBodyShape to look up.
+            var terrain = hp as MonoBehaviour;
             hits.Add(new ShapeCastHit
             {
                 Hit = true,
@@ -601,7 +803,8 @@ public class PhysicsWorld
                 HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
                 Rigidbody = null,
                 Shape = null,
-                Transform = null,
+                Collider = null,
+                Transform = terrain.IsValid() && terrain.GameObject.IsValid() ? terrain.GameObject.Transform : null,
             });
         }
     }
@@ -627,7 +830,7 @@ public class PhysicsWorld
     /// <returns>True if the shape hit something.</returns>
     public bool ShapeCast(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         int hitCount = ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, layerMask);
 
         if (hitCount > 0)
@@ -674,8 +877,7 @@ public class PhysicsWorld
     /// </summary>
     public bool SphereCast(Float3 origin, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
     {
-        var sphere = new SphereShape(radius);
-        return ShapeCast(sphere, Quaternion.Identity, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, out hitInfo, layerMask);
     }
 
     /// <summary>
@@ -697,8 +899,7 @@ public class PhysicsWorld
     /// </summary>
     public int SphereCastAll(Float3 origin, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var sphere = new SphereShape(radius);
-        return ShapeCastAll(sphere, Quaternion.Identity, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, hits, layerMask);
     }
 
     /// <summary>
@@ -726,8 +927,8 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Create a capsule shape (aligned along Y-axis)
-        var capsule = new CapsuleShape(radius, capsuleLength);
+        // Reused capsule shape (aligned along Y-axis)
+        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -760,8 +961,8 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Create a capsule shape (aligned along Y-axis)
-        var capsule = new CapsuleShape(radius, capsuleLength);
+        // Reused capsule shape (aligned along Y-axis)
+        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -820,8 +1021,7 @@ public class PhysicsWorld
     /// </summary>
     public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
     {
-        var box = new BoxShape(size.X, size.Y, size.Z);
-        return ShapeCast(box, orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryBox(size), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
     }
 
     /// <summary>
@@ -844,8 +1044,7 @@ public class PhysicsWorld
     /// </summary>
     public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var box = new BoxShape(size.X, size.Y, size.Z);
-        return ShapeCastAll(box, orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryBox(size), orientation, origin, direction, maxDistance, hits, layerMask);
     }
 
     /// <summary>
@@ -869,8 +1068,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CylinderCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
     {
-        var cylinder = new CylinderShape(height, radius);
-        return ShapeCast(cylinder, orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
     }
 
     /// <summary>
@@ -894,8 +1092,7 @@ public class PhysicsWorld
     /// </summary>
     public int CylinderCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var cylinder = new CylinderShape(height, radius);
-        return ShapeCastAll(cylinder, orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, hits, layerMask);
     }
 
     /// <summary>
@@ -919,8 +1116,7 @@ public class PhysicsWorld
     /// </summary>
     public bool ConeCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
     {
-        var cone = new ConeShape(radius, height);
-        return ShapeCast(cone, orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryCone(radius, height), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
     }
 
     /// <summary>
@@ -944,8 +1140,7 @@ public class PhysicsWorld
     /// </summary>
     public int ConeCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var cone = new ConeShape(radius, height);
-        return ShapeCastAll(cone, orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryCone(radius, height), orientation, origin, direction, maxDistance, hits, layerMask);
     }
 
     #endregion
@@ -963,12 +1158,15 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, LayerMask layerMask)
     {
+        hits.Clear();
+        if (!ValidateQuery(position, nameof(Overlap))) return 0;
+
         if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync (also covers Overlap*/Check* which funnel here)
         var jPosition = new JVector(position.X, position.Y, position.Z);
-        hits.Clear();
 
         // Get all shapes from the dynamic tree that could potentially overlap
-        var potentialShapes = new List<IDynamicTreeProxy>();
+        List<IDynamicTreeProxy> potentialShapes = _queryProxies;
+        potentialShapes.Clear();
 
         // Create a bounding box for the shape
         shape.CalculateBoundingBox(new JQuaternion(orientation.X, orientation.Y, orientation.Z, orientation.W), jPosition, out JBoundingBox shapeBounds);
@@ -993,6 +1191,7 @@ public class PhysicsWorld
 
             if (overlaps && penetration > 0)
             {
+                Collider owner = GetShapeOwner(targetShape);
                 var hit = new ShapeCastHit
                 {
                     Hit = true,
@@ -1003,7 +1202,8 @@ public class PhysicsWorld
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
+                    Collider = owner,
+                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
                 };
                 hits.Add(hit);
             }
@@ -1037,8 +1237,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapSphere(Float3 position, float radius, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var sphere = new SphereShape(radius);
-        return Overlap(sphere, Quaternion.Identity, position, hits, layerMask);
+        return Overlap(QuerySphere(radius), Quaternion.Identity, position, hits, layerMask);
     }
 
     /// <summary>
@@ -1064,8 +1263,8 @@ public class PhysicsWorld
         Float3 capsuleAxis = point2 - point1;
         float capsuleLength = Float3.Length(capsuleAxis);
 
-        // Create a capsule shape (aligned along Y-axis)
-        var capsule = new CapsuleShape(radius, capsuleLength);
+        // Reused capsule shape (aligned along Y-axis)
+        CapsuleShape capsule = QueryCapsule(radius, capsuleLength);
 
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
@@ -1091,8 +1290,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var box = new BoxShape(size.X, size.Y, size.Z);
-        return Overlap(box, orientation, position, hits, layerMask);
+        return Overlap(QueryBox(size), orientation, position, hits, layerMask);
     }
 
     /// <summary>
@@ -1114,8 +1312,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapCylinder(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var cylinder = new CylinderShape(height, radius);
-        return Overlap(cylinder, orientation, position, hits, layerMask);
+        return Overlap(QueryCylinder(radius, height), orientation, position, hits, layerMask);
     }
 
     /// <summary>
@@ -1137,8 +1334,7 @@ public class PhysicsWorld
     /// </summary>
     public int OverlapCone(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
     {
-        var cone = new ConeShape(radius, height);
-        return Overlap(cone, orientation, position, hits, layerMask);
+        return Overlap(QueryCone(radius, height), orientation, position, hits, layerMask);
     }
 
     #endregion
@@ -1161,7 +1357,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CheckSphere(Float3 position, float radius, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         return OverlapSphere(position, radius, hits, layerMask) > 0;
     }
 
@@ -1182,7 +1378,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CheckCapsule(Float3 point1, Float3 point2, float radius, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         return OverlapCapsule(point1, point2, radius, hits, layerMask) > 0;
     }
 
@@ -1203,7 +1399,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CheckBox(Float3 position, Float3 size, Quaternion orientation, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         return OverlapBox(position, size, orientation, hits, layerMask) > 0;
     }
 
@@ -1225,7 +1421,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CheckCylinder(Float3 position, float radius, float height, Quaternion orientation, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         return OverlapCylinder(position, radius, height, orientation, hits, layerMask) > 0;
     }
 
@@ -1247,7 +1443,7 @@ public class PhysicsWorld
     /// </summary>
     public bool CheckCone(Float3 position, float radius, float height, Quaternion orientation, LayerMask layerMask)
     {
-        var hits = new List<ShapeCastHit>();
+        List<ShapeCastHit> hits = _queryHits;
         return OverlapCone(position, radius, height, orientation, hits, layerMask) > 0;
     }
 
@@ -1260,11 +1456,9 @@ public class PhysicsWorld
     /// </summary>
     /// <param name="heightmapProxy">The terrain heightmap proxy for raycasting.</param>
     /// <param name="collisionFilter">The terrain collision filter for broad phase collision detection.</param>
-    /// <param name="heightProvider">Sampler used to query terrain height at arbitrary points during contact resolution.</param>
-    /// <param name="terrainOrigin">World-space origin (corner) of the terrain grid.</param>
-    /// <param name="cellSize">World-space spacing between height samples in the grid.</param>
+    /// <param name="heightProvider">Sampler for terrain heights and the live grid placement.</param>
     public void RegisterTerrain(TerrainHeightmapProxy heightmapProxy, TerrainCollisionFilter collisionFilter,
-        ITerrainHeightProvider heightProvider, JVector terrainOrigin, float cellSize)
+        ITerrainHeightProvider heightProvider)
     {
         if (heightmapProxy == null || collisionFilter == null)
             return;
@@ -1272,12 +1466,19 @@ public class PhysicsWorld
         World.DynamicTree.AddProxy(heightmapProxy, false);
         _compositeBroadPhaseFilter.AddFilter(collisionFilter);
 
-        _terrainProxies[heightmapProxy] = new TerrainInfo
-        {
-            HeightProvider = heightProvider,
-            Origin = terrainOrigin,
-            CellSize = cellSize,
-        };
+        _terrainProxies[heightmapProxy] = heightProvider;
+    }
+
+    /// <summary>
+    /// Re-fits a registered terrain's broad phase bounds after its transform changed. The grid itself is
+    /// sampled live, so only the dynamic tree needs telling.
+    /// </summary>
+    public void RefreshTerrain(TerrainHeightmapProxy heightmapProxy)
+    {
+        if (heightmapProxy == null || heightmapProxy.SetIndex == -1)
+            return;
+
+        World.DynamicTree.Update(heightmapProxy);
     }
 
     /// <summary>
