@@ -54,9 +54,20 @@ public sealed class TriggerVolume : MonoBehaviour
     /// <summary>The rigidbodies currently inside the volume.</summary>
     public IReadOnlyCollection<Rigidbody3D> Overlapping => _current;
 
-    public override void FixedUpdate()
+    private PhysicsWorld ResolvePhysics() =>
+        GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+
+    public override void OnEnable()
     {
-        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        // Sample after the step, not in FixedUpdate: FixedUpdate runs before the step, so it would
+        // report overlaps against poses the solver is about to change.
+        PhysicsWorld physics = ResolvePhysics();
+        if (physics != null) physics.PostStep += OnPostStep;
+    }
+
+    private void OnPostStep(float deltaTime)
+    {
+        PhysicsWorld physics = ResolvePhysics();
         if (physics == null) return;
 
         // Swap buffers: last step's occupants become the baseline we diff against.
@@ -85,6 +96,9 @@ public sealed class TriggerVolume : MonoBehaviour
 
     public override void OnDisable()
     {
+        PhysicsWorld physics = ResolvePhysics();
+        if (physics != null) physics.PostStep -= OnPostStep;
+
         // Everything that was inside counts as having left when the volume turns off.
         foreach (Rigidbody3D rb in _current) SceneDispatcher.TriggerExit(GameObject, rb);
         _current.Clear();
