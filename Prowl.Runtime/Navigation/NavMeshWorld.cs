@@ -75,12 +75,14 @@ public sealed class NavMeshInstance
     /// it — prefer <see cref="NavMeshWorld.MutateTileCache"/> for tile changes.</summary>
     public DtNavMesh NativeNavMesh => Mesh;
 
-    // Off-mesh connection user ids present in the mesh, built lazily and invalidated on
-    // mutation — turns per-link containment checks (every NavMeshLink at scene load) into
-    // O(1) after one O(tiles) pass per instance. Main-thread only, like registration.
-    private HashSet<int>? _linkIds;
+    // The mesh's traversable off-mesh connections by link id, built lazily and invalidated on
+    // mutation — turns per-link lookups (every NavMeshLink at scene load, and again per frame
+    // while one is selected) into O(1) after a single O(tiles) pass. A link Detour could not
+    // attach is absent, so "contains" means usable rather than merely present, and a catch-up
+    // retries one that failed instead of taking the stub for success. Main thread only.
+    private Dictionary<int, NavMeshConnection>? _connections;
 
-    internal void InvalidateLinkIds() => _linkIds = null;
+    internal void InvalidateLinkIds() => _connections = null;
 
     // ReaderWriterLockSlim owns kernel wait handles that only Dispose releases, and disposing
     // one while a thread is inside it throws on that thread rather than this one. Since a worker
@@ -124,23 +126,33 @@ public sealed class NavMeshInstance
         Release();
     }
 
-    /// <summary>Whether the mesh holds an off-mesh connection stamped with the given link id
+    /// <summary>Whether the mesh holds a traversable connection stamped with the given link id
     /// (see <see cref="NavMeshLink.LinkId"/>). Main thread.</summary>
-    public bool ContainsLinkId(int linkId)
+    public bool ContainsLinkId(int linkId) => Connections.ContainsKey(linkId);
+
+    /// <summary>The connection the mesh holds for a link id — where its endpoints actually
+    /// snapped to, which is not necessarily where the component put them. False when the link
+    /// never attached. Main thread.</summary>
+    public bool TryGetConnection(int linkId, out NavMeshConnection connection)
+        => Connections.TryGetValue(linkId, out connection);
+
+    private Dictionary<int, NavMeshConnection> Connections
     {
-        if (_linkIds == null)
+        get
         {
-            _linkIds = [];
+            if (_connections != null) return _connections;
+
+            _connections = [];
             for (int t = 0; t < Mesh.GetMaxTiles(); t++)
             {
-                var cons = Mesh.GetTile(t)?.data?.offMeshCons;
-                if (cons == null) continue;
-                foreach (DtOffMeshConnection con in cons)
-                    if (con.userId != 0)
-                        _linkIds.Add(con.userId);
+                DtMeshTile? tile = Mesh.GetTile(t);
+                if (tile?.data?.offMeshCons == null) continue;
+                foreach (DtOffMeshConnection con in tile.data.offMeshCons)
+                    if (con.userId != 0 && NavMeshConnection.TryFrom(tile, con, out NavMeshConnection connection))
+                        _connections[con.userId] = connection;
             }
+            return _connections;
         }
-        return _linkIds.Contains(linkId);
     }
 }
 
@@ -609,6 +621,25 @@ public sealed class NavMeshWorld
     /// <see cref="NavMeshLink.LinkId"/>).</summary>
     public NavMeshLink? FindLink(int linkId)
         => _links.TryGetValue(linkId, out NavMeshLink? link) && link.IsValid() ? link : null;
+
+    /// <summary>Every enabled link in this scene. What a bake gathers its off-mesh connections
+    /// from, so it never has to walk the scene to find them.</summary>
+    public IReadOnlyCollection<NavMeshLink> Links => _links.Values;
+
+    // The scene's enabled surfaces. A link needs the ones it applies to on every edit, so
+    // finding them by walking every GameObject would cost a scene scan per link moved — with
+    // the link collection each rebuild does nested inside it.
+    private readonly List<NavMeshSurface> _surfaces = [];
+
+    internal void RegisterSurface(NavMeshSurface surface)
+    {
+        if (!_surfaces.Contains(surface)) _surfaces.Add(surface);
+    }
+
+    internal void UnregisterSurface(NavMeshSurface surface) => _surfaces.Remove(surface);
+
+    /// <summary>Every enabled surface in this scene, whether or not it has a navmesh loaded.</summary>
+    public IReadOnlyList<NavMeshSurface> Surfaces => _surfaces;
 
     #endregion
 

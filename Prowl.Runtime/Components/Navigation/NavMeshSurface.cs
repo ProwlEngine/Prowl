@@ -32,6 +32,11 @@ public enum NavMeshCollectObjects
 /// (<see cref="BuildNavMeshAsync"/>), or per-tile for localized geometry changes
 /// (<see cref="RebuildTiles"/> — destructible worlds rebuild only what changed).
 /// </summary>
+// Registration is the whole of this component's lifecycle — there is no per-frame work — and the
+// editor needs it as much as play does: an obstacle can only carve a live navmesh, and the scene
+// view's overlay draws one. Without this, opening a scene leaves its baked navmesh unregistered
+// until something bakes again, so carve previews only work in the session you pressed Bake in.
+[ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Surface")]
 [ComponentIcon("")] // map icon
 public class NavMeshSurface : MonoBehaviour
@@ -95,10 +100,15 @@ public class NavMeshSurface : MonoBehaviour
         }
     }
 
-    public override void OnEnable() => Register();
+    public override void OnEnable()
+    {
+        World?.RegisterSurface(this);
+        Register();
+    }
 
     public override void OnDisable()
     {
+        World?.UnregisterSurface(this);
         Unregister();
 
         // Release the debug-overlay subscription; without this every surface ever selected
@@ -533,11 +543,13 @@ public class NavMeshSurface : MonoBehaviour
         if (!TryResolveCollectionBounds(filterBounds, out AABB? bounds))
             return links;
 
-        IEnumerable<GameObject> objects = CollectObjects == NavMeshCollectObjects.Children
-            ? EnumerateSelfAndChildren(GameObject)
-            : scene!.ActiveObjects;
-
-        NavMeshGeometryCollector.CollectLinks(objects, Layers, AgentTypeId, links, bounds);
+        // Scene-wide collection reads the world's registry rather than every GameObject: a link
+        // edit re-collects on the spot, so this runs at gameplay rate. Children mode still walks,
+        // because what it scopes to is the hierarchy.
+        if (CollectObjects == NavMeshCollectObjects.Children)
+            NavMeshGeometryCollector.CollectLinks(EnumerateSelfAndChildren(GameObject), Layers, AgentTypeId, links, bounds);
+        else
+            NavMeshGeometryCollector.CollectLinks(scene!.Navigation.Links, Layers, AgentTypeId, links, bounds);
         return links;
     }
 
@@ -605,9 +617,9 @@ public class NavMeshSurface : MonoBehaviour
             _debugTriangulation = null;
         }
 
-        // Prefer the live navmesh (it reflects runtime rebuilds and carving). Outside play mode
-        // nothing registers the surface, so fall back to triangulating the baked asset — the
-        // overlay must not depend on having just baked this session.
+        // Prefer the live navmesh: it is the one carving and rebuilds change. Fall back to the
+        // baked asset when this surface has no live instance to read — its data failed to
+        // instantiate, or another surface of the same agent type holds the registration.
         bool live = world != null && world.GetInstance(AgentTypeId) != null;
         if (_debugTriangulation == null || _debugFromLive != live || !ReferenceEquals(_debugSource, data))
         {
@@ -628,6 +640,51 @@ public class NavMeshSurface : MonoBehaviour
                 tri.Vertices[tri.Indices[t * 3 + 2]] + lift,
                 color);
         }
+
+        foreach (NavMeshConnection con in tri.Connections)
+            DrawConnection(con, lift);
+    }
+
+    /// <summary>Endpoint marker size, shared so a link's own gizmo matches the overlay.</summary>
+    internal const float EndpointGizmoRadius = 0.15f;
+
+    /// <summary>
+    /// One off-mesh connection, drawn where the navmesh put it rather than where the component
+    /// asked: endpoints that snapped elsewhere show it, and a link that never attached is
+    /// visibly absent. Opaque, because the translucent surface fill is a poor read for a line.
+    /// </summary>
+    internal static void DrawConnection(NavMeshConnection con, Float3 lift)
+    {
+        Color area = AreaColor(con.Area);
+        var color = new Color(area.R, area.G, area.B, 1f);
+        Float3 start = con.Start + lift, end = con.End + lift;
+
+        Debug.DrawLine(start, end, color);
+        Debug.DrawWireSphere(start, EndpointGizmoRadius, color);
+        Debug.DrawWireSphere(end, EndpointGizmoRadius, color);
+
+        // Measured flat: the markings read as ground plan, and a steep link would otherwise
+        // splay them out of the surface.
+        var flat = new Float3(end.X - start.X, 0, end.Z - start.Z);
+        double length = Math.Sqrt(flat.X * flat.X + flat.Z * flat.Z);
+        if (length <= 1e-4) return;
+        var forward = new Float3((float)(flat.X / length), 0, (float)(flat.Z / length));
+        var perp = new Float3(-forward.Z, 0, forward.X);
+
+        // The width the connection actually covers, as a bar across each end.
+        if (con.Radius > 0f)
+        {
+            Float3 half = perp * con.Radius;
+            Debug.DrawLine(start - half, start + half, color);
+            Debug.DrawLine(end - half, end + half, color);
+        }
+
+        // One-way connections get an arrowhead; a bidirectional one is just the line.
+        if (con.Bidirectional) return;
+        Float3 back = end - forward * (EndpointGizmoRadius * 3f);
+        Float3 barb = perp * (EndpointGizmoRadius * 1.5f);
+        Debug.DrawLine(end, back + barb, color);
+        Debug.DrawLine(end, back - barb, color);
     }
 
     /// <summary>Stable debug color for an area index (Walkable is the familiar navmesh blue).</summary>

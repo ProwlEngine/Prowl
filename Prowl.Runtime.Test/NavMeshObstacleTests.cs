@@ -588,20 +588,27 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Carving works outside play mode, because that is where you place buildings: OnEnable queues
-    /// the carve in the editor, and the pump must process it rather than waiting for play.
+    /// Carving works outside play mode, because that is where you place buildings. The scene here
+    /// is opened rather than baked — its asset came from an earlier session — so the surface has
+    /// to register from OnEnable alone. Without that there is no live navmesh for the obstacle to
+    /// carve, and the scene view shows an untouched mesh while play mode avoids the crate fine.
     /// </summary>
     [Fact]
     public void Obstacle_CarvesAndFollowsOutsidePlayMode()
     {
-        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
-        Assert.True(surface.BuildNavMesh());
-        Tick(scene, 2);
+        (Scene _, NavMeshSurface baker) = CreateFloorScene(bake: true);
+        NavMeshData asset = baker.NavMeshData.Res!;
 
-        bool wasPlaying = Application.IsPlaying;
-        Application.IsPlaying = false; // gameplay callbacks stop; lifecycle and [ExecuteAlways] do not
-        try
+        using (EditMode())
         {
+            Scene scene = CreateScene(enable: true);
+            GameObject surfaceGo = CreateGameObject("NavMeshSurface");
+            NavMeshSurface surface = surfaceGo.AddComponent<NavMeshSurface>();
+            surface.NavMeshData = asset;
+            scene.Add(surfaceGo); // enabling is what registers it
+
+            Assert.NotNull(surface.Instance);
+
             GameObject crate = CreateGameObject("Crate");
             scene.Add(crate);
             crate.Transform.Position = new Float3(0, 1, 0);
@@ -618,10 +625,6 @@ public class NavMeshObstacleTests : RuntimeTestBase
                 "The old spot should heal when the obstacle is dragged away.");
             Assert.True(TickUntil(scene, () => !Walkable(scene, new Float3(6, 0.2f, 6))) >= 0,
                 "The carve should follow to where the obstacle was dropped.");
-        }
-        finally
-        {
-            Application.IsPlaying = wasPlaying;
         }
     }
 

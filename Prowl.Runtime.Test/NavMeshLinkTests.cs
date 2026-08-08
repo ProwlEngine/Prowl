@@ -74,6 +74,70 @@ public class NavMeshLinkTests : RuntimeTestBase
         Assert.Same(a, scene.Navigation.FindLink(before));
     }
 
+    /// <summary>
+    /// Baking is something you do in the editor, and a bake gathers its links from the world's
+    /// registry. A link that stayed inert outside play mode would never register, and would go
+    /// silently missing from every navmesh baked from the button — with nothing to see until an
+    /// agent refused to cross.
+    /// </summary>
+    [Fact]
+    public void Link_IsBakedIntoASurfaceBuiltInTheEditor()
+    {
+        using (EditMode())
+        {
+            (Scene scene, NavMeshSurface surface) = CreateGapScene();
+            AddLink(scene);
+
+            Assert.True(surface.BuildNavMesh());
+            Assert.NotEmpty(surface.NavMeshData.Res!.Links);
+            Assert.Equal(NavMeshPathStatus.PathComplete,
+                PathStatus(scene, new Float3(-6, 0, 0), new Float3(6, 0, 0)));
+        }
+    }
+
+    /// <summary>
+    /// What the scene view draws for a link comes from the mesh, not the component: the
+    /// endpoints Detour snapped onto walkable polygons, which are held on the connection's
+    /// polygon rather than on the connection (that keeps the positions originally asked for).
+    /// A link that attached to nothing is left out entirely, which is what makes a broken one
+    /// distinguishable from a working one at a glance.
+    /// </summary>
+    [Fact]
+    public void Link_ReportsTheConnectionTheMeshActuallyHolds()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        NavMeshLink link = AddLink(scene);
+        link.Bidirectional = false;
+        Assert.True(surface.BuildNavMesh());
+
+        NavMeshConnection connection = Assert.Single(scene.Navigation.CalculateTriangulation().Connections);
+        Assert.Equal(link.LinkId, connection.LinkId);
+        Assert.Equal(NavMeshAreas.Jump, connection.Area);
+        Assert.False(connection.Bidirectional);
+
+        // Snapped onto the islands, so within a tolerance of the authored ends rather than at
+        // them — and on the walkable surface, not the y=0 plane the component was authored on.
+        Assert.True(Float3.Distance(connection.Start, link.WorldStart) < 1.5f,
+            $"Start {connection.Start} should be near the authored {link.WorldStart}.");
+        Assert.True(Float3.Distance(connection.End, link.WorldEnd) < 1.5f,
+            $"End {connection.End} should be near the authored {link.WorldEnd}.");
+
+        // Move an end over the gap: inside the tile grid, so the connection is still stored, but
+        // with no walkable polygon under it Detour never attaches that end. Either end failing
+        // makes the link untraversable, and both must therefore be reported as nothing — the far
+        // end is attached separately from the start, so it is its own way to fail.
+        link.EndPoint = new Float3(0, 0, 0);
+        Tick(scene, 2);
+        Assert.Empty(scene.Navigation.CalculateTriangulation().Connections);
+        Assert.Equal(NavMeshPathStatus.PathPartial,
+            PathStatus(scene, new Float3(-6, 0, 0), new Float3(6, 0, 0)));
+
+        link.StartPoint = new Float3(0, 0, 0);
+        link.EndPoint = new Float3(3, 0, 0);
+        Tick(scene, 2);
+        Assert.Empty(scene.Navigation.CalculateTriangulation().Connections);
+    }
+
     /// <summary>A link answers for its own scene only: two additively loaded scenes derive ids
     /// from their own components and have no reason to agree on them, so one scene resolving
     /// another's link would hand an agent a component from the wrong world.</summary>

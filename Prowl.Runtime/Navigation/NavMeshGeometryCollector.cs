@@ -198,22 +198,38 @@ public static class NavMeshGeometryCollector
         List<NavMeshLinkSource> results, AABB? bounds = null)
     {
         ArgumentNullException.ThrowIfNull(objects);
+        CollectLinks(EnumerateLinks(objects), layers, agentTypeId, results, bounds);
+    }
+
+    /// <inheritdoc cref="CollectLinks(IEnumerable{GameObject}, LayerMask, int, List{NavMeshLinkSource}, AABB?)"/>
+    /// <remarks>Takes the links themselves, which is how a whole-scene bake avoids visiting every
+    /// GameObject to find the handful that carry one — see <see cref="NavMeshWorld.Links"/>.</remarks>
+    public static void CollectLinks(IEnumerable<NavMeshLink> links, LayerMask layers, int agentTypeId,
+        List<NavMeshLinkSource> results, AABB? bounds = null)
+    {
+        ArgumentNullException.ThrowIfNull(links);
         ArgumentNullException.ThrowIfNull(results);
 
+        foreach (NavMeshLink link in links)
+        {
+            // EnabledInHierarchy already folds in the GameObject's own state.
+            if (link.IsNotValid() || !link.EnabledInHierarchy || !link.Activated || !link.AffectsAgentType(agentTypeId))
+                continue;
+            if (!layers.HasLayer(link.GameObject.LayerIndex)) continue;
+
+            NavMeshLinkSource source = link.ToLinkSource();
+            if (bounds is AABB filter && !source.Bounds.Intersects(filter)) continue;
+            results.Add(source);
+        }
+    }
+
+    private static IEnumerable<NavMeshLink> EnumerateLinks(IEnumerable<GameObject> objects)
+    {
         foreach (GameObject go in objects)
         {
-            if (go.IsNotValid() || !go.EnabledInHierarchy) continue;
-            if (!layers.HasLayer(go.LayerIndex)) continue;
-
+            if (go.IsNotValid()) continue;
             foreach (NavMeshLink link in go.GetComponents<NavMeshLink>())
-            {
-                if (link.IsNotValid() || !link.EnabledInHierarchy || !link.Activated || !link.AffectsAgentType(agentTypeId))
-                    continue;
-
-                NavMeshLinkSource source = link.ToLinkSource();
-                if (bounds is AABB filter && !source.Bounds.Intersects(filter)) continue;
-                results.Add(source);
-            }
+                yield return link;
         }
     }
 

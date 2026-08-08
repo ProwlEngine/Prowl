@@ -49,6 +49,34 @@ public abstract class RuntimeTestBase : IDisposable
     protected static float FixedDeltaTime => Time.FixedDeltaTime;
 
     /// <summary>
+    /// Runs the block as an open editor with play mode off, so only components marked
+    /// <see cref="ExecuteAlwaysAttribute"/> receive gameplay callbacks. Build the scene inside
+    /// the scope: enabling one decides there and then which components get OnEnable, and a
+    /// scene assembled in play mode has already had them.
+    /// </summary>
+    protected static EditModeScope EditMode() => new();
+
+    protected readonly struct EditModeScope : IDisposable
+    {
+        private readonly bool _wasPlaying;
+        private readonly bool _wasEditor;
+
+        public EditModeScope()
+        {
+            _wasPlaying = Application.IsPlaying;
+            _wasEditor = Application.IsEditor;
+            Application.IsPlaying = false;
+            Application.IsEditor = true;
+        }
+
+        public void Dispose()
+        {
+            Application.IsPlaying = _wasPlaying;
+            Application.IsEditor = _wasEditor;
+        }
+    }
+
+    /// <summary>
     /// Creates a tracked scene. Pass <paramref name="enable"/> to immediately enable it (play mode),
     /// otherwise it starts disabled so component OnEnable is deferred until <see cref="Scene.Enable"/>.
     /// </summary>

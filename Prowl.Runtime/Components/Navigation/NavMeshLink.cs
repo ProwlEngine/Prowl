@@ -20,6 +20,11 @@ namespace Prowl.Runtime;
 /// A link's traversal cost comes from its area's cost; to price a link individually, give it
 /// its own area with the desired cost.
 /// </summary>
+// A link has to be enabled to be registered, and a bake gathers its links from that registry —
+// so a link inert outside play mode would go missing from every bake pressed in the editor.
+// Being live also means editing one re-contours the tiles around it there, the way it does in
+// play, and the surface overlay redraws the connection to match.
+[ExecuteAlways]
 [AddComponentMenu("Navigation/NavMesh Link")]
 [ComponentIcon("")] // link icon
 public class NavMeshLink : MonoBehaviour
@@ -205,13 +210,18 @@ public class NavMeshLink : MonoBehaviour
         {
             _world.NavMeshChanged -= OnNavMeshChanged;
             _world.UnregisterLink(this);
+
+            // Unregistered first, so the rebuild collects the links WITHOUT this one and the
+            // tiles come back without its connection — but before the world reference is
+            // released, since that is what reaches the surfaces.
+            // Scene teardown costs nothing here: Scene.OnDispose clears the navigation world
+            // before GameObjects dispose, so every instance is already retired and the rebuild
+            // finds nothing to do. A gameplay disable (pooling, a destroyed building) keeps its
+            // rebuild — the world really changed.
+            if (_appliedActive) RequestRebuild(_appliedStart, _appliedEnd);
+
             _world = null;
         }
-        // Scene teardown never pays this: Scene.OnDispose marks the scene disposed and clears
-        // the navigation world BEFORE GameObjects dispose, so RequestRebuild's scene-validity
-        // early-out (and the surfaces' dead instances) make it a no-op. A gameplay disable
-        // (pooling, destroyed building) keeps its rebuild — the world really changed.
-        if (_appliedActive) RequestRebuild(_appliedStart, _appliedEnd);
     }
 
     private bool _catchUpPending;
@@ -223,10 +233,9 @@ public class NavMeshLink : MonoBehaviour
     /// immediate check would see no surface to rebuild through.</summary>
     private void OnNavMeshChanged()
     {
-        // Only a change to the SET of navmeshes can give this link somewhere new to attach.
-        // The event also fires per frame while a surface converges a carve, and each
-        // catch-up walks the whole scene — so gate on the structural counter, or every carving
-        // frame pays a scene scan per link to discover nothing.
+        // Only a change to the SET of navmeshes can give this link somewhere new to attach, and
+        // the event also fires per frame while a surface converges a carve. Gate on the
+        // structural counter, or every carving frame wakes a check per link to discover nothing.
         if (_world == null || _world.StructureGeneration == _seenStructureGeneration) return;
         _seenStructureGeneration = _world.StructureGeneration;
         _catchUpPending = true;
@@ -241,24 +250,20 @@ public class NavMeshLink : MonoBehaviour
     /// </summary>
     private void CatchUp()
     {
-        if (!AutoRebuild) return;
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsNotValid()) return;
+        if (!AutoRebuild || _world == null) return;
 
         // Replaced instances (full rebakes) would otherwise be pinned by the checked set.
-        _catchUpDone.RemoveWhere(i => _world?.GetInstance(i.AgentTypeId) != i);
+        _catchUpDone.RemoveWhere(i => _world.GetInstance(i.AgentTypeId) != i);
 
-        foreach (GameObject go in scene!.ActiveObjects)
+        IReadOnlyList<NavMeshSurface> surfaces = _world.Surfaces;
+        for (int i = 0; i < surfaces.Count; i++)
         {
-            if (go.IsNotValid()) continue;
-            foreach (NavMeshSurface surface in go.GetComponents<NavMeshSurface>())
-            {
-                NavMeshInstance? instance = surface.Instance;
-                if (instance == null || !AffectsAgentType(surface.AgentTypeId)) continue;
-                if (!_catchUpDone.Add(instance)) continue;      // one attempt per instance
-                if (instance.ContainsLinkId(LinkId)) continue;  // already in the live mesh
-                RebuildEndpointRegions(surface, _appliedStart, _appliedEnd);
-            }
+            NavMeshSurface surface = surfaces[i];
+            NavMeshInstance? instance = surface.Instance;
+            if (instance == null || !AffectsAgentType(surface.AgentTypeId)) continue;
+            if (!_catchUpDone.Add(instance)) continue;      // one attempt per instance
+            if (instance.ContainsLinkId(LinkId)) continue;  // already in the live mesh
+            RebuildEndpointRegions(surface, _appliedStart, _appliedEnd);
         }
     }
 
@@ -296,18 +301,14 @@ public class NavMeshLink : MonoBehaviour
     /// (which includes scene teardown — see the note in <see cref="OnDisable"/>).</summary>
     private void RequestRebuild(Float3 start, Float3 end)
     {
-        if (!AutoRebuild) return;
-        var scene = GameObject.IsValid() ? GameObject.Scene : null;
-        if (scene.IsNotValid()) return;
+        if (!AutoRebuild || _world == null) return;
 
-        foreach (GameObject go in scene!.ActiveObjects)
+        IReadOnlyList<NavMeshSurface> surfaces = _world.Surfaces;
+        for (int i = 0; i < surfaces.Count; i++)
         {
-            if (go.IsNotValid()) continue;
-            foreach (NavMeshSurface surface in go.GetComponents<NavMeshSurface>())
-            {
-                if (surface.Instance == null || !AffectsOrDidAffect(surface.AgentTypeId)) continue;
-                RebuildEndpointRegions(surface, start, end);
-            }
+            NavMeshSurface surface = surfaces[i];
+            if (surface.Instance == null || !AffectsOrDidAffect(surface.AgentTypeId)) continue;
+            RebuildEndpointRegions(surface, start, end);
         }
     }
 
@@ -334,23 +335,27 @@ public class NavMeshLink : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Draws whatever the navmesh made of this link — the same connection the surface's overlay
+    /// draws, in the same place, so the two agree wherever both are shown. A link that has not
+    /// attached has nothing there to draw, so it falls back to the authored line in grey: that
+    /// difference in colour is the only warning that it reached nothing walkable.
+    /// </summary>
     public override void DrawGizmosSelected()
     {
-        Color c = NavMeshSurface.AreaColor(Area);
-        var color = new Color(c.R, c.G, c.B, 1f);
-        Float3 start = WorldStart, end = WorldEnd;
-        Debug.DrawLine(start, end, color);
-        Debug.DrawWireSphere(start, 0.15f, color);
-        Debug.DrawWireSphere(end, 0.15f, color);
-        if (Width > 0f)
+        IReadOnlyList<NavMeshSurface> surfaces = _world?.Surfaces ?? [];
+        for (int i = 0; i < surfaces.Count; i++)
         {
-            // Width extent ticks at both endpoints.
-            var dir = new Float3(end.X - start.X, 0, end.Z - start.Z);
-            double len = Math.Sqrt(dir.X * dir.X + dir.Z * dir.Z);
-            Float3 perp = len > 1e-4 ? new Float3((float)(-dir.Z / len), 0, (float)(dir.X / len)) : new Float3(1, 0, 0);
-            Float3 half = perp * (Width * 0.5f);
-            Debug.DrawLine(start - half, start + half, color);
-            Debug.DrawLine(end - half, end + half, color);
+            NavMeshInstance? instance = surfaces[i].Instance;
+            if (instance == null || !AffectsAgentType(surfaces[i].AgentTypeId)) continue;
+            if (!instance.TryGetConnection(LinkId, out NavMeshConnection connection)) continue;
+            NavMeshSurface.DrawConnection(connection, Float3.Zero);
+            return;
         }
+
+        var color = new Color(0.6f, 0.6f, 0.6f, 1f);
+        Debug.DrawLine(WorldStart, WorldEnd, color);
+        Debug.DrawWireSphere(WorldStart, NavMeshSurface.EndpointGizmoRadius, color);
+        Debug.DrawWireSphere(WorldEnd, NavMeshSurface.EndpointGizmoRadius, color);
     }
 }

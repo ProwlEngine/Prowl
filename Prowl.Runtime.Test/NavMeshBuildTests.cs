@@ -483,9 +483,13 @@ public class NavMeshBuildTests
             {
                 if (dx == 0 && dz == 0) continue;
                 Float3 source = Centre(2 + dx, 2 + dz);
+                // Fanned out either side of the tile centre, not off to one side: the outermost
+                // tile centre is barely a tile from the quad's edge, and a source that lands past
+                // it (or inside the eroded margin) has no polygon to attach to — which would
+                // test the geometry rather than the link pool.
                 for (int k = 0; k < perNeighbour; k++)
                     data.Links.Add(NavMeshData.NavMeshLinkEntry.From(new NavMeshLinkSource(
-                        new Float3(source.X + k * 0.4f, 0, source.Z), destination,
+                        new Float3(source.X + (k - (perNeighbour - 1) * 0.5f) * 0.4f, 0, source.Z), destination,
                         width: 0f, bidirectional: true, NavMeshAreas.Jump, userId: id++)));
             }
 
