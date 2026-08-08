@@ -431,10 +431,27 @@ public static class SpriteMeshTracer
         bool Opaque(int x, int y) => x >= 0 && y >= 0 && x < width && y < height && alpha[y * width + x] >= alphaThreshold;
 
         static long Corner(int x, int y) => ((long)x << 32) | (uint)y;
+        static int CornerX(long c) => (int)(c >> 32);
+        static int CornerY(long c) => (int)(c & 0xffffffff);
 
-        // start-corner -> end-corner. A well-formed boundary uses each start corner once.
-        var edges = new Dictionary<long, long>(256);
-        void AddEdge(int sx, int sy, int ex, int ey) => edges[Corner(sx, sy)] = Corner(ex, ey);
+        // Boundary edges are stored per edge, not keyed by their start corner. Where two opaque cells
+        // meet only at a corner - a diagonal, which pixel art is full of - that corner starts two
+        // separate edges, and keying by corner would silently keep just one of them and leave the loops
+        // fused or truncated. Edges leaving the same corner are chained through nextFromCorner.
+        var edgeStart = new List<long>(256);
+        var edgeEnd = new List<long>(256);
+        var nextFromCorner = new List<int>(256);
+        var firstFromCorner = new Dictionary<long, int>(256);
+
+        void AddEdge(int sx, int sy, int ex, int ey)
+        {
+            long start = Corner(sx, sy);
+            int index = edgeStart.Count;
+            edgeStart.Add(start);
+            edgeEnd.Add(Corner(ex, ey));
+            nextFromCorner.Add(firstFromCorner.TryGetValue(start, out int previous) ? previous : -1);
+            firstFromCorner[start] = index;
+        }
 
         for (int y = 0; y < height; y++)
         {
@@ -451,24 +468,25 @@ public static class SpriteMeshTracer
             }
         }
 
+        var used = new bool[edgeStart.Count];
         var contours = new List<Float2[]>();
-        var visited = new HashSet<long>();
 
-        foreach (long startKey in edges.Keys)
+        // Each edge belongs to exactly one loop, so consuming them bounds the whole walk - no guard
+        // counter needed. A corner may legitimately appear in two loops, which is the diagonal case.
+        for (int seed = 0; seed < edgeStart.Count; seed++)
         {
-            if (visited.Contains(startKey)) continue;
+            if (used[seed]) continue;
 
             var loop = new List<Float2>();
-            long cur = startKey;
-            int guard = edges.Count + 4;
+            long closesAt = edgeStart[seed];
 
-            while (guard-- > 0)
+            for (int edge = seed; edge >= 0 && !used[edge]; )
             {
-                if (!visited.Add(cur)) break;
-                loop.Add(new Float2(cur >> 32, (int)(cur & 0xffffffff)));
-                if (!edges.TryGetValue(cur, out long next) || next == startKey)
-                    break;
-                cur = next;
+                used[edge] = true;
+                long from = edgeStart[edge], to = edgeEnd[edge];
+                loop.Add(new Float2(CornerX(from), CornerY(from)));
+                if (to == closesAt) break;
+                edge = NextEdge(from, to);
             }
 
             if (loop.Count >= 3)
@@ -476,6 +494,32 @@ public static class SpriteMeshTracer
         }
 
         return contours;
+
+        // Picks the continuation at the corner an edge arrived at. Where the corner offers a choice,
+        // take the most counter-clockwise turn: that keeps each opaque region on its own loop instead
+        // of splicing two of them into one self-intersecting figure eight that cannot triangulate.
+        int NextEdge(long from, long to)
+        {
+            if (!firstFromCorner.TryGetValue(to, out int head)) return -1;
+
+            int inDx = CornerX(to) - CornerX(from);
+            int inDy = CornerY(to) - CornerY(from);
+
+            int best = -1, bestRank = -1;
+            for (int edge = head; edge >= 0; edge = nextFromCorner[edge])
+            {
+                if (used[edge]) continue;
+
+                int outDx = CornerX(edgeEnd[edge]) - CornerX(edgeStart[edge]);
+                int outDy = CornerY(edgeEnd[edge]) - CornerY(edgeStart[edge]);
+
+                int cross = inDx * outDy - inDy * outDx;
+                int dot = inDx * outDx + inDy * outDy;
+                int rank = cross > 0 ? 3 : cross < 0 ? 1 : dot > 0 ? 2 : 0; // left, right, straight, back
+                if (rank > bestRank) { bestRank = rank; best = edge; }
+            }
+            return best;
+        }
     }
 
     /// <summary>Douglas-Peucker simplification of a closed polygon, keeping deviation within <paramref name="tolerance"/> pixels.</summary>
