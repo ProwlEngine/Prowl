@@ -196,17 +196,21 @@ public class CharacterController : MonoBehaviour
 
     private Float3 GetCapsuleBottom(Float3 position)
     {
-        return position + new Float3(0, Radius, 0);
+        return position + new Float3(0, GetEffectiveRadius(), 0);
     }
 
     private Float3 GetCapsuleTop(Float3 position)
     {
-        return position + new Float3(0, Height - Radius, 0);
+        // Keep the segment non-degenerate: Jitter rejects a capsule of zero length outright, and a
+        // Height at or below twice the radius would produce one.
+        float radius = GetEffectiveRadius();
+        return position + new Float3(0, Maths.Max(Height - radius, radius + 0.001f), 0);
     }
 
+    // Shape dimensions must stay positive; Jitter throws on a zero or negative radius.
     private float GetEffectiveRadius()
     {
-        return Radius - SkinWidth;
+        return Maths.Max(Radius - SkinWidth, 0.001f);
     }
 
     /// <summary>
@@ -245,11 +249,19 @@ public class CharacterController : MonoBehaviour
         if (depth >= MaxDepth)
             return position;
 
+        // A degenerate surface normal turns the projected slide into NaN, and NaN fails every "too
+        // small to bother" test below, so it would ride all the way into the next cast and take the
+        // solver down with it. Stop here instead and keep the last good position.
+        if (!float.IsFinite(velocity.X) || !float.IsFinite(velocity.Y) || !float.IsFinite(velocity.Z))
+            return position;
+
         float moveDistance = Float3.Length(velocity);
         if (moveDistance < 0.0001)
             return position;
 
         Float3 moveDirection = Float3.Normalize(velocity);
+        if (Float3.LengthSquared(moveDirection) <= 0.0f)
+            return position;
 
         float castDistance = moveDistance + SkinWidth;
         bool hit = PerformShapeCast(position, moveDirection, castDistance, out ShapeCastHit hitInfo);
@@ -375,8 +387,10 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     private float GetSlopeAngle(Float3 normal)
     {
-        // Angle between surface normal and up vector
-        return Maths.Acos(normal.Y) * (180.0f / Maths.PI);
+        // Angle between surface normal and up vector. Clamped because a normal component a hair over 1
+        // from float error makes Acos return NaN, which fails every walkable test and would silently
+        // make the character un-groundable.
+        return Maths.Acos(Maths.Clamp(normal.Y, -1.0f, 1.0f)) * (180.0f / Maths.PI);
     }
 
     /// <summary>

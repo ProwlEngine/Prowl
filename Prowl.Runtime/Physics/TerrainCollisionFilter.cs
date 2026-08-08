@@ -71,6 +71,24 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
     }
 
     /// <summary>
+    /// Registers a contact against one terrain triangle. A degenerate cell (repeated corners, or a
+    /// terrain whose data has not sized itself yet) has a zero-area cross product, and normalising that
+    /// yields NaN rather than zero - feeding it to the solver poisons every body it touches.
+    /// </summary>
+    private void RegisterTriangleContact(RigidBodyShape rbs, ref RigidBodyData body, in CollisionTriangle triangle, ulong triangleIndex)
+    {
+        JVector normal = JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
+        if (normal.LengthSquared() <= 0.0f) return;
+
+        if (NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
+                out JVector pointA, out JVector pointB, out _, out _))
+        {
+            _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
+                pointA, pointB, normal);
+        }
+    }
+
+    /// <summary>
     /// Processes collision between a rigidbody shape and the terrain.
     /// </summary>
     private void ProcessTerrainCollision(RigidBodyShape rbs)
@@ -119,33 +137,14 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
                 triangle.B = new JVector((x + 1) * cellSize + terrainOrigin.X, h11, (z + 1) * cellSize + terrainOrigin.Z);
                 triangle.C = new JVector((x + 1) * cellSize + terrainOrigin.X, h10, (z + 0) * cellSize + terrainOrigin.Z);
 
-                JVector normal = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
-
-                bool hit = NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
-                    out JVector pointA, out JVector pointB, out _, out float penetration);
-
-                if (hit)
-                {
-                    _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
-                        pointA, pointB, normal);
-                }
+                RegisterTriangleContact(rbs, ref body, triangle, triangleIndex);
 
                 // Test second triangle of the quad (a-d-c)
-                triangleIndex += 1;
                 triangle.A = new JVector((x + 0) * cellSize + terrainOrigin.X, h00, (z + 0) * cellSize + terrainOrigin.Z);
                 triangle.B = new JVector((x + 0) * cellSize + terrainOrigin.X, h01, (z + 1) * cellSize + terrainOrigin.Z);
                 triangle.C = new JVector((x + 1) * cellSize + terrainOrigin.X, h11, (z + 1) * cellSize + terrainOrigin.Z);
 
-                normal = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
-
-                hit = NarrowPhase.MprEpa(triangle, rbs, body.Orientation, body.Position,
-                    out pointA, out pointB, out _, out penetration);
-
-                if (hit)
-                {
-                    _world.RegisterContact(rbs.ShapeId, triangleIndex, _world.NullBody, rbs.RigidBody,
-                        pointA, pointB, normal);
-                }
+                RegisterTriangleContact(rbs, ref body, triangle, triangleIndex + 1);
             }
         }
     }

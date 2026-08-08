@@ -207,10 +207,14 @@ public sealed class WheelCollider : MonoBehaviour
         JVector.NormalizeInPlace(ref up);
 
         JVector fwd = JVector.Transform(ToJ(Transform.Forward), JMatrix.CreateRotationMatrix(up, SteerAngle));
-        JVector axle = JVector.Cross(up, fwd);
-        JVector.NormalizeInPlace(ref axle);
-        fwd = JVector.Cross(axle, up);
-        JVector.NormalizeInPlace(ref fwd);
+
+        // NormalizeSafe: a wheel transform whose forward has been steered onto its own up axis gives a
+        // zero cross product, and plain Normalize turns that into NaN rather than zero.
+        JVector axle = JVector.NormalizeSafe(JVector.Cross(up, fwd));
+        if (axle.LengthSquared() <= 0.0f) return;
+
+        fwd = JVector.NormalizeSafe(JVector.Cross(axle, up));
+        if (fwd.LengthSquared() <= 0.0f) return;
 
         // Camber tilts the wheel (its axle) about the forward axis; the suspension axis stays vertical.
         // Mirror it per side so one positive angle leans the tops of both wheels the same way.
