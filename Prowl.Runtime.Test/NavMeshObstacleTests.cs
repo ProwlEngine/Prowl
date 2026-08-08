@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Prowl.Echo;
 using Prowl.Runtime;
@@ -464,7 +465,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
 
     /// <summary>The async pair: layers regenerate off the main thread and apply as a swap.</summary>
     [Fact]
-    public void RebuildTilesAsync_AppliesLikeSyncPath()
+    public async Task RebuildTilesAsync_AppliesLikeSyncPath()
     {
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
@@ -475,7 +476,7 @@ public class NavMeshObstacleTests : RuntimeTestBase
         wall.Transform.Position = new Float3(0, 2, 0);
 
         var region = new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11));
-        var rebuilt = surface.RebuildTilesAsync(region, surface.CollectSources()).Result;
+        var rebuilt = await surface.RebuildTilesAsync(region, surface.CollectSources());
         Assert.NotEmpty(rebuilt);
         Assert.True(surface.ApplyRebuiltTiles(rebuilt, out int rebuiltTiles));
         Assert.True(rebuiltTiles > 0);

@@ -555,8 +555,10 @@ public class NavMeshAgent : MonoBehaviour
         DtCrowd? crowd = _crowd;
         if (_world == null || _agent == null || crowd == null)
         {
+            // The Transform moves, but with no crowd agent nothing snapped it to the mesh and
+            // there is no one to ask whether it landed on any.
             Transform.Position = newPosition + new Float3(0, BaseOffset, 0);
-            return _world != null && IsOnNavMesh;
+            return false;
         }
 
         // Detour has no teleport: re-add the agent at the new position.
@@ -617,8 +619,9 @@ public class NavMeshAgent : MonoBehaviour
         return false;
     }
 
-    /// <summary>Sample a position on the navmesh near the agent with the agent's filter.</summary>
-    public bool SamplePathPosition(Float3 sourcePosition, float maxDistance, out NavMeshHit hit)
+    /// <summary>Find the closest navmesh point within <paramref name="maxDistance"/> of a
+    /// position, using the agent's filter.</summary>
+    public bool SamplePosition(Float3 sourcePosition, float maxDistance, out NavMeshHit hit)
     {
         if (_world != null) return _world.SamplePosition(sourcePosition, out hit, maxDistance, Filter);
         hit = default;

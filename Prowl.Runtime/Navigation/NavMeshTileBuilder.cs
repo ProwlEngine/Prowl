@@ -264,7 +264,9 @@ internal static class NavMeshTileBuilder
             // so do that first: handing over every link on the map would allocate six arrays
             // sized by the whole set for a tile that usually contains none of them. The tile box
             // is widened by each connection's radius so this can never be stricter than the
-            // classification it front-runs.
+            // classification it front-runs. Counted before filling, and so tested twice, because
+            // the six arrays have to be sized exactly — the second test is a handful of float
+            // compares, where collecting the matches first would mean a list allocation per tile.
             int count = 0;
             for (int i = 0; i < _connections.Count; i++)
                 if (StartsInTile(_connections[i], option)) count++;

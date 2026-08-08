@@ -342,7 +342,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
             Tick(scene, 2);
             Assert.True(agent.IsOnNavMesh);
             var typeZeroCrowd = scene.Navigation.GetNativeCrowd(0)!;
-            Assert.Equal(1, typeZeroCrowd.GetActiveAgents().Count);
+            Assert.Single(typeZeroCrowd.GetActiveAgents());
 
             // The race: gameplay retypes the agent, then a navmesh event (here a partial tile
             // rebuild — the event a destructible world produces constantly) fires BEFORE any
@@ -354,7 +354,7 @@ public class NavMeshCrowdTests : RuntimeTestBase
             Tick(scene, 2); // drift check re-places the agent onto type 3
             Assert.True(agent.IsOnNavMesh);
             Assert.Same(agent.NativeAgent, System.Linq.Enumerable.FirstOrDefault(scene.Navigation.GetNativeCrowd(3)!.GetActiveAgents()));
-            Assert.Equal(0, typeZeroCrowd.GetActiveAgents().Count); // no ghost left behind
+            Assert.Empty(typeZeroCrowd.GetActiveAgents()); // no ghost left behind
         }
         finally
         {

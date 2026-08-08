@@ -169,6 +169,47 @@ public class NavMeshLinkTests : RuntimeTestBase
             PathStatus(scene, new Float3(-6, 0, 0), new Float3(6, 0, 0)));
     }
 
+    /// <summary>
+    /// Draining the batch raises NavMeshChanged, and a handler is free to disable a link from it —
+    /// which marks tiles while the drain is still running. Those marks have to survive: the batch
+    /// is swapped out before draining, so they land in the next frame's instead of being dropped
+    /// when this one finishes. (A handler that dirties a surface not already in the batch would
+    /// also have mutated the collection mid-enumeration; the swap covers both, this covers the
+    /// half that is deterministic to reproduce.)
+    /// </summary>
+    [Fact]
+    public void Links_MarkedFromAChangeHandler_SurviveTheDrain()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateGapScene();
+        NavMeshLink first = AddLink(scene);
+        NavMeshLink second = AddLink(scene);
+        Assert.True(surface.BuildNavMesh());
+        Assert.True(TickUntil(scene, () => !scene.Navigation.GetInstance()!.CachePending) >= 0);
+        Assert.NotEmpty(scene.Navigation.CalculateTriangulation().Connections);
+
+        bool disabledFromHandler = false;
+        void DisableTheOtherLink()
+        {
+            if (disabledFromHandler) return;
+            disabledFromHandler = true;
+            second.Enabled = false; // OnDisable marks its endpoint tiles, mid-drain
+        }
+
+        scene.Navigation.NavMeshChanged += DisableTheOtherLink;
+        try
+        {
+            first.Activated = false;
+            Tick(scene, 4);
+        }
+        finally
+        {
+            scene.Navigation.NavMeshChanged -= DisableTheOtherLink;
+        }
+
+        Assert.True(disabledFromHandler, "The drain should have raised NavMeshChanged.");
+        Assert.Empty(scene.Navigation.CalculateTriangulation().Connections);
+    }
+
     /// <summary>A link answers for its own scene only: two additively loaded scenes derive ids
     /// from their own components and have no reason to agree on them, so one scene resolving
     /// another's link would hand an agent a component from the wrong world.</summary>

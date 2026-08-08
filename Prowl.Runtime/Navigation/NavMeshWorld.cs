@@ -671,12 +671,18 @@ public sealed class NavMeshWorld
     // ladders with it. Applied as they arrive, each edit would re-collect the scene's links,
     // replace the whole link set again, and re-contour tiles the edit before it had just done.
     // Held until the frame's edits are all in, then applied as one pass per surface.
-    private readonly Dictionary<NavMeshSurface, List<AABB>> _pendingLinkTiles = [];
+    private Dictionary<NavMeshSurface, List<AABB>> _pendingLinkTiles = [];
+
+    // The batch being drained, swapped with the one above rather than enumerated in place. The
+    // region lists are pooled between frames: a link following a Transform marks every frame, and
+    // this is otherwise a list per surface per frame for the life of the movement.
+    private Dictionary<NavMeshSurface, List<AABB>> _drainingLinkTiles = [];
+    private readonly Stack<List<AABB>> _regionPool = [];
 
     internal void MarkLinkTilesDirty(NavMeshSurface surface, AABB region)
     {
         if (!_pendingLinkTiles.TryGetValue(surface, out List<AABB>? regions))
-            _pendingLinkTiles[surface] = regions = [];
+            _pendingLinkTiles[surface] = regions = _regionPool.Count > 0 ? _regionPool.Pop() : [];
         regions.Add(region);
     }
 
@@ -684,10 +690,21 @@ public sealed class NavMeshWorld
     {
         if (_pendingLinkTiles.Count == 0) return;
 
-        foreach ((NavMeshSurface surface, List<AABB> regions) in _pendingLinkTiles)
+        // Swapped out before draining, because a rebuild raises NavMeshChanged synchronously and a
+        // handler is free to disable a link or a surface from it. Marking or unregistering during
+        // the drain would then mutate the collection being enumerated, and anything marked would
+        // be lost to the clear afterwards. Against the swapped-in batch it simply joins the next
+        // frame's, which is where a change made mid-drain belongs anyway.
+        (_pendingLinkTiles, _drainingLinkTiles) = (_drainingLinkTiles, _pendingLinkTiles);
+
+        foreach ((NavMeshSurface surface, List<AABB> regions) in _drainingLinkTiles)
+        {
             if (surface.IsValid())
                 surface.RebuildLinkTiles(CollectionsMarshal.AsSpan(regions));
-        _pendingLinkTiles.Clear();
+            regions.Clear();
+            _regionPool.Push(regions);
+        }
+        _drainingLinkTiles.Clear();
     }
 
     /// <summary>Every enabled surface in this scene, whether or not it has a navmesh loaded.</summary>
