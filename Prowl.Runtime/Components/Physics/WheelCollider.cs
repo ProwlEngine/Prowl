@@ -365,7 +365,8 @@ public sealed class WheelCollider : MonoBehaviour
 
     private bool SweepFilter(IDynamicTreeProxy proxy)
     {
-        if (proxy is not RigidBodyShape rbs) return false;
+        // Terrain is not a RigidBodyShape, so let it through - otherwise wheels find no ground on a heightmap.
+        if (proxy is not RigidBodyShape rbs) return true;
         if (rb.IsNotValid() || rb._body == null) return false;
         return rbs.RigidBody != rb._body; // ignore the vehicle's own body
     }
@@ -434,7 +435,7 @@ public sealed class WheelCollider : MonoBehaviour
                 if (!world.DynamicTree.RayCast(origin, -up, SweepFilter, null,
                         out IDynamicTreeProxy proxy, out JVector n, out float dist))
                     continue;
-                if (proxy is not RigidBodyShape rbs || dist > maxDist) continue;
+                if (dist > maxDist) continue;
 
                 // curvature lifts the equivalent ground contact to the tyre surface at this offset.
                 float c = suspensionDistance + curvature - dist;
@@ -454,7 +455,8 @@ public sealed class WheelCollider : MonoBehaviour
                 pointSum += (ToF(origin) - upF * dist) * w;
                 normalSum += nf * w;
 
-                if (c > bestC) { bestC = c; outGround = rbs.RigidBody; }
+                // Terrain has no body to push back on, so the deepest ray leaves it null (static ground).
+                if (c > bestC) { bestC = c; outGround = (proxy as RigidBodyShape)?.RigidBody; }
             }
         }
 
