@@ -251,46 +251,37 @@ public class CharacterController : MonoBehaviour
 
         Float3 moveDirection = Float3.Normalize(velocity);
 
-        bool hit = PerformShapeCast(
-            position,
-            moveDirection,
-            moveDistance + SkinWidth,
-            out ShapeCastHit hitInfo
-        );
+        float castDistance = moveDistance + SkinWidth;
+        bool hit = PerformShapeCast(position, moveDirection, castDistance, out ShapeCastHit hitInfo);
 
-        if (hit)
+        if (!hit)
+            return position + velocity;
+
+        // Fraction is measured over the cast distance, not the requested move. Back off by the skin
+        // width, and clamp so a cast that started already touching never walks backwards.
+        float safeDistance = Maths.Clamp(hitInfo.Fraction * castDistance - SkinWidth, 0.0f, moveDistance);
+        position += moveDirection * safeDistance;
+
+        // Calculate remaining movement after hitting surface
+        float remainingDistance = moveDistance - safeDistance;
+        Float3 remainingMove = moveDirection * remainingDistance;
+
+        // Check if this is a step we can climb
+        // Only attempt step-up if we're grounded and moving mostly horizontally
+        float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
         {
-            // Move to safe distance from hit point
-            float safeDistance = (moveDistance * hitInfo.Fraction - SkinWidth);
-            position += moveDirection * safeDistance;
-
-            // Calculate remaining movement after hitting surface
-            float remainingDistance = moveDistance - safeDistance;
-            Float3 remainingMove = moveDirection * remainingDistance;
-
-            // Check if this is a step we can climb
-            // Only attempt step-up if we're grounded and moving mostly horizontally
-            float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
-            if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
+            if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
             {
-                if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
-                {
-                    return steppedPosition;
-                }
+                return steppedPosition;
             }
-
-            // Project remaining movement onto the hit surface (slide)
-            Float3 slideMove = ProjectOntoSurface(remainingMove, hitInfo.Normal);
-
-            // Recurse with remaining slide movement
-            return CollideAndSlide(position, slideMove, depth + 1, grounded);
-        }
-        else
-        {
-            position += velocity;
         }
 
-        return position;
+        // Project remaining movement onto the hit surface (slide)
+        Float3 slideMove = ProjectOntoSurface(remainingMove, hitInfo.Normal);
+
+        // Recurse with remaining slide movement
+        return CollideAndSlide(position, slideMove, depth + 1, grounded);
     }
 
     /// <summary>
