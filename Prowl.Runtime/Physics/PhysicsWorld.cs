@@ -78,14 +78,9 @@ public class PhysicsWorld
     /// </summary>
     private CompositeBroadPhaseFilter _compositeBroadPhaseFilter;
 
-    // Registered terrain data for shape casts
-    internal struct TerrainInfo
-    {
-        public ITerrainHeightProvider HeightProvider;
-        public JVector Origin;
-        public float CellSize;
-    }
-    internal readonly Dictionary<TerrainHeightmapProxy, TerrainInfo> _terrainProxies = [];
+    // Registered terrain providers for shape casts. The grid placement is read from the provider per
+    // query rather than captured here, so terrain can be moved and scaled after registration.
+    internal readonly Dictionary<TerrainHeightmapProxy, ITerrainHeightProvider> _terrainProxies = [];
 
     public Float3 Gravity = new(0, -9.81f, 0);
     public int SolverIterations = 8;
@@ -141,8 +136,8 @@ public class PhysicsWorld
     private MonoBehaviour GetTerrainOwner(IDynamicTreeProxy proxy)
     {
         if (proxy is TerrainHeightmapProxy terrain &&
-            _terrainProxies.TryGetValue(terrain, out TerrainInfo info) &&
-            info.HeightProvider is MonoBehaviour owner && owner.IsValid())
+            _terrainProxies.TryGetValue(terrain, out ITerrainHeightProvider provider) &&
+            provider is MonoBehaviour owner && owner.IsValid())
             return owner;
 
         return null;
@@ -609,12 +604,12 @@ public class PhysicsWorld
         JVector jOrigin, JVector sweep, TerrainHeightmapProxy terrainProxy,
         JBoundingBox sweepBox, List<ShapeCastHit> hits)
     {
-        if (!_terrainProxies.TryGetValue(terrainProxy, out var info))
+        if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
             return;
 
-        var hp = info.HeightProvider;
-        var origin = info.Origin;
-        float cs = info.CellSize;
+        JVector origin = hp.Origin;
+        float cs = hp.CellSize;
+        if (cs <= 0.0f) return;
 
         // Convert sweep AABB to grid coordinates
         int minX = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.X - origin.X) / cs));
@@ -1355,11 +1350,9 @@ public class PhysicsWorld
     /// </summary>
     /// <param name="heightmapProxy">The terrain heightmap proxy for raycasting.</param>
     /// <param name="collisionFilter">The terrain collision filter for broad phase collision detection.</param>
-    /// <param name="heightProvider">Sampler used to query terrain height at arbitrary points during contact resolution.</param>
-    /// <param name="terrainOrigin">World-space origin (corner) of the terrain grid.</param>
-    /// <param name="cellSize">World-space spacing between height samples in the grid.</param>
+    /// <param name="heightProvider">Sampler for terrain heights and the live grid placement.</param>
     public void RegisterTerrain(TerrainHeightmapProxy heightmapProxy, TerrainCollisionFilter collisionFilter,
-        ITerrainHeightProvider heightProvider, JVector terrainOrigin, float cellSize)
+        ITerrainHeightProvider heightProvider)
     {
         if (heightmapProxy == null || collisionFilter == null)
             return;
@@ -1367,12 +1360,19 @@ public class PhysicsWorld
         World.DynamicTree.AddProxy(heightmapProxy, false);
         _compositeBroadPhaseFilter.AddFilter(collisionFilter);
 
-        _terrainProxies[heightmapProxy] = new TerrainInfo
-        {
-            HeightProvider = heightProvider,
-            Origin = terrainOrigin,
-            CellSize = cellSize,
-        };
+        _terrainProxies[heightmapProxy] = heightProvider;
+    }
+
+    /// <summary>
+    /// Re-fits a registered terrain's broad phase bounds after its transform changed. The grid itself is
+    /// sampled live, so only the dynamic tree needs telling.
+    /// </summary>
+    public void RefreshTerrain(TerrainHeightmapProxy heightmapProxy)
+    {
+        if (heightmapProxy == null || heightmapProxy.SetIndex == -1)
+            return;
+
+        World.DynamicTree.Update(heightmapProxy);
     }
 
     /// <summary>
