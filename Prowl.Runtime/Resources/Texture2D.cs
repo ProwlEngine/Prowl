@@ -76,8 +76,7 @@ public sealed class Texture2D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
-        if (data.Length < rectWidth * rectHeight)
-            throw new ArgumentException("Not enough pixel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * GetBytesPerPixel(ImageFormat), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
@@ -112,8 +111,7 @@ public sealed class Texture2D : Texture, ISerializable
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureNotDisposed();
-        if (data.Length < Width * Height)
-            throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.GetTexImage(Handle, 0, ptr);
@@ -163,6 +161,18 @@ public sealed class Texture2D : Texture, ISerializable
         Height = height;
 
         Graphics.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="Texture.GetBytesPerPixel"/> bytes per texel, so a byte buffer
+    /// sized one-per-texel for an RGBA texture is a quarter of what TexSubImage2D goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     private void ValidateTextureSize(uint width, uint height)

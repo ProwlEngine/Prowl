@@ -94,8 +94,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
-        if (data.Length < boxWidth * boxHeight * boxDepth)
-            throw new ArgumentException("Not enough voxel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)boxWidth * boxHeight * boxDepth * GetBytesPerPixel(ImageFormat), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.TexSubImage3D(Handle, 0, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth, ptr);
@@ -130,8 +129,7 @@ public sealed class Texture3D : Texture, ISerializable
     public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
     {
         EnsureNotDisposed();
-        if (data.Length < Width * Height * Depth)
-            throw new ArgumentException("Insufficient space to store the requested voxel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
 
         fixed (void* ptr = data.Span)
             Graphics.GetTexImage(Handle, 0, ptr);
@@ -187,6 +185,18 @@ public sealed class Texture3D : Texture, ISerializable
 
         if (depth <= 0 || depth > Graphics.MaxTextureSize)
             throw new ArgumentOutOfRangeException(nameof(depth), depth, nameof(depth) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + "]");
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="Texture.GetBytesPerPixel"/> bytes per voxel, so a byte buffer
+    /// sized one-per-voxel for an RGBA texture is a quarter of what TexSubImage3D goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     private void ValidateBoxOperation(int boxX, int boxY, int boxZ, uint boxWidth, uint boxHeight, uint boxDepth)
