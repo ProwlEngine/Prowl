@@ -96,6 +96,27 @@ public sealed class NavMeshData : EngineObject
     public List<NavMeshTile> CacheLayers = [];
 
     /// <summary>
+    /// A copy for one consumer's private use, so runtime tile and link rewrites do not land on
+    /// an asset every other consumer of the same <c>.navmesh</c> is reading. The blobs are
+    /// shared rather than duplicated: a rebuild replaces entries in these lists and never edits
+    /// one in place, so the copy costs two lists rather than the megabytes they point at.
+    /// </summary>
+    public NavMeshData Clone() => new()
+    {
+        Name = Name,
+        FormatVersion = FormatVersion,
+        Settings = Settings.Clone(),
+        BoundsMin = BoundsMin,
+        BoundsMax = BoundsMax,
+        Origin = Origin,
+        TileWorldSize = TileWorldSize,
+        MaxTiles = MaxTiles,
+        MaxPolys = MaxPolys,
+        CacheLayers = [.. CacheLayers],
+        Links = [.. Links],
+    };
+
+    /// <summary>
     /// Baked tile coordinates overlapping <paramref name="worldBounds"/>, inclusive; false when
     /// none do. Intersecting with the tiles that were actually baked keeps the range bounded by
     /// the navmesh — a range taken straight from a caller's rect spans every coordinate in it,

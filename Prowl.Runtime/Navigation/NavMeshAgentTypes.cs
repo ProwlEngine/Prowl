@@ -31,7 +31,18 @@ public sealed class NavMeshAgentType
     /// <summary>Maximum ledge height the agent can step up, in world units.</summary>
     public float MaxClimb = 0.4f;
 
-    public NavMeshAgentType Clone() => (NavMeshAgentType)MemberwiseClone();
+    /// <summary>Copy, so the table holds entries of its own rather than the caller's objects.
+    /// Field by field: a reference field added later would be shared, and settings loading would
+    /// hand every table entry the same one.</summary>
+    public NavMeshAgentType Clone() => new()
+    {
+        Id = Id,
+        Name = Name,
+        Radius = Radius,
+        Height = Height,
+        MaxSlope = MaxSlope,
+        MaxClimb = MaxClimb,
+    };
 }
 
 /// <summary>

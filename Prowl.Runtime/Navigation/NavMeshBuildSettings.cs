@@ -82,10 +82,26 @@ public sealed class NavMeshBuildSettings
     /// tile size is the per-carve cost and the default stays well under the cap.</summary>
     public const int DefaultTileSize = 64;
 
-    /// <summary>Snapshot copy, so a bake isn't mutated by later inspector edits. Note this is
-    /// a MemberwiseClone — valid only while every field is a value type; a future reference
-    /// field must be cloned explicitly here.</summary>
-    public NavMeshBuildSettings Clone() => (NavMeshBuildSettings)MemberwiseClone();
+    /// <summary>Snapshot copy, so a bake isn't mutated by later inspector edits. Written out
+    /// field by field rather than memberwise: a reference field added later would be shared by
+    /// every copy, and the first symptom would be one bake's settings changing under another.</summary>
+    public NavMeshBuildSettings Clone() => new()
+    {
+        AgentTypeId = AgentTypeId,
+        AgentRadius = AgentRadius,
+        AgentHeight = AgentHeight,
+        AgentMaxSlope = AgentMaxSlope,
+        AgentMaxClimb = AgentMaxClimb,
+        OverrideVoxelSize = OverrideVoxelSize,
+        VoxelSize = VoxelSize,
+        OverrideTileSize = OverrideTileSize,
+        TileSize = TileSize,
+        MinRegionArea = MinRegionArea,
+        EdgeMaxError = EdgeMaxError,
+        FilterLowHangingObstacles = FilterLowHangingObstacles,
+        FilterLedgeSpans = FilterLedgeSpans,
+        FilterWalkableLowHeightSpans = FilterWalkableLowHeightSpans,
+    };
 }
 
 /// <summary>
@@ -125,6 +141,4 @@ public sealed class NavMeshBuildOverrides
 
     [Tooltip("Remove walkable voxels with too little clearance above them for the agent to stand.")]
     public bool FilterWalkableLowHeightSpans = true;
-
-    public NavMeshBuildOverrides Clone() => (NavMeshBuildOverrides)MemberwiseClone();
 }

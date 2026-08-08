@@ -85,10 +85,20 @@ public class NavMeshSurface : MonoBehaviour
     public bool AlwaysShowNavMesh;
 
     private NavMeshInstance? _instance;
+    private Runtime.NavMeshData? _runtimeData;
     private bool IsVolumeMode => CollectObjects == NavMeshCollectObjects.Volume;
 
     /// <summary>The live navmesh registration, while enabled and a navmesh is loaded.</summary>
     public NavMeshInstance? Instance => _instance;
+
+    /// <summary>
+    /// What the live navmesh was built from: this surface's private copy of the asset, made at
+    /// registration and null without one. Rebuilds rewrite its tile and link lists, and the
+    /// object the asset database hands out is shared by every surface pointing at that
+    /// <c>.navmesh</c> — one surface's link moving must not rewrite another surface's navmesh,
+    /// nor the asset the next scene load reads. See <see cref="NavMeshData.Clone"/> for the cost.
+    /// </summary>
+    public Runtime.NavMeshData? RuntimeData => _runtimeData;
 
     /// <summary>The scene's navigation world, or null when not in a scene.</summary>
     private NavMeshWorld? World
@@ -130,7 +140,9 @@ public class NavMeshSurface : MonoBehaviour
         Runtime.NavMeshData? data = NavMeshData.Res;
         if (data.IsNotValid() || !data!.HasTiles) return;
 
-        _instance = world.AddNavMeshData(data);
+        _runtimeData = data.Clone();
+        _instance = world.AddNavMeshData(_runtimeData);
+        if (_instance == null) _runtimeData = null;
     }
 
     private void Unregister()
@@ -138,6 +150,7 @@ public class NavMeshSurface : MonoBehaviour
         if (_instance == null) return;
         World?.RemoveNavMeshData(_instance);
         _instance = null;
+        _runtimeData = null;
     }
 
     #region Building
@@ -220,9 +233,9 @@ public class NavMeshSurface : MonoBehaviour
     /// </summary>
     public bool RebuildTiles(AABB worldBounds)
     {
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = _runtimeData;
         if (data.IsNotValid()) return false;
-        // Collection (terrain decimation) uses the ASSET's voxel size, same as the tiles being
+        // Collection (terrain decimation) uses the BAKED voxel size, same as the tiles being
         // rebuilt — the current agent table may disagree with the bake this grid came from.
         AABB? collectionBounds = RebuildCollectionBounds(worldBounds);
         return RebuildTiles(worldBounds,
@@ -246,7 +259,7 @@ public class NavMeshSurface : MonoBehaviour
     public bool RebuildLinkTiles(AABB worldBounds, IReadOnlyList<NavMeshLinkSource>? links = null)
     {
         NavMeshInstance? instance = Instance;
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = _runtimeData;
         if (instance == null || data.IsNotValid()) return false;
         if (data!.TileWorldSize <= 0) return false;
 
@@ -270,8 +283,9 @@ public class NavMeshSurface : MonoBehaviour
                         cache.BuildNavMeshTile(tileRef);
         });
 
-        // Mirror onto the asset so a save (or a later re-instantiation of this data) starts
-        // from the same link set the live mesh is using.
+        // Mirror onto the runtime copy, so a rebuild that re-instantiates it starts from the
+        // link set the live mesh is using. The .navmesh asset is left alone: a link moving is a
+        // scene edit, and the baked artifact answers for it at the next bake.
         data.Links.Clear();
         foreach (NavMeshLinkSource link in links)
             data.Links.Add(Runtime.NavMeshData.NavMeshLinkEntry.From(link));
@@ -327,7 +341,7 @@ public class NavMeshSurface : MonoBehaviour
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
     {
         rebuiltTiles = 0;
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = _runtimeData;
         if (World == null || _instance == null || data.IsNotValid())
             return false;
 
@@ -348,7 +362,9 @@ public class NavMeshSurface : MonoBehaviour
         AABB worldBounds, IReadOnlyList<NavMeshGeometrySource> sources, CancellationToken cancellation = default,
         IReadOnlyList<NavMeshAreaVolume>? volumes = null)
     {
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        // The surface's own copy, not the asset: the background build reads the tile grid off
+        // it, and it must be the grid the live mesh is on.
+        Runtime.NavMeshData? data = _runtimeData;
         if (data.IsNotValid())
             return Task.FromResult(new List<(int, int, List<byte[]>)>());
 
@@ -376,7 +392,7 @@ public class NavMeshSurface : MonoBehaviour
         ArgumentNullException.ThrowIfNull(rebuilt);
         rebuiltTiles = 0;
         NavMeshWorld? world = World;
-        Runtime.NavMeshData? data = NavMeshData.Res;
+        Runtime.NavMeshData? data = _runtimeData;
         if (world == null || _instance == null || data.IsNotValid() || rebuilt.Count == 0)
             return false;
         rebuiltTiles = rebuilt.Count;
@@ -433,13 +449,10 @@ public class NavMeshSurface : MonoBehaviour
                 cache.BuildNavMeshTile(added); // re-contours with carves applied via the refreshed lists
         });
 
-        // Mirror the swap into the serializable asset so a later save/instantiate agrees with
-        // the live mesh. Note this mutates the loaded NavMeshData INSTANCE — for an imported
-        // .navmesh asset that is the shared imported object, and nothing is written to disk
-        // unless the asset is explicitly saved; leaving play mode without saving discards the
-        // in-memory changes with the usual asset reload. Obstacles are runtime state and never
-        // serialize — the asset stores clean regenerated layers. Single pass over the tile
-        // list: RemoveAll-per-tile would be O(total x rebuilt).
+        // Mirror the swap into this surface's runtime copy so a later re-instantiation agrees
+        // with the live mesh; the .navmesh asset on disk is not touched. Obstacles are runtime
+        // state and never serialize, so the copy holds clean regenerated layers. Single pass
+        // over the tile list: RemoveAll-per-tile would be O(total x rebuilt).
         var replaced = new HashSet<(int, int)>(rebuilt.Count);
         foreach ((int x, int z, _) in rebuilt)
             replaced.Add((x, z));

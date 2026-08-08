@@ -118,7 +118,7 @@ public class NavMeshSurfaceEditor : CustomEditor
             string fileRel = folderRel + "/" + Sanitize(sceneName + " NavMesh") + ".navmesh";
             string fileAbs = Path.Combine(Project.Current.AssetsPath, fileRel);
             data!.Name = Path.GetFileNameWithoutExtension(fileRel);
-            File.WriteAllText(fileAbs, Serializer.Serialize(typeof(object), data).WriteToString());
+            Serializer.Serialize(typeof(object), data).WriteToBinary(new FileInfo(fileAbs));
 
             Guid guid = db.ImportFile(fileRel);
             if (guid == Guid.Empty)

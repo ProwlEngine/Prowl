@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
@@ -377,16 +379,25 @@ public class NavMeshObstacleTests : RuntimeTestBase
             "Removing the spanning obstacle must restore both sides of the seam.");
     }
 
-    /// <summary>Regenerated layers replace the asset's blobs (a later save/instantiate agrees
-    /// with the live mesh), and the mutated asset still round-trips and re-instantiates.</summary>
+    /// <summary>
+    /// Regenerated layers replace the blobs on the surface's own copy, so re-instantiating it
+    /// agrees with the live mesh, and that copy still round-trips. The asset the database handed
+    /// out keeps every blob it was baked with: it is shared with every other surface pointing at
+    /// the same .navmesh, and with the next scene that loads it.
+    /// </summary>
     [Fact]
-    public void LayerRegeneration_MirrorsIntoAsset()
+    public void LayerRegeneration_MirrorsIntoTheRuntimeCopyAndLeavesTheAsset()
     {
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
-        Runtime.NavMeshData data = surface.NavMeshData.Res!;
-        var blobsBefore = new System.Collections.Generic.Dictionary<(int, int), byte[]>();
-        foreach (Runtime.NavMeshData.NavMeshTile layer in data.CacheLayers)
+
+        Runtime.NavMeshData asset = surface.NavMeshData.Res!;
+        Runtime.NavMeshData runtime = surface.RuntimeData!;
+        Assert.NotSame(asset, runtime);
+
+        List<Runtime.NavMeshData.NavMeshTile> assetLayersBefore = [.. asset.CacheLayers];
+        var blobsBefore = new Dictionary<(int, int), byte[]>();
+        foreach (Runtime.NavMeshData.NavMeshTile layer in assetLayersBefore)
             blobsBefore[(layer.X, layer.Z)] = layer.Data;
 
         GameObject wall = CreateGameObject("Wall");
@@ -396,12 +407,16 @@ public class NavMeshObstacleTests : RuntimeTestBase
         Assert.True(surface.RebuildTiles(new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11))));
 
         bool anyReplaced = false;
-        foreach (Runtime.NavMeshData.NavMeshTile layer in data.CacheLayers)
+        foreach (Runtime.NavMeshData.NavMeshTile layer in runtime.CacheLayers)
             if (blobsBefore.TryGetValue((layer.X, layer.Z), out byte[]? before) && !ReferenceEquals(before, layer.Data))
                 anyReplaced = true;
-        Assert.True(anyReplaced, "Affected tiles' blobs should be replaced in the asset.");
+        Assert.True(anyReplaced, "Affected tiles' blobs should be replaced on the runtime copy.");
 
-        EchoObject echo = Serializer.Serialize(data);
+        Assert.Equal(assetLayersBefore.Count, asset.CacheLayers.Count);
+        for (int i = 0; i < assetLayersBefore.Count; i++)
+            Assert.Same(assetLayersBefore[i], asset.CacheLayers[i]);
+
+        EchoObject echo = Serializer.Serialize(runtime);
         Runtime.NavMeshData? loaded = Serializer.Deserialize<Runtime.NavMeshData>(echo);
         Assert.NotNull(loaded);
         var cache = loaded!.CreateTileCache(maxObstacles: 16);

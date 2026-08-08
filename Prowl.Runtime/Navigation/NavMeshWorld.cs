@@ -294,10 +294,32 @@ public readonly struct NavMeshQueryLease : IDisposable
 /// </summary>
 public sealed class NavMeshWorld
 {
-    // Capacity limits for a single query, in polys/corners. Detour needs explicit maximums;
-    // these match the sizes the Recast demos use for long paths.
-    private const int MaxPolyPath = 1024;
-    private const int MaxStraightPath = 256;
+    private int _maxPolyPath = 1024;
+    private int _maxStraightPath = 256;
+
+    /// <summary>
+    /// How many navmesh polygons one path may cross. Detour needs an explicit ceiling; the
+    /// default matches what the Recast demos use for long paths. A route that would exceed it
+    /// comes back <see cref="NavMeshPathStatus.PathPartial"/> rather than failing, so the symptom
+    /// of setting it too low is agents that stop short on long journeys for no visible reason.
+    /// Buffers are rented per query, so the cost is per query in flight, not per world.
+    /// </summary>
+    public int MaxPolyPath
+    {
+        get => _maxPolyPath;
+        set => _maxPolyPath = Math.Max(2, value);
+    }
+
+    /// <summary>
+    /// How many corners one path may have. The same trade as <see cref="MaxPolyPath"/>: a path
+    /// that fills the buffer is reported partial. Corners are the turns of the string-pulled
+    /// route, so this can be far smaller than the polygon count.
+    /// </summary>
+    public int MaxStraightPath
+    {
+        get => _maxStraightPath;
+        set => _maxStraightPath = Math.Max(2, value);
+    }
 
     private readonly List<NavMeshInstance> _instances = [];
     private readonly Lock _instancesLock = new();
@@ -709,12 +731,16 @@ public sealed class NavMeshWorld
             if (startRef == 0 || endRef == 0)
                 return false;
 
-            long[] polys = ArrayPool<long>.Shared.Rent(MaxPolyPath);
-            DtStraightPath[] straight = ArrayPool<DtStraightPath>.Shared.Rent(MaxStraightPath);
-            Float3[] corners = ArrayPool<Float3>.Shared.Rent(MaxStraightPath);
+            // Read once: the ceilings are settable, and a change between the rent and the span
+            // would size a buffer to one value and index it by another.
+            int maxPolys = MaxPolyPath, maxCorners = MaxStraightPath;
+
+            long[] polys = ArrayPool<long>.Shared.Rent(maxPolys);
+            DtStraightPath[] straight = ArrayPool<DtStraightPath>.Shared.Rent(maxCorners);
+            Float3[] corners = ArrayPool<Float3>.Shared.Rent(maxCorners);
             try
             {
-                DtStatus status = query.FindPath(startRef, endRef, startPt, endPt, filter, polys.AsSpan(0, MaxPolyPath), out int polyCount, MaxPolyPath);
+                DtStatus status = query.FindPath(startRef, endRef, startPt, endPt, filter, polys.AsSpan(0, maxPolys), out int polyCount, maxPolys);
                 if (status.Failed() || polyCount == 0)
                     return false;
 
@@ -726,13 +752,13 @@ public sealed class NavMeshWorld
                     query.ClosestPointOnPoly(polys[polyCount - 1], endPt, out steerTarget, out _);
 
                 DtStatus straightStatus = query.FindStraightPath(startPt, steerTarget, polys.AsSpan(0, polyCount), polyCount,
-                    straight.AsSpan(0, MaxStraightPath), out int cornerCount, MaxStraightPath, 0);
+                    straight.AsSpan(0, maxCorners), out int cornerCount, maxCorners, 0);
                 if (straightStatus.Failed() || cornerCount == 0)
                     return false;
 
                 // A corner buffer filled to capacity means FindStraightPath truncated the
                 // path; reporting that as complete would lie to the caller.
-                if (cornerCount >= MaxStraightPath)
+                if (cornerCount >= maxCorners)
                     partial = true;
 
                 for (int i = 0; i < cornerCount; i++)
@@ -810,11 +836,12 @@ public sealed class NavMeshWorld
             if (startRef == 0)
                 return false;
 
-            long[] polys = ArrayPool<long>.Shared.Rent(MaxPolyPath);
+            int maxPolys = MaxPolyPath;
+            long[] polys = ArrayPool<long>.Shared.Rent(maxPolys);
             try
             {
                 DtStatus status = query.Raycast(startRef, startPt, end, filter, out float t, out RcVec3f normal,
-                    polys.AsSpan(0, MaxPolyPath), out int _, MaxPolyPath);
+                    polys.AsSpan(0, maxPolys), out int _, maxPolys);
                 if (status.Failed())
                     return false;
 
