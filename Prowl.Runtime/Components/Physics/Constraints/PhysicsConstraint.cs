@@ -103,18 +103,12 @@ public abstract class PhysicsConstraint : MonoBehaviour
         World world = GameObject.Scene.Physics.World;
         if (world == null) return;
 
-        // If no connected body is specified, create a static body at the world origin
-        RigidBody body2;
-        if (connectedBody.IsNotValid() || connectedBody._body == null || connectedBody._body.Handle.IsZero)
-        {
-            // Create a temporary static body for world-space constraints
-            body2 = world.CreateRigidBody();
-            body2.MotionType = MotionType.Static;
-        }
-        else
-        {
-            body2 = connectedBody._body;
-        }
+        // No connected body means "anchor to the world". Jitter keeps a pinned static NullBody for
+        // exactly that; creating a fresh static body here would leak one into the world on every
+        // recreate, and this runs from OnEnable, OnValidate and every property setter.
+        RigidBody body2 = connectedBody.IsNotValid() || connectedBody._body == null || connectedBody._body.Handle.IsZero
+            ? world.NullBody
+            : connectedBody._body;
 
         CreateConstraint(world, body1._body, body2);
 
