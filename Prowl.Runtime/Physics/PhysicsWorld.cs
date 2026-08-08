@@ -106,8 +106,37 @@ public class PhysicsWorld
     // Rigidbodies that may need their Transform pushed into the physics world (transform -> body).
     private readonly HashSet<Rigidbody3D> _syncBodies = [];
 
+    // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
+    // which GameObject was struck. This maps every shape back to the Collider that created it.
+    private readonly Dictionary<RigidBodyShape, Collider> _shapeOwners = [];
+
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
+
+    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider) => _shapeOwners[shape] = collider;
+
+    internal void UnregisterShapeOwner(RigidBodyShape shape) => _shapeOwners.Remove(shape);
+
+    /// <summary>
+    /// The <see cref="Collider"/> that created the given shape, or null if the shape is not tracked.
+    /// </summary>
+    public Collider GetShapeOwner(RigidBodyShape shape)
+    {
+        if (shape != null && _shapeOwners.TryGetValue(shape, out Collider collider) && collider.IsValid())
+            return collider;
+        return null;
+    }
+
+    /// <summary>
+    /// The Transform a query hit should report: the rigidbody's when there is one, otherwise the
+    /// collider's own.
+    /// </summary>
+    internal static Transform ResolveHitTransform(Rigidbody3D rigidbody, Collider collider)
+    {
+        if (rigidbody.IsValid() && rigidbody.GameObject.IsValid()) return rigidbody.GameObject.Transform;
+        if (collider.IsValid() && collider.GameObject.IsValid()) return collider.GameObject.Transform;
+        return null;
+    }
 
     /// <summary>
     /// Pushes any changed Transforms into their physics bodies (transform -> body). Runs automatically
@@ -238,6 +267,11 @@ public class PhysicsWorld
 
         // Clear the static rigidbodies dictionary - they will be recreated as needed
         _staticRigidbodiesByLayer.Clear();
+
+        // World.Clear removed every body, so the per-body registries hold nothing worth visiting.
+        // The components re-register when they recreate their bodies.
+        _syncBodies.Clear();
+        _shapeOwners.Clear();
     }
 
     public void Update()
@@ -304,7 +338,7 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
@@ -348,7 +382,7 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal,
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
@@ -392,7 +426,7 @@ public class PhysicsWorld
                 Lambda = lambda,
                 Normal = normal,
             };
-            hitInfo.SetFromJitterResult(result, origin, direction);
+            hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
         return hit;
@@ -498,6 +532,7 @@ public class PhysicsWorld
                     normal = JVector.Normalize(normal);
                 }
 
+                Collider owner = GetShapeOwner(targetShape);
                 var castHit = new ShapeCastHit
                 {
                     Hit = true,
@@ -507,7 +542,8 @@ public class PhysicsWorld
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
+                    Collider = owner,
+                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
                 };
                 hits.Add(castHit);
             }
@@ -592,6 +628,9 @@ public class PhysicsWorld
 
         if (bestLambda < float.MaxValue)
         {
+            // The height provider is the TerrainCollider component itself, so it can name the GameObject
+            // even though terrain has no RigidBodyShape to look up.
+            var terrain = hp as MonoBehaviour;
             hits.Add(new ShapeCastHit
             {
                 Hit = true,
@@ -601,7 +640,8 @@ public class PhysicsWorld
                 HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
                 Rigidbody = null,
                 Shape = null,
-                Transform = null,
+                Collider = null,
+                Transform = terrain.IsValid() && terrain.GameObject.IsValid() ? terrain.GameObject.Transform : null,
             });
         }
     }
@@ -993,6 +1033,7 @@ public class PhysicsWorld
 
             if (overlaps && penetration > 0)
             {
+                Collider owner = GetShapeOwner(targetShape);
                 var hit = new ShapeCastHit
                 {
                     Hit = true,
@@ -1003,7 +1044,8 @@ public class PhysicsWorld
                     HitPoint = new Float3(pointB.X, pointB.Y, pointB.Z),
                     Rigidbody = userData.Rigidbody,
                     Shape = targetShape,
-                    Transform = userData.Rigidbody.IsValid() && userData.Rigidbody.GameObject.IsValid() ? userData.Rigidbody.GameObject.Transform : null
+                    Collider = owner,
+                    Transform = ResolveHitTransform(userData.Rigidbody, owner)
                 };
                 hits.Add(hit);
             }

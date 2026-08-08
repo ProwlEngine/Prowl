@@ -40,6 +40,12 @@ public abstract class Collider : MonoBehaviour
     private RigidBodyShape[] _attachedShapes;
 
     /// <summary>
+    /// The physics world holding shape-owner entries for <see cref="_attachedShapes"/>. Captured at
+    /// registration so Detach can clean up even once the GameObject can no longer reach its scene.
+    /// </summary>
+    private PhysicsWorld _registeredWorld;
+
+    /// <summary>
     /// Transform version tracking for static colliders.
     /// Used to detect when the transform has moved and shapes need updating.
     /// </summary>
@@ -144,6 +150,13 @@ public abstract class Collider : MonoBehaviour
             }
         }
 
+        if (_registeredWorld != null && _attachedShapes != null)
+        {
+            foreach (RigidBodyShape shape in _attachedShapes)
+                _registeredWorld.UnregisterShapeOwner(shape);
+        }
+
+        _registeredWorld = null;
         _attachedBody = null;
         _attachedRigidbody3D = null;
         _attachedShapes = null;
@@ -171,12 +184,16 @@ public abstract class Collider : MonoBehaviour
 
         if (_attachedShapes != null)
         {
+            var scene = GameObject.IsValid() ? GameObject.Scene : null;
+            _registeredWorld = scene.IsValid() ? scene.Physics : null;
+
             foreach (RigidBodyShape shape in _attachedShapes)
             {
                 // Always use Preserve: per-shape Update mode calls SetMassInertia() after every
                 // addition, which iterates ALL attached shapes. Any TriangleShape in that set
                 // throws NotSupportedException. We set mass once below, after all shapes are added.
                 _attachedBody.AddShape(shape, Jitter2.Dynamics.MassInertiaUpdateMode.Preserve);
+                _registeredWorld?.RegisterShapeOwner(shape, this);
             }
         }
 
