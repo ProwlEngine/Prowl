@@ -3,12 +3,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
 using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
+using Jitter2.Dynamics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -80,14 +81,24 @@ public class LayerFilter : IBroadPhaseFilter
         return copy;
     }
 
+    private static bool AreConstrainedTogether(RigidBody a, RigidBody b)
+    {
+        if (a.Constraints.Count == 0 || b.Constraints.Count == 0) return false;
+
+        if (b.Constraints.Count < a.Constraints.Count) (a, b) = (b, a);
+
+        foreach (Constraint constraint in a.Constraints)
+            if (constraint.Body1 == b || constraint.Body2 == b) return true;
+
+        return false;
+    }
+
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
     {
         if (proxyA is RigidBodyShape rbsA && proxyB is RigidBodyShape rbsB)
         {
             // Things with constraints dont collide against eachother. (TODO: This should be toggleable)
-            if (rbsA.RigidBody.Constraints.Any(conn => conn.Body1 == rbsB.RigidBody || conn.Body2 == rbsB.RigidBody))
-                return false;
-            if (rbsB.RigidBody.Constraints.Any(conn => conn.Body1 == rbsA.RigidBody || conn.Body2 == rbsA.RigidBody))
+            if (AreConstrainedTogether(rbsA.RigidBody, rbsB.RigidBody))
                 return false;
 
             if (rbsA.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData udA ||
