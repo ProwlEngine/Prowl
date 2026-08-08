@@ -625,4 +625,24 @@ public class PhysicsTests : RuntimeTestBase
         Assert.True(boxB.Transform.Position.Y > 0,
             $"Pair ignored in another world should still collide here; body was at y={boxB.Transform.Position.Y}");
     }
+
+    [Theory]
+    [InlineData(float.NaN, 0f, 0f)]
+    [InlineData(0f, float.PositiveInfinity, 0f)]
+    public void Queries_WithNonFiniteInputs_ReportNoHitInsteadOfThrowing(float x, float y, float z)
+    {
+        var scene = CreatePhysicsScene();
+        AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+
+        var bad = new Float3(x, y, z);
+        var hits = new List<ShapeCastHit>();
+
+        Assert.False(scene.Physics.Raycast(bad, new Float3(0, -1, 0), 10f, out _));
+        Assert.False(scene.Physics.Raycast(Float3.Zero, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.SphereCastAll(bad, 0.5f, new Float3(0, -1, 0), 10f, hits));
+        Assert.False(scene.Physics.SphereCast(Float3.Zero, 0.5f, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.OverlapSphere(bad, 0.5f, hits));
+        Assert.False(scene.Physics.CheckSphere(bad, 0.5f));
+    }
 }
