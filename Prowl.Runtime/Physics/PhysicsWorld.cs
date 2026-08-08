@@ -322,6 +322,11 @@ public class PhysicsWorld
         SyncTransforms();
 
         World.Step(Time.FixedDeltaTime, UseMultithreading);
+
+        // Record the pose each body just landed on, so interpolated bodies have two steps to render
+        // between. Driven from here rather than a per-body event to keep it one pass with no delegates.
+        foreach (var body in _syncBodies)
+            if (body.IsValid()) body.CapturePose();
     }
 
     /// <summary>

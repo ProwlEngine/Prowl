@@ -15,6 +15,20 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// How a rigidbody's Transform is filled in between physics steps. Physics runs at a fixed rate, so
+/// without smoothing the visuals move in fixed-rate jumps whenever the frame rate differs from it.
+/// </summary>
+public enum RigidbodyInterpolation
+{
+    /// <summary>Write the simulated pose as-is. Cheapest, and visibly steps at high frame rates.</summary>
+    None,
+    /// <summary>Render between the last two steps. Smooth, at the cost of trailing one fixed step behind.</summary>
+    Interpolate,
+    /// <summary>Predict ahead of the last step from the body's velocity. No lag, but can overshoot a collision.</summary>
+    Extrapolate
+}
+
 [AddComponentMenu("Physics/Rigidbody")]
 [ComponentIcon("\uf1b2")] // Cube
 public sealed class Rigidbody3D : MonoBehaviour
@@ -42,11 +56,32 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private float linearSleepThreshold = 0.1f;
     [SerializeField] private float angularSleepThreshold = 0.1f;
 
+    [SerializeField] private RigidbodyInterpolation interpolation = RigidbodyInterpolation.Interpolate;
+
     private float interpTimer = 0;
+
+    // The poses the last two steps produced, and how far into the current step we have rendered.
+    private Float3 _previousPosition, _currentPosition;
+    private Quaternion _previousRotation, _currentRotation;
+    private bool _hasPose;
 
     // Transform.Version last pushed into the physics body, so SyncTransformToBody only pushes when
     // the user actually edited the Transform (not when the physics readback wrote it).
     private uint _lastSyncedTransformVersion;
+
+    /// <summary>
+    /// How the Transform is filled in between fixed steps. Turn this on for anything the player
+    /// watches closely; leave it off for bodies whose exact pose per frame does not matter.
+    /// </summary>
+    public RigidbodyInterpolation Interpolation
+    {
+        get => interpolation;
+        set
+        {
+            interpolation = value;
+            ResetPose();
+        }
+    }
 
     /// <summary>
     /// How this body participates in the simulation: <see cref="MotionType.Dynamic"/>,
@@ -378,22 +413,74 @@ public sealed class Rigidbody3D : MonoBehaviour
 
         interpTimer += Time.DeltaTime;
 
-        //_body.PredictPose(interpTimer, out JVector predictedPosition, out JQuaternion predictedOrientation);
-        JVector predictedPosition = _body.Position;
-        JQuaternion predictedOrientation = _body.Orientation;
+        Float3 position;
+        Quaternion rotation;
 
-        Transform.Position = new Float3(predictedPosition.X, predictedPosition.Y, predictedPosition.Z);
-        Transform.Rotation = new Quaternion(predictedOrientation.X, predictedOrientation.Y, predictedOrientation.Z, predictedOrientation.W);
+        if (interpolation == RigidbodyInterpolation.None || !_hasPose)
+        {
+            position = ToFloat3(_body.Position);
+            rotation = ToQuaternion(_body.Orientation);
+        }
+        else if (interpolation == RigidbodyInterpolation.Extrapolate)
+        {
+            _body.PredictPose(interpTimer, out JVector predicted, out JQuaternion predictedOrientation);
+            position = ToFloat3(predicted);
+            rotation = ToQuaternion(predictedOrientation);
+        }
+        else
+        {
+            // Render between the last two steps. The visual trails the simulation by up to one fixed
+            // step, which is the price of never overshooting into geometry the solver has not seen.
+            float t = Time.FixedDeltaTime > 0.0f ? Maths.Clamp(interpTimer / Time.FixedDeltaTime, 0.0f, 1.0f) : 1.0f;
+            position = Maths.Lerp(_previousPosition, _currentPosition, t);
+            rotation = Quaternion.Slerp(_previousRotation, _currentRotation, t);
+        }
+
+        Transform.Position = position;
+        Transform.Rotation = rotation;
 
         // Remember the version we just wrote so the transform->body sync doesn't treat this
         // physics-driven change as a user edit and push it straight back.
         _lastSyncedTransformVersion = Transform.Version;
     }
 
-    public override void FixedUpdate()
+    /// <summary>
+    /// Records the pose the step just produced, so the next frames can render between it and the one
+    /// before. Driven by the physics world for every registered body right after the step.
+    /// </summary>
+    internal void CapturePose()
     {
-        interpTimer = 0;
+        if (_body == null || _body.Handle.IsZero) return;
+
+        interpTimer = 0.0f;
+        _previousPosition = _currentPosition;
+        _previousRotation = _currentRotation;
+        _currentPosition = ToFloat3(_body.Position);
+        _currentRotation = ToQuaternion(_body.Orientation);
+
+        if (!_hasPose)
+        {
+            _previousPosition = _currentPosition;
+            _previousRotation = _currentRotation;
+            _hasPose = true;
+        }
     }
+
+    /// <summary>
+    /// Drops the interpolation history so a teleport snaps instead of being smeared across a frame.
+    /// </summary>
+    private void ResetPose()
+    {
+        if (_body == null || _body.Handle.IsZero) { _hasPose = false; return; }
+
+        interpTimer = 0.0f;
+        _currentPosition = _previousPosition = ToFloat3(_body.Position);
+        _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
+        _hasPose = true;
+    }
+
+    private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
+    private static Quaternion ToQuaternion(JQuaternion q) => new(q.X, q.Y, q.Z, q.W);
 
     public override void DrawGizmos()
     {
@@ -547,6 +634,7 @@ public sealed class Rigidbody3D : MonoBehaviour
     {
         rb.Position = new JVector(Transform.Position.X, Transform.Position.Y, Transform.Position.Z);
         rb.Orientation = new JQuaternion(Transform.Rotation.X, Transform.Rotation.Y, Transform.Rotation.Z, Transform.Rotation.W);
+        ResetPose();
     }
 
     /// <summary>
@@ -683,6 +771,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (_body != null)
         {
             _body.Position = new JVector(position.X, position.Y, position.Z);
+            ResetPose();
         }
     }
 
@@ -694,6 +783,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         if (_body != null)
         {
             _body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+            ResetPose();
         }
     }
 }
