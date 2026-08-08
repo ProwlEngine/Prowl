@@ -631,7 +631,7 @@ public class PhysicsWorld
         {
             for (int z = minZ; z < maxZ; z++)
             {
-                if (!hp.IsValidCell(x, z)) continue;
+                if (!hp.IsValidCell(x, z) || hp.IsCellHole(x, z)) continue;
                 if (!hp.TryGetHeight(x, z, out float h00) ||
                     !hp.TryGetHeight(x + 1, z, out float h10) ||
                     !hp.TryGetHeight(x + 1, z + 1, out float h11) ||

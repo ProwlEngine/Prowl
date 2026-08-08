@@ -98,8 +98,8 @@ public class TerrainHeightmapProxy : IDynamicTreeProxy, IRayCastable
 
         while (t <= maxDistance)
         {
-            // Check if we are out of bounds
-            if (!_heightProvider.IsValidCell(x, z))
+            // Skip cells that are out of bounds or punched out as holes
+            if (!_heightProvider.IsValidCell(x, z) || _heightProvider.IsCellHole(x, z))
                 goto continue_walk;
 
             // Check this quad
