@@ -255,71 +255,42 @@ public abstract class Collider : MonoBehaviour
     public abstract RigidBodyShape[] CreateShapes();
 
     /// <summary>
-    /// Create the Transformed Jitter Physics RigidBodyShape
+    /// Produce the collider's shapes with the given transform already applied to their geometry, or
+    /// null to let the base class wrap <see cref="CreateShapes"/> in a <see cref="TransformedShape"/>.
+    /// Triangle-mesh colliders must override this: Jitter's internal-edge filter only recognises a bare
+    /// <c>TriangleShape</c>, so a wrapped one silently loses edge filtering and one-sided triangles.
+    /// </summary>
+    protected virtual RigidBodyShape[] CreateBakedShapes(Float4x4 transform) => null;
+
+    /// <summary>
+    /// The collider's world-space scale, clamped away from zero so shapes stay non-degenerate.
+    /// </summary>
+    private Float3 CumulativeScale()
+    {
+        Float3 scale = Float3.One;
+        for (Transform current = Transform; current != null; current = current.Parent)
+            scale *= current.LocalScale;
+
+        return Maths.Max(scale, Float3.One * 0.05f);
+    }
+
+    /// <summary>
+    /// Create the Jitter Physics RigidBodyShapes in the space of the attached Rigidbody3D.
     /// </summary>
     public RigidBodyShape[] CreateTransformedShapes()
     {
-        // Create the base shape
-        RigidBodyShape[] shapes = CreateShapes();
-        if (shapes == null)
-            return null;
         Rigidbody3D rb = RigidBody;
-        if (rb.IsNotValid()) return shapes;
+        if (rb.IsNotValid()) return CreateShapes();
 
-        // Get the cumulative scale from this object up to (but not including) the rigidbody
-        Float3 cumulativeScale = Float3.One;
-        Transform current = Transform;
-        Transform rbTransform = rb.Transform;
+        Float3 cumulativeScale = CumulativeScale();
+        Float3 worldCenter = Transform.TransformPoint(Center * cumulativeScale);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
 
-        while (current != null)
-        {
-            cumulativeScale *= current.LocalScale;
-            current = current.Parent;
-        }
-
-        cumulativeScale = Maths.Max(cumulativeScale, Float3.One * 0.05f);
-
-        // Get the local rotation and position in world space
-        Quaternion localRotation = Quaternion.FromEuler(Rotation);
-        Float3 scaledCenter = Center * cumulativeScale;
-
-        // Transform local position and rotation to world space
-        Float3 worldCenter = Transform.TransformPoint(scaledCenter);
-        Quaternion worldRotation = Transform.Rotation * localRotation;
-
-        // Transform from world space to rigid body's local space
+        // Transform from world space into the rigid body's local space
         Float3 rbLocalCenter = rb.Transform.InverseTransformPoint(worldCenter);
         Quaternion rbLocalRotation = Quaternion.Inverse(rb.Transform.Rotation) * worldRotation;
 
-        // Create a scale transform matrix that includes both rotation and scale
-        Float4x4 scaleMatrix = Float4x4.CreateTRS(Float3.Zero, rbLocalRotation, cumulativeScale);
-
-        // If there's no transformation needed, return the original shape
-        if (rbLocalCenter.Equals(Float3.Zero) &&
-            cumulativeScale.Equals(Float3.One) &&
-            rbLocalRotation == Quaternion.Identity)
-            return shapes;
-
-        // Convert to Jitter types
-        var translation = new Jitter2.LinearMath.JVector(
-            rbLocalCenter.X,
-            rbLocalCenter.Y,
-            rbLocalCenter.Z
-        );
-
-        // Convert combined rotation and scale matrix to JMatrix
-        var orientation = new Jitter2.LinearMath.JMatrix(
-            scaleMatrix[0, 0], scaleMatrix[0, 1], scaleMatrix[0, 2],
-            scaleMatrix[1, 0], scaleMatrix[1, 1], scaleMatrix[1, 2],
-            scaleMatrix[2, 0], scaleMatrix[2, 1], scaleMatrix[2, 2]
-        );
-
-        //return new TransformedShape(shape, translation, orientation);
-        TransformedShape[] transformedShapes = new TransformedShape[shapes.Length];
-        for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], translation, orientation);
-
-        return transformedShapes;
+        return BuildShapes(rbLocalCenter, rbLocalRotation, cumulativeScale);
     }
 
     /// <summary>
@@ -327,57 +298,40 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private RigidBodyShape[] CreateWorldTransformedShapes()
     {
-        // Create the base shape
+        Float3 cumulativeScale = CumulativeScale();
+        Float3 worldCenter = Transform.TransformPoint(Center * cumulativeScale);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
+
+        return BuildShapes(worldCenter, worldRotation, cumulativeScale);
+    }
+
+    /// <summary>
+    /// Places the collider's shapes at the given pose and scale, letting colliders that bake the
+    /// transform into their geometry take precedence over the TransformedShape wrapper.
+    /// </summary>
+    private RigidBodyShape[] BuildShapes(Float3 translation, Quaternion rotation, Float3 scale)
+    {
+        RigidBodyShape[] baked = CreateBakedShapes(Float4x4.CreateTRS(translation, rotation, scale));
+        if (baked != null)
+            return baked;
+
         RigidBodyShape[] shapes = CreateShapes();
         if (shapes == null)
             return null;
 
-        // Get the cumulative scale
-        Float3 cumulativeScale = Float3.One;
-        Transform current = Transform;
-
-        while (current != null)
-        {
-            cumulativeScale *= current.LocalScale;
-            current = current.Parent;
-        }
-
-        cumulativeScale = Maths.Max(cumulativeScale, Float3.One * 0.05f);
-
-        // Get the local rotation and position
-        Quaternion localRotation = Quaternion.FromEuler(Rotation);
-        Float3 scaledCenter = Center * cumulativeScale;
-
-        // Transform to world space
-        Float3 worldCenter = Transform.TransformPoint(scaledCenter);
-        Quaternion worldRotation = Transform.Rotation * localRotation;
-
-        // Create a scale transform matrix that includes both rotation and scale
-        Float4x4 scaleMatrix = Float4x4.CreateTRS(Float3.Zero, worldRotation, cumulativeScale);
-
-        // Convert to Jitter types
-        var translation = new Jitter2.LinearMath.JVector(
-            worldCenter.X,
-            worldCenter.Y,
-            worldCenter.Z
-        );
-
-        // Convert combined rotation and scale matrix to JMatrix
-        var orientation = new Jitter2.LinearMath.JMatrix(
-            scaleMatrix[0, 0], scaleMatrix[0, 1], scaleMatrix[0, 2],
-            scaleMatrix[1, 0], scaleMatrix[1, 1], scaleMatrix[1, 2],
-            scaleMatrix[2, 0], scaleMatrix[2, 1], scaleMatrix[2, 2]
-        );
-
-        // If there's no transformation needed, return the original shape
-        if (worldCenter.Equals(Float3.Zero) &&
-            cumulativeScale.Equals(Float3.One) &&
-            worldRotation == Quaternion.Identity)
+        if (translation.Equals(Float3.Zero) && scale.Equals(Float3.One) && rotation == Quaternion.Identity)
             return shapes;
 
-        TransformedShape[] transformedShapes = new TransformedShape[shapes.Length];
+        Float4x4 linear = Float4x4.CreateTRS(Float3.Zero, rotation, scale);
+        var jTranslation = new JVector(translation.X, translation.Y, translation.Z);
+        var jLinear = new JMatrix(
+            linear[0, 0], linear[0, 1], linear[0, 2],
+            linear[1, 0], linear[1, 1], linear[1, 2],
+            linear[2, 0], linear[2, 1], linear[2, 2]);
+
+        var transformedShapes = new RigidBodyShape[shapes.Length];
         for (int i = 0; i < shapes.Length; i++)
-            transformedShapes[i] = new TransformedShape(shapes[i], translation, orientation);
+            transformedShapes[i] = new TransformedShape(shapes[i], jTranslation, jLinear);
 
         return transformedShapes;
     }
