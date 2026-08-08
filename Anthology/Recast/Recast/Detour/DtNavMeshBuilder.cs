@@ -357,7 +357,13 @@ namespace Prowl.Recast.Detour
                 }
             }
 
-            int maxLinkCount = edgeCount + portalCount * 2 + offMeshConLinkCount * 2;
+            // A connection stored in this tile spends three of its links: BaseOffMeshLinks takes
+            // one for connection->land and one for land->connection, and ConnectExtOffMeshLinks
+            // takes a third from the tile holding the connection for the far-end edge, wherever
+            // that end lands. Two per endpoint only covers that when both ends are in the tile.
+            // Short, the far-end link is dropped once the slack in edgeCount runs out, leaving a
+            // connection agents can enter and never leave.
+            int maxLinkCount = edgeCount + portalCount * 2 + offMeshConLinkCount * 2 + storedOffMeshConCount;
 
             // Find unique detail vertices.
             int uniqueDetailVertCount = 0;

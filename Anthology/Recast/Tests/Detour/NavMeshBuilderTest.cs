@@ -37,7 +37,7 @@ public class NavMeshBuilderTest
     {
         Assert.Equal(225, nmd.verts.Length / 3);
         Assert.Equal(119, nmd.polys.Length);
-        Assert.Equal(457, nmd.header.maxLinkCount);
+        Assert.Equal(458, nmd.header.maxLinkCount);
         Assert.Equal(118, nmd.detailMeshes.Length);
         Assert.Equal(291, nmd.detailTris.Length / 4);
         Assert.Equal(60, nmd.detailVerts.Length / 3);
