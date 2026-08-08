@@ -314,19 +314,25 @@ public class CharacterController : MonoBehaviour
             return false;
 
         // Step 4: Try to move forward at the elevated position
+        float forwardCastDistance = moveDistance + SkinWidth;
         bool hitAtElevated = PerformShapeCast(
             upPosition,
             forwardDirection,
-            moveDistance + SkinWidth,
+            forwardCastDistance,
             out ShapeCastHit elevatedHit
         );
 
-        // If we still hit something at the elevated position, we can't step up
-        if (hitAtElevated && elevatedHit.Fraction < 0.5)
-            return false;
+        // Step 5: Move forward at elevated height, only as far as the cast is actually clear. If most
+        // of the move is still blocked up there it is a wall, not a step, so slide instead.
+        float forwardDistance = moveDistance;
+        if (hitAtElevated)
+        {
+            forwardDistance = Maths.Clamp(elevatedHit.Fraction * forwardCastDistance - SkinWidth, 0.0f, moveDistance);
+            if (forwardDistance < moveDistance * 0.5f)
+                return false;
+        }
 
-        // Step 5: Move forward at elevated height
-        Float3 forwardPosition = upPosition + forwardDirection * moveDistance;
+        Float3 forwardPosition = upPosition + forwardDirection * forwardDistance;
 
         // Step 6: Cast down to find the actual step surface
         // Search from StepSize height down to slightly below original position for reliability sake
@@ -345,15 +351,11 @@ public class CharacterController : MonoBehaviour
             if (slopeAngle > MaxSlopeAngle)
                 return false; // Surface is too steep
 
-            // Calculate the actual step height
-            float actualStepHeight = StepSize - (downHit.Fraction * maxStepDownDistance - SkinWidth);
-
-            // Only accept if we're actually stepping up (not down)
-            if (actualStepHeight < 0.0)
+            // Drop onto the surface. Descending further than we rose means this is a step down, not up.
+            float stepDownDistance = Maths.Max(0.0f, downHit.Fraction * maxStepDownDistance - SkinWidth);
+            if (stepDownDistance > StepSize)
                 return false;
 
-            // Step down onto the surface
-            float stepDownDistance = downHit.Fraction * maxStepDownDistance - SkinWidth;
             newPosition = forwardPosition - new Float3(0, stepDownDistance, 0);
             return true;
         }
