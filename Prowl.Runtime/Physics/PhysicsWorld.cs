@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Jitter2;
 using Jitter2.Collision;
@@ -112,13 +113,15 @@ public class PhysicsWorld
     private readonly HashSet<Rigidbody3D> _syncBodies = [];
 
     // Colliders without a Rigidbody3D all share one static body per layer, so a hit's body cannot say
-    // which GameObject was struck. This maps every shape back to the Collider that created it.
-    private readonly Dictionary<RigidBodyShape, Collider> _shapeOwners = [];
+    // which GameObject was struck. This maps every shape back to the Collider that created it. The key
+    // is weak, so an entry that no Detach reached (a shape bulk-removed during a rebuild, say) dies
+    // with the shape instead of pinning it and its collider for the lifetime of the world.
+    private readonly ConditionalWeakTable<RigidBodyShape, Collider> _shapeOwners = new();
 
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
 
-    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider) => _shapeOwners[shape] = collider;
+    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider) => _shapeOwners.AddOrUpdate(shape, collider);
 
     internal void UnregisterShapeOwner(RigidBodyShape shape) => _shapeOwners.Remove(shape);
 
