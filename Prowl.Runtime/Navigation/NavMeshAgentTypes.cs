@@ -45,7 +45,10 @@ public static class NavMeshAgentTypes
     /// <summary>The built-in default agent type id. Always present; cannot be removed.</summary>
     public const int Humanoid = 0;
 
-    private static readonly List<NavMeshAgentType> s_types = [CreateHumanoid()];
+    // Replaced wholesale rather than edited in place (see NavMeshAreas): bakes resolve their
+    // envelope from here off the main thread while the settings UI rewrites the table, and a
+    // reader walking one mid-rebuild could index past its own end.
+    private static volatile NavMeshAgentType[] s_types = [CreateHumanoid()];
 
     private static NavMeshAgentType CreateHumanoid() => new()
     {
@@ -62,11 +65,13 @@ public static class NavMeshAgentTypes
     public static IReadOnlyList<NavMeshAgentType> All => s_types;
 
     /// <summary>The agent type with the given id, or null when undefined.</summary>
-    public static NavMeshAgentType? Get(int agentTypeId)
+    public static NavMeshAgentType? Get(int agentTypeId) => Find(s_types, agentTypeId);
+
+    private static NavMeshAgentType? Find(IReadOnlyList<NavMeshAgentType> types, int agentTypeId)
     {
-        for (int i = 0; i < s_types.Count; i++)
-            if (s_types[i].Id == agentTypeId)
-                return s_types[i];
+        for (int i = 0; i < types.Count; i++)
+            if (types[i].Id == agentTypeId)
+                return types[i];
         return null;
     }
 
@@ -79,9 +84,10 @@ public static class NavMeshAgentTypes
     public static int GetIdFromName(string name)
     {
         if (string.IsNullOrEmpty(name)) return -1;
-        for (int i = 0; i < s_types.Count; i++)
-            if (string.Equals(s_types[i].Name, name, StringComparison.Ordinal))
-                return s_types[i].Id;
+        NavMeshAgentType[] types = s_types;
+        for (int i = 0; i < types.Length; i++)
+            if (string.Equals(types[i].Name, name, StringComparison.Ordinal))
+                return types[i].Id;
         return -1;
     }
 
@@ -94,24 +100,28 @@ public static class NavMeshAgentTypes
     {
         ArgumentNullException.ThrowIfNull(types);
 
-        s_types.Clear();
+        // Built aside and published in one store, so a reader never sees the table empty or
+        // half-filled.
+        List<NavMeshAgentType> built = [];
         foreach (NavMeshAgentType type in types)
         {
             if (type == null) continue;
-            if (Get(type.Id) != null)
+            NavMeshAgentType? clash = Find(built, type.Id);
+            if (clash != null)
             {
                 // Unreachable from the editor UI; a hand-edited Navigation.yaml can do it.
                 // Get returns the first match, so a silent duplicate would shadow the second.
-                Debug.LogWarning($"[Navigation] Duplicate agent type id {type.Id} ('{type.Name}') ignored; '{Get(type.Id)!.Name}' keeps the id.");
+                Debug.LogWarning($"[Navigation] Duplicate agent type id {type.Id} ('{type.Name}') ignored; '{clash.Name}' keeps the id.");
                 continue;
             }
             NavMeshAgentType copy = type.Clone();
             if (copy.Id == Humanoid) copy.Name = "Humanoid";
-            s_types.Add(copy);
+            built.Add(copy);
         }
 
-        if (Get(Humanoid) == null)
-            s_types.Insert(0, CreateHumanoid());
+        if (Find(built, Humanoid) == null)
+            built.Insert(0, CreateHumanoid());
+        s_types = [.. built];
     }
 
     /// <summary>

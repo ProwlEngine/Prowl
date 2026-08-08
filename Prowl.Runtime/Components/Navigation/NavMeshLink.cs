@@ -81,10 +81,6 @@ public class NavMeshLink : MonoBehaviour
 
     private bool UsesExplicitAgentTypes => !AffectAllAgentTypes;
 
-    // linkId → live component, for resolving a crowd agent's off-mesh connection back to the
-    // component it came from. Session-local; ids themselves persist in baked data.
-    private static readonly Dictionary<int, NavMeshLink> s_liveLinks = [];
-
     // The state the navmesh last saw, for change detection in LateUpdate. World endpoints size
     // the rebuild regions; the authored fields are tracked separately so writing them after
     // AddComponent (spawn-then-configure) re-applies the link without needing
@@ -180,18 +176,12 @@ public class NavMeshLink : MonoBehaviour
     /// <summary>World-space end position.</summary>
     public Float3 WorldEnd => Transform.TransformPoint(EndPoint);
 
-    /// <summary>The live link with the given id, or null (agent link resolution).</summary>
-    public static NavMeshLink? FindByLinkId(int linkId)
-        => s_liveLinks.TryGetValue(linkId, out NavMeshLink? link) && link.IsValid() ? link : null;
-
     /// <summary>This link as a self-contained bake payload (world space, current state).</summary>
     public NavMeshLinkSource ToLinkSource()
         => new(WorldStart, WorldEnd, Width, Bidirectional, Area, LinkId);
 
     public override void OnEnable()
     {
-        s_liveLinks[LinkId] = this;
-
         CaptureAppliedDefinition();
 
         // Catch-up must survive any enable order between links and surfaces: a navmesh may
@@ -203,17 +193,18 @@ public class NavMeshLink : MonoBehaviour
         {
             _world = scene!.Navigation;
             _world.NavMeshChanged += OnNavMeshChanged;
+            _world.RegisterLink(this);
         }
         if (Activated) CatchUp();
     }
 
     public override void OnDisable()
     {
-        s_liveLinks.Remove(LinkId);
         _catchUpDone.Clear();
         if (_world != null)
         {
             _world.NavMeshChanged -= OnNavMeshChanged;
+            _world.UnregisterLink(this);
             _world = null;
         }
         // Scene teardown never pays this: Scene.OnDispose marks the scene disposed and clears

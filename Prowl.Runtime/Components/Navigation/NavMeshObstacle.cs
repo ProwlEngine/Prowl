@@ -362,8 +362,10 @@ public class NavMeshObstacle : MonoBehaviour
         userData = this,
     };
 
-    /// <summary>Queue the carve on every registered navmesh not already carrying it.
-    /// The affected tiles rebuild incrementally in NavMeshWorld.Update.</summary>
+    /// <summary>Queue the carve on every registered navmesh not already carrying it. Queued onto
+    /// the cache directly rather than through <see cref="NavMeshWorld.MutateTileCache"/>, because
+    /// nothing here touches the mesh but the request queue: the tiles rebuild in the pump, which
+    /// is where the write lock and the change notification belong.</summary>
     private void TryApplyCarve()
     {
         if (_world == null || !Carve) return;
@@ -375,7 +377,7 @@ public class NavMeshObstacle : MonoBehaviour
             long obstacleRef = AddToCache(instance.TileCache, instance.NavMeshData.Settings.AgentRadius);
             if (obstacleRef == 0) continue;
             _refs[instance] = obstacleRef;
-            instance.CachePending = true;
+            instance.MarkCachePending();
         }
         _carveApplied = true;
         CaptureAppliedGeometry();
@@ -419,7 +421,7 @@ public class NavMeshObstacle : MonoBehaviour
         foreach ((NavMeshInstance instance, long obstacleRef) in _refs)
         {
             instance.TileCache.RemoveObstacle(obstacleRef);
-            instance.CachePending = true;
+            instance.MarkCachePending();
         }
         _refs.Clear();
         _carveApplied = false;

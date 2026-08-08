@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Prowl.Runtime;
 
@@ -37,8 +38,13 @@ public static class NavMeshAreas
     /// <summary>Area mask that includes every area.</summary>
     public const int AllAreas = -1;
 
-    private static readonly string[] s_names = CreateDefaultNames();
-    private static readonly float[] s_costs = CreateDefaultCosts();
+    // Replaced wholesale rather than edited in place: query filters read the cost table from
+    // worker threads while the settings UI rewrites it on every keystroke, and publishing a new
+    // array is one atomic store, so a reader gets a whole revision of the table rather than one
+    // caught mid-edit. Writers take a lock so two of them cannot clobber each other's copy.
+    private static volatile string[] s_names = CreateDefaultNames();
+    private static volatile float[] s_costs = CreateDefaultCosts();
+    private static readonly Lock s_writeLock = new();
 
     private static string[] CreateDefaultNames()
     {
@@ -69,7 +75,12 @@ public static class NavMeshAreas
     public static void SetAreaName(int areaIndex, string name)
     {
         if (areaIndex <= Jump || areaIndex >= MaxAreas) return;
-        s_names[areaIndex] = name ?? string.Empty;
+        lock (s_writeLock)
+        {
+            string[] names = [.. s_names];
+            names[areaIndex] = name ?? string.Empty;
+            s_names = names;
+        }
     }
 
     /// <summary>Find an area index by name, or -1 when no area has that name. Null/empty never
@@ -77,8 +88,9 @@ public static class NavMeshAreas
     public static int GetAreaFromName(string areaName)
     {
         if (string.IsNullOrEmpty(areaName)) return -1;
+        string[] names = s_names;
         for (int i = 0; i < MaxAreas; i++)
-            if (string.Equals(s_names[i], areaName, StringComparison.Ordinal))
+            if (string.Equals(names[i], areaName, StringComparison.Ordinal))
                 return i;
         return -1;
     }
@@ -97,16 +109,28 @@ public static class NavMeshAreas
     public static void SetAreaCost(int areaIndex, float cost)
     {
         if (areaIndex < 0 || areaIndex >= MaxAreas) return;
-        s_costs[areaIndex] = Math.Max(1f, cost);
+        lock (s_writeLock)
+        {
+            float[] costs = [.. s_costs];
+            costs[areaIndex] = Math.Max(1f, cost);
+            s_costs = costs;
+        }
     }
 
     /// <summary>Replace the whole area table (names + costs). Called by project-settings loading.</summary>
     public static void ApplyTable(IReadOnlyList<string> names, IReadOnlyList<float> costs)
     {
-        for (int i = 0; i < MaxAreas; i++)
+        lock (s_writeLock)
         {
-            if (names != null && i < names.Count && i > Jump) s_names[i] = names[i] ?? string.Empty;
-            if (costs != null && i < costs.Count) s_costs[i] = Math.Max(1f, costs[i]);
+            string[] newNames = [.. s_names];
+            float[] newCosts = [.. s_costs];
+            for (int i = 0; i < MaxAreas; i++)
+            {
+                if (names != null && i < names.Count && i > Jump) newNames[i] = names[i] ?? string.Empty;
+                if (costs != null && i < costs.Count) newCosts[i] = Math.Max(1f, costs[i]);
+            }
+            s_names = newNames;
+            s_costs = newCosts;
         }
     }
 
@@ -114,9 +138,10 @@ public static class NavMeshAreas
     /// non-empty name), in index order. What area dropdowns enumerate.</summary>
     public static List<int> GetDefinedAreas()
     {
+        string[] names = s_names;
         var defined = new List<int>(8);
         for (int i = 0; i < MaxAreas; i++)
-            if (i <= Jump || !string.IsNullOrEmpty(s_names[i]))
+            if (i <= Jump || !string.IsNullOrEmpty(names[i]))
                 defined.Add(i);
         return defined;
     }

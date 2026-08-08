@@ -1,6 +1,9 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+using System.Collections.Generic;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
@@ -71,6 +74,37 @@ public class NavMeshComponentTests : RuntimeTestBase
         {
             // Agent-type table is global static state; restore defaults for other tests.
             NavMeshAgentTypes.ApplyTable([new NavMeshAgentType { Id = 0, Name = "Humanoid" }]);
+        }
+    }
+
+    /// <summary>
+    /// The table is read while bakes resolve their envelope from it, so a new one is built aside
+    /// and published in a single store. A source that faults part way through therefore leaves
+    /// the previous table standing rather than a half-built one.
+    /// </summary>
+    [Fact]
+    public void AgentTypes_ApplyTable_IsAllOrNothing()
+    {
+        try
+        {
+            NavMeshAgentTypes.ApplyTable(
+            [
+                new NavMeshAgentType { Id = 0, Name = "Humanoid" },
+                new NavMeshAgentType { Id = 7, Name = "Tank", Radius = 1.4f },
+            ]);
+
+            Assert.Throws<InvalidOperationException>(() => NavMeshAgentTypes.ApplyTable(FaultingSource()));
+            Assert.Equal(1.4f, NavMeshAgentTypes.Get(7)?.Radius);
+        }
+        finally
+        {
+            NavMeshAgentTypes.ApplyTable([new NavMeshAgentType { Id = 0, Name = "Humanoid" }]);
+        }
+
+        static IEnumerable<NavMeshAgentType> FaultingSource()
+        {
+            yield return new NavMeshAgentType { Id = 0, Name = "Humanoid" };
+            throw new InvalidOperationException("Malformed settings.");
         }
     }
 

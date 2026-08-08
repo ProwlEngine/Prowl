@@ -59,9 +59,9 @@ public sealed class NavMeshInstance
     /// queues on this handle directly must call <see cref="MarkCachePending"/>.</summary>
     public Prowl.Recast.Detour.TileCache.DtTileCache TileCache { get; }
 
-    /// <summary>Tell the pump this cache has work waiting. Only needed after queuing on
-    /// <see cref="TileCache"/> directly; <see cref="NavMeshWorld.MutateTileCache"/> and the
-    /// navigation components already do it. Main thread only.</summary>
+    /// <summary>Tell the pump this cache has work waiting. Needed after queuing on
+    /// <see cref="TileCache"/> directly, which is what <see cref="NavMeshObstacle"/> does;
+    /// <see cref="NavMeshWorld.MutateTileCache"/> calls it for you. Main thread only.</summary>
     public void MarkCachePending() => CachePending = true;
 
     /// <summary>The agent type this navmesh was built for.</summary>
@@ -81,6 +81,48 @@ public sealed class NavMeshInstance
     private HashSet<int>? _linkIds;
 
     internal void InvalidateLinkIds() => _linkIds = null;
+
+    // ReaderWriterLockSlim owns kernel wait handles that only Dispose releases, and disposing
+    // one while a thread is inside it throws on that thread rather than this one. Since a worker
+    // can ask for a query at any moment — including the instant this instance is unregistered —
+    // users are counted: one for the registration, one per outstanding lease or mutation, and
+    // whichever is last out disposes. A count that reached zero cannot be revived, so that
+    // happens exactly once and with nobody inside.
+    private int _users = 1;
+
+    private volatile bool _retired;
+
+    internal bool TryAcquire()
+    {
+        if (_retired) return false;
+        int users = Volatile.Read(ref _users);
+        while (users > 0)
+        {
+            int seen = Interlocked.CompareExchange(ref _users, users + 1, users);
+            if (seen == users) return true;
+            users = seen;
+        }
+        return false;
+    }
+
+    internal void Release()
+    {
+        if (Interlocked.Decrement(ref _users) == 0)
+            Lock.Dispose();
+    }
+
+    /// <summary>Unregistration, from the lock's point of view: stop admitting queries, wait out
+    /// the ones already inside, poison the pool, and drop the registration's own hold.</summary>
+    internal void Retire()
+    {
+        _retired = true;
+
+        Lock.EnterWriteLock();
+        QueryPool.Clear();
+        Lock.ExitWriteLock();
+
+        Release();
+    }
 
     /// <summary>Whether the mesh holds an off-mesh connection stamped with the given link id
     /// (see <see cref="NavMeshLink.LinkId"/>). Main thread.</summary>
@@ -224,6 +266,7 @@ public readonly struct NavMeshQueryLease : IDisposable
         if (_instance == null) return;
         _instance.QueryPool.Add(Query);
         _instance.Lock.ExitReadLock();
+        _instance.Release();
     }
 }
 
@@ -249,9 +292,19 @@ public sealed class NavMeshWorld
 
     [ThreadStatic] private static NavMeshQueryFilter? t_scratchFilter;
 
+    // Boxed because queries read the extents from worker threads and a Float3 is three separate
+    // floats: a plain field could be read mid-assignment and snap against a mix of the old and
+    // new value. Storing it behind a reference makes publication a single atomic write, so a
+    // reader sees one whole value or the other. Only the setter allocates.
+    private volatile object _defaultQueryExtents = new Float3(1f, 2f, 1f);
+
     /// <summary>Default half-extents used to snap query positions onto the navmesh, in world
     /// units. Larger values tolerate more vertical mismatch but can snap to the wrong floor.</summary>
-    public Float3 DefaultQueryExtents = new(1f, 2f, 1f);
+    public Float3 DefaultQueryExtents
+    {
+        get => (Float3)_defaultQueryExtents;
+        set => _defaultQueryExtents = value;
+    }
 
     /// <summary>Maximum agent radius the crowds' proximity grids are sized for. Agents with a
     /// larger <c>Radius</c> degrade neighbour queries silently, so registration warns when one
@@ -448,10 +501,7 @@ public sealed class NavMeshWorld
             removed = _instances.Remove(instance);
         if (!removed) return;
 
-        // Wait out in-flight queries, then poison the pool.
-        instance.Lock.EnterWriteLock();
-        instance.QueryPool.Clear();
-        instance.Lock.ExitWriteLock();
+        instance.Retire();
 
         // A crowd steers against its instance's DtNavMesh; it must not survive the mesh.
         // Its agents notice their crowd is gone via NavMeshChanged and rejoin the next one
@@ -477,11 +527,7 @@ public sealed class NavMeshWorld
             _instances.Clear();
         }
         foreach (NavMeshInstance instance in toRemove)
-        {
-            instance.Lock.EnterWriteLock();
-            instance.QueryPool.Clear();
-            instance.Lock.ExitWriteLock();
-        }
+            instance.Retire();
         _crowds.Clear();
         if (toRemove.Count > 0)
         {
@@ -522,6 +568,9 @@ public sealed class NavMeshWorld
     {
         ArgumentNullException.ThrowIfNull(instance);
         ArgumentNullException.ThrowIfNull(mutation);
+        // Unregistered: its cache is no longer anyone's navmesh, and its lock may already be
+        // gone. An async rebuild finishing after its surface was torn down lands here.
+        if (!instance.TryAcquire()) return;
 
         instance.Lock.EnterWriteLock();
         try
@@ -531,6 +580,7 @@ public sealed class NavMeshWorld
         finally
         {
             instance.Lock.ExitWriteLock();
+            instance.Release();
         }
         // A mutation can leave tiles queued (added tiles rebuild lazily, obstacle edits queue
         // requests), so hand the instance to the pump regardless of what the caller did.
@@ -538,6 +588,27 @@ public sealed class NavMeshWorld
         instance.InvalidateLinkIds();
         NavMeshChanged?.Invoke();
     }
+
+    // Link id -> the enabled component that owns it, for resolving a crowd agent's off-mesh
+    // connection back to the link it came from. Per world rather than per process: ids come from
+    // the component's scene identifier, so a global table would let one additively loaded scene
+    // answer for another's links. Main thread only, like the callbacks that fill it.
+    private readonly Dictionary<int, NavMeshLink> _links = [];
+
+    internal void RegisterLink(NavMeshLink link) => _links[link.LinkId] = link;
+
+    /// <summary>Only if this link is the registered owner: on an id collision the loser must not
+    /// evict the winner when it is disabled.</summary>
+    internal void UnregisterLink(NavMeshLink link)
+    {
+        if (_links.TryGetValue(link.LinkId, out NavMeshLink? owner) && ReferenceEquals(owner, link))
+            _links.Remove(link.LinkId);
+    }
+
+    /// <summary>The enabled link with the given id in this scene, or null (see
+    /// <see cref="NavMeshLink.LinkId"/>).</summary>
+    public NavMeshLink? FindLink(int linkId)
+        => _links.TryGetValue(linkId, out NavMeshLink? link) && link.IsValid() ? link : null;
 
     #endregion
 
@@ -551,16 +622,15 @@ public sealed class NavMeshWorld
     public bool TryRentQuery(out NavMeshQueryLease lease, int agentTypeId = 0)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
-        if (instance == null)
+        // Acquiring is what keeps the instance's lock alive for the life of the lease — it may
+        // be unregistered a moment from now, and the last user out is what disposes. A retired
+        // one refuses, so a query never begins against a navmesh the world has already dropped.
+        if (instance == null || !instance.TryAcquire())
         {
             lease = default;
             return false;
         }
 
-        // Benign race with RemoveNavMeshData: the instance may be unregistered between the
-        // lookup and the lock, in which case this queries a just-removed (but still fully
-        // alive and internally consistent) mesh one last time. Do not "fix" with a global
-        // lock — the stale answer is indistinguishable from having queried a moment earlier.
         instance.Lock.EnterReadLock();
         if (!instance.QueryPool.TryTake(out DtNavMeshQuery? query))
             query = new DtNavMeshQuery(instance.Mesh);
@@ -786,7 +856,7 @@ public sealed class NavMeshWorld
     public NavMeshTriangulation CalculateTriangulation(int agentTypeId = 0)
     {
         NavMeshInstance? instance = GetInstance(agentTypeId);
-        if (instance == null)
+        if (instance == null || !instance.TryAcquire())
             return NavMeshTriangulation.Empty;
 
         instance.Lock.EnterReadLock();
@@ -797,6 +867,7 @@ public sealed class NavMeshWorld
         finally
         {
             instance.Lock.ExitReadLock();
+            instance.Release();
         }
     }
 
@@ -850,6 +921,8 @@ public sealed class NavMeshWorld
 
         foreach (NavMeshInstance instance in _cachePumpScratch)
         {
+            if (!instance.TryAcquire()) continue;
+
             bool upToDate;
             instance.Lock.EnterWriteLock();
             try
@@ -859,6 +932,7 @@ public sealed class NavMeshWorld
             finally
             {
                 instance.Lock.ExitWriteLock();
+                instance.Release();
             }
 
             // Reaching here means work was queued, so report unconditionally — idle instances

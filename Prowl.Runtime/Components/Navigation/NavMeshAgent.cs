@@ -235,7 +235,7 @@ public class NavMeshAgent : MonoBehaviour
         if (cons == null) return null;
         foreach (DtOffMeshConnection con in cons)
             if (ReferenceEquals(tile!.data.polys[con.poly], poly))
-                return NavMeshLink.FindByLinkId(con.userId);
+                return _world!.FindLink(con.userId);
         return null;
     }
 

@@ -71,7 +71,21 @@ public class NavMeshLinkTests : RuntimeTestBase
         a.Enabled = false;
         a.Enabled = true;
         Assert.Equal(before, a.LinkId);
-        Assert.Same(a, NavMeshLink.FindByLinkId(before));
+        Assert.Same(a, scene.Navigation.FindLink(before));
+    }
+
+    /// <summary>A link answers for its own scene only: two additively loaded scenes derive ids
+    /// from their own components and have no reason to agree on them, so one scene resolving
+    /// another's link would hand an agent a component from the wrong world.</summary>
+    [Fact]
+    public void Link_ResolvesOnlyWithinItsOwnScene()
+    {
+        Scene home = CreateScene(enable: true);
+        Scene other = CreateScene(enable: true);
+        NavMeshLink link = AddLink(home);
+
+        Assert.Same(link, home.Navigation.FindLink(link.LinkId));
+        Assert.Null(other.Navigation.FindLink(link.LinkId));
     }
 
     private static NavMeshPathStatus PathStatus(Scene scene, Float3 from, Float3 to, int areaMask = NavMesh.AllAreas)

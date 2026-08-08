@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.Runtime;
 using Prowl.Vector;
 
@@ -226,5 +228,30 @@ public class NavMeshQueryTests
         // Queries still work after the pool was invalidated.
         Assert.True(world.CalculatePath(new Float3(2, 0, 2), new Float3(8, 0, 8), NavMesh.AllAreas, path));
         Assert.Equal(NavMeshPathStatus.PathComplete, path.Status);
+    }
+
+    /// <summary>
+    /// An instance's lock holds wait handles that only Dispose releases, so unregistering has to
+    /// dispose it — but a query rented a moment earlier is still inside it, and disposing under
+    /// one throws on that thread instead of ours. Removal drops its own hold and bars new
+    /// queries; the last query out is what actually disposes.
+    /// </summary>
+    [Fact]
+    public void RemovingANavMesh_DisposesItsLockOnceTheLastQueryIsDone()
+    {
+        var world = new NavMeshWorld();
+        NavMeshData? data = NavMeshBuilder.Build(TestSettings(), [Quad(10, 10, Float3.Zero)]);
+        NavMeshInstance instance = world.AddNavMeshData(data!)!;
+
+        Assert.True(instance.TryAcquire()); // stands in for a query in flight on another thread
+
+        world.RemoveNavMeshData(instance);
+        Assert.False(instance.TryAcquire(), "An unregistered navmesh must not admit new queries.");
+
+        instance.Lock.EnterReadLock(); // the in-flight query still has a lock to finish under
+        instance.Lock.ExitReadLock();
+
+        instance.Release();
+        Assert.Throws<ObjectDisposedException>(instance.Lock.EnterReadLock);
     }
 }
