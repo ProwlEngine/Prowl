@@ -236,12 +236,15 @@ public abstract class Collider : MonoBehaviour
         if (rb.IsNotValid()) return CreateShapes();
 
         Float3 cumulativeScale = CumulativeScale();
-        Float3 worldCenter = Transform.TransformPoint(Center * cumulativeScale);
+        Float3 worldCenter = Transform.TransformPoint(Center);
         Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
 
-        // Transform from world space into the rigid body's local space
-        Float3 rbLocalCenter = rb.Transform.InverseTransformPoint(worldCenter);
-        Quaternion rbLocalRotation = Quaternion.Inverse(rb.Transform.Rotation) * worldRotation;
+        // A Jitter body carries no scale, so its shape offsets are plain world-space distances rotated
+        // into body space. InverseTransformPoint would also divide out the body's scale and pull the
+        // shape toward the origin.
+        Quaternion inverseBodyRotation = Quaternion.Inverse(rb.Transform.Rotation);
+        Float3 rbLocalCenter = inverseBodyRotation * (worldCenter - rb.Transform.Position);
+        Quaternion rbLocalRotation = inverseBodyRotation * worldRotation;
 
         return BuildShapes(rbLocalCenter, rbLocalRotation, cumulativeScale);
     }
@@ -252,7 +255,7 @@ public abstract class Collider : MonoBehaviour
     private RigidBodyShape[] CreateWorldTransformedShapes()
     {
         Float3 cumulativeScale = CumulativeScale();
-        Float3 worldCenter = Transform.TransformPoint(Center * cumulativeScale);
+        Float3 worldCenter = Transform.TransformPoint(Center);
         Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
 
         return BuildShapes(worldCenter, worldRotation, cumulativeScale);
