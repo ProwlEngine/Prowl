@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
@@ -13,13 +13,13 @@ public sealed class PhysicsListener : MonoBehaviour
     public string Mark = "";
     public int Begins, Ends, Enters, Stays, Exits;
 
-    public override void OnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact)
+    public override void OnCollisionBegin(Collision collision)
     {
         Begins++;
         PhysicsLog.Entries.Add(Mark);
     }
 
-    public override void OnCollisionEnd(Rigidbody3D other) => Ends++;
+    public override void OnCollisionEnd(Collision collision) => Ends++;
     public override void OnTriggerEnter(Rigidbody3D other) => Enters++;
     public override void OnTriggerStay(Rigidbody3D other) => Stays++;
     public override void OnTriggerExit(Rigidbody3D other) => Exits++;
@@ -29,7 +29,7 @@ public sealed class PhysicsListener : MonoBehaviour
 public sealed class PhysicsOnlyListener : MonoBehaviour
 {
     public int Begins;
-    public override void OnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact) => Begins++;
+    public override void OnCollisionBegin(Collision collision) => Begins++;
 }
 
 /// <summary>Mutates its GameObject from inside a physics callback, to exercise the snapshot path.</summary>
@@ -37,7 +37,7 @@ public sealed class SelfRemovingListener : MonoBehaviour
 {
     public int Begins;
 
-    public override void OnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact)
+    public override void OnCollisionBegin(Collision collision)
     {
         Begins++;
         GameObject.RemoveComponent(this);
@@ -56,7 +56,7 @@ public static class PhysicsLog
 /// </summary>
 public class SceneDispatcherTests : RuntimeTestBase
 {
-    private static Rigidbody3D.ContactInfo NoContact => default;
+    private static Collision NoContact => default;
 
     private (Scene scene, GameObject go) NewSceneGo()
     {
@@ -147,7 +147,7 @@ public class SceneDispatcherTests : RuntimeTestBase
         go.AddComponent<PlainUpdateCounter>(); // overrides nothing physics dispatches
         scene.Add(go);
 
-        SceneDispatcher.CollisionBegin(go, null!, NoContact); // must not throw
+        SceneDispatcher.CollisionBegin(go, NoContact); // must not throw
     }
 
     [Fact]
@@ -157,8 +157,8 @@ public class SceneDispatcherTests : RuntimeTestBase
         var listener = go.AddComponent<PhysicsListener>();
         scene.Add(go);
 
-        SceneDispatcher.CollisionBegin(go, null!, NoContact);
-        SceneDispatcher.CollisionEnd(go, null!);
+        SceneDispatcher.CollisionBegin(go, NoContact);
+        SceneDispatcher.CollisionEnd(go, NoContact);
         SceneDispatcher.TriggerEnter(go, null!);
         SceneDispatcher.TriggerStay(go, null!);
         SceneDispatcher.TriggerExit(go, null!);
@@ -181,7 +181,7 @@ public class SceneDispatcherTests : RuntimeTestBase
         var c = go.AddComponent<PhysicsListener>(); c.Mark = "c";
         scene.Add(go);
 
-        SceneDispatcher.CollisionBegin(go, null!, NoContact);
+        SceneDispatcher.CollisionBegin(go, NoContact);
 
         Assert.Equal(new[] { "a", "b", "c" }, PhysicsLog.Entries);
         Assert.Equal(1, a.Begins);
@@ -198,7 +198,7 @@ public class SceneDispatcherTests : RuntimeTestBase
         scene.Add(go);
 
         disabled.Enabled = false;
-        SceneDispatcher.CollisionBegin(go, null!, NoContact);
+        SceneDispatcher.CollisionBegin(go, NoContact);
 
         Assert.Equal(1, enabled.Begins);
         Assert.Equal(0, disabled.Begins);
@@ -213,7 +213,7 @@ public class SceneDispatcherTests : RuntimeTestBase
         var listener = go.AddComponent<PhysicsOnlyListener>();
         scene.Add(go);
 
-        SceneDispatcher.CollisionBegin(go, null!, NoContact);
+        SceneDispatcher.CollisionBegin(go, NoContact);
 
         Assert.Equal(1, listener.Begins);
     }
@@ -226,7 +226,7 @@ public class SceneDispatcherTests : RuntimeTestBase
         var survivor = go.AddComponent<PhysicsListener>();
         scene.Add(go);
 
-        SceneDispatcher.CollisionBegin(go, null!, NoContact);
+        SceneDispatcher.CollisionBegin(go, NoContact);
 
         Assert.Equal(1, remover.Begins);
         Assert.Equal(1, survivor.Begins); // dispatched off a snapshot, so the removal cannot skip it
@@ -235,7 +235,7 @@ public class SceneDispatcherTests : RuntimeTestBase
     [Fact]
     public void PhysicsEvent_OnNullGameObject_IsIgnored()
     {
-        SceneDispatcher.CollisionBegin(null!, null!, NoContact);
+        SceneDispatcher.CollisionBegin(null!, NoContact);
         SceneDispatcher.TriggerExit(null!, null!);
     }
 }

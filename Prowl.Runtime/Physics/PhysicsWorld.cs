@@ -118,6 +118,12 @@ public class PhysicsWorld
     // with the shape instead of pinning it and its collider for the lifetime of the world.
     private readonly ConditionalWeakTable<RigidBodyShape, Collider> _shapeOwners = new();
 
+    // Collision events name their shapes by id rather than by reference (the contact data is freed
+    // before the event is raised), so the same mapping is kept by ShapeId. Written and cleared in
+    // lockstep with the table above; a stale entry can only return a destroyed collider, which the
+    // lookup filters out.
+    private readonly Dictionary<ulong, Collider> _shapeOwnersById = [];
+
     private readonly List<IDynamicTreeProxy> _queryProxies = [];
     private readonly List<ShapeCastHit> _queryHits = [];
     private readonly SphereShape _querySphere = new(0.5f);
@@ -162,9 +168,17 @@ public class PhysicsWorld
     internal void RegisterBody(Rigidbody3D body) => _syncBodies.Add(body);
     internal void UnregisterBody(Rigidbody3D body) => _syncBodies.Remove(body);
 
-    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider) => _shapeOwners.AddOrUpdate(shape, collider);
+    internal void RegisterShapeOwner(RigidBodyShape shape, Collider collider)
+    {
+        _shapeOwners.AddOrUpdate(shape, collider);
+        _shapeOwnersById[shape.ShapeId] = collider;
+    }
 
-    internal void UnregisterShapeOwner(RigidBodyShape shape) => _shapeOwners.Remove(shape);
+    internal void UnregisterShapeOwner(RigidBodyShape shape)
+    {
+        _shapeOwners.Remove(shape);
+        _shapeOwnersById.Remove(shape.ShapeId);
+    }
 
     /// <summary>
     /// The <see cref="Collider"/> that created the given shape, or null if the shape is not tracked.
@@ -172,6 +186,16 @@ public class PhysicsWorld
     public Collider GetShapeOwner(RigidBodyShape shape)
     {
         if (shape != null && _shapeOwners.TryGetValue(shape, out Collider collider) && collider.IsValid())
+            return collider;
+        return null;
+    }
+
+    /// <summary>
+    /// The <see cref="Collider"/> that created the shape with the given id, or null if it is not tracked.
+    /// </summary>
+    public Collider GetShapeOwner(ulong shapeId)
+    {
+        if (_shapeOwnersById.TryGetValue(shapeId, out Collider collider) && collider.IsValid())
             return collider;
         return null;
     }
@@ -350,6 +374,7 @@ public class PhysicsWorld
         // The components re-register when they recreate their bodies.
         _syncBodies.Clear();
         _shapeOwners.Clear();
+        _shapeOwnersById.Clear();
         _layerFilter.ClearIgnoredCollisions();
 
         // World.Clear drops every dynamic tree proxy, terrain included, so the terrain filters would be

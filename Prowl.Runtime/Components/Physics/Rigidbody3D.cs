@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Jitter2;
@@ -291,18 +292,12 @@ public sealed class Rigidbody3D : MonoBehaviour
         set { EnsureBody(); if (_body != null) _body.Torque = new JVector(value.X, value.Y, value.Z); }
     }
 
-    /// <summary>
-    /// Information about a collision contact.
-    /// </summary>
-    public struct ContactInfo
-    {
-        public Float3 Point;
-        public Float3 Normal;
-        public float ImpulseMagnitude;
-    }
-
     [SerializeIgnore]
     internal RigidBody _body;
+
+    // The collider each live contact is against, recorded when the contact forms. OnCollisionEnd runs
+    // after Jitter has freed the contact data, so this is the only way it can still name the surface.
+    private readonly Dictionary<Arbiter, Collider> _contactColliders = [];
 
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
@@ -345,39 +340,56 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     private void OnJitterBeginCollide(Arbiter arbiter)
     {
-        // Get the other body in the collision
-        var otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        var userData = otherBody.Tag as RigidBodyUserData;
 
-        if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
-        {
-            // Get contact information from the first contact point if available
-            var contact = arbiter.Handle.Data.Contact0;
-            var normal = contact.Normal;
-            var relPos = contact.RelativePosition2;
+        Collider collider = ResolveOtherCollider(arbiter, otherBody);
+        _contactColliders[arbiter] = collider;
 
-            // Calculate world position of contact
-            var worldPos = otherBody.Position + relPos;
+        // Contact data lives in unmanaged memory that is valid only while the arbiter is.
+        ref ContactData data = ref arbiter.Handle.Data;
+        JVector normal = data.Contact0.Normal;
+        JVector worldPos = otherBody.Position + data.Contact0.RelativePosition2;
 
-            var contactInfo = new ContactInfo
-            {
-                Point = new Float3(worldPos.X, worldPos.Y, worldPos.Z),
-                Normal = new Float3(normal.X, normal.Y, normal.Z),
-                ImpulseMagnitude = contact.Impulse
-            };
-
-            SceneDispatcher.CollisionBegin(GameObject, userData.Rigidbody, contactInfo);
-        }
+        SceneDispatcher.CollisionBegin(GameObject, new Collision(
+            userData?.Rigidbody, collider,
+            new Float3(worldPos.X, worldPos.Y, worldPos.Z),
+            new Float3(normal.X, normal.Y, normal.Z),
+            data.Contact0.Impulse));
     }
 
     private void OnJitterEndCollide(Arbiter arbiter)
     {
-        // Get the other body in the collision
-        var otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        var userData = otherBody.Tag as RigidBodyUserData;
 
-        if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
-        {
-            SceneDispatcher.CollisionEnd(GameObject, userData.Rigidbody);
-        }
+        // Jitter frees the contact data before raising this, so the shape ids are already gone and
+        // there is no contact point to report. The collider is recovered from what Begin recorded.
+        _contactColliders.Remove(arbiter, out Collider collider);
+
+        SceneDispatcher.CollisionEnd(GameObject, new Collision(
+            userData?.Rigidbody, collider.IsValid() ? collider : null, Float3.Zero, Float3.Zero, 0.0f));
+    }
+
+    /// <summary>
+    /// Which <see cref="Collider"/> on the other body this contact is against. Static colliders share
+    /// one body per layer, so the body alone cannot say what was hit; the arbiter names the two shapes
+    /// by id, and the physics world maps those back to the colliders that created them.
+    /// </summary>
+    private Collider ResolveOtherCollider(Arbiter arbiter, RigidBody otherBody)
+    {
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        if (physics == null) return null;
+
+        ArbiterKey key = arbiter.Handle.Data.Key;
+
+        Collider first = physics.GetShapeOwner(key.Key1);
+        if (first.IsValid() && first.AttachedBody == otherBody) return first;
+
+        Collider second = physics.GetShapeOwner(key.Key2);
+        if (second.IsValid() && second.AttachedBody == otherBody) return second;
+
+        return null;
     }
 
     public override void OnValidate()
@@ -526,9 +538,11 @@ public sealed class Rigidbody3D : MonoBehaviour
         foreach (Collider collider in colliders)
             if (collider.IsValid()) collider.Detach();
 
-        // Unhook collision events
+        // Unhook collision events. Removing the body discards its arbiters without raising EndCollide,
+        // so the per-contact colliders have to be dropped here.
         _body.BeginCollide -= OnJitterBeginCollide;
         _body.EndCollide -= OnJitterEndCollide;
+        _contactColliders.Clear();
 
         GameObject.Scene.Physics.UnregisterBody(this);
         GameObject.Scene.Physics.World?.Remove(_body);
@@ -610,6 +624,13 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateShapes(RigidBody rb)
     {
+        // Drop the owner entries first: the colliders below re-register their own shapes, but a shape
+        // left over from a collider that has since gone would otherwise linger in the world's map.
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        if (physics != null)
+            foreach (RigidBodyShape shape in rb.Shapes)
+                physics.UnregisterShapeOwner(shape);
+
         // Remove all shapes from this rigidbody (Preserve mass/inertia, the rebuild below will refresh it)
         rb.RemoveShapes(rb.Shapes, MassInertiaUpdateMode.Preserve);
 

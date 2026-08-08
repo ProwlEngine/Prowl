@@ -626,6 +626,59 @@ public class PhysicsTests : RuntimeTestBase
             $"Pair ignored in another world should still collide here; body was at y={boxB.Transform.Position.Y}");
     }
 
+    /// <summary>Records the collisions it is told about, so the payload can be asserted.</summary>
+    private sealed class CollisionRecorder : MonoBehaviour
+    {
+        public readonly List<Collision> Begins = [];
+        public readonly List<Collision> Ends = [];
+
+        public override void OnCollisionBegin(Collision collision) => Begins.Add(collision);
+        public override void OnCollisionEnd(Collision collision) => Ends.Add(collision);
+    }
+
+    // Static colliders share one body per layer, so the body cannot name what was hit and the contact
+    // used to be dropped entirely. It now reports the Collider that owns the shape.
+    [Fact]
+    public void CollisionBegin_FiresAgainstStaticGeometry_AndNamesTheCollider()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 180);
+
+        Assert.NotEmpty(recorder.Begins);
+
+        Collision hit = recorder.Begins[0];
+        Assert.Null(hit.Rigidbody);                     // static geometry has no rigidbody of its own
+        Assert.NotNull(hit.Collider);
+        Assert.Same(floor, hit.Collider.GameObject);
+        Assert.Same(floor, hit.GameObject);
+    }
+
+    [Fact]
+    public void CollisionEnd_AgainstStaticGeometry_StillNamesTheCollider()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 180);
+        Assert.NotEmpty(recorder.Begins);
+
+        // Fling it off the floor so the contact breaks.
+        rb.AffectedByGravity = false;
+        rb.LinearVelocity = new Float3(0, 40, 0);
+        Tick(scene, 60);
+
+        Assert.NotEmpty(recorder.Ends);
+        Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
+    }
+
     [Theory]
     [InlineData(float.NaN, 0f, 0f)]
     [InlineData(0f, float.PositiveInfinity, 0f)]

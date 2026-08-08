@@ -59,6 +59,9 @@ public abstract class Collider : MonoBehaviour
 
     protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
+    /// <summary>The Jitter body this collider's shapes are currently on, or null when it is detached.</summary>
+    internal Jitter2.Dynamics.RigidBody AttachedBody => _attachedBody;
+
     /// <summary>
     /// Returns true if this collider is already attached to a rigidbody.
     /// Used to prevent multiple rigidbodies from claiming the same collider.

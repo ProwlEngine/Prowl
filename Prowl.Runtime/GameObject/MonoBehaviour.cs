@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -374,10 +374,10 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// is the body we hit. Override on a component sharing the GameObject with the Rigidbody3D; the engine
     /// resolves it live at contact time, so no subscription is stored and it survives hot reload.
     /// </summary>
-    public virtual void OnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact) { }
+    public virtual void OnCollisionBegin(Collision collision) { }
 
     /// <summary>Called when this GameObject's <see cref="Rigidbody3D"/> stops touching <paramref name="other"/>. See <see cref="OnCollisionBegin"/>.</summary>
-    public virtual void OnCollisionEnd(Rigidbody3D other) { }
+    public virtual void OnCollisionEnd(Collision collision) { }
 
     /// <summary>Called once when <paramref name="other"/> first enters a <see cref="TriggerVolume"/> on this GameObject.</summary>
     public virtual void OnTriggerEnter(Rigidbody3D other) { }
@@ -455,17 +455,17 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     // ---- Physics callbacks: gameplay-gated + exception-guarded, dispatched by SceneDispatcher ----
 
-    internal void InternalOnCollisionBegin(Rigidbody3D other, Rigidbody3D.ContactInfo contact)
+    internal void InternalOnCollisionBegin(in Collision collision)
     {
         if (!ShouldExecuteGameplay) return;
-        try { OnCollisionBegin(other, contact); }
+        try { OnCollisionBegin(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionBegin() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
-    internal void InternalOnCollisionEnd(Rigidbody3D other)
+    internal void InternalOnCollisionEnd(in Collision collision)
     {
         if (!ShouldExecuteGameplay) return;
-        try { OnCollisionEnd(other); }
+        try { OnCollisionEnd(collision); }
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnCollisionEnd() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
