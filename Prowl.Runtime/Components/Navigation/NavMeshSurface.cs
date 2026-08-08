@@ -92,11 +92,11 @@ public class NavMeshSurface : MonoBehaviour
     public NavMeshInstance? Instance => _instance;
 
     /// <summary>
-    /// What the live navmesh was built from: this surface's private copy of the asset, made at
-    /// registration and null without one. Rebuilds rewrite its tile and link lists, and the
-    /// object the asset database hands out is shared by every surface pointing at that
-    /// <c>.navmesh</c> — one surface's link moving must not rewrite another surface's navmesh,
-    /// nor the asset the next scene load reads. See <see cref="NavMeshData.Clone"/> for the cost.
+    /// What the live navmesh was built from, and what rebuilds rewrite. Null while unregistered.
+    /// For a <c>.navmesh</c> asset this is a private copy made at registration, because the object
+    /// the database hands out is shared by every surface pointing at it and by the next scene that
+    /// loads it. For a navmesh built at runtime and handed over through
+    /// <see cref="ApplyNavMeshData"/> it is that object itself — nothing else owns it.
     /// </summary>
     public Runtime.NavMeshData? RuntimeData => _runtimeData;
 
@@ -146,7 +146,14 @@ public class NavMeshSurface : MonoBehaviour
         Runtime.NavMeshData? data = NavMeshData.Res;
         if (data.IsNotValid() || !data!.HasTiles) return;
 
-        _runtimeData = data.Clone();
+        // Copy only what the asset database owns. An asset is shared with every other surface
+        // pointing at that .navmesh and with the next scene that loads it, so runtime tile and
+        // link rewrites must not land on it. One built at runtime and handed over through
+        // ApplyNavMeshData has no other owner: copying it would cost a list per registration
+        // and, worse, mean re-registering rebuilt from the original bake and threw away every
+        // rebuild since — which is the whole navmesh, for a game that generates its map.
+        // (Handing one runtime navmesh to two surfaces shares it, as it always has.)
+        _runtimeData = NavMeshData.AssetID == Guid.Empty ? data : data.Clone();
         _instance = world.AddNavMeshData(_runtimeData);
         if (_instance == null) _runtimeData = null;
     }

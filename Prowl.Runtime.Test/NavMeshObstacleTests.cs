@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
@@ -380,18 +381,56 @@ public class NavMeshObstacleTests : RuntimeTestBase
     }
 
     /// <summary>
-    /// Regenerated layers replace the blobs on the surface's own copy, so re-instantiating it
-    /// agrees with the live mesh, and that copy still round-trips. The asset the database handed
-    /// out keeps every blob it was baked with: it is shared with every other surface pointing at
-    /// the same .navmesh, and with the next scene that loads it.
+    /// A navmesh built at runtime is the surface's own — nothing else points at it — so rebuilds
+    /// land on it directly. Copying it would mean the next registration rebuilt from the original
+    /// bake and threw away every rebuild since, which for a game that generates its map is the
+    /// whole navmesh.
     /// </summary>
     [Fact]
-    public void LayerRegeneration_MirrorsIntoTheRuntimeCopyAndLeavesTheAsset()
+    public void LayerRegeneration_OnARuntimeBake_LandsOnTheDataItself()
+    {
+        (Scene scene, NavMeshSurface surface) = CreateFloorScene();
+        Assert.True(surface.BuildNavMesh());
+        Assert.Same(surface.NavMeshData.Res, surface.RuntimeData);
+
+        Runtime.NavMeshData data = surface.RuntimeData!;
+        var blobsBefore = new Dictionary<(int, int), byte[]>();
+        foreach (Runtime.NavMeshData.NavMeshTile layer in data.CacheLayers)
+            blobsBefore[(layer.X, layer.Z)] = layer.Data;
+
+        GameObject wall = CreateGameObject("Wall");
+        scene.Add(wall);
+        wall.AddComponent<BoxCollider>().Size = new Float3(2, 4, 20);
+        wall.Transform.Position = new Float3(0, 2, 0);
+        Assert.True(surface.RebuildTiles(new AABB(new Float3(-2, -1, -11), new Float3(2, 5, 11))));
+
+        bool anyReplaced = false;
+        foreach (Runtime.NavMeshData.NavMeshTile layer in data.CacheLayers)
+            if (blobsBefore.TryGetValue((layer.X, layer.Z), out byte[]? before) && !ReferenceEquals(before, layer.Data))
+                anyReplaced = true;
+        Assert.True(anyReplaced, "Affected tiles' blobs should be replaced.");
+
+        // Re-registering must keep the rebuilt tiles rather than reverting to the original bake.
+        surface.RefreshRegistration();
+        Assert.Same(data, surface.RuntimeData);
+    }
+
+    /// <summary>
+    /// A navmesh the asset database handed out is shared with every other surface pointing at the
+    /// same .navmesh and with the next scene that loads it, so the surface rebuilds a copy and
+    /// leaves the asset holding every blob it was baked with. That copy still round-trips.
+    /// </summary>
+    [Fact]
+    public void LayerRegeneration_OnAnAsset_MirrorsIntoACopyAndLeavesTheAsset()
     {
         (Scene scene, NavMeshSurface surface) = CreateFloorScene();
         Assert.True(surface.BuildNavMesh());
 
+        // Stand in for an imported asset: what marks one is carrying a database id.
         Runtime.NavMeshData asset = surface.NavMeshData.Res!;
+        asset.AssetID = Guid.NewGuid();
+        surface.RefreshRegistration();
+
         Runtime.NavMeshData runtime = surface.RuntimeData!;
         Assert.NotSame(asset, runtime);
 
