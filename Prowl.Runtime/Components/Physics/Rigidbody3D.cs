@@ -5,6 +5,8 @@ using System;
 using System.Linq;
 
 using Jitter2;
+using Jitter2.Collision.Shapes;
+using Jitter2.DataStructures;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
@@ -98,7 +100,7 @@ public sealed class Rigidbody3D : MonoBehaviour
                 throw new ArgumentException("Mass can not be zero or negative.", nameof(value));
 
             mass = value;
-            if (_body != null) _body.SetMassInertia(value);
+            ApplyMassInertia();
         }
     }
 
@@ -473,6 +475,52 @@ public sealed class Rigidbody3D : MonoBehaviour
         // the no-collider case.
     }
 
+    /// <summary>
+    /// Pushes <see cref="Mass"/> onto the Jitter body, deriving the inertia tensor from its shapes.
+    /// Shapes with no volume (the TriangleShapes of a concave MeshCollider) cannot report inertia, so
+    /// those bodies fall back to a solid box sized to the combined bounds of every attached shape - a
+    /// rough tensor that still rotates plausibly beats no body at all.
+    /// </summary>
+    internal void ApplyMassInertia()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+
+        try
+        {
+            _body.SetMassInertia(mass);
+        }
+        catch (NotSupportedException)
+        {
+            _body.SetMassInertia(ApproximateBoxInertia(_body.Shapes, mass), mass);
+        }
+    }
+
+    private static JMatrix ApproximateBoxInertia(ReadOnlyList<RigidBodyShape> shapes, float mass)
+    {
+        if (shapes.Count == 0) return JMatrix.Identity;
+
+        JVector min = new(float.MaxValue, float.MaxValue, float.MaxValue);
+        JVector max = new(float.MinValue, float.MinValue, float.MinValue);
+        foreach (RigidBodyShape shape in shapes)
+        {
+            shape.CalculateBoundingBox(JQuaternion.Identity, JVector.Zero, out JBoundingBox box);
+            min = JVector.Min(min, box.Min);
+            max = JVector.Max(max, box.Max);
+        }
+
+        // Clamp to a small positive size so the tensor stays positive-definite (invertible) even for
+        // perfectly flat or degenerate meshes.
+        float sx = Maths.Max(max.X - min.X, 1e-3f);
+        float sy = Maths.Max(max.Y - min.Y, 1e-3f);
+        float sz = Maths.Max(max.Z - min.Z, 1e-3f);
+
+        JMatrix inertia = JMatrix.Identity;
+        inertia.M11 = (1.0f / 12.0f) * mass * (sy * sy + sz * sz);
+        inertia.M22 = (1.0f / 12.0f) * mass * (sx * sx + sz * sz);
+        inertia.M33 = (1.0f / 12.0f) * mass * (sx * sx + sy * sy);
+        return inertia;
+    }
+
     internal void UpdateShapes(RigidBody rb)
     {
         // Remove all shapes from this rigidbody (Preserve mass/inertia, the rebuild below will refresh it)
@@ -489,9 +537,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         }
 
         // If no colliders provided shapes, RegisterShapes was never called and mass was never set.
-        // Safe to call here because the body has no shapes attached.
         if (rb.Shapes.Count == 0)
-            rb.SetMassInertia(mass);
+            ApplyMassInertia();
     }
 
     /// <summary>Unconditionally pushes the Transform pose into the body. WHEN this runs is controlled
