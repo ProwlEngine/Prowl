@@ -635,8 +635,11 @@ public class PhysicsWorld
 
                     if (hit && lambda >= 0 && lambda <= 1.0f && lambda < bestLambda)
                     {
+                        // Overlap at t=0 leaves no sweep direction. Substitute the triangle's own
+                        // normal, flipped to point from the caster at the triangle so it matches
+                        // the sign convention of the sweep normal (negated once when reported).
                         if (n.LengthSquared() <= 0)
-                            n = JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
+                            n = -JVector.Normalize((triangle.B - triangle.A) % (triangle.C - triangle.A));
 
                         bestLambda = lambda;
                         bestNormal = n;
