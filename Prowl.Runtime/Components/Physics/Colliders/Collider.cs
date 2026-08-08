@@ -241,7 +241,8 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     public RigidBodyShape[] CreateTransformedShapes()
     {
-        Rigidbody3D rb = RigidBody;
+        // Prefer the body we are actually attached to over another walk up the component tree.
+        Rigidbody3D rb = _attachedRigidbody3D.IsValid() ? _attachedRigidbody3D : RigidBody;
         if (rb.IsNotValid()) return CreateShapes();
 
         Float3 cumulativeScale = CumulativeScale();
