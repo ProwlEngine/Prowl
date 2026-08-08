@@ -109,10 +109,6 @@ public class TextureAssetEditor : AssetImporterEditor
         EditorGUI.SettingsToggle(paper, $"{id}_mips", "Generate Mipmaps", genMips,
             v => { settings["generateMipmaps"] = new EchoObject(v); _dirty = true; }, separator: false);
 
-        bool srgb = settings.TryGet("sRGB", out var srgbTag) && srgbTag.BoolValue;
-        EditorGUI.SettingsToggle(paper, $"{id}_srgb", "sRGB", srgb,
-            v => { settings["sRGB"] = new EchoObject(v); _dirty = true; }, separator: false);
-
         var currentMin = settings.TryGet("minFilter", out var minTag)
             ? (TextureMin)minTag.IntValue : TextureMin.LinearMipmapLinear;
         EditorGUI.Row(paper, $"{id}_min", "Min Filter", () =>

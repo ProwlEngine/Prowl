@@ -74,7 +74,6 @@ public class TextureImporter : AssetImporter
     {
         var s = EchoObject.NewCompound();
         s["generateMipmaps"] = new EchoObject(true);
-        s["sRGB"] = new EchoObject(true);
         s["minFilter"] = new EchoObject((int)TextureMin.LinearMipmapLinear);
         s["magFilter"] = new EchoObject((int)TextureMag.Linear);
         s["wrapMode"] = new EchoObject((int)TextureWrap.Repeat);
