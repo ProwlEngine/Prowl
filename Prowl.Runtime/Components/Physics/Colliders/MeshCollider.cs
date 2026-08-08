@@ -88,6 +88,12 @@ public sealed class MeshCollider : Collider
             return null;
         }
 
+        // Every triangle becomes its own shape and its own dynamic tree leaf, so cost scales with the
+        // triangle count. Past a few thousand a convex hull or a decimated collision mesh is the answer.
+        const int TriangleBudget = 5000;
+        if (count > TriangleBudget)
+            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
+
         var shapes = new TriangleShape[count];
         for (int i = 0; i < count; i++)
             shapes[i] = new TriangleShape(triMesh, i);
