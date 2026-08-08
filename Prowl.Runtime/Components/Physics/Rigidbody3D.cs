@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Linq;
 
 using Jitter2;
 using Jitter2.Dynamics;
@@ -420,27 +421,24 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     public override void OnDisable()
     {
-        if (_body != null && !_body.Handle.IsZero)
-        {
-            // Detach all child colliders - they will attach to the static rigidbody when they re-enable
-            var colliders = GetComponentsInChildren<Collider>();
-            foreach (var collider in colliders)
-            {
-                if (collider.IsValid() && collider.Enabled)
-                {
-                    collider.Detach();
-                    // Re-enable the collider so it attaches to the static rigidbody
-                    collider.OnEnable();
-                }
-            }
+        if (_body == null || _body.Handle.IsZero) return;
 
-            // Unhook collision events
-            _body.BeginCollide -= OnJitterBeginCollide;
-            _body.EndCollide -= OnJitterEndCollide;
+        // Take the colliders off while the body is still alive, so their shapes are removed cleanly.
+        Collider[] colliders = GetComponentsInChildren<Collider>().ToArray();
+        foreach (Collider collider in colliders)
+            if (collider.IsValid()) collider.Detach();
 
-            GameObject.Scene.Physics.UnregisterBody(this);
-            GameObject.Scene.Physics.World?.Remove(_body);
-        }
+        // Unhook collision events
+        _body.BeginCollide -= OnJitterBeginCollide;
+        _body.EndCollide -= OnJitterEndCollide;
+
+        GameObject.Scene.Physics.UnregisterBody(this);
+        GameObject.Scene.Physics.World?.Remove(_body);
+
+        // Only now that this body is gone will the colliders resolve past it, onto an outer rigidbody
+        // or their layer's static body.
+        foreach (Collider collider in colliders)
+            if (collider.IsValid() && collider.EnabledInHierarchy) collider.Reattach();
     }
 
     internal void UpdateProperties(RigidBody rb)

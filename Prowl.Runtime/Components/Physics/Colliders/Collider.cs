@@ -336,22 +336,33 @@ public abstract class Collider : MonoBehaviour
         return transformedShapes;
     }
 
-    public override void OnEnable()
+    /// <summary>
+    /// The nearest enabled Rigidbody3D at or above this collider, or null when the collider belongs to
+    /// static geometry. A disabled rigidbody is skipped because its Jitter body has been removed, so
+    /// attaching to it would drop the collider out of the world entirely.
+    /// </summary>
+    private Rigidbody3D FindOwningRigidbody()
     {
-        // First check if there's a Rigidbody3D on this GameObject or any parent
-        Rigidbody3D rb = GetComponentInParent<Rigidbody3D>();
+        foreach (Rigidbody3D rb in GetComponentsInParent<Rigidbody3D>())
+            if (rb.IsValid() && rb.EnabledInHierarchy) return rb;
 
-        if (rb.IsValid())
-        {
-            // Attach to the Rigidbody3D
-            TryAttachTo(rb);
-        }
-        else
-        {
-            // No Rigidbody3D found, attach to the static rigidbody
-            AttachToStatic();
-        }
+        return null;
     }
+
+    /// <summary>
+    /// Re-resolves which body this collider belongs to and attaches to it, falling back to the static
+    /// rigidbody for its layer.
+    /// </summary>
+    internal void Reattach()
+    {
+        Detach();
+
+        Rigidbody3D rb = FindOwningRigidbody();
+        if (rb.IsValid()) TryAttachTo(rb);
+        else AttachToStatic();
+    }
+
+    public override void OnEnable() => Reattach();
 
     public override void OnDisable()
     {
