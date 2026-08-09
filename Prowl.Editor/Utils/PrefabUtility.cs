@@ -53,7 +53,7 @@ public static class PrefabUtility
         // Write the .prefab file
         string absolutePath = Path.Combine(Project.Current.AssetsPath, relativeSavePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
-        File.WriteAllText(absolutePath, echo.WriteToString());
+        if (!TryWriteFile(absolutePath, echo.WriteToString())) return false;
 
         // Ensure meta file exists so asset DB picks it up with a stable GUID.
         var meta = MetaFile.EnsureMeta(absolutePath, nameof(Importers.PrefabImporter));
@@ -158,7 +158,7 @@ public static class PrefabUtility
         if (echo == null) return;
 
         // Write to the .prefab file
-        File.WriteAllText(absolutePath, echo.WriteToString());
+        if (!TryWriteFile(absolutePath, echo.WriteToString())) return;
 
         // Clear overrides on this instance
         ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
@@ -172,7 +172,7 @@ public static class PrefabUtility
             undo: () =>
             {
                 // Restore old prefab file
-                if (oldFileContent != null) File.WriteAllText(absolutePath, oldFileContent);
+                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
                 _sourceCache.Remove(prefabGuid);
                 db.Reimport(entry.Guid);
                 // Restore overrides on instance
@@ -342,9 +342,8 @@ public static class PrefabUtility
 
         // Save back to the .prefab file
         var echo = Serializer.Serialize(typeof(object), source);
-        if (echo != null)
+        if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
-            System.IO.File.WriteAllText(absolutePath, echo.WriteToString());
             _sourceCache.Remove(instanceGO.PrefabAssetId);
             db.Reimport(entry.Guid);
         }
@@ -356,7 +355,7 @@ public static class PrefabUtility
             undo: () =>
             {
                 // Restore old prefab file
-                if (oldFileContent != null) System.IO.File.WriteAllText(absolutePath, oldFileContent);
+                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
                 _sourceCache.Remove(prefabGuid);
                 db.Reimport(entry.Guid);
                 // Re-add the override to the instance
@@ -910,11 +909,18 @@ public static class PrefabUtility
         Runtime.Debug.LogWarning($"[Prefab] Cannot {operation} during play mode.");
         return false;
     }
+
+    private static bool TryWriteFile(string absolutePath, string contents)
+    {
+        try
         {
-            // Don't overwrite nested prefab instances
-            if (child.IsPrefabInstance && child.PrefabAssetId != prefabGuid)
-                continue;
-            StampAsPrefabInstance(child, prefabGuid);
+            File.WriteAllText(absolutePath, contents);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+            return false;
         }
     }
 
