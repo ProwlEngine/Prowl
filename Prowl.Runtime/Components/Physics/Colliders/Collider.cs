@@ -72,9 +72,9 @@ public abstract class Collider : MonoBehaviour
     /// </summary>
     private int _lastLayer;
 
-    /// <summary>The world scale the shapes were built at, compared by value because the body's own
-    /// Transform version changes every step and so cannot report a rescale.</summary>
-    private Float3 _lastScale = Float3.One;
+    /// <summary>The attached body's local scale when the shapes were built. Compared by value because
+    /// the body's own Transform version changes every step and so cannot report a rescale.</summary>
+    private Float3 _lastBodyScale = Float3.One;
 
     protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
@@ -122,7 +122,7 @@ public abstract class Collider : MonoBehaviour
         _attachedBody = GameObject.Scene.Physics.GetOrCreateStaticRigidBody(layer);
         RegisterShapes();
         _lastTransformVersion = CurrentTransformVersion();
-        _lastScale = CumulativeScale();
+        _lastBodyScale = Float3.One; // static colliders have no body; the version walk covers their scale
         _lastLayer = layer;
     }
 
@@ -366,7 +366,7 @@ public abstract class Collider : MonoBehaviour
         else AttachToStatic();
 
         _lastTransformVersion = CurrentTransformVersion();
-        _lastScale = CumulativeScale();
+        _lastBodyScale = _attachedRigidbody3D.IsValid() ? _attachedRigidbody3D.Transform.LocalScale : Float3.One;
         _lastLayer = GameObject.LayerIndex;
     }
 
@@ -384,14 +384,28 @@ public abstract class Collider : MonoBehaviour
 
         // Static shapes are in world space, so any movement invalidates them. Shapes on a rigidbody are
         // in body space, so only movement relative to that body does - which is why the version walk
-        // stops there. Either way a rescale has to be caught by value.
+        // stops there.
         bool transformChanged = CurrentTransformVersion() != _lastTransformVersion;
-        bool scaleChanged = !CumulativeScale().Equals(_lastScale);
+
+        // Writing LocalScale bumps the transform's version, so the walk above already covers every
+        // rescale it passes over. It stops at the body, so the body's own rescale is the one case left,
+        // and comparing that one value beats recomputing the whole chain's scale every frame.
+        bool bodyScaleChanged = _attachedRigidbody3D.IsValid() &&
+            !_attachedRigidbody3D.Transform.LocalScale.Equals(_lastBodyScale);
+
         bool layerChanged = _attachedRigidbody3D.IsNotValid() && GameObject.LayerIndex != _lastLayer;
 
-        if (transformChanged || scaleChanged || layerChanged)
-            Reattach();
+        if (!transformChanged && !bodyScaleChanged && !layerChanged) return;
+
+        OnAutoRebuild();
+        Reattach();
     }
+
+    /// <summary>
+    /// Called just before a transform change triggers an automatic rebuild, so a collider that is
+    /// expensive to rebuild can say so.
+    /// </summary>
+    protected virtual void OnAutoRebuild() { }
 
     public override void OnValidate() => Rebuild();
 }
