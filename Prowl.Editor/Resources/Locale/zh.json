@@ -159,7 +159,6 @@
   "menu.file.open_scene": "打开场景",
   "menu.file.save_scene": "保存场景",
   "menu.file.save_scene_as": "场景另存为...",
-  "menu.file.open_project": "打开项目...",
   "menu.file.build_project": "构建项目...",
   "menu.file.exit": "退出",
   "menu.edit": "编辑",

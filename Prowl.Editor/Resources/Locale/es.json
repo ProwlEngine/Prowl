@@ -202,7 +202,6 @@
   "menu.file.open_scene": "Abrir escena",
   "menu.file.save_scene": "Guardar escena",
   "menu.file.save_scene_as": "Guardar escena como...",
-  "menu.file.open_project": "Abrir proyecto...",
   "menu.file.build_project": "Compilar proyecto...",
   "menu.file.exit": "Salir",
   "menu.edit": "Editar",

@@ -159,7 +159,6 @@
   "menu.file.open_scene": "씬 열기",
   "menu.file.save_scene": "씬 저장",
   "menu.file.save_scene_as": "씬 다른 이름으로 저장...",
-  "menu.file.open_project": "프로젝트 열기...",
   "menu.file.build_project": "프로젝트 빌드...",
   "menu.file.exit": "종료",
   "menu.edit": "편집",

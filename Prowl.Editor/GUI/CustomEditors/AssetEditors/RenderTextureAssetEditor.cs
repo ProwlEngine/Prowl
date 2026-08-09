@@ -65,9 +65,6 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             s_edits[entry.Guid] = restored;
     }
 
-    /// <summary>Forgets every buffered edit. GUIDs only mean anything within one project.</summary>
-    internal static void ClearEdits() => s_edits.Clear();
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         var font = EditorTheme.DefaultFont;

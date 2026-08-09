@@ -110,8 +110,6 @@ public abstract class AssetImporterEditor
         else s_baselines[entry.Guid] = current.Clone();
     }
 
-    /// <summary>Forgets every baseline. GUIDs only mean anything within one project.</summary>
-    internal static void ClearBaselines() => s_baselines.Clear();
 
     // ============================================================
     // Shared UI

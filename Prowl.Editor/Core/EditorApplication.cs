@@ -1325,8 +1325,6 @@ public class EditorApplication : Game
         });
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () => PromptSaveAs());
         MenuRegistry.RegisterSeparator(file);
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
-        MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(BuildSettingsPanel)));
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
@@ -1509,27 +1507,6 @@ public class EditorApplication : Game
             SaveDockLayout();
 
         EditorRegistries.SaveSettings();
-    }
-
-    public void ReturnToLauncher()
-    {
-        // Save before closing
-        SaveProjectState();
-
-        // Clean up current project
-        EditorAssetBackend.Instance?.Dispose();
-        Runtime.AssetDatabase.Current = null;
-        Projects.Scripting.RoslynScriptBackend.Reset(); // drop the closed project's incremental compile state
-
-        // Reset state
-        _introTime = double.MaxValue;
-        _introClosing = false;
-        _launcherWasOpen = true;
-
-        // Reopen launcher
-        ProjectLauncher.Initialize();
-
-        Window.InternalWindow.Title = "Prowl Editor";
     }
 
     // ================================================================

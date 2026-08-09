@@ -105,7 +105,4 @@ public abstract class ImportSettingsEditor : AssetImporterEditor
     /// <summary>Called once a revert has restored <paramref name="settings"/>, for editors holding
     /// derived state that has to be rebuilt from it.</summary>
     protected virtual void OnAfterRevert(AssetEntry entry, EchoObject settings) { }
-
-    /// <summary>Forgets every cached settings object. GUIDs only mean anything within one project.</summary>
-    internal static void ClearSettings() => s_settings.Clear();
 }

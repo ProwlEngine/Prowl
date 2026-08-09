@@ -72,9 +72,6 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
             Serializer.DeserializeInto(baseline, def);
     }
 
-    /// <summary>Forgets every buffered edit. GUIDs only mean anything within one project.</summary>
-    internal static void ClearEdits() => s_edits.Clear();
-
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
         if (Project.Current == null) return;

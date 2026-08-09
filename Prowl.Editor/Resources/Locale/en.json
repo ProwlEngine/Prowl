@@ -203,7 +203,6 @@
   "menu.file.open_scene": "Open Scene",
   "menu.file.save_scene": "Save Scene",
   "menu.file.save_scene_as": "Save Scene As...",
-  "menu.file.open_project": "Open Project...",
   "menu.file.build_project": "Build Project...",
   "menu.file.exit": "Exit",
   "menu.edit": "Edit",
