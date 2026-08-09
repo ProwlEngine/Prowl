@@ -110,19 +110,29 @@ public class ImportContext
                 $"Importer added a sub-asset of type '{asset.GetType().Name}' with no name. " +
                 "A sub-asset name is required.");
 
-        // Ensure unique name; appends _1, _2, etc. if duplicate.
+        // Ensure unique name; appends _1, _2, etc. if duplicate. Names are for display only and two
+        // sub-assets may legitimately want the same one, so disambiguating them is harmless.
         string uniqueName = Utils.UniqueNames.MakeUnique(name, n => _usedNames.Contains(n),
             openSeparator: "_", closeSeparator: "", stripExistingSuffix: false);
         _usedNames.Add(uniqueName);
         asset.Name = uniqueName;
 
-        string uniqueIdentity = Utils.UniqueNames.MakeUnique(identity.Explicit ?? NextOrderIdentity(asset),
-            i => _usedIdentities.Contains(i), openSeparator: "_", closeSeparator: "", stripExistingSuffix: false);
-        _usedIdentities.Add(uniqueIdentity);
+        string identityKey = identity.Explicit ?? NextOrderIdentity(asset);
 
-        asset.AssetID = AssetEntry.DeriveSubAssetGuid(AssetGuid, uniqueIdentity);
+        // An identity, unlike a name, is a promise that it picks out this sub-asset and no other: every
+        // saved reference is keyed on the GUID derived from it. Disambiguating a duplicate the way names
+        // are would make that GUID depend on registration order, so reordering the source would silently
+        // repoint existing references at a different sub-asset. Fail the import instead - it is logged
+        // and retried, where a wrong GUID would just quietly rebind.
+        if (!_usedIdentities.Add(identityKey))
+            throw new InvalidOperationException(
+                $"Importer produced two sub-assets with the identity '{identityKey}' (the second is " +
+                $"'{uniqueName}', a {asset.GetType().Name}). Identities must be unique within an import - " +
+                "derive the key from something that tells the two apart, such as a persistent per-item id.");
+
+        asset.AssetID = AssetEntry.DeriveSubAssetGuid(AssetGuid, identityKey);
         SubAssets.Add(asset);
-        return uniqueIdentity;
+        return identityKey;
     }
 
     /// <summary>Registration order within the type, so adding a material can't shift every animation.</summary>
