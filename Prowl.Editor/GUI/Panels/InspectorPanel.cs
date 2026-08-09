@@ -174,6 +174,10 @@ public class InspectorPanel : DockPanel
             // Leaving an asset whose import settings were edited but not applied: offer to write them or
             // put them back. The selection change is queued while the prompt is up - the inspector keeps
             // drawing the asset in question so the choice is made against what is actually on screen.
+            // Safety net: if every modal went away without either button running (a PopAll from
+            // elsewhere), don't strand the inspector holding an asset it can never leave.
+            if (_promptOpen && !Modal.IsOpen) _promptOpen = false;
+
             if (_promptOpen)
             {
                 if (_openInspectable != null) active = _openInspectable;
