@@ -19,8 +19,6 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Material))]
 public class MaterialAssetEditor : AssetImporterEditor
 {
-    private readonly PreviewWidget _preview = new();
-    private Guid _currentGuid;
 
     // Materials with edits not yet written to disk, keyed by asset GUID. Static rather than
     // per-instance to have a behaviour more coherent with user expectations
@@ -64,18 +62,11 @@ public class MaterialAssetEditor : AssetImporterEditor
         Serializer.DeserializeInto(baseline, material);
 
         _pending.Remove(entry.Guid);
-        _preview.Invalidate();
+        PreviewWidget.For(entry.Guid).Invalidate();
     }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change and force a preview refresh.
-        if (_currentGuid != entry.Guid)
-        {
-            _currentGuid = entry.Guid;
-            _preview.Invalidate();
-        }
-
         // Include the GUID in element IDs so Paper UI state is unique per asset
         id = $"{id}_{entry.Guid:N}";
 
@@ -119,14 +110,14 @@ public class MaterialAssetEditor : AssetImporterEditor
         // 3D Preview
                 Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
-        _preview.Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
+        PreviewWidget.For(entry.Guid).Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
     /// <summary>Record that <paramref name="material"/> has edits not yet written to disk.</summary>
     private void MarkDirty(Material material, AssetEntry entry)
     {
         _pending[entry.Guid] = (material, entry);
-        _preview.Invalidate();
+        PreviewWidget.For(entry.Guid).Invalidate();
     }
 
     /// <summary>

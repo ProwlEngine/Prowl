@@ -18,15 +18,13 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Model))]
 public class ModelAssetEditor : ImportSettingsEditor
 {
-    private readonly PreviewWidget _preview = new(showGrid: true);
-    private Guid _currentGuid;
 
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
         if (!base.ApplyState(entry, asset)) return false;
 
         // Reimporting rebuilds every mesh this model owns, so the cached previews are stale.
-        _preview.Invalidate();
+        PreviewWidget.For(entry.Guid, showGrid: true).Invalidate();
         MeshAssetEditor.InvalidateCachedPreviews();
         return true;
     }
@@ -34,7 +32,7 @@ public class ModelAssetEditor : ImportSettingsEditor
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
     {
         base.RevertState(entry, asset, baseline);
-        _preview.Invalidate();
+        PreviewWidget.For(entry.Guid, showGrid: true).Invalidate();
     }
 
     // Settings live in the compound rather than in fields, so there is one copy of each value and
@@ -62,13 +60,6 @@ public class ModelAssetEditor : ImportSettingsEditor
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change and refresh the preview
-        if (_currentGuid != entry.Guid)
-        {
-            _currentGuid = entry.Guid;
-            _preview.Invalidate();
-        }
-
         // Include the GUID in element IDs so Paper UI state is unique per asset
         id = $"{id}_{entry.Guid:N}";
 
@@ -82,7 +73,7 @@ public class ModelAssetEditor : ImportSettingsEditor
 
         if (model != null)
         {
-            var pr = _preview.Get(model, p => p.SetupForModel(model));
+            var pr = PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForModel(model));
             using (paper.Box($"{id}_previewCard").Height(200)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
                 .Rounded(8).Clip()
@@ -199,7 +190,7 @@ public class ModelAssetEditor : ImportSettingsEditor
                 .Alignment(TextAlignment.MiddleCenter)
                 .OnClick(0, (_, _) =>
                 {
-                    _preview.Invalidate();
+                    PreviewWidget.For(entry.Guid, showGrid: true).Invalidate();
                     EditorAssetBackend.Instance?.Reimport(entry.Guid);
                 });
         }
