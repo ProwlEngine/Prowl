@@ -60,6 +60,27 @@
     <LibraryFiles Include="..\Libraries\**\*.*" />
   </ItemGroup>
 
+  <!-- Precompiled shader blobs (Tools/DefaultShaderCompiler.cs, Tools/UIShaderCompiler.cs). Neither
+       tool references this project - they compile against the Prowl.Echo/Prowl.Graphite packages
+       directly - so running them here ahead of compilation is not a build-order cycle. Skipped when
+       the committed .shaderblob outputs are already newer than their sources. -->
+  <ItemGroup>
+    <DefaultShaderSource Include="Assets\Defaults\*.shader" />
+    <DefaultShaderBlob Include="Assets\Defaults\Compiled\*.shaderblob" />
+    <UISlangSource Include="GUI\Shaders\*.slang" />
+    <UIShaderBlob Include="Assets\Shaders\*.shaderblob" />
+  </ItemGroup>
+
+  <Target Name="CompileDefaultShaders" BeforeTargets="BeforeCompile"
+          Inputs="@(DefaultShaderSource)" Outputs="@(DefaultShaderBlob)">
+    <Exec Command="dotnet run DefaultShaderCompiler.cs" WorkingDirectory="$(MSBuildThisFileDirectory)..\Tools" />
+  </Target>
+
+  <Target Name="CompileUIShaders" BeforeTargets="BeforeCompile"
+          Inputs="@(UISlangSource)" Outputs="@(UIShaderBlob)">
+    <Exec Command="dotnet run UIShaderCompiler.cs" WorkingDirectory="$(MSBuildThisFileDirectory)..\Tools" />
+  </Target>
+
   <!-- Stamp each PackageReference as AssemblyMetadata so the build pipeline
        can read dependencies from the compiled DLL without needing the .csproj file. -->
   <Target Name="EmbedPackageReferences" BeforeTargets="GetAssemblyAttributes">

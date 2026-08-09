@@ -23,18 +23,18 @@ using Prowl.Graphite.ShaderDef.Compiler;
 
 RegisterSerializationFormats();
 
-// Run from Tools/ (e.g. `dotnet run UIShaderCompiler.cs`): Environment.ProcessPath points into the
+// Run from Tools/ (e.g. `dotnet run DefaultShaderCompiler.cs`): Environment.ProcessPath points into the
 // dotnet runfile cache when launched this way, not this script's directory, so use the CWD instead.
 string scriptDir = Directory.GetCurrentDirectory();
 string runtimeDir = Path.GetFullPath(Path.Combine(scriptDir, "..", "Prowl.Runtime"));
 
 string shaderDir = args.Length > 0
     ? args[0]
-    : Path.Combine(runtimeDir, "GUI", "Shaders");
+    : Path.Combine(runtimeDir, "Assets", "Defaults");
 
 string outputDir = args.Length > 1
     ? args[1]
-    : Path.Combine(runtimeDir, "Assets", "Shaders");
+    : Path.Combine(shaderDir, "Compiled");
 
 Directory.CreateDirectory(outputDir);
 
@@ -43,21 +43,21 @@ Directory.CreateDirectory(outputDir);
 // will target - no per-backend loop needed anymore.
 GraphicsDevice device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions());
 
-Compile("UI.slang", Path.Combine(outputDir, "UI.shaderblob"));
-Compile("Blur.slang", Path.Combine(outputDir, "Blur.shaderblob"));
+foreach (string shaderPath in Directory.EnumerateFiles(shaderDir, "*.shader"))
+    Compile(shaderPath, Path.Combine(outputDir, Path.GetFileNameWithoutExtension(shaderPath) + ".shaderblob"));
 
 device.Dispose();
 
 return;
 
-void Compile(string shaderFile, string outputPath)
+void Compile(string shaderPath, string outputPath)
 {
+    string shaderFile = Path.GetFileName(shaderPath);
     Console.WriteLine($"Compiling {shaderFile} ...");
 
-    string source = File.ReadAllText(Path.Combine(shaderDir, shaderFile));
+    string source = File.ReadAllText(shaderPath);
 
-    ShaderPass pass = new() { State = new PassState(), InlineSlang = source };
-    ShaderDefinition definition = new() { Name = shaderFile, Passes = [pass] };
+    ShaderDefinition definition = ShaderParser.Parse(source);
 
     SlangShaderCompiler compiler = new();
     compiler.RegisterModule(new VulkanCompiler("spirv_1_4"));
@@ -68,7 +68,7 @@ void Compile(string shaderFile, string outputPath)
 
     compiler.EndSession();
 
-    UIShaderBlobData data = new() { Definition = definition, Snapshot = snapshot };
+    DefaultShaderBlobData data = new() { Definition = definition, Snapshot = snapshot };
 
     EchoObject root = Serializer.Serialize(data, TypeMode.None);
 
@@ -77,7 +77,7 @@ void Compile(string shaderFile, string outputPath)
 
     VerifyRoundTrip(outputPath, data);
 
-    Console.WriteLine($"  wrote {outputPath} ({snapshot.Passes[0].Variants?.Length ?? 0} variant(s))");
+    Console.WriteLine($"  wrote {outputPath} ({snapshot.Passes?.Length ?? 0} pass(es))");
 
     Memory<byte>? FileLoader(string name)
     {
@@ -86,40 +86,49 @@ void Compile(string shaderFile, string outputPath)
     }
 }
 
-void VerifyRoundTrip(string outputPath, UIShaderBlobData original)
+void VerifyRoundTrip(string outputPath, DefaultShaderBlobData original)
 {
     using var reader = new BinaryReader(File.OpenRead(outputPath));
 
     EchoObject root = EchoObject.ReadFromBinary(reader);
-    UIShaderBlobData restored = Serializer.Deserialize<UIShaderBlobData>(root);
+    DefaultShaderBlobData restored = Serializer.Deserialize<DefaultShaderBlobData>(root);
 
-    Variant[] originalVariants = original.Snapshot.Passes[0].Variants ?? [];
-    Variant[] restoredVariants = restored.Snapshot.Passes[0].Variants ?? [];
+    PassSnapshot[] originalPasses = original.Snapshot.Passes ?? [];
+    PassSnapshot[] restoredPasses = restored.Snapshot.Passes ?? [];
 
-    if (originalVariants.Length != restoredVariants.Length)
-        throw new InvalidOperationException("Round-trip variant count mismatch.");
+    if (originalPasses.Length != restoredPasses.Length)
+        throw new InvalidOperationException("Round-trip pass count mismatch.");
 
-    for (int i = 0; i < originalVariants.Length; i++)
+    for (int p = 0; p < originalPasses.Length; p++)
     {
-        if (!originalVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription a))
-            continue;
+        Variant[] originalVariants = originalPasses[p].Variants ?? [];
+        Variant[] restoredVariants = restoredPasses[p].Variants ?? [];
 
-        if (!restoredVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription b))
-            throw new InvalidOperationException($"Round-trip lost the Vulkan variant at index {i}.");
+        if (originalVariants.Length != restoredVariants.Length)
+            throw new InvalidOperationException($"Round-trip variant count mismatch (pass {p}).");
 
-        ShaderStageDescription[] sa = a.Stages;
-        ShaderStageDescription[] sb = b.Stages;
-
-        if (sa.Length != sb.Length)
-            throw new InvalidOperationException($"Round-trip stage count mismatch (variant {i}).");
-
-        for (int s = 0; s < sa.Length; s++)
+        for (int i = 0; i < originalVariants.Length; i++)
         {
-            if (sa[s].Stage != sb[s].Stage ||
-                sa[s].EntryPoint != sb[s].EntryPoint ||
-                !sa[s].ShaderBytes.AsSpan().SequenceEqual(sb[s].ShaderBytes))
+            if (!originalVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription a))
+                continue;
+
+            if (!restoredVariants[i].TryGetDescription(GraphicsBackend.Vulkan, out ShaderDescription b))
+                throw new InvalidOperationException($"Round-trip lost the Vulkan variant at index {i} (pass {p}).");
+
+            ShaderStageDescription[] sa = a.Stages;
+            ShaderStageDescription[] sb = b.Stages;
+
+            if (sa.Length != sb.Length)
+                throw new InvalidOperationException($"Round-trip stage count mismatch (pass {p}, variant {i}).");
+
+            for (int s = 0; s < sa.Length; s++)
             {
-                throw new InvalidOperationException($"Round-trip stage mismatch (variant {i}, stage {sa[s].Stage}).");
+                if (sa[s].Stage != sb[s].Stage ||
+                    sa[s].EntryPoint != sb[s].EntryPoint ||
+                    !sa[s].ShaderBytes.AsSpan().SequenceEqual(sb[s].ShaderBytes))
+                {
+                    throw new InvalidOperationException($"Round-trip stage mismatch (pass {p}, variant {i}, stage {sa[s].Stage}).");
+                }
             }
         }
     }
@@ -133,11 +142,11 @@ void RegisterSerializationFormats()
     Serializer.RegisterFormat(new VariantSpaceFormat());
 }
 
-// A baked single-pass GUI shader: the parsed definition plus whichever variants were compiled ahead of
-// time (Vulkan only). Field-for-field identical to Prowl.Runtime.GUI.UIShaderBlobData - Echo's
+// A baked default shader: the parsed definition plus whichever variants were compiled ahead of time
+// (Vulkan only). Field-for-field identical to Prowl.Runtime.Resources.DefaultShaderBlobData - Echo's
 // TypeMode.None serializes by field name only, so the two independently-defined types round-trip
 // through each other without either assembly referencing the other.
-struct UIShaderBlobData
+struct DefaultShaderBlobData
 {
     public ShaderDefinition Definition;
     public ShaderSnapshot Snapshot;

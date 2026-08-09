@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Graphite.ShaderDef;
@@ -128,12 +130,37 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     }
 
     /// <summary>
-    /// Resolves a default shader from the asset database by its deterministic GUID. Shaders are
-    /// compiled by the editor build pipeline into the asset database there is no runtime parser,
-    /// so this returns null until the compiled default has been registered.
+    /// Load a default embedded shader. Pulls the shared instance from <see cref="BuiltInAssets"/> if
+    /// initialized, otherwise falls back to a direct parse.
     /// </summary>
     public static Shader? LoadDefault(DefaultShader shader)
-        => AssetDatabase.Get(BuiltInAssets.GuidFor(shader)) as Shader;
+    {
+        if (BuiltInAssets.Get(BuiltInAssets.GuidFor(shader)) is Shader cached)
+            return cached;
+
+        return ParseDefault(shader);
+    }
+
+    /// <summary>
+    /// Raw load of a precompiled default shader blob invoked by <see cref="BuiltInAssets"/> on first
+    /// cache miss. Public callers should use <see cref="LoadDefault"/>. Returns null if the shader has
+    /// no compiled blob yet (most <see cref="DefaultShader"/> entries are still placeholders).
+    /// </summary>
+    internal static Shader? ParseDefault(DefaultShader shader)
+    {
+        string resourcePath = $"Assets/Defaults/Compiled/{shader}.shaderblob";
+        if (!EmbeddedResources.Exists(resourcePath))
+            return null;
+
+        using Stream stream = EmbeddedResources.GetStream(resourcePath);
+        using var reader = new BinaryReader(stream);
+        EchoObject root = EchoObject.ReadFromBinary(reader);
+        DefaultShaderBlobData blob = Serializer.Deserialize<DefaultShaderBlobData>(root);
+
+        ShaderProperty[] properties = [.. (blob.Definition.Properties ?? []).Select(Rendering.Shaders.ShaderPropertyConverter.Convert)];
+
+        return new Shader(blob.Definition.Name ?? shader.ToString(), properties, blob.Definition, blob.Snapshot);
+    }
 
     public void OnBeforeSerialize() { }
 

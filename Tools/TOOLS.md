@@ -8,7 +8,11 @@ Use the default .net 10 file-based app runner to run this. If you have a .net 10
 
 ### UIShaderCompiler.cs
 
-Compiles the Slang UI shaders into serialized Echo blobs for all supported graphics backends that the GUI render reads at runtime.
+Compiles the Slang UI shaders into serialized Echo blobs for all supported graphics backends that the GUI render reads at runtime. Runs automatically before every Prowl.Runtime build (see Prowl.Runtime.csproj); the manual run is only needed when iterating outside a full build.
+
+### DefaultShaderCompiler.cs
+
+Compiles Prowl.Runtime/Assets/Defaults/*.shader into serialized Echo blobs under Assets/Defaults/Compiled, read by Shader.LoadDefault at runtime. Runs automatically before every Prowl.Runtime build (see Prowl.Runtime.csproj); the manual run is only needed when iterating outside a full build.
 
 ### BrdfGen.cs
 
