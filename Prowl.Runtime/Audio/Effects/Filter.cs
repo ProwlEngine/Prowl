@@ -45,6 +45,7 @@ public sealed class Filter
         }
     }
     
+    /// <summary>Cutoff or centre frequency, clamped to the range the coefficients stay stable over.</summary>
     public float Frequency
     {
         get
@@ -53,13 +54,12 @@ public sealed class Filter
         }
         set
         {
-            if(sampleRate <= (value * 2))
-                throw new ArgumentException("Frequency must be less than 0.5 * sample rate");
-            frequency = value;
+            frequency = ClampFrequency(value);
             calcCoefficients(this);
         }
     }
 
+    /// <summary>Resonance. Clamped away from zero, which the coefficients divide by.</summary>
     public float Q
     {
         get
@@ -68,13 +68,13 @@ public sealed class Filter
         }
         set
         {
-            if(value <= 0.0f)
-                throw new ArgumentException("Q can not be zero");
-            q = value;
+            q = ClampQ(value);
             calcCoefficients(this);
         }
     }
 
+    /// <summary>Shelf or peak gain in decibels. Negative cuts, positive boosts. Only the Lowshelf,
+    /// Highshelf and Peak types use it.</summary>
     public float GainDB
     {
         get
@@ -88,26 +88,28 @@ public sealed class Filter
         }
     }
 
+    /// <summary>
+    /// Out of range values are clamped rather than rejected. These are live parameters that gameplay
+    /// drives from sliders and curves, so an exception out of a setter or a constructor is a crash
+    /// where a sane limit is what the caller wanted.
+    /// </summary>
     public Filter(FilterType type, float frequency, float q, float gainDB, int sampleRate = 0, int channels = 0)
     {
-        if(sampleRate <= 0)
-            this.sampleRate = AudioContext.SampleRate;
-        if(frequency <= 0.0f)
-            throw new ArgumentException("Frequency must be greater than 0");
-        if(sampleRate <= (frequency * 2))
-            throw new ArgumentException("Frequency must be less than 0.5 * sample rate");
-        if(q <= 0.0f)
-            throw new ArgumentException("Q can not be zero");
-
         this.type = type;
-        this.sampleRate = sampleRate == 0 ? AudioContext.SampleRate : sampleRate;
-        this.frequency = frequency;
-        this.q = q;
-        this.gainDB = gainDB > 0.0f ? gainDB : 6.0f;
+        this.sampleRate = sampleRate > 0 ? sampleRate : AudioContext.SampleRate;
+        this.frequency = ClampFrequency(frequency);
+        this.q = ClampQ(q);
+        this.gainDB = gainDB;
         AllocateState(channels > 0 ? channels : AudioContext.Channels);
         SetCoefficientsFunc();
         calcCoefficients(this);
     }
+
+    // The coefficients run the frequency through tan(pi * f / sampleRate), which runs away as it
+    // approaches Nyquist, so the top of the range keeps a margin below it.
+    private float ClampFrequency(float value) => Maths.Clamp(value, 1.0f, sampleRate * 0.49f);
+
+    private float ClampQ(float value) => Maths.Max(value, 0.01f);
 
     /// <summary>Filters one sample of a single stream, using the first channel's state.</summary>
     public float Process(float input)
