@@ -78,6 +78,46 @@ public class AudioEffectTests
         Assert.True(output[^2] > 0.5f);
     }
 
+    // The setters clamped the delay to at least one frame and the constructors did not, so a zero
+    // delay allocated a zero length buffer and then took the cursor modulo zero on the audio thread.
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    public void DelayEffect_ZeroFrameDelay_ClampsToOneFrame(uint frames)
+    {
+        var effect = new DelayEffect(44100, (uint)Channels, frames, 0f);
+
+        float[] output = Run(effect, Interleave(1f, 1f));
+
+        Assert.Equal(1u, effect.DelayInFrames);
+        Assert.Equal(0f, output[0]);
+        Assert.Equal(1f, output[^1], 4);
+    }
+
+    [Fact]
+    public void DelayEffect_ZeroSecondDelay_ClampsToOneFrame()
+    {
+        var effect = new DelayEffect(44100, (uint)Channels, 0f, 0f);
+
+        float[] output = Run(effect, Interleave(1f, 1f));
+
+        Assert.Equal(1u, effect.DelayInFrames);
+        Assert.Equal(1f, output[^1], 4);
+    }
+
+    // The blend is a crossfade against the untouched signal, so at fully dry the effect has to be
+    // unity gain. A halving outside the blend took 6 dB off just for having the effect in the chain.
+    [Fact]
+    public void DistortionEffect_FullyDry_IsUnityGain()
+    {
+        var effect = new DistortionEffect { Blend = 0f };
+
+        float[] output = Run(effect, Interleave(0.5f, -0.25f));
+
+        Assert.Equal(0.5f, output[0], 5);
+        Assert.Equal(-0.25f, output[1], 5);
+    }
+
     // Same failure in the phaser, which additionally advanced its sweep once per sample per channel,
     // so a stereo source swept at double the configured rate.
     [Fact]

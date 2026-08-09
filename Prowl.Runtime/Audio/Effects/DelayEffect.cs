@@ -47,79 +47,55 @@ namespace Prowl.Runtime.Audio.Effects;
 		public UInt32 DelayInFrames
 		{
 			get => (UInt32)bufferSizeInFrames;
-			set
-			{
-				lock (lockObject)
-				{
-					bufferSizeInFrames = (Int32)value;
-
-					if (bufferSizeInFrames < 1)
-					{
-						bufferSizeInFrames = 1;
-					}
-
-					actualBufferSize = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
-
-					if (actualBufferSize > buffer.Length)
-					{
-						buffer = new float[actualBufferSize];
-					}
-
-					cursor = cursor % bufferSizeInFrames;
-				}
-			}
+			set => Resize((Int32)value);
 		}
 
 		public float DelayInSeconds
 		{
 			get => (float)bufferSizeInFrames / sampleRate;
-			set
-			{
-				lock (lockObject)
-				{
-					bufferSizeInFrames = (Int32)Maths.Ceiling(value * sampleRate);
-
-					if (bufferSizeInFrames < 1)
-					{
-						bufferSizeInFrames = 1;
-					}
-
-					actualBufferSize = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
-
-					if (actualBufferSize > buffer.Length)
-					{
-						buffer = new float[actualBufferSize];
-					}
-
-					cursor = cursor % bufferSizeInFrames;
-				}
-			}
+			set => Resize((Int32)Maths.Ceiling(value * sampleRate));
 		}
 
 		public DelayEffect(UInt32 sampleRate, UInt32 channels, UInt32 delayInFrames, float decay)
+			: this(sampleRate, channels, decay)
 		{
-			this.sampleRate = (Int32)sampleRate;
-			this.channels = (Int32)channels;
-			delayStart = (decay == 0) ? true : false;   /* Delay the start if it looks like we're not configuring an echo. */
-			wet = 1.0f;
-			dry = 1.0f;
-			this.decay = decay;
-			bufferSizeInFrames = (Int32)delayInFrames;
-			actualBufferSize = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
-			buffer = new float[actualBufferSize];
+			Resize((Int32)delayInFrames);
 		}
 
 		public DelayEffect(UInt32 sampleRate, UInt32 channels, float delayInSeconds, float decay)
+			: this(sampleRate, channels, decay)
 		{
-			this.sampleRate = (Int32)sampleRate;
-			this.channels = (Int32)channels;
+			Resize((Int32)Maths.Ceiling(delayInSeconds * sampleRate));
+		}
+
+		private DelayEffect(UInt32 sampleRate, UInt32 channels, float decay)
+		{
+			this.sampleRate = Maths.Max(1, (Int32)sampleRate);
+			this.channels = Maths.Max(1, (Int32)channels);
 			delayStart = (decay == 0) ? true : false;   /* Delay the start if it looks like we're not configuring an echo. */
 			wet = 1.0f;
 			dry = 1.0f;
 			this.decay = decay;
-			bufferSizeInFrames = (Int32)Maths.Ceiling(delayInSeconds * sampleRate);
-			actualBufferSize = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
-			buffer = new float[actualBufferSize];
+		}
+
+		/// <summary>
+		/// Sets the delay length. One frame is the floor: OnProcess takes the cursor modulo this, and
+		/// a zero length is a divide by zero on the audio thread over a zero length buffer.
+		/// </summary>
+		private void Resize(Int32 frames)
+		{
+			lock (lockObject)
+			{
+				bufferSizeInFrames = Maths.Max(1, frames);
+				actualBufferSize = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
+
+				if (buffer == null || actualBufferSize > buffer.Length)
+				{
+					buffer = new float[actualBufferSize];
+				}
+
+				cursor = cursor % bufferSizeInFrames;
+			}
 		}
 
 		public unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
@@ -170,6 +146,9 @@ namespace Prowl.Runtime.Audio.Effects;
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private UInt32 GetNextPowerOfTwo(UInt32 value)
 		{
+			if (value <= 1)
+				return 1;
+
 			value--;
 			value |= value >> 1;
 			value |= value >> 2;
