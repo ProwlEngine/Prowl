@@ -870,15 +870,10 @@ public class PhysicsWorld
         if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
             return;
 
-        JVector origin = hp.Origin;
-        float cs = hp.CellSize;
-        if (cs <= 0.0f) return;
-
-        // Convert sweep AABB to grid coordinates
-        int minX = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.X - origin.X) / cs));
-        int minZ = Maths.Max(0, (int)Maths.Floor((sweepBox.Min.Z - origin.Z) / cs));
-        int maxX = Maths.Min(hp.Width - 1, (int)Maths.Ceiling((sweepBox.Max.X - origin.X) / cs));
-        int maxZ = Maths.Min(hp.Height - 1, (int)Maths.Ceiling((sweepBox.Max.Z - origin.Z) / cs));
+        // Cells are picked in terrain-local space, where the grid is axis-aligned however the terrain is
+        // rotated; the triangles then come back out to world space to meet the swept shape.
+        if (!hp.TryGetCellRange(sweepBox, out int minX, out int minZ, out int maxX, out int maxZ))
+            return;
 
         float bestLambda = float.MaxValue;
         JVector bestNormal = JVector.Zero;
@@ -890,28 +885,17 @@ public class PhysicsWorld
             for (int z = minZ; z < maxZ; z++)
             {
                 if (!hp.IsValidCell(x, z) || hp.IsCellHole(x, z)) continue;
-                if (!hp.TryGetHeight(x, z, out float h00) ||
-                    !hp.TryGetHeight(x + 1, z, out float h10) ||
-                    !hp.TryGetHeight(x + 1, z + 1, out float h11) ||
-                    !hp.TryGetHeight(x, z + 1, out float h01))
+
+                if (!hp.TryGetWorldCorners(x, z, out JVector a, out JVector b, out JVector c, out JVector d))
                     continue;
 
-                // Two triangles per cell
+                // Two triangles per cell, wound so their normals face out of the surface.
                 for (int tri = 0; tri < 2; tri++)
                 {
                     CollisionTriangle triangle;
-                    if (tri == 0)
-                    {
-                        triangle.A = new JVector(x * cs + origin.X, h00, z * cs + origin.Z);
-                        triangle.B = new JVector((x + 1) * cs + origin.X, h11, (z + 1) * cs + origin.Z);
-                        triangle.C = new JVector((x + 1) * cs + origin.X, h10, z * cs + origin.Z);
-                    }
-                    else
-                    {
-                        triangle.A = new JVector(x * cs + origin.X, h00, z * cs + origin.Z);
-                        triangle.B = new JVector(x * cs + origin.X, h01, (z + 1) * cs + origin.Z);
-                        triangle.C = new JVector((x + 1) * cs + origin.X, h11, (z + 1) * cs + origin.Z);
-                    }
+                    triangle.A = a;
+                    triangle.B = tri == 0 ? c : d;
+                    triangle.C = tri == 0 ? b : c;
 
                     bool hit = NarrowPhase.Sweep(
                         shape, triangle,
@@ -920,23 +904,22 @@ public class PhysicsWorld
                         sweep, JVector.Zero,
                         out JVector pA, out JVector pB, out JVector n, out float lambda);
 
-                    if (hit && lambda >= 0 && lambda <= 1.0f && lambda < bestLambda)
-                    {
-                        // Overlap at t=0 leaves no sweep direction. Substitute the triangle's own
-                        // normal, flipped to point from the caster at the triangle so it matches
-                        // the sign convention of the sweep normal (negated once when reported).
-                        // NormalizeSafe, because a degenerate cell would otherwise hand back NaN.
-                        if (n.LengthSquared() <= 0)
-                        {
-                            n = -JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
-                            if (n.LengthSquared() <= 0) continue;
-                        }
+                    if (!hit || lambda < 0 || lambda > 1.0f || lambda >= bestLambda) continue;
 
-                        bestLambda = lambda;
-                        bestNormal = n;
-                        bestPointA = pA;
-                        bestPointB = pB;
+                    // Overlap at t=0 leaves no sweep direction. Substitute the triangle's own normal,
+                    // flipped to point from the caster at the triangle so it matches the sign convention
+                    // of the sweep normal (negated once when reported). NormalizeSafe, because a
+                    // degenerate cell would otherwise hand back NaN.
+                    if (n.LengthSquared() <= 0)
+                    {
+                        n = -JVector.NormalizeSafe((triangle.B - triangle.A) % (triangle.C - triangle.A));
+                        if (n.LengthSquared() <= 0) continue;
                     }
+
+                    bestLambda = lambda;
+                    bestNormal = n;
+                    bestPointA = pA;
+                    bestPointB = pB;
                 }
             }
         }
