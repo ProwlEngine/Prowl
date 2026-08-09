@@ -28,6 +28,9 @@ public static class PrefabEditingMode
 
     private static EchoObject? _savedSceneState;
     private static string? _savedScenePath;
+    // The scene's own dirty flag, parked while the prefab session borrows it. Without this the
+    // prefab and the scene share one flag, so each makes the other look unsaved.
+    private static bool _savedSceneDirty;
     // Tracked so Save() can serialize the prefab root specifically, skipping the
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
@@ -84,6 +87,7 @@ public static class PrefabEditingMode
             _savedSceneState = Serializer.Serialize(currentScene);
             _savedScenePath = EditorSceneManager.CurrentScenePath;
         }
+        _savedSceneDirty = EditorSceneManager.IsDirty;
 
         // Instantiate prefab into isolated scene
         var editScene = new Scene();
@@ -127,6 +131,7 @@ public static class PrefabEditingMode
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
         EditorSceneManager.CurrentScenePath = null;
+        EditorSceneManager.IsDirty = false; // the prefab session starts clean
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
     }
@@ -161,6 +166,7 @@ public static class PrefabEditingMode
             File.WriteAllText(absolutePath, echo.WriteToString());
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
+            EditorSceneManager.IsDirty = false;
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
             // Label reported via SaveManager.OnSave handler
             return true;
@@ -246,5 +252,7 @@ public static class PrefabEditingMode
         _savedSceneState = null;
         _savedScenePath = null;
         _editingRoot = null;
+        EditorSceneManager.IsDirty = _savedSceneDirty;
+        _savedSceneDirty = false;
     }
 }
