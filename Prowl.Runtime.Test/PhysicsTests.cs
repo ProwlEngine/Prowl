@@ -716,6 +716,42 @@ public class PhysicsTests : RuntimeTestBase
         }
     }
 
+    // CenterOfMass used to return the body origin, which is only the centre of mass when the shapes
+    // happen to be centred on it.
+    [Fact]
+    public void CenterOfMass_FollowsOffsetColliders()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Offset");
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        go.AddComponent<BoxCollider>().Center = new Float3(4, 0, 0);
+        scene.Add(go);
+        StepPhysics(scene, 2);
+
+        Assert.Equal(4.0, rb.CenterOfMass.X, 2);
+        Assert.Equal(0.0, rb.Transform.Position.X, 2); // the origin is still where it was
+    }
+
+    [Fact]
+    public void CenterOfMass_OfACompound_IsMassWeightedBetweenTheShapes()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Compound");
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+
+        // Equal boxes either side of the origin average back to it.
+        go.AddComponent<BoxCollider>().Center = new Float3(-2, 0, 0);
+        go.AddComponent<BoxCollider>().Center = new Float3(2, 0, 0);
+        scene.Add(go);
+        StepPhysics(scene, 2);
+
+        Assert.Equal(0.0, rb.CenterOfMass.X, 2);
+    }
+
     // A joint is several Jitter constraints, and PhysicsConstraint.Active used to route through a
     // single-constraint accessor that joints return null from, so Active always read false and its
     // setter was a no-op.

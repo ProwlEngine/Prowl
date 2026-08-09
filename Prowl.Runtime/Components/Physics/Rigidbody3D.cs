@@ -846,15 +846,40 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the center of mass in world space.
+    /// The centre of mass in world space, derived from the attached shapes and their offsets.
+    /// <para/>
+    /// This is not the point the body spins about. Jitter accumulates inertia about the body origin and
+    /// never shifts it, so an off-centre collider rotates about the Transform's position rather than
+    /// about this. Shapes with no volume (a concave MeshCollider's triangles) contribute nothing, and a
+    /// body made only of those reports its origin.
     /// </summary>
     public Float3 CenterOfMass
     {
         get
         {
-            if (_body == null) return Transform.Position;
-            JVector pos = _body.Position;
-            return new Float3(pos.X, pos.Y, pos.Z);
+            if (_body == null || _body.Handle.IsZero) return Transform.Position;
+
+            JVector weighted = JVector.Zero;
+            float totalMass = 0.0f;
+
+            foreach (RigidBodyShape shape in _body.Shapes)
+            {
+                try
+                {
+                    shape.CalculateMassInertia(out _, out JVector shapeCenter, out float shapeMass);
+                    weighted += shapeCenter * shapeMass;
+                    totalMass += shapeMass;
+                }
+                catch (NotSupportedException)
+                {
+                    // A volumeless shape (a concave MeshCollider's triangles) has no mass to weigh.
+                }
+            }
+
+            // Body-local, because the shape offsets are; fall back to the origin when nothing weighed in.
+            JVector local = totalMass > 0.0f ? weighted * (1.0f / totalMass) : JVector.Zero;
+            JVector world = _body.Position + JVector.Transform(local, _body.Orientation);
+            return new Float3(world.X, world.Y, world.Z);
         }
     }
 
