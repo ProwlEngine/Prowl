@@ -213,6 +213,8 @@
   "inspector.pop_out": "Destacar",
   "inspector.select": "Selecionar",
   "inspector.revert": "Reverter",
+  "inspector.override_missing": "ausente",
+  "inspector.remove_override": "Remover",
   "inspector.apply": "Aplicar",
   "inspector.missing_prefab": "Prefab ausente!",
   "inspector.missing": "Ausente",

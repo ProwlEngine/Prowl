@@ -213,6 +213,8 @@
   "inspector.pop_out": "Отделить",
   "inspector.select": "Выбрат��",
   "inspector.revert": "Вернуть",
+  "inspector.override_missing": "отсутствует",
+  "inspector.remove_override": "Удалить",
   "inspector.apply": "Применить",
   "inspector.missing_prefab": "Префаб отсутствует!",
   "inspector.missing": "Отсутствует",

@@ -213,6 +213,8 @@
   "inspector.pop_out": "Odlacz",
   "inspector.select": "Wybierz",
   "inspector.revert": "Przywroc",
+  "inspector.override_missing": "brak",
+  "inspector.remove_override": "Usun",
   "inspector.apply": "Zastosuj",
   "inspector.missing_prefab": "Brak Prefaba!",
   "inspector.missing": "Brak",

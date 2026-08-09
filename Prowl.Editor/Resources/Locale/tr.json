@@ -213,6 +213,8 @@
   "inspector.pop_out": "Ayir",
   "inspector.select": "Sec",
   "inspector.revert": "Geri al",
+  "inspector.override_missing": "eksik",
+  "inspector.remove_override": "Kaldir",
   "inspector.apply": "Uygula",
   "inspector.missing_prefab": "Prefab bulunamadi!",
   "inspector.missing": "Eksik",

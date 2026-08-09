@@ -213,6 +213,8 @@
   "inspector.pop_out": "분리",
   "inspector.select": "선택",
   "inspector.revert": "되돌리기",
+  "inspector.override_missing": "없음",
+  "inspector.remove_override": "제거",
   "inspector.apply": "적��",
   "inspector.missing_prefab": "프리팹을 찾을 수 없습니다!",
   "inspector.missing": "없음",

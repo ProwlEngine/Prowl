@@ -213,6 +213,8 @@
   "inspector.pop_out": "Separa",
   "inspector.select": "Seleziona",
   "inspector.revert": "Ripristina",
+  "inspector.override_missing": "mancante",
+  "inspector.remove_override": "Rimuovi",
   "inspector.apply": "Applica",
   "inspector.missing_prefab": "Prefab mancante!",
   "inspector.missing": "Mancante",

@@ -191,6 +191,8 @@
   "inspector.pop_out": "分離",
   "inspector.select": "選択",
   "inspector.revert": "元に戻す",
+  "inspector.override_missing": "見つかりません",
+  "inspector.remove_override": "削除",
   "inspector.apply": "適用",
   "inspector.missing_prefab": "プレハブが見つかりません!",
   "inspector.missing": "不明",

@@ -213,6 +213,8 @@
   "inspector.pop_out": "弹出",
   "inspector.select": "选择",
   "inspector.revert": "还原",
+  "inspector.override_missing": "缺失",
+  "inspector.remove_override": "移除",
   "inspector.apply": "应用",
   "inspector.missing_prefab": "预制体丢失!",
   "inspector.missing": "丢失",
