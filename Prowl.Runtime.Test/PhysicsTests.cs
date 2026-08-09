@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
@@ -29,9 +29,8 @@ public class PhysicsTests : RuntimeTestBase
 
     public override void Dispose()
     {
-        // CollisionMatrix is global static state. Boolean32Matrix is a struct wrapping a uint[], so a
-        // plain copy would alias the live array; reset to the engine default (all layers collide) instead.
-        CollisionMatrix.s_collisionMatrix = new Boolean32Matrix(true);
+        // CollisionMatrix is global static state, so put it back to the engine default between tests.
+        CollisionMatrix.Reset();
         base.Dispose();
     }
 

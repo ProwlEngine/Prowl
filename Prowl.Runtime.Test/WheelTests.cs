@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
@@ -19,7 +19,7 @@ public class WheelTests : RuntimeTestBase
 {
     public override void Dispose()
     {
-        CollisionMatrix.s_collisionMatrix = new Boolean32Matrix(true);
+        CollisionMatrix.Reset();
         base.Dispose();
     }
 
