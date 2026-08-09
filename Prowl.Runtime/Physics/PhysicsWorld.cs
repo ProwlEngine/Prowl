@@ -93,10 +93,49 @@ public class PhysicsWorld
     // query rather than captured here, so terrain can be moved and scaled after registration.
     internal readonly Dictionary<TerrainHeightmapProxy, ITerrainHeightProvider> _terrainProxies = [];
 
-    public Float3 Gravity = new(0, -9.81f, 0);
-    public int SolverIterations = 8;
-    public int RelaxIterations = 4;
-    public int Substep = 2;
+    private Float3 _gravity = new(0, -9.81f, 0);
+    private int _solverIterations = 8;
+    private int _relaxIterations = 4;
+    private int _substep = 2;
+    private float _speculativeRelaxationFactor = 0.9f;
+
+    /// <summary>Acceleration applied to every body with <see cref="Rigidbody3D.AffectedByGravity"/>.</summary>
+    public Float3 Gravity
+    {
+        get => _gravity;
+        set
+        {
+            if (!IsFinite(value))
+            {
+                Debug.LogError($"[Physics] Gravity must be finite, ignoring {value}.");
+                return;
+            }
+
+            _gravity = value;
+        }
+    }
+
+    /// <summary>Constraint solver iterations per substep. At least 1.</summary>
+    public int SolverIterations
+    {
+        get => _solverIterations;
+        set => _solverIterations = Maths.Max(1, value);
+    }
+
+    /// <summary>Velocity relaxation iterations per substep. At least 0.</summary>
+    public int RelaxIterations
+    {
+        get => _relaxIterations;
+        set => _relaxIterations = Maths.Max(0, value);
+    }
+
+    /// <summary>How many substeps each fixed step is divided into. At least 1.</summary>
+    public int Substep
+    {
+        get => _substep;
+        set => _substep = Maths.Max(1, value);
+    }
+
     public bool AllowSleep = true;
     public bool UseMultithreading = true;
     /// <summary>
@@ -315,6 +354,9 @@ public class PhysicsWorld
     /// Default 0.9.
     /// </summary>
     public float SpeculativeRelaxationFactor = 0.9f;
+        get => _speculativeRelaxationFactor;
+        set => _speculativeRelaxationFactor = Maths.Clamp(value, 0.0f, 1.0f);
+    }
 
     /// <summary>
     /// Event triggered before each physics step.
