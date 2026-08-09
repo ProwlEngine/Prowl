@@ -38,22 +38,36 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     }
 
     // Audio clip and playback settings
+    [Header("Playback")]
+    [SerializeField, Tooltip("The clip this source plays.")]
     private AssetRef<AudioClip> _clip;
+    [SerializeField, Tooltip("Start playing as soon as the component is enabled.")]
     private bool _playOnStart = false;
     // Set when OnEnable wanted to auto-play but the clip was still streaming in (async loading);
     // Update performs the play once the clip arrives.
     private bool _pendingAutoPlay = false;
+    [SerializeField]
     private bool _loop = false;
+    [SerializeField]
     private float _volume = 1.0f;
+    [SerializeField, Tooltip("Playback speed multiplier. 1 is the clip's original pitch.")]
     private float _pitch = 1.0f;
+    [SerializeField, Range(-1f, 1f), Tooltip("Stereo placement. -1 is fully left, 1 is fully right.")]
     private float _pan = 0.0f;
+    [SerializeField, Tooltip("Balance keeps the original stereo image, Pan collapses it toward one side.")]
     private PanMode _panMode = PanMode.Balance;
 
     // Spatial audio settings
+    [Header("Spatial")]
+    [SerializeField, Tooltip("Position this source in 3D space relative to the AudioListener.")]
     private bool _spatial = true;
+    [SerializeField, Tooltip("Strength of the pitch shift from relative motion. 0 disables doppler.")]
     private float _dopplerFactor = 1.0f;
+    [SerializeField, Tooltip("Distance below which the source plays at full volume.")]
     private float _minDistance = 1.0f;
+    [SerializeField, Tooltip("Distance at which the source reaches its quietest.")]
     private float _maxDistance = 10.0f;
+    [SerializeField, Tooltip("Curve used to fall off between the min and max distance.")]
     private AttenuationModel _attenuationModel = AttenuationModel.Linear;
 
     // Playback state (serialized for resume support)
@@ -398,6 +412,10 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             }
         }
     }
+
+    /// <summary>The inspector writes the backing fields directly, so the native side has to be
+    /// re-synced from them rather than from the property setters.</summary>
+    public override void OnValidate() => ApplySettings();
 
     public override void OnDisable()
     {
