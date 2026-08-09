@@ -353,7 +353,8 @@ public class PhysicsWorld
     /// Damping factor (0..1) applied to speculative contact correction. Lower = softer prediction.
     /// Default 0.9.
     /// </summary>
-    public float SpeculativeRelaxationFactor = 0.9f;
+    public float SpeculativeRelaxationFactor
+    {
         get => _speculativeRelaxationFactor;
         set => _speculativeRelaxationFactor = Maths.Clamp(value, 0.0f, 1.0f);
     }
@@ -782,6 +783,7 @@ public class PhysicsWorld
                 {
                     Hit = true,
                     Fraction = lambda,
+                    Distance = lambda * maxDistance,
                     Penetration = penetration,
                     Normal = -(new Float3(normal.X, normal.Y, normal.Z)),
                     Point = new Float3(pointA.X, pointA.Y, pointA.Z),
@@ -890,6 +892,7 @@ public class PhysicsWorld
             {
                 Hit = true,
                 Fraction = bestLambda,
+                Distance = bestLambda * sweep.Length(),
                 Normal = -(new Float3(bestNormal.X, bestNormal.Y, bestNormal.Z)),
                 Point = new Float3(bestPointA.X, bestPointA.Y, bestPointA.Z),
                 HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),

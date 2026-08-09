@@ -289,9 +289,9 @@ public class CharacterController : MonoBehaviour
         if (!hit)
             return position + velocity;
 
-        // Fraction is measured over the cast distance, not the requested move. Back off by the skin
-        // width, and clamp so a cast that started already touching never walks backwards.
-        float safeDistance = Maths.Clamp(hitInfo.Fraction * castDistance - SkinWidth, 0.0f, moveDistance);
+        // Back off by the skin width, and clamp so a cast that started already touching never walks
+        // backwards.
+        float safeDistance = Maths.Clamp(hitInfo.Distance - SkinWidth, 0.0f, moveDistance);
         position += moveDirection * safeDistance;
 
         // Calculate remaining movement after hitting surface
@@ -359,7 +359,7 @@ public class CharacterController : MonoBehaviour
         float forwardDistance = moveDistance;
         if (hitAtElevated)
         {
-            forwardDistance = Maths.Clamp(elevatedHit.Fraction * forwardCastDistance - SkinWidth, 0.0f, moveDistance);
+            forwardDistance = Maths.Clamp(elevatedHit.Distance - SkinWidth, 0.0f, moveDistance);
             if (forwardDistance < moveDistance * 0.5f)
                 return false;
         }
@@ -384,7 +384,7 @@ public class CharacterController : MonoBehaviour
                 return false; // Surface is too steep
 
             // Drop onto the surface. Descending further than we rose means this is a step down, not up.
-            float stepDownDistance = Maths.Max(0.0f, downHit.Fraction * maxStepDownDistance - SkinWidth);
+            float stepDownDistance = Maths.Max(0.0f, downHit.Distance - SkinWidth);
             if (stepDownDistance > StepSize)
                 return false;
 
@@ -439,7 +439,7 @@ public class CharacterController : MonoBehaviour
             if (slopeAngle <= MaxSlopeAngle)
             {
                 // Snap down to the surface
-                float snapDistance = hitInfo.Fraction * SnapDownDistance - SkinWidth;
+                float snapDistance = hitInfo.Distance - SkinWidth;
                 if (snapDistance > 0)
                 {
                     position.Y -= snapDistance;
