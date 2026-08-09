@@ -125,19 +125,30 @@ public class SpriteEditorWindow : DockPanel
         EnsureSingleSlice();
     }
 
-    // Single mode always has exactly one full-texture slice; keep name/pivot/border of any existing one.
+    // Single mode drives one full-texture slice, the first. Any further slices are left alone so
+    // switching back to Multiple restores the sheet - truncating here would destroy the user's slicing
+    // with no undo, and the importer already reads only the first slice in Single mode.
     private void EnsureSingleSlice()
     {
         if (!IsSingle || _texture.Res is not Texture2D tex) return;
-        bool isNew = _settings.Slices.Count == 0;
-        var slice = isNew ? new SpriteSliceData() : _settings.Slices[0];
-        if (isNew) slice.Name = tex.Name;
-        slice.Rect = new SpriteRect(0, 0, (int)tex.Width, (int)tex.Height);
-        _settings.Slices = new List<SpriteSliceData> { slice };
+
+        if (_settings.Slices.Count == 0)
+            _settings.Slices.Add(new SpriteSliceData { Id = Guid.NewGuid(), Name = tex.Name });
+
+        SpriteSliceData slice = _settings.Slices[0];
+        var full = new SpriteRect(0, 0, (int)tex.Width, (int)tex.Height);
+        if (slice.Rect.X != full.X || slice.Rect.Y != full.Y ||
+            slice.Rect.Width != full.Width || slice.Rect.Height != full.Height)
+            slice.Rect = full;
+
         _selected = 0;
     }
 
-    private bool Valid(int i) => i >= 0 && i < _settings.Slices.Count;
+    /// <summary>Slices the editor treats as live. Single mode owns only the first; the rest stay in the
+    /// settings but must not be drawn, hit-tested or selected.</summary>
+    private int ActiveSliceCount => IsSingle ? Math.Min(1, _settings.Slices.Count) : _settings.Slices.Count;
+
+    private bool Valid(int i) => i >= 0 && i < ActiveSliceCount;
 
     // --- Undo -----------------------------------------------------------------------
 
@@ -174,7 +185,7 @@ public class SpriteEditorWindow : DockPanel
         _settings.GenerateTightMesh = s.GenerateTightMesh;
         _settings.TightMeshDetail = s.TightMeshDetail;
         _settings.TightMeshAlphaThreshold = s.TightMeshAlphaThreshold;
-        if (_selected >= _settings.Slices.Count) _selected = _settings.Slices.Count - 1;
+        if (_selected >= ActiveSliceCount) _selected = ActiveSliceCount - 1;
         _target.Dirty = true;
     }
 
@@ -238,7 +249,7 @@ public class SpriteEditorWindow : DockPanel
         Mutate("Delete Sprite", () =>
         {
             _settings.Slices.RemoveAt(idx);
-            _selected = Math.Min(idx, _settings.Slices.Count - 1);
+            _selected = Math.Min(idx, ActiveSliceCount - 1);
         });
     }
 
@@ -637,7 +648,7 @@ public class SpriteEditorWindow : DockPanel
 
     private int HitBody(Float2 content, int texH)
     {
-        for (int i = _settings.Slices.Count - 1; i >= 0; i--)
+        for (int i = ActiveSliceCount - 1; i >= 0; i--)
         {
             Float4 dr = DisplayRect(_settings.Slices[i].Rect, texH);
             if (content.X >= dr.X && content.X <= dr.X + dr.Z && content.Y >= dr.Y && content.Y <= dr.Y + dr.W)
@@ -774,7 +785,7 @@ public class SpriteEditorWindow : DockPanel
         canvas.RectFilled(imgTL.X, imgTL.Y, imgW, imgH, new Color32(255, 255, 255, 255));
         canvas.ClearBrushTexture();
 
-        for (int i = 0; i < _settings.Slices.Count; i++)
+        for (int i = 0; i < ActiveSliceCount; i++)
         {
             Float4 dr = DisplayRect(_settings.Slices[i].Rect, texH);
             Float2 tl = ScreenOf(new Float2(dr.X, dr.Y));

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 using Prowl.Echo;
@@ -107,15 +107,15 @@ public static class PlayerSettingsLoader
             if (settings.TryGet("CollisionMatrixRows", out var cmProp) && cmProp!.TryGet("array", out var rows)
                 && rows!.TagType == EchoType.List)
             {
+                var packed = new uint[CollisionMatrix.LayerCount];
                 int i = 0;
                 foreach (var row in rows.List)
                 {
-                    if (i >= 32) break;
-                    uint val = row.UIntValue;
-                    for (int j = 0; j < 32; j++)
-                        CollisionMatrix.SetLayerCollision(i, j, (val & (1u << j)) != 0);
-                    i++;
+                    if (i >= packed.Length) break;
+                    packed[i++] = row.UIntValue;
                 }
+
+                CollisionMatrix.SetRows(packed);
             }
 
             Debug.Log("[PlayerSettings] Physics applied.");

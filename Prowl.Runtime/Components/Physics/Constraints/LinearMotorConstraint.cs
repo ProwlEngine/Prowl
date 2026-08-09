@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -61,7 +61,7 @@ public class LinearMotorConstraint : PhysicsConstraint
         set
         {
             targetVelocity = value;
-            if (constraint != null) constraint.TargetVelocity = value;
+            if (IsLive(constraint)) constraint.TargetVelocity = value;
         }
     }
 
@@ -74,7 +74,7 @@ public class LinearMotorConstraint : PhysicsConstraint
         set
         {
             maximumForce = value;
-            if (constraint != null) constraint.MaximumForce = value;
+            if (IsLive(constraint)) constraint.MaximumForce = value;
         }
     }
 
@@ -101,10 +101,27 @@ public class LinearMotorConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A motor that drives one body along an axis. The arrow points the way it pushes, and greys out
+    // when the maximum force is zero.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.0f, ConnectedColor);
+
+        float sign = targetVelocity < 0.0f ? -1.0f : 1.0f;
+        Color color = maximumForce > 0.0f ? MotorColor : InactiveColor;
+        Debug.DrawArrow(pivot, Float3.Normalize(a) * (sign * scale * 1.6f), color);
     }
 }

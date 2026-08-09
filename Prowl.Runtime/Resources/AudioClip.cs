@@ -67,12 +67,6 @@ public sealed class AudioClip : EngineObject, ISerializable
         get { EnsureNotDisposed(); return hashCode; }
     }
 
-    // Raw, unchecked accessors for AudioContext.Remove to use during OnDispose(): at that point
-    // IsDisposed is already true (EngineObject.Dispose sets the flag before calling OnDispose), so
-    // the checked public Hash/Handle properties would themselves throw right when disposal needs them.
-    internal UInt64 RawHash => hashCode;
-    internal IntPtr RawHandle => handle;
-
     /// <summary>
     /// If the constructor with 'byte[] data' overload is used this will contain the size of the data in number of bytes.
     /// </summary>
@@ -88,6 +82,17 @@ public sealed class AudioClip : EngineObject, ISerializable
             }
             return 0;
         }
+    }
+
+    /// <summary>
+    /// For the serializer, which constructs the instance before filling it in from Deserialize.
+    /// Without it every attempt to load a clip from the asset cache fails to construct and resolves
+    /// to null, which is silence with no failure at the point of playback.
+    /// </summary>
+    private AudioClip()
+    {
+        filePath = string.Empty;
+        clipName = string.Empty;
     }
 
     /// <summary>
@@ -124,31 +129,41 @@ public sealed class AudioClip : EngineObject, ISerializable
         this.streamFromDisk = false;
         this.dataSize = (UInt64)data.Length;
 
-        if(isUnique)
-            this.hashCode = (UInt64)data.GetHashCode();
-        else
-            this.hashCode = GetHashCode(data, data.Length);
+        AcquireHandle(data, isUnique ? (UInt64)data.GetHashCode() : GetHashCode(data, data.Length));
+    }
 
-        if(AudioContext.GetAudioClipHandle(hashCode, out IntPtr existingHandle))
-        {
-            handle = existingHandle;
-            AudioContext.AddRef(hashCode); // sharing an existing allocation - bump its ref-count
-        }
-        else
-        {
-            handle = Marshal.AllocHGlobal(data.Length);
+    /// <summary>
+    /// Points this clip at the shared buffer for <paramref name="hash"/> and takes a reference on it,
+    /// letting go of whatever it held before. The byte array is the authority on the size, so a stored
+    /// length that disagrees with the stored bytes can't make playback read past the allocation.
+    /// </summary>
+    private void AcquireHandle(byte[] data, UInt64 hash)
+    {
+        ReleaseHandle();
 
-            if(handle != IntPtr.Zero)
-            {            
-                Marshal.Copy(data, 0, handle, data.Length);
-                AudioContext.Add(this);
-            }
-        }
+        handle = AudioContext.AcquireClipHandle(hash, data, data.Length);
+
+        if (handle == IntPtr.Zero)
+            return;
+
+        hashCode = hash;
+        dataSize = (UInt64)data.Length;
+    }
+
+    private void ReleaseHandle()
+    {
+        if (handle == IntPtr.Zero)
+            return;
+
+        AudioContext.ReleaseClipHandle(hashCode);
+        handle = IntPtr.Zero;
+        hashCode = 0;
+        dataSize = 0;
     }
 
     protected override void OnDispose()
     {
-        AudioContext.Remove(this);
+        ReleaseHandle();
     }
 
     ~AudioClip() => Dispose();
@@ -215,70 +230,48 @@ public sealed class AudioClip : EngineObject, ISerializable
         }
     }
 
+    // Every read defaults instead of indexing. A missing key used to throw out of the middle of a
+    // load, which takes the rest of the scene down with it rather than costing one clip.
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         // Restore the name
-        clipName = value["Name"].StringValue;
+        clipName = value.Get("Name")?.StringValue ?? string.Empty;
         if (!string.IsNullOrEmpty(clipName))
             Name = clipName;
 
-        bool isFileBased = value["IsFileBased"].BoolValue;
+        bool isFileBased = value.Get("IsFileBased")?.BoolValue ?? false;
 
         if (isFileBased)
         {
             // Reconstruct file-based clip
-            filePath = value["FilePath"].StringValue;
-            streamFromDisk = value["StreamFromDisk"].BoolValue;
-            handle = IntPtr.Zero;
-            hashCode = 0;
-            dataSize = 0;
+            ReleaseHandle();
+            filePath = value.Get("FilePath")?.StringValue ?? string.Empty;
+            streamFromDisk = value.Get("StreamFromDisk")?.BoolValue ?? false;
 
             // Verify the file still exists
-            if (!System.IO.File.Exists(filePath))
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
             {
-                Debug.LogError($"AudioClip deserialization warning: File not found: {filePath}");
+                Debug.LogError($"AudioClip '{Name}' points at a file that does not exist: '{filePath}'");
             }
         }
         else
         {
             // Reconstruct in-memory clip
-            long storedDataSize = value["DataSize"].LongValue;
+            filePath = string.Empty;
+            streamFromDisk = false;
 
-            if (storedDataSize > 0)
+            byte[]? audioData = value.Get("AudioData")?.ByteArrayValue;
+
+            if (audioData == null || audioData.Length == 0)
             {
-                filePath = string.Empty;
-                streamFromDisk = false;
-
-                byte[] audioData = value["AudioData"].ByteArrayValue;
-                dataSize = (UInt64)storedDataSize;
-                hashCode = (UInt64)value["HashCode"].LongValue;
-
-                // Check if we can reuse existing memory
-                if (AudioContext.GetAudioClipHandle(hashCode, out IntPtr existingHandle))
-                {
-                    handle = existingHandle;
-                }
-                else
-                {
-                    // Allocate new memory and copy the data
-                    handle = Marshal.AllocHGlobal(audioData.Length);
-
-                    if (handle != IntPtr.Zero)
-                    {
-                        Marshal.Copy(audioData, 0, handle, audioData.Length);
-                        AudioContext.Add(this);
-                    }
-                }
+                ReleaseHandle();
+                return;
             }
-            else
-            {
-                // Invalid state - no data
-                filePath = string.Empty;
-                streamFromDisk = false;
-                handle = IntPtr.Zero;
-                hashCode = 0;
-                dataSize = 0;
-            }
+
+            // The bytes are the fallback authority for the hash too, so a compound written without
+            // one still loads instead of resolving to a clip with no data.
+            ulong hash = (ulong)(value.Get("HashCode")?.LongValue ?? 0);
+            AcquireHandle(audioData, hash != 0 ? hash : GetHashCode(audioData, audioData.Length));
         }
     }
 }

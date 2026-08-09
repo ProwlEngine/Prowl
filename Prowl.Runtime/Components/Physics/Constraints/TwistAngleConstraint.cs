@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -89,7 +89,7 @@ public class TwistAngleConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -102,7 +102,7 @@ public class TwistAngleConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -143,19 +143,35 @@ public class TwistAngleConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
     }
 
     private void UpdateLimits()
     {
-        if (constraint != null)
+        if (IsLive(constraint))
         {
             var limit = AngularLimit.FromDegree(minAngle, maxAngle);
             constraint.Limit = limit;
         }
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // Twist is the angle between two directions that each belong to one of the bodies, so both are
+    // drawn: this body's in cyan, the other's in orange, with the allowed twist swept between them.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.0f, ConnectedColor);
+
+        Debug.PerpendicularAxes(a, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, a, zero, scale * 0.7f, minAngle, maxAngle, RangeColor, LimitColor);
     }
 }

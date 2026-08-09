@@ -18,27 +18,70 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(Material))]
 public class MaterialAssetEditor : AssetImporterEditor
 {
-    private readonly PreviewWidget _preview = new();
-    private Guid _currentGuid;
 
     // Materials with edits not yet written to disk, keyed by asset GUID. Static rather than
     // per-instance to have a behaviour more coherent with user expectations
     private static readonly Dictionary<Guid, (Material Material, AssetEntry Entry)> _pending = new();
 
+    /// <summary>Used only to reach the instance members from the global save hook.</summary>
+    private static readonly MaterialAssetEditor s_saveHook = new();
+
     static MaterialAssetEditor()
     {
-        SaveManager.OnSave += () => SavePending(showToast: false);
+        SaveManager.OnSave += () => s_saveHook.SavePending(showToast: false);
+    }
+
+    // ============================================================
+    // Pending changes
+    // ============================================================
+    // A material is edited live, so the scene shows every tweak as it happens. What the base class
+    // measures is whether the live object still matches the .mat file on disk.
+
+    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
+        => asset is Material material && material.IsValid() ? SerializePersisted(material) : null;
+
+    /// <summary>
+    /// Baselines against the imported form rather than the live object, so a material mutated outside
+    /// this inspector - by a script or tool holding the same instance - shows up as pending instead of
+    /// being quietly adopted as the clean state.
+    /// </summary>
+    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
+        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
+
+    /// <summary>Serializes a material the way its .mat file and cache entry are written: AssetID cleared,
+    /// so the whole object is emitted rather than an $assetId reference back to itself.</summary>
+    private static EchoObject SerializePersisted(Material material)
+    {
+        Guid savedId = material.AssetID;
+        material.AssetID = Guid.Empty;
+        try { return Serializer.Serialize(typeof(object), material); }
+        finally { material.AssetID = savedId; }
+    }
+
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
+    {
+        if (asset is not Material material || material.IsNotValid()) return false;
+        if (!Write(material, entry)) return false; // a failed write was logged and stays pending
+
+        _pending.Remove(entry.Guid);
+        EditorAssetBackend.Instance?.Reimport(entry.Guid);
+        return true;
+    }
+
+    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
+    {
+        if (asset is not Material material || material.IsNotValid()) return;
+
+        // Restored onto the live instance rather than swapped for a fresh one, so everything already
+        // referencing this material shows the revert immediately and keeps its GPU state.
+        Serializer.DeserializeInto(baseline, material);
+
+        _pending.Remove(entry.Guid);
+        PreviewWidget.For(entry.Guid).Invalidate();
     }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
-        // Detect asset change and force a preview refresh.
-        if (_currentGuid != entry.Guid)
-        {
-            _currentGuid = entry.Guid;
-            _preview.Invalidate();
-        }
-
         // Include the GUID in element IDs so Paper UI state is unique per asset
         id = $"{id}_{entry.Guid:N}";
 
@@ -76,31 +119,27 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
-        // Save button writes material to disk then reimports
-        if (_pending.ContainsKey(entry.Guid))
-        {
-            Origami.Separator(paper, $"{id}_sep_save").Show();
-            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material",
-                () => SavePending(showToast: true)).Show();
-        }
+        // Shown when the live material actually differs from its file, not merely because it was
+        // touched at some point. Ctrl+S still commits it too, via SaveManager.
+        DrawApplyRevertBar(paper, id, entry, asset);
 
         // 3D Preview
         Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
 
-        _preview.Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
+        PreviewWidget.For(entry.Guid).Get(material, p => p.SetupForMaterial(material)).DrawPreview(paper, $"{id}_preview", 256, 256);
     }
 
     /// <summary>Record that <paramref name="material"/> has edits not yet written to disk.</summary>
     private void MarkDirty(Material material, AssetEntry entry)
     {
         _pending[entry.Guid] = (material, entry);
-        _preview.Invalidate();
+        PreviewWidget.For(entry.Guid).Invalidate();
     }
 
     /// <summary>
     /// Write every pending material to disk.
     /// </summary>
-    private static string? SavePending(bool showToast)
+    private string? SavePending(bool showToast)
     {
         if (_pending.Count == 0) return null;
 
@@ -120,15 +159,18 @@ public class MaterialAssetEditor : AssetImporterEditor
                 continue;
             }
 
+            // Touched at some point but since put back to what the file already holds.
+            if (!HasPendingChanges(entry, material))
+            {
+                _pending.Remove(guid);
+                continue;
+            }
+
+            ApplyPendingChanges(entry, material);
+
             // A failed write stays pending (and was logged) so the next save retries it rather than
             // silently discarding the user's edits.
-            if (!Write(material, entry)) continue;
-
-            _pending.Remove(guid);
-
-            // Reimport refreshes the cache + thumbnail and replaces the loaded instance, so it has
-            // to run after this material leaves the pending set
-            db.Reimport(entry.Guid);
+            if (_pending.ContainsKey(guid)) continue;
 
             names.Add(Path.GetFileNameWithoutExtension(entry.Path));
         }
@@ -150,16 +192,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         string absolutePath = Path.Combine(Project.Current!.AssetsPath, entry.Path);
         try
         {
-            EchoObject? echo;
-
-            // Temporarily clear AssetID so the serializer writes the full object
-            // instead of just an $assetId reference
-            var savedId = material.AssetID;
-            material.AssetID = Guid.Empty;
-            try { echo = Serializer.Serialize(typeof(object), material); }
-            finally { material.AssetID = savedId; }
-
-            if (echo == null) return false;
+            EchoObject echo = SerializePersisted(material);
             File.WriteAllText(absolutePath, echo.WriteToString());
             return true;
         }

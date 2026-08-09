@@ -27,6 +27,42 @@ public class CharacterController : MonoBehaviour
     public float Height = 1.8f;
     public float SkinWidth = 0.02f;
 
+    /// <summary>Which layers the controller collides with.</summary>
+    public LayerMask CollisionMask = LayerMask.Everything;
+
+    // Resolved once rather than per cast: Move issues about ten of them, and an ancestor walk each time
+    // just to rediscover a body that does not change is pure overhead.
+    private Rigidbody3D _selfBody;
+    private bool _selfBodyResolved;
+
+    /// <summary>
+    /// The filter every internal cast uses: the collision mask, minus anything belonging to a
+    /// Rigidbody3D on this GameObject. Without that exclusion a controller placed on a body would
+    /// immediately collide with itself and refuse to move.
+    /// </summary>
+    private QueryFilter Filter
+    {
+        get
+        {
+            if (!_selfBodyResolved) ResolveSelfBody();
+
+            var filter = new QueryFilter(CollisionMask);
+            return _selfBody.IsValid() ? filter.Ignoring(_selfBody) : filter;
+        }
+    }
+
+    /// <summary>
+    /// Re-resolves the rigidbody the controller must not collide with. Call after re-parenting, or after
+    /// adding or removing a Rigidbody3D above this controller.
+    /// </summary>
+    public void ResolveSelfBody()
+    {
+        _selfBody = GetComponentInParent<Rigidbody3D>();
+        _selfBodyResolved = true;
+    }
+
+    public override void OnEnable() => ResolveSelfBody();
+
     /// <summary>
     /// Maximum angle in degrees for a surface to be considered walkable (default: 45 degrees)
     /// </summary>
@@ -177,36 +213,35 @@ public class CharacterController : MonoBehaviour
         {
             Float3 bottom = position + new Float3(0, radius, 0);
             Float3 top = position + new Float3(0, height - radius, 0);
-            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius);
+            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius, Filter);
         }
         else // Cylinder
         {
             Float3 center = position + new Float3(0, height * 0.5f, 0);
-            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity);
+            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity, Filter);
         }
     }
 
-    private Float3 GetShapeCenter(Float3 position)
-    {
-        if (Shape == ColliderShape.Capsule)
-            return position + new Float3(0, Height * 0.5f, 0);
-        else // Cylinder
-            return position + new Float3(0, Height * 0.5f, 0);
-    }
+    // The controller stands on its origin, so its centre is half a height up whatever the shape.
+    private Float3 GetShapeCenter(Float3 position) => position + new Float3(0, Height * 0.5f, 0);
 
     private Float3 GetCapsuleBottom(Float3 position)
     {
-        return position + new Float3(0, Radius, 0);
+        return position + new Float3(0, GetEffectiveRadius(), 0);
     }
 
     private Float3 GetCapsuleTop(Float3 position)
     {
-        return position + new Float3(0, Height - Radius, 0);
+        // Keep the segment non-degenerate: Jitter rejects a capsule of zero length outright, and a
+        // Height at or below twice the radius would produce one.
+        float radius = GetEffectiveRadius();
+        return position + new Float3(0, Maths.Max(Height - radius, radius + 0.001f), 0);
     }
 
+    // Shape dimensions must stay positive; Jitter throws on a zero or negative radius.
     private float GetEffectiveRadius()
     {
-        return Radius - SkinWidth;
+        return Maths.Max(Radius - SkinWidth, 0.001f);
     }
 
     /// <summary>
@@ -222,7 +257,8 @@ public class CharacterController : MonoBehaviour
                 GetEffectiveRadius(),
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
         else // Cylinder
@@ -234,7 +270,8 @@ public class CharacterController : MonoBehaviour
                 Quaternion.Identity,
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
     }
@@ -245,52 +282,51 @@ public class CharacterController : MonoBehaviour
         if (depth >= MaxDepth)
             return position;
 
+        // A degenerate surface normal turns the projected slide into NaN, and NaN fails every "too
+        // small to bother" test below, so it would ride all the way into the next cast and take the
+        // solver down with it. Stop here instead and keep the last good position.
+        if (!float.IsFinite(velocity.X) || !float.IsFinite(velocity.Y) || !float.IsFinite(velocity.Z))
+            return position;
+
         float moveDistance = Float3.Length(velocity);
         if (moveDistance < 0.0001)
             return position;
 
         Float3 moveDirection = Float3.Normalize(velocity);
+        if (Float3.LengthSquared(moveDirection) <= 0.0f)
+            return position;
 
-        bool hit = PerformShapeCast(
-            position,
-            moveDirection,
-            moveDistance + SkinWidth,
-            out ShapeCastHit hitInfo
-        );
+        float castDistance = moveDistance + SkinWidth;
+        bool hit = PerformShapeCast(position, moveDirection, castDistance, out ShapeCastHit hitInfo);
 
-        if (hit)
+        if (!hit)
+            return position + velocity;
+
+        // Back off by the skin width, and clamp so a cast that started already touching never walks
+        // backwards.
+        float safeDistance = Maths.Clamp(hitInfo.Distance - SkinWidth, 0.0f, moveDistance);
+        position += moveDirection * safeDistance;
+
+        // Calculate remaining movement after hitting surface
+        float remainingDistance = moveDistance - safeDistance;
+        Float3 remainingMove = moveDirection * remainingDistance;
+
+        // Check if this is a step we can climb
+        // Only attempt step-up if we're grounded and moving mostly horizontally
+        float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
+        if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
         {
-            // Move to safe distance from hit point
-            float safeDistance = (moveDistance * hitInfo.Fraction - SkinWidth);
-            position += moveDirection * safeDistance;
-
-            // Calculate remaining movement after hitting surface
-            float remainingDistance = moveDistance - safeDistance;
-            Float3 remainingMove = moveDirection * remainingDistance;
-
-            // Check if this is a step we can climb
-            // Only attempt step-up if we're grounded and moving mostly horizontally
-            float horizontalSpeed = Maths.Sqrt(velocity.X * velocity.X + velocity.Z * velocity.Z);
-            if (grounded && horizontalSpeed > 0.0001 && StepSize > 0)
+            if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
             {
-                if (TryStepUp(position, moveDirection, remainingDistance, out Float3 steppedPosition))
-                {
-                    return steppedPosition;
-                }
+                return steppedPosition;
             }
-
-            // Project remaining movement onto the hit surface (slide)
-            Float3 slideMove = ProjectOntoSurface(remainingMove, hitInfo.Normal);
-
-            // Recurse with remaining slide movement
-            return CollideAndSlide(position, slideMove, depth + 1, grounded);
-        }
-        else
-        {
-            position += velocity;
         }
 
-        return position;
+        // Project remaining movement onto the hit surface (slide)
+        Float3 slideMove = ProjectOntoSurface(remainingMove, hitInfo.Normal);
+
+        // Recurse with remaining slide movement
+        return CollideAndSlide(position, slideMove, depth + 1, grounded);
     }
 
     /// <summary>
@@ -323,19 +359,25 @@ public class CharacterController : MonoBehaviour
             return false;
 
         // Step 4: Try to move forward at the elevated position
+        float forwardCastDistance = moveDistance + SkinWidth;
         bool hitAtElevated = PerformShapeCast(
             upPosition,
             forwardDirection,
-            moveDistance + SkinWidth,
+            forwardCastDistance,
             out ShapeCastHit elevatedHit
         );
 
-        // If we still hit something at the elevated position, we can't step up
-        if (hitAtElevated && elevatedHit.Fraction < 0.5)
-            return false;
+        // Step 5: Move forward at elevated height, only as far as the cast is actually clear. If most
+        // of the move is still blocked up there it is a wall, not a step, so slide instead.
+        float forwardDistance = moveDistance;
+        if (hitAtElevated)
+        {
+            forwardDistance = Maths.Clamp(elevatedHit.Distance - SkinWidth, 0.0f, moveDistance);
+            if (forwardDistance < moveDistance * 0.5f)
+                return false;
+        }
 
-        // Step 5: Move forward at elevated height
-        Float3 forwardPosition = upPosition + forwardDirection * moveDistance;
+        Float3 forwardPosition = upPosition + forwardDirection * forwardDistance;
 
         // Step 6: Cast down to find the actual step surface
         // Search from StepSize height down to slightly below original position for reliability sake
@@ -354,15 +396,11 @@ public class CharacterController : MonoBehaviour
             if (slopeAngle > MaxSlopeAngle)
                 return false; // Surface is too steep
 
-            // Calculate the actual step height
-            float actualStepHeight = StepSize - (downHit.Fraction * maxStepDownDistance - SkinWidth);
-
-            // Only accept if we're actually stepping up (not down)
-            if (actualStepHeight < 0.0)
+            // Drop onto the surface. Descending further than we rose means this is a step down, not up.
+            float stepDownDistance = Maths.Max(0.0f, downHit.Distance - SkinWidth);
+            if (stepDownDistance > StepSize)
                 return false;
 
-            // Step down onto the surface
-            float stepDownDistance = downHit.Fraction * maxStepDownDistance - SkinWidth;
             newPosition = forwardPosition - new Float3(0, stepDownDistance, 0);
             return true;
         }
@@ -382,8 +420,10 @@ public class CharacterController : MonoBehaviour
     /// </summary>
     private float GetSlopeAngle(Float3 normal)
     {
-        // Angle between surface normal and up vector
-        return Maths.Acos(normal.Y) * (180.0f / Maths.PI);
+        // Angle between surface normal and up vector. Clamped because a normal component a hair over 1
+        // from float error makes Acos return NaN, which fails every walkable test and would silently
+        // make the character un-groundable.
+        return Maths.Acos(Maths.Clamp(normal.Y, -1.0f, 1.0f)) * (180.0f / Maths.PI);
     }
 
     /// <summary>
@@ -412,7 +452,7 @@ public class CharacterController : MonoBehaviour
             if (slopeAngle <= MaxSlopeAngle)
             {
                 // Snap down to the surface
-                float snapDistance = hitInfo.Fraction * SnapDownDistance - SkinWidth;
+                float snapDistance = hitInfo.Distance - SkinWidth;
                 if (snapDistance > 0)
                 {
                     position.Y -= snapDistance;

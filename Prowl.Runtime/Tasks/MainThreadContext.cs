@@ -32,6 +32,13 @@ public sealed class MainThreadContext : SynchronizationContext
     /// <summary>Whether the caller is on the thread the engine pumps.</summary>
     public bool IsMainThread => Environment.CurrentManagedThreadId == _threadId;
 
+    /// <summary>
+    /// Whether the caller is on the engine's thread, for main-thread-only APIs to check themselves.
+    /// True when no context has been installed (tests, tools, early startup), since there is no engine
+    /// thread to be off yet and refusing to run would be worse than the race being guarded against.
+    /// </summary>
+    public static bool OnMainThread => Current is null || Current.IsMainThread;
+
     /// <summary>How much work is waiting for the next pump.</summary>
     public int PendingCount => _queue.Count;
 

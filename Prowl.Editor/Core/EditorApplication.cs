@@ -1328,8 +1328,6 @@ public class EditorApplication : Game
         });
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.save_scene_as")}", () => PromptSaveAs());
         MenuRegistry.RegisterSeparator(file);
-        MenuRegistry.Register($"{file}/{Loc.Get("menu.file.open_project")}", () => ReturnToLauncher());
-        MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.build_project")}", () => OpenPanel(typeof(BuildSettingsPanel)));
         MenuRegistry.RegisterSeparator(file);
         MenuRegistry.Register($"{file}/{Loc.Get("menu.file.exit")}", () => Game.Quit());
@@ -1394,6 +1392,9 @@ public class EditorApplication : Game
     public void ReinitializeAfterReload()
     {
         ReinitializeRegistries();
+
+        // New code, so anything reported once against the old assemblies gets to report again.
+        Debug.ClearReportedOnce();
     }
 
     /// <summary>Transient toast shown while a script recompile is in progress.</summary>
@@ -1514,27 +1515,6 @@ public class EditorApplication : Game
         EditorRegistries.SaveSettings();
     }
 
-    public void ReturnToLauncher()
-    {
-        // Save before closing
-        SaveProjectState();
-
-        // Clean up current project
-        EditorAssetBackend.Instance?.Dispose();
-        Runtime.AssetDatabase.Current = null;
-        Projects.Scripting.RoslynScriptBackend.Reset(); // drop the closed project's incremental compile state
-
-        // Reset state
-        _introTime = double.MaxValue;
-        _introClosing = false;
-        _launcherWasOpen = true;
-
-        // Reopen launcher
-        ProjectLauncher.Initialize();
-
-        Window.InternalWindow.Title = "Prowl Editor";
-    }
-
     // ================================================================
     //  Play Mode
     // ================================================================
@@ -1542,6 +1522,14 @@ public class EditorApplication : Game
     private void EnterPlayMode()
     {
         if (Application.IsPlaying) return;
+
+        // Playing the prefab editing scene would run the editor-only camera/light rig, and stopping
+        // restores it as the "editor scene", from where a save writes runtime state to the prefab.
+        if (PrefabEditingMode.IsEditing)
+        {
+            Runtime.Debug.LogWarning("Exit prefab editing mode before entering play mode.");
+            return;
+        }
 
         var scene = Runtime.Resources.Scene.Current;
         if (scene == null) return;

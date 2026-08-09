@@ -11,7 +11,6 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(PrefabAsset))]
 public class PrefabAssetEditor : AssetImporterEditor
 {
-    private readonly PreviewWidget _preview = new(showGrid: true);
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -32,7 +31,7 @@ public class PrefabAssetEditor : AssetImporterEditor
         if (prefab.GameObjectData != null)
         {
             Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
-            _preview.Get(prefab, p => p.SetupForPrefab(prefab)).DrawPreview(paper, $"{id}_preview", 256, 256);
+            PreviewWidget.For(entry.Guid, showGrid: true).Get(prefab, p => p.SetupForPrefab(prefab)).DrawPreview(paper, $"{id}_preview", 256, 256);
         }
     }
 }

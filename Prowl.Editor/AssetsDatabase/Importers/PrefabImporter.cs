@@ -25,6 +25,12 @@ public class PrefabImporter : AssetImporter
             string text = File.ReadAllText(ctx.AbsolutePath);
             var goEcho = EchoObject.ReadFromString(text);
 
+            if (!DescribesGameObject(goEcho))
+            {
+                Debug.LogError($"Prefab does not contain a GameObject hierarchy: {ctx.AbsolutePath}");
+                return false;
+            }
+
             var dependencies = new HashSet<Guid>();
             ImportHelper.CollectAssetDependencies(goEcho, dependencies);
 
@@ -43,4 +49,11 @@ public class PrefabImporter : AssetImporter
         }
         return true;
     }
+
+    /// <summary>
+    /// Cheap shape check so a file that parses as Echo but isn't a GameObject fails at import,
+    /// where the path is reported, rather than as a null at some later Instantiate call.
+    /// </summary>
+    private static bool DescribesGameObject(EchoObject? echo)
+        => echo is { TagType: EchoType.Compound } && echo.TryGet("Transform", out _) && echo.TryGet("Components", out _);
 }

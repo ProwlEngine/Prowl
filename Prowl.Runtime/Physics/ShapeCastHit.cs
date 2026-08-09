@@ -19,12 +19,21 @@ public struct ShapeCastHit
 
     /// <summary>
     /// The fraction/lambda along the sweep direction where the hit occurred (0 = start, 1 = end of sweep).
-    /// Note: This is not a distance, but a normalized value between 0 and 1.
+    /// Note: This is not a distance, but a normalized value between 0 and 1. Prefer
+    /// <see cref="Distance"/> unless the normalized form is what you actually want.
     /// </summary>
     public float Fraction;
 
     /// <summary>
-    /// The amount of penetration at the hit point. Only valid for overlap casts.
+    /// How far along the cast the hit occurred, in world units. Zero for overlap queries, which do not
+    /// sweep. This is <see cref="Fraction"/> already multiplied by the cast distance, which is what
+    /// callers almost always want and is easy to get wrong by hand.
+    /// </summary>
+    public float Distance;
+
+    /// <summary>
+    /// The amount of penetration at the hit point. Non-zero for overlap queries, and for shape casts
+    /// that were already overlapping at the start of the sweep (where <see cref="Fraction"/> is 0).
     /// </summary>
     public float Penetration;
 
@@ -54,7 +63,13 @@ public struct ShapeCastHit
     public RigidBodyShape Shape;
 
     /// <summary>
-    /// The Transform of the rigidbody that was hit.
+    /// The Collider that was hit. Null for hits that no Collider owns (e.g. terrain).
+    /// </summary>
+    public Collider Collider;
+
+    /// <summary>
+    /// The Transform of the rigidbody that was hit, or of the collider itself when the hit belongs to
+    /// static geometry (which shares one body per layer and so cannot identify a GameObject).
     /// </summary>
     public Transform Transform;
 

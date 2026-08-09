@@ -2,66 +2,113 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+
+using Prowl.Echo;
 using Prowl.Runtime.Audio.Native;
 
 namespace Prowl.Runtime.Audio.Effects;
 
-	public sealed class PhaserEffect : IAudioEffect
-	{
-		private Phaser phaser;
-		
-		public float Depth
-		{
-			get => phaser.Depth;
-			set => phaser.Depth = value;
-		}
+/// <summary>Six stage phase shifter with a swept notch.</summary>
+public sealed class PhaserEffect : AudioEffect
+{
+    [SerializeField, Tooltip("How much of the shifted signal is mixed back in.")]
+    private float _depth = 1.0f;
+    [SerializeField, Range(0f, 1f), Tooltip("How much output is fed back into the input.")]
+    private float _feedback = 0.7f;
+    [SerializeField, Tooltip("Lowest frequency the sweep reaches, in hertz.")]
+    private float _minimum = 440.0f;
+    [SerializeField, Tooltip("Highest frequency the sweep reaches, in hertz.")]
+    private float _maximum = 1600.0f;
+    [SerializeField, Tooltip("Sweep speed in hertz.")]
+    private float _rate = 5.0f;
 
-		public float Feedback
-		{
-			get => phaser.Feedback;
-			set => phaser.Feedback = value;
-		}
+    // A phaser carries allpass state and an LFO. One instance shared by every channel smears them
+    // together and advances the sweep once per sample per channel.
+    private Phaser[] _phasers = [];
 
-		public float Minimum
-		{
-			get => phaser.Minimum;
-			set => phaser.Minimum = value;
-		}
+    public float Depth
+    {
+        get => _depth;
+        set { _depth = value; foreach (Phaser phaser in _phasers) phaser.Depth = value; }
+    }
 
-		public float Maximum
-		{
-			get => phaser.Maximum;
-			set => phaser.Maximum = value;
-		}
+    public float Feedback
+    {
+        get => _feedback;
+        set { _feedback = value; foreach (Phaser phaser in _phasers) phaser.Feedback = value; }
+    }
 
-		public float Rate
-		{
-			get => phaser.Rate;
-			set => phaser.Rate = value;
-		}
+    public float Minimum
+    {
+        get => _minimum;
+        set { _minimum = value; foreach (Phaser phaser in _phasers) phaser.Minimum = value; }
+    }
 
-		public PhaserEffect(UInt32 sampleRate)
-		{
-			phaser = new Phaser();
-			phaser.Depth = 1.0f;
-			phaser.Feedback = 0.7f;
-			phaser.Minimum = 440.0f;
-			phaser.Maximum = 1600.0f;
-			phaser.Rate = 5.0f;
-			phaser.SampleRate = (float)sampleRate;
-		}
+    public float Maximum
+    {
+        get => _maximum;
+        set { _maximum = value; foreach (Phaser phaser in _phasers) phaser.Maximum = value; }
+    }
 
-		public void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels)
-		{
-        for (UInt32 i = 0; i < frameCountIn; i++)
+    public float Rate
+    {
+        get => _rate;
+        set { _rate = value; foreach (Phaser phaser in _phasers) phaser.Rate = value; }
+    }
+
+    protected override void OnInitialize() => Allocate(Channels);
+
+    public override void OnValidate()
+    {
+        foreach (Phaser phaser in _phasers)
+            Configure(phaser);
+    }
+
+    public override void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    {
+        if (channels == 0)
+            return;
+
+        if (channels > _phasers.Length)
+            Allocate((int)channels);
+
+        int frames = (int)frameCountIn;
+        int available = Math.Min(framesIn.Length, framesOut.Length) / (int)channels;
+
+        if (frames > available)
+            frames = available;
+
+        for (int frame = 0; frame < frames; frame++)
         {
-            for (UInt32 ch = 0; ch < channels; ch++)
+            int start = frame * (int)channels;
+
+            for (int channel = 0; channel < channels; channel++)
             {
-                int index = (int)(i * channels + ch);
-                framesOut[index] = phaser.Process(framesIn[index]);
+                int i = start + channel;
+                framesOut[i] = _phasers[channel].Process(framesIn[i]);
             }
         }
-		}
-		
-		public void OnDestroy() {}
-	}
+    }
+
+    private void Allocate(int channels)
+    {
+        _phasers = new Phaser[Math.Max(1, channels)];
+
+        for (int i = 0; i < _phasers.Length; i++)
+        {
+            _phasers[i] = new Phaser();
+            Configure(_phasers[i]);
+        }
+    }
+
+    private void Configure(Phaser phaser)
+    {
+        phaser.Depth = _depth;
+        phaser.Feedback = _feedback;
+        phaser.Minimum = _minimum;
+        phaser.Maximum = _maximum;
+        phaser.Rate = _rate;
+        // Last: its setter recomputes the sweep increment and the normalised sweep range.
+        phaser.SampleRate = SampleRate > 0 ? SampleRate : AudioContext.SampleRate;
+    }
+}

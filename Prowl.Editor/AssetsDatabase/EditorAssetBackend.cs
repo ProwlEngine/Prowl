@@ -1809,6 +1809,30 @@ public class EditorAssetBackend : AssetBackendBase
     private string GetCachePath(Guid guid)
         => Path.Combine(_project.CachePath, $"{guid}.asset");
 
+    /// <summary>
+    /// The asset exactly as it was imported, straight from the cache, or null when it has never been
+    /// cached or cannot be read. This is what the loaded instance was built from.
+	///
+	/// This was added to allow the Inspectors to track modified assets to show Apply/Revert.
+	/// Comparing a live object against it reveals any change made to that object since last import, including ones made outside the
+    /// inspector, which nothing else can detect. Like a user mutating a asset directly rather then copying or instantiating it.
+    /// </summary>
+    public EchoObject? ReadCachedEcho(Guid guid)
+    {
+        string cachePath = GetCachePath(guid);
+        if (!File.Exists(cachePath)) return null;
+
+        try
+        {
+            return EchoObject.ReadFromBinary(new FileInfo(cachePath));
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogWarning($"Could not read the cached form of {guid}: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>True when the source file has been written since the entry was last imported, i.e. the
     /// cached import no longer represents what's on disk.</summary>
     private bool IsSourceNewerThanImport(AssetEntry entry)

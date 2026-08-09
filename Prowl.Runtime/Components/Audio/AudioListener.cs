@@ -25,21 +25,22 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void OnEnable()
     {
+        if (!AudioContext.IsInitialized)
+        {
+            Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
+            return;
+        }
+
         handle = MiniAudioExNative.ma_ex_audio_listener_init(AudioContext.NativeContext);
 
         if (handle != IntPtr.Zero)
         {
-            previousPosition = this.Transform.Position;
+            previousPosition = Transform.Position;
 
             // Set Initial Values
             MiniAudioExNative.ma_ex_audio_listener_set_spatialization(handle, 1);
 
-            var up = Transform.Up;
-            var forward = Transform.Forward;
-            var pos = Transform.Position;
-            MiniAudioExNative.ma_ex_audio_listener_set_world_up(handle, (float)up.X, (float)up.Y, (float)up.Z);
-            MiniAudioExNative.ma_ex_audio_listener_set_direction(handle, (float)forward.X, (float)forward.Y, (float)forward.Z);
-            MiniAudioExNative.ma_ex_audio_listener_set_position(handle, (float)pos.X, (float)pos.Y, (float)pos.Z);
+            Apply(Transform.Up, Transform.Forward, previousPosition);
             MiniAudioExNative.ma_ex_audio_listener_set_velocity(handle, 0f, 0f, 0f);
         }
     }
@@ -48,31 +49,32 @@ public sealed class AudioListener : MonoBehaviour
     {
         if (handle == IntPtr.Zero) return;
 
-        var up = -Transform.Up;
-        var forward = Transform.Forward;
-        var pos = Transform.Position;
+        Float3 position = Transform.Position;
 
-        MiniAudioExNative.ma_ex_audio_listener_set_world_up(handle, (float)up.X, (float)up.Y, (float)up.Z);
-        MiniAudioExNative.ma_ex_audio_listener_set_direction(handle, (float)forward.X, (float)forward.Y, (float)forward.Z);
-
-
-        MiniAudioExNative.ma_ex_audio_listener_get_position(handle, out float prevX, out float prevY, out float prevZ);
-        previousPosition = new Float3(prevX, prevY, prevZ);
-        MiniAudioExNative.ma_ex_audio_listener_set_position(handle, (float)pos.X, (float)pos.Y, (float)pos.Z);
+        Apply(Transform.Up, Transform.Forward, position);
 
         // Only compute velocity with a positive delta - a zero delta would produce Inf/NaN velocity
         // and feed NaN into the Doppler calculation (AudioSource.Update guards the same way).
         float deltaTime = AudioContext.DeltaTime;
         if (deltaTime > 0f)
         {
-            Float3 currentPosition = Transform.Position;
-            var vel = new Float3(
-                (currentPosition.X - previousPosition.X) / deltaTime,
-                (currentPosition.Y - previousPosition.Y) / deltaTime,
-                (currentPosition.Z - previousPosition.Z) / deltaTime);
-
-            MiniAudioExNative.ma_ex_audio_listener_set_velocity(handle, (float)vel.X, (float)vel.Y, (float)vel.Z);
+            Float3 velocity = AudioContext.ToAudioSpace((position - previousPosition) / deltaTime);
+            MiniAudioExNative.ma_ex_audio_listener_set_velocity(handle, velocity.X, velocity.Y, velocity.Z);
         }
+
+        previousPosition = position;
+    }
+
+    /// <summary>Pushes the listener's orientation and position across, converted to audio space.</summary>
+    private void Apply(Float3 up, Float3 forward, Float3 position)
+    {
+        up = AudioContext.ToAudioSpace(up);
+        forward = AudioContext.ToAudioSpace(forward);
+        position = AudioContext.ToAudioSpace(position);
+
+        MiniAudioExNative.ma_ex_audio_listener_set_world_up(handle, up.X, up.Y, up.Z);
+        MiniAudioExNative.ma_ex_audio_listener_set_direction(handle, forward.X, forward.Y, forward.Z);
+        MiniAudioExNative.ma_ex_audio_listener_set_position(handle, position.X, position.Y, position.Z);
     }
 
     public override void OnDisable()

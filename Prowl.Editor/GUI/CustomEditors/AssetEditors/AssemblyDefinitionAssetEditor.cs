@@ -2,9 +2,11 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
+using Prowl.Echo;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
@@ -22,8 +24,53 @@ namespace Prowl.Editor.Inspector;
 [CustomAssetEditor(typeof(AssemblyDefinitionAsset))]
 public class AssemblyDefinitionAssetEditor : AssetImporterEditor
 {
-    private AssemblyDefinition? _def;
-    private Guid _forGuid;
+    /// <summary>The definition being edited, per asset. Static so switching selection and coming back
+    /// keeps the edits - a single slot would re-read the file and discard them.</summary>
+    private static readonly Dictionary<Guid, AssemblyDefinition> s_edits = new();
+
+    private AssemblyDefinition Edits(AssetEntry entry, string absPath)
+    {
+        if (s_edits.TryGetValue(entry.Guid, out AssemblyDefinition? existing)) return existing;
+
+        AssemblyDefinition loaded;
+        try { loaded = AssemblyDefinition.ReadFromFile(absPath); }
+        catch { loaded = new AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(absPath) }; }
+
+        s_edits[entry.Guid] = loaded;
+        Rebaseline(entry, null); // the file as loaded is the clean state
+        return loaded;
+    }
+
+    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
+        => s_edits.TryGetValue(entry.Guid, out AssemblyDefinition? def)
+            ? Serializer.Serialize(typeof(AssemblyDefinition), def)
+            : null;
+
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
+    {
+        if (Project.Current == null) return false;
+        if (!s_edits.TryGetValue(entry.Guid, out AssemblyDefinition? def)) return false;
+
+        try
+        {
+            def.WriteToFile(Path.Combine(Project.Current.AssetsPath, entry.Path));
+        }
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to save assembly definition '{entry.Path}': {ex.Message}");
+            return false;
+        }
+
+        EditorAssetBackend.Instance?.Reimport(entry.Guid);
+        ScriptAssemblyManager.RequestRecompile();
+        return true;
+    }
+
+    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
+    {
+        if (s_edits.TryGetValue(entry.Guid, out AssemblyDefinition? def))
+            Serializer.DeserializeInto(baseline, def);
+    }
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -32,13 +79,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         string absPath = Path.Combine(Project.Current.AssetsPath, entry.Path);
         if (!File.Exists(absPath)) return;
 
-        if (_def == null || _forGuid != entry.Guid)
-        {
-            try { _def = AssemblyDefinition.ReadFromFile(absPath); }
-            catch { _def = new AssemblyDefinition { Name = Path.GetFileNameWithoutExtension(absPath) }; }
-            _forGuid = entry.Guid;
-        }
-        var def = _def;
+        AssemblyDefinition def = Edits(entry, absPath);
 
         Origami.Header(paper, $"{id}_hdr", $"{EditorIcons.FileLines}  Assembly Definition").Show();
 
@@ -98,13 +139,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         }
 
         paper.Box($"{id}_sp3").Height(8);
-        Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Recompile", () =>
-        {
-            def.WriteToFile(absPath);
-            _def = null;
-            EditorAssetBackend.Instance?.Reimport(entry.Guid);
-            ScriptAssemblyManager.RequestRecompile();
-        }).Width(170).Show();
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
     private static void IncludeToggle(Paper paper, string id, string platform, AssemblyDefinition def)

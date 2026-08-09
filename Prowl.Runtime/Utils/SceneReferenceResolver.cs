@@ -9,21 +9,32 @@ using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
-namespace Prowl.Editor.Core;
+namespace Prowl.Runtime;
 
 /// <summary>
-/// Echo external-reference resolver for copy/paste of scene objects. The objects passed to the
-/// constructor - the copy selection - serialize by value; every other GameObject / MonoBehaviour /
-/// Transform reference is linked by its persistence id and resolved back against the current scene
-/// on paste, so a copied object keeps its references to the rest of the scene instead of deep-cloning
-/// them into orphans. References that can't be resolved (different scene, deleted object) become null.
+/// Echo external-reference resolver for scene objects. The objects passed to the constructor - the
+/// copy selection, or the tree being written to an asset - serialize by value; every other
+/// GameObject / MonoBehaviour / Transform reference is linked by its persistence id and resolved back
+/// against the current scene, so the copy keeps its references to the rest of the scene instead of
+/// deep-cloning them into orphans. References that can't be resolved (different scene, deleted
+/// object) become null.
 ///
-/// Shared across the various copy/paste flows (components today, GameObjects/prefabs later): each
-/// passes the roots it's serializing by value, and everything outside that set is linked.
+/// Shared across the flows that serialize part of a scene: component copy/paste, GameObject
+/// duplication, and prefab creation/apply. Each passes the roots it is serializing by value, and
+/// everything outside that set is linked.
 /// </summary>
 public sealed class SceneReferenceResolver : IExternalReferenceResolver
 {
     private readonly HashSet<object> _copied;
+
+    /// <summary>
+    /// Links nothing and resolves nothing, for reading content that must not bind to the scene at
+    /// all - a prefab asset, which cannot legally reference scene objects. Echo only recognises a
+    /// reference stub while a resolver is present, so this is what turns an external reference into
+    /// null instead of an empty object rebuilt from the stub. Deserialization only: serializing with
+    /// it would deep-copy every reference rather than link it.
+    /// </summary>
+    public static readonly IExternalReferenceResolver None = new NoReferences();
 
     /// <param name="copied">
     /// The objects being serialized by value. Anything they reference that isn't in this set is
@@ -32,6 +43,12 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// </param>
     public SceneReferenceResolver(params object[] copied)
         => _copied = new HashSet<object>(copied, ReferenceEqualityComparer.Instance);
+
+    private sealed class NoReferences : IExternalReferenceResolver
+    {
+        public object? GetReferenceKey(object value) => null;
+        public object? ResolveReference(object key, Type targetType) => null;
+    }
 
     public object? GetReferenceKey(object value)
     {

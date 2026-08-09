@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime.Resources;
@@ -29,9 +29,8 @@ public class PhysicsTests : RuntimeTestBase
 
     public override void Dispose()
     {
-        // CollisionMatrix is global static state. Boolean32Matrix is a struct wrapping a uint[], so a
-        // plain copy would alias the live array; reset to the engine default (all layers collide) instead.
-        CollisionMatrix.s_collisionMatrix = new Boolean32Matrix(true);
+        // CollisionMatrix is global static state, so put it back to the engine default between tests.
+        CollisionMatrix.Reset();
         base.Dispose();
     }
 
@@ -66,7 +65,7 @@ public class PhysicsTests : RuntimeTestBase
 
     private static LayerMask OnlyLayer(int index)
     {
-        var mask = new LayerMask();
+        var mask = LayerMask.Nothing;
         mask.SetLayer(index);
         return mask;
     }
@@ -589,17 +588,443 @@ public class PhysicsTests : RuntimeTestBase
 
         var top = AddDynamicBox(scene, new Float3(0, 3, 0), gravity: true);
 
-        PhysicsWorld.IgnoreCollisionBetween(top, floorRb);
+        scene.Physics.IgnoreCollisionBetween(top, floorRb);
+
+        Tick(scene, 180);
+
+        Assert.True(top.Transform.Position.Y < 0,
+            $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
+    }
+
+    [Fact]
+    public void IgnoredCollisions_AreScopedToTheirOwnWorld()
+    {
+        var sceneA = CreatePhysicsScene();
+        var floorA = CreateGameObject("Floor");
+        var floorRbA = floorA.AddComponent<Rigidbody3D>();
+        floorRbA.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorA.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneA.Add(floorA);
+
+        var boxA = AddDynamicBox(sceneA, new Float3(0, 3, 0), gravity: true);
+        sceneA.Physics.IgnoreCollisionBetween(boxA, floorRbA);
+
+        // A second world must not inherit the first world's ignore pairs.
+        var sceneB = CreatePhysicsScene();
+        var floorB = CreateGameObject("Floor");
+        var floorRbB = floorB.AddComponent<Rigidbody3D>();
+        floorRbB.MotionType = Jitter2.Dynamics.MotionType.Static;
+        floorB.AddComponent<BoxCollider>().Size = new Float3(20, 1, 20);
+        sceneB.Add(floorB);
+
+        var boxB = AddDynamicBox(sceneB, new Float3(0, 3, 0), gravity: true);
+
+        Tick(sceneB, 180);
+
+        Assert.True(boxB.Transform.Position.Y > 0,
+            $"Pair ignored in another world should still collide here; body was at y={boxB.Transform.Position.Y}");
+    }
+
+    /// <summary>Records the collisions it is told about, so the payload can be asserted.</summary>
+    private sealed class CollisionRecorder : MonoBehaviour
+    {
+        public readonly List<Collision> Begins = [];
+        public readonly List<Collision> Ends = [];
+
+        public override void OnCollisionBegin(Collision collision) => Begins.Add(collision);
+        public override void OnCollisionEnd(Collision collision) => Ends.Add(collision);
+    }
+
+    // Static colliders share one body per layer, so the body cannot name what was hit and the contact
+    // used to be dropped entirely. It now reports the Collider that owns the shape.
+    [Fact]
+    public void CollisionBegin_FiresAgainstStaticGeometry_AndNamesTheCollider()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 180);
+
+        Assert.NotEmpty(recorder.Begins);
+
+        Collision hit = recorder.Begins[0];
+        Assert.Null(hit.Rigidbody);                     // static geometry has no rigidbody of its own
+        Assert.NotNull(hit.Collider);
+        Assert.Same(floor, hit.Collider.GameObject);
+        Assert.Same(floor, hit.GameObject);
+    }
+
+    [Fact]
+    public void CollisionEnd_AgainstStaticGeometry_StillNamesTheCollider()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, -1, 0), new Float3(20, 1, 20));
+
+        var rb = AddDynamicBox(scene, new Float3(0, 2, 0), gravity: true);
+        var recorder = rb.GameObject.AddComponent<CollisionRecorder>();
+
+        Tick(scene, 180);
+        Assert.NotEmpty(recorder.Begins);
+
+        // Fling it off the floor so the contact breaks.
+        rb.AffectedByGravity = false;
+        rb.LinearVelocity = new Float3(0, 40, 0);
+        Tick(scene, 60);
+
+        Assert.NotEmpty(recorder.Ends);
+        Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
+    }
+
+    [Fact]
+    public void LogOnce_ReportsOnce_CountsTheRest_AndResetsOnPlayModeChange()
+    {
+        Debug.ClearReportedOnce();
+
+        int logged = 0;
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) => logged++;
+
+        Debug.OnLog += Count;
         try
         {
-            Tick(scene, 180);
+            for (int i = 0; i < 100; i++)
+                Debug.LogWarningOnce("Test.Spam", "expensive thing happened");
 
-            Assert.True(top.Transform.Position.Y < 0,
-                $"Ignored pair should not collide; body was at y={top.Transform.Position.Y}");
+            Assert.Equal(1, logged);
+            Assert.Equal(100, Debug.GetReportCount("Test.Spam"));
+
+            // A distinct id is its own budget.
+            Debug.LogWarningOnce("Test.Other", "something else");
+            Assert.Equal(2, logged);
+
+            // Toggling play mode is a fresh run, so the condition gets to report again.
+            bool wasPlaying = Application.IsPlaying;
+            Application.IsPlaying = !wasPlaying;
+            Application.IsPlaying = wasPlaying;
+
+            Assert.Equal(0, Debug.GetReportCount("Test.Spam"));
+            Debug.LogWarningOnce("Test.Spam", "expensive thing happened");
+            Assert.Equal(3, logged);
         }
         finally
         {
-            PhysicsWorld.EnableCollisionBetween(top, floorRb);
+            Debug.OnLog -= Count;
+            Debug.ClearReportedOnce();
         }
+    }
+
+    // CenterOfMass used to return the body origin, which is only the centre of mass when the shapes
+    // happen to be centred on it.
+    [Fact]
+    public void CenterOfMass_FollowsOffsetColliders()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Offset");
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+        go.AddComponent<BoxCollider>().Center = new Float3(4, 0, 0);
+        scene.Add(go);
+        StepPhysics(scene, 2);
+
+        Assert.Equal(4.0, rb.CenterOfMass.X, 2);
+        Assert.Equal(0.0, rb.Transform.Position.X, 2); // the origin is still where it was
+    }
+
+    [Fact]
+    public void CenterOfMass_OfACompound_IsMassWeightedBetweenTheShapes()
+    {
+        var scene = CreatePhysicsScene();
+
+        var go = CreateGameObject("Compound");
+        var rb = go.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+
+        // Equal boxes either side of the origin average back to it.
+        go.AddComponent<BoxCollider>().Center = new Float3(-2, 0, 0);
+        go.AddComponent<BoxCollider>().Center = new Float3(2, 0, 0);
+        scene.Add(go);
+        StepPhysics(scene, 2);
+
+        Assert.Equal(0.0, rb.CenterOfMass.X, 2);
+    }
+
+    // Removing a body removes its constraints, which zeroes their handles while the component still
+    // holds the managed object. Jitter's constraint properties are views onto unmanaged memory reached
+    // through that handle, so a null check alone let writes land on freed memory.
+    [Fact]
+    public void ConstraintProperties_AreSafeAfterTheirBodyIsDisabled()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        var joint = armGo.AddComponent<DistanceLimitConstraint>();
+        joint.ConnectedBody = anchor;
+        scene.Add(armGo);
+        StepPhysics(scene, 2);
+
+        // Disabling the rigidbody tears the constraint out from under the still-enabled component.
+        arm.Enabled = false;
+        StepPhysics(scene, 1);
+
+        joint.TargetDistance = 3f;
+        joint.Softness = 0.5f;
+        joint.Anchor = new Float3(0, 1, 0);
+        Assert.False(joint.Active);
+    }
+
+    // A joint is several Jitter constraints, and PhysicsConstraint.Active used to route through a
+    // single-constraint accessor that joints return null from, so Active always read false and its
+    // setter was a no-op.
+    [Fact]
+    public void Joint_Active_ReflectsAndControlsAllOfItsConstraints()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        var joint = armGo.AddComponent<HingeJoint>();
+        joint.ConnectedBody = anchor;
+        scene.Add(armGo);
+        StepPhysics(scene, 2);
+
+        Assert.True(joint.Active, "a freshly created joint should report itself active");
+
+        joint.Active = false;
+        Assert.False(joint.Active, "disabling should reach every constraint the joint owns");
+
+        joint.Active = true;
+        Assert.True(joint.Active);
+    }
+
+    // ---------------------------------------------------------------------
+    // Collider shape rebuilds
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void Collider_Center_RebuildsShapes_WhenSetAtRuntime()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, Float3.Zero, new Float3(1, 1, 1));
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
+
+        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>();
+        collider.Center = new Float3(10, 0, 0);
+        StepPhysics(scene, 2);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.2f), "the shape should have moved off the origin");
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.2f), "the shape should be at the new centre");
+    }
+
+    [Fact]
+    public void Collider_OnRigidbody_RebuildsWhenMovedRelativeToTheBody()
+    {
+        var scene = CreatePhysicsScene();
+
+        var bodyGo = CreateGameObject("Body");
+        var rb = bodyGo.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+
+        var colliderGo = CreateGameObject("Child");
+        colliderGo.AddComponent<BoxCollider>();
+        colliderGo.SetParent(bodyGo);
+        scene.Add(bodyGo);
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
+
+        colliderGo.Transform.LocalPosition = new Float3(0, 8, 0);
+        Tick(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 8, 0), 0.3f),
+            "the shape should have followed the collider's new offset from the body");
+    }
+
+    // ---------------------------------------------------------------------
+    // Rigidbody3D surface: force modes and axis constraints
+    // ---------------------------------------------------------------------
+
+    // Acceleration and VelocityChange ignore mass, so a heavy and a light body must respond identically.
+    [Theory]
+    [InlineData(ForceMode.Acceleration)]
+    [InlineData(ForceMode.VelocityChange)]
+    public void MassIndependentForceModes_MoveHeavyAndLightBodiesAlike(ForceMode mode)
+    {
+        var scene = CreatePhysicsScene();
+        var light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        var heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+        heavy.Mass = 100f;
+
+        light.AddForce(new Float3(0, 0, 5), mode);
+        heavy.AddForce(new Float3(0, 0, 5), mode);
+        Tick(scene, 20);
+
+        Assert.Equal(light.Transform.Position.Z, heavy.Transform.Position.Z, 2);
+    }
+
+    // Force and Impulse scale with mass, so the heavy body must lag behind.
+    [Theory]
+    [InlineData(ForceMode.Force)]
+    [InlineData(ForceMode.Impulse)]
+    public void MassDependentForceModes_MoveHeavyBodiesLess(ForceMode mode)
+    {
+        var scene = CreatePhysicsScene();
+        var light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        var heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+        heavy.Mass = 100f;
+
+        light.AddForce(new Float3(0, 0, 5), mode);
+        heavy.AddForce(new Float3(0, 0, 5), mode);
+        Tick(scene, 20);
+
+        Assert.True(light.Transform.Position.Z > heavy.Transform.Position.Z * 5f,
+            $"light moved {light.Transform.Position.Z}, heavy moved {heavy.Transform.Position.Z}");
+    }
+
+    [Fact]
+    public void FreezePosition_PinsTheFrozenAxis_AndLeavesOthersFree()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 5, 0), gravity: true);
+        rb.Constraints = RigidbodyConstraints.FreezePositionY;
+
+        rb.AddForce(new Float3(0, 0, 3), ForceMode.VelocityChange);
+        Tick(scene, 60);
+
+        Assert.Equal(5.0, rb.Transform.Position.Y, 2);
+        Assert.True(rb.Transform.Position.Z > 0.5f, "the unfrozen axis should still move");
+    }
+
+    [Fact]
+    public void FreezeRotation_KeepsTheBodyUpright()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        rb.Constraints = RigidbodyConstraints.FreezeRotation;
+
+        rb.AddTorque(new Float3(4, 4, 4), ForceMode.VelocityChange);
+        Tick(scene, 60);
+
+        Quaternion rotation = rb.Transform.Rotation;
+        Assert.Equal(1.0, Maths.Abs(rotation.W), 3);
+    }
+
+    // ---------------------------------------------------------------------
+    // Query API: filters, all-hits, linecast
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void RaycastAll_ReturnsEveryHit_NearestFirst()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -4, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -8, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        var hits = new List<RaycastHit>();
+        int count = scene.Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 50f, hits);
+
+        Assert.Equal(3, count);
+        Assert.True(hits[0].Distance <= hits[1].Distance && hits[1].Distance <= hits[2].Distance,
+            "hits should be sorted nearest first");
+    }
+
+    [Fact]
+    public void QueryFilter_IgnoringRigidbody_SkipsThatBody()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene, 2);
+
+        var from = new Float3(0, 5, 0);
+        var dir = new Float3(0, -1, 0);
+
+        Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
+        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(rb)),
+            "the ignored body should not be reported");
+    }
+
+    [Fact]
+    public void QueryFilter_IgnoringCollider_SkipsStaticGeometry()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, 0, 0), new Float3(4, 1, 4));
+        StepPhysics(scene, 2);
+
+        var from = new Float3(0, 5, 0);
+        var dir = new Float3(0, -1, 0);
+
+        Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
+
+        Collider collider = floor.GetComponent<BoxCollider>();
+        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(collider)),
+            "the ignored collider should not be reported");
+    }
+
+    [Fact]
+    public void Linecast_HitsOnlyBetweenTheTwoPoints()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.Linecast(new Float3(0, 5, 0), new Float3(0, -5, 0), out _));
+        Assert.False(scene.Physics.Linecast(new Float3(0, 5, 0), new Float3(0, 3, 0), out _),
+            "a line stopping short of the box should not hit it");
+    }
+
+    [Fact]
+    public void ShapeCastAll_ReturnsHitsNearestFirst()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -6, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        var hits = new List<ShapeCastHit>();
+        int count = scene.Physics.SphereCastAll(new Float3(0, 6, 0), 0.4f, new Float3(0, -1, 0), 50f, hits);
+
+        Assert.Equal(2, count);
+        Assert.True(hits[0].Fraction <= hits[1].Fraction, "hits should be sorted nearest first");
+    }
+
+    [Theory]
+    [InlineData(float.NaN, 0f, 0f)]
+    [InlineData(0f, float.PositiveInfinity, 0f)]
+    public void Queries_WithNonFiniteInputs_ReportNoHitInsteadOfThrowing(float x, float y, float z)
+    {
+        var scene = CreatePhysicsScene();
+        AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+
+        var bad = new Float3(x, y, z);
+        var hits = new List<ShapeCastHit>();
+
+        Assert.False(scene.Physics.Raycast(bad, new Float3(0, -1, 0), 10f, out _));
+        Assert.False(scene.Physics.Raycast(Float3.Zero, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.SphereCastAll(bad, 0.5f, new Float3(0, -1, 0), 10f, hits));
+        Assert.False(scene.Physics.SphereCast(Float3.Zero, 0.5f, bad, 10f, out _));
+        Assert.Equal(0, scene.Physics.OverlapSphere(bad, 0.5f, hits));
+        Assert.False(scene.Physics.CheckSphere(bad, 0.5f));
     }
 }

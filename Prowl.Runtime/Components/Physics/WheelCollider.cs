@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -63,7 +63,7 @@ public sealed class WheelCollider : MonoBehaviour
     /// <summary>Optional visual wheel transform. When set it is placed at the wheel centre and rotated
     /// for steering (about the suspension axis) and spin (about the axle) each frame. Keep this separate
     /// from the WheelCollider's own GameObject, which marks the fixed suspension mount used by physics.</summary>
-    public Transform visualTransform;
+    public Transform VisualTransform;
 
     // Runtime state
     private Rigidbody3D rb;
@@ -165,15 +165,15 @@ public sealed class WheelCollider : MonoBehaviour
 
     public override void Update()
     {
-        if (visualTransform == null) return;
+        if (VisualTransform == null) return;
 
         // The mount transform (this GameObject) gives the base wheel frame: up = suspension axis,
         // right = axle. Steer rotates about the suspension axis, camber tilts about forward, spin about the axle.
         Quaternion steer = Quaternion.AxisAngle(Float3.UnitY, SteerAngle);
         Quaternion camberQ = Quaternion.AxisAngle(Float3.UnitZ, CamberRadians());
         Quaternion spin = Quaternion.AxisAngle(Float3.UnitX, wheelRotation);
-        visualTransform.Rotation = Transform.Rotation * steer * camberQ * spin;
-        visualTransform.Position = GetWheelCenter();
+        VisualTransform.Rotation = Transform.Rotation * steer * camberQ * spin;
+        VisualTransform.Position = GetWheelCenter();
     }
 
     /// <summary>Re-resolves the rigidbody and counts sibling wheels (for auto sprung-mass). Call after
@@ -207,10 +207,14 @@ public sealed class WheelCollider : MonoBehaviour
         JVector.NormalizeInPlace(ref up);
 
         JVector fwd = JVector.Transform(ToJ(Transform.Forward), JMatrix.CreateRotationMatrix(up, SteerAngle));
-        JVector axle = JVector.Cross(up, fwd);
-        JVector.NormalizeInPlace(ref axle);
-        fwd = JVector.Cross(axle, up);
-        JVector.NormalizeInPlace(ref fwd);
+
+        // NormalizeSafe: a wheel transform whose forward has been steered onto its own up axis gives a
+        // zero cross product, and plain Normalize turns that into NaN rather than zero.
+        JVector axle = JVector.NormalizeSafe(JVector.Cross(up, fwd));
+        if (axle.LengthSquared() <= 0.0f) return;
+
+        fwd = JVector.NormalizeSafe(JVector.Cross(axle, up));
+        if (fwd.LengthSquared() <= 0.0f) return;
 
         // Camber tilts the wheel (its axle) about the forward axis; the suspension axis stays vertical.
         // Mirror it per side so one positive angle leans the tops of both wheels the same way.
@@ -365,7 +369,8 @@ public sealed class WheelCollider : MonoBehaviour
 
     private bool SweepFilter(IDynamicTreeProxy proxy)
     {
-        if (proxy is not RigidBodyShape rbs) return false;
+        // Terrain is not a RigidBodyShape, so let it through - otherwise wheels find no ground on a heightmap.
+        if (proxy is not RigidBodyShape rbs) return true;
         if (rb.IsNotValid() || rb._body == null) return false;
         return rbs.RigidBody != rb._body; // ignore the vehicle's own body
     }
@@ -434,7 +439,7 @@ public sealed class WheelCollider : MonoBehaviour
                 if (!world.DynamicTree.RayCast(origin, -up, SweepFilter, null,
                         out IDynamicTreeProxy proxy, out JVector n, out float dist))
                     continue;
-                if (proxy is not RigidBodyShape rbs || dist > maxDist) continue;
+                if (dist > maxDist) continue;
 
                 // curvature lifts the equivalent ground contact to the tyre surface at this offset.
                 float c = suspensionDistance + curvature - dist;
@@ -454,7 +459,8 @@ public sealed class WheelCollider : MonoBehaviour
                 pointSum += (ToF(origin) - upF * dist) * w;
                 normalSum += nf * w;
 
-                if (c > bestC) { bestC = c; outGround = rbs.RigidBody; }
+                // Terrain has no body to push back on, so the deepest ray leaves it null (static ground).
+                if (c > bestC) { bestC = c; outGround = (proxy as RigidBodyShape)?.RigidBody; }
             }
         }
 

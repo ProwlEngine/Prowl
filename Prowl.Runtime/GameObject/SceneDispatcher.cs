@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -380,27 +380,27 @@ internal sealed class SceneDispatcher
     // GameObject's live component list rather than stored as delegates, which is also what lets them survive
     // a hot reload for free: the list is repointed to the migrated instances and the masks are re-resolved.
 
-    public static void CollisionBegin(GameObject go, Rigidbody3D other, Rigidbody3D.ContactInfo contact)
+    public static void CollisionBegin(GameObject go, in Collision collision)
     {
         if (go is null) return;
 
         int count = Collect(go, SceneCallbacks.CollisionBegin, out MonoBehaviour single, out MonoBehaviour[]? many);
         if (count == 0) return;
-        if (count == 1) { single.InternalOnCollisionBegin(other, contact); return; }
+        if (count == 1) { single.InternalOnCollisionBegin(collision); return; }
 
-        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionBegin(other, contact); }
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionBegin(collision); }
         finally { Release(many!, count); }
     }
 
-    public static void CollisionEnd(GameObject go, Rigidbody3D other)
+    public static void CollisionEnd(GameObject go, in Collision collision)
     {
         if (go is null) return;
 
         int count = Collect(go, SceneCallbacks.CollisionEnd, out MonoBehaviour single, out MonoBehaviour[]? many);
         if (count == 0) return;
-        if (count == 1) { single.InternalOnCollisionEnd(other); return; }
+        if (count == 1) { single.InternalOnCollisionEnd(collision); return; }
 
-        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionEnd(other); }
+        try { for (int i = 0; i < count; i++) many![i].InternalOnCollisionEnd(collision); }
         finally { Release(many!, count); }
     }
 

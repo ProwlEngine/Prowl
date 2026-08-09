@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -75,7 +75,7 @@ public class HingeAngleConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -88,7 +88,7 @@ public class HingeAngleConstraint : PhysicsConstraint
         set
         {
             limitSoftness = value;
-            if (constraint != null) constraint.LimitSoftness = value;
+            if (IsLive(constraint)) constraint.LimitSoftness = value;
         }
     }
 
@@ -101,7 +101,7 @@ public class HingeAngleConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -114,7 +114,7 @@ public class HingeAngleConstraint : PhysicsConstraint
         set
         {
             limitBias = value;
-            if (constraint != null) constraint.LimitBias = value;
+            if (IsLive(constraint)) constraint.LimitBias = value;
         }
     }
 
@@ -162,19 +162,34 @@ public class HingeAngleConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
     }
 
     private void UpdateLimits()
     {
-        if (constraint != null)
+        if (IsLive(constraint))
         {
             var limit = AngularLimit.FromDegree(minAngle, maxAngle);
             constraint.Limit = limit;
         }
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A door hinge: the pin it turns on, and the wedge of angle it is allowed to swing through.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 axis = WorldAxis(hingeAxis);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, axis, scale * 1.2f, AxisColor);
+        Debug.DrawWireCircle(pivot, axis, scale, AxisColor, 28);
+
+        // Measured from a fixed reference in the hinge plane, so dragging the limits sweeps the wedge.
+        Debug.PerpendicularAxes(axis, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, axis, zero, scale, minAngle, maxAngle, RangeColor, LimitColor);
     }
 }

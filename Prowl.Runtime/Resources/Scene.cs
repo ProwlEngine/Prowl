@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -859,11 +859,12 @@ public class Scene : EngineObject, ISerializationCallbackReceiver
         // Update, so drive Start here too (RunStart is idempotent - it only starts un-started ones).
         _dispatcher.RunStart();
 
+        _dispatcher.RunFixedUpdate();
+
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         try { Physics.Update(); }
-        catch (Exception ex) { Debug.LogError($"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
-
-        _dispatcher.RunFixedUpdate();
+        // A solver that blows up does so every frame, so report it once rather than per frame.
+        catch (Exception ex) { Debug.LogErrorOnce("Physics.StepThrew", $"[Physics] Step threw and was skipped this frame: {ex.Message}\n{ex.StackTrace}"); }
 
         Flush();
     }

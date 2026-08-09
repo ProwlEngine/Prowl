@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -62,7 +62,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         set
         {
             targetVelocity = value;
-            if (constraint != null) constraint.TargetVelocity = value;
+            if (IsLive(constraint)) constraint.TargetVelocity = value;
         }
     }
 
@@ -75,7 +75,7 @@ public class AngularMotorConstraint : PhysicsConstraint
         set
         {
             maximumForce = value;
-            if (constraint != null) constraint.MaximumForce = value;
+            if (IsLive(constraint)) constraint.MaximumForce = value;
         }
     }
 
@@ -123,10 +123,33 @@ public class AngularMotorConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A motor that spins one body against another. The arc points the way it drives and grows with the
+    // target speed; it greys out when the maximum force is zero, because then it cannot actually do it.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.0f, ConnectedColor);
+
+        Debug.PerpendicularAxes(a, out Float3 zero, out _);
+        Debug.DrawSpinArrow(pivot, a, zero, scale * 0.8f, DriveSweep(targetVelocity), DriveColor(maximumForce));
+    }
+
+    // Enough sweep to read as a direction even at rest, growing with speed but capped so a fast motor
+    // does not wrap into an unreadable spiral.
+    private static float DriveSweep(float velocity)
+        => (velocity < 0.0f ? -1.0f : 1.0f) * Maths.Min(0.7f + Maths.Abs(velocity) * 0.3f, Maths.PI * 1.4f);
+
+    private Color DriveColor(float force) => force > 0.0f ? MotorColor : InactiveColor;
 }

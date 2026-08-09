@@ -21,7 +21,45 @@ public class InputActionMapEditor : AssetImporterEditor
 {
     private string? _selectedAction;
     private int _selectedBindingIdx = -1; // -1 = none, 0..N-1 = binding, N..N+M-1 = composite
-    private bool _dirty;
+
+    // ============================================================
+    // Pending changes
+    // ============================================================
+    // The map is edited live, so anything already bound to it reacts as you go. The base class measures
+    // whether that live object still matches the file on disk.
+
+    protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
+        => asset is InputActionMap map && map.IsValid() ? Serialize(map) : null;
+
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
+        => asset is InputActionMap map && map.IsValid() && SaveMap(map, entry);
+
+    /// <summary>
+    /// Baselines against the imported form rather than the live object, so a map mutated outside this
+    /// inspector shows up as pending instead of being quietly adopted as the clean state.
+    /// </summary>
+    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
+        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
+
+    protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
+    {
+        if (asset is not InputActionMap map || map.IsNotValid()) return;
+
+        // Restored onto the live instance so anything already holding this map sees the revert, rather
+        // than being left pointing at the discarded edits.
+        Serializer.DeserializeInto(baseline, map);
+        _selectedBindingIdx = -1;
+    }
+
+    /// <summary>Serializes the map as its file form - AssetID cleared so the whole object is written
+    /// rather than an $assetId reference back to itself.</summary>
+    private static EchoObject Serialize(InputActionMap map)
+    {
+        Guid savedId = map.AssetID;
+        map.AssetID = Guid.Empty;
+        try { return Serializer.Serialize(typeof(object), map); }
+        finally { map.AssetID = savedId; }
+    }
 
     // Listening state which binding slot we're listening for
     private bool _listeningForBinding;
@@ -47,8 +85,13 @@ public class InputActionMapEditor : AssetImporterEditor
         {
             Origami.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}").Show();
 
-            if (_dirty)
-                Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save", () => { SaveMap(map, entry); }).Width(80).Show();
+            if (HasPendingChanges(entry, asset))
+            {
+                Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"),
+                    () => RevertPendingChanges(entry, asset)).Width(80).Show();
+                Origami.Button(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
+                    () => ApplyPendingChanges(entry, asset)).Width(90).Show();
+            }
         }
         Origami.Separator(paper, $"{id}_sep").Show();
 
@@ -94,7 +137,6 @@ public class InputActionMapEditor : AssetImporterEditor
                         map.AddAction(name, InputActionType.Button);
                         _selectedAction = name;
                         _selectedBindingIdx = -1;
-                        MarkDirty();
                     });
             }
 
@@ -157,18 +199,17 @@ public class InputActionMapEditor : AssetImporterEditor
                         action.Name = v;
                         map.AddAction(action);
                         _selectedAction = v;
-                        MarkDirty();
                     }
                 }).Show());
 
             EditorGUI.Row(paper, $"{id}_atype", "Type", () =>
                 Origami.EnumDropdown(paper, $"{id}_atype_v", action.ActionType,
-                    v => { action.ActionType = v; MarkDirty(); }).Show());
+                    v => { action.ActionType = v; }).Show());
 
             bool isFloat2 = action.ExpectedValueType == typeof(Prowl.Vector.Float2);
             EditorGUI.Row(paper, $"{id}_vtype", "Value", () =>
                 Origami.Dropdown(paper, $"{id}_vtype_v", isFloat2 ? 1 : 0,
-                    v => { action.ExpectedValueType = v == 1 ? typeof(Prowl.Vector.Float2) : typeof(float); MarkDirty(); },
+                    v => { action.ExpectedValueType = v == 1 ? typeof(Prowl.Vector.Float2) : typeof(float); },
                     new[] { "float", "Float2" }).Show());
 
             paper.Box($"{id}_sp1").Height(6);
@@ -198,7 +239,6 @@ public class InputActionMapEditor : AssetImporterEditor
                 {
                     action.Bindings.RemoveAt(idx);
                     if (_selectedBindingIdx >= action.Bindings.Count) _selectedBindingIdx = -1;
-                    MarkDirty();
                 });
 
                 // Inline properties when selected
@@ -224,7 +264,6 @@ public class InputActionMapEditor : AssetImporterEditor
                     action.RemoveCompositeAt(idx);
                     if (_selectedBindingIdx >= bindingOffset + action.CompositeBindings.Count)
                         _selectedBindingIdx = -1;
-                    MarkDirty();
                 });
 
                 // Inline properties when selected
@@ -241,7 +280,6 @@ public class InputActionMapEditor : AssetImporterEditor
                 {
                     action.AddBinding(KeyCode.Space);
                     _selectedBindingIdx = action.Bindings.Count - 1;
-                    MarkDirty();
                 }).Width(110).Show();
 
                 Origami.Button(paper, $"{id}_awasd", $"{EditorIcons.Plus} WASD", () =>
@@ -252,7 +290,6 @@ public class InputActionMapEditor : AssetImporterEditor
                         InputBinding.CreateKeyBinding(KeyCode.A),
                         InputBinding.CreateKeyBinding(KeyCode.D)));
                     _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                    MarkDirty();
                 }).Width(80).Show();
 
                 Origami.Button(paper, $"{id}_aaxis", $"{EditorIcons.Plus} Axis", () =>
@@ -261,7 +298,6 @@ public class InputActionMapEditor : AssetImporterEditor
                         InputBinding.CreateKeyBinding(KeyCode.D),
                         InputBinding.CreateKeyBinding(KeyCode.A)));
                     _selectedBindingIdx = action.Bindings.Count + action.CompositeBindings.Count - 1;
-                    MarkDirty();
                 }).Width(75).Show();
             }
 
@@ -272,7 +308,6 @@ public class InputActionMapEditor : AssetImporterEditor
                 map.RemoveAction(action.Name);
                 _selectedAction = null;
                 _selectedBindingIdx = -1;
-                MarkDirty();
             }).Width(130).Show();
         }
     }
@@ -381,7 +416,6 @@ public class InputActionMapEditor : AssetImporterEditor
                         case InputBindingType.GamepadAxis: binding.AxisIndex = 0; break;
                         case InputBindingType.GamepadTrigger: binding.AxisIndex = 0; break;
                     }
-                    MarkDirty();
                 }).Show());
 
             // Type-specific fields
@@ -393,7 +427,7 @@ public class InputActionMapEditor : AssetImporterEditor
             // Interaction
             EditorGUI.Row(paper, $"{id}_inter", "Interaction", () =>
                 Origami.EnumDropdown(paper, $"{id}_inter_v", binding.Interaction,
-                    v => { binding.Interaction = v; MarkDirty(); }).Show());
+                    v => { binding.Interaction = v; }).Show());
 
             DrawInteractionParams(paper, $"{id}_ip", binding);
 
@@ -418,7 +452,7 @@ public class InputActionMapEditor : AssetImporterEditor
             if (composite is Vector2CompositeBinding v2c)
             {
                 Origami.Checkbox(paper, $"{id}_norm", v2c.Normalize,
-                        v => { v2c.Normalize = v; MarkDirty(); })
+                        v => { v2c.Normalize = v; })
                     .LabelRight("Normalize").Show();
                 paper.Box($"{id}_sp").Height(4);
             }
@@ -487,7 +521,6 @@ public class InputActionMapEditor : AssetImporterEditor
                     binding.AxisIndex = detected.AxisIndex;
                     binding.RequiredDeviceIndex = detected.RequiredDeviceIndex;
                     _listeningForBinding = false;
-                    MarkDirty();
                 });
             }).Show();
         }
@@ -504,33 +537,33 @@ public class InputActionMapEditor : AssetImporterEditor
             case InputBindingType.Key:
                 EditorGUI.Row(paper, $"{id}_key", "Key", () =>
                     Origami.EnumDropdown(paper, $"{id}_key_v", binding.Key ?? KeyCode.Unknown,
-                        v => { binding.Key = v; MarkDirty(); }).Searchable().Show());
+                        v => { binding.Key = v; }).Searchable().Show());
                 break;
 
             case InputBindingType.MouseButton:
                 EditorGUI.Row(paper, $"{id}_mb", "Button", () =>
                     Origami.EnumDropdown(paper, $"{id}_mb_v", binding.MouseButton ?? MouseButton.Left,
-                        v => { binding.MouseButton = v; MarkDirty(); }).Show());
+                        v => { binding.MouseButton = v; }).Show());
                 break;
 
             case InputBindingType.MouseAxis:
                 EditorGUI.Row(paper, $"{id}_ma", "Axis", () =>
                     Origami.Dropdown(paper, $"{id}_ma_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        v => { binding.AxisIndex = v; },
                         new[] { "X", "Y", "Wheel" }).Show());
                 break;
 
             case InputBindingType.GamepadButton:
                 EditorGUI.Row(paper, $"{id}_gb", "Button", () =>
                     Origami.EnumDropdown(paper, $"{id}_gb_v", binding.GamepadButton ?? GamepadButton.A,
-                        v => { binding.GamepadButton = v; MarkDirty(); }).Show());
+                        v => { binding.GamepadButton = v; }).Show());
                 DrawDeviceField(paper, $"{id}_gbd", binding);
                 break;
 
             case InputBindingType.GamepadAxis:
                 EditorGUI.Row(paper, $"{id}_ga", "Stick", () =>
                     Origami.Dropdown(paper, $"{id}_ga_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        v => { binding.AxisIndex = v; },
                         new[] { "Left Stick", "Right Stick" }).Show());
                 DrawDeviceField(paper, $"{id}_gad", binding);
                 break;
@@ -538,7 +571,7 @@ public class InputActionMapEditor : AssetImporterEditor
             case InputBindingType.GamepadTrigger:
                 EditorGUI.Row(paper, $"{id}_gt", "Trigger", () =>
                     Origami.Dropdown(paper, $"{id}_gt_v", binding.AxisIndex ?? 0,
-                        v => { binding.AxisIndex = v; MarkDirty(); },
+                        v => { binding.AxisIndex = v; },
                         new[] { "Left", "Right" }).Show());
                 DrawDeviceField(paper, $"{id}_gtd", binding);
                 break;
@@ -549,7 +582,7 @@ public class InputActionMapEditor : AssetImporterEditor
     {
         EditorGUI.Row(paper, $"{id}_dev", "Device Index", () =>
             Origami.NumericField<int>(paper, $"{id}_dev_v", binding.RequiredDeviceIndex ?? 0,
-                v => { binding.RequiredDeviceIndex = Math.Max(0, v); MarkDirty(); }).Min(0).Show());
+                v => { binding.RequiredDeviceIndex = Math.Max(0, v); }).Min(0).Show());
     }
 
     private void DrawInteractionParams(Paper paper, string id, InputBinding binding)
@@ -559,25 +592,25 @@ public class InputActionMapEditor : AssetImporterEditor
             case InputInteractionType.Hold:
                 EditorGUI.Row(paper, $"{id}_hd", "Hold Duration (s)", () =>
                     Origami.NumericField<float>(paper, $"{id}_hd_v", binding.HoldDuration,
-                        v => { binding.HoldDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
+                        v => { binding.HoldDuration = MathF.Max(0.01f, v); }).Show());
                 break;
 
             case InputInteractionType.Tap:
                 EditorGUI.Row(paper, $"{id}_td", "Max Tap Duration (s)", () =>
                     Origami.NumericField<float>(paper, $"{id}_td_v", binding.MaxTapDuration,
-                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
+                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); }).Show());
                 break;
 
             case InputInteractionType.MultiTap:
                 EditorGUI.Row(paper, $"{id}_tc", "Tap Count", () =>
                     Origami.NumericField<int>(paper, $"{id}_tc_v", binding.TapCount,
-                        v => { binding.TapCount = Math.Max(2, v); MarkDirty(); }).Min(2).Show());
+                        v => { binding.TapCount = Math.Max(2, v); }).Min(2).Show());
                 EditorGUI.Row(paper, $"{id}_tw", "Tap Window (s)", () =>
                     Origami.NumericField<float>(paper, $"{id}_tw_v", binding.TapWindow,
-                        v => { binding.TapWindow = MathF.Max(0.01f, v); MarkDirty(); }).Show());
+                        v => { binding.TapWindow = MathF.Max(0.01f, v); }).Show());
                 EditorGUI.Row(paper, $"{id}_mtd", "Max Tap Duration (s)", () =>
                     Origami.NumericField<float>(paper, $"{id}_mtd_v", binding.MaxTapDuration,
-                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); MarkDirty(); }).Show());
+                        v => { binding.MaxTapDuration = MathF.Max(0.01f, v); }).Show());
                 break;
         }
     }
@@ -633,7 +666,7 @@ public class InputActionMapEditor : AssetImporterEditor
                         .Hovered.BackgroundColor(EditorTheme.Ink200).End()
                         .Text(EditorIcons.Xmark, font).TextColor(EditorTheme.Ink400)
                         .FontSize(9f).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick(idx, (ci, _) => { processors.RemoveAt(ci); MarkDirty(); });
+                        .OnClick(idx, (ci, _) => { processors.RemoveAt(ci); });
                 }
 
                 // Processor-specific parameters
@@ -642,28 +675,28 @@ public class InputActionMapEditor : AssetImporterEditor
                     case ScaleProcessor sp:
                         EditorGUI.Row(paper, $"{id}_ps{i}", "Scale", () =>
                             Origami.NumericField<float>(paper, $"{id}_ps{i}_v", sp.Scale,
-                                v => { sp.Scale = v; MarkDirty(); }).Show());
+                                v => { sp.Scale = v; }).Show());
                         break;
 
                     case ClampProcessor cp:
                         EditorGUI.Row(paper, $"{id}_pmn{i}", "Min", () =>
                             Origami.NumericField<float>(paper, $"{id}_pmn{i}_v", cp.Min,
-                                v => { cp.Min = v; MarkDirty(); }).Show());
+                                v => { cp.Min = v; }).Show());
                         EditorGUI.Row(paper, $"{id}_pmx{i}", "Max", () =>
                             Origami.NumericField<float>(paper, $"{id}_pmx{i}_v", cp.Max,
-                                v => { cp.Max = v; MarkDirty(); }).Show());
+                                v => { cp.Max = v; }).Show());
                         break;
 
                     case DeadzoneProcessor dp:
                         EditorGUI.Row(paper, $"{id}_pd{i}", "Threshold", () =>
                             Origami.NumericField<float>(paper, $"{id}_pd{i}_v", dp.Threshold,
-                                v => { dp.Threshold = MathF.Max(0f, v); MarkDirty(); }).Min(0f).Show());
+                                v => { dp.Threshold = MathF.Max(0f, v); }).Min(0f).Show());
                         break;
 
                     case ExponentialProcessor ep:
                         EditorGUI.Row(paper, $"{id}_pe{i}", "Exponent", () =>
                             Origami.NumericField<float>(paper, $"{id}_pe{i}_v", ep.Exponent,
-                                v => { ep.Exponent = MathF.Max(0.1f, v); MarkDirty(); }).Min(0.1f).Show());
+                                v => { ep.Exponent = MathF.Max(0.1f, v); }).Min(0.1f).Show());
                         break;
                 }
             }
@@ -684,7 +717,7 @@ public class InputActionMapEditor : AssetImporterEditor
                         5 => new ExponentialProcessor(2f),
                         _ => null
                     };
-                    if (newProc != null) { processors.Add(newProc); MarkDirty(); }
+                    if (newProc != null) { processors.Add(newProc); }
                 }, _processorTypes).Placeholder("Select a processor...").Show());
     }
 
@@ -716,24 +749,22 @@ public class InputActionMapEditor : AssetImporterEditor
         };
     }
 
-    private void MarkDirty() => _dirty = true;
-
-    private void SaveMap(InputActionMap map, AssetEntry entry)
+    private static bool SaveMap(InputActionMap map, AssetEntry entry)
     {
-        if (Project.Current == null) return;
-        string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+        if (Project.Current == null) return false;
 
-        var savedId = map.AssetID;
-        map.AssetID = Guid.Empty;
-        var echo = Serializer.Serialize(typeof(object), map);
-        map.AssetID = savedId;
-
-        if (echo != null)
+        try
         {
-            File.WriteAllText(absolutePath, echo.WriteToString());
+            string absolutePath = Path.Combine(Project.Current.AssetsPath, entry.Path);
+            File.WriteAllText(absolutePath, Serialize(map).WriteToString());
             EditorAssetBackend.Instance?.Reimport(entry.Guid);
+            return true;
         }
-        _dirty = false;
+        catch (Exception ex)
+        {
+            Runtime.Debug.LogError($"Failed to save input actions '{entry.Path}': {ex.Message}");
+            return false;
+        }
     }
 
     private static string FindUniqueName(InputActionMap map, string baseName)

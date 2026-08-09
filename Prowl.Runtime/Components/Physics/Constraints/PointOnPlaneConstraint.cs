@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -103,7 +103,7 @@ public class PointOnPlaneConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -116,7 +116,7 @@ public class PointOnPlaneConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -146,10 +146,29 @@ public class PointOnPlaneConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor1));
+
+    // A point held to a surface: the surface itself, the normal it is measured along, and the slab the
+    // point may sit between when the range is bounded.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 a = WorldAnchor(anchor1);
+        Float3 b = WorldConnectedAnchor(anchor2);
+        Float3 normal = WorldAxis(planeNormal);
+
+        DrawAnchorPair(a, b);
+        Debug.DrawWirePlane(a, normal, scale, AxisColor);
+        Debug.DrawAxisLine(a, normal, scale * 1.5f, AxisColor);
+        Debug.DrawLinearRange(a, normal, minDistance, maxDistance, scale * 2.0f, scale * 0.35f, RangeColor, LimitColor);
+
+        // The bounded faces, so an offset slab reads as two surfaces rather than two ticks on a line.
+        Float3 unit = Float3.Normalize(normal);
+        if (float.IsFinite(minDistance)) Debug.DrawWirePlane(a + unit * minDistance, normal, scale * 0.8f, LimitColor);
+        if (float.IsFinite(maxDistance)) Debug.DrawWirePlane(a + unit * maxDistance, normal, scale * 0.8f, LimitColor);
     }
 }

@@ -44,26 +44,35 @@ public struct RaycastHit
     public RigidBodyShape Shape;
 
     /// <summary>
-    /// The Transform of the rigidbody that was hit.
+    /// The Collider that was hit. Null for hits that no Collider owns (e.g. terrain).
+    /// </summary>
+    public Collider Collider;
+
+    /// <summary>
+    /// The Transform of the rigidbody that was hit, or of the collider itself when the hit belongs to
+    /// static geometry (which shares one body per layer and so cannot identify a GameObject).
     /// </summary>
     public Transform Transform;
 
-    internal void SetFromJitterResult(DynamicTree.RayCastResult result, Float3 origin, Float3 direction)
+    internal void SetFromJitterResult(PhysicsWorld world, DynamicTree.RayCastResult result, Float3 origin, Float3 direction)
     {
+        Hit = true;
+        Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
+        Distance = result.Lambda;
+        Point = origin + (direction * Distance);
+
         Shape = result.Entity as RigidBodyShape;
         if (Shape == null)
         {
-            Hit = false;
+            // Terrain has no shape or body to report, only the GameObject it was authored on.
+            Transform = world.GetTerrainTransform(result.Entity);
             return;
         }
 
         var userData = Shape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
 
-        Hit = true;
-        Rigidbody = userData.Rigidbody;
-        Transform = Rigidbody.IsValid() && Rigidbody.GameObject.IsValid() ? Rigidbody.GameObject.Transform : null;
-        Normal = new Float3(result.Normal.X, result.Normal.Y, result.Normal.Z);
-        Distance = result.Lambda;
-        Point = origin + (direction * Distance);
+        Rigidbody = userData?.Rigidbody;
+        Collider = world.GetShapeOwner(Shape);
+        Transform = PhysicsWorld.ResolveHitTransform(Rigidbody, Collider);
     }
 }

@@ -28,6 +28,9 @@ public static class PrefabEditingMode
 
     private static EchoObject? _savedSceneState;
     private static string? _savedScenePath;
+    // The scene's own dirty flag, parked while the prefab session borrows it. Without this the
+    // prefab and the scene share one flag, so each makes the other look unsaved.
+    private static bool _savedSceneDirty;
     // Tracked so Save() can serialize the prefab root specifically, skipping the
     // editor-only camera/light/etc. that we add for visibility.
     private static GameObject? _editingRoot;
@@ -38,6 +41,12 @@ public static class PrefabEditingMode
     /// </summary>
     public static void Enter(Guid prefabGuid)
     {
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot open a prefab for editing during play mode.");
+            return;
+        }
+
         if (IsEditing)
         {
             if (EditorSceneManager.IsDirty)
@@ -78,6 +87,7 @@ public static class PrefabEditingMode
             _savedSceneState = Serializer.Serialize(currentScene);
             _savedScenePath = EditorSceneManager.CurrentScenePath;
         }
+        _savedSceneDirty = EditorSceneManager.IsDirty;
 
         // Instantiate prefab into isolated scene
         var editScene = new Scene();
@@ -90,8 +100,9 @@ public static class PrefabEditingMode
             return;
         }
 
-        // Clear prefab instance data we're editing the source, not an instance
-        go.ClearPrefabDataRecursive();
+        // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
+        // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
+        PrefabUtility.StripPrefabDataWithinBoundary(go, prefabGuid);
 
         editScene.Add(go);
         _editingRoot = go;
@@ -121,6 +132,7 @@ public static class PrefabEditingMode
         EditingPrefabGuid = prefabGuid;
         IsEditing = true;
         EditorSceneManager.CurrentScenePath = null;
+        EditorSceneManager.IsDirty = false; // the prefab session starts clean
 
         Debug.Log($"[Prefab] Entered editing mode: {prefab.Name}");
     }
@@ -131,6 +143,11 @@ public static class PrefabEditingMode
     public static bool Save()
     {
         if (!IsEditing) return false;
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot save a prefab during play mode.");
+            return false;
+        }
 
         var scene = Scene.Current;
         if (scene == null) return false;
@@ -145,16 +162,38 @@ public static class PrefabEditingMode
         }
         if (root == null) return false;
 
-        // Serialize to .prefab file
-        var echo = Serializer.Serialize(typeof(object), root);
+        // A prefab has exactly one root, so anything else the user created at the top level is not
+        // going to be saved. Say so rather than dropping it silently.
+        var strays = scene.RootObjects
+            .Where(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave) && go != root)
+            .Select(go => go.Name)
+            .ToList();
+        if (strays.Count > 0)
+        {
+            Debug.LogWarning($"[Prefab] Only '{root.Name}' is saved into the prefab. " +
+                $"Parent these under it to keep them: {string.Join(", ", strays)}");
+        }
+
+        // Serialize to .prefab file. The editor-only camera and light live in this scene too, so
+        // anything the prefab references outside itself is linked rather than copied into the asset.
+        var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.TreeValueContext(root));
         if (echo == null) return false;
 
         if (EditingPrefabPath != null && Project.Current != null)
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
-            File.WriteAllText(absolutePath, echo.WriteToString());
+            try
+            {
+                File.WriteAllText(absolutePath, echo.WriteToString());
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+                return false;
+            }
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
+            EditorSceneManager.IsDirty = false;
             Debug.Log($"[Prefab] Saved prefab: {EditingPrefabPath}");
             // Label reported via SaveManager.OnSave handler
             return true;
@@ -169,6 +208,11 @@ public static class PrefabEditingMode
     public static void SaveAndExit()
     {
         if (!IsEditing) return;
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot save a prefab during play mode.");
+            return;
+        }
 
         Save();
         var prefabGuid = EditingPrefabGuid;
@@ -187,6 +231,28 @@ public static class PrefabEditingMode
 
         Cleanup();
         Debug.Log("[Prefab] Saved and exited editing mode.");
+    }
+
+    /// <summary>
+    /// Leave prefab editing mode, prompting first if the prefab has unsaved changes.
+    /// This is the entry point for user-driven exits; <see cref="Exit"/> discards without asking.
+    /// </summary>
+    public static void RequestExit()
+    {
+        if (!IsEditing) return;
+
+        if (EditorSceneManager.IsDirty)
+        {
+            string name = EditingPrefabPath != null ? Path.GetFileNameWithoutExtension(EditingPrefabPath) : "prefab";
+            Origami.Confirm(
+                Loc.Get("dialog.unsaved_prefab"),
+                Loc.Get("dialog.unsaved_prefab_body", new { name }),
+                onYes: SaveAndExit,
+                onNo: Exit);
+            return;
+        }
+
+        Exit();
     }
 
     /// <summary>
@@ -235,5 +301,7 @@ public static class PrefabEditingMode
         _savedSceneState = null;
         _savedScenePath = null;
         _editingRoot = null;
+        EditorSceneManager.IsDirty = _savedSceneDirty;
+        _savedSceneDirty = false;
     }
 }

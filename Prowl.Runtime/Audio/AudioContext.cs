@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Audio.Native;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio;
 
@@ -31,8 +32,10 @@ public static class AudioContext
 
     private static UInt32 sampleRate = 44100;
     private static UInt32 channels = 2;
-    private static DateTime lastUpdateTime;
+    private static long lastUpdateTime;
     private static float deltaTime;
+    private static float masterVolume = 1.0f;
+    private static bool deviceProcessFailed;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -43,6 +46,25 @@ public static class AudioContext
             return audioContext;
         }
     }
+
+    /// <summary>
+    /// Converts a world position, direction or velocity into the space the audio engine works in.
+    /// </summary>
+    /// <remarks>
+    /// Prowl is left handed with +Z forward, the audio engine is right handed with -Z forward, so the
+    /// two disagree by a mirror on one axis. Mirroring the vectors that cross the boundary is what
+    /// gets all three axes right. Mirroring one of the listener's basis vectors instead (negating its
+    /// world up, say) also lines left and right back up, but it does it by flipping the handedness of
+    /// the basis, which leaves vertical inverted.
+    /// </remarks>
+    public static Float3 ToAudioSpace(Float3 vector) => new Float3(vector.X, vector.Y, -vector.Z);
+
+    /// <summary>
+    /// True once a device is up. False before <see cref="Initialize"/>, after
+    /// <see cref="Deinitialize"/>, if the device failed to open, and for the whole of a headless run.
+    /// Nothing may be handed to the native layer while this is false.
+    /// </summary>
+    public static bool IsInitialized => audioContext != IntPtr.Zero;
 
     /// <summary>
     /// Gets the chosen sample rate.
@@ -72,11 +94,17 @@ public static class AudioContext
     {
         get
         {
+            if (!IsInitialized)
+                return masterVolume;
             return MiniAudioExNative.ma_ex_context_get_master_volume(audioContext);
         }
         set
         {
-            MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
+            // Remembered either way, so a volume set before the device opens (settings load) is not
+            // lost, and so the getter still answers in a headless run.
+            masterVolume = value;
+            if (IsInitialized)
+                MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
         }
     }
 
@@ -124,10 +152,14 @@ public static class AudioContext
 
         if (audioContext == IntPtr.Zero)
         {
-            Console.WriteLine("Failed to initialize MiniAudioEx");
+            Debug.LogError($"Failed to open an audio device at {sampleRate} Hz, {channels} channels. " +
+                           "Audio is disabled for this session.");
+            return;
         }
 
-        lastUpdateTime = DateTime.Now;
+        MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
+
+        lastUpdateTime = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
     /// <summary>
@@ -162,9 +194,10 @@ public static class AudioContext
         if (audioContext == IntPtr.Zero)
             return;
 
-        DateTime currentTime = DateTime.Now;
-        TimeSpan dt = currentTime - lastUpdateTime;
-        deltaTime = (float)dt.TotalSeconds;
+        // Monotonic. DateTime.Now is local time, so a daylight saving shift or a clock correction
+        // produced a negative or hour long delta, and this is the only clock doppler is measured on.
+        long currentTime = System.Diagnostics.Stopwatch.GetTimestamp();
+        deltaTime = (float)((currentTime - lastUpdateTime) / (double)System.Diagnostics.Stopwatch.Frequency);
 
         lastUpdateTime = currentTime;
     }
@@ -200,39 +233,53 @@ public static class AudioContext
         return devices;
     }
 
-    internal static void Add(AudioClip clip)
+    /// <summary>
+    /// Takes a reference on the shared native buffer for <paramref name="hash"/>, allocating and
+    /// filling it from <paramref name="data"/> if this is the first caller to ask for it. Release it
+    /// with <see cref="ReleaseClipHandle"/>. Returns IntPtr.Zero if the allocation failed.
+    /// </summary>
+    /// <remarks>
+    /// Lookup and insert are one operation on purpose. Splitting them let two clips with identical
+    /// data both miss the lookup and both allocate, and it let a caller adopt an existing buffer while
+    /// forgetting to count the reference, which freed the buffer out from under the other holder.
+    /// </remarks>
+    internal static IntPtr AcquireClipHandle(UInt64 hash, byte[] data, int length)
     {
-        if (clip.Hash == 0)
-            return;
-
-        if (clip.Handle == IntPtr.Zero)
-            return;
+        if (hash == 0 || data == null || length <= 0)
+            return IntPtr.Zero;
 
         lock (clipTableLock)
         {
-            if (audioClipHandles.ContainsKey(clip.Hash))
-                return;
+            if (audioClipHandles.TryGetValue(hash, out IntPtr existing) && existing != IntPtr.Zero)
+            {
+                audioClipRefCounts[hash] = audioClipRefCounts.TryGetValue(hash, out int count) ? count + 1 : 1;
+                return existing;
+            }
 
-            audioClipHandles.Add(clip.Hash, clip.Handle);
-            audioClipRefCounts[clip.Hash] = 1;
+            IntPtr handle = Marshal.AllocHGlobal(length);
+
+            if (handle == IntPtr.Zero)
+                return IntPtr.Zero;
+
+            Marshal.Copy(data, 0, handle, length);
+            audioClipHandles[hash] = handle;
+            audioClipRefCounts[hash] = 1;
+            return handle;
         }
     }
 
-    /// <summary>Register another clip sharing an already-cached handle (increments its ref-count).</summary>
-    internal static void AddRef(UInt64 hash)
+    /// <summary>How many clips currently hold the shared buffer for this hash, 0 if it is not cached.</summary>
+    internal static int GetClipRefCount(UInt64 hash)
     {
         lock (clipTableLock)
         {
-            if (audioClipRefCounts.TryGetValue(hash, out int count))
-                audioClipRefCounts[hash] = count + 1;
+            return audioClipRefCounts.TryGetValue(hash, out int count) ? count : 0;
         }
     }
 
-    internal static void Remove(AudioClip clip)
+    /// <summary>Drops one reference on a shared buffer, freeing it once the last holder lets go.</summary>
+    internal static void ReleaseClipHandle(UInt64 hash)
     {
-        // Raw accessors: this runs from OnDispose(), where IsDisposed is already true, so the
-        // checked public Hash/Handle properties would themselves throw here.
-        UInt64 hash = clip.RawHash;
         if (hash == 0)
             return;
 
@@ -241,43 +288,48 @@ public static class AudioContext
             if (!audioClipRefCounts.TryGetValue(hash, out int count))
                 return;
 
-            // Only free the shared native allocation when the last user releases it.
-            if (count <= 1)
-            {
-                if (audioClipHandles.TryGetValue(hash, out IntPtr handle) && handle != IntPtr.Zero)
-                    Marshal.FreeHGlobal(handle);
-                audioClipHandles.Remove(hash);
-                audioClipRefCounts.Remove(hash);
-            }
-            else
+            if (count > 1)
             {
                 audioClipRefCounts[hash] = count - 1;
+                return;
             }
+
+            if (audioClipHandles.TryGetValue(hash, out IntPtr handle) && handle != IntPtr.Zero)
+                Marshal.FreeHGlobal(handle);
+
+            audioClipHandles.Remove(hash);
+            audioClipRefCounts.Remove(hash);
         }
     }
 
-    internal static bool GetAudioClipHandle(UInt64 hashcode, out IntPtr handle)
-    {
-        lock (clipTableLock)
-        {
-            return audioClipHandles.TryGetValue(hashcode, out handle);
-        }
-    }
-
+    // The device thread calls this directly, so an exception leaving it is undefined behaviour rather
+    // than a stack trace. A subscriber that throws must not be able to take the process with it.
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static void OnDeviceDataProc(ma_device_ptr pDevice, IntPtr pOutput, IntPtr pInput, UInt32 frameCount)
     {
         IntPtr pEngine = MiniAudioExNative.ma_ex_device_get_user_data(pDevice.pointer);
         MiniAudioExNative.ma_engine_read_pcm_frames(pEngine, pOutput, frameCount, out _);
 
-        NativeArray<float> buffer = new NativeArray<float>(pOutput, (Int32)(frameCount * channels));
-
-        if (DataProcess != null)
+        try
         {
-            DataProcess.Invoke(buffer, frameCount);
-        }
+            NativeArray<float> buffer = new NativeArray<float>(pOutput, (Int32)(frameCount * channels));
 
-        outputBuffer.Write(buffer);
+            if (DataProcess != null)
+            {
+                DataProcess.Invoke(buffer, frameCount);
+            }
+
+            outputBuffer.Write(buffer);
+        }
+        catch (Exception ex)
+        {
+            // Latched: building this message every block would allocate on the device thread forever.
+            if (!deviceProcessFailed)
+            {
+                deviceProcessFailed = true;
+                Debug.LogError($"An audio device data handler threw, further failures are not reported: {ex}");
+            }
+        }
     }
 
     public static bool GetOutputBuffer(ref float[] buffer, out int length)
@@ -419,11 +471,12 @@ public sealed class ConcurrentList<T>
         }
     }
 
-    public void Remove(T item)
+    /// <summary>Removes the item, returning whether it was there to remove.</summary>
+    public bool Remove(T item)
     {
         lock (syncRoot)
         {
-            items.Remove(item);
+            return items.Remove(item);
         }
     }
 
@@ -435,6 +488,17 @@ public sealed class ConcurrentList<T>
             {
                 this.items.Remove(items[i]);
             }
+        }
+    }
+
+    /// <summary>Empties the list and hands back what it held, as one operation.</summary>
+    public List<T> TakeAll()
+    {
+        lock (syncRoot)
+        {
+            List<T> taken = new List<T>(items);
+            items.Clear();
+            return taken;
         }
     }
 
@@ -455,6 +519,7 @@ public sealed class AudioBuffer
     private readonly float[] buffer;
     private readonly object sync = new();
     private int currentLength = 0;
+    private bool truncationReported;
 
     public AudioBuffer(int capacityPowerOfTwo)
     {
@@ -464,24 +529,44 @@ public sealed class AudioBuffer
         buffer = new float[capacity];
     }
 
+    /// <summary>
+    /// Copies as much of <paramref name="src"/> as fits and returns how much that was. Anything past
+    /// the capacity is dropped rather than written past the end of the array, which is what happened
+    /// when the destination was sized from the source and so bounds-checked itself.
+    /// </summary>
     public int Write(NativeArray<float> src)
     {
         lock (sync)
         {
+            int count = Math.Min(src.Length, buffer.Length);
+
+            // Latched: this runs on the audio thread, where formatting a message per block is worse
+            // than the truncation it is reporting.
+            if (src.Length > buffer.Length && !truncationReported)
+            {
+                truncationReported = true;
+                Debug.LogWarning($"AudioBuffer was handed {src.Length} samples but holds {buffer.Length}. The remainder is dropped.");
+            }
+
             unsafe
             {
                 fixed (float* pBuffer = &buffer[0])
                 {
-                    NativeArray<float> b = new NativeArray<float>(pBuffer, src.Length);
-                    src.CopyTo(b);
-                    currentLength = src.Length;
+                    NativeArray<float> source = new NativeArray<float>(src.Pointer, count);
+                    NativeArray<float> destination = new NativeArray<float>(pBuffer, buffer.Length);
+                    source.CopyTo(destination);
                 }
-
             }
-            return src.Length;
+
+            currentLength = count;
+            return count;
         }
     }
 
+    /// <summary>
+    /// Copies the samples written by the last <see cref="Write"/> into <paramref name="output"/>,
+    /// allocating or growing it to the buffer's capacity first, and returns how many are valid.
+    /// </summary>
     public int Read(ref float[] output)
     {
         lock (sync)
@@ -491,10 +576,12 @@ public sealed class AudioBuffer
                 if (output == null || output.Length < buffer.Length)
                     output = new float[buffer.Length];
 
+                // Only the written span, not the whole capacity. Everything past it is stale and the
+                // caller is told not to read it by the return value.
                 fixed (float* pSrc = &buffer[0], pDst = &output[0])
                 {
-                    NativeArray<float> src = new NativeArray<float>(pSrc, buffer.Length);
-                    NativeArray<float> dst = new NativeArray<float>(pDst, buffer.Length);
+                    NativeArray<float> src = new NativeArray<float>(pSrc, currentLength);
+                    NativeArray<float> dst = new NativeArray<float>(pDst, output.Length);
                     src.CopyTo(dst);
                     return currentLength;
                 }

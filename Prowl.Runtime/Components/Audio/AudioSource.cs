@@ -23,7 +23,7 @@ public delegate void AudioReadEvent(NativeArray<float> framesOut, UInt64 frameCo
 /// </summary>
 [AddComponentMenu("Audio/Audio Source")]
 [ComponentIcon("\uf028")] // VolumeHigh
-public sealed class AudioSource : MonoBehaviour, ISerializable
+public sealed class AudioSource : MonoBehaviour
 {
     /// <summary>
     /// Static flag to control whether AudioSources should resume their playback position on deserialization.
@@ -35,42 +35,86 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     {
         public IntPtr handle;
         public bool atEnd;
+        public long startOrder;
     }
 
     // Audio clip and playback settings
+    [Header("Playback")]
+    [SerializeField, Tooltip("The clip this source plays.")]
     private AssetRef<AudioClip> _clip;
+    [SerializeField, Tooltip("Start playing as soon as the component is enabled.")]
     private bool _playOnStart = false;
     // Set when OnEnable wanted to auto-play but the clip was still streaming in (async loading);
     // Update performs the play once the clip arrives.
     private bool _pendingAutoPlay = false;
+    [SerializeField]
     private bool _loop = false;
+    [SerializeField]
     private float _volume = 1.0f;
+    [SerializeField, Tooltip("Playback speed multiplier. 1 is the clip's original pitch.")]
     private float _pitch = 1.0f;
+    [SerializeField, Range(-1f, 1f), Tooltip("Stereo placement. -1 is fully left, 1 is fully right.")]
     private float _pan = 0.0f;
+    [SerializeField, Tooltip("Balance keeps the original stereo image, Pan collapses it toward one side.")]
     private PanMode _panMode = PanMode.Balance;
 
     // Spatial audio settings
+    [Header("Spatial")]
+    [SerializeField, Tooltip("Position this source in 3D space relative to the AudioListener.")]
     private bool _spatial = true;
+    [SerializeField, Tooltip("Strength of the pitch shift from relative motion. 0 disables doppler.")]
     private float _dopplerFactor = 1.0f;
+    [SerializeField, Tooltip("Distance below which the source plays at full volume.")]
     private float _minDistance = 1.0f;
+    [SerializeField, Tooltip("Distance at which the source reaches its quietest.")]
     private float _maxDistance = 10.0f;
+    [SerializeField, Tooltip("Curve used to fall off between the min and max distance.")]
     private AttenuationModel _attenuationModel = AttenuationModel.Linear;
 
+    [Header("Voices")]
+    [SerializeField, Tooltip("How many one shot voices this source can sound at once before the longest running one is taken over.")]
+    private int _maxOneShotVoices = 8;
+
+    /// <summary>How many one shot voices this source can sound at once before stealing the oldest.</summary>
+    public int MaxOneShotVoices
+    {
+        get => _maxOneShotVoices;
+        set => _maxOneShotVoices = value;
+    }
+
     // Playback state (serialized for resume support)
+    [SerializeField, HideInInspector]
     private ulong _savedCursor = 0;
+    [SerializeField, HideInInspector]
     private bool _wasPlaying = false;
 
     // Native handles
     private SourceInfo _mainSource;
+    private readonly List<SourceInfo> _oneShots = [];
+    private long _oneShotCounter;
+    private bool _isPaused;
+    private ulong _pausedCursor;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private Float3 _previousPosition;
+    private Float3 _velocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
     private ma_procedural_data_source_proc _proceduralProcessCallback;
 
     // Effects and buffers
-    private ConcurrentList<IAudioEffect> _effects = new();
+    [Header("Effects")]
+    [SerializeField, Tooltip("Applied to this source's output in order, before it reaches the mix.")]
+    private List<AudioEffect> _effects = [];
+
+    // What the audio thread reads. Rebuilt as a whole array on every change and swapped in, so the
+    // audio thread never sees a half-edited chain and never needs a lock to walk one.
+    private volatile AudioEffect[] _effectChain = [];
+
     private AudioBuffer _outputBuffer;
+
+    // Latched so a failing audio callback reports itself once instead of every block.
+    private bool _effectProcessFailed;
+    private bool _proceduralProcessFailed;
 
     // Events
     public event AudioEndEvent End;
@@ -288,12 +332,58 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
         }
     }
 
+    /// <summary>
+    /// Playback position in seconds. Named to stay clear of the engine's <see cref="Time"/> class.
+    /// </summary>
+    public float PlaybackTime
+    {
+        get => FramesToSeconds(Cursor);
+        set => Cursor = SecondsToFrames(value);
+    }
+
+    /// <summary>Length of the playing clip in seconds, 0 when nothing is loaded.</summary>
+    public float Duration => FramesToSeconds(Length);
+
+    /// <summary>
+    /// Playback position as a fraction of the clip, 0 at the start and 1 at the end. Exact regardless
+    /// of what rate the frame counts are expressed in, which makes it the safer choice for a progress
+    /// readout than <see cref="PlaybackTime"/>.
+    /// </summary>
+    public float NormalizedTime
+    {
+        get
+        {
+            ulong length = Length;
+            return length > 0 ? (float)(Cursor / (double)length) : 0.0f;
+        }
+        set
+        {
+            ulong length = Length;
+            if (length > 0)
+                Cursor = (ulong)(Maths.Clamp(value, 0.0f, 1.0f) * length);
+        }
+    }
+
+    private static float FramesToSeconds(ulong frames)
+        => AudioContext.SampleRate > 0 ? (float)(frames / (double)AudioContext.SampleRate) : 0.0f;
+
+    private static ulong SecondsToFrames(float seconds)
+        => seconds <= 0.0f ? 0 : (ulong)(seconds * AudioContext.SampleRate);
+
     #endregion
 
     #region MonoBehaviour Lifecycle
 
     public override void OnEnable()
     {
+        // No device means no native objects to hand a null context to. Every playback entry point
+        // already no-ops on a null sound group, so the component stays inert but usable.
+        if (!AudioContext.IsInitialized)
+        {
+            Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
+            return;
+        }
+
         // Initialize native resources
         _previousPosition = Transform.Position;
         _outputBuffer = new AudioBuffer(8192);
@@ -331,6 +421,7 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
 
             // Apply all serialized settings
             ApplySettings();
+            RefreshEffects();
 
             // Handle playback. If the clip is still streaming in (async loading), defer the
             // auto-play until it arrives (see Update) instead of silently never playing.
@@ -368,18 +459,22 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
         // Update spatial audio properties based on transform
         if (_spatial)
         {
-            var pos = Transform.Position;
-            MiniAudioNative.ma_sound_group_set_position(_soundGroup, (float)pos.X, (float)pos.Y, (float)pos.Z);
+            Float3 pos = Transform.Position;
+            Float3 audioPos = AudioContext.ToAudioSpace(pos);
+            MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPos.X, audioPos.Y, audioPos.Z);
 
-            var forward = Transform.Forward;
-            MiniAudioNative.ma_sound_group_set_direction(_soundGroup, (float)forward.X, (float)forward.Y, (float)forward.Z);
+            Float3 forward = AudioContext.ToAudioSpace(Transform.Forward);
+            MiniAudioNative.ma_sound_group_set_direction(_soundGroup, forward.X, forward.Y, forward.Z);
 
-            // Calculate velocity based on position change
-            float deltaTime = Time.DeltaTime;
+            // Velocity for doppler, against the same wall clock the listener uses. Doppler is the
+            // difference between the two, so a source measured in scaled time and a listener measured
+            // in real time invent a relative velocity out of nothing but the time scale.
+            float deltaTime = AudioContext.DeltaTime;
             if (deltaTime > 0)
             {
-                Float3 velocity = (pos - _previousPosition) / deltaTime;
-                MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, (float)velocity.X, (float)velocity.Y, (float)velocity.Z);
+                _velocity = (pos - _previousPosition) / deltaTime;
+                Float3 velocity = AudioContext.ToAudioSpace(_velocity);
+                MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, velocity.X, velocity.Y, velocity.Z);
             }
 
             _previousPosition = pos;
@@ -399,8 +494,18 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
         }
     }
 
+    /// <summary>The inspector writes the backing fields directly, so the native side has to be
+    /// re-synced from them rather than from the property setters.</summary>
+    public override void OnValidate()
+    {
+        ApplySettings();
+        RefreshEffects();
+    }
+
     public override void OnDisable()
     {
+        DestroyOneShotVoices();
+
         // Save state for serialization
         if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
         {
@@ -427,9 +532,15 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             _soundGroup.pointer = IntPtr.Zero;
         }
 
-        // Cleanup effects
-        for (int i = 0; i < _effects.Count; i++)
-            _effects[i].OnDestroy();
+        // The effect chain deliberately survives: effects are managed DSP state that belongs to the
+        // source, not to the native objects above, and toggling a component must not silently wipe
+        // the chain the user built.
+    }
+
+    protected override void OnDispose()
+    {
+        ClearEffects();
+        base.OnDispose();
     }
 
     #endregion
@@ -445,6 +556,7 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         _mainSource.atEnd = false;
+        _isPaused = false;
         MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
 
         if (_clip.Res.Handle != IntPtr.Zero)
@@ -466,89 +578,303 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     }
 
     /// <summary>
-    /// Stops playback. The cursor position is maintained (can be used as pause).
+    /// Stops playback and rewinds to the start. Use <see cref="Pause"/> to stop without losing the
+    /// position.
     /// </summary>
     public void Stop()
     {
-        if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
+        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
+
+        MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
+        MiniAudioExNative.ma_ex_audio_source_set_pcm_position(_mainSource.handle, 0);
+        _mainSource.atEnd = false;
+        _isPaused = false;
+        _pausedCursor = 0;
+    }
+
+    /// <summary>
+    /// Stops playback while remembering the position, so <see cref="Resume"/> picks up where it left
+    /// off. Does nothing if the source is not playing.
+    /// </summary>
+    public void Pause()
+    {
+        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
+        if (_isPaused || !IsPlaying) return;
+
+        _pausedCursor = Cursor;
+        _isPaused = true;
+        MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
+    }
+
+    /// <summary>
+    /// Continues from where <see cref="Pause"/> stopped. Does nothing if the source is not paused.
+    /// </summary>
+    /// <remarks>
+    /// The position is restored explicitly after starting rather than relying on the stopped source
+    /// having kept it, so this behaves the same whether the native layer rewinds on stop or not.
+    /// </remarks>
+    public void Resume()
+    {
+        if (!_isPaused) return;
+
+        ulong resumeFrom = _pausedCursor;
+        _isPaused = false;
+        _pausedCursor = 0;
+
+        Play();
+        Cursor = resumeFrom;
+    }
+
+    /// <summary>True while <see cref="Pause"/> is holding the position for a later <see cref="Resume"/>.</summary>
+    public bool IsPaused => _isPaused;
+
+    /// <summary>
+    /// Plays a clip on its own voice, without disturbing whatever this source is already playing.
+    /// Overlapping calls layer instead of cutting each other off, which is what a one shot is for.
+    /// </summary>
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="volumeScale">Level for this voice alone, on top of the source's own volume.</param>
+    /// <remarks>
+    /// Voices are pooled and share the source's sound group, so they inherit its volume, pitch and
+    /// spatial settings and follow the object as it moves. Once <see cref="MaxOneShotVoices"/> are
+    /// sounding at once the longest running one is taken over.
+    /// </remarks>
+    public void PlayOneShot(AudioClip clip, float volumeScale = 1.0f)
+    {
+        if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
+
+        SourceInfo voice = AcquireOneShotVoice();
+
+        if (voice == null) return;
+
+        voice.atEnd = false;
+        voice.startOrder = ++_oneShotCounter;
+
+        MiniAudioExNative.ma_ex_audio_source_set_loop(voice.handle, 0);
+        MiniAudioExNative.ma_ex_audio_source_set_volume(voice.handle, volumeScale);
+
+        if (clip.Handle != IntPtr.Zero)
+            MiniAudioExNative.ma_ex_audio_source_play_from_memory(voice.handle, clip.Handle, clip.DataSize);
+        else
+            MiniAudioExNative.ma_ex_audio_source_play_from_file(voice.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+    }
+
+    /// <summary>Stops every one shot voice this source is sounding. Leaves the main playback alone.</summary>
+    public void StopOneShots()
+    {
+        foreach (SourceInfo voice in _oneShots)
         {
-            MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
-            _mainSource.atEnd = false;
+            if (voice.handle != IntPtr.Zero)
+                MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
+        }
+    }
+
+    /// <summary>How many one shot voices are sounding right now.</summary>
+    public int ActiveOneShotCount
+    {
+        get
+        {
+            int count = 0;
+
+            foreach (SourceInfo voice in _oneShots)
+            {
+                if (voice.handle != IntPtr.Zero && MiniAudioExNative.ma_ex_audio_source_get_is_playing(voice.handle) > 0)
+                    count++;
+            }
+
+            return count;
         }
     }
 
     /// <summary>
-    /// Plays the given clip as a one-shot (fire and forget).
-    /// Note: This uses the main source, so it will interrupt currently playing audio.
+    /// Finds a voice that has finished, or makes one, or takes over the longest running voice once
+    /// the pool is at its limit. Voices are kept rather than torn down so a rapid-fire emitter is not
+    /// allocating native objects every shot.
     /// </summary>
-    public void PlayOneShot(AudioClip clip)
+    private SourceInfo AcquireOneShotVoice()
     {
-        if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
-        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
+        SourceInfo oldest = null;
 
-        // Stop current playback and reset
-        if (IsPlaying)
+        foreach (SourceInfo voice in _oneShots)
         {
-            MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
-            MiniAudioExNative.ma_ex_audio_source_set_pcm_position(_mainSource.handle, 0);
+            if (voice.handle == IntPtr.Zero)
+                continue;
+
+            if (MiniAudioExNative.ma_ex_audio_source_get_is_playing(voice.handle) == 0)
+                return voice;
+
+            if (oldest == null || voice.startOrder < oldest.startOrder)
+                oldest = voice;
         }
 
-        _mainSource.atEnd = false;
+        if (_oneShots.Count < Maths.Max(1, _maxOneShotVoices))
+        {
+            IntPtr handle = MiniAudioExNative.ma_ex_audio_source_init(AudioContext.NativeContext);
 
-        if (clip.Handle != IntPtr.Zero)
-            MiniAudioExNative.ma_ex_audio_source_play_from_memory(_mainSource.handle, clip.Handle, clip.DataSize);
-        else
-            MiniAudioExNative.ma_ex_audio_source_play_from_file(_mainSource.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+            if (handle == IntPtr.Zero)
+                return oldest;
+
+            MiniAudioExNative.ma_ex_audio_source_set_group(handle, _soundGroup.pointer);
+
+            var created = new SourceInfo { handle = handle };
+            _oneShots.Add(created);
+            return created;
+        }
+
+        if (oldest != null)
+            MiniAudioExNative.ma_ex_audio_source_stop(oldest.handle);
+
+        return oldest;
+    }
+
+    private void DestroyOneShotVoices()
+    {
+        foreach (SourceInfo voice in _oneShots)
+        {
+            if (voice.handle == IntPtr.Zero)
+                continue;
+
+            MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
+            MiniAudioExNative.ma_ex_audio_source_uninit(voice.handle);
+        }
+
+        _oneShots.Clear();
+    }
+
+    /// <summary>
+    /// Plays a clip at a world position with no emitter of its own, for sounds whose source is gone by
+    /// the time they finish, like an impact or a pickup. Returns null if there is no scene to put it in.
+    /// </summary>
+    public static AudioSource PlayClipAtPoint(AudioClip clip, Float3 position, float volume = 1.0f)
+    {
+        if (clip == null) return null;
+
+        // The temporary object is destroyed by the End event, which only fires while audio is running.
+        // Without a device it would never fire, so a headless run would leak an object per call.
+        if (!AudioContext.IsInitialized)
+            return null;
+
+        Scene scene = Scene.Current;
+
+        if (scene == null)
+        {
+            Debug.LogWarning("PlayClipAtPoint needs a loaded scene to place the sound in.");
+            return null;
+        }
+
+        var go = new GameObject($"One Shot Audio ({clip.Name})");
+        go.Transform.Position = position;
+
+        AudioSource source = go.AddComponent<AudioSource>();
+        source.Volume = volume;
+        source.Spatial = true;
+        source.Clip = clip;
+
+        scene.Add(go);
+
+        // Added to the scene first: OnEnable is what creates the native source Play needs.
+        source.End += () => go.Destroy();
+        source.Play();
+
+        // Nothing started, so nothing will ever raise End to clean this up.
+        if (!source.IsPlaying)
+        {
+            go.Destroy();
+            return null;
+        }
+
+        return source;
     }
 
     #endregion
 
     #region Effects Management
 
+    /// <summary>The effect chain, in processing order.</summary>
+    public IReadOnlyList<AudioEffect> Effects => _effects;
+
     /// <summary>
-    /// Adds an audio effect to the processing chain.
+    /// Adds an audio effect to the processing chain. The source takes ownership: the effect is
+    /// destroyed when it is removed from the chain or when the source itself is destroyed. Disabling
+    /// and re-enabling the source keeps the chain intact.
     /// </summary>
-    public void AddEffect(IAudioEffect effect)
+    public void AddEffect(AudioEffect effect)
     {
         if (effect == null) return;
+
         _effects.Add(effect);
+        effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
+        RebuildEffectChain();
     }
 
     /// <summary>
-    /// Removes an audio effect from the processing chain.
+    /// Removes an audio effect from the processing chain and destroys it.
     /// </summary>
-    public void RemoveEffect(IAudioEffect effect)
+    public void RemoveEffect(AudioEffect effect)
     {
         if (effect == null) return;
-        _effects.Remove(effect);
+
+        if (!_effects.Remove(effect)) return;
+
+        RebuildEffectChain();
+        effect.OnDestroy();
     }
 
     /// <summary>
-    /// Removes an audio effect by index.
+    /// Removes an audio effect by index and destroys it.
     /// </summary>
     public void RemoveEffect(int index)
     {
-        if (index >= 0 && index < _effects.Count)
-        {
-            var target = _effects[index];
-            _effects.Remove(target);
-        }
+        if (index < 0 || index >= _effects.Count) return;
+
+        RemoveEffect(_effects[index]);
     }
 
     /// <summary>
-    /// Removes all audio effects.
+    /// Removes and destroys every audio effect in the chain.
     /// </summary>
     public void ClearEffects()
     {
-        List<IAudioEffect> targets = new List<IAudioEffect>();
-        for (int i = 0; i < _effects.Count; i++)
+        AudioEffect[] removed = _effects.ToArray();
+        _effects.Clear();
+        RebuildEffectChain();
+
+        foreach (AudioEffect effect in removed)
+            effect?.OnDestroy();
+    }
+
+    /// <summary>
+    /// Binds every effect to the current audio format and republishes the chain the audio thread
+    /// reads. Call after editing <see cref="Effects"/> in place.
+    /// </summary>
+    public void RefreshEffects()
+    {
+        foreach (AudioEffect effect in _effects)
         {
-            targets.Add(_effects[i]);
+            if (effect == null) continue;
+
+            if (!effect.IsInitialized)
+                effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
+            else
+                effect.OnValidate();
         }
-        if (targets.Count > 0)
+
+        RebuildEffectChain();
+    }
+
+    private void RebuildEffectChain()
+    {
+        var chain = new List<AudioEffect>(_effects.Count);
+
+        foreach (AudioEffect effect in _effects)
         {
-            _effects.Remove(targets);
+            // Bypassed and null entries are dropped here rather than tested per block on the audio
+            // thread. An inspector row left empty is a normal state, not an error.
+            if (effect != null && !effect.Bypass)
+                chain.Add(effect);
         }
+
+        _effectChain = chain.ToArray();
     }
 
     /// <summary>
@@ -561,22 +887,16 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     #region Utility Methods
 
     /// <summary>
-    /// Gets the calculated velocity based on position changes.
+    /// The world space velocity the doppler shift is being driven from, in units per real second.
     /// </summary>
+    /// <remarks>
+    /// This used to difference the sound group's position against the previous position that Update
+    /// had already overwritten with it, so it always answered roughly zero, and divided by a delta it
+    /// never checked. It now reports the value Update actually handed the audio engine.
+    /// </remarks>
     public Float3 GetCalculatedVelocity()
     {
-        if (_soundGroup.pointer == IntPtr.Zero)
-            return new Float3(0, 0, 0);
-
-        float deltaTime = AudioContext.DeltaTime;
-        var result = MiniAudioNative.ma_sound_group_get_position(_soundGroup);
-        Float3 currentPosition = new Float3(result.x, result.y, result.z);
-
-        float dx = currentPosition.X - _previousPosition.X;
-        float dy = currentPosition.Y - _previousPosition.Y;
-        float dz = currentPosition.Z - _previousPosition.Z;
-
-        return new Float3(dx / deltaTime, dy / deltaTime, dz / deltaTime);
+        return _velocity;
     }
 
     /// <summary>
@@ -616,6 +936,9 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
     }
 
+    // Native calls this on the audio thread, so an exception leaving it is undefined behaviour and in
+    // practice takes the process down with no usable stack. A user effect throwing, or an effect
+    // changing the frame count so a buffer copy no longer fits, has to cost silence and one log line.
     private unsafe void OnEffectProcess(ma_node_ptr pNode, IntPtr ppFramesIn, IntPtr pFrameCountIn, IntPtr ppFramesOut, IntPtr pFrameCountOut)
     {
         if (pNode.pointer == IntPtr.Zero)
@@ -630,100 +953,100 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
         float** framesIn = (float**)ppFramesIn;
         float** framesOut = (float**)ppFramesOut;
 
-        NativeArray<float> bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
-        NativeArray<float> bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
-
-        // Just in case we end up with no sound at all because no effects were active (prevents silence)
-        bufferIn.CopyTo(bufferOut);
-
-        // An effect can modify the number of frames it processes so we need to keep track of this
-        UInt32 countIn = *frameCountIn;
-        UInt32 countOut = *frameCountOut;
-
-        for (int i = 0; i < _effects.Count; i++)
+        try
         {
-            _effects[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+            NativeArray<float> bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
+            NativeArray<float> bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
 
-            //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
-            bufferOut.CopyTo(bufferIn);
+            // Just in case we end up with no sound at all because no effects were active (prevents silence)
+            bufferIn.CopyTo(bufferOut);
 
-            countIn = countOut;
+            // An effect can modify the number of frames it processes so we need to keep track of this
+            UInt32 countIn = *frameCountIn;
+            UInt32 countOut = *frameCountOut;
+
+            // Read the chain once: it is swapped as a whole array, so this is a consistent snapshot
+            // even if the game thread edits the effects mid-block.
+            AudioEffect[] chain = _effectChain;
+
+            for (int i = 0; i < chain.Length; i++)
+            {
+                chain[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+
+                //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
+                bufferOut.CopyTo(bufferIn);
+
+                countIn = countOut;
+            }
+
+            Process?.Invoke(bufferIn, countIn, bufferOut, ref countOut, pEffectNode->config.channels);
+
+            *frameCountOut = countOut;
+
+            _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels)));
         }
+        catch (Exception ex)
+        {
+            // Flagged rather than logged every callback: a permanently broken effect would otherwise
+            // build a message thousands of times a second on the audio thread.
+            if (!_effectProcessFailed)
+            {
+                _effectProcessFailed = true;
+                Debug.LogError($"[{Name}] Audio effect processing threw and is now producing silence: {ex}");
+            }
 
-        Process?.Invoke(bufferIn, countIn, bufferOut, ref countOut, pEffectNode->config.channels);
-
-        *frameCountOut = countOut;
-
-        _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels)));
+            if (framesOut != null && framesOut[0] != null)
+                new Span<float>(framesOut[0], (int)(*frameCountOut * channels)).Clear();
+        }
     }
 
-    private void OnProceduralProcess(IntPtr pUserData, IntPtr pFramesOut, UInt64 frameCount, UInt32 channels)
+    private unsafe void OnProceduralProcess(IntPtr pUserData, IntPtr pFramesOut, UInt64 frameCount, UInt32 channels)
     {
         int length = (int)(frameCount * channels);
-        NativeArray<float> framesOut = new NativeArray<float>(pFramesOut, length);
-        Read?.Invoke(framesOut, frameCount, (int)channels);
+
+        try
+        {
+            NativeArray<float> framesOut = new NativeArray<float>(pFramesOut, length);
+            Read?.Invoke(framesOut, frameCount, (int)channels);
+        }
+        catch (Exception ex)
+        {
+            if (!_proceduralProcessFailed)
+            {
+                _proceduralProcessFailed = true;
+                Debug.LogError($"[{Name}] Procedural audio generation threw and is now producing silence: {ex}");
+            }
+
+            if (pFramesOut != IntPtr.Zero)
+                new Span<float>((void*)pFramesOut, length).Clear();
+        }
     }
 
     #endregion
 
-    #region ISerializable Implementation
+    #region Serialization Callbacks
 
-    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+    public override void OnBeforeSerialize()
     {
-        compound.Add("Clip", Serializer.Serialize(typeof(AssetRef<AudioClip>), _clip, ctx));
+        base.OnBeforeSerialize();
 
-        // Serialize playback settings
-        compound.Add("PlayOnStart", new EchoObject(_playOnStart));
-        compound.Add("Loop", new EchoObject(_loop));
-        compound.Add("Volume", new EchoObject(_volume));
-        compound.Add("Pitch", new EchoObject(_pitch));
-        compound.Add("Pan", new EchoObject(_pan));
-        compound.Add("PanMode", new EchoObject((int)_panMode));
-
-        // Serialize spatial audio settings
-        compound.Add("Spatial", new EchoObject(_spatial));
-        compound.Add("DopplerFactor", new EchoObject(_dopplerFactor));
-        compound.Add("MinDistance", new EchoObject(_minDistance));
-        compound.Add("MaxDistance", new EchoObject(_maxDistance));
-        compound.Add("AttenuationModel", new EchoObject((int)_attenuationModel));
-
-        // Serialize playback state (for resume support)
-        if (ResumePositionOnLoad && _mainSource != null && _mainSource.handle != IntPtr.Zero)
-        {
-            compound.Add("SavedCursor", new EchoObject((long)Cursor));
-            compound.Add("WasPlaying", new EchoObject(IsPlaying));
-        }
-        else
-        {
-            compound.Add("SavedCursor", new EchoObject(0L));
-            compound.Add("WasPlaying", new EchoObject(false));
-        }
+        bool live = ResumePositionOnLoad && _mainSource != null && _mainSource.handle != IntPtr.Zero;
+        _savedCursor = live ? Cursor : 0;
+        _wasPlaying = live && IsPlaying;
     }
 
-    public void Deserialize(EchoObject value, SerializationContext ctx)
+    public override void OnAfterDeserialize()
     {
-        // Deserialize audio clip reference
-        if (value.TryGet("Clip", out var clipTag))
-            _clip = Serializer.Deserialize<AssetRef<AudioClip>>(clipTag, ctx);
+        base.OnAfterDeserialize();
 
-        // Deserialize playback settings
-        _playOnStart = value["PlayOnStart"].BoolValue;
-        _loop = value["Loop"].BoolValue;
-        _volume = value["Volume"].FloatValue;
-        _pitch = value["Pitch"].FloatValue;
-        _pan = value["Pan"].FloatValue;
-        _panMode = (PanMode)value["PanMode"].IntValue;
+        // The loaded values are only in the fields at this point, so push them at the native side for
+        // the paths that deserialize into an already-running component (clipboard paste, undo, prefab
+        // revert). ApplySettings is a no-op while there is no sound group.
+        ApplySettings();
 
-        // Deserialize spatial audio settings
-        _spatial = value["Spatial"].BoolValue;
-        _dopplerFactor = value["DopplerFactor"].FloatValue;
-        _minDistance = value["MinDistance"].FloatValue;
-        _maxDistance = value["MaxDistance"].FloatValue;
-        _attenuationModel = (AttenuationModel)value["AttenuationModel"].IntValue;
-
-        // Deserialize playback state
-        _savedCursor = (ulong)value["SavedCursor"].LongValue;
-        _wasPlaying = value["WasPlaying"].BoolValue;
+        // Deserialized effects arrive with their parameters but no DSP state, so they have to be
+        // bound to the audio format before the chain the audio thread reads is published.
+        RefreshEffects();
     }
 
     #endregion

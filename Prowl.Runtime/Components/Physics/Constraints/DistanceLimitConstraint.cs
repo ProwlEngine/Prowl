@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -63,7 +63,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             targetDistance = value;
-            if (constraint != null) constraint.TargetDistance = value;
+            if (IsLive(constraint)) constraint.TargetDistance = value;
         }
     }
 
@@ -102,7 +102,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -115,7 +115,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -149,16 +149,13 @@ public class DistanceLimitConstraint : PhysicsConstraint
 
     protected override void DestroyConstraint()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
-        {
-            Body1._body.World.Remove(constraint);
-            constraint = null;
-        }
+        RemoveConstraint(constraint);
+        constraint = null;
     }
 
     private void UpdateAnchors()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
+        if (IsLive(constraint))
         {
             JVector worldAnchor1 = LocalToWorld(anchor, Body1.Transform);
             JVector worldAnchor2 = connectedBody.IsValid()
@@ -168,5 +165,28 @@ public class DistanceLimitConstraint : PhysicsConstraint
             constraint.Anchor1 = worldAnchor1;
             constraint.Anchor2 = worldAnchor2;
         }
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // The whole joint is about the gap between two points, so the gizmo is that gap: both ends, the
+    // span between them, where the range starts and stops, and where it is trying to sit.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 a = WorldAnchor(anchor);
+        Float3 b = WorldConnectedAnchor(connectedAnchor);
+
+        DrawAnchorPair(a, b);
+
+        Float3 span = b - a;
+        float length = Float3.Length(span);
+        if (length <= 1e-5f) return;
+
+        Float3 dir = span / length;
+        Debug.DrawLinearRange(a, dir, minDistance, maxDistance, length + scale * 2.0f, scale * 0.35f, RangeColor, LimitColor);
+
+        // The rest distance it pulls toward, marked on the same line the limits live on.
+        Debug.DrawCrossBar(a + dir * targetDistance, dir, scale * 0.22f, AxisColor);
     }
 }

@@ -21,7 +21,7 @@ public sealed class CapsuleCollider : Collider
         set
         {
             radius = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -31,16 +31,19 @@ public sealed class CapsuleCollider : Collider
         set
         {
             height = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+    private float SegmentLength => Maths.Max(Maths.Max(height, 0.01f) - Maths.Max(radius, 0.01f) * 2.0f, 0.01f);
+
+    public override RigidBodyShape[] CreateShapes() => [new CapsuleShape(Maths.Max(radius, 0.01f), SegmentLength)];
 
     public override void DrawGizmos()
     {
+        float halfSegment = SegmentLength * 0.5f;
         Debug.PushMatrix(GizmoMatrix);
-        Debug.DrawWireCapsule(new Float3(0, -height * 0.5f, 0), new Float3(0, height * 0.5f, 0), radius, Color.Green);
+        Debug.DrawWireCapsule(new Float3(0, -halfSegment, 0), new Float3(0, halfSegment, 0), radius, Color.Green);
         Debug.PopMatrix();
     }
 }

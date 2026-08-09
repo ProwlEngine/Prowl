@@ -21,7 +21,7 @@ public sealed class CylinderCollider : Collider
         set
         {
             radius = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -31,11 +31,12 @@ public sealed class CylinderCollider : Collider
         set
         {
             height = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
-    public override RigidBodyShape[] CreateShapes() => [new CylinderShape(Maths.Max(radius, 0.01f), Maths.Max(height, 0.01f))];
+    // CylinderShape takes (height, radius) in that order.
+    public override RigidBodyShape[] CreateShapes() => [new CylinderShape(Maths.Max(height, 0.01f), Maths.Max(radius, 0.01f))];
 
     public override void DrawGizmos()
     {

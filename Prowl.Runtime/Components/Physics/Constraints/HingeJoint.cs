@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -104,7 +104,7 @@ public class HingeJoint : PhysicsJoint
         set
         {
             motorTargetVelocity = value;
-            if (hingeJoint?.Motor != null)
+            if (IsLive(hingeJoint?.Motor))
                 hingeJoint.Motor.TargetVelocity = value;
         }
     }
@@ -118,7 +118,7 @@ public class HingeJoint : PhysicsJoint
         set
         {
             motorMaxForce = value;
-            if (hingeJoint?.Motor != null)
+            if (IsLive(hingeJoint?.Motor))
                 hingeJoint.Motor.MaximumForce = value;
         }
     }
@@ -130,7 +130,7 @@ public class HingeJoint : PhysicsJoint
     {
         get
         {
-            if (hingeJoint?.HingeAngle == null) return 0.0f;
+            if (!IsLive(hingeJoint?.HingeAngle)) return 0.0f;
             return (float)hingeJoint.HingeAngle.Angle * (180.0f / Maths.PI);
         }
     }
@@ -162,10 +162,32 @@ public class HingeJoint : PhysicsJoint
 
     private void UpdateAngleLimits()
     {
-        if (hingeJoint?.HingeAngle != null)
+        if (IsLive(hingeJoint?.HingeAngle))
         {
             var angleLimit = AngularLimit.FromDegree(minAngleDegrees, maxAngleDegrees);
             hingeJoint.HingeAngle.Limit = angleLimit;
         }
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // Hinge plus socket: the pin, the swing range about it, and the motor when one is fitted.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+        Float3 hinge = WorldAxis(axis);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, hinge, scale * 1.2f, AxisColor);
+        Debug.DrawWireCircle(pivot, hinge, scale, AxisColor, 28);
+
+        Debug.PerpendicularAxes(hinge, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, hinge, zero, scale, minAngleDegrees, maxAngleDegrees, RangeColor, LimitColor);
+
+        if (!hasMotor) return;
+
+        float sweep = (motorTargetVelocity < 0.0f ? -1.0f : 1.0f) * Maths.Min(0.7f + Maths.Abs(motorTargetVelocity) * 0.3f, Maths.PI * 1.4f);
+        Debug.DrawSpinArrow(pivot, hinge, zero, scale * 0.6f, sweep, motorMaxForce > 0.0f ? MotorColor : InactiveColor);
     }
 }

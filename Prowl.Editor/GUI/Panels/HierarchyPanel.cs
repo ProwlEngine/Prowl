@@ -104,7 +104,7 @@ public class HierarchyPanel : DockPanel
                         .TextColor(EditorTheme.Purple400)
                         .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft)
                         .Hovered.TextColor(EditorTheme.Ink500).End()
-                        .OnClick(0, (_, _) => PrefabEditingMode.Exit());
+                        .OnClick(0, (_, _) => PrefabEditingMode.RequestExit());
 
                     paper.Box("hier_prefab_sep_arrow")
                         .Width(UnitValue.Auto).Height(24)

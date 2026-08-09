@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Runtime;
@@ -8,10 +8,24 @@ namespace Prowl.Runtime;
 /// </summary>
 public static class Application
 {
+    private static bool s_isPlaying;
+
     /// <summary>
     /// True when the game is actively running (play mode in editor, or standalone player).
     /// </summary>
-    public static bool IsPlaying { get; set; }
+    public static bool IsPlaying
+    {
+        get => s_isPlaying;
+        set
+        {
+            if (s_isPlaying == value) return;
+            s_isPlaying = value;
+
+            // Entering or leaving play mode is a fresh run, so conditions that were reported once
+            // during the last one should be allowed to report again.
+            Debug.ClearReportedOnce();
+        }
+    }
 
     /// <summary>
     /// True when running inside the editor (false in standalone builds).

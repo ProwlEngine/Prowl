@@ -60,7 +60,7 @@ public class SpriteRenderer : MonoBehaviour
         if (tex == null || tex.Width == 0 || tex.Height == 0) return;
         if (sprite.Rect.Width <= 0 || sprite.Rect.Height <= 0) return;
 
-        EnsureMesh(sprite, tex);
+        EnsureMesh(sprite);
         if (_mesh == null) return;
 
         Material assignedMat = Material.Res;
@@ -88,7 +88,7 @@ public class SpriteRenderer : MonoBehaviour
         culler.Add(new MeshRenderable(_mesh, mat, world, GameObject.LayerIndex, _props));
     }
 
-    private void EnsureMesh(Sprite sprite, Texture2D tex)
+    private void EnsureMesh(Sprite sprite)
     {
         if (!NeedsRebuild(sprite)) return;
 
@@ -101,9 +101,12 @@ public class SpriteRenderer : MonoBehaviour
 
         if (_mesh.IsNotValid()) _mesh = new Mesh();
 
-        // Flip mirrors the UVs within the sprite's atlas sub-rect.
-        float u0 = sprite.Rect.X / (float)tex.Width, u1 = sprite.Rect.MaxX / (float)tex.Width;
-        float v0 = sprite.Rect.Y / (float)tex.Height, v1 = sprite.Rect.MaxY / (float)tex.Height;
+        // Flip mirrors the geometry about the pivot - vertices are already pivot-relative, so negating
+        // an axis is the whole operation. Mirroring the UVs instead would slide the artwork across a
+        // silhouette that stayed put: invisible on a quad, but a tight mesh would then clip its own
+        // image against the wrong edges.
+        float flipX = FlipX ? -1f : 1f;
+        float flipY = FlipY ? -1f : 1f;
 
         var verts = new Float3[n];
         var uvs = new Float2[n];
@@ -111,15 +114,19 @@ public class SpriteRenderer : MonoBehaviour
         Color32 tint = (Color32)Color;
         for (int i = 0; i < n; i++)
         {
-            verts[i] = new Float3(srcVerts[i].X, srcVerts[i].Y, 0f);
-            Float2 uv = srcUV[i];
-            if (FlipX) uv.X = u0 + u1 - uv.X;
-            if (FlipY) uv.Y = v0 + v1 - uv.Y;
-            uvs[i] = uv;
+            verts[i] = new Float3(srcVerts[i].X * flipX, srcVerts[i].Y * flipY, 0f);
+            uvs[i] = srcUV[i];
             colors[i] = tint;
         }
+
         var idx = new uint[srcIdx.Length];
         for (int i = 0; i < srcIdx.Length; i++) idx[i] = srcIdx[i];
+
+        // Mirroring exactly one axis reverses the winding. The built-in sprite shader is Cull Off, but
+        // an assigned material need not be, so put the orientation back.
+        if (FlipX ^ FlipY)
+            for (int i = 0; i + 2 < idx.Length; i += 3)
+                (idx[i + 1], idx[i + 2]) = (idx[i + 2], idx[i + 1]);
 
         _mesh.Vertices = verts; // sets first so length-matched arrays below validate
         _mesh.UV = uvs;
@@ -153,6 +160,10 @@ public class SpriteRenderer : MonoBehaviour
         float w = sprite.Rect.Width / ppu, h = sprite.Rect.Height / ppu;
         Float2 pivot = sprite.Pivot;
         float x0 = -pivot.X * w, y0 = -pivot.Y * h, x1 = (1f - pivot.X) * w, y1 = (1f - pivot.Y) * h;
+
+        // Match the mesh, which mirrors about the pivot. Only visible with an off-centre pivot.
+        if (FlipX) (x0, x1) = (-x1, -x0);
+        if (FlipY) (y0, y1) = (-y1, -y0);
 
         // Rect outline, following the GameObject's transform (so rotation/scale are respected).
         Float4x4 world = Transform.LocalToWorldMatrix;
