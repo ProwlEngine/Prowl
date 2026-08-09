@@ -25,33 +25,39 @@ public static class PrefabUtility
 
     /// <summary>
     /// Save a GameObject hierarchy as a new .prefab file and convert the source to a prefab instance.
+    /// Nested prefab instances within the hierarchy keep their own links, in the saved asset and in the scene.
     /// </summary>
     /// <param name="source">The GameObject to save as a prefab.</param>
     /// <param name="relativeSavePath">Path relative to the Assets folder (e.g., "Prefabs/Enemy.prefab").</param>
+    /// <param name="overwrite">Allow replacing an existing file. Off by default replacing a prefab
+    /// keeps its GUID, so every instance in every scene would silently adopt the new contents.</param>
     /// <returns>True if successful.</returns>
-    public static bool CreatePrefab(GameObject source, string relativeSavePath)
+    public static bool CreatePrefab(GameObject source, string relativeSavePath, bool overwrite = false)
     {
         if (source == null || Project.Current == null) return false;
         if (!GuardNotPlaying("create a prefab")) return false;
 
-        // Clear any existing prefab data so we serialize a clean prefab source
-        source.ClearPrefabDataRecursive();
         if (!relativeSavePath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
         {
             Runtime.Debug.LogError($"[Prefab] '{relativeSavePath}' is not a .prefab path.");
             return false;
         }
 
-        // Serialize the GO tree
-        var savedId = source.AssetID;
-        source.AssetID = Guid.Empty;
-        var echo = Serializer.Serialize(typeof(object), source);
-        source.AssetID = savedId;
+        string absolutePath = Path.Combine(Project.Current.AssetsPath, relativeSavePath);
+        if (!overwrite && File.Exists(absolutePath))
+        {
+            Runtime.Debug.LogWarning($"[Prefab] '{relativeSavePath}' already exists; pass overwrite to replace it.");
+            return false;
+        }
 
+        // Serialize a copy with this object's own prefab data stripped. Nested instances keep theirs,
+        // so saving a hierarchy that contains prefabs preserves those links.
+        var cleanCopy = CloneWithoutPrefabData(source);
+        if (cleanCopy == null) return false;
+
+        var echo = Serializer.Serialize(typeof(object), cleanCopy);
         if (echo == null) return false;
 
-        // Write the .prefab file
-        string absolutePath = Path.Combine(Project.Current.AssetsPath, relativeSavePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
         if (!TryWriteFile(absolutePath, echo.WriteToString())) return false;
 
@@ -59,8 +65,15 @@ public static class PrefabUtility
         var meta = MetaFile.EnsureMeta(absolutePath, nameof(Importers.PrefabImporter));
         if (meta.Guid == Guid.Empty) return false;
 
-        // Stamp the source GO as a prefab instance
-        StampAsPrefabInstance(source, meta.Guid);
+        // Stamp the source GO as an instance of the new prefab. Undo restores the previous prefab
+        // links; the created asset itself is left on disk.
+        var boundary = source.PrefabAssetId;
+        var previous = CapturePrefabState(source, boundary);
+        StampAsPrefabInstance(source, meta.Guid, boundary);
+
+        Undo.RegisterAction("Create Prefab",
+            undo: () => RestorePrefabState(previous),
+            redo: () => StampAsPrefabInstance(source, meta.Guid, boundary));
 
         EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Prefab] Created prefab: {relativeSavePath}");
@@ -131,6 +144,11 @@ public static class PrefabUtility
         if (!instanceRoot.IsPrefabInstance) return;
         if (!GuardNotPlaying("apply prefab overrides")) return;
 
+        // This serializes the whole instance tree over the asset, so it has to run on the instance
+        // root. Handed a child, it would replace the prefab with just that subtree.
+        var applyRoot = GetPrefabInstanceRoot(instanceRoot);
+        if (applyRoot.IsValid()) instanceRoot = applyRoot!;
+
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -151,6 +169,9 @@ public static class PrefabUtility
         // Serialize the instance tree with prefab data stripped
         var cleanCopy = CloneWithoutPrefabData(instanceRoot);
         if (cleanCopy == null) return;
+
+        // Name and root transform are per-instance, not prefab content, so keep the asset's own.
+        PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
 
         var echo = Serializer.Serialize(typeof(object), cleanCopy);
         if (echo == null) return;
@@ -191,6 +212,8 @@ public static class PrefabUtility
         if (!instanceRoot.IsPrefabInstance) return;
         if (!GuardNotPlaying("revert prefab overrides")) return;
 
+        var revertRoot = GetPrefabInstanceRoot(instanceRoot);
+        if (revertRoot.IsValid()) instanceRoot = revertRoot!;
 
         var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
         if (prefab == null)
@@ -388,8 +411,8 @@ public static class PrefabUtility
         if (sourceTarget == null || string.IsNullOrEmpty(sourceFieldPath)) return;
 
         // Read the source value
-        var sourceField = GetFieldByPath(sourceTarget, sourceFieldPath);
-        if (sourceField == null) return;
+        var sourceMember = GetMemberByPath(sourceTarget, sourceFieldPath);
+        if (!sourceMember.IsValid) return;
 
         // Overrides live on the prefab instance root, with root-relative paths, so resolve and
         // mutate against the root rather than whichever GO the inspector happened to pass in.
@@ -401,15 +424,15 @@ public static class PrefabUtility
         if (instanceTarget == null) return;
 
         // Capture old instance value for undo
-        var oldInstanceValue = GetFieldValue(instanceTarget, instanceFieldPath);
-        var oldInstanceEcho = Serializer.Serialize(sourceField.FieldType, oldInstanceValue);
+        var oldInstanceValue = GetMemberValue(instanceTarget, instanceFieldPath);
+        var oldInstanceEcho = Serializer.Serialize(sourceMember.MemberType, oldInstanceValue);
         var removedOverrides = root.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
         var goRef = root;
         var path = overridePath;
 
         // Copy source value to instance
-        var sourceValue = GetFieldValue(sourceTarget, sourceFieldPath);
-        SetFieldValue(instanceTarget, instanceFieldPath, sourceValue);
+        var sourceValue = GetMemberValue(sourceTarget, sourceFieldPath);
+        SetMemberValue(instanceTarget, instanceFieldPath, sourceValue);
 
         // Remove the override entry
         root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
@@ -432,42 +455,75 @@ public static class PrefabUtility
         EditorSceneManager.MarkDirty();
     }
 
-    private const BindingFlags InstanceFields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+    private const BindingFlags InstanceMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+    /// <summary>
+    /// A field or property addressed by an override path. GameObject-level overrides name properties
+    /// (Enabled) while component overrides name fields, and writing through a property setter is what
+    /// keeps side effects like enable/disable propagation working.
+    /// </summary>
+    private readonly struct Member
+    {
+        private readonly FieldInfo? _field;
+        private readonly PropertyInfo? _property;
+
+        private Member(FieldInfo field) { _field = field; _property = null; }
+        private Member(PropertyInfo property) { _field = null; _property = property; }
+
+        public bool IsValid => _field != null || _property != null;
+        public Type MemberType => _field?.FieldType ?? _property!.PropertyType;
+        public object? GetValue(object target) => _field != null ? _field.GetValue(target) : _property!.GetValue(target);
+
+        public void SetValue(object target, object? value)
+        {
+            if (_field != null) _field.SetValue(target, value);
+            else if (_property!.CanWrite) _property.SetValue(target, value);
+        }
+
+        public static Member Find(object target, string name)
+        {
+            var field = target.GetType().GetField(name, InstanceMembers);
+            if (field != null) return new Member(field);
+
+            var property = target.GetType().GetProperty(name, InstanceMembers);
+            return property != null ? new Member(property) : default;
+        }
+    }
 
     private static bool TraverseToParent(object target, string[] parts, out object parent)
     {
         parent = target;
         for (int i = 0; i < parts.Length - 1; i++)
         {
-            var field = parent.GetType().GetField(parts[i], InstanceFields);
-            if (field == null) return false;
-            var next = field.GetValue(parent);
+            var member = Member.Find(parent, parts[i]);
+            if (!member.IsValid) return false;
+            var next = member.GetValue(parent);
             if (next == null) return false;
             parent = next;
         }
         return true;
     }
 
-    private static FieldInfo? GetFieldByPath(object target, string fieldPath)
+    private static Member GetMemberByPath(object target, string memberPath)
     {
-        string[] parts = fieldPath.Split('.');
-        if (!TraverseToParent(target, parts, out var parent)) return null;
-        return parent.GetType().GetField(parts[^1], InstanceFields);
+        string[] parts = memberPath.Split('.');
+        if (!TraverseToParent(target, parts, out var parent)) return default;
+        return Member.Find(parent, parts[^1]);
     }
 
-    private static object? GetFieldValue(object target, string fieldPath)
+    private static object? GetMemberValue(object target, string memberPath)
     {
-        string[] parts = fieldPath.Split('.');
+        string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return null;
-        var field = parent.GetType().GetField(parts[^1], InstanceFields);
-        return field?.GetValue(parent);
+        var member = Member.Find(parent, parts[^1]);
+        return member.IsValid ? member.GetValue(parent) : null;
     }
 
-    private static void SetFieldValue(object target, string fieldPath, object? value)
+    private static void SetMemberValue(object target, string memberPath, object? value)
     {
-        string[] parts = fieldPath.Split('.');
+        string[] parts = memberPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return;
-        parent.GetType().GetField(parts[^1], InstanceFields)?.SetValue(parent, value);
+        Member.Find(parent, parts[^1]).SetValue(parent, value);
     }
 
     /// <summary>Check if a specific property path is overridden on a GameObject.</summary>
@@ -613,15 +669,18 @@ public static class PrefabUtility
                 {
                     // The structure shifted (component/child added, removed or reordered) so this
                     // index-based path no longer resolves. Skip rather than mis-applying the value.
-                    Runtime.Debug.LogWarning($"[Prefab] Override path '{ov.Path}' no longer resolves on the instance; skipping.");
+                    // Once per path: every instance of the prefab reports the same broken path.
+                    Runtime.Debug.LogWarningOnce($"prefab.path.{ov.Path}",
+                        $"[Prefab] Override path '{ov.Path}' no longer resolves on the instance; skipping.");
                     continue;
                 }
 
-                // Validate the field still exists on the resolved target before writing, so a path
+                // Validate the member still exists on the resolved target before writing, so a path
                 // that now points at a different component type doesn't silently land on the wrong field.
-                if (GetFieldByPath(targetObj, fieldPath) == null)
+                if (!GetMemberByPath(targetObj, fieldPath).IsValid)
                 {
-                    Runtime.Debug.LogWarning($"[Prefab] Override '{ov.Path}' has no matching field on the current instance; skipping.");
+                    Runtime.Debug.LogWarningOnce($"prefab.member.{ov.Path}",
+                        $"[Prefab] Override '{ov.Path}' has no matching field on the current instance; skipping.");
                     continue;
                 }
 
@@ -677,16 +736,16 @@ public static class PrefabUtility
         string[] parts = fieldPath.Split('.');
         if (!TraverseToParent(target, parts, out var parent)) return;
 
-        var finalFieldInfo = parent.GetType().GetField(parts[^1], InstanceFields);
-        if (finalFieldInfo == null) return;
+        var member = Member.Find(parent, parts[^1]);
+        if (!member.IsValid) return;
 
-        var deserialized = Serializer.Deserialize(value, finalFieldInfo.FieldType);
+        var deserialized = Serializer.Deserialize(value, member.MemberType);
 
         // Null is a valid override for reference fields (e.g. clearing an object reference).
         // Only skip for non-nullable value types where null means deserialization failed.
-        bool fieldAllowsNull = !finalFieldInfo.FieldType.IsValueType || Nullable.GetUnderlyingType(finalFieldInfo.FieldType) != null;
-        if (deserialized != null || fieldAllowsNull)
-            finalFieldInfo.SetValue(parent, deserialized);
+        bool allowsNull = !member.MemberType.IsValueType || Nullable.GetUnderlyingType(member.MemberType) != null;
+        if (deserialized != null || allowsNull)
+            member.SetValue(parent, deserialized);
     }
 
     // ================================================================
@@ -722,7 +781,9 @@ public static class PrefabUtility
         var sourceComp = sourceComps[compIndex];
         if (sourceComp.GetType() != instanceComp.GetType())
         {
-            Runtime.Debug.LogWarning($"[Prefab] Component type mismatch at index {compIndex}: instance={instanceComp.GetType().Name}, source={sourceComp.GetType().Name}");
+            // Runs once per drawn component per frame, so this must not log per occurrence.
+            Runtime.Debug.LogWarningOnce($"prefab.mismatch.{instanceGO.PrefabAssetId}.{goPath}.{compIndex}",
+                $"[Prefab] Component type mismatch at index {compIndex}: instance={instanceComp.GetType().Name}, source={sourceComp.GetType().Name}");
             return;
         }
 
@@ -897,10 +958,65 @@ public static class PrefabUtility
             CopyIdentifiers(oldGO.Children[i], freshGO.Children[i]);
     }
 
-    private static void StampAsPrefabInstance(GameObject go, Guid prefabGuid)
+    /// <summary>
+    /// Convert every object that belonged to <paramref name="boundaryId"/> into an instance of
+    /// <paramref name="prefabGuid"/>. Nested instances of other prefabs are left alone.
+    /// </summary>
+    private static void StampAsPrefabInstance(GameObject go, Guid prefabGuid, Guid boundaryId)
     {
+        if (go.PrefabAssetId != boundaryId) return;
+
         go.PrefabAssetId = prefabGuid;
+        go.PrefabOverrides.Clear();
+        go.PrefabComponentCount = go.GetComponents<MonoBehaviour>().Count();
+        go.PrefabChildCount = go.Children.Count;
+
         foreach (var child in go.Children)
+            StampAsPrefabInstance(child, prefabGuid, boundaryId);
+    }
+
+    /// <summary>Snapshot the prefab tracking data of every object within a boundary, for undo.</summary>
+    private static List<(GameObject go, Guid assetId, List<PropertyOverride> overrides, int compCount, int childCount)>
+        CapturePrefabState(GameObject root, Guid boundaryId)
+    {
+        var captured = new List<(GameObject, Guid, List<PropertyOverride>, int, int)>();
+        Walk(root);
+        return captured;
+
+        void Walk(GameObject go)
+        {
+            if (go.PrefabAssetId != boundaryId) return;
+            captured.Add((go, go.PrefabAssetId, go.PrefabOverrides.ToList(), go.PrefabComponentCount, go.PrefabChildCount));
+            foreach (var child in go.Children)
+                Walk(child);
+        }
+    }
+
+    private static void RestorePrefabState(
+        List<(GameObject go, Guid assetId, List<PropertyOverride> overrides, int compCount, int childCount)> captured)
+    {
+        foreach (var (go, assetId, overrides, compCount, childCount) in captured)
+        {
+            if (go.IsNotValid()) continue;
+            go.PrefabAssetId = assetId;
+            go.PrefabOverrides = overrides.ToList();
+            go.PrefabComponentCount = compCount;
+            go.PrefabChildCount = childCount;
+        }
+    }
+
+    /// <summary>Copy the prefab source's name and root transform onto a tree about to overwrite it.</summary>
+    private static void PreserveSourceIdentity(GameObject cleanCopy, Guid prefabGuid)
+    {
+        var source = GetCachedPrefabSource(prefabGuid);
+        if (source == null) return;
+
+        cleanCopy.Name = source.Name;
+        cleanCopy.Transform.LocalPosition = source.Transform.LocalPosition;
+        cleanCopy.Transform.LocalRotation = source.Transform.LocalRotation;
+        cleanCopy.Transform.LocalScale = source.Transform.LocalScale;
+    }
+
     private static bool GuardNotPlaying(string operation)
     {
         if (!Application.IsPlaying) return true;
