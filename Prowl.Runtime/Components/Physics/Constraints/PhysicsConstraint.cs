@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Jitter2;
 using Jitter2.Dynamics;
 using Jitter2.Dynamics.Constraints;
@@ -41,15 +43,30 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected Rigidbody3D Body1 => GetComponentInParent<Rigidbody3D>();
 
     /// <summary>
-    /// Gets or sets whether this constraint is active.
+    /// Whether this constraint is currently solving. False while it holds no live constraints, and for
+    /// a joint, false unless every constraint it is composed of is enabled.
     /// </summary>
     public bool Active
     {
-        get => GetConstraint()?.IsEnabled ?? false;
+        get
+        {
+            bool any = false;
+            foreach (Constraint constraint in GetConstraints())
+            {
+                if (constraint.Handle.IsZero) continue;
+                if (!constraint.IsEnabled) return false;
+                any = true;
+            }
+
+            return any;
+        }
         set
         {
-            Constraint constraint = GetConstraint();
-            if (constraint != null) constraint.IsEnabled = value;
+            foreach (Constraint constraint in GetConstraints())
+            {
+                if (constraint.Handle.IsZero) continue;
+                constraint.IsEnabled = value;
+            }
         }
     }
 
@@ -70,9 +87,20 @@ public abstract class PhysicsConstraint : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the underlying Jitter2 constraint.
+    /// Gets the underlying Jitter2 constraint. Composite joints own several and return null here;
+    /// anything that has to act on all of them goes through <see cref="GetConstraints"/>.
     /// </summary>
     protected abstract Constraint GetConstraint();
+
+    /// <summary>
+    /// Every Jitter constraint this component owns. A simple constraint owns one, a joint owns several,
+    /// and enabling or disabling has to reach all of them.
+    /// </summary>
+    protected virtual IEnumerable<Constraint> GetConstraints()
+    {
+        Constraint constraint = GetConstraint();
+        if (constraint != null) yield return constraint;
+    }
 
     /// <summary>
     /// Creates the constraint in the physics world.
@@ -120,12 +148,9 @@ public abstract class PhysicsConstraint : MonoBehaviour
 
         CreateConstraint(world, body1._body, body2);
 
-        // Set initial enabled state
-        Constraint constraint = GetConstraint();
-        if (constraint != null)
-        {
-            constraint.IsEnabled = enabledOnStart;
-        }
+        // Set initial enabled state. Through Active so a joint's constraints all get it, not just the
+        // single one GetConstraint can name.
+        Active = enabledOnStart;
     }
 
     /// <summary>

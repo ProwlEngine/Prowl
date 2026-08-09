@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Jitter2.Dynamics.Constraints;
 
 namespace Prowl.Runtime;
@@ -14,8 +16,18 @@ public abstract class PhysicsJoint : PhysicsConstraint
 
     protected override Constraint GetConstraint()
     {
-        // Joints are composed of multiple constraints, return null for base implementation
+        // A joint is several constraints, so no single one represents it. GetConstraints below is what
+        // Active and enabledOnStart actually use.
         return null;
+    }
+
+    /// <summary>The constraints the underlying Jitter joint is composed of.</summary>
+    protected override IEnumerable<Constraint> GetConstraints()
+    {
+        if (joint == null) yield break;
+
+        foreach (Constraint constraint in joint.Constraints)
+            yield return constraint;
     }
 
     /// <summary>

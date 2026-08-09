@@ -716,6 +716,36 @@ public class PhysicsTests : RuntimeTestBase
         }
     }
 
+    // A joint is several Jitter constraints, and PhysicsConstraint.Active used to route through a
+    // single-constraint accessor that joints return null from, so Active always read false and its
+    // setter was a no-op.
+    [Fact]
+    public void Joint_Active_ReflectsAndControlsAllOfItsConstraints()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        var joint = armGo.AddComponent<HingeJoint>();
+        joint.ConnectedBody = anchor;
+        scene.Add(armGo);
+        StepPhysics(scene, 2);
+
+        Assert.True(joint.Active, "a freshly created joint should report itself active");
+
+        joint.Active = false;
+        Assert.False(joint.Active, "disabling should reach every constraint the joint owns");
+
+        joint.Active = true;
+        Assert.True(joint.Active);
+    }
+
     // ---------------------------------------------------------------------
     // Collider shape rebuilds
     // ---------------------------------------------------------------------
