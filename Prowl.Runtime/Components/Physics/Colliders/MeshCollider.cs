@@ -82,7 +82,7 @@ public sealed class MeshCollider : Collider
         // and falls back to a box approximation. Concave dynamic collision is not really supported.
         Rigidbody3D rb = RigidBody;
         if (rb.IsValid() && rb.MotionType == Jitter2.Dynamics.MotionType.Dynamic)
-            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' is concave but sits on a dynamic Rigidbody3D. Its inertia is approximated by a box; use Convex for dynamic bodies.");
+            Debug.LogWarningOnce($"MeshCollider.ConcaveDynamic.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' is concave but sits on a dynamic Rigidbody3D. Its inertia is approximated by a box; use Convex for dynamic bodies.");
 
         // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
         // indexes into it - the source soup can hold more.
@@ -98,7 +98,7 @@ public sealed class MeshCollider : Collider
         // triangle count. Past a few thousand a convex hull or a decimated collision mesh is the answer.
         const int TriangleBudget = 5000;
         if (count > TriangleBudget)
-            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
+            Debug.LogWarningOnce($"MeshCollider.TriangleBudget.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
 
         var shapes = new TriangleShape[count];
         for (int i = 0; i < count; i++)
@@ -159,7 +159,7 @@ public sealed class MeshCollider : Collider
         // A concave rebuild re-bakes the whole triangle mesh and recreates one shape and one dynamic
         // tree leaf per triangle, so doing it every frame an animated collider moves is pathological.
         if (!convex)
-            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' moved relative to its body and re-baked its triangle mesh. Moving a concave mesh collider's local transform is expensive; keep it still, or mark it Convex.");
+            Debug.LogWarningOnce($"MeshCollider.RelativeRebuild.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' moved relative to its body and re-baked its triangle mesh. Moving a concave mesh collider's local transform is expensive; keep it still, or mark it Convex.");
     }
 
     // The gizmo hull is derived from the mesh and the convex flag, so it has to die with the shapes.

@@ -437,7 +437,9 @@ public class PhysicsWorld
             try { ((Action<float>)d)(deltaTime); }
             catch (Exception ex)
             {
-                Debug.LogError($"[Physics] {stage} subscriber {d.Method.DeclaringType?.Name}.{d.Method.Name} threw and was skipped: {ex.Message}");
+                // Fires every step while the subscriber stays broken, so key it on the subscriber.
+                Debug.LogErrorOnce($"Physics.StepCallback.{d.Method.DeclaringType?.Name}.{d.Method.Name}",
+                    $"[Physics] {stage} subscriber {d.Method.DeclaringType?.Name}.{d.Method.Name} threw and was skipped: {ex.Message}");
             }
         }
     }
@@ -656,7 +658,8 @@ public class PhysicsWorld
     {
         if (!IsFinite(origin) || !IsFinite(direction) || !float.IsFinite(maxDistance))
         {
-            Debug.LogError($"[Physics] {query} was given a non-finite origin ({origin}), direction ({direction}) or distance ({maxDistance}) and was skipped.");
+            // A poisoned caller feeds this every frame, so report the query once rather than per call.
+            Debug.LogErrorOnce($"Physics.NonFiniteQuery.{query}", $"[Physics] {query} was given a non-finite origin ({origin}), direction ({direction}) or distance ({maxDistance}) and was skipped.");
             return false;
         }
 
@@ -668,7 +671,7 @@ public class PhysicsWorld
     {
         if (!IsFinite(position))
         {
-            Debug.LogError($"[Physics] {query} was given a non-finite position ({position}) and was skipped.");
+            Debug.LogErrorOnce($"Physics.NonFiniteQuery.{query}", $"[Physics] {query} was given a non-finite position ({position}) and was skipped.");
             return false;
         }
 

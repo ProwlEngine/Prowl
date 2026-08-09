@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -157,7 +157,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         bool squareCells = MathF.Abs(MathF.Abs((float)scale.X) - MathF.Abs((float)scale.Z)) <= 1e-4f;
 
         if (Transform.Rotation != Quaternion.Identity || !squareCells)
-            Debug.LogError($"TerrainCollider on '{GameObject.Name}' needs an unrotated transform with equal X and Z scale. Collision will not line up with the rendered terrain.");
+            Debug.LogErrorOnce($"TerrainCollider.UnsupportedTransform.{GameObject.Name}", $"TerrainCollider on '{GameObject.Name}' needs an unrotated transform with equal X and Z scale. Collision will not line up with the rendered terrain.");
     }
 
     public override void Update()
