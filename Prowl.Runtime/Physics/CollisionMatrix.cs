@@ -59,6 +59,28 @@ public static class CollisionMatrix
     /// <summary>Sets every pair at once.</summary>
     public static void SetAllCollisions(bool shouldCollide) => Publish(CreateRows(shouldCollide));
 
+    /// <summary>
+    /// Replaces the whole matrix from packed rows, one bit per pair. Loading it a pair at a time would
+    /// copy the matrix once per bit, and would let a reader catch it half applied.
+    /// <para/>
+    /// The result is forced symmetric: filtering asks about a pair in whatever order the broad phase
+    /// produced it, so an asymmetric matrix would make collisions depend on that order.
+    /// </summary>
+    public static void SetRows(ReadOnlySpan<uint> rows)
+    {
+        uint[] next = CreateRows(false);
+
+        int count = Math.Min(rows.Length, LayerCount);
+        for (int i = 0; i < count; i++)
+            next[i] = rows[i];
+
+        Symmetrize(next);
+        Publish(next);
+    }
+
+    /// <summary>The matrix as packed rows, one bit per pair.</summary>
+    public static uint[] GetRows() => (uint[])Volatile.Read(ref s_rows).Clone();
+
     /// <summary>Restores the engine default, where every layer collides with every other.</summary>
     public static void Reset() => SetAllCollisions(true);
 
@@ -82,6 +104,13 @@ public static class CollisionMatrix
     public static void EnsureSymmetric()
     {
         uint[] rows = Snapshot();
+        Symmetrize(rows);
+        Publish(rows);
+    }
+
+    // Union of the two triangles, so a pair collides if either direction said so.
+    private static void Symmetrize(uint[] rows)
+    {
         for (int row = 0; row < LayerCount; row++)
             for (int col = row + 1; col < LayerCount; col++)
                 if (((rows[row] & Bit(col)) != 0) || ((rows[col] & Bit(row)) != 0))
@@ -89,8 +118,6 @@ public static class CollisionMatrix
                     rows[row] |= Bit(col);
                     rows[col] |= Bit(row);
                 }
-
-        Publish(rows);
     }
 
     private static bool InRange(int layer) => (uint)layer < LayerCount;
