@@ -493,6 +493,7 @@ public sealed class AudioBuffer
     private readonly float[] buffer;
     private readonly object sync = new();
     private int currentLength = 0;
+    private bool truncationReported;
 
     public AudioBuffer(int capacityPowerOfTwo)
     {
@@ -502,24 +503,44 @@ public sealed class AudioBuffer
         buffer = new float[capacity];
     }
 
+    /// <summary>
+    /// Copies as much of <paramref name="src"/> as fits and returns how much that was. Anything past
+    /// the capacity is dropped rather than written past the end of the array, which is what happened
+    /// when the destination was sized from the source and so bounds-checked itself.
+    /// </summary>
     public int Write(NativeArray<float> src)
     {
         lock (sync)
         {
+            int count = Math.Min(src.Length, buffer.Length);
+
+            // Latched: this runs on the audio thread, where formatting a message per block is worse
+            // than the truncation it is reporting.
+            if (src.Length > buffer.Length && !truncationReported)
+            {
+                truncationReported = true;
+                Debug.LogWarning($"AudioBuffer was handed {src.Length} samples but holds {buffer.Length}. The remainder is dropped.");
+            }
+
             unsafe
             {
                 fixed (float* pBuffer = &buffer[0])
                 {
-                    NativeArray<float> b = new NativeArray<float>(pBuffer, src.Length);
-                    src.CopyTo(b);
-                    currentLength = src.Length;
+                    NativeArray<float> source = new NativeArray<float>(src.Pointer, count);
+                    NativeArray<float> destination = new NativeArray<float>(pBuffer, buffer.Length);
+                    source.CopyTo(destination);
                 }
-
             }
-            return src.Length;
+
+            currentLength = count;
+            return count;
         }
     }
 
+    /// <summary>
+    /// Copies the samples written by the last <see cref="Write"/> into <paramref name="output"/>,
+    /// allocating or growing it to the buffer's capacity first, and returns how many are valid.
+    /// </summary>
     public int Read(ref float[] output)
     {
         lock (sync)
@@ -529,10 +550,12 @@ public sealed class AudioBuffer
                 if (output == null || output.Length < buffer.Length)
                     output = new float[buffer.Length];
 
+                // Only the written span, not the whole capacity. Everything past it is stale and the
+                // caller is told not to read it by the return value.
                 fixed (float* pSrc = &buffer[0], pDst = &output[0])
                 {
-                    NativeArray<float> src = new NativeArray<float>(pSrc, buffer.Length);
-                    NativeArray<float> dst = new NativeArray<float>(pDst, buffer.Length);
+                    NativeArray<float> src = new NativeArray<float>(pSrc, currentLength);
+                    NativeArray<float> dst = new NativeArray<float>(pDst, output.Length);
                     src.CopyTo(dst);
                     return currentLength;
                 }

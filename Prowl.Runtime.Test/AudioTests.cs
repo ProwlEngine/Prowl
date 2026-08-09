@@ -3,6 +3,7 @@
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Audio.Native;
 using Prowl.Runtime.Resources;
 
 using Xunit;
@@ -24,6 +25,50 @@ public class AudioTests
         Assert.Null(ex);
         Assert.NotNull(output);
         Assert.Equal(8192, output.Length);
+    }
+
+    // Write sized its destination from the source, so the bounds check compared the source against
+    // itself and always passed. Anything longer than the capacity was memcpy'd past the end of the
+    // managed array. The clamped return value is the observable half of that.
+    [Fact]
+    public unsafe void AudioBuffer_Write_ClampsToCapacity()
+    {
+        var buffer = new AudioBuffer(8);
+        float[] source = new float[32];
+        for (int i = 0; i < source.Length; i++)
+            source[i] = i;
+
+        int written;
+        fixed (float* pSource = source)
+            written = buffer.Write(new NativeArray<float>(pSource, source.Length));
+
+        Assert.Equal(8, written);
+
+        float[] output = null!;
+        int read = buffer.Read(ref output);
+
+        Assert.Equal(8, read);
+        for (int i = 0; i < 8; i++)
+            Assert.Equal(i, output[i]);
+    }
+
+    // The indexer built an IndexOutOfRangeException and dropped it on the floor, so a user effect
+    // reading past its buffer silently touched whatever native memory came next.
+    [Fact]
+    public unsafe void NativeArray_OutOfRangeIndex_Throws()
+    {
+        float[] data = new float[4];
+        bool threw = false;
+
+        fixed (float* pData = data)
+        {
+            var array = new NativeArray<float>(pData, data.Length);
+
+            try { _ = array[4]; }
+            catch (IndexOutOfRangeException) { threw = true; }
+        }
+
+        Assert.True(threw);
     }
 
     // AudioSource keeps its settings in private fields, so they only persist because they carry
