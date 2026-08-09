@@ -142,6 +142,11 @@ public static class PrefabEditingMode
     public static bool Save()
     {
         if (!IsEditing) return false;
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot save a prefab during play mode.");
+            return false;
+        }
 
         var scene = Scene.Current;
         if (scene == null) return false;
