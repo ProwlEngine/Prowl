@@ -93,6 +93,12 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
 
     /// <summary>
     /// Processes collision between a rigidbody shape and the terrain.
+    /// <para/>
+    /// Runs on Jitter's broad-phase worker threads, and reads the heightmap and hole mask straight out
+    /// of the TerrainData. Sculpting is main-thread and happens between steps, so the two never overlap;
+    /// editing terrain from inside a <see cref="PhysicsWorld.PreStep"/> subscriber would be the one way
+    /// to race this, and is not something to do. The grid placement is not read here at all: the
+    /// TerrainCollider caches it on the main thread precisely so this path does not touch a Transform.
     /// </summary>
     private void ProcessTerrainCollision(RigidBodyShape rbs)
     {
