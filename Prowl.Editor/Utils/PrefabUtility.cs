@@ -482,7 +482,10 @@ public static class PrefabUtility
         var sourceValue = GetMemberValue(sourceTarget, sourceFieldPath);
         SetMemberValue(instanceTarget, instanceFieldPath, sourceValue);
         if (instanceTarget is MonoBehaviour reverted)
+        {
             reverted.HierarchyStateChanged();
+            reverted.OnValidate();
+        }
 
         // Remove the override entry
         root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
@@ -759,6 +762,10 @@ public static class PrefabUtility
     /// </summary>
     private static void ApplyPropertyOverridesToInstance(GameObject root, List<PropertyOverride> overrides)
     {
+        // Collected rather than validated per field, so a component with several overridden fields
+        // rebuilds its derived state once, after all of them have been written.
+        var touched = new HashSet<MonoBehaviour>();
+
         foreach (var ov in overrides)
         {
             try
@@ -785,10 +792,27 @@ public static class PrefabUtility
                 }
 
                 ApplyFieldValue(targetObj, fieldPath, ov.Value);
+                if (targetObj is MonoBehaviour behaviour)
+                    touched.Add(behaviour);
             }
             catch (Exception ex)
             {
                 Runtime.Debug.LogWarning($"[Prefab] Failed to apply override '{ov.Path}': {ex.Message}");
+            }
+        }
+
+        // An override writes fields directly, so components that derive state from them (colliders
+        // rebuilding their shapes, renderers rebuilding caches) would otherwise keep whatever the
+        // prefab source had until something else happened to touch them.
+        foreach (var behaviour in touched)
+        {
+            try
+            {
+                behaviour.OnValidate();
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogWarning($"[Prefab] OnValidate threw on {behaviour.GetType().Name}: {ex.Message}");
             }
         }
     }
