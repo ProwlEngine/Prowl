@@ -305,6 +305,12 @@ public static class Debug
     public static void DrawWireCube(Float3 center, Float3 halfExtents, Color color) => s_gizmoBuilder.DrawWireCube(center, halfExtents, color);
     public static void DrawCube(Float3 center, Float3 halfExtents, Color color) => s_gizmoBuilder.DrawCube(center, halfExtents, color);
     public static void DrawWireCircle(Float3 center, Float3 normal, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawCircle(center, normal, radius, color, segments);
+
+    /// <summary>
+    /// Part of a circle, starting at the <paramref name="from"/> direction and sweeping
+    /// <paramref name="sweepRadians"/> about <paramref name="normal"/>. Negative sweeps go the other way.
+    /// </summary>
+    public static void DrawWireArc(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color, int segments = 24) => s_gizmoBuilder.DrawWireArc(center, normal, from, radius, sweepRadians, color, segments);
     public static void DrawWireSphere(Float3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireSphere(center, radius, color, segments);
     public static void DrawSphere(Float3 center, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawSphere(center, radius, color, segments);
     public static void DrawWireCone(Float3 start, Float3 direction, float radius, Color color, int segments = 16) => s_gizmoBuilder.DrawWireCone(start, direction, radius, color, segments);
@@ -313,6 +319,177 @@ public static class Debug
     public static void DrawArrow(Float3 start, Float3 direction, Color color) => s_gizmoBuilder.DrawArrow(start, direction, color);
 
     public static void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => s_gizmoBuilder.DrawIcon(icon, center, scale, color);
+
+    /// <summary>
+    /// A line broken into dashes, so it reads as a relationship between two things rather than as an
+    /// edge of something.
+    /// </summary>
+    public static void DrawDashedLine(Float3 from, Float3 to, Color color, int dashes = 8)
+    {
+        if (dashes < 1) dashes = 1;
+        Float3 step = (to - from) / (dashes * 2 - 1);
+
+        for (int i = 0; i < dashes; i++)
+            DrawLine(from + step * (i * 2), from + step * (i * 2 + 1), color);
+    }
+
+    /// <summary>
+    /// An axis through a point, drawn both ways because an axis has no near end, with an arrow to give
+    /// it a positive direction.
+    /// </summary>
+    public static void DrawAxisLine(Float3 center, Float3 direction, float length, Color color)
+    {
+        Float3 half = Float3.Normalize(direction) * length;
+        if (Float3.LengthSquared(half) <= 0.0f) return;
+
+        DrawLine(center - half, center + half, color);
+        DrawArrow(center, half, color);
+    }
+
+    /// <summary>A bar across an axis, for marking a hard stop along it.</summary>
+    public static void DrawCrossBar(Float3 position, Float3 axis, float size, Color color)
+    {
+        PerpendicularAxes(axis, out Float3 u, out Float3 v);
+        DrawLine(position - u * size, position + u * size, color);
+        DrawLine(position - v * size, position + v * size, color);
+    }
+
+    /// <summary>
+    /// An angular range about <paramref name="normal"/>, measured from the <paramref name="zero"/>
+    /// direction: the swept band, plus a spoke at each end unless it goes all the way round.
+    /// </summary>
+    public static void DrawArcRange(Float3 center, Float3 normal, Float3 zero, float radius,
+        float minDegrees, float maxDegrees, Color rangeColor, Color limitColor)
+    {
+        float min = minDegrees * Maths.Deg2Rad;
+        float max = maxDegrees * Maths.Deg2Rad;
+        if (max < min) (min, max) = (max, min);
+
+        Float3 start = Quaternion.AxisAngle(Float3.Normalize(normal), min) * zero;
+        DrawWireArc(center, normal, start, radius, max - min, rangeColor, 32);
+
+        if (max - min >= Maths.PI * 2 - 1e-3f) return; // a full turn has no stops to mark
+
+        Float3 end = Quaternion.AxisAngle(Float3.Normalize(normal), max) * zero;
+        DrawLine(center, center + Float3.Normalize(start) * radius, limitColor);
+        DrawLine(center, center + Float3.Normalize(end) * radius, limitColor);
+    }
+
+    /// <summary>
+    /// A range along an axis. Ends that are infinite run on for <paramref name="openLength"/> with no
+    /// stop drawn, which is what makes an unbounded range look unbounded.
+    /// </summary>
+    public static void DrawLinearRange(Float3 origin, Float3 direction, float minDistance, float maxDistance,
+        float openLength, float stopSize, Color rangeColor, Color limitColor)
+    {
+        Float3 axis = Float3.Normalize(direction);
+        if (Float3.LengthSquared(axis) <= 0.0f) return;
+
+        bool hasMin = float.IsFinite(minDistance);
+        bool hasMax = float.IsFinite(maxDistance);
+
+        float from = hasMin ? minDistance : -openLength;
+        float to = hasMax ? maxDistance : openLength;
+        if (to < from) (from, to) = (to, from);
+
+        DrawLine(origin + axis * from, origin + axis * to, rangeColor);
+
+        if (hasMin) DrawCrossBar(origin + axis * from, axis, stopSize, limitColor);
+        if (hasMax) DrawCrossBar(origin + axis * to, axis, stopSize, limitColor);
+    }
+
+    /// <summary>
+    /// An arc with an arrowhead on the swept end, for showing a rotation direction. A negative
+    /// <paramref name="sweepRadians"/> turns the other way.
+    /// </summary>
+    public static void DrawSpinArrow(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color)
+    {
+        DrawWireArc(center, normal, from, radius, sweepRadians, color, 24);
+
+        Float3 end = Quaternion.AxisAngle(Float3.Normalize(normal), sweepRadians) * (Float3.Normalize(from) * radius);
+        Float3 tangent = Float3.Cross(Float3.Normalize(normal), end);
+        if (Float3.LengthSquared(tangent) <= 0.0f) return;
+
+        DrawArrow(center + end, Float3.Normalize(tangent) * Maths.Sign(sweepRadians) * (radius * 0.5f), color);
+    }
+
+    /// <summary>Three rings around a point, the shorthand for "free to rotate any way".</summary>
+    public static void DrawGimbal(Float3 center, float radius, Color color, int segments = 20)
+    {
+        DrawWireCircle(center, Float3.UnitX, radius, color, segments);
+        DrawWireCircle(center, Float3.UnitY, radius, color, segments);
+        DrawWireCircle(center, Float3.UnitZ, radius, color, segments);
+    }
+
+    /// <summary>An orientation tripod, X/Y/Z in red/green/blue.</summary>
+    public static void DrawAxes(Float3 center, Quaternion rotation, float scale)
+    {
+        DrawLine(center, center + rotation * Float3.UnitX * scale, Color.Red);
+        DrawLine(center, center + rotation * Float3.UnitY * scale, Color.Green);
+        DrawLine(center, center + rotation * Float3.UnitZ * scale, Color.Blue);
+    }
+
+    /// <inheritdoc cref="DrawAxes(Float3, Quaternion, float)"/>
+    public static void DrawAxes(Float3 center, Quaternion rotation, float scale, Color color)
+    {
+        DrawLine(center, center + rotation * Float3.UnitX * scale, color);
+        DrawLine(center, center + rotation * Float3.UnitY * scale, color);
+        DrawLine(center, center + rotation * Float3.UnitZ * scale, color);
+    }
+
+    /// <summary>A square patch of plane with a cross through it, so it reads as a surface.</summary>
+    public static void DrawWirePlane(Float3 center, Float3 normal, float extent, Color color)
+    {
+        PerpendicularAxes(normal, out Float3 u, out Float3 v);
+
+        Float3 a = center + (u + v) * extent;
+        Float3 b = center + (u - v) * extent;
+        Float3 c = center - (u + v) * extent;
+        Float3 d = center - (u - v) * extent;
+
+        DrawLine(a, b, color);
+        DrawLine(b, c, color);
+        DrawLine(c, d, color);
+        DrawLine(d, a, color);
+        DrawLine((a + b) * 0.5f, (c + d) * 0.5f, color);
+        DrawLine((b + c) * 0.5f, (d + a) * 0.5f, color);
+    }
+
+    /// <summary>
+    /// A cone described by its half-angle from the axis rather than by a rim radius, drawn as a rim and
+    /// four ribs. Useful for swing limits, spotlight cones, vision cones.
+    /// </summary>
+    public static void DrawWireConeAngle(Float3 apex, Float3 axis, float angleDegrees, float length, Color color)
+    {
+        Float3 dir = Float3.Normalize(axis);
+        if (Float3.LengthSquared(dir) <= 0.0f) return;
+
+        float angle = Maths.Clamp(angleDegrees, 0.0f, 89.0f) * Maths.Deg2Rad;
+        float radius = Maths.Tan(angle) * length;
+        Float3 rim = apex + dir * length;
+
+        DrawWireCircle(rim, dir, radius, color, 24);
+
+        PerpendicularAxes(dir, out Float3 u, out Float3 v);
+        DrawLine(apex, rim + u * radius, color);
+        DrawLine(apex, rim - u * radius, color);
+        DrawLine(apex, rim + v * radius, color);
+        DrawLine(apex, rim - v * radius, color);
+    }
+
+    /// <summary>
+    /// Two unit vectors perpendicular to <paramref name="axis"/> and to each other. The reference is
+    /// chosen away from the axis, since crossing with a fixed one collapses to zero when they align.
+    /// </summary>
+    public static void PerpendicularAxes(Float3 axis, out Float3 u, out Float3 v)
+    {
+        Float3 n = Float3.Normalize(axis);
+        if (Float3.LengthSquared(n) <= 0.0f) n = Float3.UnitY;
+
+        Float3 reference = Maths.Abs(n.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
+        u = Float3.Normalize(Float3.Cross(reference, n));
+        v = Float3.Normalize(Float3.Cross(n, u));
+    }
 
     #endregion
 
@@ -563,17 +740,48 @@ public class GizmoBuilder
 
     public void DrawCircle(Float3 center, Float3 normal, float radius, Color color, int segments)
     {
-        Float3 u = Float3.Normalize(Float3.Cross(normal, Float3.UnitY));
-        Float3 v = Float3.Normalize(Float3.Cross(u, normal));
-        float step = MathF.PI * 2 / segments;
-        for (int i = 0; i < segments; i++)
+        PlaneBasis(normal, out Float3 u, out Float3 v);
+        DrawArcInternal(center, u, v, radius, 0.0f, MathF.PI * 2, color, segments);
+    }
+
+    public void DrawWireArc(Float3 center, Float3 normal, Float3 from, float radius, float sweepRadians, Color color, int segments)
+    {
+        PlaneBasis(normal, out Float3 u, out Float3 v);
+
+        // Re-seat the basis so the arc starts exactly at `from`, which is what lets callers line an arc
+        // up with a limit angle instead of an arbitrary reference direction.
+        Float3 flattened = from - Float3.Dot(from, Float3.Normalize(normal)) * Float3.Normalize(normal);
+        if (Float3.LengthSquared(flattened) > 1e-12f)
         {
-            float angle1 = i * step;
-            float angle2 = (i + 1) * step;
-            Float3 a = center + radius * (Maths.Cos(angle1) * u + Maths.Sin(angle1) * v);
-            Float3 b = center + radius * (Maths.Cos(angle2) * u + Maths.Sin(angle2) * v);
-            AddLine(a, b, color);
+            u = Float3.Normalize(flattened);
+            v = Float3.Normalize(Float3.Cross(normal, u));
         }
+
+        DrawArcInternal(center, u, v, radius, 0.0f, sweepRadians, color, Maths.Max(1, segments));
+    }
+
+    private void DrawArcInternal(Float3 center, Float3 u, Float3 v, float radius, float start, float sweep, Color color, int segments)
+    {
+        float step = sweep / segments;
+        Float3 previous = center + radius * (Maths.Cos(start) * u + Maths.Sin(start) * v);
+
+        for (int i = 1; i <= segments; i++)
+        {
+            float angle = start + i * step;
+            Float3 point = center + radius * (Maths.Cos(angle) * u + Maths.Sin(angle) * v);
+            AddLine(previous, point, color);
+            previous = point;
+        }
+    }
+
+    private static void PlaneBasis(Float3 normal, out Float3 u, out Float3 v)
+    {
+        Float3 n = Float3.Normalize(normal);
+        if (Float3.LengthSquared(n) <= 0.0f) n = Float3.UnitY;
+
+        Float3 reference = Maths.Abs(n.Y) < 0.9f ? Float3.UnitY : Float3.UnitX;
+        u = Float3.Normalize(Float3.Cross(reference, n));
+        v = Float3.Normalize(Float3.Cross(n, u));
     }
 
     public void DrawSphere(Float3 center, float radius, Color color, int segments = 16)
@@ -784,12 +992,16 @@ public class GizmoBuilder
 
     public void DrawArrow(Float3 start, Float3 direction, Color color)
     {
-        Float3 axis = Float3.Normalize(direction);
-        Float3 end = start + direction;
-        AddLine(start, end, color);
+        float length = Float3.Length(direction);
+        if (length <= 0.0f) return;
 
-        DrawWireCone(start + (direction * 0.9f), axis * 0.1f, 0.1f, color, 4);
+        Float3 axis = direction / length;
+        AddLine(start, start + direction, color);
 
+        // Head sized from the arrow rather than fixed in world units, so a short arrow is not all head
+        // and a long one still reads as an arrow.
+        float head = length * 0.18f;
+        DrawWireCone(start + direction - axis * head, axis * head, head * 0.4f, color, 4);
     }
 
     public void DrawIcon(Texture2D icon, Float3 center, float scale, Color color) => _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
