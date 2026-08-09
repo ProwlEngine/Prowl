@@ -34,6 +34,13 @@ public class InputActionMapEditor : AssetImporterEditor
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
         => asset is InputActionMap map && map.IsValid() && SaveMap(map, entry);
 
+    /// <summary>
+    /// Baselines against the imported form rather than the live object, so a map mutated outside this
+    /// inspector shows up as pending instead of being quietly adopted as the clean state.
+    /// </summary>
+    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
+        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
+
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
     {
         if (asset is not InputActionMap map || map.IsNotValid()) return;

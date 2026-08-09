@@ -60,6 +60,20 @@ public abstract class AssetImporterEditor
     /// </remarks>
     protected virtual EchoObject? CaptureState(AssetEntry entry, EngineObject? asset) => null;
 
+    /// <summary>
+    /// The asset as persisted, used as the clean baseline. Defaults to whatever <see cref="CaptureState"/>
+    /// reports, which is already right for editors that load their buffer from disk.
+    /// </summary>
+    /// <remarks>
+    /// Editors whose state is a live object should override this to read what was actually imported.
+    /// Baselining from the live instance instead adopts whatever it happens to hold when the inspector
+    /// first draws it as "clean", so a mutation made somewhere else - a script or tool poking the asset
+    /// directly - is silently accepted. Comparing against the imported form surfaces it as pending
+    /// changes, which is the only signal that something diverged.
+    /// </remarks>
+    protected virtual EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
+        => CaptureState(entry, asset);
+
     /// <summary>Writes this editor's current state to disk and reimports. Returns false when nothing was
     /// written, so a failed write keeps its changes pending instead of being marked clean.</summary>
     protected virtual bool ApplyState(AssetEntry entry, EngineObject? asset) => false;
@@ -75,9 +89,10 @@ public abstract class AssetImporterEditor
 
         if (!s_baselines.TryGetValue(entry.Guid, out EchoObject baseline))
         {
-            // Nothing seen for this asset yet, so what it holds now is by definition unmodified.
-            s_baselines[entry.Guid] = current.Clone();
-            return false;
+            // Nothing seen for this asset yet. Take the persisted form as clean rather than whatever
+            // the live object holds, so a change made before this inspector opened still registers.
+            baseline = (CapturePersistedState(entry, asset) ?? current).Clone();
+            s_baselines[entry.Guid] = baseline;
         }
 
         EchoObject delta = EchoObject.CreateDelta(baseline, current);
@@ -105,9 +120,9 @@ public abstract class AssetImporterEditor
     /// </summary>
     protected void Rebaseline(AssetEntry entry, EngineObject? asset)
     {
-        EchoObject? current = CaptureState(entry, asset);
-        if (current is null) s_baselines.Remove(entry.Guid);
-        else s_baselines[entry.Guid] = current.Clone();
+        EchoObject? persisted = CapturePersistedState(entry, asset);
+        if (persisted is null) s_baselines.Remove(entry.Guid);
+        else s_baselines[entry.Guid] = persisted.Clone();
     }
 
 

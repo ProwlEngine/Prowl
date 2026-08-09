@@ -39,9 +39,25 @@ public class MaterialAssetEditor : AssetImporterEditor
     // measures is whether the live object still matches the .mat file on disk.
 
     protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
-        => asset is Material material && material.IsValid()
-            ? Serializer.Serialize(typeof(Material), material)
-            : null;
+        => asset is Material material && material.IsValid() ? SerializePersisted(material) : null;
+
+    /// <summary>
+    /// Baselines against the imported form rather than the live object, so a material mutated outside
+    /// this inspector - by a script or tool holding the same instance - shows up as pending instead of
+    /// being quietly adopted as the clean state.
+    /// </summary>
+    protected override EchoObject? CapturePersistedState(AssetEntry entry, EngineObject? asset)
+        => EditorAssetBackend.Instance?.ReadCachedEcho(entry.Guid) ?? CaptureState(entry, asset);
+
+    /// <summary>Serializes a material the way its .mat file and cache entry are written: AssetID cleared,
+    /// so the whole object is emitted rather than an $assetId reference back to itself.</summary>
+    private static EchoObject SerializePersisted(Material material)
+    {
+        Guid savedId = material.AssetID;
+        material.AssetID = Guid.Empty;
+        try { return Serializer.Serialize(typeof(object), material); }
+        finally { material.AssetID = savedId; }
+    }
 
     protected override bool ApplyState(AssetEntry entry, EngineObject? asset)
     {
@@ -176,16 +192,7 @@ public class MaterialAssetEditor : AssetImporterEditor
         string absolutePath = Path.Combine(Project.Current!.AssetsPath, entry.Path);
         try
         {
-            EchoObject? echo;
-
-            // Temporarily clear AssetID so the serializer writes the full object
-            // instead of just an $assetId reference
-            var savedId = material.AssetID;
-            material.AssetID = Guid.Empty;
-            try { echo = Serializer.Serialize(typeof(object), material); }
-            finally { material.AssetID = savedId; }
-
-            if (echo == null) return false;
+            EchoObject echo = SerializePersisted(material);
             File.WriteAllText(absolutePath, echo.WriteToString());
             return true;
         }
