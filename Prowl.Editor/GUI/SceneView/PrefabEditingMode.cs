@@ -100,8 +100,9 @@ public static class PrefabEditingMode
             return;
         }
 
-        // Clear prefab instance data we're editing the source, not an instance
-        go.ClearPrefabDataRecursive();
+        // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
+        // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
+        PrefabUtility.StripPrefabDataWithinBoundary(go, prefabGuid);
 
         editScene.Add(go);
         _editingRoot = go;

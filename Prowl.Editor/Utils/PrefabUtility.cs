@@ -918,7 +918,11 @@ public static class PrefabUtility
         return clone;
     }
 
-    private static void StripPrefabDataWithinBoundary(GameObject go, Guid boundaryPrefabId)
+    /// <summary>
+    /// Clear prefab tracking data on every object belonging to <paramref name="boundaryPrefabId"/>,
+    /// stopping at nested instances of other prefabs so their links survive.
+    /// </summary>
+    internal static void StripPrefabDataWithinBoundary(GameObject go, Guid boundaryPrefabId)
     {
         if (go.PrefabAssetId == boundaryPrefabId)
         {
