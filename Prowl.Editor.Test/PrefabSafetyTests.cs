@@ -622,6 +622,64 @@ public class PrefabSafetyTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Imported prefabs (models) are revert-only, and track their source file
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void OnlyAuthoredPrefabFilesAreEditable()
+    {
+        // Authored: writing the instance back over this file is the whole point of Apply.
+        Guid authored = CreatePrefabAsset(new GameObject("Root"), "Authored.prefab");
+        Assert.True(PrefabUtility.IsEditablePrefab(authored));
+
+        // Imported: a model imports into a PrefabAsset too, but its file is the model. Applying
+        // would write a serialized hierarchy over the .obj/.fbx, so it must be refused.
+        // (The harness cannot import real model files, so this covers the rule, not the format.)
+        var scene = new Scene();
+        Guid notAPrefabFile = CreateSceneAsset(scene, "Some.scene");
+        Assert.False(PrefabUtility.IsEditablePrefab(notAPrefabFile));
+        Assert.False(PrefabUtility.IsEditablePrefab(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void RevertStillWorksWhenApplyIsNotAvailable()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "RevertOnly.prefab");
+
+        var instance = Inst(g);
+        instance.GetComponent<OverrideComp>()!.A = 99;
+        PrefabUtility.DetectComponentOverrides(instance, instance.GetComponent<OverrideComp>()!);
+        SetSceneCurrent(instance);
+
+        PrefabUtility.RevertSingleOverride(Scene.Current!.RootObjects.First(), "c0.A");
+
+        Assert.Equal(1, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void ReimportingAPrefab_UpdatesInstancesInTheOpenScene()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Live.prefab");
+
+        var instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        // Stands in for changing a model's import settings: the asset's contents change and it is
+        // reimported, with no explicit refresh call from the caller.
+        var newSource = new GameObject("Root");
+        newSource.AddComponent<OverrideComp>().A = 42;
+        File.WriteAllText(AssetAbsolutePath("Live.prefab"),
+            Serializer.Serialize(typeof(object), newSource).WriteToString());
+        Assets.Reimport(g);
+
+        Assert.Equal(42, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
+    // ---------------------------------------------------------------------
     // Play mode never writes to prefab assets
     // ---------------------------------------------------------------------
 

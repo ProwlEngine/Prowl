@@ -75,6 +75,14 @@ public static class PrefabEditingMode
             return;
         }
 
+        // Saving writes the edited tree back over the asset's own file, which for an imported prefab
+        // is the model it came from.
+        if (!PrefabUtility.IsEditablePrefab(prefabGuid))
+        {
+            Debug.LogWarning("[Prefab] Cannot edit an imported prefab; it is generated from its source file.");
+            return;
+        }
+
         var db = EditorAssetBackend.Instance;
         var entry = db?.GetEntry(prefabGuid);
         EditingPrefabPath = entry?.Path;

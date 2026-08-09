@@ -81,6 +81,28 @@ public static class PrefabUtility
         return true;
     }
 
+    /// <summary>
+    /// Whether a prefab asset can be written back to. A .prefab file is authored, so applying to it
+    /// is the whole point; a prefab imported from another format (a model) is generated from its
+    /// source file, and writing a serialized hierarchy over that .fbx or .obj would destroy it.
+    /// Instances of an imported prefab still track and revert overrides, they just cannot apply.
+    /// </summary>
+    public static bool IsEditablePrefab(Guid prefabGuid)
+    {
+        var entry = EditorAssetBackend.Instance?.GetEntry(prefabGuid);
+        return entry != null && entry.Path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool GuardEditablePrefab(Guid prefabGuid, string operation)
+    {
+        if (IsEditablePrefab(prefabGuid)) return true;
+
+        var entry = EditorAssetBackend.Instance?.GetEntry(prefabGuid);
+        Runtime.Debug.LogWarning($"[Prefab] Cannot {operation}: '{entry?.Path ?? prefabGuid.ToString()}' is " +
+            "imported from its source file. Reimport it to change it, or unpack the instance.");
+        return false;
+    }
+
     // ================================================================
     //  Instantiation
     // ================================================================
@@ -148,6 +170,8 @@ public static class PrefabUtility
         // root. Handed a child, it would replace the prefab with just that subtree.
         var applyRoot = GetPrefabInstanceRoot(instanceRoot);
         if (applyRoot.IsValid()) instanceRoot = applyRoot!;
+
+        if (!GuardEditablePrefab(instanceRoot.PrefabAssetId, "apply prefab overrides")) return;
 
         ApplyOverridesCore(instanceRoot, recordUndo: true);
     }
@@ -366,6 +390,8 @@ public static class PrefabUtility
     {
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("apply a prefab override")) return;
+
+        if (!GuardEditablePrefab(instanceGO.PrefabAssetId, "apply a prefab override")) return;
 
         ApplySingleOverrideCore(instanceGO, ov, recordUndo: true);
     }
