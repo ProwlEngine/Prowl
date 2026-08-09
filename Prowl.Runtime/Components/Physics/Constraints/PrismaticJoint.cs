@@ -176,4 +176,27 @@ public class PrismaticJoint : PhysicsJoint
         prismaticJoint = null;
         base.DestroyConstraint();
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // A slider: the rail, how far along it may travel, and which way the motor drives. Pinned means the
+    // orientation is welded too, which the frame at the anchor stands for.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+        Float3 rail = WorldAxis(axis);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, rail, scale * 1.5f, AxisColor);
+        Debug.DrawLinearRange(pivot, rail, minDistance, maxDistance, scale * 2.5f, scale * 0.35f, RangeColor, LimitColor);
+
+        if (pinned) Debug.DrawAxes(pivot, BodyFrame.Rotation, scale * 0.5f, LinkColor);
+
+        if (hasMotor)
+        {
+            float sign = motorTargetVelocity < 0.0f ? -1.0f : 1.0f;
+            Debug.DrawArrow(pivot, Float3.Normalize(rail) * (sign * scale * 1.6f), motorMaxForce > 0.0f ? MotorColor : InactiveColor);
+        }
+    }
 }

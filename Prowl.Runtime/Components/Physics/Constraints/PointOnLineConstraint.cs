@@ -192,4 +192,19 @@ public class PointOnLineConstraint : PhysicsConstraint
         RemoveConstraint(constraint);
         constraint = null;
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor1));
+
+    // A bead on a wire: the wire, the bead, and how far along it may travel.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 a = WorldAnchor(anchor1);
+        Float3 b = WorldConnectedAnchor(anchor2);
+        Float3 dir = WorldAxis(lineAxis);
+
+        DrawAnchorPair(a, b);
+        Debug.DrawAxisLine(a, dir, scale * 2.0f, AxisColor);
+        Debug.DrawLinearRange(a, dir, minDistance, maxDistance, scale * 2.5f, scale * 0.35f, RangeColor, LimitColor);
+    }
 }

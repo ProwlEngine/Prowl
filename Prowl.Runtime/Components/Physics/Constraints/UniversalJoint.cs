@@ -146,4 +146,30 @@ public class UniversalJoint : PhysicsJoint
         universalJoint = null;
         base.DestroyConstraint();
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // Two crossed axes, one owned by each body, that can pivot about each other but not twist. Drawing
+    // both in their owners' colours is what separates it from a hinge at a glance.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.2f, ConnectedColor);
+
+        // A ring per axis: each one is a rotation this joint allows.
+        Debug.DrawWireCircle(pivot, a, scale * 0.75f, AnchorColor, 24);
+        Debug.DrawWireCircle(pivot, b, scale * 0.75f, ConnectedColor, 24);
+
+        if (!hasMotor) return;
+
+        Debug.PerpendicularAxes(a, out Float3 zero, out _);
+        float sweep = (motorTargetVelocity < 0.0f ? -1.0f : 1.0f) * Maths.Min(0.7f + Maths.Abs(motorTargetVelocity) * 0.3f, Maths.PI * 1.4f);
+        Debug.DrawSpinArrow(pivot, a, zero, scale * 0.55f, sweep, motorMaxForce > 0.0f ? MotorColor : InactiveColor);
+    }
 }

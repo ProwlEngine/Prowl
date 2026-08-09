@@ -104,4 +104,24 @@ public class LinearMotorConstraint : PhysicsConstraint
         RemoveConstraint(constraint);
         constraint = null;
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A motor that drives one body along an axis. The arrow points the way it pushes, and greys out
+    // when the maximum force is zero.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.0f, ConnectedColor);
+
+        float sign = targetVelocity < 0.0f ? -1.0f : 1.0f;
+        Color color = maximumForce > 0.0f ? MotorColor : InactiveColor;
+        Debug.DrawArrow(pivot, Float3.Normalize(a) * (sign * scale * 1.6f), color);
+    }
 }

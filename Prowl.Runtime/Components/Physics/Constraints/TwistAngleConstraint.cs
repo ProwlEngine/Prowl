@@ -155,4 +155,23 @@ public class TwistAngleConstraint : PhysicsConstraint
             constraint.Limit = limit;
         }
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // Twist is the angle between two directions that each belong to one of the bodies, so both are
+    // drawn: this body's in cyan, the other's in orange, with the allowed twist swept between them.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 a = WorldAxis(axis1);
+        Float3 b = WorldConnectedAxis(axis2);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, a, scale * 1.2f, AnchorColor);
+        Debug.DrawAxisLine(pivot, b, scale * 1.0f, ConnectedColor);
+
+        Debug.PerpendicularAxes(a, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, a, zero, scale * 0.7f, minAngle, maxAngle, RangeColor, LimitColor);
+    }
 }
