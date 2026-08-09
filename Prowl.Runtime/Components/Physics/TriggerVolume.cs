@@ -87,8 +87,10 @@ public sealed class TriggerVolume : MonoBehaviour
         Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
         foreach (ShapeCastHit hit in _hits)
         {
+            // Our own body is already excluded by the query filter, so only unidentifiable hits (static
+            // geometry, terrain) are left to drop here.
             Rigidbody3D other = hit.Rigidbody;
-            if (other.IsNotValid() || other == self) continue; // skip static/unidentifiable and our own body
+            if (other.IsNotValid()) continue;
             _current.Add(other);
         }
 
