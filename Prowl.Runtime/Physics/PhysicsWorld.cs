@@ -302,16 +302,20 @@ public class PhysicsWorld
         // The owner lookup is only worth doing when something is actually excluded.
         if (!filter.HasExclusions) return true;
 
-        if (filter.IgnoreRigidbody.IsValid() && userData.Rigidbody == filter.IgnoreRigidbody) return false;
-        if (filter.IgnoreCollider.IsValid() && GetShapeOwner(shape) == filter.IgnoreCollider) return false;
+        bool ignoringBody = filter.IgnoreRigidbody.IsValid();
+        if (ignoringBody && userData.Rigidbody == filter.IgnoreRigidbody) return false;
 
-        // Static colliders share one body per layer, so excluding a rigidbody has to also drop the
-        // static shapes belonging to colliders parented under it.
-        if (filter.IgnoreRigidbody.IsValid() && userData.Rigidbody.IsNotValid())
-        {
-            Collider owner = GetShapeOwner(shape);
-            if (owner.IsValid() && owner.GetComponentInParent<Rigidbody3D>() == filter.IgnoreRigidbody) return false;
-        }
+        // Static colliders share one body per layer, so a shape with no rigidbody of its own still has
+        // to be checked against the ignored one, by way of the collider that created it. One lookup
+        // serves both exclusions.
+        bool checkStaticOwner = ignoringBody && userData.Rigidbody.IsNotValid();
+        if (!filter.IgnoreCollider.IsValid() && !checkStaticOwner) return true;
+
+        Collider owner = GetShapeOwner(shape);
+        if (!owner.IsValid()) return true;
+
+        if (owner == filter.IgnoreCollider) return false;
+        if (checkStaticOwner && owner.GetComponentInParent<Rigidbody3D>() == filter.IgnoreRigidbody) return false;
 
         return true;
     }
