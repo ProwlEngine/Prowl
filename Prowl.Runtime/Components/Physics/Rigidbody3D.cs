@@ -145,8 +145,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => friction;
         set
         {
-            if (value < 0.0 || value > 1.0)
-                throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
+            if (value < 0.0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Friction can not be negative.");
 
             friction = value;
             if (_body != null) _body.Friction = value;
