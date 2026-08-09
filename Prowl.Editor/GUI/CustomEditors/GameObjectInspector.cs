@@ -1176,6 +1176,11 @@ public static class GameObjectInspector
                 int idx = i;
                 var ov = overrides[i];
 
+                // A path that no longer resolves cannot be applied or reverted, so it is shown as
+                // broken and offers removal instead. Otherwise it sits in the list forever, keeping
+                // the instance permanently "modified".
+                bool resolvable = PrefabUtility.IsOverrideResolvable(go, ov.Path);
+
                 using (paper.Row($"gi_ov_{i}")
                     .Height(EditorTheme.RowHeight)
                     .BackgroundColor(EditorTheme.Neutral300)
@@ -1186,38 +1191,55 @@ public static class GameObjectInspector
                     // Override path
                     paper.Box($"gi_ov_path_{i}")
                         .Width(UnitValue.Stretch()).Height(EditorTheme.RowHeight)
-                        .Text(ov.Path, font).TextColor(EditorTheme.Purple400)
+                        .Text(resolvable ? ov.Path : $"{ov.Path}  ({Loc.Get("inspector.override_missing")})", font)
+                        .TextColor(resolvable ? EditorTheme.Purple400 : EditorTheme.Red400)
                         .FontSize(fs - 2).Alignment(TextAlignment.MiddleLeft);
 
-                    // Revert single
-                    paper.Box($"gi_ov_revert_{i}")
-                        .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(Loc.Get("inspector.revert"), font).TextColor(EditorTheme.Ink400)
-                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick((go, idx), (cap, _) =>
-                        {
-                            if (cap.idx < cap.go.PrefabOverrides.Count)
+                    if (resolvable)
+                    {
+                        // Revert single
+                        paper.Box($"gi_ov_revert_{i}")
+                            .Width(50).Height(EditorTheme.RowHeight).Rounded(3)
+                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                            .Text(Loc.Get("inspector.revert"), font).TextColor(EditorTheme.Ink400)
+                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                            .OnClick((go, idx), (cap, _) =>
                             {
-                                var overridePath = cap.go.PrefabOverrides[cap.idx].Path;
-                                PrefabUtility.RevertSingleOverride(cap.go, overridePath);
-                            }
-                        });
+                                if (cap.idx < cap.go.PrefabOverrides.Count)
+                                {
+                                    var overridePath = cap.go.PrefabOverrides[cap.idx].Path;
+                                    PrefabUtility.RevertSingleOverride(cap.go, overridePath);
+                                }
+                            });
 
-                    // Apply single
-                    paper.Box($"gi_ov_apply_{i}")
-                        .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
-                        .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                        .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
-                        .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                        .OnClick((go, idx), (cap, _) =>
-                        {
-                            if (cap.idx < cap.go.PrefabOverrides.Count)
+                        // Apply single
+                        paper.Box($"gi_ov_apply_{i}")
+                            .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
+                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                            .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
+                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                            .OnClick((go, idx), (cap, _) =>
                             {
-                                var singleOv = cap.go.PrefabOverrides[cap.idx];
-                                PrefabUtility.ApplySingleOverride(cap.go, singleOv);
-                            }
-                        });
+                                if (cap.idx < cap.go.PrefabOverrides.Count)
+                                {
+                                    var singleOv = cap.go.PrefabOverrides[cap.idx];
+                                    PrefabUtility.ApplySingleOverride(cap.go, singleOv);
+                                }
+                            });
+                    }
+                    else
+                    {
+                        paper.Box($"gi_ov_remove_{i}")
+                            .Width(95).Height(EditorTheme.RowHeight).Rounded(3)
+                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                            .Text(Loc.Get("inspector.remove_override"), font).TextColor(EditorTheme.Ink400)
+                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                            .OnClick((go, idx), (cap, _) =>
+                            {
+                                if (cap.idx < cap.go.PrefabOverrides.Count)
+                                    PrefabUtility.RemoveOverride(cap.go, cap.go.PrefabOverrides[cap.idx].Path);
+                            });
+                    }
                 }
             }
         }

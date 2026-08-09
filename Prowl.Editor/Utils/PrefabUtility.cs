@@ -625,6 +625,57 @@ public static class PrefabUtility
         Member.Find(parent, parts[^1]).SetValue(parent, value);
     }
 
+    /// <summary>
+    /// Whether an override path still addresses something on this instance. Index-based paths stop
+    /// resolving when the structure drifts (a component or child added, removed or reordered), and
+    /// such an entry can no longer be applied or reverted - only removed.
+    /// </summary>
+    public static bool IsOverrideResolvable(GameObject instanceGO, string overridePath)
+    {
+        if (!instanceGO.IsPrefabInstance) return false;
+
+        var prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        var root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        ParseOverridePath(root, overridePath, out var target, out string fieldPath);
+        if (target == null || string.IsNullOrEmpty(fieldPath)) return false;
+
+        return GetMemberByPath(target, fieldPath).IsValid;
+    }
+
+    /// <summary>
+    /// Drop an override entry without touching the instance or the asset. For entries that no longer
+    /// resolve, this is the only way to get rid of them: revert and apply both bail on the same
+    /// unresolvable path, so the instance would otherwise read as permanently modified.
+    /// </summary>
+    public static void RemoveOverride(GameObject instanceGO, string overridePath)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("remove a prefab override")) return;
+
+        var prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        var root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        var removed = root.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
+        if (removed.Count == 0) return;
+
+        var rootId = root.Identifier;
+        Undo.RegisterAction("Remove Prefab Override",
+            undo: () =>
+            {
+                var live = Undo.FindGO(rootId);
+                if (live.IsValid()) live!.PrefabOverrides.AddRange(removed);
+            },
+            redo: () =>
+            {
+                var live = Undo.FindGO(rootId);
+                if (live.IsValid()) live!.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
+            });
+
+        root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
+        EditorSceneManager.MarkDirty();
+    }
+
     /// <summary>Check if a specific property path is overridden on a GameObject.</summary>
     public static bool IsPropertyOverridden(GameObject go, string path)
     {

@@ -192,6 +192,8 @@
   "inspector.pop_out": "Pop Out",
   "inspector.select": "Select",
   "inspector.revert": "Revert",
+  "inspector.override_missing": "missing",
+  "inspector.remove_override": "Remove",
   "inspector.apply": "Apply",
   "inspector.missing_prefab": "Missing Prefab!",
   "inspector.missing": "Missing",
