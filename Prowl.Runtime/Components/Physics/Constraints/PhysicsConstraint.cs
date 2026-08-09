@@ -227,18 +227,15 @@ public abstract class PhysicsConstraint : MonoBehaviour
         => connectedBody.IsValid() ? connectedBody.Transform.TransformDirection(localAxis) : localAxis;
 
     /// <summary>
-    /// The always-on part: just enough to see that a joint exists here and what it ties to. The detail
-    /// lives in DrawGizmosSelected, so a scene full of joints does not become a scene full of lines.
+    /// The always-on part: a dot where the joint acts, nothing more.
     /// </summary>
     protected void DrawJointMarker(Float3 worldAnchor)
-    {
-        Debug.DrawWireSphere(worldAnchor, GizmoScale * 0.14f, AnchorColor, 8);
+        => Debug.DrawWireSphere(worldAnchor, GizmoScale * 0.14f, AnchorColor, 8);
 
-        Float3 other = connectedBody.IsValid() ? connectedBody.Transform.Position : worldAnchor;
-        if (connectedBody.IsValid()) Debug.DrawDashedLine(worldAnchor, other, LinkColor);
-    }
-
-    /// <summary>Anchor pair plus the tie between them, shared by every joint that has two anchors.</summary>
+    /// <summary>
+    /// Both ends of a joint that genuinely has two anchors. The dashes between them are the pair's
+    /// current separation, so they vanish when the joint is satisfied and show the error when it is not.
+    /// </summary>
     protected void DrawAnchorPair(Float3 worldAnchor, Float3 worldConnectedAnchor)
     {
         float scale = GizmoScale;
