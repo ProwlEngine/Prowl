@@ -113,9 +113,15 @@ public class InspectorPanel : DockPanel
         _promptOpen = true;
 
         string name = Path.GetFileName(entry.Path);
-        Origami.Dialog(Loc.Get("dialog.unapplied_settings"),
-                p => Origami.Label(p, "insp_unapplied_msg", Loc.Get("dialog.unapplied_settings_body", new { name })).Show())
-            .Button(Loc.Get("dialog.apply"),
+        DialogModal dialog = Origami.Dialog(Loc.Get("dialog.unapplied_settings"),
+            p => Origami.Label(p, "insp_unapplied_msg", Loc.Get("dialog.unapplied_settings_body", new { name })).Show());
+
+        // The edits have to go somewhere. Escaping out would leave them unresolved with the inspector
+        // still holding the asset open, which is the one state this whole flow exists to prevent.
+        dialog.CloseOnEscape = false;
+        dialog.CloseOnBackdrop = false;
+
+        dialog.Button(Loc.Get("dialog.apply"),
                 () => { editor.ApplyPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); }, OrigamiVariant.Primary)
             .Button(Loc.Get("dialog.revert"),
                 () => { editor.RevertPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); });
