@@ -32,6 +32,7 @@ public static class PrefabUtility
     public static bool CreatePrefab(GameObject source, string relativeSavePath)
     {
         if (source == null || Project.Current == null) return false;
+        if (!GuardNotPlaying("create a prefab")) return false;
 
         // Clear any existing prefab data so we serialize a clean prefab source
         source.ClearPrefabDataRecursive();
@@ -96,6 +97,7 @@ public static class PrefabUtility
         var overrides = go.PrefabOverrides.ToList();
         var compCount = go.PrefabComponentCount;
         var childCount = go.PrefabChildCount;
+        if (!GuardNotPlaying("break a prefab instance")) return;
         var goRef = go;
 
         Undo.RegisterAction("Break Prefab Instance",
@@ -124,6 +126,7 @@ public static class PrefabUtility
     public static void ApplyOverrides(GameObject instanceRoot)
     {
         if (!instanceRoot.IsPrefabInstance) return;
+        if (!GuardNotPlaying("apply prefab overrides")) return;
 
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
@@ -183,6 +186,8 @@ public static class PrefabUtility
     public static void RevertOverrides(GameObject instanceRoot)
     {
         if (!instanceRoot.IsPrefabInstance) return;
+        if (!GuardNotPlaying("revert prefab overrides")) return;
+
 
         var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
         if (prefab == null)
@@ -300,6 +305,7 @@ public static class PrefabUtility
     public static void ApplySingleOverride(GameObject instanceGO, PropertyOverride ov)
     {
         if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("apply a prefab override")) return;
 
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
@@ -370,6 +376,7 @@ public static class PrefabUtility
     public static void RevertSingleOverride(GameObject instanceGO, string overridePath)
     {
         if (!instanceGO.IsPrefabInstance) return;
+        if (!GuardNotPlaying("revert a prefab override")) return;
 
         var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
         if (source == null) return;
@@ -892,6 +899,12 @@ public static class PrefabUtility
     {
         go.PrefabAssetId = prefabGuid;
         foreach (var child in go.Children)
+    private static bool GuardNotPlaying(string operation)
+    {
+        if (!Application.IsPlaying) return true;
+        Runtime.Debug.LogWarning($"[Prefab] Cannot {operation} during play mode.");
+        return false;
+    }
         {
             // Don't overwrite nested prefab instances
             if (child.IsPrefabInstance && child.PrefabAssetId != prefabGuid)
