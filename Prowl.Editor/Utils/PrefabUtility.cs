@@ -997,9 +997,10 @@ public static class PrefabUtility
             var sourceVal = field.GetValue(source);
             string path = $"{pathPrefix}.{field.Name}";
 
-            var ctx = InstanceValueContext();
-            var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal, ctx);
-            var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal, ctx);
+            // A context per side, deliberately: Echo numbers object references as it goes, so sharing
+            // one would give the second value different ids and make equal content compare unequal.
+            var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal, InstanceValueContext());
+            var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal, InstanceValueContext());
 
             bool areSame = (instanceEcho?.WriteToString() ?? "") == (sourceEcho?.WriteToString() ?? "");
 
@@ -1074,7 +1075,8 @@ public static class PrefabUtility
         return current;
     }
 
-    // Cache the deserialized prefab source for comparison (per prefab GUID)
+    // Cache the deserialized prefab source for comparison (per prefab GUID), for the current frame
+    // only, so an edited or reimported prefab is picked up on the next one.
     private static readonly Dictionary<Guid, (GameObject go, long frame)> _sourceCache = new();
 
     private static GameObject? GetCachedPrefabSource(Guid prefabGuid)
@@ -1087,7 +1089,10 @@ public static class PrefabUtility
         var prefab = Runtime.AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab.IsNotValid() || prefab.GameObjectData == null) return null;
 
-        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
+        // Deserialized the same way an instance is, so the comparison baseline matches what
+        // Instantiate would actually produce.
+        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData,
+            new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
         if (source != null)
             _sourceCache[prefabGuid] = (source, frame);
 
