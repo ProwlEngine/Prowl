@@ -204,13 +204,8 @@ public class CharacterController : MonoBehaviour
         }
     }
 
-    private Float3 GetShapeCenter(Float3 position)
-    {
-        if (Shape == ColliderShape.Capsule)
-            return position + new Float3(0, Height * 0.5f, 0);
-        else // Cylinder
-            return position + new Float3(0, Height * 0.5f, 0);
-    }
+    // The controller stands on its origin, so its centre is half a height up whatever the shape.
+    private Float3 GetShapeCenter(Float3 position) => position + new Float3(0, Height * 0.5f, 0);
 
     private Float3 GetCapsuleBottom(Float3 position)
     {
