@@ -433,6 +433,8 @@ public static class PrefabUtility
         // Copy source value to instance
         var sourceValue = GetMemberValue(sourceTarget, sourceFieldPath);
         SetMemberValue(instanceTarget, instanceFieldPath, sourceValue);
+        if (instanceTarget is MonoBehaviour reverted)
+            reverted.HierarchyStateChanged();
 
         // Remove the override entry
         root.PrefabOverrides.RemoveAll(o => o.Path == overridePath);
@@ -744,8 +746,14 @@ public static class PrefabUtility
         // Null is a valid override for reference fields (e.g. clearing an object reference).
         // Only skip for non-nullable value types where null means deserialization failed.
         bool allowsNull = !member.MemberType.IsValueType || Nullable.GetUnderlyingType(member.MemberType) != null;
-        if (deserialized != null || allowsNull)
-            member.SetValue(parent, deserialized);
+        if (deserialized == null && !allowsNull) return;
+
+        member.SetValue(parent, deserialized);
+
+        // Component enabled state is a serialized field, so an override writes it directly and skips
+        // the Enabled setter. Re-derive so dispatch registration matches what was just written.
+        if (parent is MonoBehaviour behaviour)
+            behaviour.HierarchyStateChanged();
     }
 
     // ================================================================
@@ -826,21 +834,43 @@ public static class PrefabUtility
         // they are per-instance values that don't constitute overrides.
     }
 
-    // Fields that should never be compared for prefab overrides
+    // Serialized state that must never become a per-instance override.
+    // This list is load-bearing: the field set below is Echo's, so anything Echo persists and that is
+    // not named here is comparable. _identifier especially - identifiers are regenerated on every
+    // deserialization, so instance and source always differ and every component would record one.
     private static readonly HashSet<string> _skipFields = new()
     {
-        "_identifier", "_enabledInHierarchy", "_go",
-        "_hasStarted", "_hasBeenEnabled", "_executeAlwaysCached",
-        "HideFlags"
+        "_identifier",          // regenerated per load; never per-instance state
+        "_enabledInHierarchy",  // derived from _enabled and the parent chain
+        "_go",                  // back-reference to the owning GameObject
+        "_hasStarted", "_hasBeenEnabled", "_executeAlwaysCached", // runtime lifecycle bookkeeping
+        "HideFlags",            // editor presentation, not content
+        "AssetID", "AssetPath"  // asset identity, meaningless on a scene component
     };
+
+    // Keyed by concrete type; the field set never changes for a type within a session.
+    private static readonly Dictionary<Type, FieldInfo[]> _overridableFields = new();
+
+    /// <summary>
+    /// The fields an override may address: exactly what Echo persists, minus engine bookkeeping.
+    /// </summary>
+    private static FieldInfo[] GetOverridableFields(object instance)
+    {
+        Type type = instance.GetType();
+        if (_overridableFields.TryGetValue(type, out var cached)) return cached;
+
+        var fields = instance.GetSerializableFields()
+            .Where(f => !_skipFields.Contains(f.Name))
+            .ToArray();
+
+        _overridableFields[type] = fields;
+        return fields;
+    }
 
     private static void CompareFields(object instance, object source, string pathPrefix, List<PropertyOverride> overrides)
     {
-        var fields = PropertyGridUtils.GetSerializableFields(instance.GetType());
-        foreach (var field in fields)
+        foreach (var field in GetOverridableFields(instance))
         {
-            if (_skipFields.Contains(field.Name)) continue;
-
             var instanceVal = field.GetValue(instance);
             var sourceVal = field.GetValue(source);
             string path = $"{pathPrefix}.{field.Name}";
