@@ -411,3 +411,8 @@ Slang/Native/lib
 
 .claude
 .shadergen.stamp
+
+# Recast test meshes. The "*.obj" rule above targets C/C++ object files, but these are
+# Wavefront meshes the Recast tests load at runtime - without them CI has no resources/
+# folder to find and those tests fail with a missing dungeon.obj.
+!Recast/Tests/resources/*.obj
