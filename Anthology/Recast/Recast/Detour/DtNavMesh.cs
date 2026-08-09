@@ -625,14 +625,17 @@ namespace Prowl.Recast.Detour
                     }
 
                     int idx = AllocLink(tile);
-                    DtLink link = tile.links[idx];
-                    link.refs = @base | (long)(poly.neis[j] - 1);
-                    link.edge = (byte)j;
-                    link.side = 0xff;
-                    link.bmin = link.bmax = 0;
-                    // Add to linked list.
-                    link.next = poly.firstLink;
-                    poly.firstLink = idx;
+                    if (idx != DT_NULL_LINK)
+                    {
+                        DtLink link = tile.links[idx];
+                        link.refs = @base | (long)(poly.neis[j] - 1);
+                        link.edge = (byte)j;
+                        link.side = 0xff;
+                        link.bmin = link.bmax = 0;
+                        // Add to linked list.
+                        link.next = poly.firstLink;
+                        poly.firstLink = idx;
+                    }
                 }
             }
         }
@@ -827,29 +830,35 @@ namespace Prowl.Recast.Detour
 
                 // Link off-mesh connection to target poly.
                 int idx = AllocLink(target);
-                DtLink link = target.links[idx];
-                link.refs = refs;
-                link.edge = 1;
-                link.side = (byte)oppositeSide;
-                link.bmin = link.bmax = 0;
-                // Add to linked list.
-                link.next = targetPoly.firstLink;
-                targetPoly.firstLink = idx;
+                if (idx != DT_NULL_LINK)
+                {
+                    DtLink link = target.links[idx];
+                    link.refs = refs;
+                    link.edge = 1;
+                    link.side = (byte)oppositeSide;
+                    link.bmin = link.bmax = 0;
+                    // Add to linked list.
+                    link.next = targetPoly.firstLink;
+                    targetPoly.firstLink = idx;
+                }
 
                 // Link target poly to off-mesh connection.
                 if ((targetCon.flags & DT_OFFMESH_CON_BIDIR) != 0)
                 {
                     int tidx = AllocLink(tile);
-                    int landPolyIdx = DecodePolyIdPoly(refs);
-                    DtPoly landPoly = tile.data.polys[landPolyIdx];
-                    link = tile.links[tidx];
-                    link.refs = GetPolyRefBase(target) | (long)targetCon.poly;
-                    link.edge = 0xff;
-                    link.side = (byte)(side == -1 ? 0xff : side);
-                    link.bmin = link.bmax = 0;
-                    // Add to linked list.
-                    link.next = landPoly.firstLink;
-                    landPoly.firstLink = tidx;
+                    if (tidx != DT_NULL_LINK)
+                    {
+                        int landPolyIdx = DecodePolyIdPoly(refs);
+                        DtPoly landPoly = tile.data.polys[landPolyIdx];
+                        DtLink link = tile.links[tidx];
+                        link.refs = GetPolyRefBase(target) | (long)targetCon.poly;
+                        link.edge = 0xff;
+                        link.side = (byte)(side == -1 ? 0xff : side);
+                        link.bmin = link.bmax = 0;
+                        // Add to linked list.
+                        link.next = landPoly.firstLink;
+                        landPoly.firstLink = tidx;
+                    }
                 }
             }
         }
@@ -1001,27 +1010,33 @@ namespace Prowl.Recast.Detour
 
                 // Link off-mesh connection to target poly.
                 int idx = AllocLink(tile);
-                DtLink link = tile.links[idx];
-                link.refs = refs;
-                link.edge = 0;
-                link.side = 0xff;
-                link.bmin = link.bmax = 0;
-                // Add to linked list.
-                link.next = poly.firstLink;
-                poly.firstLink = idx;
+                if (idx != DT_NULL_LINK)
+                {
+                    DtLink link = tile.links[idx];
+                    link.refs = refs;
+                    link.edge = 0;
+                    link.side = 0xff;
+                    link.bmin = link.bmax = 0;
+                    // Add to linked list.
+                    link.next = poly.firstLink;
+                    poly.firstLink = idx;
+                }
 
                 // Start end-point is always connect back to off-mesh connection.
                 int tidx = AllocLink(tile);
-                int landPolyIdx = DecodePolyIdPoly(refs);
-                DtPoly landPoly = tile.data.polys[landPolyIdx];
-                link = tile.links[tidx];
-                link.refs = @base | (long)con.poly;
-                link.edge = 0xff;
-                link.side = 0xff;
-                link.bmin = link.bmax = 0;
-                // Add to linked list.
-                link.next = landPoly.firstLink;
-                landPoly.firstLink = tidx;
+                if (tidx != DT_NULL_LINK)
+                {
+                    int landPolyIdx = DecodePolyIdPoly(refs);
+                    DtPoly landPoly = tile.data.polys[landPolyIdx];
+                    DtLink link = tile.links[tidx];
+                    link.refs = @base | (long)con.poly;
+                    link.edge = 0xff;
+                    link.side = 0xff;
+                    link.bmin = link.bmax = 0;
+                    // Add to linked list.
+                    link.next = landPoly.firstLink;
+                    landPoly.firstLink = tidx;
+                }
             }
         }
 

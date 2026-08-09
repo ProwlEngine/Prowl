@@ -409,6 +409,11 @@ Wulferis_Local/
 # Slang native binary library cache
 Slang/Native/lib
 
+# Recast test meshes. The *.obj rule above targets C/C++ object files, but these are Wavefront
+# .obj geometry the vendored Detour/Crowd tests load, so they have to survive it — without them
+# every test deriving from AbstractDetourTest/AbstractCrowdTest fails in its constructor.
+!Recast/Tests/resources/*.obj
+
 .claude
 .shadergen.stamp
 

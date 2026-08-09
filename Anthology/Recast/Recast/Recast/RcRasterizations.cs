@@ -86,6 +86,36 @@ namespace Prowl.Recast
             return newSpan;
         }
 
+        /// Attaches span pool pages from a discarded heightfield to this one, marking every span
+        /// in them free.
+        ///
+        /// Rebuilding tiles allocates a fresh heightfield each time, and its spans dominate that
+        /// cost. A caller that keeps the pages from a heightfield it is done with can hand them to
+        /// the next one and stop allocating spans altogether, once the pages have grown to the
+        /// largest tile's span count.
+        ///
+        /// Every span in @p pools is treated as free, so only pass pages whose heightfield has
+        /// been discarded.
+        ///
+        /// @param[in,out]	heightfield		The heightfield adopting the pages.
+        /// @param[in]		pools			Head of the pool page list to adopt.
+        public static void AdoptSpanPools(RcHeightfield heightfield, RcSpanPool pools)
+        {
+            heightfield.pools = pools;
+
+            RcSpan freelist = null;
+            for (RcSpanPool pool = pools; pool != null; pool = pool.next)
+            {
+                for (int i = 0; i < pool.items.Length; ++i)
+                {
+                    pool.items[i].next = freelist;
+                    freelist = pool.items[i];
+                }
+            }
+
+            heightfield.freelist = freelist;
+        }
+
         /// Releases the memory used by the span back to the heightfield, so it can be re-used for new spans.
         /// @param[in]	heightfield		The heightfield.
         /// @param[in]	span	A pointer to the span to free
@@ -114,8 +144,14 @@ namespace Prowl.Recast
         /// @param[in]	flagMergeThreshold	How close two spans maximum extents need to be to merge area type IDs
         public static bool AddSpan(RcHeightfield heightfield, int x, int z, int min, int max, int areaID, int flagMergeThreshold)
         {
-            // Create the new span.
-            RcSpan newSpan = new RcSpan();
+            // Create the new span. Comes from the heightfield's pool and free list, so rasterizing
+            // a tile allocates nothing once the pools have grown to the working-set size.
+            RcSpan newSpan = AllocSpan(heightfield);
+            if (newSpan == null)
+            {
+                return false;
+            }
+
             newSpan.smin = min;
             newSpan.smax = max;
             newSpan.area = areaID;
@@ -168,9 +204,11 @@ namespace Prowl.Recast
                         newSpan.area = Math.Max(newSpan.area, currentSpan.area);
                     }
 
-                    // Remove the current span since it's now merged with newSpan.
+                    // Remove the current span since it's now merged with newSpan, and return it to
+                    // the free list so the next AddSpan reuses it instead of allocating.
                     // Keep going because there might be other overlapping spans that also need to be merged.
                     RcSpan next = currentSpan.next;
+                    FreeSpan(heightfield, currentSpan);
                     if (previousSpan != null)
                     {
                         previousSpan.next = next;
@@ -571,6 +609,68 @@ namespace Prowl.Recast
                 RasterizeTri(verts, v0, v1, v2, triAreaIDs[triIndex], heightfield, heightfield.bmin, heightfield.bmax, heightfield.cs,
                     inverseCellSize, inverseCellHeight, flagMergeThreshold);
             }
+        }
+
+        /// Rasterizes a triangle list, deriving each triangle's area from its slope rather than
+        /// taking a precomputed area array.
+        ///
+        /// Equivalent to #RcRecast.MarkWalkableTriangles followed by #RasterizeTriangles, but
+        /// without the per-call area array that pairing needs — the slope test is folded into the
+        /// loop. Triangles steeper than the limit rasterize as #RcRecast.RC_NULL_AREA: still
+        /// solid, just not walkable.
+        ///
+        /// @ingroup recast
+        /// @param[in,out]	context				The build context to use during the operation.
+        /// @param[in]		verts				The vertices. [(x, y, z) * @p nv]
+        /// @param[in]		tris				The triangle indices. [(vertA, vertB, vertC) * @p numTris]
+        /// @param[in]		numTris				The number of triangles.
+        /// @param[in]		walkableSlopeCos	Cosine of the maximum walkable slope angle.
+        /// @param[in]		walkableAreaID		Area id for triangles within the slope limit.
+        ///										[Limit: <= #RcRecast.RC_WALKABLE_AREA]
+        /// @param[in,out]	heightfield			An initialized heightfield.
+        /// @param[in]		flagMergeThreshold	The distance where the walkable flag is favored over
+        ///										the non-walkable flag. [Limit: >= 0] [Units: vx]
+        public static void RasterizeTriangles(RcContext context, float[] verts, int[] tris, int numTris,
+            float walkableSlopeCos, int walkableAreaID, RcHeightfield heightfield, int flagMergeThreshold)
+        {
+            using var timer = context.ScopedTimer(RcTimerLabel.RC_TIMER_RASTERIZE_TRIANGLES);
+
+            float inverseCellSize = 1.0f / heightfield.cs;
+            float inverseCellHeight = 1.0f / heightfield.ch;
+            for (int triIndex = 0; triIndex < numTris; ++triIndex)
+            {
+                int v0 = tris[triIndex * 3 + 0];
+                int v1 = tris[triIndex * 3 + 1];
+                int v2 = tris[triIndex * 3 + 2];
+                int areaID = TriangleNormalY(verts, v0, v1, v2) > walkableSlopeCos
+                    ? walkableAreaID
+                    : RcRecast.RC_NULL_AREA;
+                RasterizeTri(verts, v0, v1, v2, areaID, heightfield, heightfield.bmin, heightfield.bmax, heightfield.cs,
+                    inverseCellSize, inverseCellHeight, flagMergeThreshold);
+            }
+        }
+
+        /// Y component of a triangle's normalized face normal — all the slope test needs.
+        /// Degenerate triangles return 0, so they never pass a positive slope limit.
+        private static float TriangleNormalY(float[] verts, int v0, int v1, int v2)
+        {
+            float ax = verts[v1 * 3 + 0] - verts[v0 * 3 + 0];
+            float ay = verts[v1 * 3 + 1] - verts[v0 * 3 + 1];
+            float az = verts[v1 * 3 + 2] - verts[v0 * 3 + 2];
+            float bx = verts[v2 * 3 + 0] - verts[v0 * 3 + 0];
+            float by = verts[v2 * 3 + 1] - verts[v0 * 3 + 1];
+            float bz = verts[v2 * 3 + 2] - verts[v0 * 3 + 2];
+
+            float nx = ay * bz - az * by;
+            float ny = az * bx - ax * bz;
+            float nz = ax * by - ay * bx;
+            float lenSq = nx * nx + ny * ny + nz * nz;
+            if (lenSq <= 1e-12f)
+            {
+                return 0f;
+            }
+
+            return ny / MathF.Sqrt(lenSq);
         }
     }
 }
