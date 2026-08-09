@@ -56,7 +56,7 @@ public sealed class FilterEffect: IAudioEffect
 
     public FilterEffect(FilterType type, float frequency, float q, float gainDB)
     {
-        filter = new Filter(type, frequency, q, gainDB, AudioContext.SampleRate);
+        filter = new Filter(type, frequency, q, gainDB, AudioContext.SampleRate, AudioContext.Channels);
     }
 
     public void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)

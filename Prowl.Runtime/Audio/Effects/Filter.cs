@@ -31,8 +31,10 @@ public sealed class Filter
     private float a2;
     private float b1;
     private float b2;
-    private float z1;
-    private float z2;
+    // One delay pair per channel. A biquad carries state, so running an interleaved stereo stream
+    // through a single pair is not a stereo filter, it is one filter fed two unrelated signals.
+    private float[] z1;
+    private float[] z2;
     private CalcCoefficientsFunc calcCoefficients;
 
     public FilterType Type
@@ -86,7 +88,7 @@ public sealed class Filter
         }
     }
 
-    public Filter(FilterType type, float frequency, float q, float gainDB, int sampleRate = 0)
+    public Filter(FilterType type, float frequency, float q, float gainDB, int sampleRate = 0, int channels = 0)
     {
         if(sampleRate <= 0)
             this.sampleRate = AudioContext.SampleRate;
@@ -102,34 +104,55 @@ public sealed class Filter
         this.frequency = frequency;
         this.q = q;
         this.gainDB = gainDB > 0.0f ? gainDB : 6.0f;
+        AllocateState(channels > 0 ? channels : AudioContext.Channels);
         SetCoefficientsFunc();
         calcCoefficients(this);
     }
 
+    /// <summary>Filters one sample of a single stream, using the first channel's state.</summary>
     public float Process(float input)
     {
-        float output = input * a0 + z1;
-        z1 = input * a1 + z2 - b1 * output;
-        z2 = input * a2 - b2 * output;
+        float output = input * a0 + z1[0];
+        z1[0] = input * a1 + z2[0] - b1 * output;
+        z2[0] = input * a2 - b2 * output;
         return output;
     }
 
-    public void Process(NativeArray<float> framesOut, NativeArray<float> framesIn, ulong frameCount, int channels)
+    /// <summary>Filters <paramref name="frameCount"/> interleaved frames, each channel against its own state.</summary>
+    public void Process(NativeArray<float> framesIn, NativeArray<float> framesOut, ulong frameCount, int channels)
     {
-        float output = 0.0f;
-        float currentSample = 0.0f;
-        
-        for(int i = 0; i < framesIn.Length; i+=channels)
+        if (channels <= 0)
+            return;
+
+        if (channels > z1.Length)
+            AllocateState(channels);
+
+        int frames = (int)frameCount;
+        int available = Math.Min(framesIn.Length, framesOut.Length) / channels;
+
+        if (frames > available)
+            frames = available;
+
+        for(int frame = 0; frame < frames; frame++)
         {
-            for(int j = 0; j < channels; j++)
+            int start = frame * channels;
+
+            for(int channel = 0; channel < channels; channel++)
             {
-                currentSample = framesIn[i+j]; 
-                output = currentSample * a0 + z1;
-                z1 = currentSample * a1 + z2 - b1 * output;
-                z2 = currentSample * a2 - b2 * output;
-                framesOut[i+j] = output;
+                int i = start + channel;
+                float input = framesIn[i];
+                float output = input * a0 + z1[channel];
+                z1[channel] = input * a1 + z2[channel] - b1 * output;
+                z2[channel] = input * a2 - b2 * output;
+                framesOut[i] = output;
             }
         }
+    }
+
+    private void AllocateState(int channels)
+    {
+        z1 = new float[Math.Max(1, channels)];
+        z2 = new float[Math.Max(1, channels)];
     }
 
     private void SetCoefficientsFunc()
