@@ -212,6 +212,28 @@ public static class PrefabEditingMode
     }
 
     /// <summary>
+    /// Leave prefab editing mode, prompting first if the prefab has unsaved changes.
+    /// This is the entry point for user-driven exits; <see cref="Exit"/> discards without asking.
+    /// </summary>
+    public static void RequestExit()
+    {
+        if (!IsEditing) return;
+
+        if (EditorSceneManager.IsDirty)
+        {
+            string name = EditingPrefabPath != null ? Path.GetFileNameWithoutExtension(EditingPrefabPath) : "prefab";
+            Origami.Confirm(
+                Loc.Get("dialog.unsaved_prefab"),
+                Loc.Get("dialog.unsaved_prefab_body", new { name }),
+                onYes: SaveAndExit,
+                onNo: Exit);
+            return;
+        }
+
+        Exit();
+    }
+
+    /// <summary>
     /// Exit prefab editing mode without saving. Restores the original scene as-is.
     /// Instance overrides are preserved exactly as they were before entering.
     /// </summary>
