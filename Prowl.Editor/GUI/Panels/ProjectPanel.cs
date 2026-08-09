@@ -230,8 +230,10 @@ public class ProjectPanel : DockPanel
                 DragDrop.EndDrag();
                 break;
             case GameObjectDragPayload gp:
-                foreach (var go in gp.GameObjects)
-                    if (go != null) CreatePrefabInFolder(go, targetFolder);
+                // Roots only: making a prefab of a parent already captures its children, and making
+                // one of a child afterwards would tear that subtree back out of the parent's instance.
+                foreach (var go in GameObjectClipboard.FilterToRoots(gp.GameObjects.Where(g => g != null)))
+                    CreatePrefabInFolder(go, targetFolder);
                 DragDrop.EndDrag();
                 break;
         }
