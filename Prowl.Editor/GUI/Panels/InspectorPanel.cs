@@ -78,6 +78,12 @@ public class InspectorPanel : DockPanel
     private AssetEntry? _openEntry;
     private EngineObject? _openAsset;
 
+    // What the inspector was showing, and whether the unapplied-changes prompt is up. While it is, the
+    // selection change is held: the inspector keeps drawing the asset the prompt is about, so the choice
+    // is made against what is on screen rather than behind a dialog for something already gone.
+    private object? _openInspectable;
+    private bool _promptOpen;
+
     /// <summary>The asset GUID <paramref name="active"/> inspects, or empty when it is not an asset.</summary>
     private static Guid InspectedAssetGuid(object? active)
     {
@@ -91,23 +97,30 @@ public class InspectorPanel : DockPanel
     /// unwritten changes. Whether anything is pending is measured by diffing the editor's state against
     /// what was last written, so this cannot fire on an asset that was merely looked at.
     /// </summary>
-    private void PromptIfLeavingUnappliedEdits(Guid nowInspecting)
+    /// <summary>True when the prompt was raised, meaning the caller must keep showing the old asset.</summary>
+    private bool PromptIfLeavingUnappliedEdits(Guid nowInspecting)
     {
-        if (_openEditor == null || _openEntry == null) return;
-        if (_openEntry.Guid == nowInspecting) return; // still on it
+        if (_openEditor == null || _openEntry == null) return false;
+        if (_openEntry.Guid == nowInspecting) return false; // still on it
 
         AssetImporterEditor editor = _openEditor;
         AssetEntry entry = _openEntry;
         EngineObject? asset = _openAsset;
         _openEditor = null; _openEntry = null; _openAsset = null;
 
-        if (!editor.HasPendingChanges(entry, asset)) return;
+        if (!editor.HasPendingChanges(entry, asset)) return false;
+
+        _promptOpen = true;
 
         string name = Path.GetFileName(entry.Path);
         Origami.Dialog(Loc.Get("dialog.unapplied_settings"),
                 p => Origami.Label(p, "insp_unapplied_msg", Loc.Get("dialog.unapplied_settings_body", new { name })).Show())
-            .Button(Loc.Get("dialog.apply"), () => { editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
-            .Button(Loc.Get("dialog.revert"), () => { editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
+            .Button(Loc.Get("dialog.apply"),
+                () => { editor.ApplyPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); }, OrigamiVariant.Primary)
+            .Button(Loc.Get("dialog.revert"),
+                () => { editor.RevertPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); });
+
+        return true;
     }
 
     private void OnSelectionChanged()
@@ -152,9 +165,21 @@ public class InspectorPanel : DockPanel
                 return;
             }
 
-            // Leaving an asset whose import settings were edited but not applied: offer to write them
-            // or put them back, rather than carrying them silently or dropping them.
-            PromptIfLeavingUnappliedEdits(InspectedAssetGuid(active));
+            // Leaving an asset whose import settings were edited but not applied: offer to write them or
+            // put them back. The selection change is queued while the prompt is up - the inspector keeps
+            // drawing the asset in question so the choice is made against what is actually on screen.
+            if (_promptOpen)
+            {
+                if (_openInspectable != null) active = _openInspectable;
+            }
+            else if (PromptIfLeavingUnappliedEdits(InspectedAssetGuid(active)))
+            {
+                active = _openInspectable ?? active;
+            }
+            else
+            {
+                _openInspectable = active;
+            }
 
             // Draw based on type GameObject has its own header
             if (active is GameObject gameObject)

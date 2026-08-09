@@ -148,21 +148,7 @@ public class TextureAssetEditor : ImportSettingsEditor
                 $"{EditorIcons.TriangleExclamation}  This texture's sprite settings could not be read. Saving is disabled so the existing data isn't overwritten - see the console.")
                 .Show();
 
-        // Save CTA - lit only when the settings actually differ from disk (and never in read-only, e.g.
-        // when this editor is shown for a texture sub-asset). It's a raw Box, so it must check IsReadOnly.
-        bool dirty = !Origami.IsReadOnly && !spriteTarget.LoadFailed && HasPendingChanges(entry, asset);
-        paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
-            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)
-            .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(dirty ? EditorTheme.AccentBright : EditorTheme.Neutral300).End()
-            .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? font)
-            .TextColor(dirty ? System.Drawing.Color.White : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) =>
-            {
-                if (!dirty) return;
-                ApplyPendingChanges(entry, asset);
-            });
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
 }

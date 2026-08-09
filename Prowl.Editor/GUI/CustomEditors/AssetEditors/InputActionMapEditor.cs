@@ -79,8 +79,12 @@ public class InputActionMapEditor : AssetImporterEditor
             Origami.Header(paper, $"{id}_title", $"{EditorIcons.Gamepad}  Input Actions: {map.Name}").Show();
 
             if (HasPendingChanges(entry, asset))
-                Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save",
-                    () => ApplyPendingChanges(entry, asset)).Width(80).Show();
+            {
+                Origami.Button(paper, $"{id}_revert", Prowl.Rosetta.Loc.Get("dialog.revert"),
+                    () => RevertPendingChanges(entry, asset)).Width(80).Show();
+                Origami.Button(paper, $"{id}_apply", $"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}",
+                    () => ApplyPendingChanges(entry, asset)).Width(90).Show();
+            }
         }
         Origami.Separator(paper, $"{id}_sep").Show();
 

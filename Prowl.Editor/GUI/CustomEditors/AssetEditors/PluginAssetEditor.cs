@@ -94,9 +94,7 @@ public class PluginAssetEditor : ImportSettingsEditor
         }
 
         paper.Box($"{id}_sp3").Height(8);
-        if (HasPendingChanges(entry, asset))
-            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Reimport",
-                () => ApplyPendingChanges(entry, asset)).Width(150).Show();
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
     private static void PlatformToggle(Paper paper, string id, string label, EchoObject s, string key)

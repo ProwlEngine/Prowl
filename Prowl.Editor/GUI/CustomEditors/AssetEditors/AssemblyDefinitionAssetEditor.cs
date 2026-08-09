@@ -142,9 +142,7 @@ public class AssemblyDefinitionAssetEditor : AssetImporterEditor
         }
 
         paper.Box($"{id}_sp3").Height(8);
-        if (HasPendingChanges(entry, asset))
-            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save & Recompile",
-                () => ApplyPendingChanges(entry, asset)).Width(170).Show();
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
     private static void IncludeToggle(Paper paper, string id, string platform, AssemblyDefinition def)

@@ -2,7 +2,11 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.Echo;
+using Prowl.Editor.GUI;
+using Prowl.Editor.Theming;
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Inspector;
@@ -108,4 +112,45 @@ public abstract class AssetImporterEditor
 
     /// <summary>Forgets every baseline. GUIDs only mean anything within one project.</summary>
     internal static void ClearBaselines() => s_baselines.Clear();
+
+    // ============================================================
+    // Shared UI
+    // ============================================================
+
+    /// <summary>
+    /// Draws the Apply / Revert pair, and nothing at all when there is nothing to apply. Every asset
+    /// editor calls this so the choice reads the same wherever it appears, and matches the prompt raised
+    /// when navigating away from an asset with unwritten changes.
+    /// </summary>
+    protected void DrawApplyRevertBar(Paper paper, string id, AssetEntry entry, EngineObject? asset)
+    {
+        if (Origami.IsReadOnly || !HasPendingChanges(entry, asset)) return;
+
+        var font = EditorTheme.FontSemiBold ?? EditorTheme.DefaultFont;
+        if (font == null) return;
+        var m = Origami.Current.Metrics;
+
+        using (paper.Row($"{id}_applybar").Height(UnitValue.Auto)
+            .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
+            .RowBetween(m.SpacingMedium).Enter())
+        {
+            // Pushes both buttons to the right.
+            paper.Box($"{id}_applybar_spacer").Height(1).IsNotInteractable();
+
+            paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
+                .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
+                .Hovered.BackgroundColor(EditorTheme.Neutral300).End()
+                .Text(Prowl.Rosetta.Loc.Get("dialog.revert"), font).TextColor(EditorTheme.Ink400)
+                .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => RevertPendingChanges(entry, asset));
+
+            paper.Box($"{id}_apply").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
+                .BackgroundColor(EditorTheme.Accent)
+                .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
+                .Text($"{EditorIcons.FloppyDisk}  {Prowl.Rosetta.Loc.Get("dialog.apply")}", font)
+                .TextColor(System.Drawing.Color.White).FontSize(EditorTheme.FontSizeSmall)
+                .Alignment(TextAlignment.MiddleCenter)
+                .OnClick(0, (_, _) => ApplyPendingChanges(entry, asset));
+        }
+    }
 }

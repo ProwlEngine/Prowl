@@ -110,19 +110,7 @@ public class RenderTextureAssetEditor : AssetImporterEditor
                     () => edits.Formats.RemoveAt(edits.Formats.Count - 1)).Width(110).Show();
         }
 
-        bool dirty = !Origami.IsReadOnly && HasPendingChanges(entry, asset);
-        paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
-            .Margin(8, 8, 10, 10).Rounded(8).Padding(16, 16, 0, 0)
-            .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(dirty ? EditorTheme.AccentBright : EditorTheme.Neutral300).End()
-            .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? font)
-            .TextColor(dirty ? System.Drawing.Color.White : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) =>
-            {
-                if (!dirty) return;
-                ApplyPendingChanges(entry, asset);
-            });
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
     private bool Save(AssetEntry entry)

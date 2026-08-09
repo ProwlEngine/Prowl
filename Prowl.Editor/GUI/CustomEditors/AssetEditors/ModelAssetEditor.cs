@@ -185,32 +185,10 @@ public class ModelAssetEditor : ImportSettingsEditor
                     v => SdfBlockForWrite(settings)[SDFFeatureSpec.Key_MaxDistance] = new EchoObject(v)).Show());
         }
 
-        // Save / Reimport CTA
-        if (HasPendingChanges(entry, asset))
-        {
-            using (paper.Row($"{id}_btns").Height(UnitValue.Auto)
-                .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge)
-                .RowBetween(m.SpacingMedium).Enter())
-            {
-                paper.Box($"{id}_btn_spacer").Height(1).IsNotInteractable();
+        DrawApplyRevertBar(paper, id, entry, asset);
 
-                paper.Box($"{id}_revert").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
-                    .BackgroundColor(EditorTheme.Glass).BorderColor(EditorTheme.BorderSoft).BorderWidth(1)
-                    .Hovered.BackgroundColor(EditorTheme.Neutral300).End()
-                    .Text("Revert", EditorTheme.FontSemiBold ?? font).TextColor(EditorTheme.Ink400)
-                    .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => RevertPendingChanges(entry, asset));
-
-                paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30).Rounded(8).Padding(16, 16, 0, 0)
-                    .BackgroundColor(EditorTheme.Accent)
-                    .Hovered.BackgroundColor(EditorTheme.AccentBright).End()
-                    .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? font)
-                    .TextColor(System.Drawing.Color.White).FontSize(EditorTheme.FontSizeSmall)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .OnClick(0, (_, _) => ApplyPendingChanges(entry, asset));
-            }
-        }
-        else
+        // Reimport stays available when there is nothing pending, for re-running the import as-is.
+        if (!HasPendingChanges(entry, asset))
         {
             paper.Box($"{id}_reimport").Width(UnitValue.Auto).Height(30)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.SpacingLarge, m.SpacingLarge).Rounded(8).Padding(16, 16, 0, 0)

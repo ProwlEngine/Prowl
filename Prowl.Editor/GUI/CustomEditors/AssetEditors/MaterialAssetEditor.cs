@@ -112,14 +112,9 @@ public class MaterialAssetEditor : AssetImporterEditor
 
         }
 
-        // Save button writes material to disk then reimports. Shown when the live material actually
-        // differs from its file, not merely because it was touched at some point.
-        if (HasPendingChanges(entry, asset))
-        {
-            Origami.Separator(paper, $"{id}_sep_save").Show();
-            Origami.Button(paper, $"{id}_save", $"{EditorIcons.FloppyDisk}  Save Material",
-                () => SavePending(showToast: true)).Show();
-        }
+        // Shown when the live material actually differs from its file, not merely because it was
+        // touched at some point. Ctrl+S still commits it too, via SaveManager.
+        DrawApplyRevertBar(paper, id, entry, asset);
 
         // 3D Preview
                 Origami.Header(paper, $"{id}_h_preview", "Preview").Underline().Show();
