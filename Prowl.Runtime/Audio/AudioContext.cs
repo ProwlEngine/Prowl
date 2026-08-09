@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 
 using Prowl.Runtime.Audio.Native;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime.Audio;
 
@@ -31,7 +32,7 @@ public static class AudioContext
 
     private static UInt32 sampleRate = 44100;
     private static UInt32 channels = 2;
-    private static DateTime lastUpdateTime;
+    private static long lastUpdateTime;
     private static float deltaTime;
     private static float masterVolume = 1.0f;
     private static bool deviceProcessFailed;
@@ -45,6 +46,18 @@ public static class AudioContext
             return audioContext;
         }
     }
+
+    /// <summary>
+    /// Converts a world position, direction or velocity into the space the audio engine works in.
+    /// </summary>
+    /// <remarks>
+    /// Prowl is left handed with +Z forward, the audio engine is right handed with -Z forward, so the
+    /// two disagree by a mirror on one axis. Mirroring the vectors that cross the boundary is what
+    /// gets all three axes right. Mirroring one of the listener's basis vectors instead (negating its
+    /// world up, say) also lines left and right back up, but it does it by flipping the handedness of
+    /// the basis, which leaves vertical inverted.
+    /// </remarks>
+    public static Float3 ToAudioSpace(Float3 vector) => new Float3(vector.X, vector.Y, -vector.Z);
 
     /// <summary>
     /// True once a device is up. False before <see cref="Initialize"/>, after
@@ -146,7 +159,7 @@ public static class AudioContext
 
         MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
 
-        lastUpdateTime = DateTime.Now;
+        lastUpdateTime = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 
     /// <summary>
@@ -181,9 +194,10 @@ public static class AudioContext
         if (audioContext == IntPtr.Zero)
             return;
 
-        DateTime currentTime = DateTime.Now;
-        TimeSpan dt = currentTime - lastUpdateTime;
-        deltaTime = (float)dt.TotalSeconds;
+        // Monotonic. DateTime.Now is local time, so a daylight saving shift or a clock correction
+        // produced a negative or hour long delta, and this is the only clock doppler is measured on.
+        long currentTime = System.Diagnostics.Stopwatch.GetTimestamp();
+        deltaTime = (float)((currentTime - lastUpdateTime) / (double)System.Diagnostics.Stopwatch.Frequency);
 
         lastUpdateTime = currentTime;
     }

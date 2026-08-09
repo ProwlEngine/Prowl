@@ -81,6 +81,7 @@ public sealed class AudioSource : MonoBehaviour
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private Float3 _previousPosition;
+    private Float3 _velocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
     private ma_procedural_data_source_proc _proceduralProcessCallback;
 
@@ -396,18 +397,22 @@ public sealed class AudioSource : MonoBehaviour
         // Update spatial audio properties based on transform
         if (_spatial)
         {
-            var pos = Transform.Position;
-            MiniAudioNative.ma_sound_group_set_position(_soundGroup, (float)pos.X, (float)pos.Y, (float)pos.Z);
+            Float3 pos = Transform.Position;
+            Float3 audioPos = AudioContext.ToAudioSpace(pos);
+            MiniAudioNative.ma_sound_group_set_position(_soundGroup, audioPos.X, audioPos.Y, audioPos.Z);
 
-            var forward = Transform.Forward;
-            MiniAudioNative.ma_sound_group_set_direction(_soundGroup, (float)forward.X, (float)forward.Y, (float)forward.Z);
+            Float3 forward = AudioContext.ToAudioSpace(Transform.Forward);
+            MiniAudioNative.ma_sound_group_set_direction(_soundGroup, forward.X, forward.Y, forward.Z);
 
-            // Calculate velocity based on position change
-            float deltaTime = Time.DeltaTime;
+            // Velocity for doppler, against the same wall clock the listener uses. Doppler is the
+            // difference between the two, so a source measured in scaled time and a listener measured
+            // in real time invent a relative velocity out of nothing but the time scale.
+            float deltaTime = AudioContext.DeltaTime;
             if (deltaTime > 0)
             {
-                Float3 velocity = (pos - _previousPosition) / deltaTime;
-                MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, (float)velocity.X, (float)velocity.Y, (float)velocity.Z);
+                _velocity = (pos - _previousPosition) / deltaTime;
+                Float3 velocity = AudioContext.ToAudioSpace(_velocity);
+                MiniAudioNative.ma_sound_group_set_velocity(_soundGroup, velocity.X, velocity.Y, velocity.Z);
             }
 
             _previousPosition = pos;
@@ -594,22 +599,16 @@ public sealed class AudioSource : MonoBehaviour
     #region Utility Methods
 
     /// <summary>
-    /// Gets the calculated velocity based on position changes.
+    /// The world space velocity the doppler shift is being driven from, in units per real second.
     /// </summary>
+    /// <remarks>
+    /// This used to difference the sound group's position against the previous position that Update
+    /// had already overwritten with it, so it always answered roughly zero, and divided by a delta it
+    /// never checked. It now reports the value Update actually handed the audio engine.
+    /// </remarks>
     public Float3 GetCalculatedVelocity()
     {
-        if (_soundGroup.pointer == IntPtr.Zero)
-            return new Float3(0, 0, 0);
-
-        float deltaTime = AudioContext.DeltaTime;
-        var result = MiniAudioNative.ma_sound_group_get_position(_soundGroup);
-        Float3 currentPosition = new Float3(result.x, result.y, result.z);
-
-        float dx = currentPosition.X - _previousPosition.X;
-        float dy = currentPosition.Y - _previousPosition.Y;
-        float dz = currentPosition.Z - _previousPosition.Z;
-
-        return new Float3(dx / deltaTime, dy / deltaTime, dz / deltaTime);
+        return _velocity;
     }
 
     /// <summary>
