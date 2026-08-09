@@ -523,6 +523,105 @@ public class PrefabSafetyTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Overrides that no longer resolve can be identified and cleared
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void UnresolvableOverride_IsReportedAndCanBeRemoved()
+    {
+        var root = new GameObject("Root");
+        var child = new GameObject("Child");
+        child.AddComponent<OverrideComp>().A = 1;
+        child.SetParent(root);
+        Guid g = CreatePrefabAsset(root, "Stale.prefab");
+
+        var instance = Inst(g);
+        var comp = instance.Children[0].GetComponent<OverrideComp>()!;
+        comp.A = 50;
+        PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
+        Assert.True(PrefabUtility.IsOverrideResolvable(instance, "g0.c0.A"));
+        SetSceneCurrent(instance);
+
+        // The source drops the child, so the override's path no longer addresses anything.
+        File.WriteAllText(AssetAbsolutePath("Stale.prefab"),
+            Serializer.Serialize(typeof(object), new GameObject("Root")).WriteToString());
+        Assets.Reimport(g);
+        PrefabUtility.RefreshAllInstances(g);
+
+        var live = Scene.Current!.RootObjects.First();
+        Assert.Single(live.PrefabOverrides);
+        Assert.False(PrefabUtility.IsOverrideResolvable(live, "g0.c0.A"));
+
+        PrefabUtility.RemoveOverride(live, "g0.c0.A");
+
+        Assert.Empty(live.PrefabOverrides);
+        Assert.False(PrefabUtility.HasAnyOverrides(live));
+    }
+
+    [Fact]
+    public void RemoveOverride_IsUndoable()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 5;
+        Guid g = CreatePrefabAsset(root, "RemoveUndo.prefab");
+
+        var instance = Inst(g);
+        var comp = instance.GetComponent<OverrideComp>()!;
+        comp.A = 99;
+        PrefabUtility.DetectComponentOverrides(instance, comp);
+        SetSceneCurrent(instance);
+        Undo.Clear();
+
+        PrefabUtility.RemoveOverride(Scene.Current!.RootObjects.First(), "c0.A");
+        Undo.FlushFrame();
+        Assert.Empty(Scene.Current!.RootObjects.First().PrefabOverrides);
+
+        Undo.PerformUndo();
+        Assert.Single(Scene.Current!.RootObjects.First().PrefabOverrides);
+    }
+
+    // ---------------------------------------------------------------------
+    // Editor-only prefab bookkeeping does not ship
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void Build_StripsOverrideDataButKeepsThePrefabLink()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 5;
+        Guid g = CreatePrefabAsset(root, "Ship.prefab");
+
+        var instance = Inst(g);
+        var comp = instance.GetComponent<OverrideComp>()!;
+        comp.A = 12345;
+        PrefabUtility.DetectComponentOverrides(instance, comp);
+
+        var scene = new Scene();
+        scene.Add(instance);
+        var echo = Serializer.Serialize(typeof(object), scene);
+
+        Assert.True(Build.BuildPipeline.StripEditorOnlyPrefabData(echo));
+
+        string text = echo.WriteToString();
+        Assert.DoesNotContain("PrefabOverrides", text);
+        Assert.DoesNotContain("PrefabComponentCount", text);
+        Assert.DoesNotContain("PrefabChildCount", text);
+        // The link itself is observable through IsPrefabInstance, so it stays.
+        Assert.Contains("PrefabAssetId", text);
+        // The overridden value survives as the object's own state, once rather than twice.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(text, "12345"));
+    }
+
+    [Fact]
+    public void Build_StripReportsNothingToDoOnAPlainScene()
+    {
+        var scene = new Scene();
+        scene.Add(new GameObject("Plain"));
+
+        Assert.False(Build.BuildPipeline.StripEditorOnlyPrefabData(Serializer.Serialize(typeof(object), scene)));
+    }
+
+    // ---------------------------------------------------------------------
     // Play mode never writes to prefab assets
     // ---------------------------------------------------------------------
 

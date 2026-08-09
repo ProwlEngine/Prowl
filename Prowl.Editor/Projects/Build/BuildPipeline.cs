@@ -109,7 +109,73 @@ public abstract class BuildPipeline
     protected virtual Stream? OpenShippedAsset(Guid guid)
     {
         string path = Path.Combine(Project.Current!.CachePath, $"{guid}.asset");
-        return File.Exists(path) ? File.OpenRead(path) : null;
+        if (!File.Exists(path)) return null;
+
+        return TryStripEditorOnlyPrefabData(guid, path) ?? File.OpenRead(path);
+    }
+
+    /// <summary>
+    /// Per-instance prefab bookkeeping that only the editor reads. The override list in particular is
+    /// duplicated state: the values are already baked into the objects themselves, so a scene stores
+    /// each overridden value twice. PrefabAssetId is deliberately kept - it is one guid per object and
+    /// it is publicly observable through GameObject.IsPrefabInstance.
+    /// </summary>
+    private static readonly string[] EditorOnlyPrefabKeys =
+        ["PrefabOverrides", "PrefabComponentCount", "PrefabChildCount"];
+
+    /// <summary>
+    /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the
+    /// cached bytes untouched.
+    /// </summary>
+    private static Stream? TryStripEditorOnlyPrefabData(Guid guid, string cachePath)
+    {
+        var entry = EditorAssetBackend.Instance?.GetEntry(guid);
+        if (entry == null) return null;
+        if (entry.ImporterType is not ("SceneImporter" or "PrefabImporter")) return null;
+
+        try
+        {
+            var echo = EchoObject.ReadFromBinary(new FileInfo(cachePath));
+            if (echo == null || !StripEditorOnlyPrefabData(echo)) return null;
+
+            var buffer = new MemoryStream();
+            using (var writer = new BinaryWriter(buffer, System.Text.Encoding.UTF8, leaveOpen: true))
+                echo.WriteToBinary(writer);
+
+            buffer.Position = 0;
+            return buffer;
+        }
+        catch (Exception ex)
+        {
+            // Shipping the unstripped asset is correct, just larger, so this must never fail a build.
+            Runtime.Debug.LogWarning($"[Build] Could not strip prefab data from '{entry.Path}': {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes <see cref="EditorOnlyPrefabKeys"/> everywhere in a serialized tree, returning whether
+    /// anything was found. Prefab data nests arbitrarily deep, once per GameObject.
+    /// </summary>
+    internal static bool StripEditorOnlyPrefabData(EchoObject echo)
+    {
+        bool removed = false;
+
+        if (echo.TagType == EchoType.Compound)
+        {
+            foreach (var key in EditorOnlyPrefabKeys)
+                removed |= echo.Remove(key);
+
+            foreach (var child in echo.Tags.Values)
+                removed |= StripEditorOnlyPrefabData(child);
+        }
+        else if (echo.TagType == EchoType.List && echo.List != null)
+        {
+            foreach (var item in echo.List)
+                removed |= StripEditorOnlyPrefabData(item);
+        }
+
+        return removed;
     }
 
     /// <summary>Copies shipped assets to output as loose files, returning the ones actually written.</summary>

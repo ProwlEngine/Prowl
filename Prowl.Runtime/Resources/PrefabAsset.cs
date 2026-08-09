@@ -47,8 +47,15 @@ public class PrefabAsset : EngineObject
     private static void StampPrefabId(GameObject go, Guid prefabAssetId)
     {
         go.PrefabAssetId = prefabAssetId;
-        go.PrefabComponentCount = go.GetComponents<MonoBehaviour>().Count();
-        go.PrefabChildCount = go.Children.Count;
+
+        // Only the editor reads these, and they are what the structural rules in the hierarchy and
+        // inspector are enforced from. A player pays a walk per spawn for state nothing consults.
+        if (Application.IsEditor)
+        {
+            go.PrefabComponentCount = go._components.Count;
+            go.PrefabChildCount = go.Children.Count;
+        }
+
         foreach (var child in go.Children)
         {
             // Don't overwrite nested prefab instances

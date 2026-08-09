@@ -102,7 +102,7 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Instantiate_StampsComponentAndChildCounts()
+    public void Instantiate_InTheEditor_StampsComponentAndChildCounts()
     {
         var source = CreateGameObject("Root");
         source.AddComponent<SerializableComponent>();
@@ -110,10 +110,46 @@ public class PrefabTests : RuntimeTestBase
         child.SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = true; // the counts back editor structural rules and exist only there
+        try
+        {
+            var instance = prefab.Instantiate();
 
-        Assert.Equal(1, instance!.PrefabComponentCount);
-        Assert.Equal(1, instance.PrefabChildCount);
+            Assert.Equal(1, instance!.PrefabComponentCount);
+            Assert.Equal(1, instance.PrefabChildCount);
+        }
+        finally
+        {
+            Application.IsEditor = wasEditor;
+        }
+    }
+
+    [Fact]
+    public void Instantiate_OutsideTheEditor_SkipsTheEditorOnlyCounts()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        CreateGameObject("Child").SetParent(source);
+        var id = Guid.NewGuid();
+        var prefab = MakePrefab(source, id);
+
+        bool wasEditor = Application.IsEditor;
+        Application.IsEditor = false;
+        try
+        {
+            var instance = prefab.Instantiate()!;
+
+            // The link still identifies the object; only the structural counters are editor-only.
+            Assert.Equal(id, instance.PrefabAssetId);
+            Assert.True(instance.IsPrefabInstance);
+            Assert.Equal(-1, instance.PrefabComponentCount);
+            Assert.Equal(-1, instance.PrefabChildCount);
+        }
+        finally
+        {
+            Application.IsEditor = wasEditor;
+        }
     }
 
     [Fact]
