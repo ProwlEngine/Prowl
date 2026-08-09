@@ -116,15 +116,18 @@ public class InspectorPanel : DockPanel
         DialogModal dialog = Origami.Dialog(Loc.Get("dialog.unapplied_settings"),
             p => Origami.Label(p, "insp_unapplied_msg", Loc.Get("dialog.unapplied_settings_body", new { name })).Show());
 
-        // The edits have to go somewhere. Escaping out would leave them unresolved with the inspector
-        // still holding the asset open, which is the one state this whole flow exists to prevent.
-        dialog.CloseOnEscape = false;
+        dialog.CloseOnEscape = true;
         dialog.CloseOnBackdrop = false;
+        dialog.OnDismissed = _ =>
+        {
+            _promptOpen = false;
+            editor.RevertPendingChanges(entry, asset);
+        };
 
         dialog.Button(Loc.Get("dialog.apply"),
-                () => { editor.ApplyPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); }, OrigamiVariant.Primary)
+                () => { _promptOpen = false; editor.ApplyPendingChanges(entry, asset); Modal.Pop(); }, OrigamiVariant.Primary)
             .Button(Loc.Get("dialog.revert"),
-                () => { editor.RevertPendingChanges(entry, asset); _promptOpen = false; Modal.Pop(); });
+                () => { _promptOpen = false; editor.RevertPendingChanges(entry, asset); Modal.Pop(); });
 
         return true;
     }
@@ -174,10 +177,6 @@ public class InspectorPanel : DockPanel
             // Leaving an asset whose import settings were edited but not applied: offer to write them or
             // put them back. The selection change is queued while the prompt is up - the inspector keeps
             // drawing the asset in question so the choice is made against what is actually on screen.
-            // Safety net: if every modal went away without either button running (a PopAll from
-            // elsewhere), don't strand the inspector holding an asset it can never leave.
-            if (_promptOpen && !Modal.IsOpen) _promptOpen = false;
-
             if (_promptOpen)
             {
                 if (_openInspectable != null) active = _openInspectable;
