@@ -751,6 +751,37 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Equal(0.0, rb.CenterOfMass.X, 2);
     }
 
+    // Removing a body removes its constraints, which zeroes their handles while the component still
+    // holds the managed object. Jitter's constraint properties are views onto unmanaged memory reached
+    // through that handle, so a null check alone let writes land on freed memory.
+    [Fact]
+    public void ConstraintProperties_AreSafeAfterTheirBodyIsDisabled()
+    {
+        var scene = CreatePhysicsScene();
+
+        var anchorGo = CreateGameObject("Anchor");
+        var anchor = anchorGo.AddComponent<Rigidbody3D>();
+        anchor.MotionType = Jitter2.Dynamics.MotionType.Static;
+        scene.Add(anchorGo);
+
+        var armGo = CreateGameObject("Arm");
+        armGo.Transform.Position = new Float3(1, 0, 0);
+        var arm = armGo.AddComponent<Rigidbody3D>();
+        var joint = armGo.AddComponent<DistanceLimitConstraint>();
+        joint.ConnectedBody = anchor;
+        scene.Add(armGo);
+        StepPhysics(scene, 2);
+
+        // Disabling the rigidbody tears the constraint out from under the still-enabled component.
+        arm.Enabled = false;
+        StepPhysics(scene, 1);
+
+        joint.TargetDistance = 3f;
+        joint.Softness = 0.5f;
+        joint.Anchor = new Float3(0, 1, 0);
+        Assert.False(joint.Active);
+    }
+
     // A joint is several Jitter constraints, and PhysicsConstraint.Active used to route through a
     // single-constraint accessor that joints return null from, so Active always read false and its
     // setter was a no-op.
