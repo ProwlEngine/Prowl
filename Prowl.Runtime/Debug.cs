@@ -456,25 +456,31 @@ public static class Debug
     }
 
     /// <summary>
-    /// A cone described by its half-angle from the axis rather than by a rim radius, drawn as a rim and
-    /// four ribs. Useful for swing limits, spotlight cones, vision cones.
+    /// A cone described by the half-angle it opens to from its axis, for swing limits, spotlights and
+    /// vision cones. <paramref name="length"/> is the slant length, so every drawn edge is that far from
+    /// the apex.
     /// </summary>
-    public static void DrawWireConeAngle(Float3 apex, Float3 axis, float angleDegrees, float length, Color color)
+    public static void DrawWireConeAngle(Float3 apex, Float3 axis, float angleDegrees, float length, Color color, int segments = 24)
     {
         Float3 dir = Float3.Normalize(axis);
         if (Float3.LengthSquared(dir) <= 0.0f) return;
 
-        float angle = Maths.Clamp(angleDegrees, 0.0f, 89.0f) * Maths.Deg2Rad;
-        float radius = Maths.Tan(angle) * length;
-        Float3 rim = apex + dir * length;
+        float angle = Maths.Clamp(angleDegrees, 0.0f, 180.0f) * Maths.Deg2Rad;
 
-        DrawWireCircle(rim, dir, radius, color, 24);
+        // Rim on the sphere: it slides behind the apex past 90 degrees, which is exactly right.
+        Float3 rimCenter = apex + dir * (length * Maths.Cos(angle));
+        float radius = length * Maths.Sin(angle);
+        DrawWireCircle(rimCenter, dir, radius, color, segments);
 
+        // Four meridians out to that rim. Rotating the axis about one perpendicular sweeps it toward the
+        // other, so the two perpendiculars and their negatives give the four quarters.
         PerpendicularAxes(dir, out Float3 u, out Float3 v);
-        DrawLine(apex, rim + u * radius, color);
-        DrawLine(apex, rim - u * radius, color);
-        DrawLine(apex, rim + v * radius, color);
-        DrawLine(apex, rim - v * radius, color);
+        int arcSegments = Maths.Max(2, segments / 2);
+
+        DrawWireArc(apex, v, dir, length, angle, color, arcSegments);
+        DrawWireArc(apex, v, dir, length, -angle, color, arcSegments);
+        DrawWireArc(apex, u, dir, length, angle, color, arcSegments);
+        DrawWireArc(apex, u, dir, length, -angle, color, arcSegments);
     }
 
     /// <summary>
