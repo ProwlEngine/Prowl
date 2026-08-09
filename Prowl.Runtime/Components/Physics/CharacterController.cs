@@ -27,6 +27,24 @@ public class CharacterController : MonoBehaviour
     public float Height = 1.8f;
     public float SkinWidth = 0.02f;
 
+    /// <summary>Which layers the controller collides with.</summary>
+    public LayerMask CollisionMask = LayerMask.Everything;
+
+    /// <summary>
+    /// The filter every internal cast uses: the collision mask, minus anything belonging to a
+    /// Rigidbody3D on this GameObject. Without that exclusion a controller placed on a body would
+    /// immediately collide with itself and refuse to move.
+    /// </summary>
+    private QueryFilter Filter
+    {
+        get
+        {
+            var filter = new QueryFilter(CollisionMask);
+            Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
+            return self.IsValid() ? filter.Ignoring(self) : filter;
+        }
+    }
+
     /// <summary>
     /// Maximum angle in degrees for a surface to be considered walkable (default: 45 degrees)
     /// </summary>
@@ -177,12 +195,12 @@ public class CharacterController : MonoBehaviour
         {
             Float3 bottom = position + new Float3(0, radius, 0);
             Float3 top = position + new Float3(0, height - radius, 0);
-            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius);
+            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius, Filter);
         }
         else // Cylinder
         {
             Float3 center = position + new Float3(0, height * 0.5f, 0);
-            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity);
+            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity, Filter);
         }
     }
 
@@ -226,7 +244,8 @@ public class CharacterController : MonoBehaviour
                 GetEffectiveRadius(),
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
         else // Cylinder
@@ -238,7 +257,8 @@ public class CharacterController : MonoBehaviour
                 Quaternion.Identity,
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
     }

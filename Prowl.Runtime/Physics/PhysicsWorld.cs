@@ -222,11 +222,45 @@ public class PhysicsWorld
     }
 
     /// <summary>Whether a terrain proxy sits on a layer the mask accepts. Terrain has no body to carry
-    /// layer data, so it is taken from the GameObject the terrain component lives on.</summary>
-    private bool TerrainPassesLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
+    /// layer data, so it is taken from the GameObject the terrain component lives on. The per-collider
+    /// exclusions do not apply: terrain is neither a rigidbody nor a Collider.</summary>
+    private bool TerrainAccepted(IDynamicTreeProxy proxy, in QueryFilter filter)
     {
         MonoBehaviour owner = GetTerrainOwner(proxy);
-        return owner.IsValid() && owner.GameObject.IsValid() && layerMask.HasLayer(owner.GameObject.LayerIndex);
+        return owner.IsValid() && owner.GameObject.IsValid() && filter.LayerMask.HasLayer(owner.GameObject.LayerIndex);
+    }
+
+    /// <summary>
+    /// Whether a query may report this shape. One place so every cast, overlap and raycast applies the
+    /// same rules, including the exclusions a bare layer mask cannot express.
+    /// </summary>
+    private bool Accepts(RigidBodyShape shape, in QueryFilter filter)
+    {
+        // A body with no user data has no layer to test, so a filter can only exclude it.
+        if (shape.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData userData) return false;
+        if (!filter.LayerMask.HasLayer(userData.Layer)) return false;
+
+        // The owner lookup is only worth doing when something is actually excluded.
+        if (!filter.HasExclusions) return true;
+
+        if (filter.IgnoreRigidbody.IsValid() && userData.Rigidbody == filter.IgnoreRigidbody) return false;
+        if (filter.IgnoreCollider.IsValid() && GetShapeOwner(shape) == filter.IgnoreCollider) return false;
+
+        // Static colliders share one body per layer, so excluding a rigidbody has to also drop the
+        // static shapes belonging to colliders parented under it.
+        if (filter.IgnoreRigidbody.IsValid() && userData.Rigidbody.IsNotValid())
+        {
+            Collider owner = GetShapeOwner(shape);
+            if (owner.IsValid() && owner.GetComponentInParent<Rigidbody3D>() == filter.IgnoreRigidbody) return false;
+        }
+
+        return true;
+    }
+
+    private bool AcceptsProxy(IDynamicTreeProxy proxy, in QueryFilter filter)
+    {
+        if (proxy is RigidBodyShape shape) return Accepts(shape, filter);
+        return TerrainAccepted(proxy, filter);
     }
 
     /// <summary>
@@ -313,6 +347,8 @@ public class PhysicsWorld
         World.NarrowPhaseFilter = new TriangleEdgeCollisionFilter();
 
         // Hook up physics step events
+        InitQueryDelegates();
+
         World.PreStep += OnPreStep;
         World.PostStep += OnPostStep;
         World.PreSubStep += OnPreSubStep;
@@ -417,46 +453,50 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Casts a ray against all colliders in this physics world.
+    /// Casts a ray and reports whether it hit anything.
     /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction)
-    {
-        if (!ValidateQuery(origin, direction, 0.0f, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
-        direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+    public bool Raycast(Float3 origin, Float3 direction) => Raycast(origin, direction, float.MaxValue, QueryFilter.Default);
 
-        return World.DynamicTree.RayCast(jOrigin, jDirection,
-            PreFilter, PostFilter,
-            out _, out _, out _);
+    /// <inheritdoc cref="Raycast(Float3, Float3)"/>
+    public bool Raycast(Float3 origin, Float3 direction, float maxDistance) => Raycast(origin, direction, maxDistance, QueryFilter.Default);
+
+    /// <summary>
+    /// Casts a ray and reports whether it hit anything, restricted by <paramref name="filter"/>.
+    /// A <see cref="LayerMask"/> converts implicitly, so a layer-only call site reads unchanged.
+    /// </summary>
+    public bool Raycast(Float3 origin, Float3 direction, float maxDistance, QueryFilter filter)
+    {
+        if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
+
+        return World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+            _acceptProxyDelegate, PostFilter, out _, out _, out _);
     }
 
     /// <summary>
-    /// Casts a ray against all colliders and returns detailed information about the hit.
+    /// Casts a ray and returns the closest hit.
     /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo)
+    public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo) =>
+        Raycast(origin, direction, out hitInfo, float.MaxValue, QueryFilter.Default);
+
+    /// <inheritdoc cref="Raycast(Float3, Float3, out RaycastHit)"/>
+    public bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo) =>
+        Raycast(origin, direction, out hitInfo, maxDistance, QueryFilter.Default);
+
+    /// <summary>
+    /// Casts a ray and returns the closest hit, restricted by <paramref name="filter"/>.
+    /// </summary>
+    public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo, float maxDistance, QueryFilter filter)
     {
         hitInfo = new RaycastHit();
-        if (!ValidateQuery(origin, direction, 0.0f, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
-        direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+        if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(Raycast))) return false;
 
-        hitInfo = new RaycastHit();
-        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection,
-            PreFilter, PostFilter,
+        bool hit = World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+            _acceptProxyDelegate, PostFilter,
             out IDynamicTreeProxy shape, out JVector normal, out float lambda);
 
         if (hit)
         {
-            var result = new DynamicTree.RayCastResult
-            {
-                Entity = shape,
-                Lambda = lambda,
-                Normal = normal
-            };
+            var result = new DynamicTree.RayCastResult { Entity = shape, Lambda = lambda, Normal = normal };
             hitInfo.SetFromJitterResult(this, result, origin, direction);
         }
 
@@ -464,99 +504,101 @@ public class PhysicsWorld
     }
 
     /// <summary>
-    /// Casts a ray within a maximum distance.
+    /// Casts a ray and collects every hit along it, nearest first.
     /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction, float maxDistance)
+    /// <returns>Number of hits written to <paramref name="hits"/>.</returns>
+    public int RaycastAll(Float3 origin, Float3 direction, float maxDistance, List<RaycastHit> hits) =>
+        RaycastAll(origin, direction, maxDistance, hits, QueryFilter.Default);
+
+    /// <inheritdoc cref="RaycastAll(Float3, Float3, float, List{RaycastHit})"/>
+    public int RaycastAll(Float3 origin, Float3 direction, float maxDistance, List<RaycastHit> hits, QueryFilter filter)
     {
-        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
-        direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+        hits.Clear();
+        if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(RaycastAll))) return 0;
 
-        // Direction is normalized, so maxDistance is the ray parameter limit. Passing it in lets the
-        // tree traversal prune whole branches instead of finding the closest hit and discarding it.
-        return World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
-            PreFilter, PostFilter,
-            out _, out _, out _);
-    }
-
-    /// <summary>
-    /// Casts a ray within a maximum distance and returns detailed information.
-    /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction, float maxDistance, out RaycastHit hitInfo)
-    {
-        hitInfo = new RaycastHit();
-        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
-        direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
-
-        hitInfo = new RaycastHit();
-        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
-            PreFilter, PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out float lambda);
-
-        if (hit)
+        _rayHitSink = hits;
+        _rayOrigin = origin;
+        _rayDirection = direction;
+        try
         {
-            var result = new DynamicTree.RayCastResult
-            {
-                Entity = shape,
-                Lambda = lambda,
-                Normal = normal,
-            };
-            hitInfo.SetFromJitterResult(this, result, origin, direction);
+            World.DynamicTree.RayCast(ToJ(origin), ToJ(direction), maxDistance,
+                _acceptProxyDelegate, _collectRayHitDelegate, out _, out _, out _);
+        }
+        finally
+        {
+            _rayHitSink = null;
         }
 
-        return hit;
+        hits.Sort(static (a, b) => a.Distance.CompareTo(b.Distance));
+        return hits.Count;
     }
 
     /// <summary>
-    /// Casts a ray with layer mask filtering.
+    /// Casts a ray between two points and returns the closest hit. The usual way to ask "is there
+    /// anything between these two things".
     /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction, float maxDistance, LayerMask layerMask)
-    {
-        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
-        direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+    public bool Linecast(Float3 from, Float3 to, out RaycastHit hitInfo) =>
+        Linecast(from, to, out hitInfo, QueryFilter.Default);
 
-        return World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
-            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out _, out _, out _);
+    /// <inheritdoc cref="Linecast(Float3, Float3, out RaycastHit)"/>
+    public bool Linecast(Float3 from, Float3 to, out RaycastHit hitInfo, QueryFilter filter)
+    {
+        hitInfo = new RaycastHit();
+        Float3 delta = to - from;
+        float distance = Float3.Length(delta);
+        if (distance <= 0.0f) return false;
+
+        return Raycast(from, delta, out hitInfo, distance, filter);
     }
 
+    /// <inheritdoc cref="Linecast(Float3, Float3, out RaycastHit)"/>
+    public bool Linecast(Float3 from, Float3 to) => Linecast(from, to, out _, QueryFilter.Default);
+
+    /// <inheritdoc cref="Linecast(Float3, Float3, out RaycastHit)"/>
+    public bool Linecast(Float3 from, Float3 to, QueryFilter filter) => Linecast(from, to, out _, filter);
+
     /// <summary>
-    /// Casts a ray with layer mask filtering and returns detailed information.
+    /// Shared prologue for the ray queries: validates the inputs, normalizes the direction, publishes
+    /// the filter for the shared callbacks and syncs pending Transform edits into the bodies.
     /// </summary>
-    public bool Raycast(Float3 origin, Float3 direction, out RaycastHit hitInfo, float maxDistance, LayerMask layerMask)
+    private bool BeginRayQuery(ref Float3 origin, ref Float3 direction, float maxDistance, in QueryFilter filter, string query)
     {
-        hitInfo = new RaycastHit();
-        if (!ValidateQuery(origin, direction, maxDistance, nameof(Raycast))) return false;
-        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
+        if (!ValidateQuery(origin, direction, maxDistance, query)) return false;
+
         direction = Float3.Normalize(direction);
-        var jOrigin = new JVector(origin.X, origin.Y, origin.Z);
-        var jDirection = new JVector(direction.X, direction.Y, direction.Z);
+        if (Float3.LengthSquared(direction) <= 0.0f) return false;
 
-        hitInfo = new RaycastHit();
-        bool hit = World.DynamicTree.RayCast(jOrigin, jDirection, maxDistance,
-            shape => PreFilterWithLayer(shape, layerMask), PostFilter,
-            out IDynamicTreeProxy shape, out JVector normal, out float lambda);
+        _activeFilter = filter;
+        if (AutoSyncTransforms) SyncTransforms(); // eager transform->body sync so the query sees recent Transform edits
+        return true;
+    }
 
-        if (hit)
-        {
-            var result = new DynamicTree.RayCastResult
-            {
-                Entity = shape,
-                Lambda = lambda,
-                Normal = normal,
-            };
-            hitInfo.SetFromJitterResult(this, result, origin, direction);
-        }
+    private static JVector ToJ(Float3 v) => new(v.X, v.Y, v.Z);
 
-        return hit;
+
+    // The tree's filter callbacks are delegates, so binding a filter per call would allocate a closure
+    // every query. Queries are main-thread and non-reentrant, so the in-flight filter and ray-hit sink
+    // live in fields and the delegates are built once.
+    private QueryFilter _activeFilter = QueryFilter.Default;
+    private List<RaycastHit> _rayHitSink;
+    private Float3 _rayOrigin, _rayDirection;
+    private DynamicTree.RayCastFilterPre _acceptProxyDelegate;
+    private DynamicTree.RayCastFilterPost _collectRayHitDelegate;
+
+    private void InitQueryDelegates()
+    {
+        _acceptProxyDelegate = proxy => AcceptsProxy(proxy, _activeFilter);
+        _collectRayHitDelegate = CollectRayHit;
+    }
+
+    // Collects every hit rather than the nearest: returning false tells the traversal this hit was
+    // filtered out, so it keeps descending instead of narrowing its search to the closest so far.
+    private bool CollectRayHit(DynamicTree.RayCastResult result)
+    {
+        var hit = new RaycastHit();
+        hit.SetFromJitterResult(this, result, _rayOrigin, _rayDirection);
+        if (hit.Hit) _rayHitSink.Add(hit);
+        return false;
     }
 
     private static bool IsFinite(Float3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
@@ -590,24 +632,6 @@ public class PhysicsWorld
         return true;
     }
 
-    private static bool PreFilter(IDynamicTreeProxy proxy)
-    {
-        return true;
-    }
-
-    private bool PreFilterWithLayer(IDynamicTreeProxy proxy, LayerMask layerMask)
-    {
-        if (proxy is RigidBodyShape shape)
-        {
-            // A body without our user data has no layer to test, so a mask can only exclude it.
-            if (shape.RigidBody.Tag is not Rigidbody3D.RigidBodyUserData userData) return false;
-
-            return layerMask.HasLayer(userData.Layer);
-        }
-
-        return TerrainPassesLayer(proxy, layerMask);
-    }
-
     private static bool PostFilter(DynamicTree.RayCastResult result)
     {
         return true;
@@ -624,9 +648,9 @@ public class PhysicsWorld
     /// <param name="direction">Direction to cast the shape.</param>
     /// <param name="maxDistance">Maximum distance to cast.</param>
     /// <param name="hits">List to populate with all hits found.</param>
-    /// <param name="layerMask">Layer mask for filtering.</param>
+    /// <param name="filter">Layer mask for filtering.</param>
     /// <returns>Number of hits found.</returns>
-    public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
         hits.Clear();
         if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
@@ -659,16 +683,15 @@ public class PhysicsWorld
             if (proxy is TerrainHeightmapProxy terrainProxy)
             {
                 // Shape cast against terrain heightmap triangles
-                if (TerrainPassesLayer(terrainProxy, layerMask))
+                if (TerrainAccepted(terrainProxy, filter))
                     SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
                 continue;
             }
 
             if (proxy is not RigidBodyShape targetShape) continue;
 
-            // Check layer mask
+            if (!Accepts(targetShape, filter)) continue;
             var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-            if (userData == null || !layerMask.HasLayer(userData.Layer)) continue;
 
             Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
 
@@ -730,6 +753,8 @@ public class PhysicsWorld
             }
         }
 
+        // Nearest first, so callers can take hits[0] without scanning.
+        hits.Sort(static (a, b) => a.Fraction.CompareTo(b.Fraction));
         return hits.Count;
     }
 
@@ -839,7 +864,7 @@ public class PhysicsWorld
     /// </summary>
     public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, LayerMask.Everything);
+        return ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
@@ -851,23 +876,16 @@ public class PhysicsWorld
     /// <param name="direction">Direction to cast the shape.</param>
     /// <param name="maxDistance">Maximum distance to cast.</param>
     /// <param name="hitInfo">Information about the closest hit.</param>
-    /// <param name="layerMask">Layer mask for filtering.</param>
+    /// <param name="filter">Layer mask for filtering.</param>
     /// <returns>True if the shape hit something.</returns>
-    public bool ShapeCast(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool ShapeCast(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        int hitCount = ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, layerMask);
+        int hitCount = ShapeCastAll(shape, orientation, origin, direction, maxDistance, hits, filter);
 
         if (hitCount > 0)
         {
-            // Find closest hit
-            ShapeCastHit closest = hits[0];
-            for (int i = 1; i < hits.Count; i++)
-            {
-                if (hits[i].Fraction < closest.Fraction)
-                    closest = hits[i];
-            }
-            hitInfo = closest;
+            hitInfo = hits[0]; // ShapeCastAll returns them nearest first
             return true;
         }
 
@@ -880,7 +898,7 @@ public class PhysicsWorld
     /// </summary>
     public bool ShapeCast(RigidBodyShape shape, Float3 origin, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return ShapeCast(shape, Quaternion.Identity, origin, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return ShapeCast(shape, Quaternion.Identity, origin, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
@@ -894,15 +912,15 @@ public class PhysicsWorld
     /// <returns>True if the sphere hit something.</returns>
     public bool SphereCast(Float3 origin, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return SphereCast(origin, radius, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return SphereCast(origin, radius, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a sphere along a direction with layer filtering and returns the closest hit.
     /// </summary>
-    public bool SphereCast(Float3 origin, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool SphereCast(Float3 origin, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -916,15 +934,15 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int SphereCastAll(Float3 origin, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return SphereCastAll(origin, radius, direction, maxDistance, hits, LayerMask.Everything);
+        return SphereCastAll(origin, radius, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a sphere along a direction with layer filtering and returns all hits.
     /// </summary>
-    public int SphereCastAll(Float3 origin, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int SphereCastAll(Float3 origin, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QuerySphere(radius), Quaternion.Identity, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -939,13 +957,13 @@ public class PhysicsWorld
     /// <returns>True if the capsule hit something.</returns>
     public bool CapsuleCast(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return CapsuleCast(point1, point2, radius, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return CapsuleCast(point1, point2, radius, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a capsule along a direction with layer filtering and returns the closest hit.
     /// </summary>
-    public bool CapsuleCast(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool CapsuleCast(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
         // Calculate capsule properties
         Float3 capsuleCenter = (point1 + point2) * 0.5f;
@@ -958,7 +976,7 @@ public class PhysicsWorld
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
 
-        return ShapeCast(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -973,13 +991,13 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int CapsuleCastAll(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return CapsuleCastAll(point1, point2, radius, direction, maxDistance, hits, LayerMask.Everything);
+        return CapsuleCastAll(point1, point2, radius, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a capsule along a direction with layer filtering and returns all hits.
     /// </summary>
-    public int CapsuleCastAll(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int CapsuleCastAll(Float3 point1, Float3 point2, float radius, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
         // Calculate capsule properties
         Float3 capsuleCenter = (point1 + point2) * 0.5f;
@@ -992,7 +1010,7 @@ public class PhysicsWorld
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
 
-        return ShapeCastAll(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(capsule, capsuleOrientation, capsuleCenter, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1038,15 +1056,15 @@ public class PhysicsWorld
     /// <returns>True if the box hit something.</returns>
     public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return BoxCast(origin, size, orientation, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return BoxCast(origin, size, orientation, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a box along a direction with layer filtering and returns the closest hit.
     /// </summary>
-    public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool BoxCast(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryBox(size), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryBox(size), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1061,15 +1079,15 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return BoxCastAll(origin, size, orientation, direction, maxDistance, hits, LayerMask.Everything);
+        return BoxCastAll(origin, size, orientation, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a box along a direction with layer filtering and returns all hits.
     /// </summary>
-    public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int BoxCastAll(Float3 origin, Float3 size, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryBox(size), orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryBox(size), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1085,15 +1103,15 @@ public class PhysicsWorld
     /// <returns>True if the cylinder hit something.</returns>
     public bool CylinderCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return CylinderCast(origin, radius, height, orientation, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return CylinderCast(origin, radius, height, orientation, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a cylinder along a direction with layer filtering and returns the closest hit.
     /// </summary>
-    public bool CylinderCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool CylinderCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1109,15 +1127,15 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int CylinderCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return CylinderCastAll(origin, radius, height, orientation, direction, maxDistance, hits, LayerMask.Everything);
+        return CylinderCastAll(origin, radius, height, orientation, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a cylinder along a direction with layer filtering and returns all hits.
     /// </summary>
-    public int CylinderCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int CylinderCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryCylinder(radius, height), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     /// <summary>
@@ -1133,15 +1151,15 @@ public class PhysicsWorld
     /// <returns>True if the cone hit something.</returns>
     public bool ConeCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo)
     {
-        return ConeCast(origin, radius, height, orientation, direction, maxDistance, out hitInfo, LayerMask.Everything);
+        return ConeCast(origin, radius, height, orientation, direction, maxDistance, out hitInfo, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a cone along a direction with layer filtering and returns the closest hit.
     /// </summary>
-    public bool ConeCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, LayerMask layerMask)
+    public bool ConeCast(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, out ShapeCastHit hitInfo, QueryFilter filter)
     {
-        return ShapeCast(QueryCone(radius, height), orientation, origin, direction, maxDistance, out hitInfo, layerMask);
+        return ShapeCast(QueryCone(radius, height), orientation, origin, direction, maxDistance, out hitInfo, filter);
     }
 
     /// <summary>
@@ -1157,15 +1175,15 @@ public class PhysicsWorld
     /// <returns>Number of hits found.</returns>
     public int ConeCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits)
     {
-        return ConeCastAll(origin, radius, height, orientation, direction, maxDistance, hits, LayerMask.Everything);
+        return ConeCastAll(origin, radius, height, orientation, direction, maxDistance, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Casts a cone along a direction with layer filtering and returns all hits.
     /// </summary>
-    public int ConeCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int ConeCastAll(Float3 origin, float radius, float height, Quaternion orientation, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return ShapeCastAll(QueryCone(radius, height), orientation, origin, direction, maxDistance, hits, layerMask);
+        return ShapeCastAll(QueryCone(radius, height), orientation, origin, direction, maxDistance, hits, filter);
     }
 
     #endregion
@@ -1179,9 +1197,9 @@ public class PhysicsWorld
     /// <param name="orientation">The orientation of the shape.</param>
     /// <param name="position">Position of the shape.</param>
     /// <param name="hits">List to populate with all overlapping colliders.</param>
-    /// <param name="layerMask">Layer mask for filtering.</param>
+    /// <param name="filter">Layer mask for filtering.</param>
     /// <returns>Number of overlapping colliders found.</returns>
-    public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
     {
         hits.Clear();
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
@@ -1201,9 +1219,8 @@ public class PhysicsWorld
         {
             if (proxy is not RigidBodyShape targetShape) continue;
 
-            // Check layer mask
+            if (!Accepts(targetShape, filter)) continue;
             var userData = targetShape.RigidBody.Tag as Rigidbody3D.RigidBodyUserData;
-            if (userData == null || !layerMask.HasLayer(userData.Layer)) continue;
 
             Jitter2.Dynamics.RigidBody targetBody = targetShape.RigidBody;
 
@@ -1242,7 +1259,7 @@ public class PhysicsWorld
     /// </summary>
     public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits)
     {
-        return Overlap(shape, orientation, position, hits, LayerMask.Everything);
+        return Overlap(shape, orientation, position, hits, QueryFilter.Default);
     }
 
     /// <summary>
@@ -1254,15 +1271,15 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int OverlapSphere(Float3 position, float radius, List<ShapeCastHit> hits)
     {
-        return OverlapSphere(position, radius, hits, LayerMask.Everything);
+        return OverlapSphere(position, radius, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Tests if a sphere overlaps with any colliders with layer filtering.
     /// </summary>
-    public int OverlapSphere(Float3 position, float radius, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int OverlapSphere(Float3 position, float radius, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QuerySphere(radius), Quaternion.Identity, position, hits, layerMask);
+        return Overlap(QuerySphere(radius), Quaternion.Identity, position, hits, filter);
     }
 
     /// <summary>
@@ -1275,13 +1292,13 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int OverlapCapsule(Float3 point1, Float3 point2, float radius, List<ShapeCastHit> hits)
     {
-        return OverlapCapsule(point1, point2, radius, hits, LayerMask.Everything);
+        return OverlapCapsule(point1, point2, radius, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Tests if a capsule overlaps with any colliders with layer filtering.
     /// </summary>
-    public int OverlapCapsule(Float3 point1, Float3 point2, float radius, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int OverlapCapsule(Float3 point1, Float3 point2, float radius, List<ShapeCastHit> hits, QueryFilter filter)
     {
         // Calculate capsule properties
         Float3 capsuleCenter = (point1 + point2) * 0.5f;
@@ -1294,7 +1311,7 @@ public class PhysicsWorld
         // Calculate orientation to align capsule with the segment
         Quaternion capsuleOrientation = CalculateCapsuleOrientation(capsuleAxis, capsuleLength);
 
-        return Overlap(capsule, capsuleOrientation, capsuleCenter, hits, layerMask);
+        return Overlap(capsule, capsuleOrientation, capsuleCenter, hits, filter);
     }
 
     /// <summary>
@@ -1307,15 +1324,15 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits)
     {
-        return OverlapBox(position, size, orientation, hits, LayerMask.Everything);
+        return OverlapBox(position, size, orientation, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Tests if a box overlaps with any colliders with layer filtering.
     /// </summary>
-    public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int OverlapBox(Float3 position, Float3 size, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryBox(size), orientation, position, hits, layerMask);
+        return Overlap(QueryBox(size), orientation, position, hits, filter);
     }
 
     /// <summary>
@@ -1329,15 +1346,15 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int OverlapCylinder(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits)
     {
-        return OverlapCylinder(position, radius, height, orientation, hits, LayerMask.Everything);
+        return OverlapCylinder(position, radius, height, orientation, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Tests if a cylinder overlaps with any colliders with layer filtering.
     /// </summary>
-    public int OverlapCylinder(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int OverlapCylinder(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryCylinder(radius, height), orientation, position, hits, layerMask);
+        return Overlap(QueryCylinder(radius, height), orientation, position, hits, filter);
     }
 
     /// <summary>
@@ -1351,15 +1368,15 @@ public class PhysicsWorld
     /// <returns>Number of overlapping colliders found.</returns>
     public int OverlapCone(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits)
     {
-        return OverlapCone(position, radius, height, orientation, hits, LayerMask.Everything);
+        return OverlapCone(position, radius, height, orientation, hits, QueryFilter.Default);
     }
 
     /// <summary>
     /// Tests if a cone overlaps with any colliders with layer filtering.
     /// </summary>
-    public int OverlapCone(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, LayerMask layerMask)
+    public int OverlapCone(Float3 position, float radius, float height, Quaternion orientation, List<ShapeCastHit> hits, QueryFilter filter)
     {
-        return Overlap(QueryCone(radius, height), orientation, position, hits, layerMask);
+        return Overlap(QueryCone(radius, height), orientation, position, hits, filter);
     }
 
     #endregion
@@ -1374,16 +1391,16 @@ public class PhysicsWorld
     /// <returns>True if the sphere overlaps with any collider.</returns>
     public bool CheckSphere(Float3 position, float radius)
     {
-        return CheckSphere(position, radius, LayerMask.Everything);
+        return CheckSphere(position, radius, QueryFilter.Default);
     }
 
     /// <summary>
     /// Checks if a sphere overlaps with any colliders with layer filtering.
     /// </summary>
-    public bool CheckSphere(Float3 position, float radius, LayerMask layerMask)
+    public bool CheckSphere(Float3 position, float radius, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        return OverlapSphere(position, radius, hits, layerMask) > 0;
+        return OverlapSphere(position, radius, hits, filter) > 0;
     }
 
     /// <summary>
@@ -1395,16 +1412,16 @@ public class PhysicsWorld
     /// <returns>True if the capsule overlaps with any collider.</returns>
     public bool CheckCapsule(Float3 point1, Float3 point2, float radius)
     {
-        return CheckCapsule(point1, point2, radius, LayerMask.Everything);
+        return CheckCapsule(point1, point2, radius, QueryFilter.Default);
     }
 
     /// <summary>
     /// Checks if a capsule overlaps with any colliders with layer filtering.
     /// </summary>
-    public bool CheckCapsule(Float3 point1, Float3 point2, float radius, LayerMask layerMask)
+    public bool CheckCapsule(Float3 point1, Float3 point2, float radius, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        return OverlapCapsule(point1, point2, radius, hits, layerMask) > 0;
+        return OverlapCapsule(point1, point2, radius, hits, filter) > 0;
     }
 
     /// <summary>
@@ -1416,16 +1433,16 @@ public class PhysicsWorld
     /// <returns>True if the box overlaps with any collider.</returns>
     public bool CheckBox(Float3 position, Float3 size, Quaternion orientation)
     {
-        return CheckBox(position, size, orientation, LayerMask.Everything);
+        return CheckBox(position, size, orientation, QueryFilter.Default);
     }
 
     /// <summary>
     /// Checks if a box overlaps with any colliders with layer filtering.
     /// </summary>
-    public bool CheckBox(Float3 position, Float3 size, Quaternion orientation, LayerMask layerMask)
+    public bool CheckBox(Float3 position, Float3 size, Quaternion orientation, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        return OverlapBox(position, size, orientation, hits, layerMask) > 0;
+        return OverlapBox(position, size, orientation, hits, filter) > 0;
     }
 
     /// <summary>
@@ -1438,16 +1455,16 @@ public class PhysicsWorld
     /// <returns>True if the cylinder overlaps with any collider.</returns>
     public bool CheckCylinder(Float3 position, float radius, float height, Quaternion orientation)
     {
-        return CheckCylinder(position, radius, height, orientation, LayerMask.Everything);
+        return CheckCylinder(position, radius, height, orientation, QueryFilter.Default);
     }
 
     /// <summary>
     /// Checks if a cylinder overlaps with any colliders with layer filtering.
     /// </summary>
-    public bool CheckCylinder(Float3 position, float radius, float height, Quaternion orientation, LayerMask layerMask)
+    public bool CheckCylinder(Float3 position, float radius, float height, Quaternion orientation, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        return OverlapCylinder(position, radius, height, orientation, hits, layerMask) > 0;
+        return OverlapCylinder(position, radius, height, orientation, hits, filter) > 0;
     }
 
     /// <summary>
@@ -1460,16 +1477,16 @@ public class PhysicsWorld
     /// <returns>True if the cone overlaps with any collider.</returns>
     public bool CheckCone(Float3 position, float radius, float height, Quaternion orientation)
     {
-        return CheckCone(position, radius, height, orientation, LayerMask.Everything);
+        return CheckCone(position, radius, height, orientation, QueryFilter.Default);
     }
 
     /// <summary>
     /// Checks if a cone overlaps with any colliders with layer filtering.
     /// </summary>
-    public bool CheckCone(Float3 position, float radius, float height, Quaternion orientation, LayerMask layerMask)
+    public bool CheckCone(Float3 position, float radius, float height, Quaternion orientation, QueryFilter filter)
     {
         List<ShapeCastHit> hits = _queryHits;
-        return OverlapCone(position, radius, height, orientation, hits, layerMask) > 0;
+        return OverlapCone(position, radius, height, orientation, hits, filter) > 0;
     }
 
     #endregion

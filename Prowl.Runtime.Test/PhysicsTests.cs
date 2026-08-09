@@ -679,6 +679,86 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
     }
 
+    // ---------------------------------------------------------------------
+    // Query API: filters, all-hits, linecast
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void RaycastAll_ReturnsEveryHit_NearestFirst()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -4, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -8, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        var hits = new List<RaycastHit>();
+        int count = scene.Physics.RaycastAll(new Float3(0, 5, 0), new Float3(0, -1, 0), 50f, hits);
+
+        Assert.Equal(3, count);
+        Assert.True(hits[0].Distance <= hits[1].Distance && hits[1].Distance <= hits[2].Distance,
+            "hits should be sorted nearest first");
+    }
+
+    [Fact]
+    public void QueryFilter_IgnoringRigidbody_SkipsThatBody()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        StepPhysics(scene, 2);
+
+        var from = new Float3(0, 5, 0);
+        var dir = new Float3(0, -1, 0);
+
+        Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
+        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(rb)),
+            "the ignored body should not be reported");
+    }
+
+    [Fact]
+    public void QueryFilter_IgnoringCollider_SkipsStaticGeometry()
+    {
+        var scene = CreatePhysicsScene();
+        GameObject floor = AddStaticBox(scene, new Float3(0, 0, 0), new Float3(4, 1, 4));
+        StepPhysics(scene, 2);
+
+        var from = new Float3(0, 5, 0);
+        var dir = new Float3(0, -1, 0);
+
+        Assert.True(scene.Physics.Raycast(from, dir, 50f, out _));
+
+        Collider collider = floor.GetComponent<BoxCollider>();
+        Assert.False(scene.Physics.Raycast(from, dir, out _, 50f, QueryFilter.Default.Ignoring(collider)),
+            "the ignored collider should not be reported");
+    }
+
+    [Fact]
+    public void Linecast_HitsOnlyBetweenTheTwoPoints()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.Linecast(new Float3(0, 5, 0), new Float3(0, -5, 0), out _));
+        Assert.False(scene.Physics.Linecast(new Float3(0, 5, 0), new Float3(0, 3, 0), out _),
+            "a line stopping short of the box should not hit it");
+    }
+
+    [Fact]
+    public void ShapeCastAll_ReturnsHitsNearestFirst()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, new Float3(0, 0, 0), new Float3(2, 1, 2));
+        AddStaticBox(scene, new Float3(0, -6, 0), new Float3(2, 1, 2));
+        StepPhysics(scene, 2);
+
+        var hits = new List<ShapeCastHit>();
+        int count = scene.Physics.SphereCastAll(new Float3(0, 6, 0), 0.4f, new Float3(0, -1, 0), 50f, hits);
+
+        Assert.Equal(2, count);
+        Assert.True(hits[0].Fraction <= hits[1].Fraction, "hits should be sorted nearest first");
+    }
+
     [Theory]
     [InlineData(float.NaN, 0f, 0f)]
     [InlineData(0f, float.PositiveInfinity, 0f)]
