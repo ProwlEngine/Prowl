@@ -152,7 +152,7 @@ public abstract class Collider : MonoBehaviour
     /// Rebuilds this collider's shapes in place, after its size, offset, orientation or the mesh behind
     /// it changed. Cheaper than going through the rigidbody, which rebuilds every collider on the body.
     /// </summary>
-    public void Rebuild()
+    public virtual void Rebuild()
     {
         if (_attachedBody == null) return; // not in the world yet, OnEnable will build it
         Reattach();
