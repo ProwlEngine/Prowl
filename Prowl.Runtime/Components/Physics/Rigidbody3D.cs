@@ -316,6 +316,11 @@ public sealed class Rigidbody3D : MonoBehaviour
     // after Jitter has freed the contact data, so this is the only way it can still name the surface.
     private readonly Dictionary<Arbiter, Collider> _contactColliders = [];
 
+    // Entries normally leave on EndCollide, but a contact that ends because the *other* body was
+    // removed raises no such event, and the orphan would pin a destroyed Collider and its GameObject
+    // for the life of this body. Swept out once the map outgrows this, which is rare enough to be free.
+    private int _contactPruneWatermark = 16;
+
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
     /// game code can touch a rigidbody (e.g. set velocity or add a force) in the same frame it is
@@ -506,12 +511,30 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
+    /// Drops per-contact colliders whose arbiter is dead or has been recycled onto another pair. Jitter
+    /// pools arbiters and zeroes the handle on return, and a recycled one that involves this body again
+    /// has already been overwritten by BeginCollide, so both cases are cheap to spot.
+    /// </summary>
+    private void PruneContactColliders()
+    {
+        if (_contactColliders.Count < _contactPruneWatermark) return;
+
+        foreach (Arbiter arbiter in _contactColliders.Keys.ToArray())
+            if (arbiter.Handle.IsZero || (arbiter.Body1 != _body && arbiter.Body2 != _body))
+                _contactColliders.Remove(arbiter);
+
+        // Re-baselined off what survived, so a body legitimately holding many contacts stops sweeping.
+        _contactPruneWatermark = Math.Max(16, _contactColliders.Count * 2);
+    }
+
+    /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
     /// before. Driven by the physics world for every registered body right after the step.
     /// </summary>
     internal void CapturePose()
     {
         ApplyConstraints();
+        PruneContactColliders();
 
         if (_body == null || _body.Handle.IsZero) return;
 
