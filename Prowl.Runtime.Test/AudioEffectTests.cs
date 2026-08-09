@@ -18,9 +18,12 @@ public class AudioEffectTests
     private const int Channels = 2;
     private const int Frames = 512;
 
-    /// <summary>Runs an effect over interleaved frames and returns what it wrote.</summary>
-    private static unsafe float[] Run(IAudioEffect effect, float[] input, int channels = Channels)
+    /// <summary>Binds an effect to a stereo 44100 chain and runs it over interleaved frames.</summary>
+    private static unsafe float[] Run(AudioEffect effect, float[] input, int channels = Channels)
     {
+        if (!effect.IsInitialized)
+            effect.Initialize(44100, channels);
+
         float[] output = new float[input.Length];
 
         fixed (float* pIn = input, pOut = output)
@@ -53,7 +56,7 @@ public class AudioEffectTests
     [Fact]
     public void FilterEffect_WritesItsOutput()
     {
-        var effect = new FilterEffect(FilterType.Lowpass, 500f, 0.707f, 1f);
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
 
         float[] output = Run(effect, Interleave(1f, 1f));
 
@@ -67,7 +70,7 @@ public class AudioEffectTests
     [Fact]
     public void FilterEffect_KeepsChannelsIndependent()
     {
-        var effect = new FilterEffect(FilterType.Lowpass, 500f, 0.707f, 1f);
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
 
         float[] output = Run(effect, Interleave(1f, 0f));
 
@@ -78,30 +81,20 @@ public class AudioEffectTests
         Assert.True(output[^2] > 0.5f);
     }
 
-    // The setters clamped the delay to at least one frame and the constructors did not, so a zero
-    // delay allocated a zero length buffer and then took the cursor modulo zero on the audio thread.
+    // A zero length delay allocated a zero length buffer and then took the cursor modulo zero on the
+    // audio thread. One frame is the floor.
     [Theory]
-    [InlineData(0u)]
-    [InlineData(1u)]
-    public void DelayEffect_ZeroFrameDelay_ClampsToOneFrame(uint frames)
+    [InlineData(0f)]
+    [InlineData(-1f)]
+    [InlineData(1f / 44100f)]
+    public void DelayEffect_ZeroLengthDelay_ClampsToOneFrame(float seconds)
     {
-        var effect = new DelayEffect(44100, (uint)Channels, frames, 0f);
+        var effect = new DelayEffect { DelayInSeconds = seconds, Decay = 0f };
 
         float[] output = Run(effect, Interleave(1f, 1f));
 
         Assert.Equal(1u, effect.DelayInFrames);
         Assert.Equal(0f, output[0]);
-        Assert.Equal(1f, output[^1], 4);
-    }
-
-    [Fact]
-    public void DelayEffect_ZeroSecondDelay_ClampsToOneFrame()
-    {
-        var effect = new DelayEffect(44100, (uint)Channels, 0f, 0f);
-
-        float[] output = Run(effect, Interleave(1f, 1f));
-
-        Assert.Equal(1u, effect.DelayInFrames);
         Assert.Equal(1f, output[^1], 4);
     }
 
@@ -123,7 +116,7 @@ public class AudioEffectTests
     [Fact]
     public void PhaserEffect_KeepsChannelsIndependent()
     {
-        var effect = new PhaserEffect(44100);
+        var effect = new PhaserEffect();
 
         float[] output = Run(effect, Interleave(1f, 0f));
 

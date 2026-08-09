@@ -86,7 +86,14 @@ public sealed class AudioSource : MonoBehaviour
     private ma_procedural_data_source_proc _proceduralProcessCallback;
 
     // Effects and buffers
-    private ConcurrentList<IAudioEffect> _effects = new();
+    [Header("Effects")]
+    [SerializeField, Tooltip("Applied to this source's output in order, before it reaches the mix.")]
+    private List<AudioEffect> _effects = [];
+
+    // What the audio thread reads. Rebuilt as a whole array on every change and swapped in, so the
+    // audio thread never sees a half-edited chain and never needs a lock to walk one.
+    private volatile AudioEffect[] _effectChain = [];
+
     private AudioBuffer _outputBuffer;
 
     // Latched so a failing audio callback reports itself once instead of every block.
@@ -360,6 +367,7 @@ public sealed class AudioSource : MonoBehaviour
 
             // Apply all serialized settings
             ApplySettings();
+            RefreshEffects();
 
             // Handle playback. If the clip is still streaming in (async loading), defer the
             // auto-play until it arrives (see Update) instead of silently never playing.
@@ -434,7 +442,11 @@ public sealed class AudioSource : MonoBehaviour
 
     /// <summary>The inspector writes the backing fields directly, so the native side has to be
     /// re-synced from them rather than from the property setters.</summary>
-    public override void OnValidate() => ApplySettings();
+    public override void OnValidate()
+    {
+        ApplySettings();
+        RefreshEffects();
+    }
 
     public override void OnDisable()
     {
@@ -548,26 +560,34 @@ public sealed class AudioSource : MonoBehaviour
 
     #region Effects Management
 
+    /// <summary>The effect chain, in processing order.</summary>
+    public IReadOnlyList<AudioEffect> Effects => _effects;
+
     /// <summary>
     /// Adds an audio effect to the processing chain. The source takes ownership: the effect is
     /// destroyed when it is removed from the chain or when the source itself is destroyed. Disabling
     /// and re-enabling the source keeps the chain intact.
     /// </summary>
-    public void AddEffect(IAudioEffect effect)
+    public void AddEffect(AudioEffect effect)
     {
         if (effect == null) return;
+
         _effects.Add(effect);
+        effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
+        RebuildEffectChain();
     }
 
     /// <summary>
     /// Removes an audio effect from the processing chain and destroys it.
     /// </summary>
-    public void RemoveEffect(IAudioEffect effect)
+    public void RemoveEffect(AudioEffect effect)
     {
         if (effect == null) return;
 
-        if (_effects.Remove(effect))
-            effect.OnDestroy();
+        if (!_effects.Remove(effect)) return;
+
+        RebuildEffectChain();
+        effect.OnDestroy();
     }
 
     /// <summary>
@@ -585,8 +605,46 @@ public sealed class AudioSource : MonoBehaviour
     /// </summary>
     public void ClearEffects()
     {
-        foreach (IAudioEffect effect in _effects.TakeAll())
-            effect.OnDestroy();
+        AudioEffect[] removed = _effects.ToArray();
+        _effects.Clear();
+        RebuildEffectChain();
+
+        foreach (AudioEffect effect in removed)
+            effect?.OnDestroy();
+    }
+
+    /// <summary>
+    /// Binds every effect to the current audio format and republishes the chain the audio thread
+    /// reads. Call after editing <see cref="Effects"/> in place.
+    /// </summary>
+    public void RefreshEffects()
+    {
+        foreach (AudioEffect effect in _effects)
+        {
+            if (effect == null) continue;
+
+            if (!effect.IsInitialized)
+                effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
+            else
+                effect.OnValidate();
+        }
+
+        RebuildEffectChain();
+    }
+
+    private void RebuildEffectChain()
+    {
+        var chain = new List<AudioEffect>(_effects.Count);
+
+        foreach (AudioEffect effect in _effects)
+        {
+            // Bypassed and null entries are dropped here rather than tested per block on the audio
+            // thread. An inspector row left empty is a normal state, not an error.
+            if (effect != null && !effect.Bypass)
+                chain.Add(effect);
+        }
+
+        _effectChain = chain.ToArray();
     }
 
     /// <summary>
@@ -677,9 +735,13 @@ public sealed class AudioSource : MonoBehaviour
             UInt32 countIn = *frameCountIn;
             UInt32 countOut = *frameCountOut;
 
-            for (int i = 0; i < _effects.Count; i++)
+            // Read the chain once: it is swapped as a whole array, so this is a consistent snapshot
+            // even if the game thread edits the effects mid-block.
+            AudioEffect[] chain = _effectChain;
+
+            for (int i = 0; i < chain.Length; i++)
             {
-                _effects[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+                chain[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
 
                 //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
                 bufferOut.CopyTo(bufferIn);
@@ -751,6 +813,10 @@ public sealed class AudioSource : MonoBehaviour
         // the paths that deserialize into an already-running component (clipboard paste, undo, prefab
         // revert). ApplySettings is a no-op while there is no sound group.
         ApplySettings();
+
+        // Deserialized effects arrive with their parameters but no DSP state, so they have to be
+        // bound to the audio format before the chain the audio thread reads is published.
+        RefreshEffects();
     }
 
     #endregion

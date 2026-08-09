@@ -5,6 +5,7 @@ using Prowl.Echo;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Audio.Native;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 using Xunit;
 
@@ -105,6 +106,33 @@ public class AudioTests
         Assert.Equal(3f, restored.MinDistance);
         Assert.Equal(40f, restored.MaxDistance);
         Assert.Equal(AttenuationModel.Exponential, restored.AttenuationModel);
+    }
+
+    // Effects used to be script-only and unserialized, so a chain built at runtime was gone the next
+    // time the scene loaded and could never be authored in the first place.
+    [Fact]
+    public void AudioSource_RoundTripsItsEffectChain()
+    {
+        var source = new AudioSource();
+        source.AddEffect(new Audio.Effects.FilterEffect { Type = Audio.Effects.FilterType.Highpass, Frequency = 800f, Q = 1.5f });
+        source.AddEffect(new Audio.Effects.DistortionEffect { Drive = 3f, Blend = 0.25f });
+
+        var restored = Serializer.Deserialize<AudioSource>(Serializer.Serialize(source))!;
+
+        Assert.Equal(2, restored.EffectCount);
+
+        var filter = Assert.IsType<Audio.Effects.FilterEffect>(restored.Effects[0]);
+        Assert.Equal(Audio.Effects.FilterType.Highpass, filter.Type);
+        Assert.Equal(800f, filter.Frequency);
+        Assert.Equal(1.5f, filter.Q);
+
+        var distortion = Assert.IsType<Audio.Effects.DistortionEffect>(restored.Effects[1]);
+        Assert.Equal(3f, distortion.Drive);
+        Assert.Equal(0.25f, distortion.Blend);
+
+        // Parameters alone are not enough, the DSP state has to be rebuilt on the way in or the
+        // effect is inert until something else happens to touch it.
+        Assert.True(filter.IsInitialized);
     }
 
     // Clips with identical data share one native buffer. A deserialized clip used to adopt that
@@ -213,6 +241,88 @@ public class AudioTests
 /// <summary>Audio components in a scene with no audio device, which is every headless run.</summary>
 public class AudioComponentTests : RuntimeTestBase
 {
+    /// <summary>An effect that only records whether the source destroyed it.</summary>
+    private sealed class CountingEffect : Audio.Effects.AudioEffect
+    {
+        public int Destroyed;
+
+        public override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
+        public override void OnDestroy() => Destroyed++;
+    }
+
+    private AudioSource CreateSource()
+    {
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Speaker");
+        var source = go.AddComponent<AudioSource>();
+        scene.Add(go);
+        return source;
+    }
+
+    // OnDisable used to destroy every effect and leave them in the list, so toggling a component ran
+    // the same effects again after they had been told they were finished.
+    [Fact]
+    public void Effects_SurviveDisableAndEnable()
+    {
+        var source = CreateSource();
+        var effect = new CountingEffect();
+        source.AddEffect(effect);
+
+        source.Enabled = false;
+        source.Enabled = true;
+
+        Assert.Equal(0, effect.Destroyed);
+        Assert.Equal(1, source.EffectCount);
+    }
+
+    // ClearEffects emptied the list without telling the effects, so the two removal paths disagreed
+    // about whether an effect ever gets destroyed.
+    [Fact]
+    public void Effects_AreDestroyedWhenRemoved()
+    {
+        var source = CreateSource();
+        var removed = new CountingEffect();
+        var cleared = new CountingEffect();
+        source.AddEffect(removed);
+        source.AddEffect(cleared);
+
+        source.RemoveEffect(removed);
+
+        Assert.Equal(1, removed.Destroyed);
+        Assert.Equal(0, cleared.Destroyed);
+        Assert.Equal(1, source.EffectCount);
+
+        source.ClearEffects();
+
+        Assert.Equal(1, cleared.Destroyed);
+        Assert.Equal(0, source.EffectCount);
+    }
+
+    // Removing an effect that was never attached must not destroy it.
+    [Fact]
+    public void Effects_RemovingAnUnattachedEffect_DoesNothing()
+    {
+        var source = CreateSource();
+        var stranger = new CountingEffect();
+
+        source.RemoveEffect(stranger);
+
+        Assert.Equal(0, stranger.Destroyed);
+    }
+
+    [Fact]
+    public void Effects_AreDestroyedWithTheSource()
+    {
+        var source = CreateSource();
+        var effect = new CountingEffect();
+        source.AddEffect(effect);
+
+        source.Destroy();
+        EngineObject.ProcessDestroyed();
+
+        Assert.Equal(1, effect.Destroyed);
+    }
+
     // A headless run never initializes the context, and neither does a failed device open. Handing
     // that null context to the native layer is what the guards exist to stop, so the components have
     // to come up inert and every entry point has to stay callable.
@@ -242,6 +352,17 @@ public class AudioComponentTests : RuntimeTestBase
         Assert.Equal(0ul, source.Length);
 
         source.Clip!.Dispose();
+    }
+
+    // Prowl is left handed with +Z forward, the audio engine is right handed with -Z forward. Both
+    // components have to mirror on the same axis, and only that axis, or one of left/right and
+    // vertical comes out inverted.
+    [Fact]
+    public void ToAudioSpace_MirrorsForwardOnly()
+    {
+        Assert.Equal(new Float3(0, 0, -1), AudioContext.ToAudioSpace(Float3.UnitZ));
+        Assert.Equal(Float3.UnitY, AudioContext.ToAudioSpace(Float3.UnitY));
+        Assert.Equal(Float3.UnitX, AudioContext.ToAudioSpace(Float3.UnitX));
     }
 
     // The volume is set from project settings, which can be applied before the device opens and in
