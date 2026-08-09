@@ -174,4 +174,22 @@ public class HingeAngleConstraint : PhysicsConstraint
             constraint.Limit = limit;
         }
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A door hinge: the pin it turns on, and the wedge of angle it is allowed to swing through.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+        Float3 axis = WorldAxis(hingeAxis);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, axis, scale * 1.2f, AxisColor);
+        Debug.DrawWireCircle(pivot, axis, scale, AxisColor, 28);
+
+        // Measured from a fixed reference in the hinge plane, so dragging the limits sweeps the wedge.
+        Debug.PerpendicularAxes(axis, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, axis, zero, scale, minAngle, maxAngle, RangeColor, LimitColor);
+    }
 }

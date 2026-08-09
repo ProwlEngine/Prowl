@@ -76,4 +76,23 @@ public class FixedAngleConstraint : PhysicsConstraint
         RemoveConstraint(constraint);
         constraint = null;
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // Nothing about this joint is positional: it welds two orientations together. So the gizmo is the
+    // two frames it is holding aligned, and the tie between them.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldPivot;
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxes(pivot, BodyFrame.Rotation, scale, AnchorColor);
+
+        if (connectedBody.IsValid())
+        {
+            Float3 other = connectedBody.Transform.Position;
+            Debug.DrawAxes(other, connectedBody.Transform.Rotation, scale, ConnectedColor);
+        }
+    }
 }
