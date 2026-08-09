@@ -28,7 +28,10 @@ public class PrefabAsset : EngineObject
         EnsureNotDisposed();
         if (GameObjectData == null) return null;
 
-        var clone = Serializer.Deserialize<GameObject>(GameObjectData);
+        // A prefab cannot reference objects outside itself, so anything the editor recorded as an
+        // external reference instantiates as null rather than as an empty object built from the stub.
+        var clone = Serializer.Deserialize<GameObject>(GameObjectData,
+            new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
         if (clone == null) return null;
 
         // Stamp all GOs with this prefab's asset ID

@@ -55,7 +55,7 @@ public static class PrefabUtility
         var cleanCopy = CloneWithoutPrefabData(source);
         if (cleanCopy == null) return false;
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy);
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, AssetWriteContext(cleanCopy));
         if (echo == null) return false;
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
@@ -173,7 +173,7 @@ public static class PrefabUtility
         // Name and root transform are per-instance, not prefab content, so keep the asset's own.
         PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy);
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, AssetWriteContext(cleanCopy));
         if (echo == null) return;
 
         // Write to the .prefab file
@@ -356,13 +356,14 @@ public static class PrefabUtility
         var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
         if (source == null) return;
 
-        // Apply the override value to the source
+        // Apply the override value to the source. A scene reference resolves here and is linked, not
+        // copied, when the source is written back below.
         ParseOverridePath(source, ov.Path, out var target, out string fieldPath);
         if (target != null && !string.IsNullOrEmpty(fieldPath))
             ApplyFieldValue(target, fieldPath, ov.Value);
 
         // Save back to the .prefab file
-        var echo = Serializer.Serialize(typeof(object), source);
+        var echo = Serializer.Serialize(typeof(object), source, AssetWriteContext(source));
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
             _sourceCache.Remove(instanceGO.PrefabAssetId);
@@ -425,7 +426,7 @@ public static class PrefabUtility
 
         // Capture old instance value for undo
         var oldInstanceValue = GetMemberValue(instanceTarget, instanceFieldPath);
-        var oldInstanceEcho = Serializer.Serialize(sourceMember.MemberType, oldInstanceValue);
+        var oldInstanceEcho = Serializer.Serialize(sourceMember.MemberType, oldInstanceValue, InstanceValueContext());
         var removedOverrides = root.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
         var goRef = root;
         var path = overridePath;
@@ -455,6 +456,45 @@ public static class PrefabUtility
             });
 
         EditorSceneManager.MarkDirty();
+    }
+
+    // ================================================================
+    //  Scene reference linking
+    // ================================================================
+
+    // An override value is serialized on its own, detached from any scene graph, so Echo cannot tell
+    // that a GameObject/component field points at another scene object rather than at content to
+    // copy. Left alone it deep-copies the target into the override blob, and applying that later
+    // produces an orphan clone that is in no scene. Keying the reference by identifier instead lets
+    // it re-link to the live object, the same way the component clipboard does.
+    private static SerializationContext InstanceValueContext()
+        => new() { ExternalReferences = new SceneReferenceResolver() };
+
+    /// <summary>
+    /// Context for writing a GameObject tree into a .prefab file. Everything in the tree is listed as
+    /// copied-by-value; anything else the tree references is a scene object, which gets linked by
+    /// identifier rather than deep-copied into the asset.
+    /// </summary>
+    internal static SerializationContext AssetWriteContext(GameObject treeRoot)
+        => new() { ExternalReferences = new SceneReferenceResolver(CollectTreeObjects(treeRoot)) };
+
+    /// <summary>Every object a GameObject tree is made of: the objects, their transforms and their
+    /// components. All of them must count as copied, or they would serialize as links.</summary>
+    private static object[] CollectTreeObjects(GameObject root)
+    {
+        var objects = new List<object>();
+        Collect(root);
+        return objects.ToArray();
+
+        void Collect(GameObject go)
+        {
+            objects.Add(go);
+            objects.Add(go.Transform);
+            foreach (var comp in go.GetComponents<MonoBehaviour>())
+                objects.Add(comp);
+            foreach (var child in go.Children)
+                Collect(child);
+        }
     }
 
     private const BindingFlags InstanceMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -588,7 +628,6 @@ public static class PrefabUtility
 
             fresh.PrefabOverrides = savedOverrides;
             fresh.Name = savedName;
-            ApplyPropertyOverridesToInstance(fresh, savedOverrides);
             fresh.Transform.Position = pos;
             fresh.Transform.Rotation = rot;
             fresh.Transform.LocalScale = scale;
@@ -605,6 +644,11 @@ public static class PrefabUtility
             {
                 scene.SetRootIndex(fresh, rootIdx);
             }
+
+            // Applied last, once the old instance is out of the scene and the fresh one is in it with
+            // the same identifiers: overrides holding scene references resolve by identifier, so they
+            // would otherwise bind to the instance being replaced.
+            ApplyPropertyOverridesToInstance(fresh, savedOverrides);
 
             if (selectedGO == root)
                 newSelection = fresh;
@@ -741,7 +785,7 @@ public static class PrefabUtility
         var member = Member.Find(parent, parts[^1]);
         if (!member.IsValid) return;
 
-        var deserialized = Serializer.Deserialize(value, member.MemberType);
+        var deserialized = Serializer.Deserialize(value, member.MemberType, InstanceValueContext());
 
         // Null is a valid override for reference fields (e.g. clearing an object reference).
         // Only skip for non-nullable value types where null means deserialization failed.
@@ -875,8 +919,9 @@ public static class PrefabUtility
             var sourceVal = field.GetValue(source);
             string path = $"{pathPrefix}.{field.Name}";
 
-            var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal);
-            var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal);
+            var ctx = InstanceValueContext();
+            var instanceEcho = Serializer.Serialize(field.FieldType, instanceVal, ctx);
+            var sourceEcho = Serializer.Serialize(field.FieldType, sourceVal, ctx);
 
             bool areSame = (instanceEcho?.WriteToString() ?? "") == (sourceEcho?.WriteToString() ?? "");
 
@@ -903,7 +948,7 @@ public static class PrefabUtility
         var existing = overrides.FirstOrDefault(o => o.Path == path);
         if (!areSame)
         {
-            var serialized = Serializer.Serialize(typeof(T), instanceVal);
+            var serialized = Serializer.Serialize(typeof(T), instanceVal, InstanceValueContext());
             if (existing != null)
                 existing.Value = serialized!;
             else if (serialized != null)
@@ -1070,15 +1115,16 @@ public static class PrefabUtility
 
     private static GameObject? CloneWithoutPrefabData(GameObject source)
     {
-        // Serialize the source
+        // Serialize the source. Objects outside this tree are scene references, so they are linked
+        // rather than copied into the clone (and from there into the asset).
         var savedId = source.AssetID;
         source.AssetID = Guid.Empty;
-        var echo = Serializer.Serialize(typeof(object), source);
+        var echo = Serializer.Serialize(typeof(object), source, AssetWriteContext(source));
         source.AssetID = savedId;
         if (echo == null) return null;
 
-        // Deserialize a clean copy
-        var clone = Serializer.Deserialize<GameObject>(echo);
+        // Deserialize a clean copy, re-linking those references to the live scene objects.
+        var clone = Serializer.Deserialize<GameObject>(echo, InstanceValueContext());
         if (clone == null) return null;
 
         // Strip prefab data from the clone
