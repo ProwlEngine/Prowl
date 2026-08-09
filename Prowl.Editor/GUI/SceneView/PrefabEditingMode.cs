@@ -164,7 +164,7 @@ public static class PrefabEditingMode
 
         // Serialize to .prefab file. The editor-only camera and light live in this scene too, so
         // anything the prefab references outside itself is linked rather than copied into the asset.
-        var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.AssetWriteContext(root));
+        var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.TreeValueContext(root));
         if (echo == null) return false;
 
         if (EditingPrefabPath != null && Project.Current != null)

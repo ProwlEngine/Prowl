@@ -55,7 +55,7 @@ public static class PrefabUtility
         var cleanCopy = CloneWithoutPrefabData(source);
         if (cleanCopy == null) return false;
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy, AssetWriteContext(cleanCopy));
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
         if (echo == null) return false;
 
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
@@ -149,6 +149,11 @@ public static class PrefabUtility
         var applyRoot = GetPrefabInstanceRoot(instanceRoot);
         if (applyRoot.IsValid()) instanceRoot = applyRoot!;
 
+        ApplyOverridesCore(instanceRoot, recordUndo: true);
+    }
+
+    private static void ApplyOverridesCore(GameObject instanceRoot, bool recordUndo)
+    {
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -164,7 +169,9 @@ public static class PrefabUtility
         string? oldFileContent = File.Exists(absolutePath) ? File.ReadAllText(absolutePath) : null;
         var oldOverrides = instanceRoot.PrefabOverrides.ToList();
         var prefabGuid = instanceRoot.PrefabAssetId;
-        var goRef = instanceRoot;
+        // Keyed by identifier, not by reference: the refresh below replaces this very object, so a
+        // captured reference would be dead by the time undo or redo runs.
+        var rootId = instanceRoot.Identifier;
 
         // Serialize the instance tree with prefab data stripped
         var cleanCopy = CloneWithoutPrefabData(instanceRoot);
@@ -173,7 +180,7 @@ public static class PrefabUtility
         // Name and root transform are per-instance, not prefab content, so keep the asset's own.
         PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
 
-        var echo = Serializer.Serialize(typeof(object), cleanCopy, AssetWriteContext(cleanCopy));
+        var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
         if (echo == null) return;
 
         // Write to the .prefab file
@@ -183,22 +190,32 @@ public static class PrefabUtility
         ClearOverridesWithinBoundary(instanceRoot, instanceRoot.PrefabAssetId);
 
         // Reimport and refresh invalidate source cache first
-        _sourceCache.Remove(instanceRoot.PrefabAssetId);
+        _sourceCache.Remove(prefabGuid);
         db.Reimport(entry.Guid);
-        RefreshAllInstances(instanceRoot.PrefabAssetId);
 
-        Undo.RegisterAction("Apply Prefab Overrides",
-            undo: () =>
-            {
-                // Restore old prefab file
-                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                _sourceCache.Remove(prefabGuid);
-                db.Reimport(entry.Guid);
-                // Restore overrides on instance
-                goRef.PrefabOverrides = oldOverrides;
-                RefreshAllInstances(prefabGuid);
-            },
-            redo: () => ApplyOverrides(goRef));
+        if (recordUndo)
+        {
+            Undo.RegisterAction("Apply Prefab Overrides",
+                undo: () =>
+                {
+                    // Restore old prefab file
+                    if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
+                    _sourceCache.Remove(prefabGuid);
+                    db.Reimport(entry.Guid);
+                    // Put the overrides back on the live instance before refreshing, since the
+                    // refresh is what re-applies them to the rebuilt objects.
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid()) live!.PrefabOverrides = oldOverrides.ToList();
+                    RefreshAllInstances(prefabGuid);
+                },
+                redo: () =>
+                {
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid()) ApplyOverridesCore(live!, recordUndo: false);
+                });
+        }
+
+        RefreshAllInstances(prefabGuid);
 
         EditorSceneManager.MarkDirty();
         Runtime.Debug.Log($"[Prefab] Applied overrides to {entry.Path}");
@@ -215,6 +232,11 @@ public static class PrefabUtility
         var revertRoot = GetPrefabInstanceRoot(instanceRoot);
         if (revertRoot.IsValid()) instanceRoot = revertRoot!;
 
+        RevertOverridesCore(instanceRoot, recordUndo: true);
+    }
+
+    private static void RevertOverridesCore(GameObject instanceRoot, bool recordUndo)
+    {
         var prefab = AssetDatabase.Get(instanceRoot.PrefabAssetId) as PrefabAsset;
         if (prefab == null)
         {
@@ -222,9 +244,17 @@ public static class PrefabUtility
             return;
         }
 
-        // Capture old state for undo
-        var oldSerialized = Serializer.Serialize(typeof(object), instanceRoot);
-        var parentId = instanceRoot.Parent.IsValid() ? instanceRoot.Parent.Identifier : Guid.Empty;
+        // Nothing to swap into, so leave the instance alone rather than reporting success and
+        // selecting a replacement that is in no scene.
+        if (instanceRoot.Scene == null)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Cannot revert an instance that is not in a scene.");
+            return;
+        }
+
+        // Capture old state for undo. The tree itself is written by value; references out of it are
+        // linked, not cloned into the snapshot.
+        var oldSerialized = Serializer.Serialize(typeof(object), instanceRoot, TreeValueContext(instanceRoot));
         var siblingIdx = instanceRoot.Parent != null ? instanceRoot.Parent.Children.IndexOf(instanceRoot) : -1;
         var prefabGuid = instanceRoot.PrefabAssetId;
 
@@ -240,75 +270,79 @@ public static class PrefabUtility
         fresh.Transform.LocalScale = instanceRoot.Transform.LocalScale;
         fresh.Name = instanceRoot.Name;
 
-        var scene = instanceRoot.Scene;
+        var scene = instanceRoot.Scene!;
         var parent = instanceRoot.Parent;
-        var rootIdx = parent == null && scene != null ? scene.GetRootIndex(instanceRoot) : -1;
+        var rootIdx = parent == null ? scene.GetRootIndex(instanceRoot) : -1;
 
-        if (scene != null)
+        scene.Remove(instanceRoot);
+        instanceRoot.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
+        scene.Add(fresh);
+        if (parent != null)
         {
-            scene.Remove(instanceRoot);
-            instanceRoot.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
-            scene.Add(fresh);
-            if (parent != null)
-            {
-                fresh.SetParent(parent);
-                if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
-            }
-            else if (rootIdx >= 0)
-            {
-                scene.SetRootIndex(fresh, rootIdx);
-            }
+            fresh.SetParent(parent);
+            if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
+        }
+        else if (rootIdx >= 0)
+        {
+            scene.SetRootIndex(fresh, rootIdx);
         }
 
-        // Register undo that swaps fresh back to old
-        var freshId = fresh.Identifier;
-        Undo.RegisterAction("Revert Prefab Overrides",
-            undo: () =>
-            {
-                var s = Scene.Current;
-                if (s == null) return;
-                var current = FindByIdentifier(s, freshId);
-                if (current == null) return;
+        // CopyIdentifiers gave the replacement the old object's identifier, so one key addresses the
+        // instance across every swap either direction.
+        var rootId = fresh.Identifier;
 
-                var restored = Serializer.Deserialize<GameObject>(oldSerialized);
-                if (restored == null) return;
-                Undo.RestoreIdentifiers(restored, oldSerialized);
+        if (recordUndo)
+        {
+            Undo.RegisterAction("Revert Prefab Overrides",
+                undo: () =>
+                {
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsNotValid()) return;
 
-                var p = current.Parent;
-                s.Remove(current);
-                current.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
-                s.Add(restored);
-                if (p != null) restored.SetParent(p);
-                Selection.Select(restored);
-            },
-            redo: () =>
-            {
-                var s = Scene.Current;
-                if (s == null) return;
-                // Re-revert: find by old identifier, replace with fresh prefab
-                var pf = AssetDatabase.Get(prefabGuid) as PrefabAsset;
-                if (pf == null) return;
-                // Find the old-state GO by its identifier
-                var oldGo = FindByIdentifier(s, oldSerialized.Get("Identifier")?.StringValue != null
-                    && Guid.TryParse(oldSerialized.Get("Identifier")?.StringValue, out var oid) ? oid : Guid.Empty);
-                if (oldGo == null) return;
+                    var restored = Serializer.Deserialize<GameObject>(oldSerialized, InstanceValueContext());
+                    if (restored == null) return;
+                    Undo.RestoreIdentifiers(restored, oldSerialized);
 
-                var f2 = pf.Instantiate();
-                if (f2 == null) return;
-                f2.Transform.Position = oldGo.Transform.Position;
-                f2.Transform.Rotation = oldGo.Transform.Rotation;
-                f2.Transform.LocalScale = oldGo.Transform.LocalScale;
-                f2.Name = oldGo.Name;
-                var p2 = oldGo.Parent;
-                s.Remove(oldGo);
-                oldGo.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
-                s.Add(f2);
-                if (p2 != null) f2.SetParent(p2);
-                Selection.Select(f2);
-            });
+                    SwapInPlace(live!, restored);
+                    Selection.Select(restored);
+                },
+                redo: () =>
+                {
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid()) RevertOverridesCore(live!, recordUndo: false);
+                });
+        }
 
         Selection.Select(fresh);
         EditorSceneManager.MarkDirty();
+    }
+
+    /// <summary>
+    /// Put <paramref name="replacement"/> where <paramref name="existing"/> is, keeping its parent,
+    /// sibling order and root order, and destroy the object it replaces.
+    /// </summary>
+    private static void SwapInPlace(GameObject existing, GameObject replacement)
+    {
+        var scene = existing.Scene;
+        if (scene == null) return;
+
+        var parent = existing.Parent;
+        int siblingIdx = existing.GetSiblingIndex() ?? -1;
+        int rootIdx = parent == null ? scene.GetRootIndex(existing) : -1;
+
+        scene.Remove(existing);
+        existing.Destroy();
+        scene.Add(replacement);
+
+        if (parent != null)
+        {
+            replacement.SetParent(parent);
+            if (siblingIdx >= 0) replacement.SetSiblingIndex(siblingIdx);
+        }
+        else if (rootIdx >= 0)
+        {
+            scene.SetRootIndex(replacement, rootIdx);
+        }
     }
 
     private static GameObject? FindByIdentifier(Scene scene, Guid id)
@@ -333,6 +367,11 @@ public static class PrefabUtility
         if (!instanceGO.IsPrefabInstance) return;
         if (!GuardNotPlaying("apply a prefab override")) return;
 
+        ApplySingleOverrideCore(instanceGO, ov, recordUndo: true);
+    }
+
+    private static void ApplySingleOverrideCore(GameObject instanceGO, PropertyOverride ov, bool recordUndo)
+    {
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -349,11 +388,13 @@ public static class PrefabUtility
         var ovPath = ov.Path;
         var ovValue = ov.Value;
         var prefabGuid = instanceGO.PrefabAssetId;
-        // Overrides live on the prefab instance root.
+        // Overrides live on the prefab instance root, and the refresh below replaces that object, so
+        // undo and redo address it by identifier rather than holding on to it.
         var instanceRoot = GetPrefabInstanceRoot(instanceGO);
-        var goRef = instanceRoot.IsValid() ? instanceRoot : instanceGO;
+        var goRef = instanceRoot.IsValid() ? instanceRoot! : instanceGO;
+        var rootId = goRef.Identifier;
 
-        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData);
+        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData, InstanceValueContext());
         if (source == null) return;
 
         // Apply the override value to the source. A scene reference resolves here and is linked, not
@@ -363,7 +404,7 @@ public static class PrefabUtility
             ApplyFieldValue(target, fieldPath, ov.Value);
 
         // Save back to the .prefab file
-        var echo = Serializer.Serialize(typeof(object), source, AssetWriteContext(source));
+        var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {
             _sourceCache.Remove(instanceGO.PrefabAssetId);
@@ -373,22 +414,27 @@ public static class PrefabUtility
         // Remove this override from the instance (stored on the root)
         goRef.PrefabOverrides.Remove(ov);
 
-        Undo.RegisterAction("Apply Single Override",
-            undo: () =>
-            {
-                // Restore old prefab file
-                if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
-                _sourceCache.Remove(prefabGuid);
-                db.Reimport(entry.Guid);
-                // Re-add the override to the instance
-                goRef.PrefabOverrides.Add(new PropertyOverride { Path = ovPath, Value = ovValue });
-                RefreshAllInstances(prefabGuid);
-            },
-            redo: () =>
-            {
-                // Re-apply
-                ApplySingleOverride(goRef, new PropertyOverride { Path = ovPath, Value = ovValue });
-            });
+        if (recordUndo)
+        {
+            Undo.RegisterAction("Apply Single Override",
+                undo: () =>
+                {
+                    // Restore old prefab file
+                    if (oldFileContent != null) TryWriteFile(absolutePath, oldFileContent);
+                    _sourceCache.Remove(prefabGuid);
+                    db.Reimport(entry.Guid);
+                    // Re-add the override to the instance
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid()) live!.PrefabOverrides.Add(new PropertyOverride { Path = ovPath, Value = ovValue });
+                    RefreshAllInstances(prefabGuid);
+                },
+                redo: () =>
+                {
+                    var live = Undo.FindGO(rootId);
+                    if (live.IsValid())
+                        ApplySingleOverrideCore(live!, new PropertyOverride { Path = ovPath, Value = ovValue }, recordUndo: false);
+                });
+        }
 
         // Refresh other instances to pick up the change
         RefreshAllInstances(instanceGO.PrefabAssetId);
@@ -428,7 +474,8 @@ public static class PrefabUtility
         var oldInstanceValue = GetMemberValue(instanceTarget, instanceFieldPath);
         var oldInstanceEcho = Serializer.Serialize(sourceMember.MemberType, oldInstanceValue, InstanceValueContext());
         var removedOverrides = root.PrefabOverrides.Where(o => o.Path == overridePath).ToList();
-        var goRef = root;
+        // A later refresh replaces the instance, so address it by identifier rather than holding it.
+        var rootId = root!.Identifier;
         var path = overridePath;
 
         // Copy source value to instance
@@ -443,16 +490,20 @@ public static class PrefabUtility
         Undo.RegisterAction("Revert Single Override",
             undo: () =>
             {
+                var live = Undo.FindGO(rootId);
+                if (live.IsNotValid()) return;
+
                 // Restore old instance value
-                ParseOverridePath(goRef, path, out var undoTarget, out string undoFieldPath);
+                ParseOverridePath(live!, path, out var undoTarget, out string undoFieldPath);
                 if (undoTarget != null && oldInstanceEcho != null)
                     ApplyFieldValue(undoTarget, undoFieldPath, oldInstanceEcho);
                 // Re-add removed overrides
-                goRef.PrefabOverrides.AddRange(removedOverrides);
+                live!.PrefabOverrides.AddRange(removedOverrides);
             },
             redo: () =>
             {
-                RevertSingleOverride(goRef, path);
+                var live = Undo.FindGO(rootId);
+                if (live.IsValid()) RevertSingleOverride(live!, path);
             });
 
         EditorSceneManager.MarkDirty();
@@ -471,11 +522,14 @@ public static class PrefabUtility
         => new() { ExternalReferences = new SceneReferenceResolver() };
 
     /// <summary>
-    /// Context for writing a GameObject tree into a .prefab file. Everything in the tree is listed as
-    /// copied-by-value; anything else the tree references is a scene object, which gets linked by
-    /// identifier rather than deep-copied into the asset.
+    /// Context for serializing a whole GameObject tree: everything in the tree is listed as
+    /// copied-by-value, so anything else it references is external and gets linked by identifier
+    /// rather than deep-copied in. Used for writing .prefab files and for undo snapshots.
+    /// <para/>
+    /// Note this is not interchangeable with <see cref="InstanceValueContext"/>, which lists nothing
+    /// as copied: passing that here would link the tree's own root instead of writing it out.
     /// </summary>
-    internal static SerializationContext AssetWriteContext(GameObject treeRoot)
+    internal static SerializationContext TreeValueContext(GameObject treeRoot)
         => new() { ExternalReferences = new SceneReferenceResolver(CollectTreeObjects(treeRoot)) };
 
     /// <summary>Every object a GameObject tree is made of: the objects, their transforms and their
@@ -1119,7 +1173,7 @@ public static class PrefabUtility
         // rather than copied into the clone (and from there into the asset).
         var savedId = source.AssetID;
         source.AssetID = Guid.Empty;
-        var echo = Serializer.Serialize(typeof(object), source, AssetWriteContext(source));
+        var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
         source.AssetID = savedId;
         if (echo == null) return null;
 
