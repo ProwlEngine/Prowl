@@ -84,7 +84,9 @@ public class EditorAssetBackend : AssetBackendBase
         // A prefab that changed on disk - edited elsewhere, pulled from source control, or a model
         // whose import settings were changed - has to reach the instances already in the open scene.
         // Hooked here rather than at each construction site so every backend, including the ones
-        // tests build, behaves the same.
+        // tests build, behaves the same. Detached first: Initialize is documented as idempotent, and
+        // subscribing twice would refresh every instance twice per import.
+        OnAssetsImported -= Prefabs.PrefabUtility.OnAssetsImported;
         OnAssetsImported += Prefabs.PrefabUtility.OnAssetsImported;
 
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
