@@ -101,7 +101,7 @@ public static class PrefabEditingMode
         var editScene = new Scene();
         editScene.Name = $"Editing: {prefab.Name}";
 
-        var go = prefab.Instantiate();
+        var go = GameObject.InstantiateDetached(prefab);
         if (go == null)
         {
             Debug.LogWarning("[Prefab] Failed to instantiate prefab for editing.");

@@ -40,7 +40,7 @@ public sealed class DerivedStateComp : MonoBehaviour
 /// </summary>
 public class PrefabSafetyTests : EditorTestHarness
 {
-    private GameObject Inst(Guid guid) => GetPrefab(guid)!.Instantiate()!;
+    private GameObject Inst(Guid guid) => GameObject.InstantiateDetached(GetPrefab(guid)!)!;
 
     private void SetSceneCurrent(params GameObject[] instances)
     {
@@ -77,7 +77,7 @@ public class PrefabSafetyTests : EditorTestHarness
 
         PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First().Children[0]);
 
-        var fresh = ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!;
+        var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal("Root", fresh.Name);
         Assert.Single(fresh.Children);
         Assert.Equal(42, fresh.Children[0].GetComponent<OverrideComp>()!.A);
@@ -102,7 +102,7 @@ public class PrefabSafetyTests : EditorTestHarness
         PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First());
 
         // Name and placement are per-instance; only the real override reaches the asset.
-        var fresh = ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!;
+        var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal("Root", fresh.Name);
         Assert.Equal(0.0, fresh.Transform.Position.X, 3);
         Assert.Equal(1.0, fresh.Transform.LocalScale.X, 3);
@@ -288,7 +288,7 @@ public class PrefabSafetyTests : EditorTestHarness
         // A prefab asset cannot hold a scene reference; it must be dropped, not embedded as a copy.
         string text = File.ReadAllText(AssetAbsolutePath("RefApply.prefab"));
         Assert.DoesNotContain("SceneTarget", text);
-        Assert.Null(((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!.GetComponent<RefHolderComp>()!.Target);
+        Assert.Null(GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!.GetComponent<RefHolderComp>()!.Target);
     }
 
     [Fact]
@@ -356,7 +356,7 @@ public class PrefabSafetyTests : EditorTestHarness
         Undo.PerformUndo();
 
         // The asset goes back to its old value...
-        Assert.Equal(5, ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!.GetComponent<OverrideComp>()!.A);
+        Assert.Equal(5, GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!.GetComponent<OverrideComp>()!.A);
 
         // ...and the instance keeps the local edit that was applied away.
         var live = Scene.Current!.RootObjects.First();
@@ -376,7 +376,7 @@ public class PrefabSafetyTests : EditorTestHarness
         Undo.PerformRedo();
         Undo.PerformUndo();
 
-        Assert.Equal(5, ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!.GetComponent<OverrideComp>()!.A);
+        Assert.Equal(5, GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!.GetComponent<OverrideComp>()!.A);
         var live = Scene.Current!.RootObjects.First();
         Assert.Single(live.PrefabOverrides);
         Assert.Equal(99, live.GetComponent<OverrideComp>()!.A);
@@ -626,36 +626,48 @@ public class PrefabSafetyTests : EditorTestHarness
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void OnlyAuthoredPrefabFilesAreEditable()
+    public void OnlyAuthoredPrefabsAreEditable()
     {
-        // Authored: writing the instance back over this file is the whole point of Apply.
         Guid authored = CreatePrefabAsset(new GameObject("Root"), "Authored.prefab");
         Assert.True(PrefabUtility.IsEditablePrefab(authored));
 
-        // Imported: a model imports into a PrefabAsset too, but its file is the model. Applying
-        // would write a serialized hierarchy over the .obj/.fbx, so it must be refused.
-        // (The harness cannot import real model files, so this covers the rule, not the format.)
-        var scene = new Scene();
-        Guid notAPrefabFile = CreateSceneAsset(scene, "Some.scene");
-        Assert.False(PrefabUtility.IsEditablePrefab(notAPrefabFile));
+        // What the model importer produces: same asset type, generated contents.
+        GetPrefab(authored)!.InstanceType = PrefabInstanceType.Model;
+        Assert.False(PrefabUtility.IsEditablePrefab(authored));
+
         Assert.False(PrefabUtility.IsEditablePrefab(Guid.NewGuid()));
     }
 
     [Fact]
-    public void RevertStillWorksWhenApplyIsNotAvailable()
+    public void GeneratedPrefabs_RefuseApplyButStillRevert()
     {
         var root = new GameObject("Root");
         root.AddComponent<OverrideComp>().A = 1;
-        Guid g = CreatePrefabAsset(root, "RevertOnly.prefab");
+        Guid g = CreatePrefabAsset(root, "Generated.prefab");
+        string original = File.ReadAllText(AssetAbsolutePath("Generated.prefab"));
+
+        // Stands in for a model: the asset is rebuilt from a source file, so nothing may be written
+        // back to it. For a real model the file would be the .obj/.fbx itself.
+        GetPrefab(g)!.InstanceType = PrefabInstanceType.Model;
 
         var instance = Inst(g);
-        instance.GetComponent<OverrideComp>()!.A = 99;
-        PrefabUtility.DetectComponentOverrides(instance, instance.GetComponent<OverrideComp>()!);
+        var comp = instance.GetComponent<OverrideComp>()!;
+        comp.A = 99;
+        PrefabUtility.DetectComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
-        PrefabUtility.RevertSingleOverride(Scene.Current!.RootObjects.First(), "c0.A");
+        var live = Scene.Current!.RootObjects.First();
+        PrefabUtility.ApplyOverrides(live);
+        PrefabUtility.ApplySingleOverride(live, live.PrefabOverrides.First());
 
-        Assert.Equal(1, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+        // Neither the asset nor its file moved, and the override is still there.
+        Assert.Equal(original, File.ReadAllText(AssetAbsolutePath("Generated.prefab")));
+        Assert.Single(live.PrefabOverrides);
+
+        // Reverting is the one direction that stays available.
+        PrefabUtility.RevertSingleOverride(live, "c0.A");
+        Assert.Equal(1, live.GetComponent<OverrideComp>()!.A);
+        Assert.Empty(live.PrefabOverrides);
     }
 
     [Fact]
@@ -677,6 +689,63 @@ public class PrefabSafetyTests : EditorTestHarness
         Assets.Reimport(g);
 
         Assert.Equal(42, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
+    // ---------------------------------------------------------------------
+    // A component added to an instance belongs to that instance
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void AddedComponent_SurvivesARefresh()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        var child = new GameObject("Child");
+        child.SetParent(root);
+        Guid g = CreatePrefabAsset(root, "Added.prefab");
+
+        var instance = Inst(g);
+        instance.AddComponent<VecComp>().V = new Float3(5, 6, 7);
+        instance.Children[0].AddComponent<VecComp>().V = new Float3(1, 2, 3);
+        SetSceneCurrent(instance);
+
+        PrefabUtility.RefreshAllInstances(g);
+
+        var refreshed = Scene.Current!.RootObjects.First();
+        var added = refreshed.GetComponent<VecComp>();
+        Assert.NotNull(added);
+        Assert.Equal(5.0, added!.V.X, 3);
+
+        // Added components on children survive too, not just on the instance root.
+        var childAdded = refreshed.Children[0].GetComponent<VecComp>();
+        Assert.NotNull(childAdded);
+        Assert.Equal(1.0, childAdded!.V.X, 3);
+
+        // The prefab's own component is still there and still the source's.
+        Assert.Equal(1, refreshed.GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void AddedComponent_SurvivesAReimport()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "AddedReimport.prefab");
+
+        var instance = Inst(g);
+        instance.AddComponent<VecComp>().V = new Float3(9, 0, 0);
+        SetSceneCurrent(instance);
+
+        // Stands in for changing a model's import settings.
+        var newSource = new GameObject("Root");
+        newSource.AddComponent<OverrideComp>().A = 5;
+        File.WriteAllText(AssetAbsolutePath("AddedReimport.prefab"),
+            Serializer.Serialize(typeof(object), newSource).WriteToString());
+        Assets.Reimport(g);
+
+        var refreshed = Scene.Current!.RootObjects.First();
+        Assert.Equal(5, refreshed.GetComponent<OverrideComp>()!.A);   // source change picked up
+        Assert.NotNull(refreshed.GetComponent<VecComp>());            // instance addition kept
     }
 
     // ---------------------------------------------------------------------
@@ -708,7 +777,7 @@ public class PrefabSafetyTests : EditorTestHarness
             Application.IsPlaying = false;
         }
 
-        Assert.Equal(1, ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!.GetComponent<OverrideComp>()!.A);
+        Assert.Equal(1, GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!.GetComponent<OverrideComp>()!.A);
         Assert.True(Scene.Current!.RootObjects.First().IsPrefabInstance);
         Assert.False(File.Exists(AssetAbsolutePath("X.prefab")));
     }

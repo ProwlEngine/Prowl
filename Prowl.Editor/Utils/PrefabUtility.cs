@@ -118,7 +118,7 @@ public static class PrefabUtility
             Runtime.Debug.LogWarning($"[Prefab] Failed to load prefab asset {prefabGuid}");
             return null;
         }
-        return prefab.Instantiate();
+        return GameObject.InstantiateDetached(prefab);
     }
 
     // ================================================================
@@ -289,7 +289,7 @@ public static class PrefabUtility
         var prefabGuid = instanceRoot.PrefabAssetId;
 
         // Instantiate fresh from prefab
-        var fresh = prefab.Instantiate();
+        var fresh = GameObject.InstantiateDetached(prefab);
         if (fresh == null) return;
 
         // Preserve identifiers so undo records stay valid
@@ -572,26 +572,7 @@ public static class PrefabUtility
     /// as copied: passing that here would link the tree's own root instead of writing it out.
     /// </summary>
     internal static SerializationContext TreeValueContext(GameObject treeRoot)
-        => new() { ExternalReferences = new SceneReferenceResolver(CollectTreeObjects(treeRoot)) };
-
-    /// <summary>Every object a GameObject tree is made of: the objects, their transforms and their
-    /// components. All of them must count as copied, or they would serialize as links.</summary>
-    private static object[] CollectTreeObjects(GameObject root)
-    {
-        var objects = new List<object>();
-        Collect(root);
-        return objects.ToArray();
-
-        void Collect(GameObject go)
-        {
-            objects.Add(go);
-            objects.Add(go.Transform);
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
-                objects.Add(comp);
-            foreach (var child in go.Children)
-                Collect(child);
-        }
-    }
+        => new() { ExternalReferences = SceneReferenceResolver.ForTree(treeRoot) };
 
     private const BindingFlags InstanceMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
@@ -808,7 +789,7 @@ public static class PrefabUtility
             var siblingIdx = root.GetSiblingIndex() ?? -1;
             var rootIdx = parent == null ? scene.GetRootIndex(root) : -1;
 
-            var fresh = prefab.Instantiate();
+            var fresh = GameObject.InstantiateDetached(prefab);
             if (fresh == null) continue;
 
             // Preserve identifiers from the old instance so undo records stay valid

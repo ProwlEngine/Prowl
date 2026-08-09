@@ -30,7 +30,7 @@ public sealed class VecComp : MonoBehaviour
 /// </summary>
 public class PrefabEdgeCaseTests : EditorTestHarness
 {
-    private GameObject Instantiate(Guid guid) => GetPrefab(guid)!.Instantiate()!;
+    private GameObject Instantiate(Guid guid) => GameObject.InstantiateDetached(GetPrefab(guid)!)!;
 
     private void SetSceneCurrent(params GameObject[] instances)
     {
@@ -67,7 +67,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         File.WriteAllText(AssetAbsolutePath("Broken.prefab"), text);
         Guid g = Assets.ImportFile("Broken.prefab");
 
-        var instance = GetPrefab(g)!.Instantiate();
+        var instance = GameObject.InstantiateDetached(GetPrefab(g)!);
 
         Assert.NotNull(instance); // the whole prefab does NOT break
         Assert.Equal(7, instance!.GetComponent<OverrideComp>()!.A); // valid component intact
@@ -87,7 +87,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         File.WriteAllText(AssetAbsolutePath("Broken2.prefab"), text);
         Guid g = Assets.ImportFile("Broken2.prefab");
 
-        var instance = GetPrefab(g)!.Instantiate();
+        var instance = GameObject.InstantiateDetached(GetPrefab(g)!);
 
         Assert.NotNull(instance);
         Assert.Equal("Root", instance!.Name);
@@ -230,7 +230,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c0.V"));
 
         PrefabUtility.ApplyOverrides(instance);
-        var fresh = ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!;
+        var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal(9.0, fresh.GetComponent<VecComp>()!.V.X, 3);
     }
 

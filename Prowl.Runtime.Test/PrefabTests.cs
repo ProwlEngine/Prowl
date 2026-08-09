@@ -9,7 +9,7 @@ using Xunit;
 namespace Prowl.Runtime.Test;
 
 /// <summary>
-/// Tests for the Runtime prefab surface: <see cref="PrefabAsset.Instantiate"/> (cloning, prefab-id
+/// Tests for the Runtime prefab surface: <see cref="GameObject.InstantiateDetached"/> (cloning, prefab-id
 /// stamping, nested-prefab boundaries), GameObject prefab tracking, and prefab-data serialization.
 /// The editor-side override engine (apply/revert/detect) lives in Prowl.Editor and is out of scope here.
 /// </summary>
@@ -32,7 +32,7 @@ public class PrefabTests : RuntimeTestBase
     public void Instantiate_NullData_ReturnsNull()
     {
         var prefab = new PrefabAsset { GameObjectData = null };
-        Assert.Null(prefab.Instantiate());
+        Assert.Null(GameObject.InstantiateDetached(prefab));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class PrefabTests : RuntimeTestBase
         var id = Guid.NewGuid();
         var prefab = MakePrefab(CreateGameObject("Root"), id);
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.NotNull(instance);
         Assert.Equal(id, instance!.PrefabAssetId);
@@ -55,7 +55,7 @@ public class PrefabTests : RuntimeTestBase
         source.AddComponent<SerializableComponent>().IntField = 17;
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         var comp = instance!.GetComponent<SerializableComponent>();
         Assert.NotNull(comp);
@@ -71,7 +71,7 @@ public class PrefabTests : RuntimeTestBase
         child.SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.Single(instance!.Children);
         Assert.Equal("Child", instance.Children[0].Name);
@@ -88,8 +88,8 @@ public class PrefabTests : RuntimeTestBase
         sourceChild.SetParent(source);
         var prefab = MakePrefab(source, Guid.NewGuid());
 
-        var a = prefab.Instantiate()!;
-        var b = prefab.Instantiate()!;
+        var a = GameObject.InstantiateDetached(prefab)!;
+        var b = GameObject.InstantiateDetached(prefab)!;
 
         // Mutate instance A.
         a.GetComponent<SerializableComponent>()!.IntField = 999;
@@ -114,7 +114,7 @@ public class PrefabTests : RuntimeTestBase
         Application.IsEditor = true; // the counts back editor structural rules and exist only there
         try
         {
-            var instance = prefab.Instantiate();
+            var instance = GameObject.InstantiateDetached(prefab);
 
             Assert.Equal(1, instance!.PrefabComponentCount);
             Assert.Equal(1, instance.PrefabChildCount);
@@ -138,7 +138,7 @@ public class PrefabTests : RuntimeTestBase
         Application.IsEditor = false;
         try
         {
-            var instance = prefab.Instantiate()!;
+            var instance = GameObject.InstantiateDetached(prefab)!;
 
             // The link still identifies the object; only the structural counters are editor-only.
             Assert.Equal(id, instance.PrefabAssetId);
@@ -161,7 +161,7 @@ public class PrefabTests : RuntimeTestBase
         child.SetParent(source);
         var prefab = MakePrefab(source, id);
 
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         Assert.Equal(id, instance!.Children[0].PrefabAssetId);
     }
@@ -181,7 +181,7 @@ public class PrefabTests : RuntimeTestBase
         nested.SetParent(source);
 
         var prefab = MakePrefab(source, outerId);
-        var instance = prefab.Instantiate();
+        var instance = GameObject.InstantiateDetached(prefab);
 
         var normalClone = instance!.Children.Single(c => c.Name == "Normal");
         var nestedClone = instance.Children.Single(c => c.Name == "Nested");
@@ -197,7 +197,7 @@ public class PrefabTests : RuntimeTestBase
         var prefab = MakePrefab(CreateGameObject("Root"), Guid.NewGuid());
         var scene = CreateScene(enable: true);
 
-        var instance = prefab.Instantiate()!;
+        var instance = GameObject.InstantiateDetached(prefab)!;
         scene.Add(instance);
 
         Assert.Same(scene, instance.Scene);

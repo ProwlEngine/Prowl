@@ -19,7 +19,7 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-public class GameObject : EngineObject, ISerializable
+public partial class GameObject : EngineObject, ISerializable
 {
     #region Private Fields/Properties
 

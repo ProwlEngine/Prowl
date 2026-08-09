@@ -92,7 +92,7 @@ public class PreviewRenderer : IDisposable
         ClearSubject();
         if (prefab == null) return;
 
-        _subjectGo = prefab.Instantiate();
+        _subjectGo = GameObject.InstantiateDetached(prefab);
         if (_subjectGo == null) { _subjectGo = new GameObject("PreviewSubject"); return; }
         _subjectGo.Name = "PreviewSubject";
         _subjectGo.HideFlags = HideFlags.HideAndDontSave;

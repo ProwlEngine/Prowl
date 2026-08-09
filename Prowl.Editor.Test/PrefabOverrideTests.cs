@@ -32,7 +32,7 @@ public class PrefabOverrideTests : EditorTestHarness
         return CreatePrefabAsset(root, path);
     }
 
-    private GameObject Instantiate(Guid guid) => GetPrefab(guid)!.Instantiate()!;
+    private GameObject Instantiate(Guid guid) => GameObject.InstantiateDetached(GetPrefab(guid)!)!;
 
     private void SetSceneCurrent(GameObject instance)
     {
@@ -186,7 +186,7 @@ public class PrefabOverrideTests : EditorTestHarness
         PrefabUtility.ApplyOverrides(instance);
 
         // A freshly instantiated copy now reflects the applied value.
-        var fresh = ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!;
+        var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal(99, fresh.GetComponent<OverrideComp>()!.A);
         Assert.False(PrefabUtility.HasAnyOverrides(instance)); // overrides cleared after apply
     }
@@ -232,7 +232,7 @@ public class PrefabOverrideTests : EditorTestHarness
 
         PrefabUtility.ApplySingleOverride(instance, ov);
 
-        var fresh = ((PrefabAsset)AssetDatabase.Get(g)!).Instantiate()!;
+        var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
         Assert.Equal(99, fresh.GetComponent<OverrideComp>()!.A);
     }
 

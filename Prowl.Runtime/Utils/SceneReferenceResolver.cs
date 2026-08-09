@@ -44,6 +44,28 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     public SceneReferenceResolver(params object[] copied)
         => _copied = new HashSet<object>(copied, ReferenceEqualityComparer.Instance);
 
+    /// <summary>
+    /// A resolver for writing out a whole GameObject tree: the tree serializes by value, and anything
+    /// it references from outside is linked. Transforms and components have to be listed alongside
+    /// their GameObjects, or they would serialize as links themselves.
+    /// </summary>
+    public static SceneReferenceResolver ForTree(GameObject root)
+    {
+        var objects = new List<object>();
+        Collect(root);
+        return new SceneReferenceResolver(objects.ToArray());
+
+        void Collect(GameObject go)
+        {
+            objects.Add(go);
+            objects.Add(go.Transform);
+            foreach (var component in go.GetComponents<MonoBehaviour>())
+                objects.Add(component);
+            foreach (var child in go.Children)
+                Collect(child);
+        }
+    }
+
     private sealed class NoReferences : IExternalReferenceResolver
     {
         public object? GetReferenceKey(object value) => null;

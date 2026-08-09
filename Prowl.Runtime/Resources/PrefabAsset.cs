@@ -1,9 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
-using System.Linq;
-
 using Prowl.Echo;
 
 namespace Prowl.Runtime.Resources;
@@ -23,8 +20,12 @@ public enum PrefabInstanceType
 }
 
 /// <summary>
-/// A prefab asset containing a serialized GameObject hierarchy.
-/// The GO tree is stored as raw EchoObject data and instantiated on demand.
+/// A prefab asset: a serialized GameObject hierarchy, stored as raw EchoObject data.
+/// <para/>
+/// Instantiating one lives on <see cref="GameObject"/> - see
+/// <see cref="GameObject.Instantiate(PrefabAsset)"/> to spawn into a scene, or
+/// <see cref="GameObject.InstantiateDetached"/> for the hierarchy on its own - so that every way of
+/// building a GameObject from serialized data goes through one place.
 /// </summary>
 public class PrefabAsset : EngineObject
 {
@@ -55,70 +56,5 @@ public class PrefabAsset : EngineObject
     {
         get { EnsureNotDisposed(); return _gameObjectData; }
         set { EnsureNotDisposed(); _gameObjectData = value?.Clone(); }
-    }
-
-    /// <summary>
-    /// Instantiate a live GameObject from this prefab.
-    /// The returned GO has PrefabAssetId set to this asset's GUID.
-    /// Add it to a scene to make it active.
-    /// </summary>
-    /// <returns>The new hierarchy, or null if this asset has no data or it could not be read.</returns>
-    public GameObject? Instantiate()
-    {
-        EnsureNotDisposed();
-
-        if (_gameObjectData == null)
-        {
-            Debug.LogWarning($"[Prefab] '{Name}' has no GameObject data to instantiate.");
-            return null;
-        }
-
-        GameObject? clone;
-        try
-        {
-            // A prefab cannot reference objects outside itself, so anything the editor recorded as an
-            // external reference instantiates as null rather than as an empty object built from the stub.
-            clone = Serializer.Deserialize<GameObject>(_gameObjectData,
-                new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"[Prefab] Failed to instantiate '{Name}': {ex.Message}");
-            return null;
-        }
-
-        if (clone == null)
-        {
-            Debug.LogError($"[Prefab] '{Name}' did not deserialize into a GameObject.");
-            return null;
-        }
-
-        StampPrefabId(clone, AssetID);
-        return clone;
-    }
-
-    /// <summary>
-    /// Stamps PrefabAssetId on a GO and its children.
-    /// Skips children that already have a different PrefabAssetId (nested prefab instances).
-    /// </summary>
-    private static void StampPrefabId(GameObject go, Guid prefabAssetId)
-    {
-        go.PrefabAssetId = prefabAssetId;
-
-        // Only the editor reads these, and they are what the structural rules in the hierarchy and
-        // inspector are enforced from. A player pays a walk per spawn for state nothing consults.
-        if (Application.IsEditor)
-        {
-            go.PrefabComponentCount = go._components.Count;
-            go.PrefabChildCount = go.Children.Count;
-        }
-
-        foreach (var child in go.Children)
-        {
-            // Don't overwrite nested prefab instances
-            if (child.IsPrefabInstance && child.PrefabAssetId != prefabAssetId)
-                continue;
-            StampPrefabId(child, prefabAssetId);
-        }
     }
 }
