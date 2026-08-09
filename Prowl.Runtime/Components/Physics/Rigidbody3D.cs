@@ -874,8 +874,15 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MovePosition(Float3 position)
     {
-            ResetPose();
-        }
+        if (!TryGetBody(out RigidBody body)) return;
+
+        body.Position = new JVector(position.X, position.Y, position.Z);
+        body.SetActivationState(true);
+
+        // Static bodies never read their pose back, so the Transform has to be taken along explicitly.
+        Transform.Position = position;
+        _lastSyncedTransformVersion = Transform.Version;
+        ResetPose();
     }
 
     /// <summary>
@@ -883,7 +890,13 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MoveRotation(Quaternion rotation)
     {
-            ResetPose();
-        }
+        if (!TryGetBody(out RigidBody body)) return;
+
+        body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+        body.SetActivationState(true);
+
+        Transform.Rotation = rotation;
+        _lastSyncedTransformVersion = Transform.Version;
+        ResetPose();
     }
 }
