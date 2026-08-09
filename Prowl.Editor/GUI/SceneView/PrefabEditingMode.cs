@@ -162,6 +162,18 @@ public static class PrefabEditingMode
         }
         if (root == null) return false;
 
+        // A prefab has exactly one root, so anything else the user created at the top level is not
+        // going to be saved. Say so rather than dropping it silently.
+        var strays = scene.RootObjects
+            .Where(go => !go.HideFlags.HasFlag(HideFlags.HideAndDontSave) && go != root)
+            .Select(go => go.Name)
+            .ToList();
+        if (strays.Count > 0)
+        {
+            Debug.LogWarning($"[Prefab] Only '{root.Name}' is saved into the prefab. " +
+                $"Parent these under it to keep them: {string.Join(", ", strays)}");
+        }
+
         // Serialize to .prefab file. The editor-only camera and light live in this scene too, so
         // anything the prefab references outside itself is linked rather than copied into the asset.
         var echo = Serializer.Serialize(typeof(object), root, PrefabUtility.TreeValueContext(root));
