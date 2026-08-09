@@ -92,31 +92,29 @@ public static class PrefabUtility
     // ================================================================
 
     /// <summary>
-    /// Break a prefab instance removes all prefab tracking data.
-    /// The GameObject becomes a plain non-prefab object.
+    /// Break a prefab instance removes the link to its prefab asset.
+    /// The GameObject becomes a plain non-prefab object, but nested prefab instances inside it keep
+    /// their own links (breaking the outermost instance only).
     /// </summary>
     public static void BreakPrefabInstance(GameObject go)
     {
-        // Capture prefab state for undo
-        var prefabId = go.PrefabAssetId;
-        var overrides = go.PrefabOverrides.ToList();
-        var compCount = go.PrefabComponentCount;
-        var childCount = go.PrefabChildCount;
+        if (!go.IsPrefabInstance) return;
         if (!GuardNotPlaying("break a prefab instance")) return;
+
+        // Unpacking is an instance-level operation. Breaking a child would leave a hole inside an
+        // instance that the next refresh silently fills back in.
+        var unpackRoot = GetPrefabInstanceRoot(go);
+        if (unpackRoot.IsValid()) go = unpackRoot!;
+
+        var boundary = go.PrefabAssetId;
+        var previous = CapturePrefabState(go, boundary);
         var goRef = go;
 
         Undo.RegisterAction("Break Prefab Instance",
-            undo: () =>
-            {
-                // Re-stamp as prefab instance
-                StampAsPrefabInstance(goRef, prefabId);
-                goRef.PrefabOverrides = overrides;
-                goRef.PrefabComponentCount = compCount;
-                goRef.PrefabChildCount = childCount;
-            },
-            redo: () => goRef.ClearPrefabDataRecursive());
+            undo: () => RestorePrefabState(previous),
+            redo: () => StripPrefabDataWithinBoundary(goRef, boundary));
 
-        go.ClearPrefabDataRecursive();
+        StripPrefabDataWithinBoundary(go, boundary);
         EditorSceneManager.MarkDirty();
     }
 
