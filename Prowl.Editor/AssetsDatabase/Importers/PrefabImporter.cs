@@ -16,7 +16,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".prefab")]
 public class PrefabImporter : AssetImporter
 {
-    public override int Version => 1;
+    // 2: PrefabAsset stores its tree in a backing field, so cached payloads from v1 no longer bind.
+    public override int Version => 2;
 
     public override bool Import(ImportContext ctx)
     {

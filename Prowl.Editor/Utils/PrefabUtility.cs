@@ -82,24 +82,23 @@ public static class PrefabUtility
     }
 
     /// <summary>
-    /// Whether a prefab asset can be written back to. A .prefab file is authored, so applying to it
-    /// is the whole point; a prefab imported from another format (a model) is generated from its
-    /// source file, and writing a serialized hierarchy over that .fbx or .obj would destroy it.
-    /// Instances of an imported prefab still track and revert overrides, they just cannot apply.
+    /// Whether a prefab asset can be written back to. An authored prefab is the thing Apply exists
+    /// for; a generated one (a model) is rebuilt on every import, so a write would either be
+    /// discarded or land on the source file and destroy it. Instances of a generated prefab still
+    /// track and revert overrides, they just cannot apply them.
     /// </summary>
     public static bool IsEditablePrefab(Guid prefabGuid)
-    {
-        var entry = EditorAssetBackend.Instance?.GetEntry(prefabGuid);
-        return entry != null && entry.Path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase);
-    }
+        => AssetDatabase.Get(prefabGuid) is PrefabAsset { IsReadOnly: false };
 
     private static bool GuardEditablePrefab(Guid prefabGuid, string operation)
     {
         if (IsEditablePrefab(prefabGuid)) return true;
 
-        var entry = EditorAssetBackend.Instance?.GetEntry(prefabGuid);
-        Runtime.Debug.LogWarning($"[Prefab] Cannot {operation}: '{entry?.Path ?? prefabGuid.ToString()}' is " +
-            "imported from its source file. Reimport it to change it, or unpack the instance.");
+        string name = EditorAssetBackend.Instance?.GetEntry(prefabGuid)?.Path ?? prefabGuid.ToString();
+        Runtime.Debug.LogWarning(AssetDatabase.Get(prefabGuid) is PrefabAsset
+            ? $"[Prefab] Cannot {operation}: '{name}' is generated from its source file. " +
+              "Change it there and reimport, or unpack the instance."
+            : $"[Prefab] Cannot {operation}: prefab asset '{name}' could not be loaded.");
         return false;
     }
 
@@ -759,8 +758,17 @@ public static class PrefabUtility
             var entry = db.GetEntry(path);
             if (entry == null || entry.MainAssetType != typeof(PrefabAsset)) continue;
 
-            _sourceCache.Remove(entry.Guid);
-            RefreshAllInstances(entry.Guid);
+            try
+            {
+                _sourceCache.Remove(entry.Guid);
+                RefreshAllInstances(entry.Guid);
+            }
+            catch (Exception ex)
+            {
+                // This runs inside the importer's notification. One instance that cannot be rebuilt
+                // must not take the rest of the import down with it.
+                Runtime.Debug.LogError($"[Prefab] Failed to refresh instances of '{entry.Path}': {ex.Message}");
+            }
         }
     }
 
@@ -805,6 +813,7 @@ public static class PrefabUtility
 
             // Preserve identifiers from the old instance so undo records stay valid
             CopyInstanceState(root, fresh);
+            CarryOverAddedComponents(root, fresh);
 
             fresh.PrefabOverrides = savedOverrides;
             fresh.Name = savedName;
@@ -1236,6 +1245,45 @@ public static class PrefabUtility
             _sourceCache[prefabGuid] = (source, frame);
 
         return source;
+    }
+
+    /// <summary>
+    /// Re-attach components an instance has beyond what its prefab source provides. They exist only
+    /// on the instance, so a freshly instantiated copy does not have them, and without this a refresh
+    /// would silently drop everything the user added to the instance.
+    /// </summary>
+    private static void CarryOverAddedComponents(GameObject oldGO, GameObject freshGO)
+    {
+        // -1 means the count was never stamped, so nothing is known about what the source provided.
+        int sourceCount = oldGO.PrefabComponentCount;
+        if (sourceCount >= 0)
+        {
+            var existing = oldGO.GetComponents<MonoBehaviour>().ToList();
+            for (int i = sourceCount; i < existing.Count; i++)
+            {
+                var original = existing[i];
+                try
+                {
+                    // Round-tripped rather than moved, so the old tree stays intact for undo. Scene
+                    // references link by identifier instead of being cloned into orphans.
+                    var echo = Serializer.Serialize(original.GetType(), original, InstanceValueContext());
+                    if (Serializer.Deserialize(echo, original.GetType(), InstanceValueContext()) is not MonoBehaviour clone)
+                        continue;
+
+                    clone.Identifier = original.Identifier;
+                    freshGO.AddComponent(clone);
+                    clone.OnValidate();
+                }
+                catch (Exception ex)
+                {
+                    Runtime.Debug.LogWarning($"[Prefab] Could not carry over added component " +
+                        $"{original.GetType().Name} on '{oldGO.Name}': {ex.Message}");
+                }
+            }
+        }
+
+        for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)
+            CarryOverAddedComponents(oldGO.Children[i], freshGO.Children[i]);
     }
 
     /// <summary>

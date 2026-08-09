@@ -13,7 +13,8 @@ namespace Prowl.Editor.Importers;
 [ImporterFor(".gltf", ".glb", ".obj", ".fbx")]
 public class EditorModelImporter : AssetImporter
 {
-    private const int BaseVersion = 6;
+    // 7: Model became a PrefabAsset, which serializes its tree through a backing field.
+    private const int BaseVersion = 7;
     public override int Version => BaseVersion + MeshFeatureRegistry.AggregateVersion;
 
     public override bool Import(ImportContext ctx)
@@ -65,18 +66,20 @@ public class EditorModelImporter : AssetImporter
                 MeshFeatureImporter.GenerateAll(data.Meshes[i], ctx.Settings, ctx, meshIdentities[i]);
 
             // 3. Serialize GO hierarchy sub-assets have correct IDs, AssetRefs serialize as GUIDs.
-            //    Tracked (matching SceneImporter/PrefabImporter) so the Model's own dependency list
+            //    Tracked (matching SceneImporter/PrefabImporter) so the prefab's own dependency list
             //    reflects what its GameObject hierarchy actually references.
-            var model = new Model(ctx.FileName);
+            //    A model is a prefab: dropping one into a scene produces an instance linked back here,
+            //    so changing import settings and reimporting updates those instances in place.
+            var prefab = new PrefabAsset { Name = ctx.FileName, InstanceType = PrefabInstanceType.Model };
             if (data.RootGO != null)
             {
                 var goSerCtx = ImportHelper.CreateTrackingContext(out var goDependencies);
-                model.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
+                prefab.GameObjectData = Serializer.Serialize(typeof(object), data.RootGO, goSerCtx);
                 foreach (var dep in goDependencies)
                     ctx.AddDependency(dep);
             }
 
-            ctx.SetMainAsset(model);
+            ctx.SetMainAsset(prefab);
             return true;
         }
         catch (Exception ex)

@@ -15,7 +15,9 @@ using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.Inspector;
 
-[CustomAssetEditor(typeof(Model))]
+// Targets the importer, not the asset type: a model imports into a PrefabAsset like any prefab,
+// so keying on the asset would hand these files the generic prefab editor and drop the import settings.
+[CustomAssetEditor(typeof(Importers.EditorModelImporter))]
 public class ModelAssetEditor : ImportSettingsEditor
 {
 
@@ -66,14 +68,14 @@ public class ModelAssetEditor : ImportSettingsEditor
         var font = EditorTheme.DefaultFont;
         if (font == null) return;
         var m = Origami.Current.Metrics;
-        var model = asset as Model;
+        var model = asset as PrefabAsset;
 
         EchoObject settings = Settings(entry);
         EchoObject? sdf = SdfBlock(settings);
 
         if (model != null)
         {
-            var pr = PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForModel(model));
+            var pr = PreviewWidget.For(entry.Guid, showGrid: true).Get(model, p => p.SetupForPrefab(model));
             using (paper.Box($"{id}_previewCard").Height(200)
                 .Margin(m.PaddingLarge, m.PaddingLarge, m.PaddingLarge, m.Spacing)
                 .Rounded(8).Clip()

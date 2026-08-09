@@ -852,12 +852,15 @@ public class HierarchyPanel : DockPanel
                 }, icon: EditorIcons.Cubes);
 
                 bool hasOverrides = Prefabs.PrefabUtility.HasAnyOverrides(firstSelected);
+                // A generated prefab (a model) is rebuilt from its source on every import, so there
+                // is nothing to apply to. Reverting still works.
+                bool canApply = Prefabs.PrefabUtility.IsEditablePrefab(firstSelected.PrefabAssetId);
 
                 builder.Item(Loc.Get("hierarchy.apply_prefab_overrides"), () =>
                 {
                     var root = Prefabs.PrefabUtility.GetPrefabInstanceRoot(firstSelected);
                     if (root != null) Prefabs.PrefabUtility.ApplyOverrides(root);
-                }, enabled: hasOverrides, icon: EditorIcons.Check);
+                }, enabled: hasOverrides && canApply, icon: EditorIcons.Check);
 
                 builder.Item(Loc.Get("hierarchy.revert_to_prefab"), () =>
                 {
@@ -1239,18 +1242,7 @@ public class HierarchyPanel : DockPanel
 
         string name = System.IO.Path.GetFileNameWithoutExtension(payload.AssetName);
 
-        if (asset is Model model)
-        {
-            var go = model.Instantiate();
-            if (go == null) { Debug.LogWarning("Failed to instantiate model."); return; }
-            go.Name = name;
-            go.Transform.Position = position;
-            scene.Add(go);
-            if (parent != null) go.SetParent(parent);
-            Selection.Select(go);
-            Undo.RegisterCreatedObject(go, "Spawn Model");
-        }
-        else if (asset is Mesh mesh)
+        if (asset is Mesh mesh)
         {
             var go = new GameObject(name);
             go.Transform.Position = position;

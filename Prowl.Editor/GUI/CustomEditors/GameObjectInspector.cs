@@ -47,9 +47,9 @@ public static class GameObjectInspector
         EditorGUI.Divider(paper, "gi_sep_transform", 6f);
         DrawComponents(paper, font, go);
 
-        // Only show Add Component if not a prefab instance (structure is fixed)
-        if (!go.IsPrefabInstance || Application.IsPlaying)
-            DrawAddComponentButton(paper, font, go);
+        // Prefab instances included: a component added to an instance belongs to that instance and
+        // is carried across refreshes. What a prefab instance cannot do is restructure the source.
+        DrawAddComponentButton(paper, font, go);
 
         // Detect GO-level overrides (Name, Tag, Transform, etc.)
         if (go.IsPrefabInstance)
@@ -986,11 +986,10 @@ public static class GameObjectInspector
         builder.Item(Loc.Get("inspector.copy_component"), () => ComponentClipboard.Copy(comp),
             icon: EditorIcons.Copy);
 
-        // Structure is fixed on prefab instances (Add Component is hidden for the same reason), so
-        // pasting a whole new component is only offered where adding one is.
-        bool canAddToGO = !go.IsPrefabInstance || Application.IsPlaying;
+        // Pasting a whole component is adding one, so it follows the same rule: allowed on a prefab
+        // instance, where it becomes part of that instance rather than of the prefab.
         builder.Item(Loc.Get("inspector.paste_component_as_new"), () => ComponentClipboard.PasteAsNew(go),
-            icon: EditorIcons.Paste, enabled: canAddToGO && ComponentClipboard.CanPasteAsNew());
+            icon: EditorIcons.Paste, enabled: ComponentClipboard.CanPasteAsNew());
 
         // Values-only paste is fine on a prefab instance - DetectComponentOverrides picks the
         // changed fields up as overrides on the next frame.
@@ -1104,6 +1103,7 @@ public static class GameObjectInspector
 
         var entry = EditorAssetBackend.Instance?.GetEntry(go.PrefabAssetId);
         bool isMissing = entry == null;
+        bool canApply = !isMissing && PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
         string prefabName = isMissing ? Loc.Get("inspector.missing") : System.IO.Path.GetFileNameWithoutExtension(entry!.Path);
 
         string label = isMissing ? Loc.Get("inspector.missing_prefab")
@@ -1142,7 +1142,10 @@ public static class GameObjectInspector
                     {
                         Origami.Button(paper, "gi_prefab_revert", Loc.Get("inspector.revert"), () => { if (root != null) PrefabUtility.RevertOverrides(root); }).Width(55).Show();
 
-                        Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
+                        // A generated prefab (a model) is rebuilt from its source file on every
+                        // import, so there is nothing to apply to.
+                        if (canApply)
+                            Origami.Button(paper, "gi_prefab_apply", Loc.Get("inspector.apply"), () => { if (root != null) PrefabUtility.ApplyOverrides(root); }).Width(50).Show();
                     }
                 }
             }
@@ -1165,6 +1168,7 @@ public static class GameObjectInspector
         var prefabRoot = PrefabUtility.GetPrefabInstanceRoot(go);
         go = prefabRoot.IsValid() ? prefabRoot : go;
         var overrides = go.PrefabOverrides;
+        bool canApply = PrefabUtility.IsEditablePrefab(go.PrefabAssetId);
 
         using (paper.Column("gi_prefab_ov_list")
             .Height(UnitValue.Auto)
@@ -1212,20 +1216,21 @@ public static class GameObjectInspector
                                 }
                             });
 
-                        // Apply single
-                        paper.Box($"gi_ov_apply_{i}")
-                            .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
-                            .Hovered.BackgroundColor(EditorTheme.Ink200).End()
-                            .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
-                            .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
-                            .OnClick((go, idx), (cap, _) =>
-                            {
-                                if (cap.idx < cap.go.PrefabOverrides.Count)
+                        // Apply single, only where there is something to apply to
+                        if (canApply)
+                            paper.Box($"gi_ov_apply_{i}")
+                                .Width(45).Height(EditorTheme.RowHeight).Rounded(3)
+                                .Hovered.BackgroundColor(EditorTheme.Ink200).End()
+                                .Text(Loc.Get("inspector.apply"), font).TextColor(EditorTheme.Ink400)
+                                .FontSize(fs - 2).Alignment(TextAlignment.MiddleCenter)
+                                .OnClick((go, idx), (cap, _) =>
                                 {
-                                    var singleOv = cap.go.PrefabOverrides[cap.idx];
-                                    PrefabUtility.ApplySingleOverride(cap.go, singleOv);
-                                }
-                            });
+                                    if (cap.idx < cap.go.PrefabOverrides.Count)
+                                    {
+                                        var singleOv = cap.go.PrefabOverrides[cap.idx];
+                                        PrefabUtility.ApplySingleOverride(cap.go, singleOv);
+                                    }
+                                });
                     }
                     else
                     {
