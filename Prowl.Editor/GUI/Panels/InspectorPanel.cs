@@ -376,7 +376,7 @@ public class InspectorPanel : DockPanel
         // Check for custom asset editor
         if (entry?.MainAssetType != null)
         {
-            var assetEditor = EditorRegistries.GetAssetEditor(entry.MainAssetType);
+            var assetEditor = EditorRegistries.GetAssetEditor(entry);
             if (assetEditor != null)
             {
                 var asset = Runtime.AssetDatabase.Get(item.Guid != Guid.Empty ? item.Guid : entry.Guid);
