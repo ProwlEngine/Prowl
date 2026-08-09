@@ -154,11 +154,13 @@ public sealed class MeshCollider : Collider
         return rendererMesh.Res;
     }
 
-    public override void OnValidate()
+    // The gizmo hull is derived from the mesh and the convex flag, so it has to die with the shapes.
+    // Rebuild rather than OnValidate, because the Mesh and Convex setters go straight to Rebuild.
+    public override void Rebuild()
     {
         _cachedConvexShape = null;
         _cachedHullTris = null;
-        base.OnValidate();
+        base.Rebuild();
     }
 
     public override void OnEnable()
