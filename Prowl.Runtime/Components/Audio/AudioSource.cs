@@ -25,12 +25,6 @@ public delegate void AudioReadEvent(NativeArray<float> framesOut, UInt64 frameCo
 [ComponentIcon("\uf028")] // VolumeHigh
 public sealed class AudioSource : MonoBehaviour
 {
-    /// <summary>
-    /// Static flag to control whether AudioSources should resume their playback position on deserialization.
-    /// If false, all AudioSources will start from the beginning when loaded.
-    /// </summary>
-    public static bool ResumePositionOnLoad = true;
-
     private class SourceInfo
     {
         public IntPtr handle;
@@ -81,12 +75,6 @@ public sealed class AudioSource : MonoBehaviour
         get => _maxOneShotVoices;
         set => _maxOneShotVoices = value;
     }
-
-    // Playback state (serialized for resume support)
-    [SerializeField, HideInInspector]
-    private ulong _savedCursor = 0;
-    [SerializeField, HideInInspector]
-    private bool _wasPlaying = false;
 
     // Native handles
     private SourceInfo _mainSource;
@@ -425,26 +413,20 @@ public sealed class AudioSource : MonoBehaviour
 
             // Handle playback. If the clip is still streaming in (async loading), defer the
             // auto-play until it arrives (see Update) instead of silently never playing.
-            if (!TryAutoPlay() && (_playOnStart || (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)))
+            if (!TryAutoPlay() && _playOnStart)
                 _pendingAutoPlay = true;
         }
     }
 
-    /// <summary>Perform the OnEnable auto-play (resume or play-on-start) if the clip is loaded.
+    /// <summary>Perform the OnEnable play-on-start if the clip is loaded.
     /// Returns false if the clip hasn't streamed in yet so the caller can defer.</summary>
     private bool TryAutoPlay()
     {
         if (_clip.Res == null) return false;
 
-        if (ResumePositionOnLoad && _wasPlaying && _savedCursor > 0)
-        {
+        if (_playOnStart)
             Play();
-            Cursor = _savedCursor;
-        }
-        else if (_playOnStart)
-        {
-            Play();
-        }
+
         return true;
     }
 
@@ -506,17 +488,16 @@ public sealed class AudioSource : MonoBehaviour
     {
         DestroyOneShotVoices();
 
-        // Save state for serialization
         if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
         {
-            _wasPlaying = IsPlaying;
-            _savedCursor = Cursor;
-
             // Stop playback
             MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
             MiniAudioExNative.ma_ex_audio_source_uninit(_mainSource.handle);
             _mainSource = null;
         }
+
+        _isPaused = false;
+        _pausedCursor = 0;
 
         // Cleanup effect node
         if (_effectNode.pointer != IntPtr.Zero)
@@ -1025,15 +1006,6 @@ public sealed class AudioSource : MonoBehaviour
     #endregion
 
     #region Serialization Callbacks
-
-    public override void OnBeforeSerialize()
-    {
-        base.OnBeforeSerialize();
-
-        bool live = ResumePositionOnLoad && _mainSource != null && _mainSource.handle != IntPtr.Zero;
-        _savedCursor = live ? Cursor : 0;
-        _wasPlaying = live && IsPlaying;
-    }
 
     public override void OnAfterDeserialize()
     {

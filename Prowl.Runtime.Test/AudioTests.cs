@@ -108,6 +108,18 @@ public class AudioTests
         Assert.Equal(AttenuationModel.Exponential, restored.AttenuationModel);
     }
 
+    // Live playback position used to be written into the serialized form, so saving a scene while
+    // play mode was running baked whatever sample the music was on into the asset, and every later
+    // load started there. On a prefab every instance spawned mid clip.
+    [Fact]
+    public void AudioSource_DoesNotSerializePlaybackPosition()
+    {
+        EchoObject echo = Serializer.Serialize(new AudioSource());
+
+        Assert.Null(echo.Get("_savedCursor"));
+        Assert.Null(echo.Get("_wasPlaying"));
+    }
+
     // Effects used to be script-only and unserialized, so a chain built at runtime was gone the next
     // time the scene loaded and could never be authored in the first place.
     [Fact]
