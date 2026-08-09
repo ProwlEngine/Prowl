@@ -78,6 +78,12 @@ public sealed class MeshCollider : Collider
         if (convex)
             return [new ConvexHullShape(baked.Triangles)];
 
+        // Triangles have no volume, so a dynamic body built from them cannot derive an inertia tensor
+        // and falls back to a box approximation. Concave dynamic collision is not really supported.
+        Rigidbody3D rb = RigidBody;
+        if (rb.IsValid() && rb.MotionType == Jitter2.Dynamics.MotionType.Dynamic)
+            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' is concave but sits on a dynamic Rigidbody3D. Its inertia is approximated by a box; use Convex for dynamic bodies.");
+
         // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
         // indexes into it - the source soup can hold more.
         TriangleMesh triMesh = transform == Float4x4.Identity ? baked.TriangleMesh : TransformMesh(baked.TriangleMesh, transform);
