@@ -55,6 +55,26 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private float angularSleepThreshold = 0.1f;
 
     [SerializeField] private RigidbodyInterpolation interpolation = RigidbodyInterpolation.Interpolate;
+    [SerializeField] private RigidbodyConstraints constraints = RigidbodyConstraints.None;
+
+    // The pose the frozen axes are held at, captured the first time a constraint is applied.
+    private JVector _lockedPosition;
+    private JQuaternion _lockedOrientation;
+    private bool _hasLockedPose;
+
+    /// <summary>
+    /// World-space axes this body may not move or turn along. Freezing an axis re-pins it after every
+    /// step, so a body can still be placed on that axis with <see cref="MovePosition"/>.
+    /// </summary>
+    public RigidbodyConstraints Constraints
+    {
+        get => constraints;
+        set
+        {
+            constraints = value;
+            CaptureLockedPose(); // re-pin to wherever the body is now
+        }
+    }
 
     private float interpTimer = 0;
 
@@ -323,9 +343,6 @@ public sealed class Rigidbody3D : MonoBehaviour
             Rigidbody = this,
             InstanceID = this.InstanceID,
             Layer = GameObject.LayerIndex,
-            //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
-            //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
-            //TranslationConstraint = new JVector(translationConstraints.x, translationConstraints.y, translationConstraints.z)
         };
 
         // Hook up collision events
@@ -454,11 +471,54 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
+    /// Re-applies the frozen axes. Jitter has no native axis locks, so the frozen components of the
+    /// velocity are zeroed and the pose is put back where it was, right after the step that moved it.
+    /// </summary>
+    private void ApplyConstraints()
+    {
+        if (constraints == RigidbodyConstraints.None || _body == null || _body.Handle.IsZero) return;
+        if (!_hasLockedPose) { CaptureLockedPose(); return; }
+
+        JVector velocity = _body.Velocity;
+        JVector position = _body.Position;
+
+        if ((constraints & RigidbodyConstraints.FreezePositionX) != 0) { velocity.X = 0.0f; position.X = _lockedPosition.X; }
+        if ((constraints & RigidbodyConstraints.FreezePositionY) != 0) { velocity.Y = 0.0f; position.Y = _lockedPosition.Y; }
+        if ((constraints & RigidbodyConstraints.FreezePositionZ) != 0) { velocity.Z = 0.0f; position.Z = _lockedPosition.Z; }
+
+        JVector angularVelocity = _body.AngularVelocity;
+        if ((constraints & RigidbodyConstraints.FreezeRotationX) != 0) angularVelocity.X = 0.0f;
+        if ((constraints & RigidbodyConstraints.FreezeRotationY) != 0) angularVelocity.Y = 0.0f;
+        if ((constraints & RigidbodyConstraints.FreezeRotationZ) != 0) angularVelocity.Z = 0.0f;
+
+        _body.Velocity = velocity;
+        _body.Position = position;
+        _body.AngularVelocity = angularVelocity;
+
+        // Zeroing angular velocity stops a body turning but leaves whatever rotation the solver already
+        // applied this step. That only fully cancels when every axis is locked, so a full rotation
+        // freeze restores the orientation outright and a partial one accepts a little drift.
+        if ((constraints & RigidbodyConstraints.FreezeRotation) == RigidbodyConstraints.FreezeRotation)
+            _body.Orientation = _lockedOrientation;
+    }
+
+    private void CaptureLockedPose()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+
+        _lockedPosition = _body.Position;
+        _lockedOrientation = _body.Orientation;
+        _hasLockedPose = true;
+    }
+
+    /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
     /// before. Driven by the physics world for every registered body right after the step.
     /// </summary>
     internal void CapturePose()
     {
+        ApplyConstraints();
+
         if (_body == null || _body.Handle.IsZero) return;
 
         interpTimer = 0.0f;
@@ -486,6 +546,7 @@ public sealed class Rigidbody3D : MonoBehaviour
         _currentPosition = _previousPosition = ToFloat3(_body.Position);
         _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
         _hasPose = true;
+        CaptureLockedPose();
     }
 
     private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
