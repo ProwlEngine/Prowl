@@ -154,6 +154,14 @@ public sealed class MeshCollider : Collider
         return rendererMesh.Res;
     }
 
+    protected override void OnAutoRebuild()
+    {
+        // A concave rebuild re-bakes the whole triangle mesh and recreates one shape and one dynamic
+        // tree leaf per triangle, so doing it every frame an animated collider moves is pathological.
+        if (!convex)
+            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' moved relative to its body and re-baked its triangle mesh. Moving a concave mesh collider's local transform is expensive; keep it still, or mark it Convex.");
+    }
+
     // The gizmo hull is derived from the mesh and the convex flag, so it has to die with the shapes.
     // Rebuild rather than OnValidate, because the Mesh and Convex setters go straight to Rebuild.
     public override void Rebuild()
