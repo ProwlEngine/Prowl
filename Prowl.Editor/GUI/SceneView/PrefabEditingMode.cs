@@ -38,6 +38,12 @@ public static class PrefabEditingMode
     /// </summary>
     public static void Enter(Guid prefabGuid)
     {
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot open a prefab for editing during play mode.");
+            return;
+        }
+
         if (IsEditing)
         {
             if (EditorSceneManager.IsDirty)
@@ -169,6 +175,11 @@ public static class PrefabEditingMode
     public static void SaveAndExit()
     {
         if (!IsEditing) return;
+        if (Application.IsPlaying)
+        {
+            Debug.LogWarning("[Prefab] Cannot save a prefab during play mode.");
+            return;
+        }
 
         Save();
         var prefabGuid = EditingPrefabGuid;
