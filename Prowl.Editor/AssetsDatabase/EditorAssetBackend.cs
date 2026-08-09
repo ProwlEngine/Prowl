@@ -1582,7 +1582,12 @@ public class EditorAssetBackend : AssetBackendBase
     // ================================================================
 
     /// <summary>Import a newly created or modified file, tracking it if it isn't already.</summary>
-    private void ImportFileChange(string absolutePath, string relativePath, List<string> imported)
+    /// <summary>
+    /// Give a changed file its .meta and its entry, and queue it for import. Registration only:
+    /// an importer that resolves a sibling by path (a model looking up its textures) must find every
+    /// file in the batch already tracked, whatever order the watcher delivered the events in.
+    /// </summary>
+    private void RegisterFileChange(string absolutePath, string relativePath, List<AssetEntry> toImport)
     {
         string ext = Path.GetExtension(absolutePath);
         string importerName = EditorRegistries.GetImporterTypeName(ext);
@@ -1605,20 +1610,27 @@ public class EditorAssetBackend : AssetBackendBase
             _guidToEntry[meta.Guid].NeedsReimport = true;
         }
 
+        var existingEntry = _guidToEntry[meta.Guid];
+        if (!toImport.Contains(existingEntry))
+            toImport.Add(existingEntry);
+    }
+
+    /// <summary>Import a file that was registered earlier in this batch.</summary>
+    private void ImportRegisteredChange(AssetEntry entry, List<string> imported)
+    {
         // Dispose previous main + sub-asset instances so any holding
         // AssetRef detects them as invalid and re-resolves to the freshly
         // imported instance. The Reimport() entry-point already does this;
         // the watcher path needs to match or downstream refs (e.g. a
         // Material pointing at a regenerated shader sub-asset) keep the
         // stale instance until the user manually reimports.
-        var existingEntry = _guidToEntry[meta.Guid];
-        DisposeAndRemove(meta.Guid);
-        if (existingEntry.SubAssets != null)
-            foreach (var sub in existingEntry.SubAssets)
+        DisposeAndRemove(entry.Guid);
+        if (entry.SubAssets != null)
+            foreach (var sub in entry.SubAssets)
                 DisposeAndRemove(sub.Guid);
 
-        RunImport(existingEntry);
-        imported.Add(relativePath);
+        RunImport(entry);
+        imported.Add(entry.Path);
     }
 
     /// <param name="force">Drain the watcher immediately instead of waiting out its debounce window.</param>
@@ -1631,13 +1643,23 @@ public class EditorAssetBackend : AssetBackendBase
 
         var imported = new List<string>();
         var deleted = new List<string>();
+        var toImport = new List<AssetEntry>();
 
+        // Two passes, matching what startup already does (ScanAssets before ImportDirty). Registering
+        // the whole batch first means a file's importer sees every other file in the batch as a
+        // tracked asset it can reference, instead of depending on which watcher event arrived first.
         foreach (var evt in events)
         {
             // One bad file (unreadable .meta, broken importer) must not drop the rest of this batch of
             // events on the floor - those changes would never be seen again until a full rescan.
-            try { ProcessFileEvent(evt, imported, deleted); }
+            try { ProcessFileEvent(evt, toImport, deleted); }
             catch (Exception ex) { Runtime.Debug.LogError($"Failed to process change to '{evt.Path}': {ex.Message}"); }
+        }
+
+        foreach (var entry in toImport)
+        {
+            try { ImportRegisteredChange(entry, imported); }
+            catch (Exception ex) { Runtime.Debug.LogError($"Failed to import '{entry.Path}': {ex.Message}"); }
         }
 
         if (imported.Count > 0 || deleted.Count > 0)
@@ -1653,7 +1675,7 @@ public class EditorAssetBackend : AssetBackendBase
         }
     }
 
-    private void ProcessFileEvent(FileEvent evt, List<string> imported, List<string> deleted)
+    private void ProcessFileEvent(FileEvent evt, List<AssetEntry> toImport, List<string> deleted)
     {
             // Any change to a real (non-.meta) file or folder can add/remove/rename an entry or
             // change a file's size/date, so the cached folder index the Project Panel reads is stale.
@@ -1679,7 +1701,7 @@ public class EditorAssetBackend : AssetBackendBase
             {
                 case FileEventType.Created:
                 case FileEventType.Modified:
-                    ImportFileChange(evt.Path, relativePath, imported);
+                    RegisterFileChange(evt.Path, relativePath, toImport);
                     break;
 
                 case FileEventType.Deleted:
@@ -1729,7 +1751,7 @@ public class EditorAssetBackend : AssetBackendBase
                             // debounce window before the temp file is ever imported. Treat the
                             // destination as a brand-new file instead of silently dropping it until
                             // the next full rescan.
-                            ImportFileChange(evt.Path, relativePath, imported);
+                            RegisterFileChange(evt.Path, relativePath, toImport);
                         }
                         else
                         {
@@ -1759,13 +1781,8 @@ public class EditorAssetBackend : AssetBackendBase
                                 renamedEntry.ImporterType = newImporterName;
                                 renamedEntry.NeedsReimport = true;
 
-                                DisposeAndRemove(guid);
-                                if (renamedEntry.SubAssets != null)
-                                    foreach (var sub in renamedEntry.SubAssets)
-                                        DisposeAndRemove(sub.Guid);
-
-                                RunImport(renamedEntry);
-                                imported.Add(relativePath);
+                                if (!toImport.Contains(renamedEntry))
+                                    toImport.Add(renamedEntry);
                             }
 
                             OnAssetMoved?.Invoke(oldRelative, relativePath);
