@@ -65,8 +65,12 @@ public sealed class TriggerVolume : MonoBehaviour
     private PhysicsWorld ResolvePhysics() =>
         GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
 
+    private Rigidbody3D _selfBody;
+
     public override void OnEnable()
     {
+        _selfBody = GetComponentInParent<Rigidbody3D>();
+
         // Sample after the step, not in FixedUpdate: FixedUpdate runs before the step, so it would
         // report overlaps against poses the solver is about to change.
         PhysicsWorld physics = ResolvePhysics();
@@ -84,7 +88,6 @@ public sealed class TriggerVolume : MonoBehaviour
 
         QueryOverlaps(physics, _hits);
 
-        Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
         foreach (ShapeCastHit hit in _hits)
         {
             // Our own body is already excluded by the query filter, so only unidentifiable hits (static
@@ -130,8 +133,7 @@ public sealed class TriggerVolume : MonoBehaviour
     private void QueryOverlaps(PhysicsWorld physics, List<ShapeCastHit> hits)
     {
         // Skip our own body rather than filtering it out afterwards, so its static colliders go too.
-        Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
-        QueryFilter filter = self.IsValid() ? new QueryFilter(LayerMask).Ignoring(self) : new QueryFilter(LayerMask);
+        QueryFilter filter = _selfBody.IsValid() ? new QueryFilter(LayerMask).Ignoring(_selfBody) : new QueryFilter(LayerMask);
 
         Float3 worldCenter = WorldCenter;
         Quaternion orientation = WorldRotation;
