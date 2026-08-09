@@ -679,6 +679,43 @@ public class PhysicsTests : RuntimeTestBase
         Assert.Same(floor, recorder.Ends[0].Collider.GameObject);
     }
 
+    [Fact]
+    public void LogOnce_ReportsOnce_CountsTheRest_AndResetsOnPlayModeChange()
+    {
+        Debug.ClearReportedOnce();
+
+        int logged = 0;
+        void Count(string message, DebugStackTrace? trace, LogSeverity severity) => logged++;
+
+        Debug.OnLog += Count;
+        try
+        {
+            for (int i = 0; i < 100; i++)
+                Debug.LogWarningOnce("Test.Spam", "expensive thing happened");
+
+            Assert.Equal(1, logged);
+            Assert.Equal(100, Debug.GetReportCount("Test.Spam"));
+
+            // A distinct id is its own budget.
+            Debug.LogWarningOnce("Test.Other", "something else");
+            Assert.Equal(2, logged);
+
+            // Toggling play mode is a fresh run, so the condition gets to report again.
+            bool wasPlaying = Application.IsPlaying;
+            Application.IsPlaying = !wasPlaying;
+            Application.IsPlaying = wasPlaying;
+
+            Assert.Equal(0, Debug.GetReportCount("Test.Spam"));
+            Debug.LogWarningOnce("Test.Spam", "expensive thing happened");
+            Assert.Equal(3, logged);
+        }
+        finally
+        {
+            Debug.OnLog -= Count;
+            Debug.ClearReportedOnce();
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Collider shape rebuilds
     // ---------------------------------------------------------------------
