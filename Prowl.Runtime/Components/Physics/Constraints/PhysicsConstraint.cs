@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -67,11 +67,6 @@ public abstract class PhysicsConstraint : MonoBehaviour
     {
         if (GameObject.IsNotValid() || GameObject.Scene.IsNotValid()) return;
         RecreateConstraint();
-    }
-
-    public override void DrawGizmos()
-    {
-        // TODO DrawGizmos
     }
 
     /// <summary>
