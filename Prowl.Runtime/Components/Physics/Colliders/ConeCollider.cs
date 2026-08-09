@@ -21,7 +21,7 @@ public sealed class ConeCollider : Collider
         set
         {
             radius = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -31,7 +31,7 @@ public sealed class ConeCollider : Collider
         set
         {
             height = value;
-            OnValidate();
+            Rebuild();
         }
     }
 

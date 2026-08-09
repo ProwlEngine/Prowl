@@ -22,7 +22,7 @@ public sealed class BoxCollider : Collider
         set
         {
             size = value;
-            OnValidate();
+            Rebuild();
         }
     }
 

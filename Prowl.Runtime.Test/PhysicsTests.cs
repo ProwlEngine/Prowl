@@ -680,6 +680,51 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     // ---------------------------------------------------------------------
+    // Collider shape rebuilds
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void Collider_Center_RebuildsShapes_WhenSetAtRuntime()
+    {
+        var scene = CreatePhysicsScene();
+        AddStaticBox(scene, Float3.Zero, new Float3(1, 1, 1));
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
+
+        Collider collider = scene.AllObjects.First(o => o.Name == "StaticBox").GetComponent<BoxCollider>();
+        collider.Center = new Float3(10, 0, 0);
+        StepPhysics(scene, 2);
+
+        Assert.False(scene.Physics.CheckSphere(Float3.Zero, 0.2f), "the shape should have moved off the origin");
+        Assert.True(scene.Physics.CheckSphere(new Float3(10, 0, 0), 0.2f), "the shape should be at the new centre");
+    }
+
+    [Fact]
+    public void Collider_OnRigidbody_RebuildsWhenMovedRelativeToTheBody()
+    {
+        var scene = CreatePhysicsScene();
+
+        var bodyGo = CreateGameObject("Body");
+        var rb = bodyGo.AddComponent<Rigidbody3D>();
+        rb.AffectedByGravity = false;
+
+        var colliderGo = CreateGameObject("Child");
+        colliderGo.AddComponent<BoxCollider>();
+        colliderGo.SetParent(bodyGo);
+        scene.Add(bodyGo);
+        StepPhysics(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(Float3.Zero, 0.2f));
+
+        colliderGo.Transform.LocalPosition = new Float3(0, 8, 0);
+        Tick(scene, 2);
+
+        Assert.True(scene.Physics.CheckSphere(new Float3(0, 8, 0), 0.3f),
+            "the shape should have followed the collider's new offset from the body");
+    }
+
+    // ---------------------------------------------------------------------
     // Rigidbody3D surface: force modes and axis constraints
     // ---------------------------------------------------------------------
 

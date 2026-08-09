@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -29,7 +29,7 @@ public sealed class MeshCollider : Collider
         set
         {
             mesh = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -43,7 +43,7 @@ public sealed class MeshCollider : Collider
         {
             if (convex == value) return;
             convex = value;
-            OnValidate();
+            Rebuild();
         }
     }
 

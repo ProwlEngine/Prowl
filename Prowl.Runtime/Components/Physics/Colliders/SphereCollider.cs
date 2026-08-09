@@ -20,7 +20,7 @@ public sealed class SphereCollider : Collider
         set
         {
             radius = value;
-            OnValidate();
+            Rebuild();
         }
     }
 

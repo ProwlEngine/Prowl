@@ -6,6 +6,7 @@ using System;
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
 
+using Prowl.Echo;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -13,13 +14,27 @@ namespace Prowl.Runtime;
 [ComponentIcon("\uf1b2")] // Cube subclasses override with their specific shape
 public abstract class Collider : MonoBehaviour
 {
-    public Float3 Center;
-    public Float3 Rotation;
+    [SerializeField] private Float3 center;
+    [SerializeField] private Float3 rotation;
+
+    /// <summary>Offset of the shape from the GameObject's origin, in local space.</summary>
+    public Float3 Center
+    {
+        get => center;
+        set { center = value; Rebuild(); }
+    }
+
+    /// <summary>Euler rotation of the shape relative to the GameObject, in degrees.</summary>
+    public Float3 Rotation
+    {
+        get => rotation;
+        set { rotation = value; Rebuild(); }
+    }
 
     protected Float4x4 GizmoMatrix =>
         Float4x4.CreateTRS(
-            Float4x4.TransformPoint(Center, Float4x4.CreateTRS(Transform.Position, Transform.Rotation, Transform.LossyScale)),
-            Transform.Rotation * Quaternion.FromEuler(Rotation),
+            Float4x4.TransformPoint(center, Float4x4.CreateTRS(Transform.Position, Transform.Rotation, Transform.LossyScale)),
+            Transform.Rotation * Quaternion.FromEuler(rotation),
             Transform.LossyScale);
 
     /// <summary>
@@ -56,6 +71,10 @@ public abstract class Collider : MonoBehaviour
     /// Used to detect when the layer has changed and we need to move to a different static rigidbody.
     /// </summary>
     private int _lastLayer;
+
+    /// <summary>The world scale the shapes were built at, compared by value because the body's own
+    /// Transform version changes every step and so cannot report a rescale.</summary>
+    private Float3 _lastScale = Float3.One;
 
     protected Rigidbody3D RigidBody => GetComponentInParent<Rigidbody3D>();
 
@@ -102,25 +121,41 @@ public abstract class Collider : MonoBehaviour
         int layer = GameObject.LayerIndex;
         _attachedBody = GameObject.Scene.Physics.GetOrCreateStaticRigidBody(layer);
         RegisterShapes();
-        _lastTransformVersion = ComputeWorldTransformVersion();
+        _lastTransformVersion = CurrentTransformVersion();
+        _lastScale = CumulativeScale();
         _lastLayer = layer;
     }
 
     /// <summary>
-    /// A version that changes whenever this transform OR any ancestor changes, so static colliders
-    /// follow their parents. Transform.Version alone only tracks local edits, so moving a parent would
-    /// not re-register a child collider's world-space shapes.
+    /// A version that changes whenever this transform OR any ancestor up to <paramref name="stopAt"/>
+    /// changes. Transform.Version only tracks local edits, so a parent has to be walked for a child's
+    /// world-space shapes to follow it.
+    /// <para/>
+    /// Stopping at the attached body is what makes this usable for a moving rigidbody: the solver
+    /// rewrites the body's own Transform every step, so including it would rebuild the shapes of every
+    /// moving body every frame, while the offset between collider and body has not changed at all.
     /// </summary>
-    private uint ComputeWorldTransformVersion()
+    private uint ComputeTransformVersion(Transform stopAt)
     {
         uint v = 17;
-        Transform t = Transform;
-        while (t != null)
-        {
+        for (Transform t = Transform; t != null && t != stopAt; t = t.Parent)
             v = v * 31 + t.Version;
-            t = t.Parent;
-        }
+
         return v;
+    }
+
+    /// <summary>The version this collider's placement is currently built against.</summary>
+    private uint CurrentTransformVersion() =>
+        ComputeTransformVersion(_attachedRigidbody3D.IsValid() ? _attachedRigidbody3D.Transform : null);
+
+    /// <summary>
+    /// Rebuilds this collider's shapes in place, after its size, offset, orientation or the mesh behind
+    /// it changed. Cheaper than going through the rigidbody, which rebuilds every collider on the body.
+    /// </summary>
+    public void Rebuild()
+    {
+        if (_attachedBody == null) return; // not in the world yet, OnEnable will build it
+        Reattach();
     }
 
     /// <summary>
@@ -249,8 +284,8 @@ public abstract class Collider : MonoBehaviour
         if (rb.IsNotValid()) return CreateShapes();
 
         Float3 cumulativeScale = CumulativeScale();
-        Float3 worldCenter = Transform.TransformPoint(Center);
-        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
+        Float3 worldCenter = Transform.TransformPoint(center);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(rotation);
 
         // A Jitter body carries no scale, so its shape offsets are plain world-space distances rotated
         // into body space. InverseTransformPoint would also divide out the body's scale and pull the
@@ -268,8 +303,8 @@ public abstract class Collider : MonoBehaviour
     private RigidBodyShape[] CreateWorldTransformedShapes()
     {
         Float3 cumulativeScale = CumulativeScale();
-        Float3 worldCenter = Transform.TransformPoint(Center);
-        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(Rotation);
+        Float3 worldCenter = Transform.TransformPoint(center);
+        Quaternion worldRotation = Transform.Rotation * Quaternion.FromEuler(rotation);
 
         return BuildShapes(worldCenter, worldRotation, cumulativeScale);
     }
@@ -329,6 +364,10 @@ public abstract class Collider : MonoBehaviour
         Rigidbody3D rb = FindOwningRigidbody();
         if (rb.IsValid()) TryAttachTo(rb);
         else AttachToStatic();
+
+        _lastTransformVersion = CurrentTransformVersion();
+        _lastScale = CumulativeScale();
+        _lastLayer = GameObject.LayerIndex;
     }
 
     public override void OnEnable() => Reattach();
@@ -341,34 +380,18 @@ public abstract class Collider : MonoBehaviour
 
     public override void Update()
     {
-        // Only track transform and layer changes if we're attached to the static rigidbody
-        if (_attachedRigidbody3D == null && _attachedBody != null)
-        {
-            bool transformChanged = ComputeWorldTransformVersion() != _lastTransformVersion;
-            bool layerChanged = GameObject.LayerIndex != _lastLayer;
+        if (_attachedBody == null) return;
 
-            // Check if the transform or layer has changed
-            if (transformChanged || layerChanged)
-            {
-                // Transform has moved or layer changed, update the shapes
-                Detach();
-                AttachToStatic();
-            }
-        }
+        // Static shapes are in world space, so any movement invalidates them. Shapes on a rigidbody are
+        // in body space, so only movement relative to that body does - which is why the version walk
+        // stops there. Either way a rescale has to be caught by value.
+        bool transformChanged = CurrentTransformVersion() != _lastTransformVersion;
+        bool scaleChanged = !CumulativeScale().Equals(_lastScale);
+        bool layerChanged = _attachedRigidbody3D.IsNotValid() && GameObject.LayerIndex != _lastLayer;
+
+        if (transformChanged || scaleChanged || layerChanged)
+            Reattach();
     }
 
-    public override void OnValidate()
-    {
-        // If we're attached to a Rigidbody3D, refresh it
-        if (_attachedRigidbody3D != null)
-        {
-            _attachedRigidbody3D.OnValidate();
-        }
-        else if (_attachedBody != null)
-        {
-            // We're attached to the static rigidbody, just re-register
-            Detach();
-            AttachToStatic();
-        }
-    }
+    public override void OnValidate() => Rebuild();
 }
