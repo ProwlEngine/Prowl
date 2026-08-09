@@ -13,9 +13,8 @@ namespace Prowl.Editor.GUI.RenderProfiler;
 
 public partial class RenderProfilerPanel : DockPanel
 {
-    // Toolbar row (36) + its divider (1) below, subtracted from the OnGUI height before it
-    // reaches DrawStatsViewer/DrawNativeStatsViewer, since those receive the panel's raw size.
-    private const float ToolbarChromeHeight = 37f;
+    private const float ToolbarHeight = 32f;
+    private const float DividerHeight = 1f;
 
     [MenuItem("Window/Debug/Render Profiler", priority: 102)]
     static void Open() => EditorApplication.Instance?.OpenPanel(typeof(RenderProfilerPanel));
@@ -24,6 +23,9 @@ public partial class RenderProfilerPanel : DockPanel
     public override string Icon => EditorIcons.ChartLine;
 
     private readonly EditorProfiler _profiler;
+    private long? _selectedFrameIndex;
+
+    public ProfiledFrame? SelectedFrame => _profiler.FrameAgo((int)(_selectedFrameIndex ?? 0));
 
 
     public RenderProfilerPanel()
@@ -42,6 +44,13 @@ public partial class RenderProfilerPanel : DockPanel
         _profiler.Pause();
     }
 
+    public void SelectFrame(long index)
+    {
+        _selectedFrameIndex = index;
+        _profiler.Pause();
+        ClearSubFrameSelection();
+    }
+
     public override void OnGUI(Paper paper, float width, float height)
     {
         using (paper.Column("rdp_root").Enter())
@@ -53,9 +62,35 @@ public partial class RenderProfilerPanel : DockPanel
                 .IsNotInteractable()
                 .BackgroundColor(EditorTheme.BorderStrong);
 
-            paper.Box("rdp_contents")
+            DrawFramePicker(paper);
+
+            paper.Box("rdp_picker_div")
+                .Height((UnitValue)1)
                 .IsNotInteractable()
-                .BackgroundColor(Color.Red);
+                .BackgroundColor(EditorTheme.BorderStrong);
+
+            DrawFlameGraph(paper);
+
+            paper.Box("rdp_flame_div")
+                .Height((UnitValue)1)
+                .IsNotInteractable()
+                .BackgroundColor(EditorTheme.BorderStrong);
+
+            using (paper.Row("rdp_contents").Width(UnitValue.Stretch()).Height(UnitValue.Stretch()).Enter())
+            {
+                float contentsHeight = height - ToolbarHeight - FramePickerHeight - FlameGraphHeight - DividerHeight * 3f;
+                DrawHierarchy(paper, HierarchyPanelWidth, contentsHeight);
+
+                paper.Box("rdp_contents_vdiv")
+                    .Width(1)
+                    .IsNotInteractable()
+                    .BackgroundColor(EditorTheme.BorderStrong);
+
+                paper.Box("rdp_detail_panel")
+                    .Width(UnitValue.Stretch())
+                    .IsNotInteractable()
+                    .BackgroundColor(Color.Red);
+            }
         }
     }
 
@@ -63,7 +98,7 @@ public partial class RenderProfilerPanel : DockPanel
     private void DrawToolbar(Paper paper)
     {
         using (paper.Row("rdp_toolbar")
-            .Height(32)
+            .Height(ToolbarHeight)
             .ColBetween(6)
             .Padding(6)
             .Enter())
@@ -98,9 +133,17 @@ public partial class RenderProfilerPanel : DockPanel
     public void TogglePaused()
     {
         if (_profiler.IsPaused)
+        {
             _profiler.Resume();
+            _selectedFrameIndex = null;
+        }
         else
+        {
             _profiler.Pause();
+            _selectedFrameIndex = 0;
+        }
+
+        ClearSubFrameSelection();
     }
 
 
