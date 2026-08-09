@@ -338,12 +338,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsValid()) scene.Physics?.RegisterBody(this);
-        _body.Tag = new RigidBodyUserData()
-        {
-            Rigidbody = this,
-            InstanceID = this.InstanceID,
-            Layer = GameObject.LayerIndex,
-        };
 
         // Hook up collision events
         _body.BeginCollide += OnJitterBeginCollide;
