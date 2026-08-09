@@ -615,12 +615,19 @@ public static class PropertyGridRenderer
             if ((valueU & u) == u) current.Add(v!);
         }
 
+        var before = new HashSet<ulong>();
+        foreach (var c in current) before.Add(Convert.ToUInt64(c));
+
         Origami.MultiDropdown<object>(paper, id, current,
             selected =>
             {
-                ulong combined = 0;
-                foreach (var f in selected) combined |= Convert.ToUInt64(f);
-                onChange(Enum.ToObject(enumType, combined));
+                var after = new HashSet<ulong>();
+                foreach (var f in selected) after.Add(Convert.ToUInt64(f));
+
+                ulong bits = valueU;
+                foreach (ulong u in before) if (!after.Contains(u)) bits &= ~u;
+                foreach (ulong u in after) if (!before.Contains(u)) bits |= u;
+                onChange(Enum.ToObject(enumType, bits));
             }, nonZero)
             .Display(o => Enum.GetName(enumType, o) ?? o.ToString() ?? "")
             .Show();
