@@ -178,6 +178,13 @@ public static class PrefabUtility
 
     private static void ApplyOverridesCore(GameObject instanceRoot, bool recordUndo)
     {
+        _refreshingFromApply = true;
+        try { ApplyOverridesCoreInner(instanceRoot, recordUndo); }
+        finally { _refreshingFromApply = false; }
+    }
+
+    private static void ApplyOverridesCoreInner(GameObject instanceRoot, bool recordUndo)
+    {
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -397,6 +404,13 @@ public static class PrefabUtility
     }
 
     private static void ApplySingleOverrideCore(GameObject instanceGO, PropertyOverride ov, bool recordUndo)
+    {
+        _refreshingFromApply = true;
+        try { ApplySingleOverrideCoreInner(instanceGO, ov, recordUndo); }
+        finally { _refreshingFromApply = false; }
+    }
+
+    private static void ApplySingleOverrideCoreInner(GameObject instanceGO, PropertyOverride ov, bool recordUndo)
     {
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
@@ -722,6 +736,33 @@ public static class PrefabUtility
     // ================================================================
     //  Instance Refresh
     // ================================================================
+
+    // Set while an apply is running, which reimports the asset itself. Without this the import
+    // notification would refresh the instances a second time, replacing every object again.
+    private static bool _refreshingFromApply;
+
+    /// <summary>
+    /// Bring open-scene instances up to date after their prefab asset was imported. Covers a prefab
+    /// edited outside the editor, one arriving from source control, and a model whose import settings
+    /// changed - a model imports to a prefab, so its instances update the same way.
+    /// </summary>
+    internal static void OnAssetsImported(string[] paths)
+    {
+        if (_refreshingFromApply || Application.IsPlaying) return;
+        if (Scene.Current == null) return;
+
+        var db = EditorAssetBackend.Instance;
+        if (db == null) return;
+
+        foreach (string path in paths)
+        {
+            var entry = db.GetEntry(path);
+            if (entry == null || entry.MainAssetType != typeof(PrefabAsset)) continue;
+
+            _sourceCache.Remove(entry.Guid);
+            RefreshAllInstances(entry.Guid);
+        }
+    }
 
     /// <summary>
     /// Refresh all instances of a prefab in the current scene after the prefab asset changes.

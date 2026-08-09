@@ -81,6 +81,12 @@ public class EditorAssetBackend : AssetBackendBase
         // tries to import a file - idempotent, so this is cheap on every call after the first.
         EditorRegistries.Initialize();
 
+        // A prefab that changed on disk - edited elsewhere, pulled from source control, or a model
+        // whose import settings were changed - has to reach the instances already in the open scene.
+        // Hooked here rather than at each construction site so every backend, including the ones
+        // tests build, behaves the same.
+        OnAssetsImported += Prefabs.PrefabUtility.OnAssetsImported;
+
         // Remove any ".meta.tmp" files left behind by a crash/power-loss mid-write before
         // ScanAssets runs, so it doesn't pick them up and import them as real asset files.
         CleanupOrphanedMetaTempFiles();
