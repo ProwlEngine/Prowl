@@ -163,8 +163,6 @@ public sealed class MeshCollider : Collider
 
     public override void OnEnable()
     {
-        base.OnEnable();
-
         if (mesh.Res == null)
         {
             var mr = GetComponent<MeshRenderer>();
@@ -173,6 +171,8 @@ public sealed class MeshCollider : Collider
             else
                 Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
+
+        base.OnEnable();
     }
 
     public override void DrawGizmos()
