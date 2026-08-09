@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 using Jitter2;
 using Jitter2.Collision;
@@ -12,6 +13,7 @@ using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -25,6 +27,9 @@ public enum PhysicsThreadModel
     Persistent
 }
 
+/// <summary>
+/// A scene's physics simulation and the queries against it.
+/// </summary>
 public class PhysicsWorld
 {
     /// <summary>
@@ -163,6 +168,15 @@ public class PhysicsWorld
     // lookup filters out.
     private readonly Dictionary<ulong, Collider> _shapeOwnersById = [];
 
+    // Scratch state for queries, shared rather than allocated per call: a character controller issues
+    // about ten casts a frame, each of which would otherwise allocate two lists and a shape.
+    //
+    // INVARIANT: a query must never run inside another query. Nothing on a query path calls into user
+    // code, so this holds as of today (09/08/26), and collision and trigger callbacks are raised between queries rather
+    // than during one. If that ever changes, these buffers and the cached shapes below are shared
+    // mutable state and both queries would return nonsense; _queryDepth is what makes that say so
+    // instead of corrupting quietly.
+    private int _queryDepth;
     private readonly List<IDynamicTreeProxy> _queryProxies = [];
     private readonly List<ShapeCastHit> _queryHits = [];
     private readonly SphereShape _querySphere = new(0.5f);
@@ -561,6 +575,7 @@ public class PhysicsWorld
         hits.Clear();
         if (!BeginRayQuery(ref origin, ref direction, maxDistance, filter, nameof(RaycastAll))) return 0;
 
+        EnterQuery(nameof(RaycastAll));
         _rayHitSink = hits;
         _rayOrigin = origin;
         _rayDirection = direction;
@@ -572,6 +587,7 @@ public class PhysicsWorld
         finally
         {
             _rayHitSink = null;
+            ExitQuery();
         }
 
         hits.Sort(static (a, b) => a.Distance.CompareTo(b.Distance));
@@ -646,6 +662,25 @@ public class PhysicsWorld
         return false;
     }
 
+    /// <summary>
+    /// Marks a query as running, reporting the two ways the shared scratch state can be violated: a
+    /// query off the engine thread, and a second query overlapping this one. Both are tripwires rather
+    /// than recoveries, since the buffers are already committed by the time we could tell. Always pair
+    /// with <see cref="ExitQuery"/> in a finally.
+    /// </summary>
+    private void EnterQuery(string query)
+    {
+        // Interlocked so the counter stays balanced even when the rule above is already being broken;
+        // a torn count would strand this permanently above zero and report every later query.
+        if (Interlocked.Increment(ref _queryDepth) > 1)
+        {
+            Debug.LogErrorOnce("Physics.OverlappingQuery",
+                $"[Physics] {query} ran while another physics query was still in progress, either nested or from another thread. Queries share scratch buffers and cast shapes, so both results are unreliable.");
+        }
+    }
+
+    private void ExitQuery() => Interlocked.Decrement(ref _queryDepth);
+
     private static bool IsFinite(Float3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
 
     /// <summary>
@@ -697,6 +732,13 @@ public class PhysicsWorld
     /// <param name="filter">Layer mask for filtering.</param>
     /// <returns>Number of hits found.</returns>
     public int ShapeCastAll(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
+    {
+        EnterQuery(nameof(ShapeCastAll));
+        try { return ShapeCastAllCore(shape, orientation, origin, direction, maxDistance, hits, filter); }
+        finally { ExitQuery(); }
+    }
+
+    private int ShapeCastAllCore(RigidBodyShape shape, Quaternion orientation, Float3 origin, Float3 direction, float maxDistance, List<ShapeCastHit> hits, QueryFilter filter)
     {
         hits.Clear();
         if (!ValidateQuery(origin, direction, maxDistance, nameof(ShapeCastAll))) return 0;
@@ -1248,6 +1290,13 @@ public class PhysicsWorld
     /// <param name="filter">Layer mask for filtering.</param>
     /// <returns>Number of overlapping colliders found.</returns>
     public int Overlap(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
+    {
+        EnterQuery(nameof(Overlap));
+        try { return OverlapCore(shape, orientation, position, hits, filter); }
+        finally { ExitQuery(); }
+    }
+
+    private int OverlapCore(RigidBodyShape shape, Quaternion orientation, Float3 position, List<ShapeCastHit> hits, QueryFilter filter)
     {
         hits.Clear();
         if (!ValidateQuery(position, nameof(Overlap))) return 0;
