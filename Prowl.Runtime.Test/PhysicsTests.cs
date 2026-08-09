@@ -65,7 +65,7 @@ public class PhysicsTests : RuntimeTestBase
 
     private static LayerMask OnlyLayer(int index)
     {
-        var mask = new LayerMask();
+        var mask = LayerMask.Nothing;
         mask.SetLayer(index);
         return mask;
     }
