@@ -680,6 +680,77 @@ public class PhysicsTests : RuntimeTestBase
     }
 
     // ---------------------------------------------------------------------
+    // Rigidbody3D surface: force modes and axis constraints
+    // ---------------------------------------------------------------------
+
+    // Acceleration and VelocityChange ignore mass, so a heavy and a light body must respond identically.
+    [Theory]
+    [InlineData(ForceMode.Acceleration)]
+    [InlineData(ForceMode.VelocityChange)]
+    public void MassIndependentForceModes_MoveHeavyAndLightBodiesAlike(ForceMode mode)
+    {
+        var scene = CreatePhysicsScene();
+        var light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        var heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+        heavy.Mass = 100f;
+
+        light.AddForce(new Float3(0, 0, 5), mode);
+        heavy.AddForce(new Float3(0, 0, 5), mode);
+        Tick(scene, 20);
+
+        Assert.Equal(light.Transform.Position.Z, heavy.Transform.Position.Z, 2);
+    }
+
+    // Force and Impulse scale with mass, so the heavy body must lag behind.
+    [Theory]
+    [InlineData(ForceMode.Force)]
+    [InlineData(ForceMode.Impulse)]
+    public void MassDependentForceModes_MoveHeavyBodiesLess(ForceMode mode)
+    {
+        var scene = CreatePhysicsScene();
+        var light = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        var heavy = AddDynamicBox(scene, new Float3(10, 0, 0), gravity: false);
+        StepPhysics(scene, 1);
+        heavy.Mass = 100f;
+
+        light.AddForce(new Float3(0, 0, 5), mode);
+        heavy.AddForce(new Float3(0, 0, 5), mode);
+        Tick(scene, 20);
+
+        Assert.True(light.Transform.Position.Z > heavy.Transform.Position.Z * 5f,
+            $"light moved {light.Transform.Position.Z}, heavy moved {heavy.Transform.Position.Z}");
+    }
+
+    [Fact]
+    public void FreezePosition_PinsTheFrozenAxis_AndLeavesOthersFree()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 5, 0), gravity: true);
+        rb.Constraints = RigidbodyConstraints.FreezePositionY;
+
+        rb.AddForce(new Float3(0, 0, 3), ForceMode.VelocityChange);
+        Tick(scene, 60);
+
+        Assert.Equal(5.0, rb.Transform.Position.Y, 2);
+        Assert.True(rb.Transform.Position.Z > 0.5f, "the unfrozen axis should still move");
+    }
+
+    [Fact]
+    public void FreezeRotation_KeepsTheBodyUpright()
+    {
+        var scene = CreatePhysicsScene();
+        var rb = AddDynamicBox(scene, new Float3(0, 0, 0), gravity: false);
+        rb.Constraints = RigidbodyConstraints.FreezeRotation;
+
+        rb.AddTorque(new Float3(4, 4, 4), ForceMode.VelocityChange);
+        Tick(scene, 60);
+
+        Quaternion rotation = rb.Transform.Rotation;
+        Assert.Equal(1.0, Maths.Abs(rotation.W), 3);
+    }
+
+    // ---------------------------------------------------------------------
     // Query API: filters, all-hits, linecast
     // ---------------------------------------------------------------------
 

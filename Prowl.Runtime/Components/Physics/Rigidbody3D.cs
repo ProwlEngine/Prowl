@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -39,9 +39,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         public Rigidbody3D Rigidbody { get; set; }
         public int InstanceID { get; set; }
         public int Layer { get; set; }
-        //public bool HasTransformConstraints { get; set; }
-        //public JVector RotationConstraint { get; set; }
-        //public JVector TranslationConstraint { get; set; }
     }
 
     [SerializeField] private MotionType motionType = MotionType.Dynamic;
@@ -671,21 +668,108 @@ public sealed class Rigidbody3D : MonoBehaviour
         _lastSyncedTransformVersion = Transform.Version;
     }
 
-    public void AddForce(Float3 velocity)
+    /// <summary>
+    /// Applies a force through the body's centre of mass, so it accelerates without spinning.
+    /// </summary>
+    public void AddForce(Float3 force, ForceMode mode = ForceMode.Force)
     {
-        EnsureBody();
-        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z));
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jForce = new JVector(force.X, force.Y, force.Z);
+        float inverseMass = body.Data.InverseMass;
+
+        switch (mode)
+        {
+            case ForceMode.Force:
+                body.AddForce(jForce);
+                break;
+
+            case ForceMode.Acceleration:
+                // a = F/m, so cancelling the mass means asking for a force of m*a.
+                if (inverseMass > 0.0f) body.AddForce(jForce * (1.0f / inverseMass));
+                break;
+
+            case ForceMode.Impulse:
+                body.Velocity += jForce * inverseMass;
+                body.SetActivationState(true);
+                break;
+
+            case ForceMode.VelocityChange:
+                body.Velocity += jForce;
+                body.SetActivationState(true);
+                break;
+        }
     }
 
-    public void AddForceAtPosition(Float3 velocity, Float3 worldPosition)
+    /// <summary>
+    /// Applies a force at a world-space point, which also spins the body about its centre of mass.
+    /// Only <see cref="ForceMode.Force"/> and <see cref="ForceMode.Impulse"/> are meaningful here; the
+    /// mass-independent modes have no defined torque.
+    /// </summary>
+    public void AddForceAtPosition(Float3 force, Float3 worldPosition, ForceMode mode = ForceMode.Force)
     {
-        EnsureBody();
-        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z), new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z));
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jForce = new JVector(force.X, force.Y, force.Z);
+        var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
+
+        if (mode == ForceMode.Impulse)
+        {
+            ApplyImpulse(force, worldPosition);
+            return;
+        }
+
+        if (mode == ForceMode.Acceleration)
+        {
+            float inverseMass = body.Data.InverseMass;
+            if (inverseMass <= 0.0f) return;
+            jForce *= 1.0f / inverseMass;
+        }
+
+        body.AddForce(jForce, jPosition);
     }
 
-    public void AddTorque(Float3 torque)
+    /// <summary>
+    /// Applies a torque about the body's centre of mass.
+    /// </summary>
+    public void AddTorque(Float3 torque, ForceMode mode = ForceMode.Force)
     {
-        Torque += torque;
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jTorque = new JVector(torque.X, torque.Y, torque.Z);
+
+        switch (mode)
+        {
+            case ForceMode.Force:
+                body.Torque += jTorque;
+                break;
+
+            case ForceMode.Acceleration:
+                // Cancelling the inertia means asking for a torque of I*alpha.
+                if (JMatrix.Inverse(body.InverseInertia, out JMatrix inertia))
+                    body.Torque += JVector.Transform(jTorque, inertia);
+                break;
+
+            case ForceMode.Impulse:
+                ApplyAngularImpulse(torque);
+                break;
+
+            case ForceMode.VelocityChange:
+                body.AngularVelocity += jTorque;
+                body.SetActivationState(true);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The live body, creating it on demand. False when this component cannot have one (no scene yet,
+    /// or it has been removed), which is the cue for every mutator to do nothing rather than throw.
+    /// </summary>
+    private bool TryGetBody(out RigidBody body)
+    {
+        EnsureBody();
+        body = _body;
+        return body != null && !body.Handle.IsZero;
     }
 
     /// <summary>
@@ -725,19 +809,20 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the inertia tensor (inverse) of this rigidbody.
+    /// The diagonal of this body's inertia tensor in body space, in kg*m^2. Only the moments about the
+    /// body's own axes; a shape whose principal axes are rotated relative to the body also has
+    /// off-diagonal terms that this does not report.
     /// </summary>
     public Float3 InertiaTensor
     {
         get
         {
-            if (_body == null) return Float3.One;
-            JMatrix inertia = _body.InverseInertia;
-            return new Float3(
-                inertia.M11 != 0 ? 1.0f / inertia.M11 : 0,
-                inertia.M22 != 0 ? 1.0f / inertia.M22 : 0,
-                inertia.M33 != 0 ? 1.0f / inertia.M33 : 0
-            );
+            // Reciprocals of the inverse diagonal are not the moments unless the tensor is diagonal,
+            // so invert the matrix properly.
+            if (_body == null || !JMatrix.Inverse(_body.InverseInertia, out JMatrix inertia))
+                return Float3.One;
+
+            return new Float3(inertia.M11, inertia.M22, inertia.M33);
         }
     }
 
@@ -746,14 +831,14 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse, Float3 worldPosition)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
         var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
 
-        JVector r = jPosition - _body.Position;
-        _body.Velocity += jImpulse * _body.Data.InverseMass;
-        _body.AngularVelocity += JVector.Transform(JVector.Cross(r, jImpulse), _body.Data.InverseInertiaWorld);
+        JVector r = jPosition - body.Position;
+        body.Velocity += jImpulse * body.Data.InverseMass;
+        body.AngularVelocity += JVector.Transform(JVector.Cross(r, jImpulse), body.Data.InverseInertiaWorld);
 
         SetActive(true);
     }
@@ -763,10 +848,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
-        _body.Velocity += jImpulse * _body.Data.InverseMass;
+        body.Velocity += jImpulse * body.Data.InverseMass;
 
         SetActive(true);
     }
@@ -776,10 +861,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyAngularImpulse(Float3 angularImpulse)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(angularImpulse.X, angularImpulse.Y, angularImpulse.Z);
-        _body.AngularVelocity += JVector.Transform(jImpulse, _body.Data.InverseInertiaWorld);
+        body.AngularVelocity += JVector.Transform(jImpulse, body.Data.InverseInertiaWorld);
 
         SetActive(true);
     }
@@ -789,9 +874,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MovePosition(Float3 position)
     {
-        if (_body != null)
-        {
-            _body.Position = new JVector(position.X, position.Y, position.Z);
             ResetPose();
         }
     }
@@ -801,9 +883,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MoveRotation(Quaternion rotation)
     {
-        if (_body != null)
-        {
-            _body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
             ResetPose();
         }
     }
