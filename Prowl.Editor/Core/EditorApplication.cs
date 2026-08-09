@@ -1389,6 +1389,9 @@ public class EditorApplication : Game
     public void ReinitializeAfterReload()
     {
         ReinitializeRegistries();
+
+        // New code, so anything reported once against the old assemblies gets to report again.
+        Debug.ClearReportedOnce();
     }
 
     /// <summary>Transient toast shown while a script recompile is in progress.</summary>

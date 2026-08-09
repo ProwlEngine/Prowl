@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -103,6 +104,62 @@ public static class Debug
 
     public static void LogSuccess(string message)
         => Log(message, LogSeverity.Success);
+
+    #region Deduplicated logging
+
+    // Conditions that recur every frame - a collider re-baking, a query handed a NaN, a step callback
+    // throwing - are worth hearing about once, not sixty times a second. The first report for an id gets
+    // through and the rest are counted and dropped, which is what keeps callers from each inventing
+    // their own "did I already warn" bool.
+    private static readonly ConcurrentDictionary<string, int> s_reportCounts = new();
+
+    /// <summary>
+    /// Logs <paramref name="message"/> the first time this <paramref name="id"/> is seen, then stays
+    /// quiet however often it recurs. Ids are cleared when play mode changes and when scripts reload, so
+    /// a condition you have just fixed reports again on the next run rather than staying silent.
+    /// <para/>
+    /// Use a stable, specific id: <c>"MeshCollider.RelativeRebuild"</c>, not the message text.
+    /// </summary>
+    public static void LogOnce(string id, string message)
+    {
+        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Normal);
+    }
+
+    /// <inheritdoc cref="LogOnce"/>
+    public static void LogWarningOnce(string id, string message)
+    {
+        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Warning);
+    }
+
+    /// <inheritdoc cref="LogOnce"/>
+    public static void LogErrorOnce(string id, string message)
+    {
+        if (ShouldReport(id)) Log(Tag(id, message), LogSeverity.Error);
+    }
+
+    /// <summary>
+    /// How many times an id has been reported, suppressed repeats included. Zero if it never has.
+    /// Useful for surfacing "this happened 4,000 times" in a summary rather than in the log itself.
+    /// </summary>
+    public static int GetReportCount(string id)
+        => s_reportCounts.TryGetValue(id, out int count) ? count : 0;
+
+    /// <summary>
+    /// Forgets every id, so recurring conditions report again. Driven by the play mode toggle and by
+    /// script reloads; call it manually only if you are deliberately re-running something.
+    /// </summary>
+    public static void ClearReportedOnce() => s_reportCounts.Clear();
+
+    // Counted rather than flagged, so GetReportCount can say how bad it got. Concurrent because logs
+    // come off physics worker threads as well as the main one.
+    private static bool ShouldReport(string id)
+        => string.IsNullOrEmpty(id) || s_reportCounts.AddOrUpdate(id, 1, static (_, count) => count + 1) == 1;
+
+    // Says both what the condition was and that the repeats are not being shown, so nobody reads a
+    // single line and concludes it happened once.
+    private static string Tag(string id, string message) => $"{message} [{id}, repeats suppressed]";
+
+    #endregion
 
     public static void LogException(Exception exception)
     {
