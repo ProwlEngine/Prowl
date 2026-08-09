@@ -87,4 +87,15 @@ public abstract class CopyChainPass : IPass<CameraView>
 
     /// <summary>Extra drawing after the chain copy. The output framebuffer is already bound.</summary>
     protected virtual void OnRender(RenderContext<CameraView> context, CommandBuffer cmd, RenderTexture output) { }
+
+    /// <summary>Submits <paramref name="count"/> empty command buffers named "{prefix} 0", "{prefix} 1", ...
+    /// so the render profiler shows more than one entry per pass.</summary>
+    protected static void EmitPlaceholderCommandBuffers(RenderContext<CameraView> context, string prefix, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            CommandBuffer placeholder = context.GetCommandBuffer($"{prefix} {i}");
+            context.SubmitCommandBuffer(placeholder);
+        }
+    }
 }

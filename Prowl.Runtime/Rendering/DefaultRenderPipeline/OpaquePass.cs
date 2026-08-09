@@ -41,6 +41,8 @@ public sealed class OpaquePass : CopyChainPass, IDisposable
 
         DrawOpaqueGeometry(context, cmd);
 
+        EmitPlaceholderCommandBuffers(context, "Opaque", 2);
+
         // The depth copy exists only so the gizmo (this pass) and grid (TransparentsPass) shaders can
         // depth-test against the scene. Renders that draw neither - thumbnails, the game view - skip it
         // entirely rather than copy a texture nothing samples.

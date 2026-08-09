@@ -21,5 +21,7 @@ public sealed class TransparentsPass : CopyChainPass
 
         if (view.Data.DisplayGrid && view.SceneDepthCopy != null)
             GridRenderer.Render(cmd, view.Camera.Transform.Position, view.SceneDepthCopy);
+
+        EmitPlaceholderCommandBuffers(context, "Transparents", 2);
     }
 }
