@@ -8,9 +8,11 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Tasks;
 using Prowl.Vector;
 
 namespace Prowl.Runtime;
@@ -158,6 +160,28 @@ public static class Debug
     // Says both what the condition was and that the repeats are not being shown, so nobody reads a
     // single line and concludes it happened once.
     private static string Tag(string id, string message) => $"{message} [{id}, repeats suppressed]";
+
+    /// <summary>
+    /// Reports when a main-thread-only API is called from somewhere else, and says whether it was.
+    /// Deduplicated per caller, because an offending call site usually repeats every frame.
+    /// <para/>
+    /// The point is to fail where the rule was broken. Touching scene or engine state off-thread
+    /// usually surfaces as a corrupted read or a crash somewhere unrelated, long after the call that
+    /// caused it. Callers that can bail should act on the result; the rest at least get a name.
+    /// <para/>
+    /// Always true before a <see cref="MainThreadContext"/> is installed (tests, tools, early startup),
+    /// since there is no engine thread to be off.
+    /// </summary>
+    /// <param name="member">Defaults to the calling member.</param>
+    /// <returns>True when the caller is on the main thread.</returns>
+    public static bool EnsureMainThread([CallerMemberName] string member = "")
+    {
+        if (MainThreadContext.OnMainThread) return true;
+
+        LogErrorOnce($"MainThread.{member}",
+            $"{member} must be called on the main thread, and was called from thread {Environment.CurrentManagedThreadId}. Marshal the call back to the main thread.");
+        return false;
+    }
 
     #endregion
 
