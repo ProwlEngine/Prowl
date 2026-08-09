@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2.Dynamics.Constraints;
@@ -30,10 +30,5 @@ public abstract class PhysicsJoint : PhysicsConstraint
             joint.Remove();
             joint = null;
         }
-    }
-
-    public override void DrawGizmos()
-    {
-        // TODO DrawGizmos
     }
 }
