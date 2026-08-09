@@ -310,6 +310,36 @@ public class AudioComponentTests : RuntimeTestBase
         Assert.Equal(0, stranger.Destroyed);
     }
 
+    // One shots layer on pooled voices now, so none of this may touch the main playback or throw when
+    // there is no device to make a voice on.
+    [Fact]
+    public void PlayOneShot_WithoutADevice_DoesNothing()
+    {
+        var source = CreateSource();
+        var clip = new AudioClip([1, 2, 3, 4]);
+
+        source.PlayOneShot(clip);
+        source.PlayOneShot(clip, 0.5f);
+        source.StopOneShots();
+
+        Assert.Equal(0, source.ActiveOneShotCount);
+
+        clip.Dispose();
+    }
+
+    // The temporary object PlayClipAtPoint spawns is cleaned up by the End event, which never fires
+    // without a device, so it must not spawn one at all rather than leaking it every call.
+    [Fact]
+    public void PlayClipAtPoint_WithoutADevice_SpawnsNothing()
+    {
+        CreateScene(enable: true);
+        var clip = new AudioClip([5, 6, 7, 8]);
+
+        Assert.Null(AudioSource.PlayClipAtPoint(clip, new Float3(1, 2, 3)));
+
+        clip.Dispose();
+    }
+
     [Fact]
     public void Effects_AreDestroyedWithTheSource()
     {

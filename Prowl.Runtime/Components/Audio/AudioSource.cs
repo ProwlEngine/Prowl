@@ -35,6 +35,7 @@ public sealed class AudioSource : MonoBehaviour
     {
         public IntPtr handle;
         public bool atEnd;
+        public long startOrder;
     }
 
     // Audio clip and playback settings
@@ -70,6 +71,17 @@ public sealed class AudioSource : MonoBehaviour
     [SerializeField, Tooltip("Curve used to fall off between the min and max distance.")]
     private AttenuationModel _attenuationModel = AttenuationModel.Linear;
 
+    [Header("Voices")]
+    [SerializeField, Tooltip("How many one shot voices this source can sound at once before the longest running one is taken over.")]
+    private int _maxOneShotVoices = 8;
+
+    /// <summary>How many one shot voices this source can sound at once before stealing the oldest.</summary>
+    public int MaxOneShotVoices
+    {
+        get => _maxOneShotVoices;
+        set => _maxOneShotVoices = value;
+    }
+
     // Playback state (serialized for resume support)
     [SerializeField, HideInInspector]
     private ulong _savedCursor = 0;
@@ -78,6 +90,8 @@ public sealed class AudioSource : MonoBehaviour
 
     // Native handles
     private SourceInfo _mainSource;
+    private readonly List<SourceInfo> _oneShots = [];
+    private long _oneShotCounter;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private Float3 _previousPosition;
@@ -450,6 +464,8 @@ public sealed class AudioSource : MonoBehaviour
 
     public override void OnDisable()
     {
+        DestroyOneShotVoices();
+
         // Save state for serialization
         if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
         {
@@ -533,27 +549,161 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Plays the given clip as a one-shot (fire and forget).
-    /// Note: This uses the main source, so it will interrupt currently playing audio.
+    /// Plays a clip on its own voice, without disturbing whatever this source is already playing.
+    /// Overlapping calls layer instead of cutting each other off, which is what a one shot is for.
     /// </summary>
-    public void PlayOneShot(AudioClip clip)
+    /// <param name="clip">The clip to play.</param>
+    /// <param name="volumeScale">Level for this voice alone, on top of the source's own volume.</param>
+    /// <remarks>
+    /// Voices are pooled and share the source's sound group, so they inherit its volume, pitch and
+    /// spatial settings and follow the object as it moves. Once <see cref="MaxOneShotVoices"/> are
+    /// sounding at once the longest running one is taken over.
+    /// </remarks>
+    public void PlayOneShot(AudioClip clip, float volumeScale = 1.0f)
     {
         if (_soundGroup.pointer == IntPtr.Zero || clip == null) return;
-        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
-        // Stop current playback and reset
-        if (IsPlaying)
-        {
-            MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
-            MiniAudioExNative.ma_ex_audio_source_set_pcm_position(_mainSource.handle, 0);
-        }
+        SourceInfo voice = AcquireOneShotVoice();
 
-        _mainSource.atEnd = false;
+        if (voice == null) return;
+
+        voice.atEnd = false;
+        voice.startOrder = ++_oneShotCounter;
+
+        MiniAudioExNative.ma_ex_audio_source_set_loop(voice.handle, 0);
+        MiniAudioExNative.ma_ex_audio_source_set_volume(voice.handle, volumeScale);
 
         if (clip.Handle != IntPtr.Zero)
-            MiniAudioExNative.ma_ex_audio_source_play_from_memory(_mainSource.handle, clip.Handle, clip.DataSize);
+            MiniAudioExNative.ma_ex_audio_source_play_from_memory(voice.handle, clip.Handle, clip.DataSize);
         else
-            MiniAudioExNative.ma_ex_audio_source_play_from_file(_mainSource.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+            MiniAudioExNative.ma_ex_audio_source_play_from_file(voice.handle, clip.FilePath, clip.StreamFromDisk ? (uint)1 : 0);
+    }
+
+    /// <summary>Stops every one shot voice this source is sounding. Leaves the main playback alone.</summary>
+    public void StopOneShots()
+    {
+        foreach (SourceInfo voice in _oneShots)
+        {
+            if (voice.handle != IntPtr.Zero)
+                MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
+        }
+    }
+
+    /// <summary>How many one shot voices are sounding right now.</summary>
+    public int ActiveOneShotCount
+    {
+        get
+        {
+            int count = 0;
+
+            foreach (SourceInfo voice in _oneShots)
+            {
+                if (voice.handle != IntPtr.Zero && MiniAudioExNative.ma_ex_audio_source_get_is_playing(voice.handle) > 0)
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// Finds a voice that has finished, or makes one, or takes over the longest running voice once
+    /// the pool is at its limit. Voices are kept rather than torn down so a rapid-fire emitter is not
+    /// allocating native objects every shot.
+    /// </summary>
+    private SourceInfo AcquireOneShotVoice()
+    {
+        SourceInfo oldest = null;
+
+        foreach (SourceInfo voice in _oneShots)
+        {
+            if (voice.handle == IntPtr.Zero)
+                continue;
+
+            if (MiniAudioExNative.ma_ex_audio_source_get_is_playing(voice.handle) == 0)
+                return voice;
+
+            if (oldest == null || voice.startOrder < oldest.startOrder)
+                oldest = voice;
+        }
+
+        if (_oneShots.Count < Maths.Max(1, _maxOneShotVoices))
+        {
+            IntPtr handle = MiniAudioExNative.ma_ex_audio_source_init(AudioContext.NativeContext);
+
+            if (handle == IntPtr.Zero)
+                return oldest;
+
+            MiniAudioExNative.ma_ex_audio_source_set_group(handle, _soundGroup.pointer);
+
+            var created = new SourceInfo { handle = handle };
+            _oneShots.Add(created);
+            return created;
+        }
+
+        if (oldest != null)
+            MiniAudioExNative.ma_ex_audio_source_stop(oldest.handle);
+
+        return oldest;
+    }
+
+    private void DestroyOneShotVoices()
+    {
+        foreach (SourceInfo voice in _oneShots)
+        {
+            if (voice.handle == IntPtr.Zero)
+                continue;
+
+            MiniAudioExNative.ma_ex_audio_source_stop(voice.handle);
+            MiniAudioExNative.ma_ex_audio_source_uninit(voice.handle);
+        }
+
+        _oneShots.Clear();
+    }
+
+    /// <summary>
+    /// Plays a clip at a world position with no emitter of its own, for sounds whose source is gone by
+    /// the time they finish, like an impact or a pickup. Returns null if there is no scene to put it in.
+    /// </summary>
+    public static AudioSource PlayClipAtPoint(AudioClip clip, Float3 position, float volume = 1.0f)
+    {
+        if (clip == null) return null;
+
+        // The temporary object is destroyed by the End event, which only fires while audio is running.
+        // Without a device it would never fire, so a headless run would leak an object per call.
+        if (!AudioContext.IsInitialized)
+            return null;
+
+        Scene scene = Scene.Current;
+
+        if (scene == null)
+        {
+            Debug.LogWarning("PlayClipAtPoint needs a loaded scene to place the sound in.");
+            return null;
+        }
+
+        var go = new GameObject($"One Shot Audio ({clip.Name})");
+        go.Transform.Position = position;
+
+        AudioSource source = go.AddComponent<AudioSource>();
+        source.Volume = volume;
+        source.Spatial = true;
+        source.Clip = clip;
+
+        scene.Add(go);
+
+        // Added to the scene first: OnEnable is what creates the native source Play needs.
+        source.End += () => go.Destroy();
+        source.Play();
+
+        // Nothing started, so nothing will ever raise End to clean this up.
+        if (!source.IsPlaying)
+        {
+            go.Destroy();
+            return null;
+        }
+
+        return source;
     }
 
     #endregion
