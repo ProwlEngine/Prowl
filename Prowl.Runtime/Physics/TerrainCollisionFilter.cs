@@ -35,9 +35,9 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
         _heightmapProxy = heightmapProxy;
         _heightProvider = heightProvider;
 
-        // Reserve unique IDs for all terrain triangles
-        // Each grid cell has 2 triangles
-        int totalTriangles = _heightProvider.Width * _heightProvider.Height * 2;
+        // Reserve unique IDs for all terrain triangles. Each grid cell has 2 triangles, and a terrain
+        // whose data has not sized itself yet would ask for zero, which Jitter rejects outright.
+        int totalTriangles = Maths.Max(1, _heightProvider.Width * _heightProvider.Height * 2);
         (_minTriangleIndex, _) = World.RequestId(totalTriangles);
     }
 
