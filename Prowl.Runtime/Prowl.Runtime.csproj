@@ -28,7 +28,7 @@
 
   <ItemGroup>
     <PackageReference Include="Jitter2" Version="2.8.5" />
-    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.13.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.0" />
     <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
     <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
