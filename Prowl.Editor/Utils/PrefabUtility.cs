@@ -36,6 +36,11 @@ public static class PrefabUtility
 
         // Clear any existing prefab data so we serialize a clean prefab source
         source.ClearPrefabDataRecursive();
+        if (!relativeSavePath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+        {
+            Runtime.Debug.LogError($"[Prefab] '{relativeSavePath}' is not a .prefab path.");
+            return false;
+        }
 
         // Serialize the GO tree
         var savedId = source.AssetID;
