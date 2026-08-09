@@ -30,6 +30,11 @@ public class CharacterController : MonoBehaviour
     /// <summary>Which layers the controller collides with.</summary>
     public LayerMask CollisionMask = LayerMask.Everything;
 
+    // Resolved once rather than per cast: Move issues about ten of them, and an ancestor walk each time
+    // just to rediscover a body that does not change is pure overhead.
+    private Rigidbody3D _selfBody;
+    private bool _selfBodyResolved;
+
     /// <summary>
     /// The filter every internal cast uses: the collision mask, minus anything belonging to a
     /// Rigidbody3D on this GameObject. Without that exclusion a controller placed on a body would
@@ -39,11 +44,24 @@ public class CharacterController : MonoBehaviour
     {
         get
         {
+            if (!_selfBodyResolved) ResolveSelfBody();
+
             var filter = new QueryFilter(CollisionMask);
-            Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
-            return self.IsValid() ? filter.Ignoring(self) : filter;
+            return _selfBody.IsValid() ? filter.Ignoring(_selfBody) : filter;
         }
     }
+
+    /// <summary>
+    /// Re-resolves the rigidbody the controller must not collide with. Call after re-parenting, or after
+    /// adding or removing a Rigidbody3D above this controller.
+    /// </summary>
+    public void ResolveSelfBody()
+    {
+        _selfBody = GetComponentInParent<Rigidbody3D>();
+        _selfBodyResolved = true;
+    }
+
+    public override void OnEnable() => ResolveSelfBody();
 
     /// <summary>
     /// Maximum angle in degrees for a surface to be considered walkable (default: 45 degrees)
