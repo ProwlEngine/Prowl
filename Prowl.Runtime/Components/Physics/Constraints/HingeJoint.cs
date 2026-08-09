@@ -168,4 +168,26 @@ public class HingeJoint : PhysicsJoint
             hingeJoint.HingeAngle.Limit = angleLimit;
         }
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // Hinge plus socket: the pin, the swing range about it, and the motor when one is fitted.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+        Float3 hinge = WorldAxis(axis);
+
+        DrawJointMarker(pivot);
+        Debug.DrawAxisLine(pivot, hinge, scale * 1.2f, AxisColor);
+        Debug.DrawWireCircle(pivot, hinge, scale, AxisColor, 28);
+
+        Debug.PerpendicularAxes(hinge, out Float3 zero, out _);
+        Debug.DrawArcRange(pivot, hinge, zero, scale, minAngleDegrees, maxAngleDegrees, RangeColor, LimitColor);
+
+        if (!hasMotor) return;
+
+        float sweep = (motorTargetVelocity < 0.0f ? -1.0f : 1.0f) * Maths.Min(0.7f + Maths.Abs(motorTargetVelocity) * 0.3f, Maths.PI * 1.4f);
+        Debug.DrawSpinArrow(pivot, hinge, zero, scale * 0.6f, sweep, motorMaxForce > 0.0f ? MotorColor : InactiveColor);
+    }
 }
