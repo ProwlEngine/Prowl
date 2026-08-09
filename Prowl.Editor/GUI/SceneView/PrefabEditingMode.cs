@@ -168,7 +168,15 @@ public static class PrefabEditingMode
         if (EditingPrefabPath != null && Project.Current != null)
         {
             string absolutePath = Path.Combine(Project.Current.AssetsPath, EditingPrefabPath);
-            File.WriteAllText(absolutePath, echo.WriteToString());
+            try
+            {
+                File.WriteAllText(absolutePath, echo.WriteToString());
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Prefab] Failed to write '{absolutePath}': {ex.Message}");
+                return false;
+            }
             EditorAssetBackend.Instance?.Reimport(EditingPrefabGuid);
 
             EditorSceneManager.IsDirty = false;
