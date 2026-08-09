@@ -552,11 +552,6 @@ public sealed class Rigidbody3D : MonoBehaviour
     private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
     private static Quaternion ToQuaternion(JQuaternion q) => new(q.X, q.Y, q.Z, q.W);
 
-    public override void DrawGizmos()
-    {
-        // TODO DrawGizmos
-    }
-
     public override void OnEnable()
     {
         if (_body == null || _body.Handle.IsZero)
