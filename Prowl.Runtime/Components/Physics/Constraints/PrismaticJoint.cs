@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -121,7 +121,7 @@ public class PrismaticJoint : PhysicsJoint
         set
         {
             motorTargetVelocity = value;
-            if (prismaticJoint?.Motor != null)
+            if (IsLive(prismaticJoint?.Motor))
                 prismaticJoint.Motor.TargetVelocity = value;
         }
     }
@@ -135,7 +135,7 @@ public class PrismaticJoint : PhysicsJoint
         set
         {
             motorMaxForce = value;
-            if (prismaticJoint?.Motor != null)
+            if (IsLive(prismaticJoint?.Motor))
                 prismaticJoint.Motor.MaximumForce = value;
         }
     }
@@ -147,7 +147,7 @@ public class PrismaticJoint : PhysicsJoint
     {
         get
         {
-            if (prismaticJoint?.Slider == null) return 0.0f;
+            if (!IsLive(prismaticJoint?.Slider)) return 0.0f;
             return prismaticJoint.Slider.Distance;
         }
     }

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -63,7 +63,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             targetDistance = value;
-            if (constraint != null) constraint.TargetDistance = value;
+            if (IsLive(constraint)) constraint.TargetDistance = value;
         }
     }
 
@@ -102,7 +102,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -115,7 +115,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -155,7 +155,7 @@ public class DistanceLimitConstraint : PhysicsConstraint
 
     private void UpdateAnchors()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
+        if (IsLive(constraint))
         {
             JVector worldAnchor1 = LocalToWorld(anchor, Body1.Transform);
             JVector worldAnchor2 = connectedBody.IsValid()

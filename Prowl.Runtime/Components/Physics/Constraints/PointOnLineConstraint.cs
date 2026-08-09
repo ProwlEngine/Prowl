@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -105,7 +105,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -118,7 +118,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             limitSoftness = value;
-            if (constraint != null) constraint.LimitSoftness = value;
+            if (IsLive(constraint)) constraint.LimitSoftness = value;
         }
     }
 
@@ -131,7 +131,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -144,7 +144,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             limitBias = value;
-            if (constraint != null) constraint.LimitBias = value;
+            if (IsLive(constraint)) constraint.LimitBias = value;
         }
     }
 

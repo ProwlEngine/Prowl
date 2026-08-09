@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -90,7 +90,7 @@ public class UniversalJoint : PhysicsJoint
         set
         {
             motorTargetVelocity = value;
-            if (universalJoint?.Motor != null)
+            if (IsLive(universalJoint?.Motor))
                 universalJoint.Motor.TargetVelocity = value;
         }
     }
@@ -104,7 +104,7 @@ public class UniversalJoint : PhysicsJoint
         set
         {
             motorMaxForce = value;
-            if (universalJoint?.Motor != null)
+            if (IsLive(universalJoint?.Motor))
                 universalJoint.Motor.MaximumForce = value;
         }
     }
@@ -116,7 +116,7 @@ public class UniversalJoint : PhysicsJoint
     {
         get
         {
-            if (universalJoint?.TwistAngle == null) return 0.0f;
+            if (!IsLive(universalJoint?.TwistAngle)) return 0.0f;
             return (float)universalJoint.TwistAngle.Angle * (180.0f / Maths.PI);
         }
     }

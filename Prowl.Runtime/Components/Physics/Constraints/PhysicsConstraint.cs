@@ -50,10 +50,10 @@ public abstract class PhysicsConstraint : MonoBehaviour
     {
         get
         {
+            // GetConstraints only yields live ones, so anything reached here is safe to read.
             bool any = false;
             foreach (Constraint constraint in GetConstraints())
             {
-                if (constraint.Handle.IsZero) continue;
                 if (!constraint.IsEnabled) return false;
                 any = true;
             }
@@ -63,10 +63,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
         set
         {
             foreach (Constraint constraint in GetConstraints())
-            {
-                if (constraint.Handle.IsZero) continue;
                 constraint.IsEnabled = value;
-            }
         }
     }
 
@@ -99,7 +96,7 @@ public abstract class PhysicsConstraint : MonoBehaviour
     protected virtual IEnumerable<Constraint> GetConstraints()
     {
         Constraint constraint = GetConstraint();
-        if (constraint != null) yield return constraint;
+        if (IsLive(constraint)) yield return constraint;
     }
 
     /// <summary>
@@ -111,6 +108,16 @@ public abstract class PhysicsConstraint : MonoBehaviour
     /// Destroys the constraint.
     /// </summary>
     protected abstract void DestroyConstraint();
+
+    /// <summary>
+    /// Whether a constraint is live enough to read or write its properties.
+    /// <para/>
+    /// A non-null check is not sufficient. Jitter's constraint properties are views onto unmanaged
+    /// memory reached through <c>Handle</c>, and removing a body removes its constraints, which zeroes
+    /// their handles while this component still holds the managed object. Disabling a rigidbody that has
+    /// a joint on it is enough to get there, and writing through it afterwards writes to freed memory.
+    /// </summary>
+    protected static bool IsLive(Constraint constraint) => constraint != null && !constraint.Handle.IsZero;
 
     /// <summary>
     /// Removes a constraint from the world that owns it. The constraint names its own bodies, so this
