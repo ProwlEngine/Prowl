@@ -781,7 +781,7 @@ public class PhysicsWorld
             {
                 // Shape cast against terrain heightmap triangles
                 if (TerrainAccepted(terrainProxy, filter))
-                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, terrainProxy, sweepBox, hits);
+                    SweepAgainstTerrain(shape, jOrientation, jOrigin, sweep, maxDistance, terrainProxy, sweepBox, hits);
                 continue;
             }
 
@@ -860,7 +860,7 @@ public class PhysicsWorld
     /// Sweep a shape against terrain heightmap triangles within the sweep bounding box.
     /// </summary>
     private void SweepAgainstTerrain(RigidBodyShape shape, JQuaternion jOrientation,
-        JVector jOrigin, JVector sweep, TerrainHeightmapProxy terrainProxy,
+        JVector jOrigin, JVector sweep, float sweepDistance, TerrainHeightmapProxy terrainProxy,
         JBoundingBox sweepBox, List<ShapeCastHit> hits)
     {
         if (!_terrainProxies.TryGetValue(terrainProxy, out ITerrainHeightProvider hp))
@@ -946,7 +946,7 @@ public class PhysicsWorld
             {
                 Hit = true,
                 Fraction = bestLambda,
-                Distance = bestLambda * sweep.Length(),
+                Distance = bestLambda * sweepDistance,
                 Normal = -(new Float3(bestNormal.X, bestNormal.Y, bestNormal.Z)),
                 Point = new Float3(bestPointA.X, bestPointA.Y, bestPointA.Z),
                 HitPoint = new Float3(bestPointB.X, bestPointB.Y, bestPointB.Z),
