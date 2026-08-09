@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -46,7 +46,7 @@ public class BallSocketConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -59,7 +59,7 @@ public class BallSocketConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -96,10 +96,23 @@ public class BallSocketConstraint : PhysicsConstraint
 
     private void UpdateAnchor()
     {
-        if (constraint != null && !constraint.Handle.IsZero)
+        if (IsLive(constraint))
         {
             Jitter2.LinearMath.JVector worldAnchor = LocalToWorld(anchor, Body1.Transform);
             constraint.Anchor1 = worldAnchor;
         }
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // A ball socket pins one point and frees every rotation, so the gizmo is a point plus the three
+    // rings that mean "turns any way it likes".
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+
+        DrawJointMarker(pivot);
+        Debug.DrawGimbal(pivot, scale * 0.5f, AxisColor);
     }
 }

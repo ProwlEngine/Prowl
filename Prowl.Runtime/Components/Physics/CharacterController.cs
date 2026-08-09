@@ -27,6 +27,42 @@ public class CharacterController : MonoBehaviour
     public float Height = 1.8f;
     public float SkinWidth = 0.02f;
 
+    /// <summary>Which layers the controller collides with.</summary>
+    public LayerMask CollisionMask = LayerMask.Everything;
+
+    // Resolved once rather than per cast: Move issues about ten of them, and an ancestor walk each time
+    // just to rediscover a body that does not change is pure overhead.
+    private Rigidbody3D _selfBody;
+    private bool _selfBodyResolved;
+
+    /// <summary>
+    /// The filter every internal cast uses: the collision mask, minus anything belonging to a
+    /// Rigidbody3D on this GameObject. Without that exclusion a controller placed on a body would
+    /// immediately collide with itself and refuse to move.
+    /// </summary>
+    private QueryFilter Filter
+    {
+        get
+        {
+            if (!_selfBodyResolved) ResolveSelfBody();
+
+            var filter = new QueryFilter(CollisionMask);
+            return _selfBody.IsValid() ? filter.Ignoring(_selfBody) : filter;
+        }
+    }
+
+    /// <summary>
+    /// Re-resolves the rigidbody the controller must not collide with. Call after re-parenting, or after
+    /// adding or removing a Rigidbody3D above this controller.
+    /// </summary>
+    public void ResolveSelfBody()
+    {
+        _selfBody = GetComponentInParent<Rigidbody3D>();
+        _selfBodyResolved = true;
+    }
+
+    public override void OnEnable() => ResolveSelfBody();
+
     /// <summary>
     /// Maximum angle in degrees for a surface to be considered walkable (default: 45 degrees)
     /// </summary>
@@ -177,22 +213,17 @@ public class CharacterController : MonoBehaviour
         {
             Float3 bottom = position + new Float3(0, radius, 0);
             Float3 top = position + new Float3(0, height - radius, 0);
-            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius);
+            return GameObject.Scene.Physics.CheckCapsule(bottom, top, effectiveRadius, Filter);
         }
         else // Cylinder
         {
             Float3 center = position + new Float3(0, height * 0.5f, 0);
-            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity);
+            return GameObject.Scene.Physics.CheckCylinder(center, effectiveRadius, height, Quaternion.Identity, Filter);
         }
     }
 
-    private Float3 GetShapeCenter(Float3 position)
-    {
-        if (Shape == ColliderShape.Capsule)
-            return position + new Float3(0, Height * 0.5f, 0);
-        else // Cylinder
-            return position + new Float3(0, Height * 0.5f, 0);
-    }
+    // The controller stands on its origin, so its centre is half a height up whatever the shape.
+    private Float3 GetShapeCenter(Float3 position) => position + new Float3(0, Height * 0.5f, 0);
 
     private Float3 GetCapsuleBottom(Float3 position)
     {
@@ -226,7 +257,8 @@ public class CharacterController : MonoBehaviour
                 GetEffectiveRadius(),
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
         else // Cylinder
@@ -238,7 +270,8 @@ public class CharacterController : MonoBehaviour
                 Quaternion.Identity,
                 direction,
                 distance,
-                out hitInfo
+                out hitInfo,
+                Filter
             );
         }
     }
@@ -269,9 +302,9 @@ public class CharacterController : MonoBehaviour
         if (!hit)
             return position + velocity;
 
-        // Fraction is measured over the cast distance, not the requested move. Back off by the skin
-        // width, and clamp so a cast that started already touching never walks backwards.
-        float safeDistance = Maths.Clamp(hitInfo.Fraction * castDistance - SkinWidth, 0.0f, moveDistance);
+        // Back off by the skin width, and clamp so a cast that started already touching never walks
+        // backwards.
+        float safeDistance = Maths.Clamp(hitInfo.Distance - SkinWidth, 0.0f, moveDistance);
         position += moveDirection * safeDistance;
 
         // Calculate remaining movement after hitting surface
@@ -339,7 +372,7 @@ public class CharacterController : MonoBehaviour
         float forwardDistance = moveDistance;
         if (hitAtElevated)
         {
-            forwardDistance = Maths.Clamp(elevatedHit.Fraction * forwardCastDistance - SkinWidth, 0.0f, moveDistance);
+            forwardDistance = Maths.Clamp(elevatedHit.Distance - SkinWidth, 0.0f, moveDistance);
             if (forwardDistance < moveDistance * 0.5f)
                 return false;
         }
@@ -364,7 +397,7 @@ public class CharacterController : MonoBehaviour
                 return false; // Surface is too steep
 
             // Drop onto the surface. Descending further than we rose means this is a step down, not up.
-            float stepDownDistance = Maths.Max(0.0f, downHit.Fraction * maxStepDownDistance - SkinWidth);
+            float stepDownDistance = Maths.Max(0.0f, downHit.Distance - SkinWidth);
             if (stepDownDistance > StepSize)
                 return false;
 
@@ -419,7 +452,7 @@ public class CharacterController : MonoBehaviour
             if (slopeAngle <= MaxSlopeAngle)
             {
                 // Snap down to the surface
-                float snapDistance = hitInfo.Fraction * SnapDownDistance - SkinWidth;
+                float snapDistance = hitInfo.Distance - SkinWidth;
                 if (snapDistance > 0)
                 {
                     position.Y -= snapDistance;

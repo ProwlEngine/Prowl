@@ -239,7 +239,7 @@ public sealed class CarPhysicsGame : Game
         wheelCollider.SuspensionDampingRatio = 0.7f;
         wheelCollider.ForwardFriction = 2.5f;
         wheelCollider.SidewaysFriction = 1.2f;
-        wheelCollider.visualTransform = visual.Transform;
+        wheelCollider.VisualTransform = visual.Transform;
 
         scene.Add(wheel);
 

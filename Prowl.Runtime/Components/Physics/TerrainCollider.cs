@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -30,42 +30,67 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
     public int Width => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
     public int Height => _terrain.IsValid() && _terrain.Data.Res.IsValid() ? _terrain.Data.Res.HeightmapResolution : 0;
 
-    public JVector Origin => _origin;
+    /// <summary>
+    /// The grid placement, refreshed from the transform once per frame rather than read per query. The
+    /// broad phase samples this from Jitter's worker threads, and Transform's cached world matrix is not
+    /// safe to touch concurrently; caching also keeps the per-sample height lookup off it entirely.
+    /// <para/>
+    /// The grid is defined in terrain-local space, so position, rotation and scale all live in these
+    /// matrices rather than being baked into the samples. That is what lets terrain be turned to any
+    /// orientation and still collide correctly.
+    /// </summary>
+    public Float4x4 LocalToWorld => _localToWorld;
+
+    public Float4x4 WorldToLocal => _worldToLocal;
 
     public float CellSize => _cellSize;
 
     public JBoundingBox WorldBounds => _worldBounds;
 
-    private JVector _origin;
+    private Float4x4 _localToWorld = Float4x4.Identity;
+    private Float4x4 _worldToLocal = Float4x4.Identity;
     private float _cellSize;
-    private float _heightScale = 1.0f;
     private JBoundingBox _worldBounds;
 
     private void RefreshPlacement()
     {
-        Float3 p = Transform.Position;
-        Float3 scale = Transform.LossyScale;
-        _origin = new JVector((float)p.X, (float)p.Y, (float)p.Z);
-        _heightScale = MathF.Abs((float)scale.Y);
+        _localToWorld = Transform.LocalToWorldMatrix;
+        _worldToLocal = Transform.WorldToLocalMatrix;
 
         var data = _terrain.IsValid() ? _terrain.Data.Res : null;
         if (data.IsNotValid() || data.HeightmapResolution < 2)
         {
             _cellSize = 0.0f;
-            _worldBounds = new JBoundingBox(_origin, _origin);
+            _worldBounds = new JBoundingBox(JVector.Zero, JVector.Zero);
             return;
         }
 
-        float span = data.Size * MathF.Abs((float)scale.X);
-        float tall = data.Height * _heightScale;
-        _cellSize = span / (data.HeightmapResolution - 1);
+        _cellSize = data.Size / (data.HeightmapResolution - 1);
 
-        // The stored heights span the full 0..Height range, so sculpting can never leave these bounds.
+        // Local bounds spanning the full possible height range (sculpting can never leave them), then
+        // every corner through the matrix, so a rotated terrain still gets bounds that enclose it.
+        var localMin = new Float3(0, -data.Height * 0.1f, 0);
+        var localMax = new Float3(data.Size, data.Height, data.Size);
+
+        Float3 worldMin = new(float.MaxValue), worldMax = new(float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            var corner = new Float3(
+                (i & 1) == 0 ? localMin.X : localMax.X,
+                (i & 2) == 0 ? localMin.Y : localMax.Y,
+                (i & 4) == 0 ? localMin.Z : localMax.Z);
+
+            Float3 world = Float4x4.TransformPoint(corner, _localToWorld);
+            worldMin = Maths.Min(worldMin, world);
+            worldMax = Maths.Max(worldMax, world);
+        }
+
         _worldBounds = new JBoundingBox(
-            new JVector(_origin.X, _origin.Y - tall * 0.1f, _origin.Z),
-            new JVector(_origin.X + span, _origin.Y + tall, _origin.Z + span));
+            new JVector(worldMin.X, worldMin.Y, worldMin.Z),
+            new JVector(worldMax.X, worldMax.Y, worldMax.Z));
     }
 
+    /// <summary>Height in terrain-local units. Placement and scale come from <see cref="LocalToWorld"/>.</summary>
     public bool TryGetHeight(int x, int z, out float height)
     {
         height = 0;
@@ -75,9 +100,7 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         int res = data.HeightmapResolution;
         if (x < 0 || x >= res || z < 0 || z >= res) return false;
 
-        // Height in terrain-local space, scaled by terrain height (16-bit storage)
-        float normalizedHeight = (float)data.Heights[z * res + x] / TerrainData.kMaxHeight;
-        height = normalizedHeight * data.Height * _heightScale + _origin.Y;
+        height = (float)data.Heights[z * res + x] / TerrainData.kMaxHeight * data.Height;
         return true;
     }
 
@@ -140,7 +163,6 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
 
         var physics = GameObject.Scene.Physics;
 
-        WarnOnUnsupportedTransform();
         RefreshPlacement();
 
         _heightmapProxy = new TerrainHeightmapProxy(this);
@@ -149,15 +171,6 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         physics.RegisterTerrain(_heightmapProxy, _collisionFilter, this);
         _lastTransformVersion = ComputeWorldTransformVersion();
         _isRegistered = true;
-    }
-
-    private void WarnOnUnsupportedTransform()
-    {
-        Float3 scale = Transform.LossyScale;
-        bool squareCells = MathF.Abs(MathF.Abs((float)scale.X) - MathF.Abs((float)scale.Z)) <= 1e-4f;
-
-        if (Transform.Rotation != Quaternion.Identity || !squareCells)
-            Debug.LogError($"TerrainCollider on '{GameObject.Name}' needs an unrotated transform with equal X and Z scale. Collision will not line up with the rendered terrain.");
     }
 
     public override void Update()
@@ -210,6 +223,8 @@ public class TerrainCollider : MonoBehaviour, ITerrainHeightProvider
         float u = (float)(localPos.X / data.Size);
         float v = (float)(localPos.Z / data.Size);
 
-        return data.GetInterpolatedHeight(u, v) + (float)Transform.Position.Y;
+        // Sampled in local space, so the result has to come back out through the transform.
+        Float3 localHit = new(localPos.X, data.GetInterpolatedHeight(u, v), localPos.Z);
+        return Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix).Y;
     }
 }

@@ -23,7 +23,7 @@ public delegate void AudioReadEvent(NativeArray<float> framesOut, UInt64 frameCo
 /// </summary>
 [AddComponentMenu("Audio/Audio Source")]
 [ComponentIcon("\uf028")] // VolumeHigh
-public sealed class AudioSource : MonoBehaviour, ISerializable
+public sealed class AudioSource : MonoBehaviour
 {
     /// <summary>
     /// Static flag to control whether AudioSources should resume their playback position on deserialization.
@@ -38,26 +38,42 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
     }
 
     // Audio clip and playback settings
+    [Header("Playback")]
+    [SerializeField, Tooltip("The clip this source plays.")]
     private AssetRef<AudioClip> _clip;
+    [SerializeField, Tooltip("Start playing as soon as the component is enabled.")]
     private bool _playOnStart = false;
     // Set when OnEnable wanted to auto-play but the clip was still streaming in (async loading);
     // Update performs the play once the clip arrives.
     private bool _pendingAutoPlay = false;
+    [SerializeField]
     private bool _loop = false;
+    [SerializeField]
     private float _volume = 1.0f;
+    [SerializeField, Tooltip("Playback speed multiplier. 1 is the clip's original pitch.")]
     private float _pitch = 1.0f;
+    [SerializeField, Range(-1f, 1f), Tooltip("Stereo placement. -1 is fully left, 1 is fully right.")]
     private float _pan = 0.0f;
+    [SerializeField, Tooltip("Balance keeps the original stereo image, Pan collapses it toward one side.")]
     private PanMode _panMode = PanMode.Balance;
 
     // Spatial audio settings
+    [Header("Spatial")]
+    [SerializeField, Tooltip("Position this source in 3D space relative to the AudioListener.")]
     private bool _spatial = true;
+    [SerializeField, Tooltip("Strength of the pitch shift from relative motion. 0 disables doppler.")]
     private float _dopplerFactor = 1.0f;
+    [SerializeField, Tooltip("Distance below which the source plays at full volume.")]
     private float _minDistance = 1.0f;
+    [SerializeField, Tooltip("Distance at which the source reaches its quietest.")]
     private float _maxDistance = 10.0f;
+    [SerializeField, Tooltip("Curve used to fall off between the min and max distance.")]
     private AttenuationModel _attenuationModel = AttenuationModel.Linear;
 
     // Playback state (serialized for resume support)
+    [SerializeField, HideInInspector]
     private ulong _savedCursor = 0;
+    [SerializeField, HideInInspector]
     private bool _wasPlaying = false;
 
     // Native handles
@@ -294,6 +310,14 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
 
     public override void OnEnable()
     {
+        // No device means no native objects to hand a null context to. Every playback entry point
+        // already no-ops on a null sound group, so the component stays inert but usable.
+        if (!AudioContext.IsInitialized)
+        {
+            Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
+            return;
+        }
+
         // Initialize native resources
         _previousPosition = Transform.Position;
         _outputBuffer = new AudioBuffer(8192);
@@ -398,6 +422,10 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
             }
         }
     }
+
+    /// <summary>The inspector writes the backing fields directly, so the native side has to be
+    /// re-synced from them rather than from the property setters.</summary>
+    public override void OnValidate() => ApplySettings();
 
     public override void OnDisable()
     {
@@ -666,64 +694,25 @@ public sealed class AudioSource : MonoBehaviour, ISerializable
 
     #endregion
 
-    #region ISerializable Implementation
+    #region Serialization Callbacks
 
-    public void Serialize(ref EchoObject compound, SerializationContext ctx)
+    public override void OnBeforeSerialize()
     {
-        compound.Add("Clip", Serializer.Serialize(typeof(AssetRef<AudioClip>), _clip, ctx));
+        base.OnBeforeSerialize();
 
-        // Serialize playback settings
-        compound.Add("PlayOnStart", new EchoObject(_playOnStart));
-        compound.Add("Loop", new EchoObject(_loop));
-        compound.Add("Volume", new EchoObject(_volume));
-        compound.Add("Pitch", new EchoObject(_pitch));
-        compound.Add("Pan", new EchoObject(_pan));
-        compound.Add("PanMode", new EchoObject((int)_panMode));
-
-        // Serialize spatial audio settings
-        compound.Add("Spatial", new EchoObject(_spatial));
-        compound.Add("DopplerFactor", new EchoObject(_dopplerFactor));
-        compound.Add("MinDistance", new EchoObject(_minDistance));
-        compound.Add("MaxDistance", new EchoObject(_maxDistance));
-        compound.Add("AttenuationModel", new EchoObject((int)_attenuationModel));
-
-        // Serialize playback state (for resume support)
-        if (ResumePositionOnLoad && _mainSource != null && _mainSource.handle != IntPtr.Zero)
-        {
-            compound.Add("SavedCursor", new EchoObject((long)Cursor));
-            compound.Add("WasPlaying", new EchoObject(IsPlaying));
-        }
-        else
-        {
-            compound.Add("SavedCursor", new EchoObject(0L));
-            compound.Add("WasPlaying", new EchoObject(false));
-        }
+        bool live = ResumePositionOnLoad && _mainSource != null && _mainSource.handle != IntPtr.Zero;
+        _savedCursor = live ? Cursor : 0;
+        _wasPlaying = live && IsPlaying;
     }
 
-    public void Deserialize(EchoObject value, SerializationContext ctx)
+    public override void OnAfterDeserialize()
     {
-        // Deserialize audio clip reference
-        if (value.TryGet("Clip", out var clipTag))
-            _clip = Serializer.Deserialize<AssetRef<AudioClip>>(clipTag, ctx);
+        base.OnAfterDeserialize();
 
-        // Deserialize playback settings
-        _playOnStart = value["PlayOnStart"].BoolValue;
-        _loop = value["Loop"].BoolValue;
-        _volume = value["Volume"].FloatValue;
-        _pitch = value["Pitch"].FloatValue;
-        _pan = value["Pan"].FloatValue;
-        _panMode = (PanMode)value["PanMode"].IntValue;
-
-        // Deserialize spatial audio settings
-        _spatial = value["Spatial"].BoolValue;
-        _dopplerFactor = value["DopplerFactor"].FloatValue;
-        _minDistance = value["MinDistance"].FloatValue;
-        _maxDistance = value["MaxDistance"].FloatValue;
-        _attenuationModel = (AttenuationModel)value["AttenuationModel"].IntValue;
-
-        // Deserialize playback state
-        _savedCursor = (ulong)value["SavedCursor"].LongValue;
-        _wasPlaying = value["WasPlaying"].BoolValue;
+        // The loaded values are only in the fields at this point, so push them at the native side for
+        // the paths that deserialize into an already-running component (clipboard paste, undo, prefab
+        // revert). ApplySettings is a no-op while there is no sound group.
+        ApplySettings();
     }
 
     #endregion

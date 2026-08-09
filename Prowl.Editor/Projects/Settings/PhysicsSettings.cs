@@ -47,9 +47,7 @@ public class PhysicsSettings : ProjectSettingsBase
         // Apply collision matrix (this is global, not per-scene)
         if (CollisionMatrixRows.Length == 32)
         {
-            for (int i = 0; i < 32; i++)
-                for (int j = 0; j < 32; j++)
-                    CollisionMatrix.SetLayerCollision(i, j, (CollisionMatrixRows[i] & (1u << j)) != 0);
+            CollisionMatrix.SetRows(CollisionMatrixRows);
         }
 
         // Re-apply to any scene that loads after this point

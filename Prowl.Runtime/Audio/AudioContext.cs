@@ -33,6 +33,7 @@ public static class AudioContext
     private static UInt32 channels = 2;
     private static DateTime lastUpdateTime;
     private static float deltaTime;
+    private static float masterVolume = 1.0f;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -43,6 +44,13 @@ public static class AudioContext
             return audioContext;
         }
     }
+
+    /// <summary>
+    /// True once a device is up. False before <see cref="Initialize"/>, after
+    /// <see cref="Deinitialize"/>, if the device failed to open, and for the whole of a headless run.
+    /// Nothing may be handed to the native layer while this is false.
+    /// </summary>
+    public static bool IsInitialized => audioContext != IntPtr.Zero;
 
     /// <summary>
     /// Gets the chosen sample rate.
@@ -72,11 +80,17 @@ public static class AudioContext
     {
         get
         {
+            if (!IsInitialized)
+                return masterVolume;
             return MiniAudioExNative.ma_ex_context_get_master_volume(audioContext);
         }
         set
         {
-            MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
+            // Remembered either way, so a volume set before the device opens (settings load) is not
+            // lost, and so the getter still answers in a headless run.
+            masterVolume = value;
+            if (IsInitialized)
+                MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
         }
     }
 
@@ -124,8 +138,12 @@ public static class AudioContext
 
         if (audioContext == IntPtr.Zero)
         {
-            Console.WriteLine("Failed to initialize MiniAudioEx");
+            Debug.LogError($"Failed to open an audio device at {sampleRate} Hz, {channels} channels. " +
+                           "Audio is disabled for this session.");
+            return;
         }
+
+        MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
 
         lastUpdateTime = DateTime.Now;
     }
@@ -200,39 +218,53 @@ public static class AudioContext
         return devices;
     }
 
-    internal static void Add(AudioClip clip)
+    /// <summary>
+    /// Takes a reference on the shared native buffer for <paramref name="hash"/>, allocating and
+    /// filling it from <paramref name="data"/> if this is the first caller to ask for it. Release it
+    /// with <see cref="ReleaseClipHandle"/>. Returns IntPtr.Zero if the allocation failed.
+    /// </summary>
+    /// <remarks>
+    /// Lookup and insert are one operation on purpose. Splitting them let two clips with identical
+    /// data both miss the lookup and both allocate, and it let a caller adopt an existing buffer while
+    /// forgetting to count the reference, which freed the buffer out from under the other holder.
+    /// </remarks>
+    internal static IntPtr AcquireClipHandle(UInt64 hash, byte[] data, int length)
     {
-        if (clip.Hash == 0)
-            return;
-
-        if (clip.Handle == IntPtr.Zero)
-            return;
+        if (hash == 0 || data == null || length <= 0)
+            return IntPtr.Zero;
 
         lock (clipTableLock)
         {
-            if (audioClipHandles.ContainsKey(clip.Hash))
-                return;
+            if (audioClipHandles.TryGetValue(hash, out IntPtr existing) && existing != IntPtr.Zero)
+            {
+                audioClipRefCounts[hash] = audioClipRefCounts.TryGetValue(hash, out int count) ? count + 1 : 1;
+                return existing;
+            }
 
-            audioClipHandles.Add(clip.Hash, clip.Handle);
-            audioClipRefCounts[clip.Hash] = 1;
+            IntPtr handle = Marshal.AllocHGlobal(length);
+
+            if (handle == IntPtr.Zero)
+                return IntPtr.Zero;
+
+            Marshal.Copy(data, 0, handle, length);
+            audioClipHandles[hash] = handle;
+            audioClipRefCounts[hash] = 1;
+            return handle;
         }
     }
 
-    /// <summary>Register another clip sharing an already-cached handle (increments its ref-count).</summary>
-    internal static void AddRef(UInt64 hash)
+    /// <summary>How many clips currently hold the shared buffer for this hash, 0 if it is not cached.</summary>
+    internal static int GetClipRefCount(UInt64 hash)
     {
         lock (clipTableLock)
         {
-            if (audioClipRefCounts.TryGetValue(hash, out int count))
-                audioClipRefCounts[hash] = count + 1;
+            return audioClipRefCounts.TryGetValue(hash, out int count) ? count : 0;
         }
     }
 
-    internal static void Remove(AudioClip clip)
+    /// <summary>Drops one reference on a shared buffer, freeing it once the last holder lets go.</summary>
+    internal static void ReleaseClipHandle(UInt64 hash)
     {
-        // Raw accessors: this runs from OnDispose(), where IsDisposed is already true, so the
-        // checked public Hash/Handle properties would themselves throw here.
-        UInt64 hash = clip.RawHash;
         if (hash == 0)
             return;
 
@@ -241,26 +273,17 @@ public static class AudioContext
             if (!audioClipRefCounts.TryGetValue(hash, out int count))
                 return;
 
-            // Only free the shared native allocation when the last user releases it.
-            if (count <= 1)
-            {
-                if (audioClipHandles.TryGetValue(hash, out IntPtr handle) && handle != IntPtr.Zero)
-                    Marshal.FreeHGlobal(handle);
-                audioClipHandles.Remove(hash);
-                audioClipRefCounts.Remove(hash);
-            }
-            else
+            if (count > 1)
             {
                 audioClipRefCounts[hash] = count - 1;
+                return;
             }
-        }
-    }
 
-    internal static bool GetAudioClipHandle(UInt64 hashcode, out IntPtr handle)
-    {
-        lock (clipTableLock)
-        {
-            return audioClipHandles.TryGetValue(hashcode, out handle);
+            if (audioClipHandles.TryGetValue(hash, out IntPtr handle) && handle != IntPtr.Zero)
+                Marshal.FreeHGlobal(handle);
+
+            audioClipHandles.Remove(hash);
+            audioClipRefCounts.Remove(hash);
         }
     }
 

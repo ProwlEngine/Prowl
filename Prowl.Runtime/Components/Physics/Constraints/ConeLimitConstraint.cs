@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -74,7 +74,7 @@ public class ConeLimitConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -87,7 +87,7 @@ public class ConeLimitConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -108,6 +108,12 @@ public class ConeLimitConstraint : PhysicsConstraint
     /// </summary>
     public float Impulse => constraint?.Impulse ?? 0.0f;
 
+    // ConeLimit measures Acos(dot(axis1, axis2)), so a tilt only ever spans 0 to 180 degrees, and Jitter
+    // throws on anything outside that or on an inverted range. Clamping keeps a stray inspector value
+    // from taking the constraint out entirely.
+    private float ClampedMinAngle => Maths.Clamp(minAngle, 0.0f, 180.0f);
+    private float ClampedMaxAngle => Maths.Clamp(maxAngle, ClampedMinAngle, 180.0f);
+
     protected override Constraint GetConstraint() => constraint;
 
     protected override void CreateConstraint(World world, RigidBody body1, RigidBody body2)
@@ -116,7 +122,7 @@ public class ConeLimitConstraint : PhysicsConstraint
 
         constraint = world.CreateConstraint<ConeLimit>(body1, body2);
 
-        var limit = AngularLimit.FromDegree(minAngle, maxAngle);
+        var limit = AngularLimit.FromDegree(ClampedMinAngle, ClampedMaxAngle);
         constraint.Initialize(worldAxis, limit);
 
         constraint.Softness = softness;
@@ -128,4 +134,35 @@ public class ConeLimitConstraint : PhysicsConstraint
         RemoveConstraint(constraint);
         constraint = null;
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldPivot);
+
+    // A swing limit: the axis the tilt is measured from, and the cone it may lean out to. Both ends of
+    // the range are stops, so both are red; the green band between them is the part that is allowed.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        float length = scale * 1.3f;
+        Float3 apex = WorldPivot;
+        Float3 dir = WorldAxis(axis);
+
+        DrawJointMarker(apex);
+        Debug.DrawAxisLine(apex, dir, scale * 1.5f, AxisColor);
+
+        float min = ClampedMinAngle;
+        float max = ClampedMaxAngle;
+
+        Debug.DrawWireConeAngle(apex, dir, max, length, LimitColor);
+        if (min > 0.0f) Debug.DrawWireConeAngle(apex, dir, min, length, LimitColor);
+
+        // With a zero minimum the outer cone already is the allowed region, so the band would only
+        // retrace it. It earns its place once an inner cone carves the middle out.
+        if (min > 0.0f)
+        {
+            Debug.PerpendicularAxes(dir, out Float3 u, out Float3 v);
+            Float3 from = Quaternion.AxisAngle(v, min * Maths.Deg2Rad) * dir;
+            Debug.DrawWireArc(apex, v, from, length, (max - min) * Maths.Deg2Rad, RangeColor, 16);
+        }
+    }
+
 }

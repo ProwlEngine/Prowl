@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Supprimer les assets",
   "dialog.unsaved_prefab": "Modifications de Prefab non enregistrees",
   "dialog.unsaved_prefab_body": "\"{{name}}\" contient des modifications non enregistrees. Enregistrer avant de changer ?",
+  "dialog.unapplied_settings": "Parametres d'import non appliques",
+  "dialog.unapplied_settings_body": "\"{{name}}\" a des parametres d'import non appliques. Les appliquer ou revenir au fichier ?",
+  "dialog.apply": "Appliquer",
+  "dialog.revert": "Retablir",
 
   "hierarchy.delete": "Supprimer",
   "hierarchy.duplicate": "Dupliquer",
@@ -198,7 +202,6 @@
   "menu.file.open_scene": "Ouvrir une scene",
   "menu.file.save_scene": "Enregistrer la scene",
   "menu.file.save_scene_as": "Enregistrer la scene sous...",
-  "menu.file.open_project": "Ouvrir un projet...",
   "menu.file.build_project": "Compiler le projet...",
   "menu.file.exit": "Quitter",
   "menu.edit": "Edition",

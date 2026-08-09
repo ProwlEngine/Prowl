@@ -21,7 +21,7 @@ public sealed class ConeCollider : Collider
         set
         {
             radius = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -31,7 +31,7 @@ public sealed class ConeCollider : Collider
         set
         {
             height = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -40,7 +40,7 @@ public sealed class ConeCollider : Collider
     public override void DrawGizmos()
     {
         Debug.PushMatrix(GizmoMatrix);
-        Debug.DrawWireCone(new Float3(0, -height * 0.5f, 0), new Float3(0, height, 0), radius, Color.Green);
+        Debug.DrawWireCone(new Float3(0, -height * 0.25f, 0), new Float3(0, height, 0), radius, Color.Green);
         Debug.PopMatrix();
     }
 }

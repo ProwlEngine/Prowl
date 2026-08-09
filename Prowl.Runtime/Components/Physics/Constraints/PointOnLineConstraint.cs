@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -105,7 +105,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             softness = value;
-            if (constraint != null) constraint.Softness = value;
+            if (IsLive(constraint)) constraint.Softness = value;
         }
     }
 
@@ -118,7 +118,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             limitSoftness = value;
-            if (constraint != null) constraint.LimitSoftness = value;
+            if (IsLive(constraint)) constraint.LimitSoftness = value;
         }
     }
 
@@ -131,7 +131,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             biasFactor = value;
-            if (constraint != null) constraint.Bias = value;
+            if (IsLive(constraint)) constraint.Bias = value;
         }
     }
 
@@ -144,7 +144,7 @@ public class PointOnLineConstraint : PhysicsConstraint
         set
         {
             limitBias = value;
-            if (constraint != null) constraint.LimitBias = value;
+            if (IsLive(constraint)) constraint.LimitBias = value;
         }
     }
 
@@ -191,5 +191,20 @@ public class PointOnLineConstraint : PhysicsConstraint
     {
         RemoveConstraint(constraint);
         constraint = null;
+    }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor1));
+
+    // A bead on a wire: the wire, the bead, and how far along it may travel.
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 a = WorldAnchor(anchor1);
+        Float3 b = WorldConnectedAnchor(anchor2);
+        Float3 dir = WorldAxis(lineAxis);
+
+        DrawAnchorPair(a, b);
+        Debug.DrawAxisLine(a, dir, scale * 2.0f, AxisColor);
+        Debug.DrawLinearRange(a, dir, minDistance, maxDistance, scale * 2.5f, scale * 0.35f, RangeColor, LimitColor);
     }
 }

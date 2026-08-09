@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Xunit;
@@ -11,7 +11,7 @@ public class LayerMaskTests
     [Fact]
     public void SetHasRemoveLayer()
     {
-        var m = new LayerMask();
+        var m = LayerMask.Nothing;
         Assert.False(m.HasLayer(3));
 
         m.SetLayer(3);
@@ -20,6 +20,19 @@ public class LayerMaskTests
 
         m.RemoveLayer(3);
         Assert.False(m.HasLayer(3));
+    }
+
+    // A serialized LayerMask nobody has touched should let everything through, not silently match
+    // nothing, so the stored bits are exclusions and default is Everything.
+    [Fact]
+    public void Default_IsEverything()
+    {
+        LayerMask fresh = default;
+
+        Assert.True(fresh.HasLayer(0));
+        Assert.True(fresh.HasLayer(31));
+        Assert.Equal(uint.MaxValue, fresh.Mask);
+        Assert.Equal(LayerMask.Everything, fresh);
     }
 
     [Fact]
@@ -36,7 +49,7 @@ public class LayerMaskTests
     {
         // Isolates the top bit: Everything (all bits set) can't distinguish a signed 1<<31 shift bug,
         // but setting only layer 31 and checking it directly does (the regression this guards).
-        var m = new LayerMask();
+        var m = LayerMask.Nothing;
         m.SetLayer(31);
 
         Assert.True(m.HasLayer(31));
@@ -47,8 +60,8 @@ public class LayerMaskTests
     [Fact]
     public void OrCombinesMasks()
     {
-        var a = new LayerMask(); a.SetLayer(1);
-        var b = new LayerMask(); b.SetLayer(2);
+        var a = LayerMask.Nothing; a.SetLayer(1);
+        var b = LayerMask.Nothing; b.SetLayer(2);
 
         var or = a | b;
 
@@ -60,7 +73,7 @@ public class LayerMaskTests
     [Fact]
     public void AndFiltersMasks()
     {
-        var a = new LayerMask(); a.SetLayer(1);
+        var a = LayerMask.Nothing; a.SetLayer(1);
 
         var and = LayerMask.Everything & a;
 
@@ -71,7 +84,7 @@ public class LayerMaskTests
     [Fact]
     public void Clear_ResetsToZero()
     {
-        var m = new LayerMask();
+        var m = LayerMask.Nothing;
         m.SetLayer(5);
         m.SetLayer(9);
 
@@ -83,7 +96,7 @@ public class LayerMaskTests
     [Fact]
     public void SettingSameLayerTwice_IsIdempotent()
     {
-        var m = new LayerMask();
+        var m = LayerMask.Nothing;
         m.SetLayer(7);
         uint once = m.Mask;
         m.SetLayer(7);

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -29,7 +29,7 @@ public sealed class MeshCollider : Collider
         set
         {
             mesh = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -43,7 +43,7 @@ public sealed class MeshCollider : Collider
         {
             if (convex == value) return;
             convex = value;
-            OnValidate();
+            Rebuild();
         }
     }
 
@@ -78,6 +78,12 @@ public sealed class MeshCollider : Collider
         if (convex)
             return [new ConvexHullShape(baked.Triangles)];
 
+        // Triangles have no volume, so a dynamic body built from them cannot derive an inertia tensor
+        // and falls back to a box approximation. Concave dynamic collision is not really supported.
+        Rigidbody3D rb = RigidBody;
+        if (rb.IsValid() && rb.MotionType == Jitter2.Dynamics.MotionType.Dynamic)
+            Debug.LogWarningOnce($"MeshCollider.ConcaveDynamic.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' is concave but sits on a dynamic Rigidbody3D. Its inertia is approximated by a box; use Convex for dynamic bodies.");
+
         // Degenerate triangles are dropped from the baked mesh, so its triangle count is what
         // indexes into it - the source soup can hold more.
         TriangleMesh triMesh = transform == Float4x4.Identity ? baked.TriangleMesh : TransformMesh(baked.TriangleMesh, transform);
@@ -92,7 +98,7 @@ public sealed class MeshCollider : Collider
         // triangle count. Past a few thousand a convex hull or a decimated collision mesh is the answer.
         const int TriangleBudget = 5000;
         if (count > TriangleBudget)
-            Debug.LogWarning($"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
+            Debug.LogWarningOnce($"MeshCollider.TriangleBudget.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' built {count} triangle shapes (over {TriangleBudget}). Consider a convex hull or a lower-poly collision mesh.");
 
         var shapes = new TriangleShape[count];
         for (int i = 0; i < count; i++)
@@ -148,17 +154,25 @@ public sealed class MeshCollider : Collider
         return rendererMesh.Res;
     }
 
-    public override void OnValidate()
+    protected override void OnAutoRebuild()
+    {
+        // A concave rebuild re-bakes the whole triangle mesh and recreates one shape and one dynamic
+        // tree leaf per triangle, so doing it every frame an animated collider moves is pathological.
+        if (!convex)
+            Debug.LogWarningOnce($"MeshCollider.RelativeRebuild.{GameObject.Name}", $"MeshCollider on '{GameObject.Name}' moved relative to its body and re-baked its triangle mesh. Moving a concave mesh collider's local transform is expensive; keep it still, or mark it Convex.");
+    }
+
+    // The gizmo hull is derived from the mesh and the convex flag, so it has to die with the shapes.
+    // Rebuild rather than OnValidate, because the Mesh and Convex setters go straight to Rebuild.
+    public override void Rebuild()
     {
         _cachedConvexShape = null;
         _cachedHullTris = null;
-        base.OnValidate();
+        base.Rebuild();
     }
 
     public override void OnEnable()
     {
-        base.OnEnable();
-
         if (mesh.Res == null)
         {
             var mr = GetComponent<MeshRenderer>();
@@ -167,6 +181,8 @@ public sealed class MeshCollider : Collider
             else
                 Debug.LogWarning("MeshCollider could not find a MeshRenderer to get the mesh from.");
         }
+
+        base.OnEnable();
     }
 
     public override void DrawGizmos()

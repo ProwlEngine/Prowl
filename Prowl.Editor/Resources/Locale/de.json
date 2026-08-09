@@ -34,6 +34,10 @@
   "dialog.delete_assets": "Assets entfernen",
   "dialog.unsaved_prefab": "Nicht gespeicherte Prefab-Aenderungen",
   "dialog.unsaved_prefab_body": "\"{{name}}\" hat nicht gespeicherte Aenderungen. Vor dem Wechseln speichern?",
+  "dialog.unapplied_settings": "Nicht angewendete Importeinstellungen",
+  "dialog.unapplied_settings_body": "\"{{name}}\" hat Importeinstellungen, die nicht angewendet wurden. Anwenden oder auf den Stand der Datei zuruecksetzen?",
+  "dialog.apply": "Anwenden",
+  "dialog.revert": "Zuruecksetzen",
 
   "hierarchy.delete": "Entfernen",
   "hierarchy.duplicate": "Duplizieren",
@@ -198,7 +202,6 @@
   "menu.file.open_scene": "Szene offnen",
   "menu.file.save_scene": "Szene speichern",
   "menu.file.save_scene_as": "Szene speichern als...",
-  "menu.file.open_project": "Projekt offnen...",
   "menu.file.build_project": "Projekt erstellen...",
   "menu.file.exit": "Beenden",
   "menu.edit": "Bearbeiten",

@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Jitter2;
@@ -63,7 +63,7 @@ public sealed class WheelCollider : MonoBehaviour
     /// <summary>Optional visual wheel transform. When set it is placed at the wheel centre and rotated
     /// for steering (about the suspension axis) and spin (about the axle) each frame. Keep this separate
     /// from the WheelCollider's own GameObject, which marks the fixed suspension mount used by physics.</summary>
-    public Transform visualTransform;
+    public Transform VisualTransform;
 
     // Runtime state
     private Rigidbody3D rb;
@@ -165,15 +165,15 @@ public sealed class WheelCollider : MonoBehaviour
 
     public override void Update()
     {
-        if (visualTransform == null) return;
+        if (VisualTransform == null) return;
 
         // The mount transform (this GameObject) gives the base wheel frame: up = suspension axis,
         // right = axle. Steer rotates about the suspension axis, camber tilts about forward, spin about the axle.
         Quaternion steer = Quaternion.AxisAngle(Float3.UnitY, SteerAngle);
         Quaternion camberQ = Quaternion.AxisAngle(Float3.UnitZ, CamberRadians());
         Quaternion spin = Quaternion.AxisAngle(Float3.UnitX, wheelRotation);
-        visualTransform.Rotation = Transform.Rotation * steer * camberQ * spin;
-        visualTransform.Position = GetWheelCenter();
+        VisualTransform.Rotation = Transform.Rotation * steer * camberQ * spin;
+        VisualTransform.Position = GetWheelCenter();
     }
 
     /// <summary>Re-resolves the rigidbody and counts sibling wheels (for auto sprung-mass). Call after

@@ -57,16 +57,13 @@ public class RenderTextureAssetEditor : AssetImporterEditor
     protected override EchoObject? CaptureState(AssetEntry entry, EngineObject? asset)
         => s_edits.TryGetValue(entry.Guid, out Description? d) ? Serializer.Serialize(typeof(Description), d) : null;
 
-    protected override void ApplyState(AssetEntry entry, EngineObject? asset) => Save(entry);
+    protected override bool ApplyState(AssetEntry entry, EngineObject? asset) => Save(entry);
 
     protected override void RevertState(AssetEntry entry, EngineObject? asset, EchoObject baseline)
     {
         if (Serializer.Deserialize<Description>(baseline) is Description restored)
             s_edits[entry.Guid] = restored;
     }
-
-    /// <summary>Forgets every buffered edit. GUIDs only mean anything within one project.</summary>
-    internal static void ClearEdits() => s_edits.Clear();
 
     public override void OnGUI(Paper paper, string id, AssetEntry entry, EngineObject? asset)
     {
@@ -110,22 +107,10 @@ public class RenderTextureAssetEditor : AssetImporterEditor
                     () => edits.Formats.RemoveAt(edits.Formats.Count - 1)).Width(110).Show();
         }
 
-        bool dirty = !Origami.IsReadOnly && HasPendingChanges(entry, asset);
-        paper.Box($"{id}_save").Width(UnitValue.Auto).Height(30)
-            .Margin(8, 8, 10, 10).Rounded(8).Padding(16, 16, 0, 0)
-            .BackgroundColor(dirty ? EditorTheme.Accent : EditorTheme.Neutral300)
-            .Hovered.BackgroundColor(dirty ? EditorTheme.AccentBright : EditorTheme.Neutral300).End()
-            .Text($"{EditorIcons.FloppyDisk}  Save & Reimport", EditorTheme.FontSemiBold ?? font)
-            .TextColor(dirty ? System.Drawing.Color.White : EditorTheme.Ink300).FontSize(EditorTheme.FontSizeSmall)
-            .Alignment(TextAlignment.MiddleCenter)
-            .OnClick(0, (_, _) =>
-            {
-                if (!dirty) return;
-                ApplyPendingChanges(entry, asset);
-            });
+        DrawApplyRevertBar(paper, id, entry, asset);
     }
 
-    private void Save(AssetEntry entry)
+    private bool Save(AssetEntry entry)
     {
         try
         {
@@ -141,10 +126,12 @@ public class RenderTextureAssetEditor : AssetImporterEditor
             described.Dispose();
 
             EditorAssetBackend.Instance?.Reimport(entry.Guid);
+            return true;
         }
         catch (Exception ex)
         {
             Debug.LogError($"Failed to save render texture '{entry.Path}': {ex.Message}");
+            return false;
         }
     }
 }

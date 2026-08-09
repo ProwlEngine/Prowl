@@ -1,7 +1,8 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Jitter2;
@@ -38,9 +39,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         public Rigidbody3D Rigidbody { get; set; }
         public int InstanceID { get; set; }
         public int Layer { get; set; }
-        //public bool HasTransformConstraints { get; set; }
-        //public JVector RotationConstraint { get; set; }
-        //public JVector TranslationConstraint { get; set; }
     }
 
     [SerializeField] private MotionType motionType = MotionType.Dynamic;
@@ -57,6 +55,26 @@ public sealed class Rigidbody3D : MonoBehaviour
     [SerializeField] private float angularSleepThreshold = 0.1f;
 
     [SerializeField] private RigidbodyInterpolation interpolation = RigidbodyInterpolation.Interpolate;
+    [SerializeField] private RigidbodyConstraints constraints = RigidbodyConstraints.None;
+
+    // The pose the frozen axes are held at, captured the first time a constraint is applied.
+    private JVector _lockedPosition;
+    private JQuaternion _lockedOrientation;
+    private bool _hasLockedPose;
+
+    /// <summary>
+    /// World-space axes this body may not move or turn along. Freezing an axis re-pins it after every
+    /// step, so a body can still be placed on that axis with <see cref="MovePosition"/>.
+    /// </summary>
+    public RigidbodyConstraints Constraints
+    {
+        get => constraints;
+        set
+        {
+            constraints = value;
+            CaptureLockedPose(); // re-pin to wherever the body is now
+        }
+    }
 
     private float interpTimer = 0;
 
@@ -147,8 +165,8 @@ public sealed class Rigidbody3D : MonoBehaviour
         get => friction;
         set
         {
-            if (value < 0.0 || value > 1.0)
-                throw new ArgumentOutOfRangeException(nameof(value), "Restitution must be between 0 and 1.");
+            if (value < 0.0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Friction can not be negative.");
 
             friction = value;
             if (_body != null) _body.Friction = value;
@@ -291,18 +309,17 @@ public sealed class Rigidbody3D : MonoBehaviour
         set { EnsureBody(); if (_body != null) _body.Torque = new JVector(value.X, value.Y, value.Z); }
     }
 
-    /// <summary>
-    /// Information about a collision contact.
-    /// </summary>
-    public struct ContactInfo
-    {
-        public Float3 Point;
-        public Float3 Normal;
-        public float ImpulseMagnitude;
-    }
-
     [SerializeIgnore]
     internal RigidBody _body;
+
+    // The collider each live contact is against, recorded when the contact forms. OnCollisionEnd runs
+    // after Jitter has freed the contact data, so this is the only way it can still name the surface.
+    private readonly Dictionary<Arbiter, Collider> _contactColliders = [];
+
+    // Entries normally leave on EndCollide, but a contact that ends because the *other* body was
+    // removed raises no such event, and the orphan would pin a destroyed Collider and its GameObject
+    // for the life of this body. Swept out once the map outgrows this, which is rare enough to be free.
+    private int _contactPruneWatermark = 16;
 
     /// <summary>
     /// Ensures the underlying Jitter body exists. Body creation normally happens in OnEnable, but
@@ -326,15 +343,6 @@ public sealed class Rigidbody3D : MonoBehaviour
         _lastSyncedTransformVersion = Transform.Version; // initial pose is already in the body
         var scene = GameObject.IsValid() ? GameObject.Scene : null;
         if (scene.IsValid()) scene.Physics?.RegisterBody(this);
-        _body.Tag = new RigidBodyUserData()
-        {
-            Rigidbody = this,
-            InstanceID = this.InstanceID,
-            Layer = GameObject.LayerIndex,
-            //HasTransformConstraints = rotationConstraints != Vector3Int.one || translationConstraints != Vector3Int.one,
-            //RotationConstraint = new JVector(rotationConstraints.x, rotationConstraints.y, rotationConstraints.z),
-            //TranslationConstraint = new JVector(translationConstraints.x, translationConstraints.y, translationConstraints.z)
-        };
 
         // Hook up collision events
         _body.BeginCollide += OnJitterBeginCollide;
@@ -345,39 +353,56 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     private void OnJitterBeginCollide(Arbiter arbiter)
     {
-        // Get the other body in the collision
-        var otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        var userData = otherBody.Tag as RigidBodyUserData;
 
-        if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
-        {
-            // Get contact information from the first contact point if available
-            var contact = arbiter.Handle.Data.Contact0;
-            var normal = contact.Normal;
-            var relPos = contact.RelativePosition2;
+        Collider collider = ResolveOtherCollider(arbiter, otherBody);
+        _contactColliders[arbiter] = collider;
 
-            // Calculate world position of contact
-            var worldPos = otherBody.Position + relPos;
+        // Contact data lives in unmanaged memory that is valid only while the arbiter is.
+        ref ContactData data = ref arbiter.Handle.Data;
+        JVector normal = data.Contact0.Normal;
+        JVector worldPos = otherBody.Position + data.Contact0.RelativePosition2;
 
-            var contactInfo = new ContactInfo
-            {
-                Point = new Float3(worldPos.X, worldPos.Y, worldPos.Z),
-                Normal = new Float3(normal.X, normal.Y, normal.Z),
-                ImpulseMagnitude = contact.Impulse
-            };
-
-            SceneDispatcher.CollisionBegin(GameObject, userData.Rigidbody, contactInfo);
-        }
+        SceneDispatcher.CollisionBegin(GameObject, new Collision(
+            userData?.Rigidbody, collider,
+            new Float3(worldPos.X, worldPos.Y, worldPos.Z),
+            new Float3(normal.X, normal.Y, normal.Z),
+            data.Contact0.Impulse));
     }
 
     private void OnJitterEndCollide(Arbiter arbiter)
     {
-        // Get the other body in the collision
-        var otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        RigidBody otherBody = arbiter.Body1 == _body ? arbiter.Body2 : arbiter.Body1;
+        var userData = otherBody.Tag as RigidBodyUserData;
 
-        if (otherBody.Tag is RigidBodyUserData userData && userData.Rigidbody != null)
-        {
-            SceneDispatcher.CollisionEnd(GameObject, userData.Rigidbody);
-        }
+        // Jitter frees the contact data before raising this, so the shape ids are already gone and
+        // there is no contact point to report. The collider is recovered from what Begin recorded.
+        _contactColliders.Remove(arbiter, out Collider collider);
+
+        SceneDispatcher.CollisionEnd(GameObject, new Collision(
+            userData?.Rigidbody, collider.IsValid() ? collider : null, Float3.Zero, Float3.Zero, 0.0f));
+    }
+
+    /// <summary>
+    /// Which <see cref="Collider"/> on the other body this contact is against. Static colliders share
+    /// one body per layer, so the body alone cannot say what was hit; the arbiter names the two shapes
+    /// by id, and the physics world maps those back to the colliders that created them.
+    /// </summary>
+    private Collider ResolveOtherCollider(Arbiter arbiter, RigidBody otherBody)
+    {
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        if (physics == null) return null;
+
+        ArbiterKey key = arbiter.Handle.Data.Key;
+
+        Collider first = physics.GetShapeOwner(key.Key1);
+        if (first.IsValid() && first.AttachedBody == otherBody) return first;
+
+        Collider second = physics.GetShapeOwner(key.Key2);
+        if (second.IsValid() && second.AttachedBody == otherBody) return second;
+
+        return null;
     }
 
     public override void OnValidate()
@@ -445,11 +470,72 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
+    /// Re-applies the frozen axes. Jitter has no native axis locks, so the frozen components of the
+    /// velocity are zeroed and the pose is put back where it was, right after the step that moved it.
+    /// </summary>
+    private void ApplyConstraints()
+    {
+        if (constraints == RigidbodyConstraints.None || _body == null || _body.Handle.IsZero) return;
+        if (!_hasLockedPose) { CaptureLockedPose(); return; }
+
+        JVector velocity = _body.Velocity;
+        JVector position = _body.Position;
+
+        if ((constraints & RigidbodyConstraints.FreezePositionX) != 0) { velocity.X = 0.0f; position.X = _lockedPosition.X; }
+        if ((constraints & RigidbodyConstraints.FreezePositionY) != 0) { velocity.Y = 0.0f; position.Y = _lockedPosition.Y; }
+        if ((constraints & RigidbodyConstraints.FreezePositionZ) != 0) { velocity.Z = 0.0f; position.Z = _lockedPosition.Z; }
+
+        JVector angularVelocity = _body.AngularVelocity;
+        if ((constraints & RigidbodyConstraints.FreezeRotationX) != 0) angularVelocity.X = 0.0f;
+        if ((constraints & RigidbodyConstraints.FreezeRotationY) != 0) angularVelocity.Y = 0.0f;
+        if ((constraints & RigidbodyConstraints.FreezeRotationZ) != 0) angularVelocity.Z = 0.0f;
+
+        _body.Velocity = velocity;
+        _body.Position = position;
+        _body.AngularVelocity = angularVelocity;
+
+        // Zeroing angular velocity stops a body turning but leaves whatever rotation the solver already
+        // applied this step. That only fully cancels when every axis is locked, so a full rotation
+        // freeze restores the orientation outright and a partial one accepts a little drift.
+        if ((constraints & RigidbodyConstraints.FreezeRotation) == RigidbodyConstraints.FreezeRotation)
+            _body.Orientation = _lockedOrientation;
+    }
+
+    private void CaptureLockedPose()
+    {
+        if (_body == null || _body.Handle.IsZero) return;
+
+        _lockedPosition = _body.Position;
+        _lockedOrientation = _body.Orientation;
+        _hasLockedPose = true;
+    }
+
+    /// <summary>
+    /// Drops per-contact colliders whose arbiter is dead or has been recycled onto another pair. Jitter
+    /// pools arbiters and zeroes the handle on return, and a recycled one that involves this body again
+    /// has already been overwritten by BeginCollide, so both cases are cheap to spot.
+    /// </summary>
+    private void PruneContactColliders()
+    {
+        if (_contactColliders.Count < _contactPruneWatermark) return;
+
+        foreach (Arbiter arbiter in _contactColliders.Keys.ToArray())
+            if (arbiter.Handle.IsZero || (arbiter.Body1 != _body && arbiter.Body2 != _body))
+                _contactColliders.Remove(arbiter);
+
+        // Re-baselined off what survived, so a body legitimately holding many contacts stops sweeping.
+        _contactPruneWatermark = Math.Max(16, _contactColliders.Count * 2);
+    }
+
+    /// <summary>
     /// Records the pose the step just produced, so the next frames can render between it and the one
     /// before. Driven by the physics world for every registered body right after the step.
     /// </summary>
     internal void CapturePose()
     {
+        ApplyConstraints();
+        PruneContactColliders();
+
         if (_body == null || _body.Handle.IsZero) return;
 
         interpTimer = 0.0f;
@@ -477,15 +563,11 @@ public sealed class Rigidbody3D : MonoBehaviour
         _currentPosition = _previousPosition = ToFloat3(_body.Position);
         _currentRotation = _previousRotation = ToQuaternion(_body.Orientation);
         _hasPose = true;
+        CaptureLockedPose();
     }
 
     private static Float3 ToFloat3(JVector v) => new(v.X, v.Y, v.Z);
     private static Quaternion ToQuaternion(JQuaternion q) => new(q.X, q.Y, q.Z, q.W);
-
-    public override void DrawGizmos()
-    {
-        // TODO DrawGizmos
-    }
 
     public override void OnEnable()
     {
@@ -526,9 +608,11 @@ public sealed class Rigidbody3D : MonoBehaviour
         foreach (Collider collider in colliders)
             if (collider.IsValid()) collider.Detach();
 
-        // Unhook collision events
+        // Unhook collision events. Removing the body discards its arbiters without raising EndCollide,
+        // so the per-contact colliders have to be dropped here.
         _body.BeginCollide -= OnJitterBeginCollide;
         _body.EndCollide -= OnJitterEndCollide;
+        _contactColliders.Clear();
 
         GameObject.Scene.Physics.UnregisterBody(this);
         GameObject.Scene.Physics.World?.Remove(_body);
@@ -610,6 +694,13 @@ public sealed class Rigidbody3D : MonoBehaviour
 
     internal void UpdateShapes(RigidBody rb)
     {
+        // Drop the owner entries first: the colliders below re-register their own shapes, but a shape
+        // left over from a collider that has since gone would otherwise linger in the world's map.
+        PhysicsWorld physics = GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
+        if (physics != null)
+            foreach (RigidBodyShape shape in rb.Shapes)
+                physics.UnregisterShapeOwner(shape);
+
         // Remove all shapes from this rigidbody (Preserve mass/inertia, the rebuild below will refresh it)
         rb.RemoveShapes(rb.Shapes, MassInertiaUpdateMode.Preserve);
 
@@ -650,21 +741,108 @@ public sealed class Rigidbody3D : MonoBehaviour
         _lastSyncedTransformVersion = Transform.Version;
     }
 
-    public void AddForce(Float3 velocity)
+    /// <summary>
+    /// Applies a force through the body's centre of mass, so it accelerates without spinning.
+    /// </summary>
+    public void AddForce(Float3 force, ForceMode mode = ForceMode.Force)
     {
-        EnsureBody();
-        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z));
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jForce = new JVector(force.X, force.Y, force.Z);
+        float inverseMass = body.Data.InverseMass;
+
+        switch (mode)
+        {
+            case ForceMode.Force:
+                body.AddForce(jForce);
+                break;
+
+            case ForceMode.Acceleration:
+                // a = F/m, so cancelling the mass means asking for a force of m*a.
+                if (inverseMass > 0.0f) body.AddForce(jForce * (1.0f / inverseMass));
+                break;
+
+            case ForceMode.Impulse:
+                body.Velocity += jForce * inverseMass;
+                body.SetActivationState(true);
+                break;
+
+            case ForceMode.VelocityChange:
+                body.Velocity += jForce;
+                body.SetActivationState(true);
+                break;
+        }
     }
 
-    public void AddForceAtPosition(Float3 velocity, Float3 worldPosition)
+    /// <summary>
+    /// Applies a force at a world-space point, which also spins the body about its centre of mass.
+    /// Only <see cref="ForceMode.Force"/> and <see cref="ForceMode.Impulse"/> are meaningful here; the
+    /// mass-independent modes have no defined torque.
+    /// </summary>
+    public void AddForceAtPosition(Float3 force, Float3 worldPosition, ForceMode mode = ForceMode.Force)
     {
-        EnsureBody();
-        if (_body != null) _body.AddForce(new JVector(velocity.X, velocity.Y, velocity.Z), new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z));
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jForce = new JVector(force.X, force.Y, force.Z);
+        var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
+
+        if (mode == ForceMode.Impulse)
+        {
+            ApplyImpulse(force, worldPosition);
+            return;
+        }
+
+        if (mode == ForceMode.Acceleration)
+        {
+            float inverseMass = body.Data.InverseMass;
+            if (inverseMass <= 0.0f) return;
+            jForce *= 1.0f / inverseMass;
+        }
+
+        body.AddForce(jForce, jPosition);
     }
 
-    public void AddTorque(Float3 torque)
+    /// <summary>
+    /// Applies a torque about the body's centre of mass.
+    /// </summary>
+    public void AddTorque(Float3 torque, ForceMode mode = ForceMode.Force)
     {
-        Torque += torque;
+        if (!TryGetBody(out RigidBody body)) return;
+
+        var jTorque = new JVector(torque.X, torque.Y, torque.Z);
+
+        switch (mode)
+        {
+            case ForceMode.Force:
+                body.Torque += jTorque;
+                break;
+
+            case ForceMode.Acceleration:
+                // Cancelling the inertia means asking for a torque of I*alpha.
+                if (JMatrix.Inverse(body.InverseInertia, out JMatrix inertia))
+                    body.Torque += JVector.Transform(jTorque, inertia);
+                break;
+
+            case ForceMode.Impulse:
+                ApplyAngularImpulse(torque);
+                break;
+
+            case ForceMode.VelocityChange:
+                body.AngularVelocity += jTorque;
+                body.SetActivationState(true);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The live body, creating it on demand. False when this component cannot have one (no scene yet,
+    /// or it has been removed), which is the cue for every mutator to do nothing rather than throw.
+    /// </summary>
+    private bool TryGetBody(out RigidBody body)
+    {
+        EnsureBody();
+        body = _body;
+        return body != null && !body.Handle.IsZero;
     }
 
     /// <summary>
@@ -691,32 +869,58 @@ public sealed class Rigidbody3D : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the center of mass in world space.
+    /// The centre of mass in world space, derived from the attached shapes and their offsets.
+    /// <para/>
+    /// This is not the point the body spins about. Jitter accumulates inertia about the body origin and
+    /// never shifts it, so an off-centre collider rotates about the Transform's position rather than
+    /// about this. Shapes with no volume (a concave MeshCollider's triangles) contribute nothing, and a
+    /// body made only of those reports its origin.
     /// </summary>
     public Float3 CenterOfMass
     {
         get
         {
-            if (_body == null) return Transform.Position;
-            JVector pos = _body.Position;
-            return new Float3(pos.X, pos.Y, pos.Z);
+            if (_body == null || _body.Handle.IsZero) return Transform.Position;
+
+            JVector weighted = JVector.Zero;
+            float totalMass = 0.0f;
+
+            foreach (RigidBodyShape shape in _body.Shapes)
+            {
+                try
+                {
+                    shape.CalculateMassInertia(out _, out JVector shapeCenter, out float shapeMass);
+                    weighted += shapeCenter * shapeMass;
+                    totalMass += shapeMass;
+                }
+                catch (NotSupportedException)
+                {
+                    // A volumeless shape (a concave MeshCollider's triangles) has no mass to weigh.
+                }
+            }
+
+            // Body-local, because the shape offsets are; fall back to the origin when nothing weighed in.
+            JVector local = totalMass > 0.0f ? weighted * (1.0f / totalMass) : JVector.Zero;
+            JVector world = _body.Position + JVector.Transform(local, _body.Orientation);
+            return new Float3(world.X, world.Y, world.Z);
         }
     }
 
     /// <summary>
-    /// Gets the inertia tensor (inverse) of this rigidbody.
+    /// The diagonal of this body's inertia tensor in body space, in kg*m^2. Only the moments about the
+    /// body's own axes; a shape whose principal axes are rotated relative to the body also has
+    /// off-diagonal terms that this does not report.
     /// </summary>
     public Float3 InertiaTensor
     {
         get
         {
-            if (_body == null) return Float3.One;
-            JMatrix inertia = _body.InverseInertia;
-            return new Float3(
-                inertia.M11 != 0 ? 1.0f / inertia.M11 : 0,
-                inertia.M22 != 0 ? 1.0f / inertia.M22 : 0,
-                inertia.M33 != 0 ? 1.0f / inertia.M33 : 0
-            );
+            // Reciprocals of the inverse diagonal are not the moments unless the tensor is diagonal,
+            // so invert the matrix properly.
+            if (_body == null || !JMatrix.Inverse(_body.InverseInertia, out JMatrix inertia))
+                return Float3.One;
+
+            return new Float3(inertia.M11, inertia.M22, inertia.M33);
         }
     }
 
@@ -725,14 +929,14 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse, Float3 worldPosition)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
         var jPosition = new JVector(worldPosition.X, worldPosition.Y, worldPosition.Z);
 
-        JVector r = jPosition - _body.Position;
-        _body.Velocity += jImpulse * _body.Data.InverseMass;
-        _body.AngularVelocity += JVector.Transform(JVector.Cross(r, jImpulse), _body.Data.InverseInertiaWorld);
+        JVector r = jPosition - body.Position;
+        body.Velocity += jImpulse * body.Data.InverseMass;
+        body.AngularVelocity += JVector.Transform(JVector.Cross(r, jImpulse), body.Data.InverseInertiaWorld);
 
         SetActive(true);
     }
@@ -742,10 +946,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyImpulse(Float3 impulse)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(impulse.X, impulse.Y, impulse.Z);
-        _body.Velocity += jImpulse * _body.Data.InverseMass;
+        body.Velocity += jImpulse * body.Data.InverseMass;
 
         SetActive(true);
     }
@@ -755,10 +959,10 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void ApplyAngularImpulse(Float3 angularImpulse)
     {
-        if (_body == null) return;
+        if (!TryGetBody(out RigidBody body)) return;
 
         var jImpulse = new JVector(angularImpulse.X, angularImpulse.Y, angularImpulse.Z);
-        _body.AngularVelocity += JVector.Transform(jImpulse, _body.Data.InverseInertiaWorld);
+        body.AngularVelocity += JVector.Transform(jImpulse, body.Data.InverseInertiaWorld);
 
         SetActive(true);
     }
@@ -768,11 +972,15 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MovePosition(Float3 position)
     {
-        if (_body != null)
-        {
-            _body.Position = new JVector(position.X, position.Y, position.Z);
-            ResetPose();
-        }
+        if (!TryGetBody(out RigidBody body)) return;
+
+        body.Position = new JVector(position.X, position.Y, position.Z);
+        body.SetActivationState(true);
+
+        // Static bodies never read their pose back, so the Transform has to be taken along explicitly.
+        Transform.Position = position;
+        _lastSyncedTransformVersion = Transform.Version;
+        ResetPose();
     }
 
     /// <summary>
@@ -780,10 +988,13 @@ public sealed class Rigidbody3D : MonoBehaviour
     /// </summary>
     public void MoveRotation(Quaternion rotation)
     {
-        if (_body != null)
-        {
-            _body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
-            ResetPose();
-        }
+        if (!TryGetBody(out RigidBody body)) return;
+
+        body.Orientation = new JQuaternion(rotation.X, rotation.Y, rotation.Z, rotation.W);
+        body.SetActivationState(true);
+
+        Transform.Rotation = rotation;
+        _lastSyncedTransformVersion = Transform.Version;
+        ResetPose();
     }
 }

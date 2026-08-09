@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections.Generic;
@@ -8,12 +8,14 @@ using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
-/// <summary>The overlap shape used by a <see cref="TriggerVolume"/>.</summary>
+/// <summary>The overlap shape used by a <see cref="TriggerVolume"/>. Mirrors the primitive colliders.</summary>
 public enum TriggerShape
 {
     Box,
     Sphere,
     Capsule,
+    Cylinder,
+    Cone,
 }
 
 /// <summary>
@@ -30,16 +32,22 @@ public sealed class TriggerVolume : MonoBehaviour
 {
     [SerializeField] private TriggerShape shape = TriggerShape.Box;
 
-    /// <summary>Local-space offset of the volume from the GameObject's origin.</summary>
+    /// <summary>Local-space offset of the volume from the GameObject's origin. As <see cref="Collider.Center"/>.</summary>
     public Float3 Center = Float3.Zero;
+
+    /// <summary>Euler rotation of the volume relative to the GameObject, in degrees. As <see cref="Collider.Rotation"/>.</summary>
+    public Float3 Rotation = Float3.Zero;
 
     /// <summary>Box full extents (width, height, depth). Used when <see cref="Shape"/> is Box.</summary>
     public Float3 Size = Float3.One;
 
-    /// <summary>Radius. Used when <see cref="Shape"/> is Sphere or Capsule.</summary>
+    /// <summary>Radius. Used by every shape except Box.</summary>
     public float Radius = 0.5f;
 
-    /// <summary>Capsule total height along the local up axis. Used when <see cref="Shape"/> is Capsule.</summary>
+    /// <summary>
+    /// Total height along the local up axis, caps included for a capsule. Used by Capsule, Cylinder
+    /// and Cone, and means the same thing as the matching collider's Height.
+    /// </summary>
     public float Height = 2.0f;
 
     /// <summary>Which layers the volume detects.</summary>
@@ -57,8 +65,12 @@ public sealed class TriggerVolume : MonoBehaviour
     private PhysicsWorld ResolvePhysics() =>
         GameObject.IsValid() && GameObject.Scene.IsValid() ? GameObject.Scene.Physics : null;
 
+    private Rigidbody3D _selfBody;
+
     public override void OnEnable()
     {
+        _selfBody = GetComponentInParent<Rigidbody3D>();
+
         // Sample after the step, not in FixedUpdate: FixedUpdate runs before the step, so it would
         // report overlaps against poses the solver is about to change.
         PhysicsWorld physics = ResolvePhysics();
@@ -76,11 +88,12 @@ public sealed class TriggerVolume : MonoBehaviour
 
         QueryOverlaps(physics, _hits);
 
-        Rigidbody3D self = GetComponentInParent<Rigidbody3D>();
         foreach (ShapeCastHit hit in _hits)
         {
+            // Our own body is already excluded by the query filter, so only unidentifiable hits (static
+            // geometry, terrain) are left to drop here.
             Rigidbody3D other = hit.Rigidbody;
-            if (other.IsNotValid() || other == self) continue; // skip static/unidentifiable and our own body
+            if (other.IsNotValid()) continue;
             _current.Add(other);
         }
 
@@ -119,26 +132,63 @@ public sealed class TriggerVolume : MonoBehaviour
 
     private void QueryOverlaps(PhysicsWorld physics, List<ShapeCastHit> hits)
     {
-        Float3 worldCenter = Transform.TransformPoint(Center);
+        // Skip our own body rather than filtering it out afterwards, so its static colliders go too.
+        QueryFilter filter = _selfBody.IsValid() ? new QueryFilter(LayerMask).Ignoring(_selfBody) : new QueryFilter(LayerMask);
+
+        Float3 worldCenter = WorldCenter;
+        Quaternion orientation = WorldRotation;
         Float3 scale = Transform.LossyScale;
 
         switch (shape)
         {
             case TriggerShape.Sphere:
-                physics.OverlapSphere(worldCenter, Radius * MaxComponent(scale), hits, LayerMask);
+                physics.OverlapSphere(worldCenter, Radius * MaxComponent(scale), hits, filter);
                 break;
 
             case TriggerShape.Capsule:
-                float capRadius = Radius * Maths.Max(Maths.Abs(scale.X), Maths.Abs(scale.Z));
-                float halfSegment = Maths.Max(0.0f, Height * 0.5f * Maths.Abs(scale.Y) - capRadius);
-                Float3 up = Transform.Up;
-                physics.OverlapCapsule(worldCenter + up * halfSegment, worldCenter - up * halfSegment, capRadius, hits, LayerMask);
+                GetCapsuleSegment(out Float3 top, out Float3 bottom, out float capRadius);
+                physics.OverlapCapsule(top, bottom, capRadius, hits, filter);
+                break;
+
+            case TriggerShape.Cylinder:
+                physics.OverlapCylinder(worldCenter, RadialScale(scale), HeightScale(scale), orientation, hits, filter);
+                break;
+
+            case TriggerShape.Cone:
+                physics.OverlapCone(worldCenter, RadialScale(scale), HeightScale(scale), orientation, hits, filter);
                 break;
 
             default:
-                physics.OverlapBox(worldCenter, Size * scale, Transform.Rotation, hits, LayerMask);
+                physics.OverlapBox(worldCenter, Size * scale, orientation, hits, filter);
                 break;
         }
+    }
+
+    /// <summary>The volume's centre in world space, offset by <see cref="Center"/>.</summary>
+    private Float3 WorldCenter => Transform.TransformPoint(Center);
+
+    /// <summary>The volume's orientation in world space, including <see cref="Rotation"/>.</summary>
+    private Quaternion WorldRotation => Transform.Rotation * Quaternion.FromEuler(Rotation);
+
+    // Radius scales with the widest axis across the shape, height with the axis along it.
+    private float RadialScale(Float3 scale) => Radius * Maths.Max(Maths.Abs(scale.X), Maths.Abs(scale.Z));
+    private float HeightScale(Float3 scale) => Height * Maths.Abs(scale.Y);
+
+    /// <summary>
+    /// The capsule's segment endpoints. Height is the total including both caps, so the segment is
+    /// what is left after removing them - matching how CapsuleCollider reads its own Height.
+    /// </summary>
+    private void GetCapsuleSegment(out Float3 top, out Float3 bottom, out float radius)
+    {
+        Float3 scale = Transform.LossyScale;
+        radius = RadialScale(scale);
+
+        float halfSegment = Maths.Max(0.0f, HeightScale(scale) * 0.5f - radius);
+        Float3 up = WorldRotation * Float3.UnitY;
+        Float3 center = WorldCenter;
+
+        top = center + up * halfSegment;
+        bottom = center - up * halfSegment;
     }
 
     private static float MaxComponent(Float3 v) => Maths.Max(Maths.Abs(v.X), Maths.Max(Maths.Abs(v.Y), Maths.Abs(v.Z)));
@@ -146,7 +196,8 @@ public sealed class TriggerVolume : MonoBehaviour
     public override void DrawGizmos()
     {
         Color color = _current.Count > 0 ? new Color(1f, 0.85f, 0f, 1f) : new Color(0f, 1f, 0.4f, 1f);
-        Float3 worldCenter = Transform.TransformPoint(Center);
+        Float3 worldCenter = WorldCenter;
+        Quaternion orientation = WorldRotation;
         Float3 scale = Transform.LossyScale;
 
         switch (shape)
@@ -156,25 +207,23 @@ public sealed class TriggerVolume : MonoBehaviour
                 break;
 
             case TriggerShape.Capsule:
-                float capRadius = Radius * Maths.Max(Maths.Abs(scale.X), Maths.Abs(scale.Z));
-                float halfSegment = Maths.Max(0.0f, Height * 0.5f * Maths.Abs(scale.Y) - capRadius);
-                Float3 up = Transform.Up;
-                Float3 a = worldCenter + up * halfSegment;
-                Float3 b = worldCenter - up * halfSegment;
-                Debug.DrawWireSphere(a, capRadius, color, 12);
-                Debug.DrawWireSphere(b, capRadius, color, 12);
-                Float3 right = Transform.Right * capRadius;
-                Float3 fwd = Transform.Forward * capRadius;
-                Debug.DrawLine(a + right, b + right, color);
-                Debug.DrawLine(a - right, b - right, color);
-                Debug.DrawLine(a + fwd, b + fwd, color);
-                Debug.DrawLine(a - fwd, b - fwd, color);
+                GetCapsuleSegment(out Float3 top, out Float3 bottom, out float capRadius);
+                Debug.DrawWireCapsule(bottom, top, capRadius, color, 16);
+                break;
+
+            case TriggerShape.Cylinder:
+                Debug.DrawWireCylinder(worldCenter, orientation, RadialScale(scale), HeightScale(scale), color, 16);
+                break;
+
+            case TriggerShape.Cone:
+                float coneHeight = HeightScale(scale);
+                Float3 up = orientation * Float3.UnitY;
+                Debug.DrawWireCone(worldCenter - up * (coneHeight * 0.5f), up * coneHeight, RadialScale(scale), color, 16);
                 break;
 
             default:
-                Float4x4 matrix = Float4x4.CreateTRS(Transform.Position, Transform.Rotation, scale);
-                Debug.PushMatrix(matrix);
-                Debug.DrawWireCube(Center, Size * 0.5f, color);
+                Debug.PushMatrix(Float4x4.CreateTRS(worldCenter, orientation, scale));
+                Debug.DrawWireCube(Float3.Zero, Size * 0.5f, color);
                 Debug.PopMatrix();
                 break;
         }

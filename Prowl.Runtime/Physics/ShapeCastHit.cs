@@ -19,9 +19,17 @@ public struct ShapeCastHit
 
     /// <summary>
     /// The fraction/lambda along the sweep direction where the hit occurred (0 = start, 1 = end of sweep).
-    /// Note: This is not a distance, but a normalized value between 0 and 1.
+    /// Note: This is not a distance, but a normalized value between 0 and 1. Prefer
+    /// <see cref="Distance"/> unless the normalized form is what you actually want.
     /// </summary>
     public float Fraction;
+
+    /// <summary>
+    /// How far along the cast the hit occurred, in world units. Zero for overlap queries, which do not
+    /// sweep. This is <see cref="Fraction"/> already multiplied by the cast distance, which is what
+    /// callers almost always want and is easy to get wrong by hand.
+    /// </summary>
+    public float Distance;
 
     /// <summary>
     /// The amount of penetration at the hit point. Non-zero for overlap queries, and for shape casts
