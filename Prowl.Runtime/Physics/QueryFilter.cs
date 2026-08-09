@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Runtime;
@@ -23,7 +23,7 @@ public struct QueryFilter
     public Collider IgnoreCollider;
 
     /// <summary>Hits anything on any layer.</summary>
-    public static QueryFilter Default => new(LayerMask.Everything);
+    public static readonly QueryFilter Default = new(LayerMask.Everything);
 
     public QueryFilter(LayerMask layerMask)
     {
