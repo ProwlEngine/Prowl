@@ -170,20 +170,37 @@ public static class TextureSpriteMeta
 {
     private const string Key = "sprite";
 
-    /// <summary>Deserializes the sprite settings from a texture's <c>.meta</c> settings compound (defaults if absent).</summary>
-    public static SpriteImportSettings ReadFrom(EchoObject? settings)
+    /// <summary>
+    /// Deserializes the sprite settings from a texture's <c>.meta</c> settings compound. An absent block
+    /// legitimately means defaults; a block that is present but unreadable is reported through
+    /// <paramref name="failed"/> so callers can refuse to write over it. Silently substituting defaults
+    /// would present the texture as having no sprites and let the next save destroy the real slicing.
+    /// </summary>
+    public static SpriteImportSettings ReadFrom(EchoObject? settings, out bool failed)
     {
+        failed = false;
         if (settings != null && settings.TryGet(Key, out EchoObject echo))
         {
             try
             {
                 var ctx = ImportHelper.CreateTrackingContext(out _);
-                return Serializer.Deserialize<SpriteImportSettings>(echo, ctx) ?? new SpriteImportSettings();
+                SpriteImportSettings? parsed = Serializer.Deserialize<SpriteImportSettings>(echo, ctx);
+                if (parsed != null) return parsed;
+
+                failed = true;
+                Prowl.Runtime.Debug.LogError("[Sprite] Sprite import settings deserialized to null. Keeping the existing block rather than replacing it with defaults.");
             }
-            catch { /* fall through to defaults */ }
+            catch (Exception ex)
+            {
+                failed = true;
+                Prowl.Runtime.Debug.LogError($"[Sprite] Failed to read sprite import settings: {ex.Message}\n{ex.StackTrace}");
+            }
         }
         return new SpriteImportSettings();
     }
+
+    /// <summary>Settings-only overload, for callers that just build from whatever is readable.</summary>
+    public static SpriteImportSettings ReadFrom(EchoObject? settings) => ReadFrom(settings, out _);
 
     /// <summary>Serializes the sprite settings into a texture's <c>.meta</c> settings compound.</summary>
     public static void WriteInto(EchoObject settings, SpriteImportSettings s)
@@ -201,21 +218,28 @@ public static class TextureSpriteMeta
                 slice.Id = Guid.NewGuid();
     }
 
-    /// <summary>Loads the sprite settings for a texture by GUID.</summary>
-    public static SpriteImportSettings Load(Guid textureGuid)
+    /// <summary>Loads the sprite settings for a texture by GUID. <paramref name="failed"/> is true when
+    /// existing settings could not be read, in which case the caller must not save over them.</summary>
+    public static SpriteImportSettings Load(Guid textureGuid, out bool failed)
     {
+        failed = false;
         try
         {
             string abs = AbsolutePath(textureGuid);
             string metaPath = MetaFile.GetMetaPath(abs);
             if (!File.Exists(metaPath)) return new SpriteImportSettings();
-            return ReadFrom(MetaFile.Read(metaPath).Settings);
+            return ReadFrom(MetaFile.Read(metaPath).Settings, out failed);
         }
-        catch
+        catch (Exception ex)
         {
+            failed = true;
+            Prowl.Runtime.Debug.LogError($"[Sprite] Could not read the meta for texture {textureGuid}: {ex.Message}\n{ex.StackTrace}");
             return new SpriteImportSettings();
         }
     }
+
+    /// <summary>Settings-only overload.</summary>
+    public static SpriteImportSettings Load(Guid textureGuid) => Load(textureGuid, out _);
 
     /// <summary>Writes the sprite settings into a texture's <c>.meta</c> and reimports it.</summary>
     public static void Save(Guid textureGuid, SpriteImportSettings s)
@@ -249,8 +273,15 @@ public sealed class SpriteEditTarget
 {
     public Guid TextureGuid;
     public SpriteImportSettings Settings = new();
-    /// <summary>True when the settings differ from what's on disk (i.e. a Save &amp; Reimport is pending).</summary>
+
+    /// <summary>Set when <see cref="Settings"/> has been edited and not yet folded back into the
+    /// texture's import-settings compound. The compound is what the inspector diffs to decide whether
+    /// anything needs applying, so this only marks "needs re-serializing", not "needs saving".</summary>
     public bool Dirty;
+
+    /// <summary>True when the texture's existing sprite settings could not be read. <see cref="Settings"/>
+    /// is then defaults that do not describe what is on disk, so saving would destroy the real slicing.</summary>
+    public bool LoadFailed;
 }
 
 /// <summary>
@@ -270,11 +301,22 @@ public static class SpriteEditRegistry
             t = new SpriteEditTarget
             {
                 TextureGuid = textureGuid,
-                Settings = TextureSpriteMeta.Load(textureGuid),
+                Settings = TextureSpriteMeta.Load(textureGuid, out bool failed),
+                LoadFailed = failed,
             };
             _targets[textureGuid] = t;
         }
         return t;
+    }
+
+    /// <summary>Replaces a texture's sprite settings wholesale - used when a revert restores the meta
+    /// values and the live copy has to follow.</summary>
+    public static void SetSettings(Guid textureGuid, SpriteImportSettings settings)
+    {
+        SpriteEditTarget t = Get(textureGuid);
+        t.Settings = settings;
+        t.Dirty = false;
+        t.LoadFailed = false;
     }
 
     public static bool IsDirty(Guid textureGuid) => _targets.TryGetValue(textureGuid, out SpriteEditTarget? t) && t.Dirty;
@@ -289,7 +331,8 @@ public static class SpriteEditRegistry
     {
         if (_targets.TryGetValue(textureGuid, out SpriteEditTarget? t))
         {
-            t.Settings = TextureSpriteMeta.Load(textureGuid);
+            t.Settings = TextureSpriteMeta.Load(textureGuid, out bool failed);
+            t.LoadFailed = failed;
             t.Dirty = false;
         }
     }
@@ -314,13 +357,15 @@ public static class SpriteSlicer
     {
         Float2 pivot = Sprite.PivotFromAlignment(data.GeneratedPivot, new Float2(0.5f, 0.5f));
 
-        return data.SlicingTool switch
+        List<SpriteSliceData> generated = data.SlicingTool switch
         {
             SpriteSlicingTool.Automatic => Automatic(alpha, textureWidth, textureHeight, baseName, data.GeneratedPivot, pivot),
             SpriteSlicingTool.GridByCount => GridByCount(data, textureWidth, textureHeight, alpha, baseName, pivot),
             SpriteSlicingTool.Isometric => Isometric(data, textureWidth, textureHeight, alpha, baseName, pivot),
             _ => GridBySize(data, textureWidth, textureHeight, alpha, baseName, pivot),
         };
+
+        return SpriteSliceMatcher.CarryOverIdentities(data.Slices, generated);
     }
 
     private static List<SpriteSliceData> GridBySize(SpriteImportSettings d, int texW, int texH, byte[]? alpha, string baseName, Float2 pivot)
@@ -489,6 +534,98 @@ public static class SpriteSlicer
             Prowl.Runtime.Debug.LogWarning($"[SpriteSlicer] Could not read texture alpha: {ex.Message}");
             return null;
         }
+    }
+}
+
+/// <summary>
+/// Carries authored slice identity across a re-slice.
+/// </summary>
+public static class SpriteSliceMatcher
+{
+    /// <summary>How much of the smaller rect two slices must share to count as the same sprite moved.</summary>
+    private const float MinOverlapFraction = 0.5f;
+
+    public static List<SpriteSliceData> CarryOverIdentities(List<SpriteSliceData> previous, List<SpriteSliceData> generated)
+    {
+        if (previous.Count == 0 || generated.Count == 0) return generated;
+
+        var oldClaimed = new bool[previous.Count];
+        var newMatched = new bool[generated.Count];
+
+        // Pass 1: identical rects. A cell the re-slice didn't move keeps its slice outright. Built in
+        // reverse so the earliest duplicate wins, which keeps the result independent of dictionary order.
+        var byRect = new Dictionary<(int, int, int, int), int>(previous.Count);
+        for (int i = previous.Count - 1; i >= 0; i--)
+            byRect[KeyOf(previous[i].Rect)] = i;
+
+        for (int n = 0; n < generated.Count; n++)
+        {
+            if (!byRect.TryGetValue(KeyOf(generated[n].Rect), out int o) || oldClaimed[o]) continue;
+            oldClaimed[o] = true;
+            newMatched[n] = true;
+            Adopt(generated[n], previous[o]);
+        }
+
+        // Pass 2: greedy best overlap over what's left, so nudging a grid keeps its sprites rather than
+        // reissuing them. Strongest overlap wins first; ties resolve by index so the result is stable.
+        var pairs = new List<(int New, int Old, long Overlap)>();
+        for (int n = 0; n < generated.Count; n++)
+        {
+            if (newMatched[n]) continue;
+            long newArea = AreaOf(generated[n].Rect);
+            for (int o = 0; o < previous.Count; o++)
+            {
+                if (oldClaimed[o]) continue;
+                long overlap = IntersectionArea(generated[n].Rect, previous[o].Rect);
+                if (overlap <= 0) continue;
+                long smaller = Math.Min(newArea, AreaOf(previous[o].Rect));
+                if (smaller <= 0 || overlap < smaller * MinOverlapFraction) continue;
+                pairs.Add((n, o, overlap));
+            }
+        }
+
+        pairs.Sort((a, b) =>
+        {
+            int byOverlap = b.Overlap.CompareTo(a.Overlap);
+            if (byOverlap != 0) return byOverlap;
+            int byNew = a.New.CompareTo(b.New);
+            return byNew != 0 ? byNew : a.Old.CompareTo(b.Old);
+        });
+
+        foreach ((int n, int o, _) in pairs)
+        {
+            if (newMatched[n] || oldClaimed[o]) continue;
+            newMatched[n] = true;
+            oldClaimed[o] = true;
+            Adopt(generated[n], previous[o]);
+        }
+
+        return generated;
+    }
+
+    private static void Adopt(SpriteSliceData target, SpriteSliceData source)
+    {
+        target.Id = source.Id;
+        target.Name = source.Name;
+        target.Border = source.Border;
+
+        if (source.Alignment == SpriteAlignment.Custom)
+        {
+            target.Alignment = SpriteAlignment.Custom;
+            target.CustomPivot = source.CustomPivot;
+            target.PivotUnit = source.PivotUnit;
+        }
+    }
+
+    private static (int, int, int, int) KeyOf(SpriteRect r) => (r.X, r.Y, r.Width, r.Height);
+
+    private static long AreaOf(SpriteRect r) => (long)Math.Max(0, r.Width) * Math.Max(0, r.Height);
+
+    private static long IntersectionArea(SpriteRect a, SpriteRect b)
+    {
+        long w = Math.Min(a.MaxX, b.MaxX) - Math.Max(a.X, b.X);
+        long h = Math.Min(a.MaxY, b.MaxY) - Math.Max(a.Y, b.Y);
+        return w > 0 && h > 0 ? w * h : 0;
     }
 }
 

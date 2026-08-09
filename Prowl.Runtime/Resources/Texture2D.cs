@@ -81,8 +81,7 @@ public sealed class Texture2D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
-        if (data.Length < rectWidth * rectHeight)
-            throw new ArgumentException("Not enough pixel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)rectWidth * rectHeight * ImageFormat.GetSizeInBytes(), nameof(data));
 
         fixed (void* ptr = data.Span)
             SetDataPtr(ptr, rectX, rectY, rectWidth, rectHeight);
@@ -119,6 +118,8 @@ public sealed class Texture2D : Texture, ISerializable
     /// </summary>
     public unsafe bool GetData<T>(Memory<T> data, Action onComplete = null) where T : unmanaged
     {
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
+
         TextureDescription stagingDescription =
             TextureDescription.Texture2D(Width, Height, 1, 1, ImageFormat, TextureUsage.Staging);
         uint destSize = (uint)GetSize();
@@ -129,6 +130,18 @@ public sealed class Texture2D : Texture, ISerializable
             using var handle = data.Pin();
             CopyMappedRegion(mapped, (nint)handle.Pointer, destSize, width, height, 1);
         }, onComplete);
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="FormatSizeHelpers.GetSizeInBytes(PixelFormat)"/> bytes per texel,
+    /// so a byte buffer sized one-per-texel for an RGBA texture is a quarter of what UpdateTexture goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     public int GetSize() => (int)(Width * Height * ImageFormat.GetSizeInBytes());

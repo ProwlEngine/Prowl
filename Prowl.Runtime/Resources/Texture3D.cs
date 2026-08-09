@@ -75,8 +75,7 @@ public sealed class Texture3D : Texture, ISerializable
     {
         EnsureNotDisposed();
         ValidateBoxOperation(boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
-        if (data.Length < boxWidth * boxHeight * boxDepth)
-            throw new ArgumentException("Not enough voxel data", nameof(data));
+        ValidateByteCapacity(data.Length * sizeof(T), (long)boxWidth * boxHeight * boxDepth * ImageFormat.GetSizeInBytes(), nameof(data));
 
         fixed (void* ptr = data.Span)
             SetDataPtr(ptr, boxX, boxY, boxZ, boxWidth, boxHeight, boxDepth);
@@ -113,6 +112,8 @@ public sealed class Texture3D : Texture, ISerializable
     /// </summary>
     public unsafe bool GetData<T>(Memory<T> data, Action onComplete = null) where T : unmanaged
     {
+        ValidateByteCapacity(data.Length * sizeof(T), GetSize(), nameof(data));
+
         TextureDescription stagingDescription =
             TextureDescription.Texture3D(Width, Height, Depth, 1, ImageFormat, TextureUsage.Staging);
         uint destSize = (uint)GetSize();
@@ -123,6 +124,18 @@ public sealed class Texture3D : Texture, ISerializable
             using var handle = data.Pin();
             CopyMappedRegion(mapped, (nint)handle.Pointer, destSize, width, height, depth);
         }, onComplete);
+    }
+
+    /// <summary>
+    /// Guards a buffer against what the driver will actually read or write. The element count alone says
+    /// nothing: the GPU transfers <see cref="FormatSizeHelpers.GetSizeInBytes(PixelFormat)"/> bytes per voxel,
+    /// so a byte buffer sized one-per-voxel for an RGBA texture is a quarter of what UpdateTexture goes on to read.
+    /// </summary>
+    private void ValidateByteCapacity(long providedBytes, long requiredBytes, string paramName)
+    {
+        if (providedBytes < requiredBytes)
+            throw new ArgumentException(
+                $"Buffer holds {providedBytes} bytes but {ImageFormat} needs {requiredBytes} for this region.", paramName);
     }
 
     public int GetSize() => (int)(Width * Height * Depth * ImageFormat.GetSizeInBytes());
