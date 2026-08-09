@@ -263,7 +263,7 @@ public static class PrefabUtility
         if (fresh == null) return;
 
         // Preserve identifiers so undo records stay valid
-        CopyIdentifiers(instanceRoot, fresh);
+        CopyInstanceState(instanceRoot, fresh);
 
         fresh.Transform.Position = instanceRoot.Transform.Position;
         fresh.Transform.Rotation = instanceRoot.Transform.Rotation;
@@ -287,7 +287,7 @@ public static class PrefabUtility
             scene.SetRootIndex(fresh, rootIdx);
         }
 
-        // CopyIdentifiers gave the replacement the old object's identifier, so one key addresses the
+        // CopyInstanceState gave the replacement the old object's identifier, so one key addresses the
         // instance across every swap either direction.
         var rootId = fresh.Identifier;
 
@@ -663,8 +663,13 @@ public static class PrefabUtility
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null) return;
 
-        var selectedGO = Selection.GetSelected<GameObject>().FirstOrDefault();
-        GameObject? newSelection = null;
+        // The whole selection is remapped, not just the first entry: it can hold several instances,
+        // and children of them as well as the roots. GameObjects are noted by identifier because the
+        // objects themselves are about to be replaced; anything else is kept as-is.
+        var selectionSnapshot = Selection.Selected
+            .Select(o => o is GameObject go ? new SelectedGameObject(go.Identifier) : o)
+            .ToList();
+        bool remapSelection = Selection.Selected.Any(o => o is GameObject);
 
         foreach (var root in roots)
         {
@@ -681,7 +686,7 @@ public static class PrefabUtility
             if (fresh == null) continue;
 
             // Preserve identifiers from the old instance so undo records stay valid
-            CopyIdentifiers(root, fresh);
+            CopyInstanceState(root, fresh);
 
             fresh.PrefabOverrides = savedOverrides;
             fresh.Name = savedName;
@@ -706,14 +711,29 @@ public static class PrefabUtility
             // the same identifiers: overrides holding scene references resolve by identifier, so they
             // would otherwise bind to the instance being replaced.
             ApplyPropertyOverridesToInstance(fresh, savedOverrides);
-
-            if (selectedGO == root)
-                newSelection = fresh;
         }
 
-        if (newSelection != null)
-            Selection.Select(newSelection);
+        if (roots.Count > 0 && remapSelection)
+        {
+            Selection.Clear();
+            foreach (var entry in selectionSnapshot)
+            {
+                if (entry is SelectedGameObject selected)
+                {
+                    var live = Undo.FindGO(selected.Identifier);
+                    if (live.IsValid()) Selection.AddToSelection(live!);
+                }
+                else
+                {
+                    Selection.AddToSelection(entry);
+                }
+            }
+        }
     }
+
+    /// <summary>A GameObject held in the selection, noted by identifier so it survives a refresh.
+    /// A distinct type rather than a bare Guid, so it cannot be confused with a selected asset.</summary>
+    private readonly record struct SelectedGameObject(Guid Identifier);
 
     // ================================================================
     //  Nesting Helpers
@@ -952,6 +972,7 @@ public static class PrefabUtility
         CompareField(pathPrefix, "TagIndex", instanceGO.TagIndex, sourceGO.TagIndex, overrides);
         CompareField(pathPrefix, "LayerIndex", instanceGO.LayerIndex, sourceGO.LayerIndex, overrides);
         CompareField(pathPrefix, "Enabled", instanceGO.Enabled, sourceGO.Enabled, overrides);
+        CompareField(pathPrefix, "IsStatic", instanceGO.IsStatic, sourceGO.IsStatic, overrides);
         // Name and Transform (Position/Rotation/Scale) are intentionally NOT tracked -
         // they are per-instance values that don't constitute overrides.
     }
@@ -1100,20 +1121,25 @@ public static class PrefabUtility
     }
 
     /// <summary>
-    /// Copy identifiers from an old GO tree to a fresh one (matched by structure index).
-    /// Preserves GO and component identifiers so undo records, selection, etc. stay valid.
+    /// Carry per-instance state from an old GO tree onto a fresh one (matched by structure index).
+    /// Identifiers keep undo records and selection valid; hide flags are editor bookkeeping that the
+    /// override system deliberately never tracks, so a refresh would otherwise reset them.
     /// </summary>
-    private static void CopyIdentifiers(GameObject oldGO, GameObject freshGO)
+    private static void CopyInstanceState(GameObject oldGO, GameObject freshGO)
     {
         freshGO.SetIdentifier(oldGO.Identifier);
+        freshGO.HideFlags = oldGO.HideFlags;
 
         var oldComps = oldGO.GetComponents().ToArray();
         var freshComps = freshGO.GetComponents().ToArray();
         for (int i = 0; i < Math.Min(oldComps.Length, freshComps.Length); i++)
+        {
             freshComps[i].Identifier = oldComps[i].Identifier;
+            freshComps[i].HideFlags = oldComps[i].HideFlags;
+        }
 
         for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)
-            CopyIdentifiers(oldGO.Children[i], freshGO.Children[i]);
+            CopyInstanceState(oldGO.Children[i], freshGO.Children[i]);
     }
 
     /// <summary>
