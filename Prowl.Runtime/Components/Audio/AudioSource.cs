@@ -88,6 +88,10 @@ public sealed class AudioSource : MonoBehaviour
     private ConcurrentList<IAudioEffect> _effects = new();
     private AudioBuffer _outputBuffer;
 
+    // Latched so a failing audio callback reports itself once instead of every block.
+    private bool _effectProcessFailed;
+    private bool _proceduralProcessFailed;
+
     // Events
     public event AudioEndEvent End;
     public event AudioProcessEvent Process;
@@ -644,6 +648,9 @@ public sealed class AudioSource : MonoBehaviour
             MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
     }
 
+    // Native calls this on the audio thread, so an exception leaving it is undefined behaviour and in
+    // practice takes the process down with no usable stack. A user effect throwing, or an effect
+    // changing the frame count so a buffer copy no longer fits, has to cost silence and one log line.
     private unsafe void OnEffectProcess(ma_node_ptr pNode, IntPtr ppFramesIn, IntPtr pFrameCountIn, IntPtr ppFramesOut, IntPtr pFrameCountOut)
     {
         if (pNode.pointer == IntPtr.Zero)
@@ -658,38 +665,69 @@ public sealed class AudioSource : MonoBehaviour
         float** framesIn = (float**)ppFramesIn;
         float** framesOut = (float**)ppFramesOut;
 
-        NativeArray<float> bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
-        NativeArray<float> bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
-
-        // Just in case we end up with no sound at all because no effects were active (prevents silence)
-        bufferIn.CopyTo(bufferOut);
-
-        // An effect can modify the number of frames it processes so we need to keep track of this
-        UInt32 countIn = *frameCountIn;
-        UInt32 countOut = *frameCountOut;
-
-        for (int i = 0; i < _effects.Count; i++)
+        try
         {
-            _effects[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+            NativeArray<float> bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
+            NativeArray<float> bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
 
-            //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
-            bufferOut.CopyTo(bufferIn);
+            // Just in case we end up with no sound at all because no effects were active (prevents silence)
+            bufferIn.CopyTo(bufferOut);
 
-            countIn = countOut;
+            // An effect can modify the number of frames it processes so we need to keep track of this
+            UInt32 countIn = *frameCountIn;
+            UInt32 countOut = *frameCountOut;
+
+            for (int i = 0; i < _effects.Count; i++)
+            {
+                _effects[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+
+                //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
+                bufferOut.CopyTo(bufferIn);
+
+                countIn = countOut;
+            }
+
+            Process?.Invoke(bufferIn, countIn, bufferOut, ref countOut, pEffectNode->config.channels);
+
+            *frameCountOut = countOut;
+
+            _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels)));
         }
+        catch (Exception ex)
+        {
+            // Flagged rather than logged every callback: a permanently broken effect would otherwise
+            // build a message thousands of times a second on the audio thread.
+            if (!_effectProcessFailed)
+            {
+                _effectProcessFailed = true;
+                Debug.LogError($"[{Name}] Audio effect processing threw and is now producing silence: {ex}");
+            }
 
-        Process?.Invoke(bufferIn, countIn, bufferOut, ref countOut, pEffectNode->config.channels);
-
-        *frameCountOut = countOut;
-
-        _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels)));
+            if (framesOut != null && framesOut[0] != null)
+                new Span<float>(framesOut[0], (int)(*frameCountOut * channels)).Clear();
+        }
     }
 
-    private void OnProceduralProcess(IntPtr pUserData, IntPtr pFramesOut, UInt64 frameCount, UInt32 channels)
+    private unsafe void OnProceduralProcess(IntPtr pUserData, IntPtr pFramesOut, UInt64 frameCount, UInt32 channels)
     {
         int length = (int)(frameCount * channels);
-        NativeArray<float> framesOut = new NativeArray<float>(pFramesOut, length);
-        Read?.Invoke(framesOut, frameCount, (int)channels);
+
+        try
+        {
+            NativeArray<float> framesOut = new NativeArray<float>(pFramesOut, length);
+            Read?.Invoke(framesOut, frameCount, (int)channels);
+        }
+        catch (Exception ex)
+        {
+            if (!_proceduralProcessFailed)
+            {
+                _proceduralProcessFailed = true;
+                Debug.LogError($"[{Name}] Procedural audio generation threw and is now producing silence: {ex}");
+            }
+
+            if (pFramesOut != IntPtr.Zero)
+                new Span<float>((void*)pFramesOut, length).Clear();
+        }
     }
 
     #endregion

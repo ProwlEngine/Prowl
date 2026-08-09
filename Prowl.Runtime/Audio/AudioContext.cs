@@ -34,6 +34,7 @@ public static class AudioContext
     private static DateTime lastUpdateTime;
     private static float deltaTime;
     private static float masterVolume = 1.0f;
+    private static bool deviceProcessFailed;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -287,20 +288,34 @@ public static class AudioContext
         }
     }
 
+    // The device thread calls this directly, so an exception leaving it is undefined behaviour rather
+    // than a stack trace. A subscriber that throws must not be able to take the process with it.
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static void OnDeviceDataProc(ma_device_ptr pDevice, IntPtr pOutput, IntPtr pInput, UInt32 frameCount)
     {
         IntPtr pEngine = MiniAudioExNative.ma_ex_device_get_user_data(pDevice.pointer);
         MiniAudioExNative.ma_engine_read_pcm_frames(pEngine, pOutput, frameCount, out _);
 
-        NativeArray<float> buffer = new NativeArray<float>(pOutput, (Int32)(frameCount * channels));
-
-        if (DataProcess != null)
+        try
         {
-            DataProcess.Invoke(buffer, frameCount);
-        }
+            NativeArray<float> buffer = new NativeArray<float>(pOutput, (Int32)(frameCount * channels));
 
-        outputBuffer.Write(buffer);
+            if (DataProcess != null)
+            {
+                DataProcess.Invoke(buffer, frameCount);
+            }
+
+            outputBuffer.Write(buffer);
+        }
+        catch (Exception ex)
+        {
+            // Latched: building this message every block would allocate on the device thread forever.
+            if (!deviceProcessFailed)
+            {
+                deviceProcessFailed = true;
+                Debug.LogError($"An audio device data handler threw, further failures are not reported: {ex}");
+            }
+        }
     }
 
     public static bool GetOutputBuffer(ref float[] buffer, out int length)
