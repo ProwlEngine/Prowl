@@ -79,7 +79,7 @@ public sealed class ClipNestedRefComp : MonoBehaviour
 }
 
 /// <summary>
-/// Mirrors AudioSource's pattern: all state lives in plain private fields that are invisible to
+/// A component whose state lives in plain private fields that are invisible to
 /// GetSerializableFields and travel only through custom ISerializable methods. A field-by-field
 /// copy would miss every one of them; a values paste must go through Deserialize.
 /// </summary>
