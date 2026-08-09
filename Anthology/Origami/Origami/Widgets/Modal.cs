@@ -17,6 +17,17 @@ namespace Prowl.OrigamiUI;
 /// Implement this to create custom modals (file dialogs, asset selectors, etc.)
 /// that participate in the unified stacking system.
 /// </summary>
+/// <summary>How a modal was closed without one of its own buttons answering it.</summary>
+public enum ModalDismissReason
+{
+    /// <summary>The title bar's close button.</summary>
+    CloseButton,
+    /// <summary>The Escape key, while this modal was topmost.</summary>
+    Escape,
+    /// <summary>A click on the backdrop behind the modal.</summary>
+    Backdrop,
+}
+
 public interface IModal
 {
     /// <summary>Whether clicking the backdrop closes this modal.</summary>
@@ -24,6 +35,18 @@ public interface IModal
 
     /// <summary>Whether pressing Escape closes this modal.</summary>
     bool CloseOnEscape { get; }
+
+    /// <summary>
+    /// Invoked whenever the modal is <i>dismissed</i> rather than answered - closed by its close button,
+    /// by Escape, or by the backdrop - with the reason it went. Runs after the matching per-reason
+    /// callback below. Never invoked when one of the modal's own buttons closes it, since that button
+    /// has already run the caller's handler.
+    /// </summary>
+    /// <remarks>
+    /// Lets a dialog whose answer actually matters treat a dismissal as a definite outcome rather than
+    /// silently doing nothing - an unsaved-changes prompt can take it as "discard", for instance.
+    /// </remarks>
+    Action<ModalDismissReason>? OnDismissed => null;
 
     /// <summary>
     /// Draw the modal content. The system provides the backdrop and layer management;
@@ -59,6 +82,8 @@ public sealed class DialogModal : IModal
     public bool CloseOnBackdrop { get; set; }
     public bool CloseOnEscape { get; set; } = true;
 
+    public Action<ModalDismissReason>? OnDismissed { get; set; }
+
     /// <summary>Optional leading vector icon in the title bar (host paints into the slot rect).</summary>
     public IOrigamiIcon? Icon;
 
@@ -93,7 +118,8 @@ public sealed class DialogModal : IModal
             .StopEventPropagation();
 
         using (container.Enter())
-            DrawInner(paper, $"omd_{stackIndex}", embedded: false, onClose: () => Modal.Remove(this));
+            DrawInner(paper, $"omd_{stackIndex}", embedded: false,
+                onClose: () => Modal.Dismiss(this, ModalDismissReason.CloseButton));
     }
 
     /// <summary>Fixed embedded width in px; null = stretch to fill. Set by <see cref="ModalBuilder.ShowEmbedded"/>.</summary>
@@ -225,6 +251,8 @@ public sealed class CustomDrawModal : IModal
     public bool CloseOnBackdrop { get; set; }
     public bool CloseOnEscape { get; set; } = true;
 
+    public Action<ModalDismissReason>? OnDismissed { get; set; }
+
     /// <param name="draw">Callback: (paper, layer, stackIndex). Render your window on the given layer.</param>
     public CustomDrawModal(Action<Paper, int, int> draw) => _draw = draw;
 
@@ -259,6 +287,14 @@ public static class Modal
 
     /// <summary>Pop a specific modal from the stack (regardless of position).</summary>
     public static void Remove(IModal modal) => _stack.Remove(modal);
+
+    /// <summary>Closes <paramref name="modal"/> as a dismissal, running <see cref="IModal.OnDismissed"/>.
+    /// For a modal drawing its own close affordance rather than using the built-in title bar.</summary>
+    public static void Dismiss(IModal modal, ModalDismissReason reason)
+    {
+        if (!_stack.Remove(modal)) return;
+        modal.OnDismissed?.Invoke(reason);
+    }
 
     /// <summary>Pop all modals.</summary>
     public static void PopAll() => _stack.Clear();
@@ -339,8 +375,10 @@ public static class Modal
                 .StopEventPropagation()
                 .OnClick(capturedIndex, (idx, _) =>
                 {
-                    if (idx < _stack.Count && _stack[idx].CloseOnBackdrop)
-                        _stack.RemoveAt(idx);
+                    if (idx >= _stack.Count || !_stack[idx].CloseOnBackdrop) return;
+                    IModal dismissed = _stack[idx];
+                    _stack.RemoveAt(idx);
+                    dismissed.OnDismissed?.Invoke(ModalDismissReason.Backdrop);
                 });
 
             // Let the modal draw itself on layer + 1
@@ -350,6 +388,7 @@ public static class Modal
             if (i == _stack.Count - 1 && modal.CloseOnEscape && paper.IsKeyPressed(PaperKey.Escape))
             {
                 _stack.RemoveAt(i);
+                modal.OnDismissed?.Invoke(ModalDismissReason.Escape);
                 break;
             }
         }
@@ -368,6 +407,7 @@ public sealed class ModalBuilder
     private float _height;
     private bool _closeOnBackdrop;
     private bool _closeOnEscape = true;
+    private Action<ModalDismissReason>? _onDismissed;
     private IOrigamiIcon? _icon;
     private readonly List<(string Label, Action OnClick, OrigamiVariant Variant)> _buttons = [];
 
@@ -398,6 +438,10 @@ public sealed class ModalBuilder
     /// <summary>Allow closing with Escape key (default true).</summary>
     public ModalBuilder CloseOnEscape(bool value = true) { _closeOnEscape = value; return this; }
 
+    /// <summary>Run when the modal is dismissed rather than answered by a button. The argument says
+    /// which way it went, so a caller needing to tell them apart can switch on it.</summary>
+    public ModalBuilder OnDismissed(Action<ModalDismissReason> handler) { _onDismissed = handler; return this; }
+
     /// <summary>Add a button to the dialog footer.</summary>
     public ModalBuilder Button(string label, Action onClick, OrigamiVariant variant = OrigamiVariant.Default)
     {
@@ -425,6 +469,7 @@ public sealed class ModalBuilder
             Height = _height,
             CloseOnBackdrop = _closeOnBackdrop,
             CloseOnEscape = _closeOnEscape,
+            OnDismissed = _onDismissed,
         };
         foreach (var (label, onClick, variant) in _buttons)
             entry.Button(label, onClick, variant);
