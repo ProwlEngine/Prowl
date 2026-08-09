@@ -230,26 +230,28 @@ public sealed class AudioClip : EngineObject, ISerializable
         }
     }
 
+    // Every read defaults instead of indexing. A missing key used to throw out of the middle of a
+    // load, which takes the rest of the scene down with it rather than costing one clip.
     public void Deserialize(EchoObject value, SerializationContext ctx)
     {
         // Restore the name
-        clipName = value["Name"].StringValue;
+        clipName = value.Get("Name")?.StringValue ?? string.Empty;
         if (!string.IsNullOrEmpty(clipName))
             Name = clipName;
 
-        bool isFileBased = value["IsFileBased"].BoolValue;
+        bool isFileBased = value.Get("IsFileBased")?.BoolValue ?? false;
 
         if (isFileBased)
         {
             // Reconstruct file-based clip
             ReleaseHandle();
-            filePath = value["FilePath"].StringValue;
-            streamFromDisk = value["StreamFromDisk"].BoolValue;
+            filePath = value.Get("FilePath")?.StringValue ?? string.Empty;
+            streamFromDisk = value.Get("StreamFromDisk")?.BoolValue ?? false;
 
             // Verify the file still exists
-            if (!System.IO.File.Exists(filePath))
+            if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
             {
-                Debug.LogError($"AudioClip deserialization warning: File not found: {filePath}");
+                Debug.LogError($"AudioClip '{Name}' points at a file that does not exist: '{filePath}'");
             }
         }
         else
@@ -258,12 +260,18 @@ public sealed class AudioClip : EngineObject, ISerializable
             filePath = string.Empty;
             streamFromDisk = false;
 
-            byte[] audioData = value["AudioData"].ByteArrayValue;
+            byte[]? audioData = value.Get("AudioData")?.ByteArrayValue;
 
-            if (audioData != null && audioData.Length > 0)
-                AcquireHandle(audioData, (UInt64)value["HashCode"].LongValue);
-            else
+            if (audioData == null || audioData.Length == 0)
+            {
                 ReleaseHandle();
+                return;
+            }
+
+            // The bytes are the fallback authority for the hash too, so a compound written without
+            // one still loads instead of resolving to a clip with no data.
+            ulong hash = (ulong)(value.Get("HashCode")?.LongValue ?? 0);
+            AcquireHandle(audioData, hash != 0 ? hash : GetHashCode(audioData, audioData.Length));
         }
     }
 }

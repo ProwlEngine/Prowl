@@ -125,6 +125,44 @@ public class AudioTests
         clip.Dispose();
         restored.Dispose();
     }
+
+    // A key that is not there used to throw out of the middle of the load, which costs the whole
+    // scene rather than the one clip.
+    [Fact]
+    public void AudioClip_Deserialize_ToleratesMissingKeys()
+    {
+        var empty = EchoObject.NewCompound();
+
+        var clip = Serializer.Deserialize(empty, typeof(AudioClip)) as AudioClip;
+
+        Assert.NotNull(clip);
+        Assert.Equal(IntPtr.Zero, clip!.Handle);
+        Assert.Equal(0ul, clip.DataSize);
+        Assert.Equal(string.Empty, clip.FilePath);
+
+        clip.Dispose();
+    }
+
+    // The bytes are enough to identify the buffer on their own, so a compound written without the
+    // hash still has to load rather than resolving to a clip with no data.
+    [Fact]
+    public void AudioClip_Deserialize_RecoversAMissingHash()
+    {
+        byte[] data = [41, 42, 43, 44, 45, 46];
+
+        var source = new AudioClip(data);
+        EchoObject echo = Serializer.Serialize(source);
+        Assert.True(echo.Remove("HashCode"));
+
+        var restored = Serializer.Deserialize<AudioClip>(echo)!;
+
+        Assert.NotEqual(IntPtr.Zero, restored.Handle);
+        Assert.Equal((ulong)data.Length, restored.DataSize);
+        Assert.Equal(source.Handle, restored.Handle);
+
+        source.Dispose();
+        restored.Dispose();
+    }
 }
 
 /// <summary>Audio components in a scene with no audio device, which is every headless run.</summary>
