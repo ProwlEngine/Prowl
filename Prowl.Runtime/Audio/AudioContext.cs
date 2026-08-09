@@ -457,11 +457,12 @@ public sealed class ConcurrentList<T>
         }
     }
 
-    public void Remove(T item)
+    /// <summary>Removes the item, returning whether it was there to remove.</summary>
+    public bool Remove(T item)
     {
         lock (syncRoot)
         {
-            items.Remove(item);
+            return items.Remove(item);
         }
     }
 
@@ -473,6 +474,17 @@ public sealed class ConcurrentList<T>
             {
                 this.items.Remove(items[i]);
             }
+        }
+    }
+
+    /// <summary>Empties the list and hands back what it held, as one operation.</summary>
+    public List<T> TakeAll()
+    {
+        lock (syncRoot)
+        {
+            List<T> taken = new List<T>(items);
+            items.Clear();
+            return taken;
         }
     }
 

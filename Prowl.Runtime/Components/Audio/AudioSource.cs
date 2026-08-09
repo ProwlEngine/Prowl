@@ -459,9 +459,15 @@ public sealed class AudioSource : MonoBehaviour
             _soundGroup.pointer = IntPtr.Zero;
         }
 
-        // Cleanup effects
-        for (int i = 0; i < _effects.Count; i++)
-            _effects[i].OnDestroy();
+        // The effect chain deliberately survives: effects are managed DSP state that belongs to the
+        // source, not to the native objects above, and toggling a component must not silently wipe
+        // the chain the user built.
+    }
+
+    protected override void OnDispose()
+    {
+        ClearEffects();
+        base.OnDispose();
     }
 
     #endregion
@@ -538,7 +544,9 @@ public sealed class AudioSource : MonoBehaviour
     #region Effects Management
 
     /// <summary>
-    /// Adds an audio effect to the processing chain.
+    /// Adds an audio effect to the processing chain. The source takes ownership: the effect is
+    /// destroyed when it is removed from the chain or when the source itself is destroyed. Disabling
+    /// and re-enabling the source keeps the chain intact.
     /// </summary>
     public void AddEffect(IAudioEffect effect)
     {
@@ -547,40 +555,33 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Removes an audio effect from the processing chain.
+    /// Removes an audio effect from the processing chain and destroys it.
     /// </summary>
     public void RemoveEffect(IAudioEffect effect)
     {
         if (effect == null) return;
-        _effects.Remove(effect);
+
+        if (_effects.Remove(effect))
+            effect.OnDestroy();
     }
 
     /// <summary>
-    /// Removes an audio effect by index.
+    /// Removes an audio effect by index and destroys it.
     /// </summary>
     public void RemoveEffect(int index)
     {
-        if (index >= 0 && index < _effects.Count)
-        {
-            var target = _effects[index];
-            _effects.Remove(target);
-        }
+        if (index < 0 || index >= _effects.Count) return;
+
+        RemoveEffect(_effects[index]);
     }
 
     /// <summary>
-    /// Removes all audio effects.
+    /// Removes and destroys every audio effect in the chain.
     /// </summary>
     public void ClearEffects()
     {
-        List<IAudioEffect> targets = new List<IAudioEffect>();
-        for (int i = 0; i < _effects.Count; i++)
-        {
-            targets.Add(_effects[i]);
-        }
-        if (targets.Count > 0)
-        {
-            _effects.Remove(targets);
-        }
+        foreach (IAudioEffect effect in _effects.TakeAll())
+            effect.OnDestroy();
     }
 
     /// <summary>
