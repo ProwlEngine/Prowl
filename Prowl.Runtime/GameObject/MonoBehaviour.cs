@@ -490,9 +490,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
-    public void OnBeforeSerialize() { }
+    /// <summary>Called right before this component is serialized. Override to refresh serialized
+    /// fields from live state. Always call base.</summary>
+    public virtual void OnBeforeSerialize() { }
 
-    public void OnAfterDeserialize()
+    /// <summary>Called right after this component is deserialized, before any lifecycle callback.
+    /// Override to react to freshly loaded values. Always call base.</summary>
+    public virtual void OnAfterDeserialize()
     {
         // Always generate fresh identifier Scene restores them after deserialization
         _identifier = Guid.NewGuid();
