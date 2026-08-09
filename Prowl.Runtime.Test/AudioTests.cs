@@ -310,6 +310,36 @@ public class AudioComponentTests : RuntimeTestBase
         Assert.Equal(0, stranger.Destroyed);
     }
 
+    [Fact]
+    public void PauseAndStop_WithoutADevice_LeaveNoStuckState()
+    {
+        var source = CreateSource();
+
+        source.Pause();
+        Assert.False(source.IsPaused);
+
+        source.Resume();
+        source.Stop();
+
+        Assert.False(source.IsPaused);
+        Assert.Equal(0f, source.PlaybackTime);
+        Assert.Equal(0f, source.Duration);
+        Assert.Equal(0f, source.NormalizedTime);
+    }
+
+    // Seeking a source with nothing loaded has no length to seek within, so it must answer zero
+    // rather than dividing by one.
+    [Fact]
+    public void NormalizedTime_WithNoClip_StaysAtZero()
+    {
+        var source = CreateSource();
+
+        source.NormalizedTime = 0.5f;
+        source.PlaybackTime = 2f;
+
+        Assert.Equal(0f, source.NormalizedTime);
+    }
+
     // One shots layer on pooled voices now, so none of this may touch the main playback or throw when
     // there is no device to make a voice on.
     [Fact]

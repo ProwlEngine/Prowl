@@ -92,6 +92,8 @@ public sealed class AudioSource : MonoBehaviour
     private SourceInfo _mainSource;
     private readonly List<SourceInfo> _oneShots = [];
     private long _oneShotCounter;
+    private bool _isPaused;
+    private ulong _pausedCursor;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private Float3 _previousPosition;
@@ -330,6 +332,44 @@ public sealed class AudioSource : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Playback position in seconds. Named to stay clear of the engine's <see cref="Time"/> class.
+    /// </summary>
+    public float PlaybackTime
+    {
+        get => FramesToSeconds(Cursor);
+        set => Cursor = SecondsToFrames(value);
+    }
+
+    /// <summary>Length of the playing clip in seconds, 0 when nothing is loaded.</summary>
+    public float Duration => FramesToSeconds(Length);
+
+    /// <summary>
+    /// Playback position as a fraction of the clip, 0 at the start and 1 at the end. Exact regardless
+    /// of what rate the frame counts are expressed in, which makes it the safer choice for a progress
+    /// readout than <see cref="PlaybackTime"/>.
+    /// </summary>
+    public float NormalizedTime
+    {
+        get
+        {
+            ulong length = Length;
+            return length > 0 ? (float)(Cursor / (double)length) : 0.0f;
+        }
+        set
+        {
+            ulong length = Length;
+            if (length > 0)
+                Cursor = (ulong)(Maths.Clamp(value, 0.0f, 1.0f) * length);
+        }
+    }
+
+    private static float FramesToSeconds(ulong frames)
+        => AudioContext.SampleRate > 0 ? (float)(frames / (double)AudioContext.SampleRate) : 0.0f;
+
+    private static ulong SecondsToFrames(float seconds)
+        => seconds <= 0.0f ? 0 : (ulong)(seconds * AudioContext.SampleRate);
+
     #endregion
 
     #region MonoBehaviour Lifecycle
@@ -516,6 +556,7 @@ public sealed class AudioSource : MonoBehaviour
         if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
 
         _mainSource.atEnd = false;
+        _isPaused = false;
         MiniAudioExNative.ma_ex_audio_source_set_loop(_mainSource.handle, _loop ? (uint)1 : 0);
 
         if (_clip.Res.Handle != IntPtr.Zero)
@@ -537,16 +578,55 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Stops playback. The cursor position is maintained (can be used as pause).
+    /// Stops playback and rewinds to the start. Use <see cref="Pause"/> to stop without losing the
+    /// position.
     /// </summary>
     public void Stop()
     {
-        if (_mainSource != null && _mainSource.handle != IntPtr.Zero)
-        {
-            MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
-            _mainSource.atEnd = false;
-        }
+        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
+
+        MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
+        MiniAudioExNative.ma_ex_audio_source_set_pcm_position(_mainSource.handle, 0);
+        _mainSource.atEnd = false;
+        _isPaused = false;
+        _pausedCursor = 0;
     }
+
+    /// <summary>
+    /// Stops playback while remembering the position, so <see cref="Resume"/> picks up where it left
+    /// off. Does nothing if the source is not playing.
+    /// </summary>
+    public void Pause()
+    {
+        if (_mainSource == null || _mainSource.handle == IntPtr.Zero) return;
+        if (_isPaused || !IsPlaying) return;
+
+        _pausedCursor = Cursor;
+        _isPaused = true;
+        MiniAudioExNative.ma_ex_audio_source_stop(_mainSource.handle);
+    }
+
+    /// <summary>
+    /// Continues from where <see cref="Pause"/> stopped. Does nothing if the source is not paused.
+    /// </summary>
+    /// <remarks>
+    /// The position is restored explicitly after starting rather than relying on the stopped source
+    /// having kept it, so this behaves the same whether the native layer rewinds on stop or not.
+    /// </remarks>
+    public void Resume()
+    {
+        if (!_isPaused) return;
+
+        ulong resumeFrom = _pausedCursor;
+        _isPaused = false;
+        _pausedCursor = 0;
+
+        Play();
+        Cursor = resumeFrom;
+    }
+
+    /// <summary>True while <see cref="Pause"/> is holding the position for a later <see cref="Resume"/>.</summary>
+    public bool IsPaused => _isPaused;
 
     /// <summary>
     /// Plays a clip on its own voice, without disturbing whatever this source is already playing.
