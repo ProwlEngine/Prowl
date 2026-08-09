@@ -47,12 +47,15 @@ public class TerrainCollisionFilter : IBroadPhaseFilter
     /// </summary>
     public bool Filter(IDynamicTreeProxy proxyA, IDynamicTreeProxy proxyB)
     {
-        // Check if either proxy is our terrain
-        if (proxyA.NodePtr != _heightmapProxy.NodePtr && proxyB.NodePtr != _heightmapProxy.NodePtr)
+        // Identify our terrain by reference. NodePtr is a mutable index the tree reassigns, and a proxy
+        // that has been removed carries a sentinel, so comparing it is fragile and disagreed with the
+        // reference check on the next line.
+        bool aIsTerrain = ReferenceEquals(proxyA, _heightmapProxy);
+        bool bIsTerrain = ReferenceEquals(proxyB, _heightmapProxy);
+        if (!aIsTerrain && !bIsTerrain)
             return true; // Not a terrain collision, let other filters handle it
 
-        // Determine which proxy is the terrain and which is the collider
-        var collider = proxyA == _heightmapProxy ? proxyB : proxyA;
+        IDynamicTreeProxy collider = aIsTerrain ? proxyB : proxyA;
 
         // Only process collisions with RigidBodyShapes
         if (collider is not RigidBodyShape rbs)
