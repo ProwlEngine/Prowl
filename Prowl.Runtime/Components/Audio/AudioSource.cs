@@ -310,6 +310,14 @@ public sealed class AudioSource : MonoBehaviour
 
     public override void OnEnable()
     {
+        // No device means no native objects to hand a null context to. Every playback entry point
+        // already no-ops on a null sound group, so the component stays inert but usable.
+        if (!AudioContext.IsInitialized)
+        {
+            Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
+            return;
+        }
+
         // Initialize native resources
         _previousPosition = Transform.Position;
         _outputBuffer = new AudioBuffer(8192);

@@ -25,6 +25,12 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void OnEnable()
     {
+        if (!AudioContext.IsInitialized)
+        {
+            Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
+            return;
+        }
+
         handle = MiniAudioExNative.ma_ex_audio_listener_init(AudioContext.NativeContext);
 
         if (handle != IntPtr.Zero)

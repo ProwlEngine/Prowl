@@ -33,6 +33,7 @@ public static class AudioContext
     private static UInt32 channels = 2;
     private static DateTime lastUpdateTime;
     private static float deltaTime;
+    private static float masterVolume = 1.0f;
 
     public static event DeviceDataEvent DataProcess;
 
@@ -43,6 +44,13 @@ public static class AudioContext
             return audioContext;
         }
     }
+
+    /// <summary>
+    /// True once a device is up. False before <see cref="Initialize"/>, after
+    /// <see cref="Deinitialize"/>, if the device failed to open, and for the whole of a headless run.
+    /// Nothing may be handed to the native layer while this is false.
+    /// </summary>
+    public static bool IsInitialized => audioContext != IntPtr.Zero;
 
     /// <summary>
     /// Gets the chosen sample rate.
@@ -72,11 +80,17 @@ public static class AudioContext
     {
         get
         {
+            if (!IsInitialized)
+                return masterVolume;
             return MiniAudioExNative.ma_ex_context_get_master_volume(audioContext);
         }
         set
         {
-            MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
+            // Remembered either way, so a volume set before the device opens (settings load) is not
+            // lost, and so the getter still answers in a headless run.
+            masterVolume = value;
+            if (IsInitialized)
+                MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, value);
         }
     }
 
@@ -124,8 +138,12 @@ public static class AudioContext
 
         if (audioContext == IntPtr.Zero)
         {
-            Console.WriteLine("Failed to initialize MiniAudioEx");
+            Debug.LogError($"Failed to open an audio device at {sampleRate} Hz, {channels} channels. " +
+                           "Audio is disabled for this session.");
+            return;
         }
+
+        MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
 
         lastUpdateTime = DateTime.Now;
     }

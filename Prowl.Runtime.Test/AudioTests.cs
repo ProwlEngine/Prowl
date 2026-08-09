@@ -126,3 +126,55 @@ public class AudioTests
         restored.Dispose();
     }
 }
+
+/// <summary>Audio components in a scene with no audio device, which is every headless run.</summary>
+public class AudioComponentTests : RuntimeTestBase
+{
+    // A headless run never initializes the context, and neither does a failed device open. Handing
+    // that null context to the native layer is what the guards exist to stop, so the components have
+    // to come up inert and every entry point has to stay callable.
+    [Fact]
+    public void AudioComponents_WithoutADevice_StayInertAndUsable()
+    {
+        Assert.False(AudioContext.IsInitialized);
+
+        var scene = CreateScene(enable: true);
+        var go = CreateGameObject("Speaker");
+        var source = go.AddComponent<AudioSource>();
+        var listener = go.AddComponent<AudioListener>();
+        scene.Add(go);
+
+        Update(scene);
+
+        source.Clip = new AudioClip([1, 2, 3, 4]);
+        source.Play();
+        source.PlayProcedural();
+        source.Stop();
+
+        Update(scene);
+
+        Assert.Equal(IntPtr.Zero, listener.Handle);
+        Assert.False(source.IsPlaying);
+        Assert.Equal(0ul, source.Cursor);
+        Assert.Equal(0ul, source.Length);
+
+        source.Clip!.Dispose();
+    }
+
+    // The volume is set from project settings, which can be applied before the device opens and in
+    // runs where it never opens at all. It has to survive that rather than being dropped.
+    [Fact]
+    public void MasterVolume_IsRememberedWithoutADevice()
+    {
+        float previous = AudioContext.MasterVolume;
+        try
+        {
+            AudioContext.MasterVolume = 0.35f;
+            Assert.Equal(0.35f, AudioContext.MasterVolume);
+        }
+        finally
+        {
+            AudioContext.MasterVolume = previous;
+        }
+    }
+}
