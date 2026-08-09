@@ -29,6 +29,12 @@ public enum PhysicsThreadModel
 
 /// <summary>
 /// A scene's physics simulation and the queries against it.
+/// <para/>
+/// <b>Threading:</b> every member here is main-thread only, and queries additionally must not overlap
+/// each other. Jitter's own read paths are thread-safe, so this is Prowl's restriction rather than
+/// Jitter's: the query layer reuses scratch buffers and cast shapes instead of allocating per call, and
+/// a query first pushes pending Transform edits into their bodies. Breaking either rule is reported
+/// rather than silently returning wrong results. If you need a query from a job, marshal it back.
 /// </summary>
 public class PhysicsWorld
 {
@@ -670,6 +676,9 @@ public class PhysicsWorld
     /// </summary>
     private void EnterQuery(string query)
     {
+        // Jitter's own traversal is thread-safe; this layer is not, so the rule is Prowl's.
+        Debug.EnsureMainThread(query);
+
         // Interlocked so the counter stays balanced even when the rule above is already being broken;
         // a torn count would strand this permanently above zero and report every later query.
         if (Interlocked.Increment(ref _queryDepth) > 1)
