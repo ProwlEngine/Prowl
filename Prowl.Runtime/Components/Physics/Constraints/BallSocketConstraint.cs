@@ -102,4 +102,17 @@ public class BallSocketConstraint : PhysicsConstraint
             constraint.Anchor1 = worldAnchor;
         }
     }
+
+    public override void DrawGizmos() => DrawJointMarker(WorldAnchor(anchor));
+
+    // A ball socket pins one point and frees every rotation, so the gizmo is a point plus the three
+    // rings that mean "turns any way it likes".
+    public override void DrawGizmosSelected()
+    {
+        float scale = GizmoScale;
+        Float3 pivot = WorldAnchor(anchor);
+
+        DrawJointMarker(pivot);
+        Debug.DrawGimbal(pivot, scale * 0.5f, AxisColor);
+    }
 }
