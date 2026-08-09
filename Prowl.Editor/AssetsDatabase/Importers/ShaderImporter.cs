@@ -3,16 +3,13 @@ using System.IO;
 using System.Linq;
 
 using Prowl.Echo;
-using Prowl.Vector;
 
 using Prowl.Runtime;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
 using Prowl.Runtime.Resources;
 
-using ParsedProperty = Prowl.Graphite.ShaderDef.ShaderProperty;
 using ShaderProperty = Prowl.Runtime.Rendering.Shaders.ShaderProperty;
-using ShaderPropertyType = Prowl.Graphite.ShaderDef.ShaderPropertyType;
 
 
 namespace Prowl.Editor.Importers;
@@ -79,7 +76,7 @@ public class ShaderImporter : AssetImporter
         {
             ShaderDefinition definition = ShaderParser.Parse(source);
 
-            ShaderProperty[] properties = [.. (definition.Properties ?? []).Select(ConvertProperty)];
+            ShaderProperty[] properties = [.. (definition.Properties ?? []).Select(Prowl.Runtime.Rendering.Shaders.ShaderPropertyConverter.Convert)];
 
             ShaderSnapshot snapshot = CompilationWorker.CompileAll(definition, definition.Name ?? Path.GetFileNameWithoutExtension(path), path, onDemand);
 
@@ -107,62 +104,16 @@ public class ShaderImporter : AssetImporter
             Debug.Log(parseEx.Message, LogSeverity.Error, new(frame));
             return null;
         }
+        catch (ArgumentException argEx)
+        {
+            // Thrown by ShaderPropertyConverter for an unresolvable property default.
+            Debug.LogError($"Shader '{Path.GetFileName(path)}': {argEx.Message}");
+            return null;
+        }
         catch (Exception)
         {
             // Compile failures are already logged by CompilationWorker with source-mapped diagnostics.
             return null;
         }
-    }
-
-
-    private static ShaderProperty ConvertProperty(ParsedProperty parsed)
-    {
-        ShaderProperty prop = parsed.PropertyType switch
-        {
-            ShaderPropertyType.Float => (float)parsed.Value.X,
-            ShaderPropertyType.Integer => (int)parsed.Value.X,
-            ShaderPropertyType.Color => new Color(parsed.Value.X, parsed.Value.Y, parsed.Value.Z, parsed.Value.W),
-            ShaderPropertyType.Vector => parsed.Value,
-            ShaderPropertyType.Matrix => parsed.MatrixValue,
-            ShaderPropertyType.Texture2D => Texture2DParse(parsed.TextureValue),
-            ShaderPropertyType.Texture3D => Texture3DParse(parsed.TextureValue),
-            ShaderPropertyType.Texture2DArray => throw new ParseException("Texture2DArray does not currently have any loadable defaults", 0, 0),
-            ShaderPropertyType.TextureCubemap => throw new ParseException("TextureCubemap does not currently have any loadable defaults", 0, 0),
-            ShaderPropertyType.TextureCubemapArray => throw new ParseException("TextureCubemapArray does not currently have any loadable defaults", 0, 0),
-            _ => throw new NotSupportedException($"Format: {parsed.PropertyType} not supported")
-        };
-
-        prop.Name = parsed.Name;
-        prop.DisplayName = parsed.DisplayName;
-        prop.HasRange = false;
-        prop.Range = Float2.One;
-
-        return prop;
-    }
-
-
-    private static Texture2D Texture2DParse(string texture)
-    {
-        return texture switch
-        {
-            "white" => Texture2D.LoadDefault(DefaultTexture.White),
-            "gray" or "grey" => Texture2D.LoadDefault(DefaultTexture.Gray18),
-            "grid" => Texture2D.LoadDefault(DefaultTexture.Grid),
-            "black" or "emission" => Texture2D.LoadDefault(DefaultTexture.Emission),
-            "normal" => Texture2D.LoadDefault(DefaultTexture.Normal),
-            "surface" => Texture2D.LoadDefault(DefaultTexture.Surface),
-            "noise" => Texture2D.LoadDefault(DefaultTexture.Noise),
-            _ => throw new ParseException($"Unknown Texture2D default: {texture}", 0, 0)
-        };
-    }
-
-
-    private static Texture3D Texture3DParse(string texture)
-    {
-        return texture switch
-        {
-            "white" => Texture3D.White,
-            _ => throw new ParseException($"Unknown Texture3D default: {texture}", 0, 0)
-        };
     }
 }
