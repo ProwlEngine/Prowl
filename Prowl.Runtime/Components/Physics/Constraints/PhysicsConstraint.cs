@@ -136,7 +136,10 @@ public abstract class PhysicsConstraint : MonoBehaviour
         if (body1.IsNotValid() || body1._body == null || body1._body.Handle.IsZero)
             return;
 
-        World world = GameObject.Scene.Physics.World;
+        // Reached from property setters as well as the lifecycle, so the scene can be mid-teardown
+        // here; Scene.Physics throws once the scene is disposed.
+        Resources.Scene scene = GameObject.IsValid() ? GameObject.Scene : null;
+        World world = scene.IsValid() ? scene.Physics?.World : null;
         if (world == null) return;
 
         // No connected body means "anchor to the world". Jitter keeps a pinned static NullBody for
