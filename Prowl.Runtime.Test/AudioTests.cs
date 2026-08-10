@@ -654,6 +654,44 @@ public class AudioTests : RuntimeTestBase
             Assert.Equal(0f, sample);
     }
 
+    // OnValidate runs for every field on the owning source, so replacing the delay line whenever it is
+    // called would empty the delay each time an unrelated slider moved.
+    [Fact]
+    public void DelayEffect_OnValidate_KeepsItsBufferedAudio()
+    {
+        const int delayFrames = 8;
+        var effect = new DelayEffect { DelayInSeconds = delayFrames / (float)TestSampleRate, Decay = 0f };
+
+        float[] impulse = new float[delayFrames * Channels];
+        impulse[0] = 1f;
+        impulse[1] = 1f;
+
+        // The impulse goes in and is still inside the line, not yet due out.
+        Run(effect, impulse);
+
+        // Stands in for an unrelated inspector edit somewhere else on the source.
+        effect.OnValidate();
+
+        float[] output = Run(effect, new float[delayFrames * Channels]);
+
+        // It comes out on schedule. A fresh line would have swallowed it.
+        Assert.Equal(1f, output[0], 4);
+    }
+
+    // Changing the length does replace the line, since the geometry is different.
+    [Fact]
+    public void DelayEffect_ChangingTheLength_Resizes()
+    {
+        var effect = new DelayEffect { DelayInSeconds = 8f / TestSampleRate, Decay = 0f };
+        Run(effect, Interleave(0f, 0f, 8));
+
+        Assert.Equal(8u, effect.DelayInFrames);
+
+        effect.DelayInSeconds = 16f / TestSampleRate;
+
+        Assert.Equal(16u, effect.DelayInFrames);
+    }
+
     // The blend is a crossfade against the untouched signal, so at fully dry the effect has to be
     // unity gain. A halving outside the blend took 6 dB off just for having the effect in the chain.
     [Fact]

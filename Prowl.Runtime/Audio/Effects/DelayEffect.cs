@@ -22,11 +22,34 @@ public sealed class DelayEffect : AudioEffect
     [SerializeField, Range(0f, 1f), Tooltip("Level of the signal written into the delay line.")]
     private float _dry = 1.0f;
 
-    private Int32 channels = 1;
+    /// <summary>
+    /// The buffer and the geometry that describes it, as one thing.
+    /// </summary>
+    /// <remarks>
+    /// These three have to agree. Held as separate fields, resizing wrote the new frame count and then
+    /// swapped the array, so a block landing between the two indexed the old, shorter buffer with the
+    /// new, larger count and ran off the end of it. Swapping one reference instead means the audio
+    /// thread reads a set that was never half updated.
+    /// </remarks>
+    private sealed class DelayLine
+    {
+        public readonly float[] Buffer;
+        public readonly int FrameCount;
+        public readonly int Channels;
+
+        /// <summary>Where feedback is written. Only the audio thread touches it.</summary>
+        public int Cursor;
+
+        public DelayLine(int frameCount, int channels)
+        {
+            FrameCount = Math.Max(1, frameCount);
+            Channels = Math.Max(1, channels);
+            Buffer = new float[GetNextPowerOfTwo((UInt32)(FrameCount * Channels))];
+        }
+    }
+
+    private volatile DelayLine _line = new(1, 1);
     private bool delayStart;       /* Set to true to delay the start of the output; false otherwise. */
-    private Int32 cursor;               /* Feedback is written to this cursor. Always equal or in front of the read cursor. */
-    private Int32 bufferSizeInFrames = 1;
-    private float[] buffer = [];
 
     public float Wet
     {
@@ -62,11 +85,10 @@ public sealed class DelayEffect : AudioEffect
     }
 
     /// <summary>The delay length the buffer was actually sized to.</summary>
-    public UInt32 DelayInFrames => (UInt32)bufferSizeInFrames;
+    public UInt32 DelayInFrames => (UInt32)_line.FrameCount;
 
     protected override void OnInitialize()
     {
-        channels = Math.Max(1, Channels);
         delayStart = _decay == 0;
         Resize();
     }
@@ -78,31 +100,42 @@ public sealed class DelayEffect : AudioEffect
     }
 
     /// <summary>
-    /// Sizes the delay line. One frame is the floor: OnProcess takes the cursor modulo this, and a
-    /// zero length is a divide by zero on the audio thread over a zero length buffer.
+    /// Sizes the delay line, replacing it only when the geometry actually changes. One frame is the
+    /// floor: OnProcess takes the cursor modulo this, and a zero length is a divide by zero over a
+    /// zero length buffer.
     /// </summary>
+    /// <remarks>
+    /// The early return matters as much as the resize. OnValidate runs for every field on the owning
+    /// source, so replacing the line unconditionally would empty the delay each time someone nudged
+    /// an unrelated slider.
+    /// </remarks>
     private void Resize()
     {
-        int frames = (Int32)Maths.Ceiling(_delaySeconds * Math.Max(1, SampleRate));
-        bufferSizeInFrames = Maths.Max(1, frames);
+        int frames = Maths.Max(1, (Int32)Maths.Ceiling(_delaySeconds * Math.Max(1, SampleRate)));
+        int channelCount = Math.Max(1, Channels);
 
-        int required = (Int32)GetNextPowerOfTwo((UInt32)(bufferSizeInFrames * channels));
+        DelayLine current = _line;
 
-        if (buffer.Length < required)
-            buffer = new float[required];
+        if (current.FrameCount == frames && current.Channels == channelCount)
+            return;
 
-        cursor %= bufferSizeInFrames;
+        _line = new DelayLine(frames, channelCount);
     }
 
     protected override unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
+        // Read once. Everything below works against this one set, so a resize landing mid block takes
+        // effect on the next one rather than halfway through this one.
+        DelayLine line = _line;
+        float[] buffer = line.Buffer;
+
         // The buffer is laid out for the channel count this effect was initialized with, so a chain
         // that disagrees would step the write cursor off the end of it.
-        if (buffer.Length == 0 || channels != this.channels)
+        if (buffer.Length == 0 || channels != line.Channels)
             return;
 
         int frames = (int)frameCountIn;
-        int available = Math.Min(framesIn.Length, framesOut.Length) / this.channels;
+        int available = Math.Min(framesIn.Length, framesOut.Length) / line.Channels;
 
         if (frames > available)
             frames = available;
@@ -110,11 +143,13 @@ public sealed class DelayEffect : AudioEffect
         float* pFramesOutF32 = (float*)framesOut.Pointer;
         float* pFramesInF32 = (float*)framesIn.Pointer;
 
+        int cursor = line.Cursor % line.FrameCount;
+
         for (int iFrame = 0; iFrame < frames; iFrame += 1)
         {
-            for (int iChannel = 0; iChannel < this.channels; iChannel += 1)
+            for (int iChannel = 0; iChannel < line.Channels; iChannel += 1)
             {
-                Int32 iBuffer = (cursor * this.channels) + iChannel;
+                Int32 iBuffer = (cursor * line.Channels) + iChannel;
 
                 if (delayStart)
                 {
@@ -138,15 +173,17 @@ public sealed class DelayEffect : AudioEffect
                 }
             }
 
-            cursor = (cursor + 1) % bufferSizeInFrames;
+            cursor = (cursor + 1) % line.FrameCount;
 
-            pFramesOutF32 += this.channels;
-            pFramesInF32 += this.channels;
+            pFramesOutF32 += line.Channels;
+            pFramesInF32 += line.Channels;
         }
+
+        line.Cursor = cursor;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private UInt32 GetNextPowerOfTwo(UInt32 value)
+    private static UInt32 GetNextPowerOfTwo(UInt32 value)
     {
         if (value <= 1)
             return 1;
