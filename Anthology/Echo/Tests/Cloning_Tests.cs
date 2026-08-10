@@ -166,6 +166,30 @@ public class Cloning_Tests
         }
     }
 
+    private class HybridExplicit : ICloneExplicit
+    {
+        public int Plain;
+        public string Text = "";
+
+        [ManuallyCloned]
+        public Node? Special;
+
+        public void SetupCloneTargets(object target, ICloneSetup setup)
+        {
+            var typed = (HybridExplicit)target;
+            setup.HandleObject(this, target);
+            setup.HandleObject(Special, typed.Special);
+        }
+
+        public void CopyCloneTo(object target, ICloneOperation operation)
+        {
+            var typed = (HybridExplicit)target;
+            operation.HandleObject(this, target);
+            typed.Special = (Node?)operation.GetTarget(Special);
+            operation.HandleObject(Special, typed.Special);
+        }
+    }
+
     #endregion
 
     #region Basics
@@ -404,6 +428,46 @@ public class Cloning_Tests
         Assert.Same(targetForSecond, target.B);
         Assert.Equal("second", target.B!.Name);
         Assert.NotSame(targetForSecond, target.A);
+    }
+
+    [Fact]
+    public void AddTarget_SeededObjectsOwnContentsAreStillWalked()
+    {
+        var sourceChild = new Node { Name = "sc", Child = new Node { Name = "grandchild" } };
+        var source = new Holder { A = sourceChild };
+
+        var targetChild = new Node { Name = "tc" };
+        var target = new Holder();
+
+        var context = new CloneContext();
+        context.AddTarget(sourceChild, targetChild);
+
+        Cloner.CopyTo(source, target, context);
+
+        Assert.Same(targetChild, target.A);
+        Assert.Equal("sc", targetChild.Name);
+        Assert.NotNull(targetChild.Child);
+        Assert.NotSame(sourceChild.Child, targetChild.Child);
+        Assert.Equal("grandchild", targetChild.Child!.Name);
+    }
+
+    [Fact]
+    public void AddTarget_SeededObjectKeepsItsExistingChildInstance()
+    {
+        var sourceChild = new Node { Name = "sc", Child = new Node { Name = "sg" } };
+        var source = new Holder { A = sourceChild };
+
+        var targetGrandchild = new Node { Name = "tg" };
+        var targetChild = new Node { Name = "tc", Child = targetGrandchild };
+        var target = new Holder { A = targetChild };
+
+        var context = new CloneContext();
+        context.AddTarget(sourceChild, targetChild);
+
+        Cloner.CopyTo(source, target, context);
+
+        Assert.Same(targetGrandchild, targetChild.Child);
+        Assert.Equal("sg", targetGrandchild.Name);
     }
 
     #endregion
@@ -762,6 +826,20 @@ public class Cloning_Tests
 
         Assert.Equal(1, CallbackObject.BeforeCount);
         Assert.Equal(1, CallbackObject.AfterCount);
+    }
+
+    [Fact]
+    public void Clone_ExplicitTypeCanAskForTheDefaultFieldWalk()
+    {
+        var source = new HybridExplicit { Plain = 3, Text = "t", Special = new Node { Name = "s" } };
+
+        HybridExplicit clone = Cloner.Clone(source);
+
+        Assert.Equal(3, clone.Plain);
+        Assert.Equal("t", clone.Text);
+        Assert.NotNull(clone.Special);
+        Assert.NotSame(source.Special, clone.Special);
+        Assert.Equal("s", clone.Special!.Name);
     }
 
     [Fact]

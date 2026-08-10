@@ -73,6 +73,7 @@ internal sealed class CloneProvider : ICloneSetup, ICloneOperation
 
     private readonly CloneContext _context;
     private readonly HashSet<object> _handled = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<object> _walked = new(ReferenceEqualityComparer.Instance);
     private readonly List<LateSetupEntry> _lateSetup = [];
     private readonly List<LocalBehavior> _localBehavior = [];
 
@@ -160,8 +161,9 @@ internal sealed class CloneProvider : ICloneSetup, ICloneOperation
         object? behaviorLock = null;
         if (!typeInfo.Type.IsValueType && source is not null)
         {
-            // Already mapped, which is also what stops cycles.
-            if (_context.Targets.ContainsKey(source)) return;
+            // Walked already, which is also what stops cycles. Being walked is not the same as having
+            // a mapping: a mapping the caller supplied still needs the source's own contents walked.
+            if (_walked.Contains(source) || _context.Sealed.Contains(source)) return;
 
             if (behavior == CloneBehavior.Default)
                 behavior = ResolveBehavior(typeInfo, out behaviorLock);
@@ -173,8 +175,12 @@ internal sealed class CloneProvider : ICloneSetup, ICloneOperation
                 return;
             }
 
-            if (target != null && target.GetType() != typeInfo.Type)
+            if (_context.Targets.TryGetValue(source, out object? seeded) && seeded != null)
+                target = seeded;
+            else if (target != null && target.GetType() != typeInfo.Type)
                 target = null;
+
+            _walked.Add(source);
         }
 
         object? lastObject = _currentObject;
@@ -324,6 +330,7 @@ internal sealed class CloneProvider : ICloneSetup, ICloneOperation
         typeInfo ??= CloneTypeInfo.Get(source!.GetType());
         if (typeInfo.CopyByAssignment) return;
         if (target is null) return;
+        if (source is not null && _context.Sealed.Contains(source)) return;
         if (!Push(source, typeInfo)) return;
 
         object? lastObject = _currentObject;
@@ -504,7 +511,18 @@ internal sealed class CloneProvider : ICloneSetup, ICloneOperation
     object? ICloneOperation.GetMappedTarget(object? source)
         => source != null && _context.Targets.TryGetValue(source, out object? target) ? target : null;
 
-    void ICloneOperation.HandleObject(object? source, object? target) => Copy(source, target);
+    void ICloneOperation.HandleObject(object? source, object? target)
+    {
+        // A handler passing the object it is currently handling is asking for the default field copy.
+        bool fromHandler = _currentObject is ICloneExplicit || _currentType?.Format != null;
+        if (fromHandler && target != null && ReferenceEquals(source, _currentObject))
+        {
+            CopyChildren(source!, target, _currentType!);
+            return;
+        }
+
+        Copy(source, target);
+    }
 
     #endregion
 }

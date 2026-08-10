@@ -19,18 +19,25 @@ public class CloneContext
 
     internal readonly Dictionary<object, object?> Targets = new(ReferenceEqualityComparer.Instance);
     internal readonly HashSet<object> TargetSet = new(ReferenceEqualityComparer.Instance);
+    internal readonly HashSet<object> Sealed = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Declares that references to <paramref name="source"/> resolve to <paramref name="target"/>.
     /// Call before cloning to supply a correspondence the cloner could not work out on its own, such
     /// as objects matched by an identifier rather than by position.
     /// </summary>
-    public void AddTarget(object source, object target)
+    /// <param name="walkContents">
+    /// Whether the source's own contents take part in the clone. False pairs the two objects for the
+    /// purpose of rewriting references to them and otherwise leaves both alone, which is what an
+    /// object that answers to something other than this clone needs.
+    /// </param>
+    public void AddTarget(object source, object target, bool walkContents = true)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         if (target == null) throw new ArgumentNullException(nameof(target));
 
         SetTarget(source, target);
+        if (!walkContents) Sealed.Add(source);
     }
 
     /// <summary>
@@ -57,5 +64,6 @@ public class CloneContext
     {
         Targets.Clear();
         TargetSet.Clear();
+        Sealed.Clear();
     }
 }
