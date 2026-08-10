@@ -35,6 +35,8 @@ public static class AudioContext
     private static long lastUpdateTime;
     private static float deltaTime;
     private static float masterVolume = 1.0f;
+    private static UInt32 periodSizeInFrames = 2048;
+    private static Int32 deviceIndex = -1;
     private static bool deviceProcessFailed;
 
     public static event DeviceDataEvent DataProcess;
@@ -147,6 +149,8 @@ public static class AudioContext
 
         AudioContext.sampleRate = sampleRate;
         AudioContext.channels = channels;
+        AudioContext.periodSizeInFrames = periodSizeInFrames;
+        AudioContext.deviceIndex = deviceInfo == null ? -1 : deviceInfo.Index;
 
         ma_ex_context_config contextConfig = MiniAudioExNative.ma_ex_context_config_init(sampleRate, (byte)channels, periodSizeInFrames, ref pDeviceInfo);
 
@@ -171,24 +175,44 @@ public static class AudioContext
     }
 
     /// <summary>
-    /// Deinitializes MiniAudioEx. Call this before closing the application.
+    /// Reopens the device with a different format or on a different output. Does nothing if the
+    /// settings already match what is running.
+    /// </summary>
+    /// <remarks>
+    /// Everything the old device owned is invalid afterwards, which is what
+    /// <see cref="DeviceGeneration"/> exists to tell the rest of the engine. Decoded clip data is not
+    /// device owned and survives untouched.
+    /// </remarks>
+    public static void Restart(UInt32 sampleRate, UInt32 channels, UInt32 periodSizeInFrames = 2048, DeviceInfo deviceInfo = null)
+    {
+        int requestedDevice = deviceInfo == null ? -1 : deviceInfo.Index;
+
+        if (IsInitialized &&
+            AudioContext.sampleRate == sampleRate &&
+            AudioContext.channels == channels &&
+            AudioContext.periodSizeInFrames == periodSizeInFrames &&
+            AudioContext.deviceIndex == requestedDevice)
+            return;
+
+        Deinitialize();
+        Initialize(sampleRate, channels, periodSizeInFrames, deviceInfo);
+    }
+
+    /// <summary>The buffer size the device was opened with, in frames.</summary>
+    public static Int32 PeriodSizeInFrames => (int)periodSizeInFrames;
+
+    /// <summary>Index of the device in use, or -1 for the system default.</summary>
+    public static Int32 DeviceIndex => deviceIndex;
+
+    /// <summary>
+    /// Closes the device. Clip data outlives it: those are plain allocations the clips themselves own
+    /// by reference count, and freeing them here left every live AudioClip holding a dangling pointer,
+    /// which is also what made reopening the device impossible.
     /// </summary>
     public static void Deinitialize()
     {
         if (audioContext == IntPtr.Zero)
             return;
-
-        lock (clipTableLock)
-        {
-            foreach (var audioClipHandle in audioClipHandles.Values)
-            {
-                if (audioClipHandle != IntPtr.Zero)
-                    Marshal.FreeHGlobal(audioClipHandle);
-            }
-
-            audioClipHandles.Clear();
-            audioClipRefCounts.Clear();
-        }
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;

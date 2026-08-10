@@ -100,6 +100,7 @@ public sealed class AudioSource : MonoBehaviour
     private long _oneShotCounter;
     private bool _isPaused;
     private ulong _pausedCursor;
+    private int _deviceGeneration = -1;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private bool _effectNodeReady;
@@ -381,7 +382,9 @@ public sealed class AudioSource : MonoBehaviour
 
     #region MonoBehaviour Lifecycle
 
-    public override void OnEnable()
+    public override void OnEnable() => CreateNativeResources();
+
+    private void CreateNativeResources()
     {
         // No device means no native objects to hand a null context to. Every playback entry point
         // already no-ops on a null sound group, so the component stays inert but usable.
@@ -390,6 +393,8 @@ public sealed class AudioSource : MonoBehaviour
             Debug.LogWarningOnce("Audio.NoContext", "No audio device is initialized, audio components stay inactive.");
             return;
         }
+
+        _deviceGeneration = AudioContext.DeviceGeneration;
 
         // Initialize native resources
         _previousPosition = Transform.Position;
@@ -453,6 +458,11 @@ public sealed class AudioSource : MonoBehaviour
 
     public override void Update()
     {
+        // The device was reopened, so everything built against the old one is gone. Rebuild and pick
+        // playback back up where it was, rather than going silent until the component is toggled.
+        if (_deviceGeneration != AudioContext.DeviceGeneration)
+            RebuildForNewDevice();
+
         if (_soundGroup.pointer == IntPtr.Zero) return;
 
         // Deferred auto-play: the clip was still streaming in at OnEnable; play once it arrives.
@@ -497,6 +507,24 @@ public sealed class AudioSource : MonoBehaviour
         }
     }
 
+    private void RebuildForNewDevice()
+    {
+        bool wasPlaying = IsPlaying;
+        ulong resumeFrom = wasPlaying ? Cursor : 0;
+
+        DestroyNativeResources();
+        CreateNativeResources();
+
+        // Still no device, so there is nothing to resume onto. The generation was recorded either way,
+        // so this does not retry every frame.
+        _deviceGeneration = AudioContext.DeviceGeneration;
+
+        if (!wasPlaying || _clip.Res == null) return;
+
+        Play();
+        Cursor = resumeFrom;
+    }
+
     /// <summary>The inspector writes the backing fields directly, so the native side has to be
     /// re-synced from them rather than from the property setters.</summary>
     public override void OnValidate()
@@ -506,7 +534,9 @@ public sealed class AudioSource : MonoBehaviour
         RouteToOutputGroup();
     }
 
-    public override void OnDisable()
+    public override void OnDisable() => DestroyNativeResources();
+
+    private void DestroyNativeResources()
     {
         DestroyOneShotVoices();
 

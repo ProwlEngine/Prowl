@@ -19,6 +19,7 @@ public sealed class AudioListener : MonoBehaviour
 {
     private IntPtr handle;
     private Float3 previousPosition;
+    private int _deviceGeneration = -1;
 
     /// <summary> A handle to the native ma_audio_listener instance. </summary>
     public IntPtr Handle => handle;
@@ -31,6 +32,7 @@ public sealed class AudioListener : MonoBehaviour
             return;
         }
 
+        _deviceGeneration = AudioContext.DeviceGeneration;
         handle = MiniAudioExNative.ma_ex_audio_listener_init(AudioContext.NativeContext);
 
         if (handle != IntPtr.Zero)
@@ -47,6 +49,14 @@ public sealed class AudioListener : MonoBehaviour
 
     public override void Update()
     {
+        // The device was reopened, so the old listener is gone with it.
+        if (_deviceGeneration != AudioContext.DeviceGeneration)
+        {
+            OnDisable();
+            OnEnable();
+            _deviceGeneration = AudioContext.DeviceGeneration;
+        }
+
         if (handle == IntPtr.Zero) return;
 
         Float3 position = Transform.Position;

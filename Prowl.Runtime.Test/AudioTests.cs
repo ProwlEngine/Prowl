@@ -437,6 +437,25 @@ public class AudioComponentTests : RuntimeTestBase
         Assert.Equal(Float3.UnitX, AudioContext.ToAudioSpace(Float3.UnitX));
     }
 
+    // Deinitialize used to free every shared clip buffer, which left live clips holding dangling
+    // pointers and is what made reopening the device impossible. Clip data is not device owned.
+    [Fact]
+    public void Deinitialize_LeavesClipDataAlone()
+    {
+        var clip = new AudioClip([21, 22, 23, 24]);
+        ulong hash = clip.Hash;
+
+        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+
+        AudioContext.Deinitialize();
+
+        Assert.Equal(1, AudioContext.GetClipRefCount(hash));
+        Assert.NotEqual(IntPtr.Zero, clip.Handle);
+
+        clip.Dispose();
+        Assert.Equal(0, AudioContext.GetClipRefCount(hash));
+    }
+
     // The volume is set from project settings, which can be applied before the device opens and in
     // runs where it never opens at all. It has to survive that rather than being dropped.
     [Fact]
