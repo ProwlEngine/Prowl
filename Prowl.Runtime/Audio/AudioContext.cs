@@ -386,12 +386,30 @@ public enum PanMode
     Pan
 }
 
+/// <summary>How samples are laid out in a device's native format.</summary>
+public enum AudioSampleFormat
+{
+    /// <summary>The device did not report a format, meaning it accepts any of them.</summary>
+    Unknown = 0,
+    UInt8 = 1,
+    Int16 = 2,
+    /// <summary>Tightly packed, three bytes per sample.</summary>
+    Int24 = 3,
+    Int32 = 4,
+    Float32 = 5,
+}
+
+/// <summary>One format a playback device reports it can run at natively.</summary>
 public struct DeviceDataFormat
 {
-    public ma_format format;       /* Sample format. If set to ma_format_unknown, all sample formats are supported. */
-    public UInt32 channels;     /* If set to 0, all channels are supported. */
-    public UInt32 sampleRate;   /* If set to 0, all sample rates are supported. */
-    public UInt32 flags;        /* A combination of MA_DATA_FORMAT_FLAG_* flags. */
+    /// <summary>Sample format, or Unknown when every format is supported.</summary>
+    public AudioSampleFormat format;
+    /// <summary>Channel count, or 0 when every count is supported.</summary>
+    public UInt32 channels;
+    /// <summary>Sample rate, or 0 when every rate is supported.</summary>
+    public UInt32 sampleRate;
+    /// <summary>Device specific flags reported alongside the format.</summary>
+    public UInt32 flags;
 }
 
 public sealed class DeviceInfo
@@ -442,116 +460,35 @@ public sealed class DeviceInfo
                 formats[i] = new DeviceDataFormat();
                 formats[i].channels = f.channels;
                 formats[i].flags = f.flags;
-                formats[i].format = f.format;
+                formats[i].format = (AudioSampleFormat)f.format;
                 formats[i].sampleRate = f.sampleRate;
             }
         }
     }
 }
 
-public sealed class ConcurrentList<T>
-{
-    private readonly List<T> items;
-    private readonly object syncRoot = new object();
-
-    public int Count
-    {
-        get
-        {
-            lock (syncRoot)
-            {
-                return items.Count;
-            }
-        }
-    }
-
-    public T this[int index]
-    {
-        get
-        {
-            lock (syncRoot)
-            {
-                return items[index];
-            }
-        }
-        set
-        {
-            lock (syncRoot)
-            {
-                items[index] = value;
-            }
-        }
-    }
-
-    public ConcurrentList()
-    {
-        this.items = new List<T>();
-    }
-
-    public void Clear()
-    {
-        lock (syncRoot)
-        {
-            items.Clear();
-        }
-    }
-
-    public void Add(T item)
-    {
-        lock (syncRoot)
-        {
-            items.Add(item);
-        }
-    }
-
-    /// <summary>Removes the item, returning whether it was there to remove.</summary>
-    public bool Remove(T item)
-    {
-        lock (syncRoot)
-        {
-            return items.Remove(item);
-        }
-    }
-
-    public void Remove(List<T> items)
-    {
-        lock (syncRoot)
-        {
-            for (int i = 0; i < items.Count; i++)
-            {
-                this.items.Remove(items[i]);
-            }
-        }
-    }
-
-    /// <summary>Empties the list and hands back what it held, as one operation.</summary>
-    public List<T> TakeAll()
-    {
-        lock (syncRoot)
-        {
-            List<T> taken = new List<T>(items);
-            items.Clear();
-            return taken;
-        }
-    }
-
-    public void RemoveAt(int index)
-    {
-        lock (syncRoot)
-        {
-            items.RemoveAt(index);
-        }
-    }
-}
 
 /// <summary>
-/// A thread safe class storing audio data.
+/// Hands the most recent block of audio from the audio thread to the game thread, for meters, scopes
+/// and spectrum displays.
 /// </summary>
+/// <remarks>
+/// One writer and one reader, and the writer never waits. Both used to take the same lock, which meant
+/// the audio thread could block behind the game thread copying the whole buffer out: the game thread
+/// stalling is a slow frame, the audio thread stalling is an audible dropout.
+///
+/// Instead the writer bumps a counter either side of the copy, odd while it is mid-write. The reader
+/// takes the counter, copies, and takes it again: unchanged and even means it saw a whole block, and
+/// anything else means the writer overtook it, so it retries a few times and then reports nothing new.
+/// Missing an occasional block is invisible in a visualiser, which is all this feeds.
+/// </remarks>
 public sealed class AudioBuffer
 {
+    private const int ReadAttempts = 4;
+
     private readonly float[] buffer;
-    private readonly object sync = new();
-    private int currentLength = 0;
+    private volatile int sequence;
+    private volatile int currentLength;
     private bool truncationReported;
 
     public AudioBuffer(int capacityPowerOfTwo)
@@ -569,56 +506,75 @@ public sealed class AudioBuffer
     /// </summary>
     public int Write(NativeArray<float> src)
     {
-        lock (sync)
+        int count = Math.Min(src.Length, buffer.Length);
+
+        // Latched: this runs on the audio thread, where formatting a message per block is worse
+        // than the truncation it is reporting.
+        if (src.Length > buffer.Length && !truncationReported)
         {
-            int count = Math.Min(src.Length, buffer.Length);
-
-            // Latched: this runs on the audio thread, where formatting a message per block is worse
-            // than the truncation it is reporting.
-            if (src.Length > buffer.Length && !truncationReported)
-            {
-                truncationReported = true;
-                Debug.LogWarning($"AudioBuffer was handed {src.Length} samples but holds {buffer.Length}. The remainder is dropped.");
-            }
-
-            unsafe
-            {
-                fixed (float* pBuffer = &buffer[0])
-                {
-                    NativeArray<float> source = new NativeArray<float>(src.Pointer, count);
-                    NativeArray<float> destination = new NativeArray<float>(pBuffer, buffer.Length);
-                    source.CopyTo(destination);
-                }
-            }
-
-            currentLength = count;
-            return count;
+            truncationReported = true;
+            Debug.LogWarning($"AudioBuffer was handed {src.Length} samples but holds {buffer.Length}. The remainder is dropped.");
         }
+
+        // Odd for the duration of the copy, so a reader can tell it caught a half written block.
+        sequence++;
+
+        unsafe
+        {
+            fixed (float* pBuffer = &buffer[0])
+            {
+                NativeArray<float> source = new NativeArray<float>(src.Pointer, count);
+                NativeArray<float> destination = new NativeArray<float>(pBuffer, buffer.Length);
+                source.CopyTo(destination);
+            }
+        }
+
+        currentLength = count;
+        sequence++;
+        return count;
     }
 
     /// <summary>
     /// Copies the samples written by the last <see cref="Write"/> into <paramref name="output"/>,
     /// allocating or growing it to the buffer's capacity first, and returns how many are valid.
+    /// Returns 0 when the writer kept overtaking the read, meaning there is nothing consistent to show.
     /// </summary>
     public int Read(ref float[] output)
     {
-        lock (sync)
-        {
-            unsafe
-            {
-                if (output == null || output.Length < buffer.Length)
-                    output = new float[buffer.Length];
+        if (output == null || output.Length < buffer.Length)
+            output = new float[buffer.Length];
 
-                // Only the written span, not the whole capacity. Everything past it is stale and the
-                // caller is told not to read it by the return value.
-                fixed (float* pSrc = &buffer[0], pDst = &output[0])
+        for (int attempt = 0; attempt < ReadAttempts; attempt++)
+        {
+            int before = sequence;
+
+            // Odd means a write is in progress, so there is no point copying yet.
+            if ((before & 1) != 0)
+                continue;
+
+            int length = currentLength;
+
+            if (length > 0)
+            {
+                unsafe
                 {
-                    NativeArray<float> src = new NativeArray<float>(pSrc, currentLength);
-                    NativeArray<float> dst = new NativeArray<float>(pDst, output.Length);
-                    src.CopyTo(dst);
-                    return currentLength;
+                    // Only the written span, not the whole capacity. Everything past it is stale and
+                    // the caller is told not to read it by the return value.
+                    fixed (float* pSrc = &buffer[0], pDst = &output[0])
+                    {
+                        NativeArray<float> src = new NativeArray<float>(pSrc, length);
+                        NativeArray<float> dst = new NativeArray<float>(pDst, output.Length);
+                        src.CopyTo(dst);
+                    }
                 }
             }
+
+            // Unchanged means no write started or finished while the copy was happening, so what was
+            // copied is one whole block rather than two halves of different ones.
+            if (sequence == before)
+                return length;
         }
+
+        return 0;
     }
 }
