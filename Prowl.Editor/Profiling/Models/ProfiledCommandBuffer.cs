@@ -51,6 +51,7 @@ public sealed class ProfiledCommandBuffer
 
     internal void SetName(string name) => Name = name;
     public void SetGpuMs(double ms) => GpuMilliseconds = ms;
+    internal void AddGpuMs(double ms) => GpuMilliseconds += ms;
     public void SetPipelineSwitchCount(int count) => PipelineSwitchCount = count;
     internal void IncrementPipelineSwitchCount() => PipelineSwitchCount++;
     public void AddDrawCalls(int count) => DrawCallCount += count;

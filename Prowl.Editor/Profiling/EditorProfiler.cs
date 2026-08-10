@@ -19,7 +19,7 @@ public sealed class EditorProfiler : IProfiler
 
     private readonly TimingCollector _timing = new();
     private readonly CountersCollector _counters = new();
-    private readonly PassGraphCollector _passGraph = new();
+    private readonly PassGraphCollector _passGraph;
 
     public DrawHierarchyCollector DrawHierarchy { get; } = new();
     public SnapshotCapturer SnapshotCapturer { get; } = new();
@@ -60,6 +60,8 @@ public sealed class EditorProfiler : IProfiler
 
     public EditorProfiler()
     {
+        _passGraph = new PassGraphCollector(_timing);
+
         IReadOnlyList<CounterDef> registry = CountersCollector.Registry;
         var names = new List<string>(registry.Count);
         var index = new Dictionary<string, int>(registry.Count);
@@ -120,7 +122,7 @@ public sealed class EditorProfiler : IProfiler
 
         _frameStopwatch.Restart();
 
-        _timing.OnFrameBegin();
+        _timing.OnFrameBegin(_frameIndex);
         _counters.OnFrameBegin();
         _passGraph.OnFrameBegin(frame, _captureActiveThisFrame);
         DrawHierarchy.OnFrameBegin(frame, _captureActiveThisFrame);
@@ -143,7 +145,6 @@ public sealed class EditorProfiler : IProfiler
 
         DrawHierarchy.FinalizeFrame();
         _counters.Contribute(frame);
-        _passGraph.FinalizeFrame(frame, _timing);
 
         _sealedCount = frame.FrameIndex + 1;
 

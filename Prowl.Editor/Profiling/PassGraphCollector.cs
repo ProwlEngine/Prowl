@@ -19,9 +19,11 @@ namespace Prowl.Editor.Profiling;
 /// <see cref="ProfiledView.Edges"/> are. View names are a small, stable set, so a ViewState persists
 /// across frames (just Reset() each frame) instead of being discarded and rebuilt.
 ///
-/// The one thing that can't be known until the whole frame is over is GPU time per command buffer
-/// (round-trips from the GPU, see <see cref="TimingCollector"/>), so <see cref="FinalizeFrame"/> does a
-/// single end-of-frame pass to stamp that onto each command buffer node.
+/// GPU time and pipeline-statistics per command buffer round-trip from the GPU well after this frame has
+/// sealed (see <see cref="TimingCollector"/>), so this collector doesn't wait for them: every command
+/// buffer node is registered with <see cref="TimingCollector.Track"/> the moment it's touched, and
+/// <see cref="TimingCollector"/> stamps the result onto that exact node whenever it actually arrives -
+/// however many frames later that is - instead of this collector doing an end-of-frame stamping pass.
 /// </summary>
 public sealed class PassGraphCollector
 {
@@ -37,11 +39,17 @@ public sealed class PassGraphCollector
         }
     }
 
+    private readonly TimingCollector _timing;
     private readonly Dictionary<string, ViewState> _viewStates = new();
     private readonly HashSet<string> _touchedViews = new();
 
     private ProfiledFrame? _frame;
     private bool _armed;
+
+    public PassGraphCollector(TimingCollector timing)
+    {
+        _timing = timing;
+    }
 
     public void OnFrameBegin(ProfiledFrame frame, bool armed)
     {
@@ -133,7 +141,8 @@ public sealed class PassGraphCollector
             return;
 
         _touchedViews.Add(currentView);
-        _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        ProfiledCommandBuffer node = _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        _timing.Track(cb.Id, _frame.FrameIndex, node);
     }
 
 
@@ -145,11 +154,13 @@ public sealed class PassGraphCollector
         if (cb.Pass is { } pass)
         {
             _touchedViews.Add(currentView);
-            _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+            ProfiledCommandBuffer node = _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+            _timing.Track(cb.Id, _frame.FrameIndex, node);
         }
         else
         {
-            _frame.FreeCommandBuffer(cb.Id, cb.Name);
+            ProfiledCommandBuffer node = _frame.FreeCommandBuffer(cb.Id, cb.Name);
+            _timing.Track(cb.Id, _frame.FrameIndex, node);
         }
     }
 
@@ -162,7 +173,9 @@ public sealed class PassGraphCollector
 
         _touchedViews.Add(currentView);
         ProfiledView view = _frame.View(currentView);
-        view.Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name).AddDispatchCount();
+        ProfiledCommandBuffer node = view.Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        node.AddDispatchCount();
+        _timing.Track(cb.Id, _frame.FrameIndex, node);
     }
 
     /// <summary>Bumps the switch count on the command buffer a pipeline bind landed on - always-on,
@@ -174,30 +187,9 @@ public sealed class PassGraphCollector
             return;
 
         _touchedViews.Add(currentView);
-        _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name).IncrementPipelineSwitchCount();
-    }
-
-    public void FinalizeFrame(ProfiledFrame frame, TimingCollector timing)
-    {
-        // Pass/View GpuMilliseconds/TrianglesDrawn are computed properties (sum of their
-        // CommandBuffers/Passes), so there's nothing to roll up here beyond stamping the leaf-level
-        // numbers onto each command buffer.
-        foreach (string viewName in _touchedViews)
-        {
-            ProfiledView view = frame.View(viewName);
-            foreach (ProfiledPass pass in view.Passes)
-                foreach (ProfiledCommandBuffer cb in pass.CommandBuffers)
-                {
-                    cb.SetGpuMs(timing.GetCommandBufferGpuMs(cb.Id));
-                    cb.SetGpuVertexStats(timing.GetCommandBufferVertexStats(cb.Id));
-                }
-        }
-
-        foreach (ProfiledCommandBuffer cb in frame.FreeCommandBuffers)
-        {
-            cb.SetGpuMs(timing.GetCommandBufferGpuMs(cb.Id));
-            cb.SetGpuVertexStats(timing.GetCommandBufferVertexStats(cb.Id));
-        }
+        ProfiledCommandBuffer node = _frame.View(currentView).Pass(pass.Index, pass.Name).CommandBuffer(cb.Id, cb.Name);
+        node.IncrementPipelineSwitchCount();
+        _timing.Track(cb.Id, _frame.FrameIndex, node);
     }
 
     private ViewState GetOrCreateViewState(string name)
