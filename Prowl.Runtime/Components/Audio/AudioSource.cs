@@ -273,7 +273,8 @@ public sealed class AudioSource : MonoBehaviour
     }
 
     /// <summary>
-    /// Minimum distance for spatial audio attenuation.
+    /// Distance below which the source plays at full volume. Never negative, and never past
+    /// <see cref="MaxDistance"/>, which is carried up with it if need be.
     /// </summary>
     public float MinDistance
     {
@@ -281,13 +282,12 @@ public sealed class AudioSource : MonoBehaviour
         set
         {
             _minDistance = value;
-            if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_min_distance(_soundGroup, value);
+            ApplyDistances();
         }
     }
 
     /// <summary>
-    /// Maximum distance for spatial audio attenuation.
+    /// Distance at which the source reaches its quietest. Never below <see cref="MinDistance"/>.
     /// </summary>
     public float MaxDistance
     {
@@ -295,9 +295,28 @@ public sealed class AudioSource : MonoBehaviour
         set
         {
             _maxDistance = value;
-            if (_soundGroup.pointer != IntPtr.Zero)
-                MiniAudioNative.ma_sound_group_set_max_distance(_soundGroup, value);
+            ApplyDistances();
         }
+    }
+
+    /// <summary>
+    /// Keeps the attenuation range coherent and pushes it across.
+    /// </summary>
+    /// <remarks>
+    /// A minimum past the maximum carries the maximum up with it rather than being clamped away, so
+    /// widening the range by dragging either end works without having to do it in a particular order.
+    /// An inverted range is not a curve at all, and both ends are now inspector fields, which write
+    /// the backing values directly and never go through these setters.
+    /// </remarks>
+    private void ApplyDistances()
+    {
+        _minDistance = Maths.Max(0.0f, _minDistance);
+        _maxDistance = Maths.Max(_maxDistance, _minDistance);
+
+        if (_soundGroup.pointer == IntPtr.Zero) return;
+
+        MiniAudioNative.ma_sound_group_set_min_distance(_soundGroup, _minDistance);
+        MiniAudioNative.ma_sound_group_set_max_distance(_soundGroup, _maxDistance);
     }
 
     /// <summary>
@@ -1015,6 +1034,10 @@ public sealed class AudioSource : MonoBehaviour
 
     private void ApplySettings()
     {
+        // First, and outside the guard below: the inspector writes the distances directly, so this is
+        // where an inverted range gets straightened out whether or not there is a device to push to.
+        ApplyDistances();
+
         if (_soundGroup.pointer == IntPtr.Zero) return;
 
         MiniAudioNative.ma_sound_group_set_volume(_soundGroup, _volume);
@@ -1023,8 +1046,6 @@ public sealed class AudioSource : MonoBehaviour
         MiniAudioNative.ma_sound_group_set_pan_mode(_soundGroup, (ma_pan_mode)_panMode);
         MiniAudioNative.ma_sound_group_set_spatialization_enabled(_soundGroup, _spatial ? (uint)1 : 0);
         MiniAudioNative.ma_sound_group_set_doppler_factor(_soundGroup, _dopplerFactor);
-        MiniAudioNative.ma_sound_group_set_min_distance(_soundGroup, _minDistance);
-        MiniAudioNative.ma_sound_group_set_max_distance(_soundGroup, _maxDistance);
         MiniAudioNative.ma_sound_group_set_attenuation_model(_soundGroup, (ma_attenuation_model)_attenuationModel);
 
         if (_mainSource != null && _mainSource.handle != IntPtr.Zero)

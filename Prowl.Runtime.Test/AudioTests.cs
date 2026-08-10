@@ -1069,6 +1069,44 @@ public class AudioTests : RuntimeTestBase
         second.Dispose();
     }
 
+    // An inverted attenuation range is not a curve, and nothing stopped one being set.
+    [Fact]
+    public void Distances_StayInOrderWhicheverEndIsSet()
+    {
+        var source = CreateSource();
+
+        source.MinDistance = 1f;
+        source.MaxDistance = 10f;
+
+        // Pushing the near end past the far end carries the far end with it rather than being clamped
+        // away, so widening the range works from either side.
+        source.MinDistance = 50f;
+        Assert.Equal(50f, source.MinDistance);
+        Assert.True(source.MaxDistance >= source.MinDistance);
+
+        source.MaxDistance = 2f;
+        Assert.True(source.MaxDistance >= source.MinDistance);
+
+        source.MinDistance = -5f;
+        Assert.Equal(0f, source.MinDistance);
+    }
+
+    // The inspector writes the backing fields directly and never goes through the properties, so the
+    // range has to be straightened out on validate too, device or no device.
+    [Fact]
+    public void Distances_AreStraightenedOutOnValidate()
+    {
+        var source = new AudioSource();
+        EchoObject echo = Serializer.Serialize(source);
+        echo["_minDistance"] = new EchoObject(80f);
+        echo["_maxDistance"] = new EchoObject(4f);
+
+        var restored = Serializer.Deserialize<AudioSource>(echo)!;
+
+        Assert.True(restored.MaxDistance >= restored.MinDistance,
+            $"min {restored.MinDistance} exceeded max {restored.MaxDistance}");
+    }
+
     // Reading Clip resolves the reference, which loads the asset. Assigning one should not have to.
     [Fact]
     public void ClipRef_RoundTripsWithoutResolving()
