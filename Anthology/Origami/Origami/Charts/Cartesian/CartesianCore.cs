@@ -588,6 +588,7 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
     private const string SampleIdxKey = "cartesian_sample";
     private const string SamplePosKey = "cartesian_sample_pos";
     private const string ViewRectKey = "cartesian_view";
+    private const string ActiveKey = "cartesian_scroll_active";
 
     private const float MinViewSpan = 0.005f;
     private const float ZoomRate = 0.14f;
@@ -780,7 +781,16 @@ public abstract class CartesianCore<TSelf, T> : ChartCore<TSelf, T> where TSelf 
             }
 
             if (_zoomable)
-                plotBox.OnScroll(e => ApplyZoom(el, e));
+            {
+                plotBox.OnClick(_ => _paper.SetElementStorage(chartEl, ActiveKey, true));
+                plotBox.OnLeave(_ => _paper.SetElementStorage(chartEl, ActiveKey, false));
+
+                plotBox.OnScroll(e =>
+                {
+                    if (!_paper.GetElementStorage(chartEl, ActiveKey, false)) return;
+                    ApplyZoom(el, e);
+                });
+            }
 
             _paper.Draw((canvas, rect) =>
             {
