@@ -65,11 +65,15 @@ public class AudioSettings : ProjectSettingsBase
         Origami.Label(paper, "audio_latency",
             $"About {BufferSize * 1000.0f / System.Math.Max(1, SampleRate):F1} ms of output latency.").Show();
 
-        Origami.Header(paper, "audio_out_hdr", "Outputs").Underline().Show();
+        using (paper.Row("audio_out_row").Height(26).RowBetween(4).Enter())
+        {
+            Origami.Header(paper, "audio_out_hdr", "Outputs").Underline().Show();
+            Origami.Button(paper, "audio_out_refresh", "Refresh", () => s_devices = null).Show();
+        }
 
-        DeviceInfo[] devices = AudioContext.GetDevices();
+        DeviceInfo[] devices = Devices();
 
-        if (devices == null || devices.Length == 0)
+        if (devices.Length == 0)
         {
             Origami.Label(paper, "audio_nodev", "No playback devices were reported.").Show();
             return;
@@ -82,6 +86,26 @@ public class AudioSettings : ProjectSettingsBase
             string marker = device.IsDefault ? "  (default)" : "";
             Origami.Label(paper, $"audio_dev_{device.Index}", $"{device.Name}{marker}").Show();
         }
+    }
+
+    private static DeviceInfo[] s_devices;
+    private static int s_devicesForGeneration = -1;
+
+    /// <summary>
+    /// The playback devices, enumerated once rather than per frame. Enumerating asks the backend to
+    /// walk the system's devices and allocates a managed object per device and per format it reports,
+    /// which is not something an immediate mode panel should do while it is on screen.
+    /// </summary>
+    private static DeviceInfo[] Devices()
+    {
+        // Reopening the device is the one thing the editor does that can change what is available,
+        // and the Refresh button covers anything plugged in while the page is open.
+        if (s_devices != null && s_devicesForGeneration == AudioContext.DeviceGeneration)
+            return s_devices;
+
+        s_devices = AudioContext.GetDevices() ?? [];
+        s_devicesForGeneration = AudioContext.DeviceGeneration;
+        return s_devices;
     }
 
     /// <summary>A row of buttons for a small fixed set of values, with the current one highlighted.</summary>
