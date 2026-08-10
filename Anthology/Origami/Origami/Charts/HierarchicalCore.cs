@@ -71,8 +71,11 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private Func<T, int, Color>? _colorFunction;
 
     private bool _legend = true;
+    private float _legendWidth = DefaultLegendWidth;
     private float? _legendFontSize;
     private bool _legendInteractive;
+
+    private bool _showHeader = true;
 
     private bool _tooltip = true;
     private Func<double, string>? _valueFormatter;
@@ -107,6 +110,11 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     // --- Chrome ---
 
     public TSelf Title(string text) { _title = text ?? ""; return Self; }
+
+    /// <summary>Show or hide the title row and the divider under it. On by default; turn off when the
+    /// chart is embedded somewhere its own chrome already labels it, so the plot doesn't lose height to
+    /// an empty header.</summary>
+    public TSelf ShowHeader(bool show = true) { _showHeader = show; return Self; }
 
     public TSelf Width(float width) { _width = MathF.Max(32f, width); return Self; }
     public TSelf Width(UnitValue width) { _width = width; return Self; }
@@ -150,6 +158,9 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     // --- Legend ---
 
     public TSelf Legend(bool show = true) { _legend = show; return Self; }
+
+    /// <summary>Width in pixels of the legend column. Defaults to 125.</summary>
+    public TSelf LegendWidth(float width) { _legendWidth = MathF.Max(1f, width); return Self; }
 
     /// <summary>Font size, in pixels, of the legend's labels. Unset uses the same XS size the rest of the
     /// chart chrome does.</summary>
@@ -601,10 +612,13 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
         {
             _containerEl = _paper.CurrentParent;
 
-            using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
-                Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
+            if (_showHeader)
+            {
+                using (_paper.Row(_id + "_chart_header").Height(20).ChildRight().Enter())
+                    Origami.Label(_paper, _id + "_chart_header", _title).MD().Height(15).AlignCenter().Show();
 
-            _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
+                _paper.Box(_id + "_chart_header_div").Height(1).BackgroundColor(_theme.BorderStrong);
+            }
 
             using (_paper.Row(_id + "_chart_col_split").Enter())
             {
@@ -640,7 +654,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private void DrawLegend(IReadOnlyList<LegendEntry> entries)
     {
         LegendBuilder legend = Origami.Legend(_paper, _id + "_legend", entries)
-            .Width(125f)
+            .Width(_legendWidth)
             .SwatchSize(SwatchSize)
             .Padding(_padding)
             .RowGap(_padding)
@@ -694,10 +708,19 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
             {
                 _paper.SetElementStorage(plotEl, HoverOnKey, false);
                 _paper.SetElementStorage(plotEl, HoverIdxKey, -1);
+                _paper.SetElementStorage(plotEl, ActiveKey, false);
             });
 
             if (_zoomable)
-                plotBox.OnScroll(ApplyZoom);
+            {
+                plotBox.OnClick(_ => _paper.SetElementStorage(plotEl, ActiveKey, true));
+
+                plotBox.OnScroll(e =>
+                {
+                    if (!_paper.GetElementStorage(plotEl, ActiveKey, false)) return;
+                    ApplyZoom(e);
+                });
+            }
 
             PlotInfo info = _paper.GetElementStorage<PlotInfo>(plotEl, PlotKey, default);
             if (info.Width <= 0f || info.Height <= 0f) return;
@@ -963,6 +986,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private const string HoverPosKey = "hier_hover_pos";
     private const string HoverOnKey = "hier_hover_on";
     private const string HoverIdxKey = "hier_hover_idx";
+    private const string ActiveKey = "hier_scroll_active";
     private const string ViewRectKey = "hier_view";
 
     private const int MaxTreeDepth = 32;
@@ -970,6 +994,7 @@ public abstract class HierarchicalCore<TSelf, T> where TSelf : HierarchicalCore<
     private const float MinViewSpan = 0.005f;
     private const float ZoomRate = 0.14f;
 
+    private const float DefaultLegendWidth = 125f;
     private const float SwatchSize = 12f;
     private const float TooltipGap = 8f;
     private const float MinLabelWidth = 60f;
