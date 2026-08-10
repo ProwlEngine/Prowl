@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Importers;
@@ -222,6 +223,13 @@ public static class EditorSceneManager
 
         try
         {
+            // Anything edited on a prefab instance without the inspector noticing is not in its
+            // override list yet. Saving without it would write a scene whose instances silently lose
+            // those edits the next time they are refreshed.
+            foreach (var go in Scene.Current.AllObjects.ToList())
+                if (Prefabs.PrefabUtility.IsInstanceRoot(go))
+                    Prefabs.PrefabUtility.ReconcileInstance(go);
+
             var echo = Serializer.Serialize(typeof(object), Scene.Current);
             if (echo == null)
             {

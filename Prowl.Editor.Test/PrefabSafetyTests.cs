@@ -754,6 +754,73 @@ public class PrefabSafetyTests : EditorTestHarness
     }
 
     // ---------------------------------------------------------------------
+    // Edits are kept whether or not anything asked for them to be detected
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void EditReportedAtTheMoment_SurvivesARefresh()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "Silent.prefab");
+
+        var instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        // Straight at the component, as a scene tool or a script would, then reported the way the
+        // editor's change hook reports it - no inspector involved.
+        var comp = Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!;
+        comp.A = 77;
+        PrefabUtility.NotifyEdited(comp);
+
+        PrefabUtility.RefreshAllInstances(g);
+
+        Assert.Equal(77, Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void ApplyingCarriesEditsNobodyDetected()
+    {
+        var root = new GameObject("Root");
+        root.AddComponent<OverrideComp>().A = 1;
+        Guid g = CreatePrefabAsset(root, "SilentApply.prefab");
+
+        var instance = Inst(g);
+        SetSceneCurrent(instance);
+        Scene.Current!.RootObjects.First().GetComponent<OverrideComp>()!.A = 55;
+
+        PrefabUtility.ApplyOverrides(Scene.Current!.RootObjects.First());
+
+        Assert.Equal(55, GameObject.InstantiateDetached((PrefabAsset)AssetDatabase.Get(g)!)!
+            .GetComponent<OverrideComp>()!.A);
+    }
+
+    [Fact]
+    public void ReconcileFindsEditsOnChildrenNobodySelected()
+    {
+        var root = new GameObject("Root");
+        var child = new GameObject("Child");
+        child.AddComponent<OverrideComp>().A = 1;
+        child.SetParent(root);
+        Guid g = CreatePrefabAsset(root, "SilentChild.prefab");
+
+        var instance = Inst(g);
+        SetSceneCurrent(instance);
+
+        // Nothing drew this child and nothing reported the edit.
+        var live = Scene.Current!.RootObjects.First();
+        live.Children[0].GetComponent<OverrideComp>()!.A = 33;
+        Assert.Empty(live.PrefabOverrides);
+
+        // A sweep of the whole instance, which is what saving and applying do first.
+        PrefabUtility.ReconcileInstance(live);
+
+        Assert.Single(live.PrefabOverrides);
+        PrefabUtility.RefreshAllInstances(g);
+        Assert.Equal(33, Scene.Current!.RootObjects.First().Children[0].GetComponent<OverrideComp>()!.A);
+    }
+
+    // ---------------------------------------------------------------------
     // Play mode never writes to prefab assets
     // ---------------------------------------------------------------------
 

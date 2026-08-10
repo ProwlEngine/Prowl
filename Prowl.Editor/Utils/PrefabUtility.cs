@@ -219,6 +219,9 @@ public static class PrefabUtility
 
     private static void ApplyOverridesCoreInner(GameObject instanceRoot, bool recordUndo)
     {
+        // Pick up anything edited without the inspector noticing, so applying does not quietly drop it.
+        ReconcileInstance(instanceRoot);
+
         var db = EditorAssetBackend.Instance;
         if (db == null || Project.Current == null) return;
 
@@ -1112,6 +1115,61 @@ public static class PrefabUtility
         var prefabRoot = GetPrefabInstanceRoot(instanceGO);
         var root = prefabRoot.IsValid() ? prefabRoot : instanceGO;
         CompareFields(instanceComp, sourceComp, path, root.PrefabOverrides);
+    }
+
+    /// <summary>
+    /// Bring an instance's override list in line with what its objects actually hold, by comparing
+    /// every object and component against the prefab.
+    /// <para/>
+    /// Detection is otherwise driven by the inspector drawing something, which means an edit made by
+    /// a scene tool, a script, or on an object nobody selected afterwards was never recorded - and
+    /// then the next refresh, which only replays recorded overrides, threw it away.
+    /// <para/>
+    /// Only sound while the prefab is unchanged. Comparison cannot tell an edited instance from a
+    /// changed prefab, so running this after a reimport would read every source change as an
+    /// override and freeze the instance against the prefab from then on. Callers reconcile before
+    /// they write, not after the asset moves.
+    /// </summary>
+    public static void ReconcileInstance(GameObject instanceGO)
+    {
+        if (!instanceGO.IsPrefabInstance) return;
+
+        var prefabRoot = GetPrefabInstanceRoot(instanceGO);
+        var root = prefabRoot.IsValid() ? prefabRoot! : instanceGO;
+
+        Reconcile(root, root.PrefabAssetId);
+
+        static void Reconcile(GameObject go, Guid boundaryPrefabId)
+        {
+            DetectGOOverrides(go);
+            foreach (var component in go.GetComponents<MonoBehaviour>())
+                DetectComponentOverrides(go, component);
+
+            foreach (var child in go.Children)
+            {
+                // A nested instance keeps its own overrides against its own prefab.
+                if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId) continue;
+                Reconcile(child, boundaryPrefabId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Record any overrides an edit to <paramref name="target"/> just produced. Called from the
+    /// editor's change hook so an edit is captured when it happens rather than whenever something
+    /// gets around to drawing that object.
+    /// </summary>
+    public static void NotifyEdited(object? target)
+    {
+        switch (target)
+        {
+            case MonoBehaviour component when component.GameObject.IsValid():
+                DetectComponentOverrides(component.GameObject, component);
+                break;
+            case GameObject go:
+                DetectGOOverrides(go);
+                break;
+        }
     }
 
     /// <summary>

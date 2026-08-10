@@ -171,6 +171,10 @@ public class EditorApplication : Game
         {
             var eo = target as Runtime.EngineObject;
             if (eo.IsValid()) eo.OnValidate();
+
+            // Record the edit against the prefab it belongs to as it happens, rather than relying on
+            // something drawing this object again later.
+            Prefabs.PrefabUtility.NotifyEdited(target);
         };
         PropertyGridConfig.OnBeforeDrawField = (fieldType, value) =>
         {
