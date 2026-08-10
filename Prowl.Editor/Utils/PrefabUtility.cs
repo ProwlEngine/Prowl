@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
+using Prowl.Vector;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
 using Prowl.Editor.GUI.SceneView;
@@ -324,41 +326,15 @@ public static class PrefabUtility
         // Capture old state for undo. The tree itself is written by value; references out of it are
         // linked, not cloned into the snapshot.
         var oldSerialized = Serializer.Serialize(typeof(object), instanceRoot, TreeValueContext(instanceRoot));
-        var siblingIdx = instanceRoot.Parent != null ? instanceRoot.Parent.Children.IndexOf(instanceRoot) : -1;
-        var prefabGuid = instanceRoot.PrefabAssetId;
+        var rootId = instanceRoot.Identifier;
 
-        // Instantiate fresh from prefab
-        var fresh = GameObject.InstantiateDetached(prefab);
-        if (fresh == null) return;
+        var source = GameObject.InstantiateDetached(prefab);
+        if (source == null) return;
 
-        // Preserve identifiers so undo records stay valid
-        CopyInstanceState(instanceRoot, fresh);
-
-        fresh.Transform.Position = instanceRoot.Transform.Position;
-        fresh.Transform.Rotation = instanceRoot.Transform.Rotation;
-        fresh.Transform.LocalScale = instanceRoot.Transform.LocalScale;
-        fresh.Name = instanceRoot.Name;
-
-        var scene = instanceRoot.Scene!;
-        var parent = instanceRoot.Parent;
-        var rootIdx = parent == null ? scene.GetRootIndex(instanceRoot) : -1;
-
-        scene.Remove(instanceRoot);
-        instanceRoot.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
-        scene.Add(fresh);
-        if (parent != null)
-        {
-            fresh.SetParent(parent);
-            if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
-        }
-        else if (rootIdx >= 0)
-        {
-            scene.SetRootIndex(fresh, rootIdx);
-        }
-
-        // CopyInstanceState gave the replacement the old object's identifier, so one key addresses the
-        // instance across every swap either direction.
-        var rootId = fresh.Identifier;
+        // Reverting brings the instance back into line with the prefab and drops what made it differ.
+        // The objects themselves stay, so anything holding a reference to them still does.
+        ReconcileToSource(instanceRoot, source, instanceRoot.PrefabAssetId);
+        instanceRoot.PrefabOverrides.Clear();
 
         if (recordUndo)
         {
@@ -382,7 +358,7 @@ public static class PrefabUtility
                 });
         }
 
-        Selection.Select(fresh);
+        Selection.Select(instanceRoot);
         EditorSceneManager.MarkDirty();
     }
 
@@ -797,94 +773,250 @@ public static class PrefabUtility
     }
 
     /// <summary>
-    /// Refresh all instances of a prefab in the current scene after the prefab asset changes.
-    /// Re-instantiates from the updated source and re-applies each instance's overrides.
+    /// Bring every instance of a prefab in the current scene up to date with the asset.
+    /// <para/>
+    /// The instances are updated in place rather than rebuilt. A rebuild left every reference to the
+    /// instance - from a script field, the selection, an undo record - pointing at an object that had
+    /// been thrown away, and anything the instance had that the prefab did not know about went with
+    /// it. Objects here keep their identity; only what the prefab provides is brought into line.
     /// </summary>
     public static void RefreshAllInstances(Guid prefabGuid)
     {
         var scene = Scene.Current;
         if (scene == null) return;
 
-        // Find all instance roots for this prefab
         var roots = scene.AllObjects
             .Where(go => go.PrefabAssetId == prefabGuid && IsInstanceRoot(go))
             .ToList();
+        if (roots.Count == 0) return;
 
         var prefab = AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab == null) return;
 
-        // The whole selection is remapped, not just the first entry: it can hold several instances,
-        // and children of them as well as the roots. GameObjects are noted by identifier because the
-        // objects themselves are about to be replaced; anything else is kept as-is.
-        var selectionSnapshot = Selection.Selected
-            .Select(o => o is GameObject go ? new SelectedGameObject(go.Identifier) : o)
-            .ToList();
-        bool remapSelection = Selection.Selected.Any(o => o is GameObject);
+        // One copy of the prefab's contents, read from by every instance. Never mutated.
+        var source = GameObject.InstantiateDetached(prefab);
+        if (source == null) return;
 
         foreach (var root in roots)
         {
             var savedOverrides = root.PrefabOverrides.ToList();
-            var savedName = root.Name;
-            var pos = root.Transform.Position;
-            var rot = root.Transform.Rotation;
-            var scale = root.Transform.LocalScale;
-            var parent = root.Parent;
-            var siblingIdx = root.GetSiblingIndex() ?? -1;
-            var rootIdx = parent == null ? scene.GetRootIndex(root) : -1;
 
-            var fresh = GameObject.InstantiateDetached(prefab);
-            if (fresh == null) continue;
+            // Nested instances answer to their own prefab, so their overrides are re-applied after
+            // this instance's structure has been brought back into line with its own source.
+            var nested = CollectNestedInstances(root, prefabGuid);
 
-            // Preserve identifiers from the old instance so undo records stay valid
-            CopyInstanceState(root, fresh);
-            CarryOverAddedComponents(root, fresh);
+            ReconcileToSource(root, source, prefabGuid);
 
-            fresh.PrefabOverrides = savedOverrides;
-            fresh.Name = savedName;
-            fresh.Transform.Position = pos;
-            fresh.Transform.Rotation = rot;
-            fresh.Transform.LocalScale = scale;
-
-            scene.Remove(root);
-            root.Destroy(); // TODO should this be Destroy (deferred) or Dispose?
-            scene.Add(fresh);
-            if (parent != null)
-            {
-                fresh.SetParent(parent);
-                if (siblingIdx >= 0) fresh.SetSiblingIndex(siblingIdx);
-            }
-            else if (rootIdx >= 0)
-            {
-                scene.SetRootIndex(fresh, rootIdx);
-            }
-
-            // Applied last, once the old instance is out of the scene and the fresh one is in it with
-            // the same identifiers: overrides holding scene references resolve by identifier, so they
-            // would otherwise bind to the instance being replaced.
-            ApplyPropertyOverridesToInstance(fresh, savedOverrides);
+            ApplyPropertyOverridesToInstance(root, savedOverrides);
+            foreach (var nestedRoot in nested)
+                if (nestedRoot.IsValid())
+                    ApplyPropertyOverridesToInstance(nestedRoot, nestedRoot.PrefabOverrides);
         }
+    }
 
-        if (roots.Count > 0 && remapSelection)
+    /// <summary>Instance roots of other prefabs sitting inside this one.</summary>
+    private static List<GameObject> CollectNestedInstances(GameObject root, Guid boundaryPrefabId)
+    {
+        var nested = new List<GameObject>();
+        Walk(root);
+        return nested;
+
+        void Walk(GameObject go)
         {
-            Selection.Clear();
-            foreach (var entry in selectionSnapshot)
+            foreach (var child in go.Children)
             {
-                if (entry is SelectedGameObject selected)
+                if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId)
                 {
-                    var live = Undo.FindGO(selected.Identifier);
-                    if (live.IsValid()) Selection.AddToSelection(live!);
+                    nested.Add(child); // its own contents are its own business
+                    continue;
                 }
-                else
-                {
-                    Selection.AddToSelection(entry);
-                }
+                Walk(child);
             }
         }
     }
 
-    /// <summary>A GameObject held in the selection, noted by identifier so it survives a refresh.
-    /// A distinct type rather than a bare Guid, so it cannot be confused with a selected asset.</summary>
-    private readonly record struct SelectedGameObject(Guid Identifier);
+    /// <summary>
+    /// Make an instance match the prefab it came from, in place.
+    /// <para/>
+    /// Objects are paired by source identifier first, so the copy lands on the instance's own objects
+    /// and every reference to them stays valid. Anything the instance added, which has no source
+    /// identifier, is left alone. Name and transform are per-instance and are put back afterwards.
+    /// </summary>
+    private static void ReconcileToSource(GameObject instance, GameObject source, Guid boundaryPrefabId)
+    {
+        var context = new CloneContext();
+        var placement = new List<PlacementState>();
+
+        PairToSource(instance, source, boundaryPrefabId, context, placement);
+        DropWhatTheSourceNoLongerHas(instance, source, boundaryPrefabId);
+
+        Cloner.CopyTo(source, instance, context);
+
+        foreach (PlacementState state in placement)
+            state.Restore();
+
+        AdoptClonedObjects(instance, source, boundaryPrefabId, context);
+    }
+
+    /// <summary>
+    /// What an object is called, where it sits and how the editor treats it. All of it belongs to the
+    /// instance rather than to the prefab, and none of it is tracked as an override.
+    /// </summary>
+    private readonly struct PlacementState(GameObject go)
+    {
+        private readonly GameObject _go = go;
+        private readonly string _name = go.Name;
+        private readonly HideFlags _hideFlags = go.HideFlags;
+        private readonly Float3 _position = go.Transform.LocalPosition;
+        private readonly Quaternion _rotation = go.Transform.LocalRotation;
+        private readonly Float3 _scale = go.Transform.LocalScale;
+
+        public void Restore()
+        {
+            if (_go.IsNotValid()) return;
+
+            _go.Name = _name;
+            _go.HideFlags = _hideFlags;
+            _go.Transform.LocalPosition = _position;
+            _go.Transform.LocalRotation = _rotation;
+            _go.Transform.LocalScale = _scale;
+        }
+    }
+
+    /// <summary>
+    /// Pairs every prefab object with the instance object standing for it, so the copy updates those
+    /// rather than replacing them. A nested instance of another prefab is paired but sealed: where it
+    /// sits is this prefab's business, what is inside it is not.
+    /// </summary>
+    private static void PairToSource(GameObject instance, GameObject source, Guid boundaryPrefabId,
+        CloneContext context, List<PlacementState> placement)
+    {
+        if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
+        {
+            context.AddTarget(source, instance, walkContents: false);
+            return;
+        }
+
+        context.AddTarget(source, instance);
+        placement.Add(new PlacementState(instance));
+
+        // What ties the instance to its prefab, overrides and all, is the instance's own record. The
+        // source carries a link too, and copying that one over would throw the overrides away.
+        PrefabLink? sourceLink = source.PrefabLink;
+        PrefabLink? instanceLink = instance.EnsurePrefabLink();
+        if (sourceLink != null)
+            context.AddTarget(sourceLink, instanceLink, walkContents: false);
+
+        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        {
+            Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
+            if (sourceId == Guid.Empty) continue;
+
+            MonoBehaviour? match = instance.GetComponents<MonoBehaviour>()
+                .FirstOrDefault(c => instance.GetComponentSourceIdentifier(c) == sourceId);
+
+            if (match.IsValid() && match!.GetType() == sourceComponent.GetType())
+                context.AddTarget(sourceComponent, match!);
+        }
+
+        foreach (GameObject sourceChild in source.Children)
+        {
+            Guid sourceId = sourceChild.SourceIdentifier;
+            if (sourceId == Guid.Empty) continue;
+
+            GameObject? match = instance.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
+            if (match.IsValid())
+                PairToSource(match!, sourceChild, boundaryPrefabId, context, placement);
+        }
+    }
+
+    /// <summary>
+    /// Removes what the prefab used to provide and no longer does. Anything without a source
+    /// identifier was added to the instance and is not the prefab's to take away.
+    /// </summary>
+    private static void DropWhatTheSourceNoLongerHas(GameObject instance, GameObject source, Guid boundaryPrefabId)
+    {
+        if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
+            return;
+
+        PrefabLink link = instance.EnsurePrefabLink();
+        var sourceComponentIds = source.GetComponents<MonoBehaviour>()
+            .Select(c => source.GetComponentSourceIdentifier(c))
+            .ToHashSet();
+
+        foreach (MonoBehaviour component in instance.GetComponents<MonoBehaviour>().ToList())
+        {
+            if (component.IsNotValid()) continue;
+
+            Guid sourceId = instance.GetComponentSourceIdentifier(component);
+            if (sourceId == Guid.Empty || sourceComponentIds.Contains(sourceId)) continue;
+
+            link.ComponentSources.Remove(component.Identifier);
+            instance.RemoveComponent(component);
+        }
+
+        foreach (GameObject child in instance.Children.ToList())
+        {
+            if (child.IsNotValid()) continue;
+
+            Guid sourceId = child.SourceIdentifier;
+            if (sourceId == Guid.Empty) continue;
+
+            GameObject? stillThere = source.Children.FirstOrDefault(c => c.SourceIdentifier == sourceId);
+            if (stillThere.IsValid())
+            {
+                DropWhatTheSourceNoLongerHas(child, stillThere!, boundaryPrefabId);
+                continue;
+            }
+
+            var childScene = child.Scene;
+            if (childScene.IsValid()) childScene!.Remove(child);
+            child.Destroy();
+        }
+    }
+
+    /// <summary>
+    /// Records where the objects the copy just created came from, puts new children into the scene,
+    /// and brings sibling order back into line with the prefab.
+    /// </summary>
+    private static void AdoptClonedObjects(GameObject instance, GameObject source, Guid boundaryPrefabId, CloneContext context)
+    {
+        if (instance.IsPrefabInstance && instance.PrefabAssetId != boundaryPrefabId)
+            return;
+
+        PrefabLink link = instance.EnsurePrefabLink();
+        link.AssetId = source.PrefabAssetId != Guid.Empty ? source.PrefabAssetId : link.AssetId;
+
+        foreach (MonoBehaviour sourceComponent in source.GetComponents<MonoBehaviour>())
+        {
+            Guid sourceId = source.GetComponentSourceIdentifier(sourceComponent);
+            if (sourceId == Guid.Empty) continue;
+            if (!context.TryGetTarget(sourceComponent, out object? paired) || paired is not MonoBehaviour component)
+                continue;
+
+            component.OnValidate();
+        }
+
+        var scene = instance.Scene;
+        int order = 0;
+
+        foreach (GameObject sourceChild in source.Children)
+        {
+            if (!context.TryGetTarget(sourceChild, out object? paired) || paired is not GameObject child)
+                continue;
+
+            child.SourceIdentifier = sourceChild.SourceIdentifier;
+
+            if (scene.IsValid() && child.Scene.IsNotValid())
+                scene!.Add(child);
+
+            child.SetSiblingIndex(order++);
+
+            AdoptClonedObjects(child, sourceChild, boundaryPrefabId, context);
+        }
+    }
+
+
 
     // ================================================================
     //  Nesting Helpers
@@ -1306,88 +1438,7 @@ public static class PrefabUtility
         return source;
     }
 
-    /// <summary>
-    /// Re-attach components an instance has beyond what its prefab source provides. They exist only
-    /// on the instance, so a freshly instantiated copy does not have them, and without this a refresh
-    /// would silently drop everything the user added to the instance.
-    /// </summary>
-    private static void CarryOverAddedComponents(GameObject oldGO, GameObject freshGO)
-    {
-        // -1 means the count was never stamped, so nothing is known about what the source provided.
-        int sourceCount = oldGO.PrefabComponentCount;
-        if (sourceCount >= 0)
-        {
-            var existing = oldGO.GetComponents<MonoBehaviour>().ToList();
-            for (int i = sourceCount; i < existing.Count; i++)
-            {
-                var original = existing[i];
-                try
-                {
-                    // Round-tripped rather than moved, so the old tree stays intact for undo. Scene
-                    // references link by identifier instead of being cloned into orphans.
-                    var echo = Serializer.Serialize(original.GetType(), original, InstanceValueContext());
-                    if (Serializer.Deserialize(echo, original.GetType(), InstanceValueContext()) is not MonoBehaviour clone)
-                        continue;
 
-                    clone.Identifier = original.Identifier;
-                    freshGO.AddComponent(clone);
-                    clone.OnValidate();
-                }
-                catch (Exception ex)
-                {
-                    Runtime.Debug.LogWarning($"[Prefab] Could not carry over added component " +
-                        $"{original.GetType().Name} on '{oldGO.Name}': {ex.Message}");
-                }
-            }
-        }
-
-        for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)
-            CarryOverAddedComponents(oldGO.Children[i], freshGO.Children[i]);
-    }
-
-    /// <summary>
-    /// Carry per-instance state from an old GO tree onto a fresh one (matched by structure index).
-    /// Identifiers keep undo records and selection valid; hide flags are editor bookkeeping that the
-    /// override system deliberately never tracks, so a refresh would otherwise reset them.
-    /// </summary>
-    private static void CopyInstanceState(GameObject oldGO, GameObject freshGO)
-    {
-        freshGO.SetIdentifier(oldGO.Identifier);
-        freshGO.HideFlags = oldGO.HideFlags;
-
-        var oldComps = oldGO.GetComponents().ToArray();
-        var freshComps = freshGO.GetComponents().ToArray();
-
-        // The link maps each component to its source by the component's identifier, and those
-        // identifiers are about to change, so the map is rebuilt as they do rather than left keyed by
-        // identifiers no component has any more.
-        var link = freshGO.PrefabLink;
-        var remapped = new Dictionary<Guid, Guid>();
-
-        for (int i = 0; i < freshComps.Length; i++)
-        {
-            Guid sourceId = freshGO.GetComponentSourceIdentifier(freshComps[i]);
-
-            if (i < oldComps.Length)
-            {
-                freshComps[i].Identifier = oldComps[i].Identifier;
-                freshComps[i].HideFlags = oldComps[i].HideFlags;
-            }
-
-            if (sourceId != Guid.Empty)
-                remapped[freshComps[i].Identifier] = sourceId;
-        }
-
-        if (link != null)
-        {
-            link.ComponentSources.Clear();
-            foreach (var (componentId, sourceId) in remapped)
-                link.ComponentSources[componentId] = sourceId;
-        }
-
-        for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)
-            CopyInstanceState(oldGO.Children[i], freshGO.Children[i]);
-    }
 
     /// <summary>
     /// Convert every object that belonged to <paramref name="boundaryId"/> into an instance of

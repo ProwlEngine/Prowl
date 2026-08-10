@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 
 using Prowl.Ember;
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -25,10 +26,12 @@ public partial class GameObject : EngineObject, ISerializable
 
     // The hot reload walk migrates this list in place; a removed-type component becomes null and is cleaned up
     // in OnHotReload.
+    [ManuallyCloned]
     internal List<MonoBehaviour> _components = [];
     // Type-keyed lookup - skipped by the walk (its keys reference old types) and rebuilt in OnHotReload.
-    [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
+    [ReloadIgnore, ManuallyCloned] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     private Guid _identifier = Guid.NewGuid();
 
     private bool _static = false;
@@ -38,12 +41,13 @@ public partial class GameObject : EngineObject, ISerializable
 
     // We don't serialize parent, since if we want to serialize X object who is a child to Y object, we don't want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
+    [ManuallyCloned]
     private GameObject? _parent;
 
     [SerializeField]
     private Transform _transform = new();
 
-    [SerializeIgnore]
+    [SerializeIgnore, ManuallyCloned]
     private WeakReference<Scene> _scene;
 
     // Everything tying this object to a prefab, or null for the ordinary case. One reference rather
@@ -105,6 +109,7 @@ public partial class GameObject : EngineObject, ISerializable
     public GameObject? Parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
+    [ManuallyCloned]
     public List<GameObject> Children = [];
 
     public int ChildCount => Children.Count;

@@ -8,23 +8,33 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Engine objects are shared rather than duplicated when a clone reaches one through a field. An
+/// asset referenced by two components stays one asset. Cloning an engine object directly still copies
+/// it, and <see cref="GameObject"/> claims its own components and children explicitly.
+/// </summary>
+[CloneBehavior(CloneBehavior.Reference)]
 public abstract class EngineObject : IDisposable
 {
     private static int s_nextID = 1;
 
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     protected int _instanceID;
     public int InstanceID => _instanceID;
 
     // Asset path if we have one
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     [HideInInspector] public string AssetPath = string.Empty;
 
     /// <summary>
     /// A unique asset identifier. When set, serialization will store only a reference
     /// and deserialization will resolve the object from the <see cref="AssetDatabase"/>.
     /// </summary>
+    [CloneField(CloneFieldFlags.IdentityRelevant)]
     [HideInInspector] public Guid AssetID = Guid.Empty;
 
     [HideInInspector] public string Name;
@@ -32,6 +42,7 @@ public abstract class EngineObject : IDisposable
     // Interlocked-guarded rather than a plain bool: a finalizer can now race an explicit Dispose()
     // call from another thread (the finalizer thread runs independently of everything else), so the
     // check-and-set must be atomic or both could pass the guard and double-run OnDispose.
+    [CloneField(CloneFieldFlags.Skip)]
     private int _disposed;
     public bool IsDisposed => _disposed != 0;
 

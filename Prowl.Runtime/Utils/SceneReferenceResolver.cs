@@ -49,10 +49,18 @@ public sealed class SceneReferenceResolver : IExternalReferenceResolver
     /// it references from outside is linked. Transforms and components have to be listed alongside
     /// their GameObjects, or they would serialize as links themselves.
     /// </summary>
-    public static SceneReferenceResolver ForTree(GameObject root)
+    public static SceneReferenceResolver ForTree(GameObject root) => ForTrees([root]);
+
+    /// <summary>
+    /// A resolver for writing out several trees as one operation, so a reference from one to another
+    /// stays inside the data instead of being linked out or copied twice.
+    /// </summary>
+    public static SceneReferenceResolver ForTrees(IEnumerable<GameObject> roots)
     {
         var objects = new List<object>();
-        Collect(root);
+        foreach (GameObject root in roots)
+            if (root.IsValid())
+                Collect(root);
         return new SceneReferenceResolver(objects.ToArray());
 
         void Collect(GameObject go)

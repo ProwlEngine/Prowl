@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Echo;
+using Prowl.Echo.Cloning;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
@@ -190,9 +191,8 @@ public partial class GameObject
     }
 
     /// <summary>
-    /// A detached copy of a GameObject tree. Serializing and reading it back is what produces
-    /// independent components; the resolver is what stops references to the rest of the scene from
-    /// being deep-copied into orphans along the way.
+    /// A detached copy of a GameObject tree. References into the tree are rewritten to the copy's own
+    /// objects, and references to anything outside it keep pointing at that same object.
     /// </summary>
     private static GameObject? Clone(GameObject original)
     {
@@ -204,11 +204,7 @@ public partial class GameObject
 
         try
         {
-            var echo = Serializer.Serialize(typeof(object), original,
-                new SerializationContext { ExternalReferences = SceneReferenceResolver.ForTree(original) });
-
-            return Serializer.Deserialize<GameObject>(echo,
-                new SerializationContext { ExternalReferences = new SceneReferenceResolver() });
+            return Cloner.Clone(original);
         }
         catch (Exception ex)
         {
