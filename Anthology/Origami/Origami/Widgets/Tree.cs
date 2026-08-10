@@ -148,6 +148,8 @@ public sealed class TreeBuilder
     // Layout - default to 0 meaning "use theme HeaderHeight"
     private float _rowHeight;
     private float _indentSize = 14f;
+    private float _baseIndent = 6f;
+    private float _arrowWidth = 12f;
     private float _width;
     private float _height;
     private float _padding = 4f;
@@ -224,6 +226,13 @@ public sealed class TreeBuilder
 
     public TreeBuilder RowHeight(float h) { _rowHeight = MathF.Max(16, h); return this; }
     public TreeBuilder IndentSize(float s) { _indentSize = MathF.Max(0, s); return this; }
+
+    /// <summary>Left inset (px) applied to every row before the per-depth indent. Default 6.</summary>
+    public TreeBuilder BaseIndent(float s) { _baseIndent = MathF.Max(0, s); return this; }
+
+    /// <summary>Width (px) reserved for the caret/arrow slot, drawn or not. Default 12.</summary>
+    public TreeBuilder ArrowWidth(float w) { _arrowWidth = MathF.Max(0, w); return this; }
+
     public TreeBuilder Size(float w, float h) { _width = w; _height = h; return this; }
     public TreeBuilder Padding(float p) { _padding = p; return this; }
 
@@ -438,7 +447,7 @@ public sealed class TreeBuilder
         bool isExpandable, bool isPinged)
     {
         // Indentation: 6px base left padding + 14px per depth level (prototype .w2trow).
-        float indent = 6f + node.Depth * _indentSize;
+        float indent = _baseIndent + node.Depth * _indentSize;
         string rowId = $"{_id}_r_{node.Id}";
         string expKey = $"{_id}_exp_{node.Id}";
         int capturedIndex = index;
@@ -594,7 +603,7 @@ public sealed class TreeBuilder
                 Color caretCol = isSelected ? ink.C600 : ink.C200;
 
                 var caret = _paper.Box($"{rowId}_arr")
-                    .Width(12).Height(_rowHeight)
+                    .Width(_arrowWidth).Height(_rowHeight)
                     .OnClick(e =>
                     {
                         // Stop the click from bubbling to the row's select handler, but per-event
@@ -632,7 +641,7 @@ public sealed class TreeBuilder
             }
             else
             {
-                _paper.Box($"{rowId}_arr").Width(12).Height(_rowHeight);
+                _paper.Box($"{rowId}_arr").Width(_arrowWidth).Height(_rowHeight);
             }
 
             // ---- Checkbox ----
