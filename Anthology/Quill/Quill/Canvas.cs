@@ -843,6 +843,7 @@ namespace Prowl.Quill
         /// <param name="texture">The texture to apply, or null to clear the brush texture.</param>
         public void SetBrushTexture(object? texture)
         {
+            _state.brush.Type = BrushType.None;
             _state.brush.Texture = texture;
             // Default texture transform: 1 pixel = 1 texel, starting at origin
             if (texture != null && _state.brush.TextureTransform == Transform2D.Identity)
@@ -869,6 +870,7 @@ namespace Prowl.Quill
         /// </summary>
         public void ClearBrushTexture()
         {
+            _state.brush.Type = BrushType.None;
             _state.brush.Texture = null;
             _state.brush.TextureTransform = Transform2D.Identity;
             InvalidateDrawState();
