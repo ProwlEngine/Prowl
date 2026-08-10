@@ -2,7 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 using Prowl.Echo;
 using Prowl.Editor.GUI;
@@ -84,10 +84,17 @@ public class AudioClipAssetEditor : ImportSettingsEditor
     }
 
     /// <summary>
-    /// Peak envelope of the clip, as one column per horizontal slot. Cached per asset because it has
-    /// to decode the whole clip to build it, which is far too much to redo every frame.
+    /// Peak envelope of each clip, one column per horizontal slot. Cached because building it decodes
+    /// the whole clip, which is far too much to redo every frame.
     /// </summary>
-    private static readonly Dictionary<Guid, float[]> s_waveforms = new();
+    /// <remarks>
+    /// Keyed on the clip instance rather than its GUID, which reimporting takes care of on its own: a
+    /// reimport hands back a new instance, so a clip re-imported as mono or at a different rate gets a
+    /// fresh envelope instead of keeping the one from before. Keying on the GUID also meant an asset
+    /// that had not been assigned one, which is every clip until it is imported, missed the cache
+    /// entirely and decoded on every frame the inspector drew.
+    /// </remarks>
+    private static readonly ConditionalWeakTable<AudioClip, float[]> s_waveforms = new();
 
     private const int WaveformColumns = 160;
     private const float WaveformHeight = 64.0f;
@@ -119,13 +126,10 @@ public class AudioClipAssetEditor : ImportSettingsEditor
         }
     }
 
-    private static float[] Waveform(AudioClip clip)
+    private static float[] Waveform(AudioClip clip) => s_waveforms.GetValue(clip, static c => BuildWaveform(c));
+
+    private static float[] BuildWaveform(AudioClip clip)
     {
-        Guid key = clip.AssetID;
-
-        if (key != Guid.Empty && s_waveforms.TryGetValue(key, out float[]? cached))
-            return cached;
-
         float[] samples = clip.GetSampleData();
         int channels = Math.Max(1, clip.Channels);
         int frames = samples.Length / channels;
@@ -146,9 +150,6 @@ public class AudioClipAssetEditor : ImportSettingsEditor
 
             peaks[column] = Math.Min(1.0f, peak);
         }
-
-        if (key != Guid.Empty)
-            s_waveforms[key] = peaks;
 
         return peaks;
     }
