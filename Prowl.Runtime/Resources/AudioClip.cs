@@ -1,11 +1,13 @@
-// This software is available as a choice of the following licenses. Choose
-// whichever you prefer.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 using Prowl.Echo;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Audio.Native;
 
 namespace Prowl.Runtime.Resources;
 
@@ -20,6 +22,13 @@ public sealed class AudioClip : EngineObject, ISerializable
     private UInt64 dataSize;
     private UInt64 hashCode;
     private bool streamFromDisk;
+
+    // Format described by the encoded data, worked out by decoding it once on first ask. There is no
+    // cheaper way to ask the decoder, so the PCM is thrown away again and only the shape is kept.
+    private bool infoLoaded;
+    private int channels;
+    private int sampleRate;
+    private UInt64 frameCount;
 
     /// <summary>
     /// If the constructor with 'string filePath' overloaded is used this will contain the file path, or string.Empty otherwise.
@@ -159,7 +168,181 @@ public sealed class AudioClip : EngineObject, ISerializable
         handle = IntPtr.Zero;
         hashCode = 0;
         dataSize = 0;
+
+        // The cached format described the data that just went away.
+        infoLoaded = false;
+        channels = 0;
+        sampleRate = 0;
+        frameCount = 0;
     }
+
+    #region Format
+
+    /// <summary>Channel count of the decoded audio, 0 if it cannot be decoded.</summary>
+    public int Channels
+    {
+        get { EnsureNotDisposed(); EnsureInfo(); return channels; }
+    }
+
+    /// <summary>Sample rate of the decoded audio in hertz, 0 if it cannot be decoded.</summary>
+    public int SampleRate
+    {
+        get { EnsureNotDisposed(); EnsureInfo(); return sampleRate; }
+    }
+
+    /// <summary>Length in sample frames. One frame holds one sample for each channel.</summary>
+    public UInt64 SampleCount
+    {
+        get { EnsureNotDisposed(); EnsureInfo(); return frameCount; }
+    }
+
+    /// <summary>Length in seconds, 0 if the clip cannot be decoded.</summary>
+    public float LengthInSeconds
+    {
+        get
+        {
+            EnsureNotDisposed();
+            EnsureInfo();
+            return sampleRate > 0 ? (float)(frameCount / (double)sampleRate) : 0.0f;
+        }
+    }
+
+    /// <summary>
+    /// Decodes the clip and returns its samples as interleaved 32 bit floats, one frame at a time
+    /// across the channels. Returns an empty array if it cannot be decoded.
+    /// </summary>
+    /// <remarks>
+    /// This decodes on every call and hands back a fresh array, so it is for tooling and analysis
+    /// (waveforms, beat detection, custom streaming), not something to call per frame.
+    /// </remarks>
+    public float[] GetSampleData()
+    {
+        EnsureNotDisposed();
+
+        IntPtr decoded = Decode(out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate);
+
+        if (decoded == IntPtr.Zero)
+            return [];
+
+        try
+        {
+            CaptureInfo(sampleCount, decodedChannels, decodedRate);
+
+            // The count is total samples across every channel, not frames.
+            var samples = new float[sampleCount];
+            Marshal.Copy(decoded, samples, 0, samples.Length);
+            return samples;
+        }
+        finally
+        {
+            MiniAudioExNative.ma_ex_free(decoded);
+        }
+    }
+
+    /// <summary>
+    /// Builds a playable clip from raw interleaved samples, for procedurally generated audio.
+    /// </summary>
+    /// <param name="name">Name for the clip.</param>
+    /// <param name="samples">Interleaved 32 bit float samples, one frame at a time across the channels.</param>
+    /// <param name="channels">How many channels the samples are interleaved across.</param>
+    /// <param name="sampleRate">Sample rate of the samples in hertz.</param>
+    /// <remarks>
+    /// The samples are wrapped in a WAVE container, because playback decodes an encoded stream and
+    /// bare PCM is not one. That keeps a procedural clip identical to an imported one everywhere else.
+    /// </remarks>
+    public static AudioClip Create(string name, float[] samples, int channels, int sampleRate)
+    {
+        ArgumentNullException.ThrowIfNull(samples);
+
+        if (channels <= 0) throw new ArgumentOutOfRangeException(nameof(channels), "A clip needs at least one channel.");
+        if (sampleRate <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRate), "A clip needs a positive sample rate.");
+
+        var clip = new AudioClip(WriteWave(samples, channels, sampleRate))
+        {
+            Name = name,
+            ClipName = name,
+        };
+
+        return clip;
+    }
+
+    /// <summary>Wraps interleaved float samples in a minimal WAVE container.</summary>
+    private static byte[] WriteWave(float[] samples, int channels, int sampleRate)
+    {
+        const int formatIeeeFloat = 3;
+        const int bitsPerSample = 32;
+        int blockAlign = channels * (bitsPerSample / 8);
+        int dataBytes = samples.Length * sizeof(float);
+
+        using var stream = new MemoryStream(44 + dataBytes);
+        using var writer = new BinaryWriter(stream);
+
+        writer.Write("RIFF"u8);
+        writer.Write(36 + dataBytes);
+        writer.Write("WAVE"u8);
+
+        writer.Write("fmt "u8);
+        writer.Write(16);
+        writer.Write((short)formatIeeeFloat);
+        writer.Write((short)channels);
+        writer.Write(sampleRate);
+        writer.Write(sampleRate * blockAlign);
+        writer.Write((short)blockAlign);
+        writer.Write((short)bitsPerSample);
+
+        writer.Write("data"u8);
+        writer.Write(dataBytes);
+
+        foreach (float sample in samples)
+            writer.Write(sample);
+
+        writer.Flush();
+        return stream.ToArray();
+    }
+
+    /// <summary>Decodes to interleaved floats. The caller frees the result with ma_ex_free.</summary>
+    private IntPtr Decode(out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate)
+    {
+        // 0 for the desired format means "whatever the source already is".
+        if (handle != IntPtr.Zero && dataSize > 0)
+            return MiniAudioExNative.ma_ex_decode_memory(handle, dataSize, out sampleCount, out decodedChannels, out decodedRate, 0, 0);
+
+        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            return MiniAudioExNative.ma_ex_decode_file(filePath, out sampleCount, out decodedChannels, out decodedRate, 0, 0);
+
+        sampleCount = 0;
+        decodedChannels = 0;
+        decodedRate = 0;
+        return IntPtr.Zero;
+    }
+
+    private void EnsureInfo()
+    {
+        if (infoLoaded) return;
+
+        infoLoaded = true;
+
+        IntPtr decoded = Decode(out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate);
+
+        if (decoded == IntPtr.Zero)
+            return;
+
+        CaptureInfo(sampleCount, decodedChannels, decodedRate);
+
+        // Only the shape is wanted here. Holding the decoded audio would multiply a compressed clip's
+        // footprint for the sake of a duration readout.
+        MiniAudioExNative.ma_ex_free(decoded);
+    }
+
+    private void CaptureInfo(UInt64 sampleCount, uint decodedChannels, uint decodedRate)
+    {
+        infoLoaded = true;
+        channels = (int)decodedChannels;
+        sampleRate = (int)decodedRate;
+        frameCount = decodedChannels > 0 ? sampleCount / decodedChannels : 0;
+    }
+
+    #endregion
 
     protected override void OnDispose()
     {
