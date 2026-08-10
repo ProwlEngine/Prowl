@@ -267,7 +267,7 @@ public sealed class AudioClip : EngineObject, ISerializable
     }
 
     /// <summary>Wraps interleaved float samples in a minimal WAVE container.</summary>
-    private static byte[] WriteWave(float[] samples, int channels, int sampleRate)
+    internal static byte[] WriteWave(float[] samples, int channels, int sampleRate)
     {
         const int formatIeeeFloat = 3;
         const int bitsPerSample = 32;
@@ -302,18 +302,61 @@ public sealed class AudioClip : EngineObject, ISerializable
 
     /// <summary>Decodes to interleaved floats. The caller frees the result with ma_ex_free.</summary>
     private IntPtr Decode(out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate)
+        => Decode(0, 0, out sampleCount, out decodedChannels, out decodedRate);
+
+    private IntPtr Decode(uint desiredChannels, uint desiredRate, out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate)
     {
-        // 0 for the desired format means "whatever the source already is".
+        // 0 for either desired value means "whatever the source already is".
         if (handle != IntPtr.Zero && dataSize > 0)
-            return MiniAudioExNative.ma_ex_decode_memory(handle, dataSize, out sampleCount, out decodedChannels, out decodedRate, 0, 0);
+            return MiniAudioExNative.ma_ex_decode_memory(handle, dataSize, out sampleCount, out decodedChannels, out decodedRate, desiredChannels, desiredRate);
 
         if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
-            return MiniAudioExNative.ma_ex_decode_file(filePath, out sampleCount, out decodedChannels, out decodedRate, 0, 0);
+            return MiniAudioExNative.ma_ex_decode_file(filePath, out sampleCount, out decodedChannels, out decodedRate, desiredChannels, desiredRate);
 
         sampleCount = 0;
         decodedChannels = 0;
         decodedRate = 0;
         return IntPtr.Zero;
+    }
+
+    /// <summary>The encoded bytes this clip plays from, as they are stored. Empty for a file backed clip.</summary>
+    public byte[] GetEncodedData()
+    {
+        EnsureNotDisposed();
+
+        if (handle == IntPtr.Zero || dataSize == 0)
+            return [];
+
+        var data = new byte[dataSize];
+        Marshal.Copy(handle, data, 0, data.Length);
+        return data;
+    }
+
+    /// <summary>
+    /// Decodes this clip, optionally converting the channel count and sample rate, and returns the
+    /// result as a WAVE stream ready to be stored as an asset. Empty if it cannot be decoded.
+    /// </summary>
+    /// <param name="targetChannels">Channels to convert to, or 0 to keep the source's.</param>
+    /// <param name="targetSampleRate">Sample rate to convert to, or 0 to keep the source's.</param>
+    internal byte[] DecodeToWave(uint targetChannels, uint targetSampleRate)
+    {
+        EnsureNotDisposed();
+
+        IntPtr decoded = Decode(targetChannels, targetSampleRate, out UInt64 sampleCount, out uint decodedChannels, out uint decodedRate);
+
+        if (decoded == IntPtr.Zero || decodedChannels == 0 || sampleCount == 0)
+            return [];
+
+        try
+        {
+            var samples = new float[sampleCount];
+            Marshal.Copy(decoded, samples, 0, samples.Length);
+            return WriteWave(samples, (int)decodedChannels, (int)decodedRate);
+        }
+        finally
+        {
+            MiniAudioExNative.ma_ex_free(decoded);
+        }
     }
 
     private void EnsureInfo()
