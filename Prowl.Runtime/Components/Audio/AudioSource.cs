@@ -65,6 +65,24 @@ public sealed class AudioSource : MonoBehaviour
     [SerializeField, Tooltip("Curve used to fall off between the min and max distance.")]
     private AttenuationModel _attenuationModel = AttenuationModel.Linear;
 
+    [Header("Routing")]
+    [SerializeField, Tooltip("Mixer group this source feeds into. Empty routes straight to the master output.")]
+    private AssetRef<AudioMixerGroup> _outputGroup;
+
+    /// <summary>
+    /// The mixer group this source feeds into, or null to go straight to the master output. Setting it
+    /// re-routes immediately, so a running source moves buses without restarting.
+    /// </summary>
+    public AudioMixerGroup OutputGroup
+    {
+        get => _outputGroup.Res;
+        set
+        {
+            _outputGroup = value;
+            RouteToOutputGroup();
+        }
+    }
+
     [Header("Voices")]
     [SerializeField, Tooltip("How many one shot voices this source can sound at once before the longest running one is taken over.")]
     private int _maxOneShotVoices = 8;
@@ -84,6 +102,7 @@ public sealed class AudioSource : MonoBehaviour
     private ulong _pausedCursor;
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
+    private bool _effectNodeReady;
     private Float3 _previousPosition;
     private Float3 _velocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
@@ -401,10 +420,12 @@ public sealed class AudioSource : MonoBehaviour
 
             ma_engine_ptr pEngine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
 
-            if (MiniAudioNative.ma_effect_node_init(MiniAudioNative.ma_engine_get_node_graph(pEngine), ref effectNodeConfig, _effectNode) == ma_result.success)
+            _effectNodeReady = MiniAudioNative.ma_effect_node_init(MiniAudioNative.ma_engine_get_node_graph(pEngine), ref effectNodeConfig, _effectNode) == ma_result.success;
+
+            if (_effectNodeReady)
             {
-                MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, MiniAudioNative.ma_engine_get_endpoint(pEngine), 0);
                 MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_soundGroup.pointer), 0, new ma_node_ptr(_effectNode.pointer), 0);
+                RouteToOutputGroup();
             }
 
             // Apply all serialized settings
@@ -482,6 +503,7 @@ public sealed class AudioSource : MonoBehaviour
     {
         ApplySettings();
         RefreshEffects();
+        RouteToOutputGroup();
     }
 
     public override void OnDisable()
@@ -499,11 +521,15 @@ public sealed class AudioSource : MonoBehaviour
         _isPaused = false;
         _pausedCursor = 0;
 
-        // Cleanup effect node
+        // Cleanup effect node. Only uninit what actually initialized: the pointer is non-zero from
+        // the allocation alone, so uninit on a failed init would be running over uninitialized memory.
         if (_effectNode.pointer != IntPtr.Zero)
         {
-            MiniAudioNative.ma_effect_node_uninit(_effectNode);
+            if (_effectNodeReady)
+                MiniAudioNative.ma_effect_node_uninit(_effectNode);
+
             _effectNode.Free();
+            _effectNodeReady = false;
         }
 
         // Cleanup sound group
@@ -898,6 +924,29 @@ public sealed class AudioSource : MonoBehaviour
     #endregion
 
     #region Private Methods
+
+    /// <summary>
+    /// Points this source's output at its mixer group, or at the engine endpoint when it has none.
+    /// The group builds its own native node on demand, so this works whether the group has been used
+    /// before or not.
+    /// </summary>
+    private void RouteToOutputGroup()
+    {
+        if (!_effectNodeReady || _effectNode.pointer == IntPtr.Zero || !AudioContext.IsInitialized)
+            return;
+
+        AudioMixerGroup group = _outputGroup.Res;
+        IntPtr target = group != null ? group.NativeNode : IntPtr.Zero;
+
+        if (target == IntPtr.Zero)
+        {
+            var engine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
+            MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, MiniAudioNative.ma_engine_get_endpoint(engine), 0);
+            return;
+        }
+
+        MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, new ma_node_ptr(target), 0);
+    }
 
     private void ApplySettings()
     {

@@ -67,6 +67,13 @@ public static class AudioContext
     public static bool IsInitialized => audioContext != IntPtr.Zero;
 
     /// <summary>
+    /// Bumped every time a device is opened or closed. Anything caching a native object built against
+    /// the device compares this to know whether its handle is still the current one or a dangling
+    /// pointer from a previous device.
+    /// </summary>
+    public static int DeviceGeneration { get; private set; }
+
+    /// <summary>
     /// Gets the chosen sample rate.
     /// </summary>
     /// <value></value>
@@ -157,6 +164,7 @@ public static class AudioContext
             return;
         }
 
+        DeviceGeneration++;
         MiniAudioExNative.ma_ex_context_set_master_volume(audioContext, masterVolume);
 
         lastUpdateTime = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -184,6 +192,7 @@ public static class AudioContext
 
         MiniAudioExNative.ma_ex_context_uninit(audioContext);
         audioContext = IntPtr.Zero;
+        DeviceGeneration++;
     }
 
     /// <summary>
