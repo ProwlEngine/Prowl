@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -94,7 +94,7 @@ public sealed class DelayEffect : AudioEffect
         cursor %= bufferSizeInFrames;
     }
 
-    public override unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    protected override unsafe void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
     {
         // The buffer is laid out for the channel count this effect was initialized with, so a chain
         // that disagrees would step the write cursor off the end of it.

@@ -38,7 +38,7 @@ public class AudioTests : RuntimeTestBase
     {
         public int Destroyed;
 
-        public override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
+        protected override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels) { }
         public override void OnDestroy() => Destroyed++;
     }
 
@@ -65,7 +65,9 @@ public class AudioTests : RuntimeTestBase
             var framesOut = new NativeArray<float>(pOut, output.Length);
             uint frameCount = (uint)(input.Length / channels);
             uint frameCountOut = frameCount;
-            effect.OnProcess(framesIn, frameCount, framesOut, ref frameCountOut, (uint)channels);
+
+            // Process, not OnProcess: that is what a chain calls, and it is where bypassing lives.
+            effect.Process(framesIn, frameCount, framesOut, ref frameCountOut, (uint)channels);
         }
 
         return output;
@@ -609,6 +611,27 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1u, effect.DelayInFrames);
         Assert.Equal(0f, output[0]);
         Assert.Equal(1f, output[^1], 4);
+    }
+
+    // Bypass used to be applied by filtering the effect out when the chain snapshot was built, so
+    // setting it from gameplay did nothing until something else happened to republish. It worked from
+    // the inspector, which is the worst place for a bug to work.
+    [Fact]
+    public void BypassedEffect_LeavesTheBufferUntouched()
+    {
+        var effect = new DistortionEffect { Drive = 10f, Blend = 1f };
+        float[] input = Interleave(0.5f, 0.5f, 16);
+
+        float[] shaped = Run(effect, input);
+        Assert.NotEqual(0.5f, shaped[0], 3);
+
+        // Set after the effect has already run once, the way a gameplay toggle would.
+        effect.Bypass = true;
+        float[] bypassed = Run(effect, input);
+
+        // Untouched means the previous stage's output carries on unchanged, which here is silence.
+        foreach (float sample in bypassed)
+            Assert.Equal(0f, sample);
     }
 
     // The blend is a crossfade against the untouched signal, so at fully dry the effect has to be

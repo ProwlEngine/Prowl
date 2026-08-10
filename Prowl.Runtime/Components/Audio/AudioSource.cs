@@ -930,9 +930,10 @@ public sealed class AudioSource : MonoBehaviour
 
         foreach (AudioEffect effect in _effects)
         {
-            // Bypassed and null entries are dropped here rather than tested per block on the audio
-            // thread. An inspector row left empty is a normal state, not an error.
-            if (effect != null && !effect.Bypass)
+            // Only null entries are dropped here. Bypass is tested per block instead, so toggling it
+            // from gameplay does not need the chain republished. An inspector row left empty is a
+            // normal state, not an error.
+            if (effect != null)
                 chain.Add(effect);
         }
 
@@ -1056,7 +1057,10 @@ public sealed class AudioSource : MonoBehaviour
 
             for (int i = 0; i < chain.Length; i++)
             {
-                chain[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+                // A bypassed effect leaves both buffers as the previous stage left them, so there is
+                // nothing to carry forward either.
+                if (!chain[i].Process(bufferIn, countIn, bufferOut, ref countOut, channels))
+                    continue;
 
                 //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
                 bufferOut.CopyTo(bufferIn);

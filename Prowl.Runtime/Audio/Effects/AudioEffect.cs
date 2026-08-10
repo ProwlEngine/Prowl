@@ -25,7 +25,16 @@ public abstract class AudioEffect
     [SerializeField, Tooltip("Pass audio through untouched, without taking the effect out of the chain.")]
     private bool _bypass;
 
-    /// <summary>Passes audio through untouched while leaving the effect in the chain.</summary>
+    /// <summary>
+    /// Passes audio through untouched while leaving the effect in the chain. Takes effect on the next
+    /// block, from any thread.
+    /// </summary>
+    /// <remarks>
+    /// Tested per block rather than filtered out when the chain is built, so toggling this from
+    /// gameplay works without anything having to republish the chain afterwards. The audio thread may
+    /// read a value one block stale, which is inaudible, and the alternative was a toggle that only
+    /// worked from the inspector.
+    /// </remarks>
     public bool Bypass
     {
         get => _bypass;
@@ -63,10 +72,23 @@ public abstract class AudioEffect
     public virtual void OnValidate() { }
 
     /// <summary>
+    /// Runs the effect over one block unless it is bypassed, and reports whether it did. Chains call
+    /// this rather than <see cref="OnProcess"/>, so bypassing is honoured the same way everywhere.
+    /// </summary>
+    public bool Process(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels)
+    {
+        if (_bypass)
+            return false;
+
+        OnProcess(framesIn, frameCountIn, framesOut, ref frameCountOut, channels);
+        return true;
+    }
+
+    /// <summary>
     /// Processes one block on the audio thread. Leaving <paramref name="framesOut"/> untouched passes
     /// the previous stage's output through unchanged.
     /// </summary>
-    public abstract void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels);
+    protected abstract void OnProcess(NativeArray<float> framesIn, UInt32 frameCountIn, NativeArray<float> framesOut, ref UInt32 frameCountOut, UInt32 channels);
 
     /// <summary>Called when the effect is removed from its source, or the source is destroyed.</summary>
     public virtual void OnDestroy() { }

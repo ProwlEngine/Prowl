@@ -295,9 +295,11 @@ public sealed class AudioMixerGroup : EngineObject
     {
         var chain = new List<AudioEffect>(_effects.Count);
 
+        // Bypass is tested per block rather than filtered here, so toggling it from gameplay takes
+        // effect without the chain being republished.
         foreach (AudioEffect effect in _effects)
         {
-            if (effect != null && !effect.Bypass)
+            if (effect != null)
                 chain.Add(effect);
         }
 
@@ -335,7 +337,9 @@ public sealed class AudioMixerGroup : EngineObject
 
             for (int i = 0; i < chain.Length; i++)
             {
-                chain[i].OnProcess(bufferIn, countIn, bufferOut, ref countOut, channels);
+                if (!chain[i].Process(bufferIn, countIn, bufferOut, ref countOut, channels))
+                    continue;
+
                 bufferOut.CopyTo(bufferIn);
                 countIn = countOut;
             }
