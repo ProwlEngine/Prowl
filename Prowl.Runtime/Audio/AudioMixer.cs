@@ -417,7 +417,17 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
         return group;
     }
 
-    /// <summary>Removes a group, re-pointing anything that fed into it at its own parent.</summary>
+    /// <summary>
+    /// Removes a group, re-pointing anything that fed into it at its own parent. Sources still routed
+    /// to it fall back to the master output.
+    /// </summary>
+    /// <remarks>
+    /// The group's native objects are released, but the object itself is left alive. It is a sub-asset,
+    /// so anything holding an <see cref="AudioSource.OutputGroup"/> reference to it still has one, and
+    /// destroying it here would leave those sources pointing at a destroyed object rather than at
+    /// nothing. Its disappearance from the asset database is the reimport's business, which is how the
+    /// rest of the sub-asset machinery works.
+    /// </remarks>
     public bool RemoveGroup(AudioMixerGroup group)
     {
         EnsureBound();
@@ -438,7 +448,13 @@ public sealed class AudioMixer : EngineObject, ISerializationCallbackReceiver
                 other.ParentIndex--;
         }
 
-        group.Dispose();
+        // Detached, so it cannot claim whichever group has taken its old index in the meantime.
+        group.ParentIndex = -1;
+        group.ReleaseNative();
+
+        Debug.LogWarning($"Removed audio mixer group '{group.GroupName}' from '{Name}'. " +
+                         "Any AudioSource still routed to it now feeds the master output.");
+
         return true;
     }
 

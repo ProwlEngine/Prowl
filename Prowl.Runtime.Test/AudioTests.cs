@@ -939,6 +939,23 @@ public class AudioTests : RuntimeTestBase
         Assert.Null(mixer.FindGroup("Music"));
     }
 
+    // Groups are sub-assets, so an AudioSource can hold a reference straight to one. Destroying the
+    // object on removal left those sources pointing at a destroyed asset instead of at nothing.
+    [Fact]
+    public void RemoveGroup_LeavesTheGroupObjectAlive()
+    {
+        var mixer = new AudioMixer();
+        AudioMixerGroup music = mixer.AddGroup("Music");
+
+        Assert.True(mixer.RemoveGroup(music));
+
+        Assert.True(music.IsValid());
+        Assert.Null(mixer.FindGroup("Music"));
+
+        // Detached, so it cannot claim whichever group has taken its old index.
+        Assert.Null(music.Parent);
+    }
+
     // Everything eventually feeds the root, so removing it would leave the tree with no outlet.
     [Fact]
     public void RemoveGroup_WillNotRemoveTheMaster()
