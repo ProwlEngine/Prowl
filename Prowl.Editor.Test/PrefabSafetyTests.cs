@@ -194,9 +194,9 @@ public class PrefabSafetyTests : EditorTestHarness
         var refreshed = Scene.Current!.RootObjects.First();
         Assert.False(refreshed.Enabled);
 
-        PrefabUtility.RevertSingleOverride(refreshed, "$.Enabled");
+        PrefabUtility.RevertSingleOverride(refreshed, PrefabUtility.GetOverridePath(refreshed, "Enabled"));
         Assert.True(refreshed.Enabled);
-        Assert.False(PrefabUtility.IsPropertyOverridden(refreshed, "$.Enabled"));
+        Assert.False(PrefabUtility.IsPropertyOverridden(refreshed, PrefabUtility.GetOverridePath(refreshed, "Enabled")));
     }
 
     // ---------------------------------------------------------------------
@@ -214,7 +214,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var comp = instance.GetComponent<OverrideComp>()!;
         comp.Enabled = false;
         PrefabUtility.DetectComponentOverrides(instance, comp);
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c0._enabled"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "_enabled")));
         SetSceneCurrent(instance);
 
         PrefabUtility.RefreshAllInstances(g);
@@ -259,7 +259,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var comp = instance.GetComponent<RefHolderComp>()!;
         comp.Target = target;
         PrefabUtility.DetectComponentOverrides(instance, comp);
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c0.Target"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "Target")));
 
         PrefabUtility.RefreshAllInstances(g);
 
@@ -281,7 +281,7 @@ public class PrefabSafetyTests : EditorTestHarness
         var comp = instance.GetComponent<RefHolderComp>()!;
         comp.Target = target;
         PrefabUtility.DetectComponentOverrides(instance, comp);
-        var ov = instance.PrefabOverrides.First(o => o.Path == "c0.Target");
+        var ov = instance.PrefabOverrides.First(o => o.Path == PrefabUtility.GetOverridePath(instance, comp, "Target"));
 
         PrefabUtility.ApplySingleOverride(instance, ov);
 
@@ -435,7 +435,7 @@ public class PrefabSafetyTests : EditorTestHarness
         PrefabUtility.DetectComponentOverrides(instance, comp);
         SetSceneCurrent(instance);
 
-        PrefabUtility.RevertSingleOverride(instance, "c0.Source");
+        PrefabUtility.RevertSingleOverride(instance, PrefabUtility.GetOverridePath(instance, comp, "Source"));
 
         Assert.Equal(1, comp.Source);
         Assert.Equal(2, comp.Derived);
@@ -462,7 +462,7 @@ public class PrefabSafetyTests : EditorTestHarness
 
         comp.Values = [1, 2, 4];
         PrefabUtility.DetectComponentOverrides(instance, comp);
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c0.Values"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "Values")));
     }
 
     // ---------------------------------------------------------------------
@@ -539,7 +539,9 @@ public class PrefabSafetyTests : EditorTestHarness
         var comp = instance.Children[0].GetComponent<OverrideComp>()!;
         comp.A = 50;
         PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
-        Assert.True(PrefabUtility.IsOverrideResolvable(instance, "g0.c0.A"));
+        // Captured now: once the source drops the child there is nothing left to build it from.
+        string childPath = PrefabUtility.GetOverridePath(instance.Children[0], comp, "A");
+        Assert.True(PrefabUtility.IsOverrideResolvable(instance, childPath));
         SetSceneCurrent(instance);
 
         // The source drops the child, so the override's path no longer addresses anything.
@@ -550,9 +552,9 @@ public class PrefabSafetyTests : EditorTestHarness
 
         var live = Scene.Current!.RootObjects.First();
         Assert.Single(live.PrefabOverrides);
-        Assert.False(PrefabUtility.IsOverrideResolvable(live, "g0.c0.A"));
+        Assert.False(PrefabUtility.IsOverrideResolvable(live, childPath));
 
-        PrefabUtility.RemoveOverride(live, "g0.c0.A");
+        PrefabUtility.RemoveOverride(live, childPath);
 
         Assert.Empty(live.PrefabOverrides);
         Assert.False(PrefabUtility.HasAnyOverrides(live));
@@ -572,7 +574,8 @@ public class PrefabSafetyTests : EditorTestHarness
         SetSceneCurrent(instance);
         Undo.Clear();
 
-        PrefabUtility.RemoveOverride(Scene.Current!.RootObjects.First(), "c0.A");
+        PrefabUtility.RemoveOverride(Scene.Current!.RootObjects.First(),
+            PrefabUtility.GetOverridePath(instance, comp, "A"));
         Undo.FlushFrame();
         Assert.Empty(Scene.Current!.RootObjects.First().PrefabOverrides);
 
@@ -667,7 +670,7 @@ public class PrefabSafetyTests : EditorTestHarness
         Assert.Single(live.PrefabOverrides);
 
         // Reverting is the one direction that stays available.
-        PrefabUtility.RevertSingleOverride(live, "c0.A");
+        PrefabUtility.RevertSingleOverride(live, PrefabUtility.GetOverridePath(live, live.GetComponent<OverrideComp>()!, "A"));
         Assert.Equal(1, live.GetComponent<OverrideComp>()!.A);
         Assert.Empty(live.PrefabOverrides);
     }

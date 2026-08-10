@@ -469,7 +469,9 @@ public static class PrefabUtility
         var goRef = instanceRoot.IsValid() ? instanceRoot! : instanceGO;
         var rootId = goRef.Identifier;
 
-        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData, InstanceValueContext());
+        // Built like an instance so its objects carry the source identifiers the override path is
+        // written in terms of; the instance markings are taken back off before it is written out.
+        var source = GameObject.InstantiateDetached(prefab);
         if (source == null) return;
 
         // Apply the override value to the source. A scene reference resolves here and is linked, not
@@ -479,6 +481,7 @@ public static class PrefabUtility
             ApplyFieldValue(target, fieldPath, ov.Value);
 
         // Save back to the .prefab file
+        StripInstanceDataForEditing(source, prefabGuid);
         StabilizeSourceIdentifiers(source);
         var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
@@ -983,41 +986,73 @@ public static class PrefabUtility
     }
 
     /// <summary>Parse an index-based override path into a target object and remaining field path.</summary>
+    // An override path is "{sourceGameObjectId}/{sourceComponentId}/{field.path}", or
+    // "{sourceGameObjectId}/$/{field}" for a field on the GameObject itself. The identifiers are the
+    // ones the prefab is stored with, so a path keeps pointing at the same thing when components or
+    // children are added, removed or reordered - which the old index-based paths could not.
+    private const char PathSeparator = '/';
+    private const string GameObjectMarker = "$";
+
+    /// <summary>The override path for a field on a component of a prefab instance.</summary>
+    public static string GetOverridePath(GameObject instanceGO, MonoBehaviour component, string fieldPath)
+        => $"{instanceGO.SourceIdentifier}{PathSeparator}{instanceGO.GetComponentSourceIdentifier(component)}{PathSeparator}{fieldPath}";
+
+    /// <summary>The override path for a field on the GameObject itself.</summary>
+    public static string GetOverridePath(GameObject instanceGO, string fieldName)
+        => $"{instanceGO.SourceIdentifier}{PathSeparator}{GameObjectMarker}{PathSeparator}{fieldName}";
+
+    /// <summary>
+    /// Resolve a path against a tree, giving the object holding the field and the remaining member
+    /// path. Both an instance and the prefab source it came from resolve the same way, since both
+    /// record which source object each of their objects is.
+    /// </summary>
     private static void ParseOverridePath(GameObject root, string path, out object? target, out string fieldPath)
     {
         target = null;
         fieldPath = "";
 
-        var parts = path.Split('.');
-        GameObject currentGO = root;
-        int i = 0;
+        var parts = path.Split(PathSeparator, 3);
+        if (parts.Length != 3) return;
+        if (!Guid.TryParse(parts[0], out Guid goSourceId)) return;
 
-        // Walk GO path (g0, g1, etc.)
-        while (i < parts.Length && parts[i].StartsWith('g'))
+        var go = FindBySourceIdentifier(root, goSourceId, root.PrefabAssetId);
+        if (go == null) return;
+
+        fieldPath = parts[2];
+
+        if (parts[1] == GameObjectMarker)
         {
-            if (!int.TryParse(parts[i].AsSpan(1), out int childIdx) || childIdx < 0 || childIdx >= currentGO.Children.Count)
-                return;
-            currentGO = currentGO.Children[childIdx];
-            i++;
+            target = go;
+            return;
         }
 
-        if (i >= parts.Length) return;
+        if (!Guid.TryParse(parts[1], out Guid componentSourceId)) return;
 
-        if (parts[i] == "$")
+        foreach (var component in go.GetComponents<MonoBehaviour>())
         {
-            // GO-level field
-            target = currentGO;
-            fieldPath = string.Join(".", parts.Skip(i + 1));
+            if (go.GetComponentSourceIdentifier(component) != componentSourceId) continue;
+            target = component;
+            return;
         }
-        else if (parts[i].StartsWith('c'))
+    }
+
+    /// <summary>
+    /// The object within one prefab instance that came from a given source object. The search stops at
+    /// nested instances of other prefabs, which own their objects and their own overrides.
+    /// </summary>
+    private static GameObject? FindBySourceIdentifier(GameObject root, Guid sourceId, Guid boundaryPrefabId)
+    {
+        if (root.SourceIdentifier == sourceId) return root;
+
+        foreach (var child in root.Children)
         {
-            // Component field
-            if (!int.TryParse(parts[i].AsSpan(1), out int compIdx)) return;
-            var comps = currentGO.GetComponents<MonoBehaviour>().ToList();
-            if (compIdx >= comps.Count) return;
-            target = comps[compIdx];
-            fieldPath = string.Join(".", parts.Skip(i + 1));
+            if (child.IsPrefabInstance && child.PrefabAssetId != boundaryPrefabId) continue;
+
+            var found = FindBySourceIdentifier(child, sourceId, boundaryPrefabId);
+            if (found != null) return found;
         }
+
+        return null;
     }
 
     private static void ApplyFieldValue(object target, string fieldPath, EchoObject value)
@@ -1058,40 +1093,25 @@ public static class PrefabUtility
         var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
         if (source == null) return;
 
-        // Build the GO path from instance root
-        string goPath = BuildGOPath(instanceGO);
+        // The component this one came from, found by identity rather than by position, so adding or
+        // reordering components on either side does not change which one it is compared against.
+        string path = GetOverridePath(instanceGO, instanceComp, "");
+        ParseOverridePath(source, path, out var sourceTarget, out _);
+        if (sourceTarget is not MonoBehaviour sourceComp) return;
 
-        // Find the matching source GO by index path
-        var sourceGO = ResolveGOPath(source, goPath);
-        if (sourceGO == null) return;
-
-        // Find matching component by index (all components, not just same type)
-        var instanceComps = instanceGO.GetComponents<MonoBehaviour>().ToList();
-        int compIndex = instanceComps.IndexOf(instanceComp);
-        if (compIndex < 0) return;
-
-        var sourceComps = sourceGO.GetComponents<MonoBehaviour>().ToList();
-        if (compIndex >= sourceComps.Count) return;
-
-        var sourceComp = sourceComps[compIndex];
         if (sourceComp.GetType() != instanceComp.GetType())
         {
             // Runs once per drawn component per frame, so this must not log per occurrence.
-            Runtime.Debug.LogWarningOnce($"prefab.mismatch.{instanceGO.PrefabAssetId}.{goPath}.{compIndex}",
-                $"[Prefab] Component type mismatch at index {compIndex}: instance={instanceComp.GetType().Name}, source={sourceComp.GetType().Name}");
+            Runtime.Debug.LogWarningOnce($"prefab.mismatch.{path}",
+                $"[Prefab] Component type mismatch: instance={instanceComp.GetType().Name}, source={sourceComp.GetType().Name}");
             return;
         }
 
-        // Build path prefix
-        string pathPrefix = string.IsNullOrEmpty(goPath)
-            ? $"c{compIndex}"
-            : $"{goPath}.c{compIndex}";
-
-        // Compare fields. Overrides are stored on the instance root (paths are root-relative) so
-        // that apply/revert/refresh - which operate on the root - can see overrides on any child.
+        // Compare fields. Overrides are stored on the instance root (the paths are absolute within
+        // the instance) so that apply/revert/refresh - which operate on the root - see them all.
         var prefabRoot = GetPrefabInstanceRoot(instanceGO);
         var root = prefabRoot.IsValid() ? prefabRoot : instanceGO;
-        CompareFields(instanceComp, sourceComp, pathPrefix, root.PrefabOverrides);
+        CompareFields(instanceComp, sourceComp, path, root.PrefabOverrides);
     }
 
     /// <summary>
@@ -1104,12 +1124,11 @@ public static class PrefabUtility
         var source = GetCachedPrefabSource(instanceGO.PrefabAssetId);
         if (source == null) return;
 
-        string goPath = BuildGOPath(instanceGO);
-        var sourceGO = ResolveGOPath(source, goPath);
-        if (sourceGO == null) return;
+        string pathPrefix = GetOverridePath(instanceGO, "");
+        ParseOverridePath(source, pathPrefix, out var sourceTarget, out _);
+        if (sourceTarget is not GameObject sourceGO) return;
 
-        string pathPrefix = string.IsNullOrEmpty(goPath) ? "$" : $"{goPath}.$";
-        // Stored on the instance root (root-relative paths) so refresh/apply can find child overrides.
+        // Stored on the instance root so refresh/apply, which operate on the root, find child overrides.
         var prefabRoot = GetPrefabInstanceRoot(instanceGO);
         var overrides = (prefabRoot.IsValid() ? prefabRoot : instanceGO).PrefabOverrides;
 
@@ -1161,7 +1180,7 @@ public static class PrefabUtility
         {
             var instanceVal = field.GetValue(instance);
             var sourceVal = field.GetValue(source);
-            string path = $"{pathPrefix}.{field.Name}";
+            string path = pathPrefix + field.Name;
 
             // A context per side, deliberately: Echo numbers object references as it goes, so sharing
             // one would give the second value different ids and make equal content compare unequal.
@@ -1187,7 +1206,7 @@ public static class PrefabUtility
 
     private static void CompareField<T>(string pathPrefix, string fieldName, T instanceVal, T sourceVal, List<PropertyOverride> overrides)
     {
-        string path = $"{pathPrefix}.{fieldName}";
+        string path = pathPrefix + fieldName;
         bool areSame = EqualityComparer<T>.Default.Equals(instanceVal, sourceVal);
 
         var existing = overrides.FirstOrDefault(o => o.Path == path);
@@ -1205,42 +1224,6 @@ public static class PrefabUtility
         }
     }
 
-    // ================================================================
-    //  GO Path Helpers
-    // ================================================================
-
-    /// <summary>Build index path from prefab instance root to this GO. Empty string = root.</summary>
-    public static string BuildGOPath(GameObject go)
-    {
-        var root = GetPrefabInstanceRoot(go);
-        if (root == null || root == go) return "";
-
-        var parts = new List<string>();
-        var current = go;
-        while (current != root && current.Parent != null)
-        {
-            int idx = current.Parent.Children.IndexOf(current);
-            parts.Insert(0, $"g{idx}");
-            current = current.Parent;
-        }
-        return string.Join(".", parts);
-    }
-
-    /// <summary>Resolve an index path like "g0.g2" to a GO in the source tree.</summary>
-    public static GameObject? ResolveGOPath(GameObject root, string path)
-    {
-        if (string.IsNullOrEmpty(path)) return root;
-        var current = root;
-        foreach (var part in path.Split('.'))
-        {
-            if (!part.StartsWith('g') || !int.TryParse(part.AsSpan(1), out int idx))
-                return null;
-            if (idx < 0 || idx >= current.Children.Count) return null;
-            current = current.Children[idx];
-        }
-        return current;
-    }
-
     // Cache the deserialized prefab source for comparison (per prefab GUID), for the current frame
     // only, so an edited or reimported prefab is picked up on the next one.
     private static readonly Dictionary<Guid, (GameObject go, long frame)> _sourceCache = new();
@@ -1255,10 +1238,10 @@ public static class PrefabUtility
         var prefab = Runtime.AssetDatabase.Get(prefabGuid) as PrefabAsset;
         if (prefab.IsNotValid() || prefab.GameObjectData == null) return null;
 
-        // Deserialized the same way an instance is, so the comparison baseline matches what
-        // Instantiate would actually produce.
-        var source = Serializer.Deserialize<GameObject>(prefab.GameObjectData,
-            new SerializationContext { ExternalReferences = SceneReferenceResolver.None });
+        // Built exactly as an instance is, so the comparison baseline matches what instantiating
+        // would produce and, importantly, so its objects carry the same source identifiers that
+        // override paths are written in terms of.
+        var source = GameObject.InstantiateDetached(prefab);
         if (source != null)
             _sourceCache[prefabGuid] = (source, frame);
 
@@ -1316,10 +1299,32 @@ public static class PrefabUtility
 
         var oldComps = oldGO.GetComponents().ToArray();
         var freshComps = freshGO.GetComponents().ToArray();
-        for (int i = 0; i < Math.Min(oldComps.Length, freshComps.Length); i++)
+
+        // The link maps each component to its source by the component's identifier, and those
+        // identifiers are about to change, so the map is rebuilt as they do rather than left keyed by
+        // identifiers no component has any more.
+        var link = freshGO.PrefabLink;
+        var remapped = new Dictionary<Guid, Guid>();
+
+        for (int i = 0; i < freshComps.Length; i++)
         {
-            freshComps[i].Identifier = oldComps[i].Identifier;
-            freshComps[i].HideFlags = oldComps[i].HideFlags;
+            Guid sourceId = freshGO.GetComponentSourceIdentifier(freshComps[i]);
+
+            if (i < oldComps.Length)
+            {
+                freshComps[i].Identifier = oldComps[i].Identifier;
+                freshComps[i].HideFlags = oldComps[i].HideFlags;
+            }
+
+            if (sourceId != Guid.Empty)
+                remapped[freshComps[i].Identifier] = sourceId;
+        }
+
+        if (link != null)
+        {
+            link.ComponentSources.Clear();
+            foreach (var (componentId, sourceId) in remapped)
+                link.ComponentSources[componentId] = sourceId;
         }
 
         for (int i = 0; i < Math.Min(oldGO.Children.Count, freshGO.Children.Count); i++)

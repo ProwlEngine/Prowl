@@ -40,9 +40,6 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         Scene.ProcessPendingLoad();
     }
 
-    private void RewritePrefab(string path, GameObject newSource)
-        => File.WriteAllText(AssetAbsolutePath(path), Serializer.Serialize(typeof(object), newSource).WriteToString());
-
     /// <summary>Write a GameObject tree to a .prefab file WITHOUT clearing its prefab data (so a
     /// pre-set nested PrefabAssetId survives), then import it.</summary>
     private Guid WritePrefabRaw(GameObject source, string path)
@@ -227,7 +224,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         comp.V = new Float3(9, 9, 9);
 
         PrefabUtility.DetectComponentOverrides(instance, comp);
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c0.V"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, comp, "V")));
 
         PrefabUtility.ApplyOverrides(instance);
         var fresh = GameObject.InstantiateDetached(((PrefabAsset)AssetDatabase.Get(g)!))!;
@@ -252,7 +249,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
 
         PrefabUtility.DetectComponentOverrides(instance, vec);
 
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "c1.V"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, vec, "V")));
     }
 
     // ---------------------------------------------------------------------
@@ -278,13 +275,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         SetSceneCurrent(instance);
 
         // Change the deep child's B in the source.
-        var ns = new GameObject("Root");
-        var nc = new GameObject("Child");
-        var ng = new GameObject("Grand");
-        var ngc = ng.AddComponent<OverrideComp>(); ngc.A = 1; ngc.B = 2;
-        nc.SetParent(ns); ng.SetParent(nc);
-        RewritePrefab("Deep.prefab", ns);
-        Assets.Reimport(g);
+        EditPrefabSource(g, "Deep.prefab", src => src.Children[0].Children[0].GetComponent<OverrideComp>()!.B = 2);
 
         PrefabUtility.RefreshAllInstances(g);
 
@@ -312,10 +303,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         PrefabUtility.DetectComponentOverrides(i2, i2.GetComponent<OverrideComp>()!);
         SetSceneCurrent(i1, i2);
 
-        var ns = new GameObject("Root");
-        var nc = ns.AddComponent<OverrideComp>(); nc.A = 1; nc.B = 2;
-        RewritePrefab("P.prefab", ns);
-        Assets.Reimport(g);
+        EditPrefabSource(g, "P.prefab", src => src.GetComponent<OverrideComp>()!.B = 2);
 
         PrefabUtility.RefreshAllInstances(g);
 
@@ -381,7 +369,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
 
         Assert.Single(instance.PrefabOverrides);   // stored on the root...
         Assert.Empty(childGo.PrefabOverrides);      // ...not on the child
-        Assert.True(PrefabUtility.IsPropertyOverridden(instance, "g0.c0.A"));
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(childGo, comp, "A")));
     }
 
     [Fact]
@@ -398,7 +386,7 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         comp.A = 99;
         PrefabUtility.DetectComponentOverrides(instance.Children[0], comp);
 
-        PrefabUtility.RevertSingleOverride(instance, "g0.c0.A");
+        PrefabUtility.RevertSingleOverride(instance, PrefabUtility.GetOverridePath(instance.Children[0], comp, "A"));
 
         Assert.Equal(5, comp.A);
         Assert.False(PrefabUtility.HasAnyOverrides(instance));
@@ -416,14 +404,11 @@ public class PrefabEdgeCaseTests : EditorTestHarness
         var instance = Instantiate(g);
         var vec = instance.GetComponent<VecComp>()!;
         vec.V = new Float3(7, 0, 0);
-        PrefabUtility.DetectComponentOverrides(instance, vec); // records "c1.V"
+        PrefabUtility.DetectComponentOverrides(instance, vec); // records an override on the VecComp
         SetSceneCurrent(instance);
 
-        // Source structure changes: VecComp removed, so c1 no longer exists.
-        var ns = new GameObject("Root");
-        ns.AddComponent<OverrideComp>().A = 1;
-        RewritePrefab("Stale.prefab", ns);
-        Assets.Reimport(g);
+        // Source structure changes: the VecComp is removed, so the override has nothing to land on.
+        EditPrefabSource(g, "Stale.prefab", src => src.RemoveComponent(src.GetComponent<VecComp>()!));
 
         PrefabUtility.RefreshAllInstances(g); // stale override must be skipped, not crash/mis-apply
 
@@ -449,12 +434,10 @@ public class PrefabEdgeCaseTests : EditorTestHarness
 
         PrefabUtility.DetectComponentOverrides(instance, original);
 
-        // With the index shifted, the source has no component at index 1, so detection BAILS rather
-        // than mis-recording the override onto the now-wrong component (the VecComp at c0). The key
-        // safety property: no corrupt/misindexed override entry is written. (This is the known
-        // index-based-path fragility under structural drift; the apply side is covered by
-        // StaleOverridePath_IsSkipped_NotMisapplied_OnRefresh.)
-        Assert.Empty(instance.PrefabOverrides);
+        // Reordering used to shift every component's index and stop detection working at all. Paths
+        // name the source component, so the override lands on the right one regardless.
+        Assert.Single(instance.PrefabOverrides);
+        Assert.True(PrefabUtility.IsPropertyOverridden(instance, PrefabUtility.GetOverridePath(instance, original, "A")));
         Assert.Equal(42, original.A);
     }
 }

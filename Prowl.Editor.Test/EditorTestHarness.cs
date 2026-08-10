@@ -78,6 +78,24 @@ public abstract class EditorTestHarness : IDisposable
         return Assets.ImportFile(relativePath);
     }
 
+    /// <summary>
+    /// Change a prefab's contents the way the editor does: take what the asset currently holds, edit
+    /// it, and write it back with its object identities intact. Writing a freshly built tree instead
+    /// would be a different set of objects, and overrides pointing at the old ones would not carry.
+    /// </summary>
+    protected void EditPrefabSource(Guid guid, string relativePath, Action<GameObject> edit)
+    {
+        var source = GameObject.InstantiateDetached(GetPrefab(guid)!)!;
+        edit(source);
+
+        Prefabs.PrefabUtility.StripInstanceDataForEditing(source, guid);
+        Prefabs.PrefabUtility.StabilizeSourceIdentifiers(source);
+
+        File.WriteAllText(AssetAbsolutePath(relativePath),
+            Serializer.Serialize(typeof(object), source).WriteToString());
+        Assets.Reimport(guid);
+    }
+
     /// <summary>Resolve a prefab asset by GUID.</summary>
     protected PrefabAsset? GetPrefab(Guid guid) => AssetDatabase.Get(guid) as PrefabAsset;
 

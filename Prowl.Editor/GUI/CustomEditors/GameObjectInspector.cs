@@ -881,12 +881,7 @@ public static class GameObjectInspector
                 // Set overridden field names for PropertyGrid highlighting
                 if (go.IsPrefabInstance)
                 {
-                    string goPath = PrefabUtility.BuildGOPath(go);
-                    var allComps = go.GetComponents<MonoBehaviour>().ToList();
-                    int compIdx = allComps.IndexOf(comp);
-                    string pathPrefix = string.IsNullOrEmpty(goPath)
-                        ? $"c{compIdx}."
-                        : $"{goPath}.c{compIdx}.";
+                    string pathPrefix = PrefabUtility.GetOverridePath(go, comp, "");
 
                     var overridden = new HashSet<string>();
                     // Overrides are stored on the instance root with root-relative paths.
