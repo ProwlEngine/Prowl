@@ -3,14 +3,10 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Prowl.Editor.Profiling;
-using Prowl.Editor.Theming;
 using Prowl.OrigamiUI;
 using Prowl.PaperUI;
-using Prowl.PaperUI.LayoutEngine;
 using Prowl.Runtime;
 using Prowl.Vector;
-
-using Color = System.Drawing.Color;
 
 namespace Prowl.Editor.GUI.RenderProfiler;
 
@@ -20,15 +16,11 @@ public partial class RenderProfilerPanel
     private const float HierarchyRowHeight = 22f;
     private const float HierarchyPingDuration = 1.5f;
     private const float HierarchyPingFadeStart = 0.5f;
-    private const float HierarchyTitleHeight = 24f;
-    private const float HierarchyTitlePadTop = 6f;
-    private const float HierarchyTitlePadLeft = 8f;
 
-    // Not a real hierarchy node (it isn't in the tree's node list), but the frame title label is
-    // still selectable/pingable, so it gets its own sentinel id for the shared ping state.
+    // Sentinel id for the frame's root tree node.
     private const string FrameHierarchyNodeId = "__frame__";
 
-    private enum HierarchyKind { View, Pass, CommandBuffer, Pipeline, Object, DrawCall }
+    private enum HierarchyKind { Frame, View, Pass, CommandBuffer, Pipeline, Object, DrawCall }
 
     private readonly record struct HierarchyUserData(
         HierarchyKind Kind,
@@ -40,7 +32,7 @@ public partial class RenderProfilerPanel
         int DrawIndex);
 
     private readonly Dictionary<string, bool> _hierarchyExpandState = [];
-    private readonly HashSet<string> _hierarchyForceExpandIds = [];
+    private HashSet<string>? _hierarchyForceExpandIds;
     private string? _pingedHierarchyNodeId;
     private float _hierarchyPingTimer;
     private bool _hierarchyScrollPending;
@@ -50,106 +42,57 @@ public partial class RenderProfilerPanel
     {
         ProfiledFrame? frame = SelectedFrame;
 
-        using (paper.Column("rdp_hierarchy").Width(width).Height(height).Enter())
-        {
-            DrawHierarchyTitle(paper, frame);
-
-            var nodes = new List<TreeNode>();
-            if (frame != null)
-                BuildHierarchyNodes(frame, nodes);
-
-            TickHierarchyPing();
-
-            float treeHeight = height - HierarchyTitlePadTop - HierarchyTitleHeight;
-            Origami.Tree(paper, "rdp_hier_tree", width, treeHeight)
-                .Nodes(nodes)
-                .RowHeight(HierarchyRowHeight)
-                .IsSelected(n => IsHierarchyNodeSelected((HierarchyUserData)n.UserData!))
-                .OnSelect(e => OnHierarchyNodeSelected((HierarchyUserData)e.Node.UserData!))
-                .IsPinged(n => _pingedHierarchyNodeId == n.Id)
-                .PingAlpha(GetHierarchyPingAlpha)
-                .ExpandStateSink(_hierarchyExpandState)
-                .EmptyMessage("No frame selected")
-                .Show();
-
-            if (_hierarchyScrollPending && _pingedHierarchyNodeId != null)
-            {
-                int pingIndex = nodes.FindIndex(n => n.Id == _pingedHierarchyNodeId);
-                if (pingIndex >= 0)
-                {
-                    float rowTotal = HierarchyRowHeight + 2f;
-                    float targetY = pingIndex * rowTotal - (treeHeight * 0.5f) + rowTotal * 0.5f;
-                    Origami.ScrollTo("rdp_hier_tree_scroll", new Float2(0, targetY));
-                }
-                _hierarchyScrollPending = false;
-            }
-        }
-    }
-
-
-    private void DrawHierarchyTitle(Paper paper, ProfiledFrame? frame)
-    {
-        bool isSelected = SelectionType == ProfilerSelectionType.Frame;
-        bool isPinged = _pingedHierarchyNodeId == FrameHierarchyNodeId;
-
-        ElementBuilder row = paper.Row("rdp_hierarchy_title_row")
-            .Height(HierarchyTitleHeight)
-            .Width(UnitValue.Stretch())
-            .Margin(HierarchyTitlePadLeft, HierarchyTitlePadTop, 0, 0)
-            .Rounded(4);
-
-        if (isSelected)
-            row.BackgroundColor(EditorTheme.Hover);
-
+        var nodes = new List<TreeNode>();
         if (frame != null)
-        {
-            row.Cursor(PaperCursor.Pointer)
-                .OnClick(e =>
-                {
-                    e.StopPropagation();
-                    ClearSubFrameSelection();
-                });
-        }
+            BuildHierarchyNodes(frame, nodes);
 
-        if (isPinged)
+        TickHierarchyPing();
+
+        Origami.Tree(paper, "rdp_hier_tree", width, height)
+            .Nodes(nodes)
+            .RowHeight(HierarchyRowHeight)
+            .IndentSize(10f)
+            .BaseIndent(2f)
+            .ArrowWidth(8f)
+            .IsSelected(n => IsHierarchyNodeSelected((HierarchyUserData)n.UserData!))
+            .OnSelect(e => OnHierarchyNodeSelected((HierarchyUserData)e.Node.UserData!))
+            .IsPinged(n => _pingedHierarchyNodeId == n.Id)
+            .PingAlpha(GetHierarchyPingAlpha)
+            .ExpandStateSink(_hierarchyExpandState)
+            .EmptyMessage("No frame selected")
+            .Show();
+
+        // Force-expand is a one-shot nudge - the tree persists it into its own element
+        // storage the moment it's applied, so it doesn't need to be reasserted next frame.
+        _hierarchyForceExpandIds = null;
+
+        if (_hierarchyScrollPending && _pingedHierarchyNodeId != null)
         {
-            row.OnPostLayout((handle, rect) =>
+            int pingIndex = nodes.FindIndex(n => n.Id == _pingedHierarchyNodeId);
+            if (pingIndex >= 0)
             {
-                float alpha = GetHierarchyPingAlpha();
-                if (alpha <= 0f)
-                    return;
-
-                paper.Draw(ref handle, (canvas, r) =>
-                {
-                    int fillA = (int)(alpha * 60);
-                    int borderA = (int)(alpha * 200);
-                    Color fillColor = Color.FromArgb(fillA, 255, 220, 50);
-                    Color borderColor = Color.FromArgb(borderA, 255, 200, 0);
-                    float x = r.Min.X, y = r.Min.Y, w = r.Size.X, h = r.Size.Y;
-                    canvas.RoundedRectFilled(x, y, w, h, 4, 4, 4, 4, fillColor);
-                    canvas.SetStrokeColor(borderColor);
-                    canvas.SetStrokeWidth(2f);
-                    canvas.BeginPath();
-                    canvas.RoundedRect(x + 1f, y + 1f, w - 2f, h - 2f, 3, 3, 3, 3);
-                    canvas.Stroke();
-                });
-            });
-        }
-
-        using (row.Enter())
-        {
-            Origami.Label(paper, "rdp_hierarchy_title_label", frame != null ? $"Frame {frame.FrameIndex} ({frame.GpuMilliseconds:F2} ms)" : "No frame selected")
-                .Height(HierarchyTitleHeight)
-                .AlignLeft()
-                .Show();
+                float rowTotal = HierarchyRowHeight + 2f;
+                float targetY = pingIndex * rowTotal - (height * 0.5f) + rowTotal * 0.5f;
+                Origami.ScrollTo("rdp_hier_tree_scroll", new Float2(0, targetY));
+            }
+            _hierarchyScrollPending = false;
         }
     }
 
 
     private void BuildHierarchyNodes(ProfiledFrame frame, List<TreeNode> nodes)
     {
+        nodes.Add(new TreeNode
+        {
+            Id = FrameHierarchyNodeId,
+            Label = $"Frame {frame.FrameIndex} ({frame.GpuMilliseconds:F2} ms)",
+            IsLeaf = true,
+            Depth = 0,
+            UserData = new HierarchyUserData(HierarchyKind.Frame, null, null, null, null, null, -1),
+        });
+
         foreach (ProfiledView view in frame.Views)
-            BuildViewNode(view, 0, nodes);
+            BuildViewNode(view, 1, nodes);
     }
 
 
@@ -162,8 +105,8 @@ public partial class RenderProfilerPanel
             Label = $"{view.Name} ({view.GpuMilliseconds:F2} ms)",
             HasChildren = view.Passes.Count > 0,
             Depth = depth,
+            OverrideExpanded = _hierarchyForceExpandIds?.Contains(id) == true ? true : null,
             UserData = new HierarchyUserData(HierarchyKind.View, view, null, null, null, null, -1),
-            OverrideExpanded = ForceExpandedOrNull(id),
         });
 
         foreach (ProfiledPass pass in view.Passes)
@@ -180,8 +123,8 @@ public partial class RenderProfilerPanel
             Label = $"{pass.Name} ({pass.GpuMilliseconds:F2} ms)",
             HasChildren = pass.CommandBuffers.Count > 0,
             Depth = depth,
+            OverrideExpanded = _hierarchyForceExpandIds?.Contains(id) == true ? true : null,
             UserData = new HierarchyUserData(HierarchyKind.Pass, view, pass, null, null, null, -1),
-            OverrideExpanded = ForceExpandedOrNull(id),
         });
 
         foreach (ProfiledCommandBuffer commandBuffer in pass.CommandBuffers)
@@ -203,7 +146,6 @@ public partial class RenderProfilerPanel
             IsLeaf = !isFullCapture,
             Depth = depth,
             UserData = new HierarchyUserData(HierarchyKind.CommandBuffer, view, pass, commandBuffer, null, null, -1),
-            OverrideExpanded = ForceExpandedOrNull(id),
         });
 
         if (!isFullCapture)
@@ -225,7 +167,6 @@ public partial class RenderProfilerPanel
             HasChildren = hasChildren,
             Depth = depth,
             UserData = new HierarchyUserData(HierarchyKind.Pipeline, view, pass, commandBuffer, pipeline, null, -1),
-            OverrideExpanded = ForceExpandedOrNull(id),
         });
 
         if (!hasChildren)
@@ -269,7 +210,6 @@ public partial class RenderProfilerPanel
             HasChildren = count > 0,
             Depth = depth,
             UserData = new HierarchyUserData(HierarchyKind.Object, view, pass, commandBuffer, pipeline, obj, -1),
-            OverrideExpanded = ForceExpandedOrNull(id),
         });
 
         for (int i = obj.DrawStart; i < obj.DrawEnd; i++)
@@ -307,10 +247,6 @@ public partial class RenderProfilerPanel
         return $"Draw #{index}{suffix}";
     }
 
-
-    private bool? ForceExpandedOrNull(string id) => _hierarchyForceExpandIds.Contains(id) ? true : null;
-
-
     private static string NodeId(object owner) => RuntimeHelpers.GetHashCode(owner).ToString();
 
 
@@ -318,6 +254,9 @@ public partial class RenderProfilerPanel
     {
         switch (d.Kind)
         {
+            case HierarchyKind.Frame:
+                ClearSubFrameSelection();
+                break;
             case HierarchyKind.View:
                 SelectView(d.View!);
                 break;
@@ -342,6 +281,7 @@ public partial class RenderProfilerPanel
 
     private bool IsHierarchyNodeSelected(HierarchyUserData d) => d.Kind switch
     {
+        HierarchyKind.Frame => SelectionType == ProfilerSelectionType.Frame,
         HierarchyKind.View => SelectionType == ProfilerSelectionType.View && ReferenceEquals(SelectedView, d.View),
         HierarchyKind.Pass => SelectionType == ProfilerSelectionType.Pass && ReferenceEquals(SelectedPass, d.Pass),
         HierarchyKind.CommandBuffer => SelectionType == ProfilerSelectionType.CommandBuffer && ReferenceEquals(SelectedCommandBuffer, d.CommandBuffer),
@@ -356,19 +296,18 @@ public partial class RenderProfilerPanel
     // row, expanding whatever ancestors are needed to make it visible.
     private void PingHierarchyForFlameSelection(ProfiledView? view, ProfiledPass? pass, ProfiledCommandBuffer? commandBuffer)
     {
-        _hierarchyForceExpandIds.Clear();
-
         string targetId;
+        var forceExpandIds = new HashSet<string>();
         if (commandBuffer != null)
         {
             targetId = NodeId(commandBuffer);
-            if (view != null) _hierarchyForceExpandIds.Add(NodeId(view));
-            if (pass != null) _hierarchyForceExpandIds.Add(NodeId(pass));
+            if (view != null) forceExpandIds.Add(NodeId(view));
+            if (pass != null) forceExpandIds.Add(NodeId(pass));
         }
         else if (pass != null)
         {
             targetId = NodeId(pass);
-            if (view != null) _hierarchyForceExpandIds.Add(NodeId(view));
+            if (view != null) forceExpandIds.Add(NodeId(view));
         }
         else if (view != null)
         {
@@ -376,14 +315,13 @@ public partial class RenderProfilerPanel
         }
         else
         {
-            // Nothing beneath the frame was clicked - the flame graph's root bar represents the
-            // whole frame, which isn't a tree node but the title label above it.
             targetId = FrameHierarchyNodeId;
         }
 
+        _hierarchyForceExpandIds = forceExpandIds;
         _pingedHierarchyNodeId = targetId;
         _hierarchyPingTimer = HierarchyPingDuration;
-        _hierarchyScrollPending = targetId != FrameHierarchyNodeId;
+        _hierarchyScrollPending = true;
     }
 
 

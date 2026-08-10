@@ -86,10 +86,8 @@ public partial class RenderProfilerPanel : DockPanel
                     .IsNotInteractable()
                     .BackgroundColor(EditorTheme.BorderStrong);
 
-                paper.Box("rdp_detail_panel")
-                    .Width(UnitValue.Stretch())
-                    .IsNotInteractable()
-                    .BackgroundColor(Color.Red);
+                float detailPanelWidth = width - HierarchyPanelWidth - DividerHeight;
+                DrawSelectionViewer(paper, detailPanelWidth, contentsHeight);
             }
         }
     }
