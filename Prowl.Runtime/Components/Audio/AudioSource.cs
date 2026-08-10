@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -115,9 +115,9 @@ public sealed class AudioSource : MonoBehaviour
     [SerializeField, Tooltip("Applied to this source's output in order, before it reaches the mix.")]
     private List<AudioEffect> _effects = [];
 
-    // What the audio thread reads. Rebuilt as a whole array on every change and swapped in, so the
+    // What the audio thread runs. Owns its own working buffers and the published snapshot, so the
     // audio thread never sees a half-edited chain and never needs a lock to walk one.
-    private volatile AudioEffect[] _effectChain = [];
+    private readonly AudioEffectChain _chain = new();
 
     private AudioBuffer _outputBuffer;
 
@@ -869,7 +869,7 @@ public sealed class AudioSource : MonoBehaviour
 
         _effects.Add(effect);
         effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
-        RebuildEffectChain();
+        _chain.Publish(_effects);
     }
 
     /// <summary>
@@ -881,7 +881,7 @@ public sealed class AudioSource : MonoBehaviour
 
         if (!_effects.Remove(effect)) return;
 
-        RebuildEffectChain();
+        _chain.Publish(_effects);
         effect.OnDestroy();
     }
 
@@ -902,7 +902,7 @@ public sealed class AudioSource : MonoBehaviour
     {
         AudioEffect[] removed = _effects.ToArray();
         _effects.Clear();
-        RebuildEffectChain();
+        _chain.Publish(_effects);
 
         foreach (AudioEffect effect in removed)
             effect?.OnDestroy();
@@ -924,23 +924,7 @@ public sealed class AudioSource : MonoBehaviour
                 effect.OnValidate();
         }
 
-        RebuildEffectChain();
-    }
-
-    private void RebuildEffectChain()
-    {
-        var chain = new List<AudioEffect>(_effects.Count);
-
-        foreach (AudioEffect effect in _effects)
-        {
-            // Only null entries are dropped here. Bypass is tested per block instead, so toggling it
-            // from gameplay does not need the chain republished. An inspector row left empty is a
-            // normal state, not an error.
-            if (effect != null)
-                chain.Add(effect);
-        }
-
-        _effectChain = chain.ToArray();
+        _chain.Publish(_effects);
     }
 
     /// <summary>
@@ -1049,38 +1033,23 @@ public sealed class AudioSource : MonoBehaviour
 
         try
         {
-            NativeArray<float> bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
-            NativeArray<float> bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
+            UInt32 countOut = _chain.Process(framesIn[0], *frameCountIn, framesOut[0], *frameCountOut, channels);
 
-            // Just in case we end up with no sound at all because no effects were active (prevents silence)
-            bufferIn.CopyTo(bufferOut);
-
-            // An effect can modify the number of frames it processes so we need to keep track of this
-            UInt32 countIn = *frameCountIn;
-            UInt32 countOut = *frameCountOut;
-
-            // Read the chain once: it is swapped as a whole array, so this is a consistent snapshot
-            // even if the game thread edits the effects mid-block.
-            AudioEffect[] chain = _effectChain;
-
-            for (int i = 0; i < chain.Length; i++)
+            if (Process != null)
             {
-                // A bypassed effect leaves both buffers as the previous stage left them, so there is
-                // nothing to carry forward either.
-                if (!chain[i].Process(bufferIn, countIn, bufferOut, ref countOut, channels))
-                    continue;
+                var bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
+                var bufferOut = new NativeArray<float>(framesOut[0], (int)(countOut * channels));
 
-                //Since effects processing is like a stack, the output needs to be copied to the input for the next effect
-                bufferOut.CopyTo(bufferIn);
+                Process.Invoke(bufferIn, *frameCountIn, bufferOut, ref countOut, channels);
 
-                countIn = countOut;
+                // A subscriber gets the same say an effect does, within the same limit.
+                if (countOut > *frameCountOut)
+                    countOut = *frameCountOut;
             }
-
-            Process?.Invoke(bufferIn, countIn, bufferOut, ref countOut, pEffectNode->config.channels);
 
             *frameCountOut = countOut;
 
-            _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels)));
+            _outputBuffer.Write(new NativeArray<float>(framesOut[0], (int)(countOut * channels)));
         }
         catch (Exception ex)
         {

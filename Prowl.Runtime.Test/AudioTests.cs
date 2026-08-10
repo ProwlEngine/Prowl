@@ -701,6 +701,79 @@ public class AudioTests : RuntimeTestBase
             Assert.Equal(0f, sample);
     }
 
+    /// <summary>Runs a chain over one block, the way the audio callback does.</summary>
+    private static unsafe float[] RunChain(AudioEffectChain chain, float[] input, int outFrames, int channels = Channels)
+    {
+        float[] output = new float[outFrames * channels];
+
+        fixed (float* pIn = input, pOut = output)
+        {
+            uint written = chain.Process(pIn, (uint)(input.Length / channels), pOut, (uint)outFrames, (uint)channels);
+            Assert.True(written <= outFrames, $"chain reported {written} frames into a {outFrames} frame buffer");
+        }
+
+        return output;
+    }
+
+    /// <summary>An effect that claims it produced more frames than it was given room for.</summary>
+    private sealed class GreedyEffect : AudioEffect
+    {
+        protected override void OnProcess(NativeArray<float> framesIn, uint frameCountIn, NativeArray<float> framesOut, ref uint frameCountOut, uint channels)
+        {
+            for (int i = 0; i < framesOut.Length; i++)
+                framesOut[i] = 1f;
+
+            frameCountOut = frameCountIn * 8;
+        }
+    }
+
+    // The chain used to pass the node graph's own input and output back and forth, which needed the
+    // input to fit the output for one copy and the opposite for the other. It only ever worked because
+    // the two counts happened to be equal, and any block where they were not threw into silence.
+    [Theory]
+    [InlineData(64, 64)]
+    [InlineData(64, 32)]
+    [InlineData(32, 64)]
+    public void EffectChain_HandlesMismatchedFrameCounts(int inFrames, int outFrames)
+    {
+        var chain = new AudioEffectChain();
+        chain.Publish([new DistortionEffect { Blend = 0f }]);
+
+        float[] output = RunChain(chain, Interleave(0.5f, 0.5f, inFrames), outFrames);
+
+        // Fully dry distortion is unity gain, so every frame the chain could fit carries the input.
+        int expected = Math.Min(inFrames, outFrames);
+        for (int i = 0; i < expected * Channels; i++)
+            Assert.Equal(0.5f, output[i], 4);
+    }
+
+    // With nothing in it the block still has to reach the output, or a source with no effects goes
+    // silent the moment it gets an effect node.
+    [Fact]
+    public void EffectChain_WithNoEffects_PassesTheBlockThrough()
+    {
+        var chain = new AudioEffectChain();
+
+        float[] output = RunChain(chain, Interleave(0.25f, -0.25f, 32), 32);
+
+        Assert.Equal(0.25f, output[0], 5);
+        Assert.Equal(-0.25f, output[1], 5);
+    }
+
+    // An effect is allowed to change the frame count, but not to talk the chain into writing past the
+    // buffer the graph handed it.
+    [Fact]
+    public void EffectChain_ClampsAnEffectThatOverstatesItsOutput()
+    {
+        var chain = new AudioEffectChain();
+        chain.Publish([new GreedyEffect()]);
+
+        // The assertion that the reported count fits lives in RunChain.
+        float[] output = RunChain(chain, Interleave(1f, 1f, 16), 16);
+
+        Assert.Equal(1f, output[^1], 5);
+    }
+
     #endregion
 
     #region Mixer

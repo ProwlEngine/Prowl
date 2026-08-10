@@ -1,4 +1,4 @@
-// This file is part of the Prowl Game Engine
+﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -88,7 +88,7 @@ public sealed class AudioMixerGroup : EngineObject
     private ma_effect_node_process_proc _onEffectNodeProcess;
 
     [SerializeIgnore]
-    private volatile AudioEffect[] _effectChain = [];
+    private readonly AudioEffectChain _chain = new();
 
     [SerializeIgnore]
     private bool _effectProcessFailed;
@@ -210,7 +210,7 @@ public sealed class AudioMixerGroup : EngineObject
         IntPtr tail = _effectNodeReady ? _effectNode.pointer : _nativeGroup.pointer;
 
         AudioMixerGroup parent = Parent;
-        IntPtr parentNode = parent != null ? parent.NativeNode : IntPtr.Zero;
+        IntPtr parentNode = parent.IsValid() ? parent.NativeNode : IntPtr.Zero;
 
         if (parentNode != IntPtr.Zero)
             MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(tail), 0, new ma_node_ptr(parentNode), 0);
@@ -260,7 +260,7 @@ public sealed class AudioMixerGroup : EngineObject
 
         _effects.Add(effect);
         effect.Initialize(AudioContext.SampleRate, AudioContext.Channels);
-        PublishEffectChain();
+        _chain.Publish(_effects);
     }
 
     /// <summary>Removes an effect from this bus and destroys it.</summary>
@@ -268,7 +268,7 @@ public sealed class AudioMixerGroup : EngineObject
     {
         if (effect == null || !_effects.Remove(effect)) return;
 
-        PublishEffectChain();
+        _chain.Publish(_effects);
         effect.OnDestroy();
     }
 
@@ -288,27 +288,11 @@ public sealed class AudioMixerGroup : EngineObject
                 effect.OnValidate();
         }
 
-        PublishEffectChain();
-    }
-
-    private void PublishEffectChain()
-    {
-        var chain = new List<AudioEffect>(_effects.Count);
-
-        // Bypass is tested per block rather than filtered here, so toggling it from gameplay takes
-        // effect without the chain being republished.
-        foreach (AudioEffect effect in _effects)
-        {
-            if (effect != null)
-                chain.Add(effect);
-        }
-
-        _effectChain = chain.ToArray();
+        _chain.Publish(_effects);
     }
 
     // Native calls this on the audio thread. An exception leaving it is undefined behaviour, so a
-    // failing effect costs this bus its audio and one log line. Mirrors AudioSource.OnEffectProcess,
-    // without the per-source output buffer and Process event.
+    // failing effect costs this bus its audio and one log line.
     private unsafe void OnEffectProcess(ma_node_ptr pNode, IntPtr ppFramesIn, IntPtr pFrameCountIn, IntPtr ppFramesOut, IntPtr pFrameCountOut)
     {
         if (pNode.pointer == IntPtr.Zero)
@@ -324,27 +308,7 @@ public sealed class AudioMixerGroup : EngineObject
 
         try
         {
-            var bufferIn = new NativeArray<float>(framesIn[0], (int)(*frameCountIn * channels));
-            var bufferOut = new NativeArray<float>(framesOut[0], (int)(*frameCountOut * channels));
-
-            // Pass through when the bus has no effects, otherwise it would emit silence.
-            bufferIn.CopyTo(bufferOut);
-
-            UInt32 countIn = *frameCountIn;
-            UInt32 countOut = *frameCountOut;
-
-            AudioEffect[] chain = _effectChain;
-
-            for (int i = 0; i < chain.Length; i++)
-            {
-                if (!chain[i].Process(bufferIn, countIn, bufferOut, ref countOut, channels))
-                    continue;
-
-                bufferOut.CopyTo(bufferIn);
-                countIn = countOut;
-            }
-
-            *frameCountOut = countOut;
+            *frameCountOut = _chain.Process(framesIn[0], *frameCountIn, framesOut[0], *frameCountOut, channels);
         }
         catch (Exception ex)
         {
