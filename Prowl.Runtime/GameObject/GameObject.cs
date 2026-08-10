@@ -165,20 +165,6 @@ public partial class GameObject : EngineObject, ISerializable
     /// <summary>Overrides without creating a link for an object that has none.</summary>
     public bool HasPrefabOverrides => _prefabLink is { Overrides.Count: > 0 };
 
-    /// <summary>Number of components in the prefab source. Used for structure enforcement.</summary>
-    public int PrefabComponentCount
-    {
-        get => _prefabLink?.SourceComponentCount ?? -1;
-        set { if (value >= 0 || _prefabLink != null) EnsurePrefabLink().SourceComponentCount = value; }
-    }
-
-    /// <summary>Number of children in the prefab source. Used for structure enforcement.</summary>
-    public int PrefabChildCount
-    {
-        get => _prefabLink?.SourceChildCount ?? -1;
-        set { if (value >= 0 || _prefabLink != null) EnsurePrefabLink().SourceChildCount = value; }
-    }
-
     /// <summary>The identifier of the component in the prefab that <paramref name="component"/> came
     /// from, or Guid.Empty when it is not part of the prefab.</summary>
     public Guid GetComponentSourceIdentifier(MonoBehaviour component)

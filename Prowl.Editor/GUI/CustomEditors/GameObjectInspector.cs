@@ -939,13 +939,10 @@ public static class GameObjectInspector
         builder.Separator();
 
         bool canRemove = comp.CanDestroy();
-        // Block removing prefab components in editor
-        if (go.IsPrefabInstance && go.PrefabComponentCount >= 0)
-        {
-            int compIdx = go._components.IndexOf(comp);
-            if (compIdx >= 0 && compIdx < go.PrefabComponentCount)
-                canRemove = false;
-        }
+        // A component the prefab provides is not the instance's to delete, because nothing records
+        // the deletion and the next refresh would put it straight back.
+        if (go.IsPrefabInstance && go.GetComponentSourceIdentifier(comp) != Guid.Empty)
+            canRemove = false;
         builder.Item(Loc.Get("inspector.remove_component"), () =>
         {
             var serialized = Echo.Serializer.Serialize(comp.GetType(), comp);

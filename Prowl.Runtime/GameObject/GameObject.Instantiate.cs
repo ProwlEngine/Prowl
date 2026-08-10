@@ -90,14 +90,6 @@ public partial class GameObject
                 link.ComponentSources[go._components[i].Identifier] = sourceComponentId;
         }
 
-        // Only the editor reads these, and they are what its structural rules are enforced from. A
-        // player would be walking the tree on every spawn to fill in state nothing consults.
-        if (Application.IsEditor)
-        {
-            link.SourceComponentCount = go._components.Count;
-            link.SourceChildCount = go.Children.Count;
-        }
-
         var childData = data?.Get("Children")?.List;
         for (int i = 0; i < go.Children.Count; i++)
             StampPrefabId(go.Children[i], prefabAssetId, childData != null && i < childData.Count ? childData[i] : null);

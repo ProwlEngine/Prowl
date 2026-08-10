@@ -122,7 +122,7 @@ public abstract class BuildPipeline
     /// in a player than in play mode.
     /// </summary>
     private static readonly string[] EditorOnlyPrefabKeys =
-        ["Overrides", "SourceComponentCount", "SourceChildCount", "SourceIdentifier", "ComponentSources"];
+        ["Overrides", "SourceIdentifier", "ComponentSources"];
 
     /// <summary>
     /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the

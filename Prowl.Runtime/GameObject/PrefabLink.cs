@@ -26,13 +26,6 @@ public sealed class PrefabLink
     public List<PropertyOverride> Overrides = new();
 
     /// <summary>
-    /// How many components and children the prefab provides. Anything past these belongs to the
-    /// instance. -1 means not yet known; only the editor fills these in.
-    /// </summary>
-    public int SourceComponentCount = -1;
-    public int SourceChildCount = -1;
-
-    /// <summary>
     /// Maps each component's identifier to the identifier of the component in the prefab it came
     /// from. Kept here rather than on MonoBehaviour so that components on ordinary GameObjects -
     /// the overwhelming majority - carry nothing at all.
@@ -48,8 +41,6 @@ public sealed class PrefabLink
     {
         AssetId = Guid.Empty;
         Overrides.Clear();
-        SourceComponentCount = -1;
-        SourceChildCount = -1;
     }
 
     public PrefabLink Clone() => new()
@@ -57,8 +48,6 @@ public sealed class PrefabLink
         AssetId = AssetId,
         SourceIdentifier = SourceIdentifier,
         Overrides = new List<PropertyOverride>(Overrides),
-        SourceComponentCount = SourceComponentCount,
-        SourceChildCount = SourceChildCount,
         ComponentSources = new Dictionary<Guid, Guid>(ComponentSources)
     };
 }

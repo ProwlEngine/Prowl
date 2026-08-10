@@ -1450,40 +1450,36 @@ public static class PrefabUtility
 
         go.PrefabAssetId = prefabGuid;
         go.PrefabOverrides.Clear();
-        go.PrefabComponentCount = go.GetComponents<MonoBehaviour>().Count();
-        go.PrefabChildCount = go.Children.Count;
 
         foreach (var child in go.Children)
             StampAsPrefabInstance(child, prefabGuid, boundaryId);
     }
 
     /// <summary>Snapshot the prefab tracking data of every object within a boundary, for undo.</summary>
-    private static List<(GameObject go, Guid assetId, List<PropertyOverride> overrides, int compCount, int childCount)>
+    private static List<(GameObject go, Guid assetId, List<PropertyOverride> overrides)>
         CapturePrefabState(GameObject root, Guid boundaryId)
     {
-        var captured = new List<(GameObject, Guid, List<PropertyOverride>, int, int)>();
+        var captured = new List<(GameObject, Guid, List<PropertyOverride>)>();
         Walk(root);
         return captured;
 
         void Walk(GameObject go)
         {
             if (go.PrefabAssetId != boundaryId) return;
-            captured.Add((go, go.PrefabAssetId, go.PrefabOverrides.ToList(), go.PrefabComponentCount, go.PrefabChildCount));
+            captured.Add((go, go.PrefabAssetId, go.PrefabOverrides.ToList()));
             foreach (var child in go.Children)
                 Walk(child);
         }
     }
 
     private static void RestorePrefabState(
-        List<(GameObject go, Guid assetId, List<PropertyOverride> overrides, int compCount, int childCount)> captured)
+        List<(GameObject go, Guid assetId, List<PropertyOverride> overrides)> captured)
     {
-        foreach (var (go, assetId, overrides, compCount, childCount) in captured)
+        foreach (var (go, assetId, overrides) in captured)
         {
             if (go.IsNotValid()) continue;
             go.PrefabAssetId = assetId;
             go.PrefabOverrides = overrides.ToList();
-            go.PrefabComponentCount = compCount;
-            go.PrefabChildCount = childCount;
         }
     }
 

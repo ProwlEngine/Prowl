@@ -589,11 +589,8 @@ public class HierarchyPanel : DockPanel
             switch (dropPos)
             {
                 case DropPosition.Into:
-                    if (target.IsPrefabInstance && target.PrefabChildCount >= 0)
-                    {
-                        Toasts.Show(Loc.Get("toast.prefab_structure"), Loc.Get("toast.prefab_cant_add"), ToastType.Warning, 3f);
-                        continue;
-                    }
+                    // A prefab instance can be given children of its own; they belong to the instance
+                    // and survive a refresh.
                     dragged.SetParent(target);
                     if (insertIndex >= 0)
                         dragged.SetSiblingIndex(insertIndex);
@@ -1105,14 +1102,17 @@ public class HierarchyPanel : DockPanel
         }
     }
 
-    /// <summary>True when the GameObject is part of its parent prefab instance's fixed structure.
-    /// Those children can't be deleted or reparented without breaking the link to the prefab.</summary>
+    /// <summary>
+    /// True when this GameObject is one the prefab provides, rather than one added to the instance.
+    /// Those cannot be deleted or reparented yet, because nothing records the change and a refresh
+    /// would undo it. Told apart by where the object came from, not by its position, so reordering
+    /// cannot reclassify it.
+    /// </summary>
     private static bool IsPrefabStructuralChild(GameObject go)
     {
         var parent = go.Parent;
-        if (!parent.IsValid() || !parent!.IsPrefabInstance || parent.PrefabChildCount < 0) return false;
-        int index = parent.Children.IndexOf(go);
-        return index >= 0 && index < parent.PrefabChildCount;
+        if (!parent.IsValid() || !parent!.IsPrefabInstance) return false;
+        return go.SourceIdentifier != Guid.Empty;
     }
 
     private void StartRenameGO(GameObject primary, IEnumerable<GameObject> allTargets)

@@ -102,54 +102,33 @@ public class PrefabTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Instantiate_InTheEditor_StampsComponentAndChildCounts()
-    {
-        var source = CreateGameObject("Root");
-        source.AddComponent<SerializableComponent>();
-        var child = CreateGameObject("Child");
-        child.SetParent(source);
-        var prefab = MakePrefab(source, Guid.NewGuid());
-
-        bool wasEditor = Application.IsEditor;
-        Application.IsEditor = true; // the counts back editor structural rules and exist only there
-        try
-        {
-            var instance = GameObject.InstantiateDetached(prefab);
-
-            Assert.Equal(1, instance!.PrefabComponentCount);
-            Assert.Equal(1, instance.PrefabChildCount);
-        }
-        finally
-        {
-            Application.IsEditor = wasEditor;
-        }
-    }
-
-    [Fact]
-    public void Instantiate_OutsideTheEditor_SkipsTheEditorOnlyCounts()
+    public void Instantiate_RecordsWhereEachComponentAndChildCameFrom()
     {
         var source = CreateGameObject("Root");
         source.AddComponent<SerializableComponent>();
         CreateGameObject("Child").SetParent(source);
-        var id = Guid.NewGuid();
-        var prefab = MakePrefab(source, id);
+        var prefab = MakePrefab(source, Guid.NewGuid());
 
-        bool wasEditor = Application.IsEditor;
-        Application.IsEditor = false;
-        try
-        {
-            var instance = GameObject.InstantiateDetached(prefab)!;
+        var instance = GameObject.InstantiateDetached(prefab)!;
 
-            // The link still identifies the object; only the structural counters are editor-only.
-            Assert.Equal(id, instance.PrefabAssetId);
-            Assert.True(instance.IsPrefabInstance);
-            Assert.Equal(-1, instance.PrefabComponentCount);
-            Assert.Equal(-1, instance.PrefabChildCount);
-        }
-        finally
-        {
-            Application.IsEditor = wasEditor;
-        }
+        // What tells a prefab-provided component from one the instance adds later. Position is not
+        // used, so reordering cannot reclassify anything.
+        MonoBehaviour provided = instance.GetComponents<MonoBehaviour>().First();
+        Assert.NotEqual(Guid.Empty, instance.GetComponentSourceIdentifier(provided));
+        Assert.NotEqual(Guid.Empty, instance.Children[0].SourceIdentifier);
+    }
+
+    [Fact]
+    public void Instantiate_ComponentAddedAfterwardsHasNoSource()
+    {
+        var source = CreateGameObject("Root");
+        source.AddComponent<SerializableComponent>();
+        var prefab = MakePrefab(source, Guid.NewGuid());
+
+        var instance = GameObject.InstantiateDetached(prefab)!;
+        MonoBehaviour added = instance.AddComponent<SerializableComponent>();
+
+        Assert.Equal(Guid.Empty, instance.GetComponentSourceIdentifier(added));
     }
 
     [Fact]
@@ -234,16 +213,12 @@ public class PrefabTests : RuntimeTestBase
     {
         var go = CreateGameObject();
         go.PrefabAssetId = Guid.NewGuid();
-        go.PrefabComponentCount = 3;
-        go.PrefabChildCount = 2;
         go.PrefabOverrides.Add(new PropertyOverride { Path = "$.X" });
 
         go.ClearPrefabData();
 
         Assert.False(go.IsPrefabInstance);
         Assert.Equal(Guid.Empty, go.PrefabAssetId);
-        Assert.Equal(-1, go.PrefabComponentCount);
-        Assert.Equal(-1, go.PrefabChildCount);
         Assert.Empty(go.PrefabOverrides);
     }
 
@@ -292,15 +267,11 @@ public class PrefabTests : RuntimeTestBase
         var id = Guid.NewGuid();
         var go = CreateGameObject("Instance");
         go.PrefabAssetId = id;
-        go.PrefabComponentCount = 2;
-        go.PrefabChildCount = 1;
         go.PrefabOverrides.Add(new PropertyOverride { Path = "$.TagIndex", Value = Serializer.Serialize(5) });
 
         var clone = RoundTrip(go);
 
         Assert.Equal(id, clone.PrefabAssetId);
-        Assert.Equal(2, clone.PrefabComponentCount);
-        Assert.Equal(1, clone.PrefabChildCount);
         Assert.Single(clone.PrefabOverrides);
         Assert.Equal("$.TagIndex", clone.PrefabOverrides[0].Path);
     }
