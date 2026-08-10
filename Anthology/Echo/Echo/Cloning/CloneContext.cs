@@ -56,6 +56,21 @@ public class CloneContext
             Targets[source] = target;
     }
 
+    /// <summary>
+    /// Declares that the copy has no counterpart for this object. References to it become null, and
+    /// anything reached only through it is left out of the copy entirely.
+    /// </summary>
+    public void Exclude(object source)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+
+        SetTarget(source, null);
+        Sealed.Add(source);
+    }
+
+    /// <summary>True when <see cref="Exclude"/> was called for this object.</summary>
+    public bool IsExcluded(object source) => Targets.TryGetValue(source, out object? target) && target == null;
+
     /// <summary>The counterpart of a source object, if it has one.</summary>
     public bool TryGetTarget(object source, out object? target) => Targets.TryGetValue(source, out target);
 
