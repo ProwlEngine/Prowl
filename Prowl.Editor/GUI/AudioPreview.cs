@@ -67,10 +67,11 @@ public static class AudioPreview
         if (s_source != IntPtr.Zero && s_deviceGeneration == AudioContext.DeviceGeneration)
             return true;
 
-        // Anything from a previous device is gone with it, so drop the handles rather than uninit
-        // them against a context that no longer exists.
-        s_source = IntPtr.Zero;
-        s_group = IntPtr.Zero;
+        // Getting here with a handle already set means the last attempt built the group and then
+        // failed on the source. That half belongs to the device that is still open, so it has to be
+        // released rather than overwritten, or every retry leaks a sound group.
+        ReleaseVoice(uninit: s_deviceGeneration == AudioContext.DeviceGeneration);
+
         s_deviceGeneration = AudioContext.DeviceGeneration;
 
         s_group = MiniAudioExNative.ma_ex_sound_group_init(AudioContext.NativeContext);
@@ -86,5 +87,25 @@ public static class AudioPreview
 
         MiniAudioExNative.ma_ex_audio_source_set_group(s_source, s_group);
         return true;
+    }
+
+    /// <summary>
+    /// Drops the voice. Only uninit what the current device owns: handles from a device that has
+    /// since been closed died with it, and uninitializing those would be running over freed memory.
+    /// </summary>
+    private static void ReleaseVoice(bool uninit)
+    {
+        if (uninit)
+        {
+            if (s_source != IntPtr.Zero)
+                MiniAudioExNative.ma_ex_audio_source_uninit(s_source);
+
+            if (s_group != IntPtr.Zero)
+                MiniAudioExNative.ma_ex_sound_group_uninit(s_group);
+        }
+
+        s_source = IntPtr.Zero;
+        s_group = IntPtr.Zero;
+        s_playing = Guid.Empty;
     }
 }
