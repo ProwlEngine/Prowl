@@ -1134,7 +1134,14 @@ public static class GameObjectInspector
                     .TextColor(textColor)
                     .FontSize(EditorTheme.FontSizeSmall).Alignment(TextAlignment.MiddleLeft);
 
-                if (!isMissing)
+                if (isMissing)
+                {
+                    // The asset is gone, so there is nothing to select, revert to or apply against.
+                    // Unpacking is the only way out, and it was previously offered nowhere.
+                    Origami.Button(paper, "gi_prefab_unpack", Loc.Get("inspector.unpack_prefab"),
+                        () => { if (root != null) PrefabUtility.BreakPrefabInstance(root); }).Width(80).Show();
+                }
+                else
                 {
                     Origami.Button(paper, "gi_prefab_select", Loc.Get("inspector.select"), () => { Selection.Ping(go.PrefabAssetId); }).Width(55).Show();
 

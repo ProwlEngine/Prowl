@@ -13,6 +13,9 @@ using Prowl.Editor.Core.Tasks;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 
+using Prowl.Editor.GUI;
+using Prowl.Editor.Prefabs;
+
 namespace Prowl.Editor;
 
 public static class AssetCreateMenu
@@ -23,6 +26,28 @@ public static class AssetCreateMenu
         var task = new CreateAssetTask();
         task.TaskType = CreateAssetTask.AssetType.Folder;
         task.BeginCreateTask(new AssetMenuEntry { Name = "New Folder", Extension = "", Icon = EditorRegistries.GetFileIconForExtension("") }, GetCurrentFolder());
+    }
+
+    [MenuItem("Assets/Create/Prefab From Selection", priority: 100, Icon = EditorIcons.Cubes, Separator = true)]
+    static void CreatePrefabFromSelectionItem()
+    {
+        var selected = Selection.GetSelected<GameObject>().ToList();
+        if (selected.Count == 0)
+        {
+            Runtime.Debug.LogWarning("[Prefab] Select a GameObject in the scene to make a prefab from it.");
+            return;
+        }
+
+        string folder = GetCurrentFolder();
+        string absFolder = GetAbsoluteFolder(folder);
+        if (!Directory.Exists(absFolder)) return;
+
+        // Roots only, so a prefab of a parent is not immediately torn apart by making one of its child.
+        foreach (var go in GameObjectClipboard.FilterToRoots(selected))
+        {
+            string name = FindUniqueName(absFolder, go.Name, ".prefab");
+            PrefabUtility.CreatePrefab(go, string.IsNullOrEmpty(folder) ? name : $"{folder}/{name}");
+        }
     }
 
     [MenuItem("Assets/Create/Shader", priority: 1000, Icon = EditorIcons.WandMagicSparkles, Separator = true)]
