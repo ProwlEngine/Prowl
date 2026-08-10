@@ -603,11 +603,13 @@ public class PrefabSafetyTests : EditorTestHarness
         Assert.True(Build.BuildPipeline.StripEditorOnlyPrefabData(echo));
 
         string text = echo.WriteToString();
-        Assert.DoesNotContain("PrefabOverrides", text);
-        Assert.DoesNotContain("PrefabComponentCount", text);
-        Assert.DoesNotContain("PrefabChildCount", text);
+        Assert.DoesNotContain("Overrides", text);
+        Assert.DoesNotContain("SourceComponentCount", text);
+        Assert.DoesNotContain("SourceChildCount", text);
+        Assert.DoesNotContain("ComponentSources", text);
+        Assert.DoesNotContain("SourceIdentifier", text);
         // The link itself is observable through IsPrefabInstance, so it stays.
-        Assert.Contains("PrefabAssetId", text);
+        Assert.Contains("AssetId", text);
         // The overridden value survives as the object's own state, once rather than twice.
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(text, "12345"));
     }

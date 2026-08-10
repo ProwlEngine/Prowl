@@ -25,9 +25,6 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     private Guid _identifier = Guid.NewGuid();
 
     [SerializeField, HideInInspector]
-    private Guid _sourceIdentifier;
-
-    [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
     [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
@@ -89,11 +86,11 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     public Guid Identifier { get => _identifier; set => _identifier = value; }
 
     /// <summary>
-    /// The identifier of the component this one's data was written from. For a prefab instance that
-    /// is the component in the prefab, which is what lets an instance be matched up with its source
-    /// even though every load hands out fresh identifiers.
+    /// The identifier of the component in the prefab this one came from, or Guid.Empty when it is not
+    /// part of a prefab. Stored on the GameObject's <see cref="PrefabLink"/>, so components on
+    /// ordinary objects carry nothing for it.
     /// </summary>
-    public Guid SourceIdentifier { get => _sourceIdentifier; internal set => _sourceIdentifier = value; }
+    public Guid SourceIdentifier => _go.IsValid() ? _go.GetComponentSourceIdentifier(this) : Guid.Empty;
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
@@ -508,10 +505,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
 
     void ISerializationCallbackReceiver.OnAfterDeserialize()
     {
-        // The identifier in the data belongs to the object this was written from, which for a prefab
-        // instance is the component in the prefab. Keep it as the link, and take a fresh identity.
-        if (_sourceIdentifier == Guid.Empty)
-            _sourceIdentifier = _identifier;
+        // A fresh identity every time: a copy of a component must not come back wearing the
+        // original's identifier. Which source component this came from is recorded on the owning
+        // GameObject's prefab link instead.
         _identifier = Guid.NewGuid();
 
         OnAfterDeserialize();

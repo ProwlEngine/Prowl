@@ -93,17 +93,23 @@ public static class PrefabUtility
     /// </summary>
     internal static void StabilizeSourceIdentifiers(GameObject root)
     {
-        if (root.SourceIdentifier == Guid.Empty)
-            root.SourceIdentifier = root.Identifier;
+        var link = root.EnsurePrefabLink();
+
+        if (link.SourceIdentifier == Guid.Empty)
+            link.SourceIdentifier = root.Identifier;
         else
-            root.SetIdentifier(root.SourceIdentifier);
+            root.SetIdentifier(link.SourceIdentifier);
+
+        // Adopting a source identifier changes the key the map is stored under, so it is rebuilt
+        // rather than patched. Afterwards each component's identifier is its source identifier.
+        var previous = new Dictionary<Guid, Guid>(link.ComponentSources);
+        link.ComponentSources.Clear();
 
         foreach (var component in root.GetComponents<MonoBehaviour>())
         {
-            if (component.SourceIdentifier == Guid.Empty)
-                component.SourceIdentifier = component.Identifier;
-            else
-                component.Identifier = component.SourceIdentifier;
+            Guid sourceId = previous.TryGetValue(component.Identifier, out var known) ? known : component.Identifier;
+            component.Identifier = sourceId;
+            link.ComponentSources[sourceId] = sourceId;
         }
 
         foreach (var child in root.Children)
@@ -1415,7 +1421,7 @@ public static class PrefabUtility
         if (clone == null) return null;
 
         // Strip prefab data from the clone
-        StripPrefabDataWithinBoundary(clone, source.PrefabAssetId);
+        StripInstanceDataForEditing(clone, source.PrefabAssetId);
         return clone;
     }
 
@@ -1432,6 +1438,20 @@ public static class PrefabUtility
                 StripPrefabDataWithinBoundary(child, boundaryPrefabId);
         }
         // Nested prefab children keep their own prefab data
+    }
+
+    /// <summary>
+    /// Like <see cref="StripPrefabDataWithinBoundary"/>, but keeps each object's record of which
+    /// source object it came from. Used when a tree is about to become the prefab asset itself: it
+    /// stops being an instance, but its identities have to stay the ones instances already match.
+    /// </summary>
+    internal static void StripInstanceDataForEditing(GameObject go, Guid boundaryPrefabId)
+    {
+        if (go.PrefabAssetId != boundaryPrefabId) return; // nested instance of another prefab
+
+        go.PrefabLink?.ClearInstanceData();
+        foreach (var child in go.Children)
+            StripInstanceDataForEditing(child, boundaryPrefabId);
     }
 
     private static void ClearOverridesWithinBoundary(GameObject go, Guid boundaryPrefabId)

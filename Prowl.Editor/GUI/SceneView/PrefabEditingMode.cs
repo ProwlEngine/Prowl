@@ -110,7 +110,9 @@ public static class PrefabEditingMode
 
         // We're editing the source, not an instance, so drop this prefab's own instance data. Nested
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
-        PrefabUtility.StripPrefabDataWithinBoundary(go, prefabGuid);
+        // The objects keep their record of which source object each one is, which is what Save writes
+        // back and what instances match against.
+        PrefabUtility.StripInstanceDataForEditing(go, prefabGuid);
 
         // Adopt the identifiers the asset is written with for the whole session, so the ids that undo
         // records and that Save writes back are the ones instances already match against.

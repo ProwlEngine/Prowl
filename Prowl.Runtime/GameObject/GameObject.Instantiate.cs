@@ -58,32 +58,48 @@ public partial class GameObject
             return null;
         }
 
-        StampPrefabId(clone, prefab.AssetID);
+        StampPrefabId(clone, prefab.AssetID, prefab.GameObjectData);
         return clone;
     }
 
     /// <summary>
     /// Marks a freshly built tree as an instance of the prefab it came from. Stops at objects that
     /// already belong to a different prefab, which are nested instances with their own link.
+    /// <para/>
+    /// The asset's own data is walked alongside the tree to record which source object each new one
+    /// came from. Identifiers are handed out fresh on load, so that correspondence cannot be read off
+    /// the objects afterwards, and it is what the editor matches overrides against.
     /// </summary>
-    private static void StampPrefabId(GameObject go, Guid prefabAssetId)
+    private static void StampPrefabId(GameObject go, Guid prefabAssetId, EchoObject? data)
     {
-        go.PrefabAssetId = prefabAssetId;
+        if (go.IsPrefabInstance && go.PrefabAssetId != prefabAssetId)
+            return; // a nested instance, with a link of its own
+
+        var link = go.EnsurePrefabLink();
+        link.AssetId = prefabAssetId;
+
+        if (data != null && Guid.TryParse(data.Get("Identifier")?.StringValue, out Guid sourceId))
+            link.SourceIdentifier = sourceId;
+
+        var componentData = data?.Get("Components")?.List;
+        for (int i = 0; i < go._components.Count; i++)
+        {
+            if (componentData == null || i >= componentData.Count) break;
+            if (Guid.TryParse(componentData[i].Get("_identifier")?.StringValue, out Guid sourceComponentId))
+                link.ComponentSources[go._components[i].Identifier] = sourceComponentId;
+        }
 
         // Only the editor reads these, and they are what its structural rules are enforced from. A
         // player would be walking the tree on every spawn to fill in state nothing consults.
         if (Application.IsEditor)
         {
-            go.PrefabComponentCount = go._components.Count;
-            go.PrefabChildCount = go.Children.Count;
+            link.SourceComponentCount = go._components.Count;
+            link.SourceChildCount = go.Children.Count;
         }
 
-        foreach (var child in go.Children)
-        {
-            if (child.IsPrefabInstance && child.PrefabAssetId != prefabAssetId)
-                continue;
-            StampPrefabId(child, prefabAssetId);
-        }
+        var childData = data?.Get("Children")?.List;
+        for (int i = 0; i < go.Children.Count; i++)
+            StampPrefabId(go.Children[i], prefabAssetId, childData != null && i < childData.Count ? childData[i] : null);
     }
 
     /// <summary>Spawn a prefab into the current scene.</summary>

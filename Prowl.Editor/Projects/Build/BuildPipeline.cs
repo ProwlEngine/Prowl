@@ -115,13 +115,14 @@ public abstract class BuildPipeline
     }
 
     /// <summary>
-    /// Per-instance prefab bookkeeping that only the editor reads. The override list in particular is
-    /// duplicated state: the values are already baked into the objects themselves, so a scene stores
-    /// each overridden value twice. PrefabAssetId is deliberately kept - it is one guid per object and
-    /// it is publicly observable through GameObject.IsPrefabInstance.
+    /// Keys inside a GameObject's "Prefab" block that only the editor reads. The override list in
+    /// particular is duplicated state: the values are already baked into the objects themselves, so a
+    /// scene stores each overridden value twice. AssetId is deliberately not here - it is one guid per
+    /// object and is observable through GameObject.IsPrefabInstance, which would then read differently
+    /// in a player than in play mode.
     /// </summary>
     private static readonly string[] EditorOnlyPrefabKeys =
-        ["PrefabOverrides", "PrefabComponentCount", "PrefabChildCount", "SourceIdentifier", "_sourceIdentifier"];
+        ["Overrides", "SourceComponentCount", "SourceChildCount", "SourceIdentifier", "ComponentSources"];
 
     /// <summary>
     /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the
@@ -163,8 +164,11 @@ public abstract class BuildPipeline
 
         if (echo.TagType == EchoType.Compound)
         {
-            foreach (var key in EditorOnlyPrefabKeys)
-                removed |= echo.Remove(key);
+            // Scoped to the prefab block rather than matched by name anywhere, so a component field
+            // that happens to be called Overrides is not caught by this.
+            if (echo.TryGet("Prefab", out var link) && link.TagType == EchoType.Compound)
+                foreach (var key in EditorOnlyPrefabKeys)
+                    removed |= link.Remove(key);
 
             foreach (var child in echo.Tags.Values)
                 removed |= StripEditorOnlyPrefabData(child);
