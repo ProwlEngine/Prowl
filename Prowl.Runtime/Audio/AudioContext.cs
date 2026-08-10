@@ -175,20 +175,27 @@ public static class AudioContext
     }
 
     /// <summary>
-    /// Reopens the device with a different format or on a different output. Does nothing if the
-    /// settings already match what is running.
+    /// Reopens a running device with a different format or on a different output. Does nothing if the
+    /// settings already match, and nothing at all if no device is open. Opening the first one is
+    /// <see cref="Initialize"/>'s job.
     /// </summary>
     /// <remarks>
     /// Everything the old device owned is invalid afterwards, which is what
     /// <see cref="DeviceGeneration"/> exists to tell the rest of the engine. Decoded clip data is not
     /// device owned and survives untouched.
+    ///
+    /// The no device case is not an oversight. Project settings are applied from paths that never
+    /// wanted audio, headless builds and dedicated servers among them, and reopening had no way to
+    /// tell those apart from a real format change.
     /// </remarks>
     public static void Restart(UInt32 sampleRate, UInt32 channels, UInt32 periodSizeInFrames = 2048, DeviceInfo deviceInfo = null)
     {
+        if (!IsInitialized)
+            return;
+
         int requestedDevice = deviceInfo == null ? -1 : deviceInfo.Index;
 
-        if (IsInitialized &&
-            AudioContext.sampleRate == sampleRate &&
+        if (AudioContext.sampleRate == sampleRate &&
             AudioContext.channels == channels &&
             AudioContext.periodSizeInFrames == periodSizeInFrames &&
             AudioContext.deviceIndex == requestedDevice)

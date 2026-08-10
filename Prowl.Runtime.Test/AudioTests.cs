@@ -1023,6 +1023,19 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(0, AudioContext.GetClipRefCount(hash));
     }
 
+    // Project settings are applied from paths that never wanted audio: a headless build, a dedicated
+    // server. Restart used to fall straight through to Initialize when nothing was open, so applying
+    // settings in any of them opened a device on a machine that might not have one.
+    [Fact]
+    public void Restart_WithoutADevice_DoesNotOpenOne()
+    {
+        Assert.False(AudioContext.IsInitialized);
+
+        AudioContext.Restart(48000, 2, 1024);
+
+        Assert.False(AudioContext.IsInitialized);
+    }
+
     // The volume is set from project settings, which can be applied before the device opens and in
     // runs where it never opens at all. It has to survive that rather than being dropped.
     [Fact]
