@@ -6,13 +6,62 @@ using System.Collections.Concurrent;
 
 namespace Prowl.Echo.Formatters;
 
-internal sealed class DictionaryFormat : ISerializationFormat
+internal sealed class DictionaryFormat : ISerializationFormat, Cloning.ICloneFormat
 {
     private static readonly ConcurrentDictionary<Type, (Type keyType, Type valueType)> _typeArgCache = new();
 
     public bool CanHandle(Type type) =>
         type.IsAssignableTo(typeof(IDictionary)) &&
         type.IsGenericType;
+
+    #region Cloning
+
+    // Buckets are indexed by the hashes of the original keys, which cloned keys do not share.
+
+    public bool CanClone(Type type) => CanHandle(type);
+
+    public object CreateCloneTarget(object source, object? existingTarget)
+    {
+        if (existingTarget != null && existingTarget.GetType() == source.GetType())
+            return existingTarget;
+
+        return ComparerSupport.CreateCollection(source.GetType(), ComparerSupport.GetComparer(source));
+    }
+
+    public void SetupCloneTargets(object source, object target, Cloning.ICloneSetup setup)
+    {
+        var sourceDict = (IDictionary)source;
+        var targetDict = target as IDictionary;
+
+        foreach (DictionaryEntry entry in sourceDict)
+        {
+            // Keys get fresh targets; values reuse the target's, found under the source key.
+            setup.HandleObject(entry.Key, null);
+            setup.HandleObject(entry.Value, targetDict?[entry.Key]);
+        }
+    }
+
+    public void CopyCloneTo(object source, object target, Cloning.ICloneOperation operation)
+    {
+        var sourceDict = (IDictionary)source;
+        var targetDict = (IDictionary)target;
+
+        targetDict.Clear();
+
+        foreach (DictionaryEntry entry in sourceDict)
+        {
+            object? key = operation.GetTarget(entry.Key);
+            operation.HandleObject(entry.Key, key);
+
+            object? value = operation.GetTarget(entry.Value);
+            operation.HandleObject(entry.Value, value);
+
+            if (key != null)
+                targetDict[key] = value;
+        }
+    }
+
+    #endregion
 
     private static (Type keyType, Type valueType) GetTypeArgs(Type dictType)
     {

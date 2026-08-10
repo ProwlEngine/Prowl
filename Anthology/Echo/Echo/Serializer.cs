@@ -65,6 +65,7 @@ public static class Serializer
         _formatCache.Clear();
         ReflectionUtils.ClearCache();
         TypeNameRegistry.ClearCache();
+        Cloning.CloneTypeInfo.ClearCache();
     }
 
     public static void RegisterFormat(ISerializationFormat format)
