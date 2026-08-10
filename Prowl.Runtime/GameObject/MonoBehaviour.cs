@@ -25,6 +25,9 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     private Guid _identifier = Guid.NewGuid();
 
     [SerializeField, HideInInspector]
+    private Guid _sourceIdentifier;
+
+    [SerializeField, HideInInspector]
     protected internal bool _enabled = true;
     [SerializeField, HideInInspector]
     protected internal bool _enabledInHierarchy = true;
@@ -84,6 +87,13 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
     /// Generally shouldnt be set manually
     /// </summary>
     public Guid Identifier { get => _identifier; set => _identifier = value; }
+
+    /// <summary>
+    /// The identifier of the component this one's data was written from. For a prefab instance that
+    /// is the component in the prefab, which is what lets an instance be matched up with its source
+    /// even though every load hands out fresh identifiers.
+    /// </summary>
+    public Guid SourceIdentifier { get => _sourceIdentifier; internal set => _sourceIdentifier = value; }
 
     /// <summary>
     /// Gets the GameObject this MonoBehaviour is attached to.
@@ -490,17 +500,30 @@ public abstract class MonoBehaviour : EngineObject, ISerializationCallbackReceiv
         catch (Exception ex) { Debug.LogError($"[{Name}/{GetType().Name}] OnTriggerExit() threw: {ex.Message}\n{ex.StackTrace}"); }
     }
 
+    // Implemented explicitly so the identity rules below always run. They used to live in the virtual
+    // OnAfterDeserialize, where a component that overrode it without calling base kept the identifier
+    // stored in the data - and every instance of that prefab then shared one identifier, so anything
+    // resolving a component by id found whichever instance came first.
+    void ISerializationCallbackReceiver.OnBeforeSerialize() => OnBeforeSerialize();
+
+    void ISerializationCallbackReceiver.OnAfterDeserialize()
+    {
+        // The identifier in the data belongs to the object this was written from, which for a prefab
+        // instance is the component in the prefab. Keep it as the link, and take a fresh identity.
+        if (_sourceIdentifier == Guid.Empty)
+            _sourceIdentifier = _identifier;
+        _identifier = Guid.NewGuid();
+
+        OnAfterDeserialize();
+    }
+
     /// <summary>Called right before this component is serialized. Override to refresh serialized
-    /// fields from live state. Always call base.</summary>
+    /// fields from live state.</summary>
     public virtual void OnBeforeSerialize() { }
 
     /// <summary>Called right after this component is deserialized, before any lifecycle callback.
-    /// Override to react to freshly loaded values. Always call base.</summary>
-    public virtual void OnAfterDeserialize()
-    {
-        // Always generate fresh identifier Scene restores them after deserialization
-        _identifier = Guid.NewGuid();
-    }
+    /// Override to react to freshly loaded values.</summary>
+    public virtual void OnAfterDeserialize() { }
 
     /// <summary>
     /// Called when the MonoBehaviour will be destroyed.

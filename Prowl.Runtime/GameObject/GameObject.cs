@@ -30,6 +30,7 @@ public partial class GameObject : EngineObject, ISerializable
     [ReloadIgnore] private MultiValueDictionary<Type, MonoBehaviour> _componentCache = [];
 
     private Guid _identifier = Guid.NewGuid();
+    private Guid _sourceIdentifier;
 
     private bool _static = false;
 
@@ -101,6 +102,13 @@ public partial class GameObject : EngineObject, ISerializable
 
     /// <summary>Set the identifier. Used by Scene to restore stable identities after deserialization.</summary>
     internal void SetIdentifier(Guid id) => _identifier = id;
+
+    /// <summary>
+    /// The identifier of the GameObject this one's data was written from. For a prefab instance that
+    /// is the object in the prefab, which is what lets an instance be matched up with its source even
+    /// though every load hands out fresh identifiers.
+    /// </summary>
+    public Guid SourceIdentifier { get => _sourceIdentifier; internal set => _sourceIdentifier = value; }
 
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => _parent;
@@ -1155,6 +1163,8 @@ public partial class GameObject : EngineObject, ISerializable
         SerializeHeader(compoundTag);
 
         compoundTag.Add("Identifier", new EchoObject(_identifier.ToString()));
+        if (_sourceIdentifier != Guid.Empty)
+            compoundTag.Add("SourceIdentifier", new EchoObject(_sourceIdentifier.ToString()));
         compoundTag.Add("Static", new EchoObject((byte)(_static ? 1 : 0)));
 
         compoundTag.Add("Enabled", new EchoObject((byte)(_enabled ? 1 : 0)));
@@ -1201,7 +1211,14 @@ public partial class GameObject : EngineObject, ISerializable
     {
         DeserializeHeader(value);
 
-        // Always generate fresh identifier Scene restores them after deserialization
+        // The identifier in the data belongs to the object this was written from, which for a prefab
+        // instance is the object in the prefab. Keep it as the link, and take a fresh identity - Scene
+        // restores the real one by index once the whole graph has loaded.
+        if (Guid.TryParse(value.Get("SourceIdentifier")?.StringValue, out Guid sourceId))
+            _sourceIdentifier = sourceId;
+        else if (Guid.TryParse(value.Get("Identifier")?.StringValue, out Guid writtenId))
+            _sourceIdentifier = writtenId;
+
         _identifier = Guid.NewGuid();
         _static = value["Static"]?.ByteValue == 1;
         _enabled = value["Enabled"]?.ByteValue == 1;

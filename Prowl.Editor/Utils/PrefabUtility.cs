@@ -55,6 +55,8 @@ public static class PrefabUtility
         var cleanCopy = CloneWithoutPrefabData(source);
         if (cleanCopy == null) return false;
 
+        StabilizeSourceIdentifiers(cleanCopy);
+
         var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
         if (echo == null) return false;
 
@@ -79,6 +81,33 @@ public static class PrefabUtility
         Runtime.Debug.Log($"[Prefab] Created prefab: {relativeSavePath}");
 
         return true;
+    }
+
+    /// <summary>
+    /// Pin a tree's identifiers to the ones it will be written out with, so a prefab's objects keep
+    /// the same identity every time the asset is saved. Overrides are matched to the source by these
+    /// identifiers, so churning them on each save would orphan every override in every scene.
+    /// <para/>
+    /// An object that came from this prefab already knows its source identifier and adopts it; one
+    /// added since is new content, and its current identifier becomes the stable one.
+    /// </summary>
+    internal static void StabilizeSourceIdentifiers(GameObject root)
+    {
+        if (root.SourceIdentifier == Guid.Empty)
+            root.SourceIdentifier = root.Identifier;
+        else
+            root.SetIdentifier(root.SourceIdentifier);
+
+        foreach (var component in root.GetComponents<MonoBehaviour>())
+        {
+            if (component.SourceIdentifier == Guid.Empty)
+                component.SourceIdentifier = component.Identifier;
+            else
+                component.Identifier = component.SourceIdentifier;
+        }
+
+        foreach (var child in root.Children)
+            StabilizeSourceIdentifiers(child);
     }
 
     /// <summary>
@@ -209,6 +238,7 @@ public static class PrefabUtility
 
         // Name and root transform are per-instance, not prefab content, so keep the asset's own.
         PreserveSourceIdentity(cleanCopy, instanceRoot.PrefabAssetId);
+        StabilizeSourceIdentifiers(cleanCopy);
 
         var echo = Serializer.Serialize(typeof(object), cleanCopy, TreeValueContext(cleanCopy));
         if (echo == null) return;
@@ -443,6 +473,7 @@ public static class PrefabUtility
             ApplyFieldValue(target, fieldPath, ov.Value);
 
         // Save back to the .prefab file
+        StabilizeSourceIdentifiers(source);
         var echo = Serializer.Serialize(typeof(object), source, TreeValueContext(source));
         if (echo != null && TryWriteFile(absolutePath, echo.WriteToString()))
         {

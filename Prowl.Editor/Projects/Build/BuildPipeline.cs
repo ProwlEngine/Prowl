@@ -121,7 +121,7 @@ public abstract class BuildPipeline
     /// it is publicly observable through GameObject.IsPrefabInstance.
     /// </summary>
     private static readonly string[] EditorOnlyPrefabKeys =
-        ["PrefabOverrides", "PrefabComponentCount", "PrefabChildCount"];
+        ["PrefabOverrides", "PrefabComponentCount", "PrefabChildCount", "SourceIdentifier", "_sourceIdentifier"];
 
     /// <summary>
     /// Rewrites a scene or prefab payload without its editor-only prefab data, or null to ship the

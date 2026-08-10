@@ -112,6 +112,10 @@ public static class PrefabEditingMode
         // instances of other prefabs keep theirs, otherwise saving would flatten them permanently.
         PrefabUtility.StripPrefabDataWithinBoundary(go, prefabGuid);
 
+        // Adopt the identifiers the asset is written with for the whole session, so the ids that undo
+        // records and that Save writes back are the ones instances already match against.
+        PrefabUtility.StabilizeSourceIdentifiers(go);
+
         editScene.Add(go);
         _editingRoot = go;
 
