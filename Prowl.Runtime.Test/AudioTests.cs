@@ -613,6 +613,26 @@ public class AudioTests : RuntimeTestBase
         Assert.Equal(1f, output[^1], 4);
     }
 
+    // OnValidate fires for every field on the source, and it used to rebuild each effect, which threw
+    // away the filter's delay state. Dragging the volume slider clicked once per frame of the drag.
+    [Fact]
+    public void FilterEffect_OnValidate_KeepsItsRunningState()
+    {
+        var effect = new FilterEffect { Type = FilterType.Lowpass, Frequency = 500f, Q = 0.707f };
+
+        // Settle on a constant, which a lowpass passes at unity.
+        float[] settled = Run(effect, Interleave(1f, 1f, 2048));
+        Assert.Equal(1f, settled[^2], 2);
+
+        // Stands in for an unrelated inspector edit somewhere else on the source.
+        effect.OnValidate();
+
+        float[] after = Run(effect, Interleave(1f, 1f, 8));
+
+        // Still settled. A rebuilt filter restarts from zero state and answers about 0.001 here.
+        Assert.Equal(1f, after[0], 2);
+    }
+
     // Bypass used to be applied by filtering the effect out when the chain snapshot was built, so
     // setting it from gameplay did nothing until something else happened to republish. It worked from
     // the inspector, which is the worst place for a bug to work.

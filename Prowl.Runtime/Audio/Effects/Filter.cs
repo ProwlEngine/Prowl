@@ -37,11 +37,24 @@ public sealed class Filter
     private float[] z2;
     private CalcCoefficientsFunc calcCoefficients;
 
+    /// <summary>
+    /// Which response this filter has. Changing it re-picks the coefficient set and leaves the delay
+    /// state alone, so a live filter can change shape without restarting.
+    /// </summary>
     public FilterType Type
     {
         get
         {
             return type;
+        }
+        set
+        {
+            if (type == value)
+                return;
+
+            type = value;
+            SetCoefficientsFunc();
+            calcCoefficients(this);
         }
     }
     

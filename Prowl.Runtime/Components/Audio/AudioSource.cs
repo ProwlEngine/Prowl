@@ -104,6 +104,7 @@ public sealed class AudioSource : MonoBehaviour
     private ma_sound_group_ptr _soundGroup;
     private ma_effect_node_ptr _effectNode;
     private bool _effectNodeReady;
+    private IntPtr _routedTo;
     private Float3 _previousPosition;
     private Float3 _velocity;
     private ma_effect_node_process_proc _onEffectNodeProcess;
@@ -587,6 +588,8 @@ public sealed class AudioSource : MonoBehaviour
             _effectNodeReady = false;
         }
 
+        _routedTo = IntPtr.Zero;
+
         // Cleanup sound group
         if (_soundGroup.pointer != IntPtr.Zero)
         {
@@ -992,16 +995,21 @@ public sealed class AudioSource : MonoBehaviour
             return;
 
         AudioMixerGroup group = _outputGroup.Res;
-        IntPtr target = group != null ? group.NativeNode : IntPtr.Zero;
+        IntPtr target = group.IsValid() ? group.NativeNode : IntPtr.Zero;
 
         if (target == IntPtr.Zero)
         {
             var engine = new ma_engine_ptr(MiniAudioExNative.ma_ex_context_get_engine(AudioContext.NativeContext));
-            MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, MiniAudioNative.ma_engine_get_endpoint(engine), 0);
-            return;
+            target = MiniAudioNative.ma_engine_get_endpoint(engine).pointer;
         }
 
+        // OnValidate runs for every field, so without this a volume drag re-attaches the node graph
+        // once per frame for no reason.
+        if (target == _routedTo)
+            return;
+
         MiniAudioNative.ma_node_attach_output_bus(new ma_node_ptr(_effectNode.pointer), 0, new ma_node_ptr(target), 0);
+        _routedTo = target;
     }
 
     private void ApplySettings()

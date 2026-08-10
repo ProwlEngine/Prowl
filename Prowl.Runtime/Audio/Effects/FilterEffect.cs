@@ -28,8 +28,8 @@ public sealed class FilterEffect : AudioEffect
         set
         {
             _type = value;
-            // The coefficient function is chosen per type, so a type change is a rebuild.
-            Rebuild();
+            if (_filter != null)
+                _filter.Type = value;
         }
     }
 
@@ -72,9 +72,29 @@ public sealed class FilterEffect : AudioEffect
         }
     }
 
+    /// <summary>Binding to a format is the one thing that needs a filter built from scratch.</summary>
     protected override void OnInitialize() => Rebuild();
 
-    public override void OnValidate() => Rebuild();
+    /// <summary>
+    /// Pushes the serialized values into the live filter rather than replacing it. Replacing it threw
+    /// away the delay state mid stream, so an unrelated inspector edit on the source, dragging its
+    /// volume say, clicked once per frame of the drag.
+    /// </summary>
+    public override void OnValidate()
+    {
+        if (_filter == null)
+        {
+            Rebuild();
+            return;
+        }
+
+        _filter.Type = _type;
+        _filter.Frequency = _frequency;
+        _filter.Q = _q;
+        _filter.GainDB = _gainDB;
+
+        MirrorClamps();
+    }
 
     private void Rebuild()
     {
@@ -83,8 +103,12 @@ public sealed class FilterEffect : AudioEffect
             return;
 
         _filter = new Filter(_type, _frequency, _q, _gainDB, SampleRate, Channels);
+        MirrorClamps();
+    }
 
-        // The filter clamps what it was given, so mirror the values it settled on back.
+    /// <summary>The filter clamps what it is given, so the serialized values follow what it settled on.</summary>
+    private void MirrorClamps()
+    {
         _frequency = _filter.Frequency;
         _q = _filter.Q;
     }
