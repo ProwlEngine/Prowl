@@ -683,6 +683,40 @@ public class AudioTests : RuntimeTestBase
         Assert.True(Math.Abs(output[^2]) > 0.1f);
     }
 
+    // The decay figure divided by the attenuation per pass, which is zero for a room that loses
+    // nothing. That is reachable through the property, and the cast of the resulting infinity to an
+    // unsigned integer is undefined.
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(0.5f)]
+    [InlineData(1f)]
+    [InlineData(2f)]
+    [InlineData(-1f)]
+    public void ReverbEffect_DecayTime_StaysFiniteAtEveryRoomSize(float roomSize)
+    {
+        var effect = new ReverbEffect { RoomSize = roomSize };
+        effect.Initialize(TestSampleRate, Channels);
+        effect.RoomSize = roomSize;
+
+        ulong decay = effect.DecayTimeInFrames;
+
+        // An hour of tail is not a real answer, and neither is a wrapped one.
+        Assert.InRange(decay, 0ul, (ulong)TestSampleRate * 3600);
+    }
+
+    // Freezing holds the tail forever, which this reports as zero rather than as a number.
+    [Fact]
+    public void ReverbEffect_WhenFrozen_ReportsNoDecay()
+    {
+        var effect = new ReverbEffect { RoomSize = 0.5f };
+        effect.Initialize(TestSampleRate, Channels);
+
+        Assert.True(effect.DecayTimeInFrames > 0);
+
+        effect.Freeze = true;
+        Assert.Equal(0ul, effect.DecayTimeInFrames);
+    }
+
     // The reverb only supports one or two channels, so on anything else it has to pass audio through
     // rather than throwing out of a constructor on the audio setup path.
     [Fact]

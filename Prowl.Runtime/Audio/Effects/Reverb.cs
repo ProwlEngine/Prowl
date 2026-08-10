@@ -80,6 +80,10 @@ public class Reverb
     private AllPassFilter[] allpassL;
     private AllPassFilter[] allpassR;
 
+    /// <summary>
+    /// Apparent size of the space, 0 to 1. Clamped, because the comb feedback is derived from it and
+    /// a value past 1 gives a room that returns more than it was given.
+    /// </summary>
     public float RoomSize
     {
         get
@@ -88,7 +92,7 @@ public class Reverb
         }
         set
         {
-            roomsize = (value * SCALE_ROOM) + OFFSET_ROOM;
+            roomsize = (Maths.Clamp(value, 0.0f, 1.0f) * SCALE_ROOM) + OFFSET_ROOM;
             Update();
         }
     }
@@ -173,20 +177,33 @@ public class Reverb
         }
     }
 
+    /// <summary>
+    /// How long the tail takes to fall below audibility, in frames. Zero means it never does, which
+    /// is what freezing asks for and what a room that returns every pass unattenuated amounts to.
+    /// </summary>
     public UInt64 DecayTimeInFrames
     {
         get
         {
-            float decay;
-
             if (mode >= FREEZE_MODE)
             {
                 return 0; /* Freeze mode creates an infinite decay. */
             }
 
-            decay = SILENCE_THRESHOLD / Maths.Abs(-20.0f * Maths.Log(1.0f / roomsize1));
+            /* Attenuation per pass through the comb, in decibels. Maths.Log is the natural log, and a
+               decibel figure needs log10, so this was reading about 2.3 times short. */
+            float attenuation = Maths.Abs(-20.0f * MathF.Log10(1.0f / roomsize1));
+
+            /* A room size of 1 loses nothing per pass, so the log is zero and the tail is endless. */
+            if (roomsize1 <= 0.0f || attenuation <= 0.0f || !float.IsFinite(attenuation))
+            {
+                return 0;
+            }
+
+            float decay = SILENCE_THRESHOLD / attenuation;
             decay *= (float)(combR[7].bufsize * 2);
-            return (UInt64)decay;
+
+            return float.IsFinite(decay) && decay > 0.0f ? (UInt64)decay : 0;
         }
     }
 
